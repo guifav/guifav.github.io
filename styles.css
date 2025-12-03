@@ -140,6 +140,16 @@ h1 {
     height: 24px;
 }
 
+.llm-link {
+    margin-left: auto;
+    font-weight: 600;
+    color: var(--accent-color);
+}
+
+.llm-link:hover {
+    text-decoration: underline;
+}
+
 .icon-img {
     width: 24px;
     height: 24px;
