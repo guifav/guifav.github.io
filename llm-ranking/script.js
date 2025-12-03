@@ -216,6 +216,7 @@ function renderAll() {
     renderOverview();
     renderRankingsTable();
     renderCategoriesView();
+    renderTypesView();
     updateLastUpdate();
 }
 
@@ -803,6 +804,30 @@ function renderCategoriesView() {
     }).join('');
 }
 
+function renderTypesView() {
+    const grid = document.getElementById('typesGrid');
+    if (!grid) return;
+    const order = ['image_edit','search','text','t2i','t2v','vision','webdev'];
+    grid.innerHTML = order.map(key => {
+        const arena = arenasData[key] || [];
+        const top10 = topN(arena, 10);
+        return `
+            <div class="category-card">
+                <h3>${getArenaLabel(key)}</h3>
+                <ul class="category-list">
+                    ${top10.map((m, idx) => `
+                        <li class="category-item">
+                            <span class="category-rank">#${idx + 1}</span>
+                            <span class="category-model">${m.model}</span>
+                            <span class="rank-badge ${getRankClass(m.rank)}">${m.rank}</span>
+                        </li>
+                    `).join('')}
+                </ul>
+            </div>
+        `;
+    }).join('');
+}
+
 // Analytics
 function renderAnalytics() {
     renderCorrelationChart();
@@ -1229,6 +1254,8 @@ function switchTab(tabName) {
         document.getElementById('categoryFilter').value = 'overall';
         filteredModels = [...allModels].sort((a, b) => (a.overall || Infinity) - (b.overall || Infinity));
         renderRankingsTable();
+    } else if (tabName === 'types') {
+        renderTypesView();
     }
 }
 
