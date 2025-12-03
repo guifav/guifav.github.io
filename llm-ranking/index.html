@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ranking: Qual é o Melhor LLM?</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1>Ranking: Qual é o Melhor LLM?</h1>
+                <p class="subtitle">Análise completa de 277 modelos de linguagem</p>
+            </div>
+            <button class="theme-toggle" id="themeToggle" aria-label="Alternar tema">
+                <span class="theme-icon">🌙</span>
+            </button>
+        </header>
+
+        <!-- Stats Cards -->
+        <div class="stats-grid" id="statsCards">
+            <div class="stat-card">
+                <div class="stat-content">
+                    <div class="stat-value" id="totalModels">277</div>
+                    <div class="stat-label">Modelos Avaliados</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-content">
+                    <div class="stat-value" id="topModel">-</div>
+                    <div class="stat-label">Melhor Overall</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-content">
+                    <div class="stat-value" id="categoriesCount">-</div>
+                    <div class="stat-label">Categorias</div>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-content">
+                    <div class="stat-value" id="lastUpdate">-</div>
+                    <div class="stat-label">Última Atualização</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <nav class="tabs">
+            <button class="tab active" data-tab="overview">Visão Geral</button>
+            <button class="tab" data-tab="rankings">Rankings</button>
+            <button class="tab" data-tab="comparison">Comparação</button>
+            <button class="tab" data-tab="categories">Por Categoria</button>
+            <button class="tab" data-tab="analytics">Análises</button>
+        </nav>
+
+        <!-- Loading -->
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Carregando dados...</p>
+        </div>
+
+        <!-- Content Sections -->
+        <div class="content">
+            <!-- Overview Tab -->
+            <section id="overview-section" class="tab-content active">
+                <div class="section-header">
+                    <h2>Visão Geral do Ranking</h2>
+                    <p>Principais insights e estatísticas dos 277 modelos avaliados</p>
+                </div>
+
+                <div class="charts-grid">
+                    <div class="chart-container wide">
+                        <h3>Top 10 Modelos (Overview)</h3>
+                        <div class="table-responsive">
+                            <table id="top10OverviewTable" class="table-simple"></table>
+                        </div>
+                    </div>
+                    <div class="chart-container wide">
+                        <h3>Origem dos Modelos (País)</h3>
+                        <div id="worldMap"></div>
+                    </div>
+                </div>
+
+                <div class="insights-grid">
+                    <div class="insight-card">
+                        <h4>Líder Absoluto</h4>
+                        <div class="leader-info" id="leaderInfo">Carregando...</div>
+                    </div>
+                    <div class="insight-card">
+                        <h4>Melhor em Coding</h4>
+                        <div class="leader-info" id="codingLeader">Carregando...</div>
+                    </div>
+                    <div class="insight-card">
+                        <h4>Melhor em Creative Writing</h4>
+                        <div class="leader-info" id="creativeLeader">Carregando...</div>
+                    </div>
+                    <div class="insight-card">
+                        <h4>Melhor em Math</h4>
+                        <div class="leader-info" id="mathLeader">Carregando...</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Rankings Tab -->
+            <section id="rankings-section" class="tab-content">
+                <div class="section-header">
+                    <h2>Ranking Completo</h2>
+                    <div class="filters">
+                        <input type="text" id="searchInput" placeholder="🔍 Buscar modelo..." />
+                        <select id="categoryFilter">
+                            <option value="overall">Overall</option>
+                            <option value="expert">Expert</option>
+                            <option value="hardPrompts">Hard Prompts</option>
+                            <option value="coding">Coding</option>
+                            <option value="math">Math</option>
+                            <option value="creativeWriting">Creative Writing</option>
+                            <option value="instructionFollowing">Instruction Following</option>
+                            <option value="longerQuery">Longer Query</option>
+                        </select>
+                        <button id="exportBtn" class="btn-secondary">📥 Exportar CSV</button>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <table id="rankingsTable">
+                        <thead>
+                            <tr>
+                                <th class="sortable" data-sort="overall">Overall</th>
+                                <th>Modelo</th>
+                                <th class="sortable" data-sort="expert">Expert</th>
+                                <th class="sortable" data-sort="hardPrompts">Hard Prompts</th>
+                                <th class="sortable" data-sort="coding">Coding</th>
+                                <th class="sortable" data-sort="math">Math</th>
+                                <th class="sortable" data-sort="creativeWriting">Creative</th>
+                                <th class="sortable" data-sort="instructionFollowing">Instructions</th>
+                                <th class="sortable" data-sort="longerQuery">Longer Query</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rankingsTableBody">
+                            <!-- Populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- Comparison Tab -->
+            <section id="comparison-section" class="tab-content">
+                <div class="section-header">
+                    <h2>Comparação de Modelos</h2>
+                    <p>Selecione até 5 modelos para comparar</p>
+                </div>
+
+                <div class="comparison-controls">
+                    <div class="model-selector">
+                        <input type="text" id="compareSearch" placeholder="Digite o nome do modelo..." />
+                        <div id="compareResults" class="autocomplete-results"></div>
+                    </div>
+                    <div id="selectedModels" class="selected-models"></div>
+                </div>
+
+                <div class="comparison-content">
+                    <canvas id="comparisonRadar"></canvas>
+                </div>
+
+                <div id="comparisonTable" class="comparison-table-container"></div>
+            </section>
+
+            <!-- Analytics Tab -->
+            <section id="analytics-section" class="tab-content">
+                <div class="section-header">
+                    <h2>Análises Avançadas</h2>
+                <p>Insights estatísticos e correlações entre categorias</p>
+                </div>
+
+                <div class="analytics-grid">
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <h3>Correlação entre Categorias</h3>
+                            <span class="info-tip" data-tip="Correlação das colunas de ranking por Spearman, adequada para dados de ordem.">ⓘ</span>
+                        </div>
+                        <canvas id="correlationChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <h3>Performance por Faixa de Ranking</h3>
+                            <span class="info-tip" data-tip="Média normalizada (0–100) por faixa de ranking Overall, por parâmetro.">ⓘ</span>
+                        </div>
+                        <canvas id="performanceChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <h3>O Mapa de Decisão: Matriz de Dominância</h3>
+                            <span class="info-tip" data-tip="Modelo Rank 1 por arena. Ajuda a escolher rapidamente por tipo de tarefa.">ⓘ</span>
+                        </div>
+                        <div class="table-responsive">
+                            <table id="decisionMatrixTable" class="table-simple"></table>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <h3>Top N em Múltiplas Arenas</h3>
+                            <div class="chart-controls">
+                                <label for="versatilityTopN">Top N</label>
+                                <select id="versatilityTopN">
+                                    <option value="3">3</option>
+                                    <option value="5">5</option>
+                                    <option value="10">10</option>
+                                </select>
+                            </div>
+                            <span class="info-tip" data-tip="Contagem de aparições no Top N por organização, across-arena.">ⓘ</span>
+                        </div>
+                        <canvas id="multiTop3Chart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <h3>Google vs OpenAI vs Anthropic: Share por Arena</h3>
+                            <span class="info-tip" data-tip="Participação no Top 10 por arena. Indica liderança relativa.">ⓘ</span>
+                        </div>
+                        <canvas id="orgShareChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <h3>Investimento vs Performance (Organizações)</h3>
+                            <div class="chart-controls">
+                                <label for="orgFilterSelect">Organizações</label>
+                                <select id="orgFilterSelect" multiple size="6"></select>
+                            </div>
+                            <span class="info-tip" data-tip="Volume de modelos vs score médio. Filtre organizações para comparação.">ⓘ</span>
+                        </div>
+                        <canvas id="orgVolumePerfChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <h3>Open-Source vs Proprietário: Performance Média</h3>
+                            <span class="info-tip" data-tip="Score médio por arena separado por licença Open vs Proprietária.">ⓘ</span>
+                        </div>
+                        <canvas id="licensePerfChart"></canvas>
+                        <div id="tcoNote"></div>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <h3>Confidence Intervals: Votes vs CI_95</h3>
+                            <span class="info-tip" data-tip="Relação entre quantidade de votos e incerteza (CI_95).">ⓘ</span>
+                        </div>
+                        <canvas id="votesCiScatter"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <h3>Volatilidade de Ranking (Spread Médio)</h3>
+                            <span class="info-tip" data-tip="Média do Rank Spread nos Top 20 como proxy de estabilidade.">ⓘ</span>
+                        </div>
+                        <canvas id="rankSpreadChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <h3>Modelos Estatisticamente Equivalentes (CI Overlap)</h3>
+                            <span class="info-tip" data-tip="Pares Top 10 por arena com sobreposição de intervalos de confiança.">ⓘ</span>
+                        </div>
+                        <div id="ciEquivalence"></div>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <h3>Multi-Modal Champions</h3>
+                            <span class="info-tip" data-tip="Organizações que lideram múltiplas arenas. Indica generalização.">ⓘ</span>
+                        </div>
+                        <div class="table-responsive">
+                            <table id="multiModalChampionsTable" class="table-simple"></table>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <h3>Generalização vs Especialização (Índice por Organização)</h3>
+                            <span class="info-tip" data-tip="Quantidade de arenas lideradas por organização.">ⓘ</span>
+                        </div>
+                        <canvas id="generalistIndexChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <h3>Emerging Players</h3>
+                            <span class="info-tip" data-tip="Modelos com alto score e baixa votação: candidatos promissores.">ⓘ</span>
+                        </div>
+                        <div class="table-responsive">
+                            <table id="emergingPlayersTable" class="table-simple"></table>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <h3>Dificuldade por Arena (Std Dev de Score)</h3>
+                            <span class="info-tip" data-tip="Dispersão de scores por arena. Maior dispersão sugere maior dificuldade.">ⓘ</span>
+                        </div>
+                        <canvas id="arenaStdDevChart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <h3>Concentration Ratio (CRN em Top 10)</h3>
+                            <div class="chart-controls">
+                                <label for="crTopN">Top N</label>
+                                <select id="crTopN">
+                                    <option value="3">3</option>
+                                    <option value="5">5</option>
+                                    <option value="10">10</option>
+                                </select>
+                            </div>
+                            <span class="info-tip" data-tip="Percentual do Top N sobre o total dos Top 10 por arena.">ⓘ</span>
+                        </div>
+                        <canvas id="arenaCR3Chart"></canvas>
+                    </div>
+                </div>
+
+                
+            </section>
+
+            <!-- Categories Tab -->
+            <section id="categories-section" class="tab-content">
+                <div class="section-header">
+                    <h2>Análise por Categoria</h2>
+                    <p>Top 10 modelos em cada categoria específica</p>
+                </div>
+
+                <div class="category-grid" id="categoryGrid">
+                    <!-- Populated by JavaScript -->
+                </div>
+            </section>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>
+                Dados: LM Arena • Desenvolvido por 
+                <a href="https://guifav.github.io" target="_blank">Guilherme Favaron</a> • 
+                Atualizado: 03/12/2025
+            </p>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

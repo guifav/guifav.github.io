@@ -1,0 +1,34 @@
+Rank,Rank_Spread_Upper,Rank_Spread_Lower,Model,Score,CI_95,Votes,Organization,License
+1,1,2,gemini-3-pro-image-preview-2k (nano-banana-pro),1242,9,4698,Google,Proprietary
+2,1,2,gemini-3-pro-image-preview (nano-banana-pro),1234,7,23903,Google,Proprietary
+3,3,5,gemini-2.5-flash-image-preview (nano-banana),1156,36,09321,Google,Proprietary
+4,3,7,hunyuan-image-3.0,1155,57,5369,Tencent,tencent-hunyuan-community
+5,3,8,flux-2-flex,1155,71,0099,Black Forest Labs,Proprietary
+6,4,8,flux-2-pro,1146,71,3082,Black Forest Labs,Proprietary
+7,5,8,imagen-4.0-ultra-generate-preview-06-06,1145,449,2228,Google,Proprietary
+8,4,8,seedream-4-2k,1144,61,4513,Bytedance,Proprietary
+9,9,11,imagen-4.0-generate-preview-06-06,1131,449,2505,Google,Proprietary
+10,9,13,seedream-4-high-res-fal,1124,55,9084,Bytedance,Proprietary
+11,9,13,wan2.5-t2i-preview,1123,62,1542,Alibaba,Proprietary
+12,10,13,gpt-image-1,1119,423,9565,OpenAI,Proprietary
+13,10,13,seedream-4-fal,1118,61,3462,Bytedance,Proprietary
+14,14,15,gpt-image-1-mini,1100,54,0654,OpenAI,Proprietary
+15,14,16,mai-image-1,1092,53,6426,Microsoft AI,Proprietary
+16,15,17,seedream-3,1084,54,1728,Bytedance,Proprietary
+17,16,17,flux-1-kontext-max,1078,372,511,Black Forest Labs,Proprietary
+18,18,20,qwen-image-prompt-extend,1068,363,5978,Alibaba,Apache 2.0
+19,18,21,flux-1-kontext-pro,1065,336,7024,Black Forest Labs,Proprietary
+20,18,21,imagen-3.0-generate-002,1062,342,4071,Google,Proprietary
+21,19,21,qwen-image,1060,210,6407,Alibaba,Apache 2.0
+22,22,22,ideogram-v3-quality,1050,57,5870,Ideogram,Proprietary
+23,23,23,photon,1033,49,1511,Luma AI,Proprietary
+24,24,27,recraft-v3,1021,414,2469,Recraft,Proprietary
+25,24,27,lucid-origin,1021,431,1859,Leonardo AI,Proprietary
+26,24,27,flux-1.1-pro,1017,371,781,Black Forest Labs,Proprietary
+27,24,27,ideogram-v2,1016,373,285,Ideogram,Proprietary
+28,28,28,gemini-2.0-flash-preview-image-generation,986,330,5284,Google,Proprietary
+29,29,29,dall-e-3,978,426,7456,OpenAI,Proprietary
+30,30,30,flux-1-dev-fp8,971,44,9919,Black Forest Labs,Open
+31,31,31,flux-1-kontext-dev,959,324,9578,Black Forest Labs,flux-1-dev-non-commercial-license
+32,32,32,stable-diffusion-v35-large,940,42,3764,Stability AI,Open
+33,33,33,bagel,912,61,1599,Bytedance,Apache 2.0

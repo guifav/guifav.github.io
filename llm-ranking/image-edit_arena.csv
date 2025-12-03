@@ -1,0 +1,21 @@
+Rank,Rank_Spread_Upper,Rank_Spread_Lower,Model,Score,CI_95,Votes,Organization,License
+1,1,2,gemini-3-pro-image-preview-2k (nano-banana-pro),1402,11,6856,Google,Proprietary
+2,1,2,gemini-3-pro-image-preview (nano-banana-pro),1392,51,49440,Google,Proprietary
+3,3,3,gemini-2.5-flash-image-preview (nano-banana),1324,39,288880,Google,Proprietary
+4,4,4,seedream-4-2k,1311,92,19137,Bytedance,Proprietary
+5,5,7,seedream-4-high-res-fal,1248,55,91267,Bytedance,Proprietary
+6,5,7,reve-v1,1243,43,22774,Reve,Proprietary
+7,5,8,flux-2-pro,1239,55,0004,Black Forest Labs,Proprietary
+8,7,8,flux-2-flex,1231,45,3721,Black Forest Labs,Proprietary
+9,9,11,seedream-4-fal,1212,51,50305,Bytedance,Proprietary
+10,9,11,qwen-image-edit,1208,31,360566,Alibaba,Apache 2.0
+11,9,11,reve-edit-fast,1206,51,55603,Reve,Proprietary
+12,12,12,flux-1-kontext-max,1193,33,38532,Black Forest Labs,Proprietary
+13,13,13,flux-1-kontext-pro,1185,35,861332,Black Forest Labs,Proprietary
+14,14,14,flux-1-kontext-dev,1160,33,428956,Black Forest Labs,flux-1-dev-non-commercial-license
+15,15,16,gpt-image-1,1153,32,426710,OpenAI,Proprietary
+16,15,16,seededit-3.0,1149,34,600553,Bytedance,Proprietary
+17,17,17,gpt-image-1-mini,1131,52,31137,OpenAI,Proprietary
+18,18,18,gemini-2.0-flash-preview-image-generation,1092,24,621157,Google,Proprietary
+19,19,19,bagel,1036,61,1758,Bytedance,Apache 2.0
+20,20,20,step1x-edit,1011,51,30438,StepFun,Apache 2.0

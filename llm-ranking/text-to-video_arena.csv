@@ -1,0 +1,24 @@
+Rank,Rank_Spread_Upper,Rank_Spread_Lower,Model,Score,CI_95,Votes,Organization,License
+1,1,4,veo-3.1-fast-audio,1386,14,5909,Google,Proprietary
+2,1,4,veo-3.1-audio,1375,16,5772,Google,Proprietary
+3,1,5,veo-3-fast-audio,1364,12,23346,Google,Proprietary
+4,1,5,sora-2-pro,1362,18,5134,OpenAI,Proprietary
+5,3,6,veo-3-audio,1346,13,16850,Google,Proprietary
+6,5,7,sora-2,1325,16,5854,OpenAI,Proprietary
+7,6,7,wan2.5-t2v-preview,1305,20,1491,Alibaba,Proprietary
+8,8,9,veo-3,1257,13,12651,Google,Proprietary
+9,8,10,veo-3-fast,1252,12,13047,Google,Proprietary
+10,9,14,kling-2.5-turbo-1080p,1222,22,1720,KlingAI,Proprietary
+11,10,15,ray-3,1207,22,1100,Luma AI,Proprietary
+12,10,15,hailuo-2.3,1205,12,3634,MiniMax,Proprietary
+13,10,16,hailuo-02-pro,1195,13,10107,MiniMax,Proprietary
+14,10,17,seedance-v1-pro,1187,14,12373,Bytedance,Proprietary
+15,11,17,hailuo-02-standard,1181,13,10142,MiniMax,Proprietary
+16,13,17,kling-v2.1-master,1171,12,14401,KlingAI,Proprietary
+17,14,17,veo-2,1163,14,7274,Google,Proprietary
+18,18,19,wan-v2.2-a14b,1126,14,11439,Alibaba,Apache 2.0
+19,18,19,seedance-v1-lite,1118,11,15601,Bytedance,Proprietary
+20,20,21,sora,1066,13,4618,OpenAI,Proprietary
+21,20,21,ray2,1063,16,5769,Luma AI,Proprietary
+22,22,23,pika-v2.2,1007,14,6640,Pika,Proprietary
+23,22,23,mochi-v1,997,15,6816,Genmo AI,Apache 2.0

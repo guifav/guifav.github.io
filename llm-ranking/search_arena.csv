@@ -1,0 +1,12 @@
+Rank,Rank_Spread_Upper,Rank_Spread_Lower,Model,Score,CI_95,Votes,Organization,License
+1,1,1,grok-4-fast-search,1166,5,14957,xAI,Proprietary
+2,2,5,ppl-sonar-pro-high,1149,4,18453,Perplexity,Proprietary
+3,2,5,gemini-2.5-pro-grounding,1142,4,19350,Google,Proprietary
+4,2,5,o3-search,1142,4,19254,OpenAI,Proprietary
+5,2,5,grok-4-search,1141,4,18132,xAI,Proprietary
+6,6,9,gpt-5-search,1132,4,18997,OpenAI,Proprietary
+7,6,9,claude-opus-4-1-search,1132,4,19123,Anthropic,Proprietary
+8,6,9,claude-opus-4-search,1130,4,19344,Anthropic,Proprietary
+9,6,9,ppl-sonar-reasoning-pro-high,1127,4,18881,Perplexity,Proprietary
+10,10,11,diffbot-small-xl,1023,7,6433,Diffbot,Apache 2.0
+11,10,11,api-gpt-4o-search,1011,10,3466,OpenAI,Proprietary
