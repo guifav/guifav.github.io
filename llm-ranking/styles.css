@@ -708,6 +708,48 @@ tr:hover {
     text-decoration: underline;
 }
 
+.tags {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.tag {
+    display: inline-block;
+    padding: 6px 10px;
+    border: 2px solid var(--color-border);
+    border-radius: 14px;
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: 0.85em;
+    font-weight: 600;
+}
+
+#companies-section .category-card {
+    max-height: 420px;
+    overflow: auto;
+}
+
+#companies-section .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    border-bottom: 2px solid var(--color-primary);
+    padding-bottom: 8px;
+}
+
+#companies-section .category-card h3 {
+    margin: 0;
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+#companies-section .count-tag {
+    /* opcional: ajustar espaçamento do contador */
+    margin-left: 12px;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
     .header-content h1 {

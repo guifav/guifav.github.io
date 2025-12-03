@@ -219,6 +219,7 @@ function renderAll() {
     renderRankingsTable();
     renderCategoriesView();
     renderTypesView();
+    renderCompaniesView();
     updateLastUpdate();
 }
 
@@ -404,7 +405,10 @@ function renderWorldMap() {
         'jamba': 'Israel',
         'openchat': 'USA',
         'reka': 'USA',
-        'wizardlm': 'China'
+        'wizardlm': 'China',
+        'flux': 'Germany',
+        'command': 'Canada',
+        'c4ai': 'Canada'
     };
     const orgMap = {
         'llama': 'Meta',
@@ -429,7 +433,10 @@ function renderWorldMap() {
         'jamba': 'AI21 Labs',
         'openchat': 'OpenChat',
         'reka': 'Reka AI',
-        'wizardlm': 'Microsoft'
+        'wizardlm': 'Microsoft',
+        'flux': 'Black Forest Labs',
+        'command': 'Cohere',
+        'c4ai': 'Cohere'
     };
     const hqCoords = {
         'OpenAI': [37.7749, -122.4194],
@@ -449,22 +456,42 @@ function renderWorldMap() {
         'DeepSeek': [39.9042, 116.4074],
         '01 AI': [39.9042, 116.4074],
         'OpenChat': [37.7749, -122.4194],
-        'Reka AI': [37.4852, -122.2364]
+        'Reka AI': [37.4852, -122.2364],
+        'Black Forest Labs': [52.5200, 13.4050],
+        'Cohere': [43.6532, -79.3832]
     };
 
     const counts = {};
     const companies = {};
+    const counted = new Set();
+    const addCount = (country, org, nameKey) => {
+        if (!country) return;
+        if (nameKey && counted.has(nameKey)) return;
+        if (nameKey) counted.add(nameKey);
+        counts[country] = (counts[country] || 0) + 1;
+        const orgName = org || 'N/A';
+        if (!companies[country]) companies[country] = new Set();
+        companies[country].add(orgName);
+    };
+
     allModels.forEach(m => {
-        const key = m.name.toLowerCase();
+        const key = (m.name || '').toLowerCase();
         const match = Object.keys(originMap).find(prefix => key.startsWith(prefix));
         const country = match ? originMap[match] : null;
-        if (country) {
-            counts[country] = (counts[country] || 0) + 1;
-            const org = orgMap[match] || 'N/A';
-            if (!companies[country]) companies[country] = new Set();
-            companies[country].add(org);
-        }
+        const org = match ? orgMap[match] : null;
+        addCount(country, org, key);
     });
+
+    Object.values(arenasData || {}).forEach(arr => (arr || []).forEach(m => {
+        const name = (m.model || '').toLowerCase();
+        const match = Object.keys(originMap).find(prefix => name.startsWith(prefix));
+        if (match) {
+            addCount(originMap[match], orgMap[match], name);
+        } else {
+            const country = orgCountry(m.organization || '');
+            addCount(country, m.organization || null, name);
+        }
+    }));
 
     const markers = [];
     const orgLayer = L.layerGroup();
@@ -855,6 +882,91 @@ function renderTypesView() {
             </div>
         `;
     }).join('');
+}
+
+function renderCompaniesView() {
+    const grid = document.getElementById('companiesGrid');
+    if (!grid) return;
+    const orgMap = {};
+    const typeOrder = ['text','webdev','vision','t2i','t2v','image_edit','search'];
+    const hasModelInType = (name, type) => (arenasData[type] || []).some(m => (m.model || '') === name);
+    const modelType = (name) => {
+        for (const t of typeOrder) if (hasModelInType(name, t)) return t; return null;
+    };
+    Object.entries(arenasData).forEach(([type, arr]) => {
+        (arr || []).forEach(m => {
+            const org = m.organization || 'N/A';
+            if (!orgMap[org]) orgMap[org] = { models: new Map(), country: orgCountry(org) };
+            if (!orgMap[org].models.has(m.model)) orgMap[org].models.set(m.model, { type, score: m.score });
+        });
+    });
+    const orgs = Object.keys(orgMap).sort((a,b)=> a.localeCompare(b));
+    if (!orgs.length) { grid.innerHTML = '<div class="category-card"><h3>Sem dados de empresas</h3><p>Carregue as arenas ou aguarde o carregamento.</p></div>'; return; }
+    const cardHTML = orgs.map(org => {
+        const entries = Array.from(orgMap[org].models.entries());
+        const models = entries.map(([name, meta]) => {
+            const overview = allModels.find(mm => mm.name === name);
+            return { name, type: meta.type || modelType(name), overall: overview ? overview.overall : null };
+        }).sort((a,b)=> (a.overall||Infinity) - (b.overall||Infinity));
+        const types = Array.from(new Set(models.map(m => m.type).filter(Boolean)));
+        const tagsHTML = types.map(t => `<span class="tag">${getArenaLabel(t)}</span>`).join('');
+        const countHTML = `<span class="tag count-tag">Modelos: ${models.length}</span>`;
+        const rowsHTML = models.map(m => `
+            <tr>
+                <td><strong>${m.name}</strong></td>
+                <td>${m.type ? `<span class="tag">${getArenaLabel(m.type)}</span>` : '—'}</td>
+                <td>${formatRank(m.overall)}</td>
+            </tr>
+        `).join('');
+        return `
+            <div class="category-card">
+                <div class="card-header">
+                    <h3>${org}</h3>
+                    ${countHTML}
+                </div>
+                <p style="color: var(--color-text-secondary); margin-bottom: 10px;">País: ${orgMap[org].country || 'N/A'}</p>
+                <div class="tags" style="margin-bottom: 12px;">${tagsHTML}</div>
+                <div class="table-responsive">
+                    <table class="table-simple">
+                        <thead>
+                            <tr><th>Modelo</th><th>Tipo</th><th>Overall</th></tr>
+                        </thead>
+                        <tbody>
+                            ${rowsHTML}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        `;
+    }).join('');
+    grid.innerHTML = cardHTML;
+}
+
+function orgCountry(org) {
+    const map = {
+        'Google': 'USA',
+        'OpenAI': 'USA',
+        'Anthropic': 'USA',
+        'Meta': 'USA',
+        'Microsoft': 'USA',
+        'Nvidia': 'USA',
+        'IBM': 'USA',
+        'Amazon': 'USA',
+        'Alibaba': 'China',
+        'Tencent': 'China',
+        'Baidu': 'China',
+        'Zhipu AI': 'China',
+        'Z.ai': 'China',
+        'Moonshot': 'China',
+        'Bytedance': 'China',
+        'DeepSeek': 'China',
+        'xAI': 'USA',
+        'Mistral': 'France',
+        'Black Forest Labs': 'Germany',
+        'AI21 Labs': 'Israel',
+        'Cohere': 'Canada'
+    };
+    return map[org] || 'N/A';
 }
 
 // Analytics
@@ -1286,6 +1398,8 @@ function switchTab(tabName) {
         filterTable();
     } else if (tabName === 'types') {
         renderTypesView();
+    } else if (tabName === 'companies') {
+        renderCompaniesView();
     }
 }
 
