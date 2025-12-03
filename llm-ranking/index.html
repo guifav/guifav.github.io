@@ -115,14 +115,24 @@
                     <div class="filters">
                         <input type="text" id="searchInput" placeholder="🔍 Buscar modelo..." />
                         <select id="categoryFilter">
-                            <option value="overall">Overall</option>
-                            <option value="expert">Expert</option>
-                            <option value="hardPrompts">Hard Prompts</option>
-                            <option value="coding">Coding</option>
-                            <option value="math">Math</option>
-                            <option value="creativeWriting">Creative Writing</option>
-                            <option value="instructionFollowing">Instruction Following</option>
-                            <option value="longerQuery">Longer Query</option>
+                            <option value="overall">Geral</option>
+                            <option value="expert">Especialista</option>
+                            <option value="hardPrompts">Prompts Difíceis</option>
+                            <option value="coding">Programação</option>
+                            <option value="math">Matemática</option>
+                            <option value="creativeWriting">Escrita Criativa</option>
+                            <option value="instructionFollowing">Seguir Instruções</option>
+                            <option value="longerQuery">Consulta Longa</option>
+                        </select>
+                        <select id="typeFilter">
+                            <option value="all">Todos os Tipos</option>
+                            <option value="image_edit">Edição de imagens</option>
+                            <option value="search">Busca de informações na internet</option>
+                            <option value="text">Geração de texto</option>
+                            <option value="t2i">Criação de imagens a partir de textos</option>
+                            <option value="t2v">Criação de vídeos a partir de textos</option>
+                            <option value="vision">Compreensão de vídeos enviados</option>
+                            <option value="webdev">Suporte a desenvolvedores</option>
                         </select>
                         <button id="exportBtn" class="btn-secondary">📥 Exportar CSV</button>
                     </div>

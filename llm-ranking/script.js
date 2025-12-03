@@ -60,6 +60,8 @@ function setupEventListeners() {
     
     document.getElementById('searchInput').addEventListener('input', filterTable);
     document.getElementById('categoryFilter').addEventListener('change', filterTable);
+    const tf = document.getElementById('typeFilter');
+    if (tf) tf.addEventListener('change', filterTable);
     document.getElementById('exportBtn').addEventListener('click', exportToCSV);
     
     document.getElementById('compareSearch').addEventListener('input', handleComparisonSearch);
@@ -554,12 +556,32 @@ function findBest(category) {
 
 // Rankings Table
 function renderRankingsTable() {
-    const tbody = document.getElementById('rankingsTableBody');
-    tbody.innerHTML = '';
-    
-    filteredModels.forEach(model => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
+    const table = document.getElementById('rankingsTable');
+    const type = (document.getElementById('typeFilter') && document.getElementById('typeFilter').value) || 'all';
+    if (type !== 'all') {
+        const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+        const theadHTML = '<thead><tr><th>Rank</th><th>Modelo</th><th>Score</th><th>CI_95</th><th>Votes</th><th>Organização</th><th>Licença</th></tr></thead>';
+        const arena = (arenasData[type] || []).filter(m => (m.model || '').toLowerCase().includes(searchTerm)).sort((a, b) => a.rank - b.rank).slice(0, 300);
+        let bodyHTML = '<tbody id="rankingsTableBody">';
+        bodyHTML += arena.map(m => `
+            <tr>
+                <td><span class="rank-badge ${getRankClass(m.rank)}">${m.rank}</span></td>
+                <td><strong>${m.model}</strong></td>
+                <td>${isNaN(m.score) ? '-' : m.score}</td>
+                <td>${isNaN(m.ci95) ? '-' : m.ci95}</td>
+                <td>${isNaN(m.votes) ? '-' : m.votes}</td>
+                <td>${m.organization || '-'}</td>
+                <td>${m.license || '-'}</td>
+            </tr>
+        `).join('');
+        bodyHTML += '</tbody>';
+        table.innerHTML = theadHTML + bodyHTML;
+        return;
+    }
+    const theadHTML = '<thead><tr><th class="sortable" data-sort="overall">Overall</th><th>Modelo</th><th class="sortable" data-sort="expert">Expert</th><th class="sortable" data-sort="hardPrompts">Hard Prompts</th><th class="sortable" data-sort="coding">Coding</th><th class="sortable" data-sort="math">Math</th><th class="sortable" data-sort="creativeWriting">Creative</th><th class="sortable" data-sort="instructionFollowing">Instructions</th><th class="sortable" data-sort="longerQuery">Longer Query</th></tr></thead>';
+    let bodyHTML = '<tbody id="rankingsTableBody">';
+    bodyHTML += filteredModels.map(model => `
+        <tr>
             <td><span class="rank-badge ${getRankClass(model.overall)}">${model.overall}</span></td>
             <td><strong>${model.name}</strong></td>
             <td>${formatRank(model.expert)}</td>
@@ -569,8 +591,12 @@ function renderRankingsTable() {
             <td>${formatRank(model.creativeWriting)}</td>
             <td>${formatRank(model.instructionFollowing)}</td>
             <td>${formatRank(model.longerQuery)}</td>
-        `;
-        tbody.appendChild(tr);
+        </tr>
+    `).join('');
+    bodyHTML += '</tbody>';
+    table.innerHTML = theadHTML + bodyHTML;
+    table.querySelectorAll('.sortable').forEach(th => {
+        th.addEventListener('click', () => sortTable(th.dataset.sort));
     });
 }
 
@@ -589,10 +615,13 @@ function formatRank(rank) {
 function filterTable() {
     const searchTerm = document.getElementById('searchInput').value.toLowerCase();
     const category = document.getElementById('categoryFilter').value;
+    const type = (document.getElementById('typeFilter') && document.getElementById('typeFilter').value) || 'all';
+    const typeSet = type !== 'all' ? new Set((arenasData[type] || []).map(m => (m.model || '').toLowerCase())) : null;
     
     filteredModels = [...allModels].filter(model => {
         const matchesSearch = model.name.toLowerCase().includes(searchTerm);
-        return matchesSearch;
+        const matchesType = !typeSet || typeSet.has(model.name.toLowerCase());
+        return matchesSearch && matchesType;
     });
     
     filteredModels.sort((a, b) => {
@@ -1252,8 +1281,9 @@ function switchTab(tabName) {
         renderAnalytics();
     } else if (tabName === 'rankings') {
         document.getElementById('categoryFilter').value = 'overall';
-        filteredModels = [...allModels].sort((a, b) => (a.overall || Infinity) - (b.overall || Infinity));
-        renderRankingsTable();
+        const tf = document.getElementById('typeFilter');
+        if (tf) tf.value = 'all';
+        filterTable();
     } else if (tabName === 'types') {
         renderTypesView();
     }
