@@ -262,9 +262,9 @@ function updateStatsCards() {
 }
 
 function updateLastUpdate() {
-    const now = new Date();
-    const dateStr = now.toLocaleDateString('pt-BR');
-    document.getElementById('lastUpdate').textContent = dateStr;
+    const dateStr = '03/12/2025';
+    const el = document.getElementById('lastUpdate');
+    if (el) el.textContent = dateStr;
     const footerEl = document.getElementById('footerDate');
     if (footerEl) footerEl.textContent = dateStr;
 }
