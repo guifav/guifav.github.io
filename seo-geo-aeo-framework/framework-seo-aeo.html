@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Framework SEO + AEO/GEO | Guilherme Favaron</title>
+    <meta name="description" content="Framework prático de SEO e AEO para ser encontrado no Google e citado por ChatGPT e Perplexity. Answer Capsules, E-E-A-T e checklist de publicação incluídos.">
+    <meta name="author" content="Guilherme Favaron">
+    <link rel="canonical" href="https://guifav.github.io/framework-seo-aeo">
+    
+    <!-- Open Graph -->
+    <meta property="og:title" content="Framework SEO + AEO/GEO | Guilherme Favaron">
+    <meta property="og:description" content="Guia completo para ser encontrado no Google e citado por IAs como ChatGPT e Perplexity.">
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://guifav.github.io/framework-seo-aeo">
+    
+    <!-- Schema.org Product -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "Product",
+        "name": "Framework SEO + AEO/GEO",
+        "description": "Guia completo para otimizar conteúdo para Google e IAs. Técnica Answer Capsule, configurações técnicas, E-E-A-T e checklist pré-publicação.",
+        "brand": {
+            "@type": "Brand",
+            "name": "Guilherme Favaron"
+        },
+        "author": {
+            "@type": "Person",
+            "name": "Guilherme Favaron",
+            "url": "https://guifav.github.io",
+            "jobTitle": "VP de Tecnologia",
+            "sameAs": [
+                "https://www.linkedin.com/in/guilhermefavaron
+            ]
+        },
+        "category": "Marketing Digital / SEO / Inteligência Artificial",
+        "keywords": "Otimização SEO, AEO, GEO, ChatGPT, Perplexity, otimização de conteúdo, Answer Capsule, E-E-A-T",
+        "offers": {
+            "@type": "Offer",
+            "price": "500",
+            "priceCurrency": "BRL",
+            "availability": "https://calendar.app.google/DmYwGeyh67m2nBD39"
+        },
+        "releaseDate": "2025-12-15",
+        "productID": "framework-seo-aeo-v1",
+        "url": "https://guifav.github.io/framework-seo-aeo",
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://guifav.github.io/framework-seo-aeo"
+        }
+    }
+    </script>
+
+    <!-- Schema.org Article -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "Product",
+        "headline": "Framework SEO + AEO/GEO: Como Ser Encontrado no Google e Citado por IAs",
+        "author": {
+            "@type": "Person",
+            "name": "Guilherme Favaron"
+        },
+        "datePublished": "2025-12-01",
+        "dateModified": "2025-12-15",
+        "publisher": {
+            "@type": "Person",
+            "name": "Guilherme Favaron"
+        }
+    }
+    </script>
+
+    <!-- Schema.org FAQPage -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [
+            {
+                "@type": "Question",
+                "name": "O que é SEO?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "SEO (Search Engine Optimization) é a otimização para mecanismos de busca. É o que você faz para aparecer no Google quando alguém pesquisa algo."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "O que é AEO?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "AEO (AI Engine Optimization) é a otimização para motores de IA. É o que você faz para ser citado quando alguém pergunta algo ao ChatGPT, Perplexity ou Claude."
+                }
+            },
+            {
+                "@type": "Question",
+                "name": "O que é um Answer Capsule?",
+                "acceptedAnswer": {
+                    "@type": "Answer",
+                    "text": "Answer Capsule é uma resposta direta de 50-80 palavras que aparece imediatamente após cada heading. É a técnica mais importante para SEO e citação por IA."
+                }
+            }
+        ]
+    }
+    </script>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        'brand': '#ffbe00',
+                        'brand-dark': '#e6ab00',
+                        'brand-light': '#fff4cc'
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .card-hover { transition: all 0.2s ease; }
+        .card-hover:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(0,0,0,0.15); }
+        .checklist-item input:checked + span { text-decoration: line-through; opacity: 0.6; }
+        details summary { cursor: pointer; }
+        details summary::-webkit-details-marker { display: none; }
+        
+        /* Light mode */
+        .answer-capsule { border-left: 4px solid #ffbe00; background: #fffbeb; }
+        
+        /* Dark mode */
+        .dark .answer-capsule { background: #1f1f1f; }
+        .dark details { background: #111; border-color: #333; }
+        .dark details:hover { background: #1a1a1a; }
+        .dark table { background: #111; }
+        .dark thead { background: #1a1a1a; }
+        .dark tbody tr { border-color: #333; }
+        
+        ::selection { background: #ffbe00; color: #000; }
+        
+        /* Theme toggle button */
+        .theme-toggle {
+            transition: all 0.3s ease;
+        }
+        .theme-toggle:hover {
+            transform: scale(1.1);
+        }
+    </style>
+</head>
+<body class="bg-white dark:bg-black text-black dark:text-white transition-colors duration-300">
+    
+    <!-- Header -->
+    <header class="bg-black text-white">
+        <div class="max-w-6xl mx-auto px-6 py-8">
+            <div class="flex items-start justify-between">
+                <!-- Left: Title and subtitle -->
+                <div>
+                    <h1 class="text-3xl md:text-4xl font-extrabold mb-2">Framework SEO + AEO/GEO</h1>
+                    <p class="text-gray-400 text-sm md:text-base">Guia completo para ser encontrado no Google e citado por IAs</p>
+                </div>
+                
+                <!-- Right: Theme toggle and Breadcrumb -->
+                <div class="flex flex-col items-end gap-3">
+                    <!-- Theme Toggle -->
+                    <button id="theme-toggle" class="theme-toggle w-10 h-10 rounded-full border border-gray-600 flex items-center justify-center hover:border-brand" aria-label="Alternar tema">
+                        <!-- Sun icon (dark mode) -->
+                        <svg id="sun-icon" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                        </svg>
+                        <!-- Moon icon (light mode) -->
+                        <svg id="moon-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path>
+                        </svg>
+                    </button>
+                    
+                    <!-- Breadcrumb -->
+                    <nav class="text-sm">
+                        <a href="https://guifav.github.io" class="text-brand hover:underline">Home</a>
+                        <span class="text-gray-500 mx-2">/</span>
+                        <span class="text-gray-400">Framework SEO/AEO</span>
+                    </nav>
+                </div>
+            </div>
+        </div>
+        <!-- Orange/Yellow bar -->
+        <div class="h-1 bg-brand"></div>
+    </header>
+
+    <!-- Navigation -->
+    <nav class="bg-white dark:bg-black border-b border-gray-200 dark:border-gray-800 sticky top-0 z-50">
+        <div class="max-w-5xl mx-auto px-6 py-3 overflow-x-auto">
+            <div class="flex gap-6 text-sm font-medium whitespace-nowrap">
+                <a href="#fundamentos" class="text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors">Fundamentos</a>
+                <a href="#estrutura" class="text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors">Estrutura</a>
+                <a href="#tecnico" class="text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors">Técnico</a>
+                <a href="#aeo" class="text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors">AEO/GEO</a>
+                <a href="#eeat" class="text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors">E-E-A-T</a>
+                <a href="#plataformas" class="text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors">Plataformas</a>
+                <a href="#checklist" class="text-gray-600 dark:text-gray-400 hover:text-black dark:hover:text-white transition-colors">Checklist</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-5xl mx-auto px-6 py-10">
+        
+        <!-- TL;DR -->
+        <section class="bg-amber-50 dark:bg-amber-950/30 border-l-4 border-brand rounded-r-xl p-6 mb-10">
+            <h2 class="text-lg font-semibold text-black dark:text-white mb-3">TL;DR — O Essencial em 30 Segundos</h2>
+            <div class="text-gray-800 dark:text-gray-300 space-y-2">
+                <p><strong class="text-black dark:text-white">SEO</strong> = ser encontrado no Google. <strong class="text-black dark:text-white">AEO/GEO</strong> = ser citado por ChatGPT, Perplexity e outras IAs.</p>
+                <p>A boa notícia: <strong class="text-black dark:text-white">ambos querem a mesma coisa</strong> — respostas claras, estrutura lógica, informação densa com fontes.</p>
+                <p>A técnica mais importante: <strong class="text-black dark:text-white">Answer Capsule</strong> — resposta direta de 50-80 palavras após cada heading.</p>
+            </div>
+        </section>
+
+        <!-- Fundamentos -->
+        <section id="fundamentos" class="mb-12">
+            <h2 class="text-2xl font-bold text-black dark:text-white mb-6 pb-2 border-b-2 border-brand">1. Por Que Isso Importa Agora</h2>
+            
+            <div class="grid md:grid-cols-2 gap-6 mb-6">
+                <div class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-5">
+                    <h3 class="font-semibold text-black dark:text-white mb-3">O Problema</h3>
+                    <ul class="text-gray-700 dark:text-gray-300 space-y-2 text-sm">
+                        <li>• 60% das buscas no Google terminam sem clique (AI Overviews)</li>
+                        <li>• 25% do volume de busca migrando para chatbots até 2026</li>
+                        <li>• Apenas 11% dos sites são citados tanto pelo ChatGPT quanto Perplexity</li>
+                        <li>• Conteúdo sem otimização tem vida útil de ~7 dias</li>
+                    </ul>
+                </div>
+                <div class="bg-amber-50 dark:bg-amber-950/30 border border-brand/30 rounded-lg p-5">
+                    <h3 class="font-semibold text-black dark:text-white mb-3">A Oportunidade</h3>
+                    <ul class="text-gray-700 dark:text-gray-300 space-y-2 text-sm">
+                        <li>• Poucos criadores estão otimizando para AEO</li>
+                        <li>• First-mover advantage é massivo</li>
+                        <li>• Posts otimizados trabalham 24/7 trazendo leitores</li>
+                        <li>• Efeito composto: posts de 6 meses atrás ainda geram tráfego</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-5">
+                <h3 class="font-semibold text-black dark:text-white mb-3">O Sistema de Dois Motores</h3>
+                <div class="grid md:grid-cols-2 gap-4">
+                    <div>
+                        <p class="font-medium text-black dark:text-white">Motor 1: SEO Tradicional</p>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Tráfego evergreen via Google. Novos leitores enquanto você dorme.</p>
+                    </div>
+                    <div>
+                        <p class="font-medium text-black dark:text-white">Motor 2: AEO/GEO</p>
+                        <p class="text-sm text-gray-600 dark:text-gray-400">Ser citado como autoridade por ChatGPT, Perplexity, Gemini, Claude.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Estrutura de Conteúdo -->
+        <section id="estrutura" class="mb-12">
+            <h2 class="text-2xl font-bold text-black dark:text-white mb-6 pb-2 border-b-2 border-brand">2. Estrutura de Conteúdo</h2>
+            
+            <!-- Answer Capsule destaque -->
+            <div class="bg-black dark:bg-white dark:bg-opacity-5 text-white rounded-xl p-6 mb-6 border border-gray-800 dark:border-gray-700">
+                <h3 class="text-xl font-bold mb-3">Técnica #1: Answer Capsule</h3>
+                <p class="mb-4 text-gray-300">A técnica mais importante para SEO e citação por IA. Estrutura:</p>
+                <div class="bg-white/10 rounded-lg p-4 font-mono text-sm">
+                    <p class="text-brand">## [Heading em formato de pergunta]</p>
+                    <p class="mt-2 text-white"><strong>[Resposta direta em 50-80 palavras, sem preâmbulo]</strong></p>
+                    <p class="text-gray-400 mt-2">[Contexto de suporte e exemplos seguem...]</p>
+                </div>
+            </div>
+
+            <div class="space-y-4">
+                <details class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800" open>
+                    <summary class="p-4 font-semibold flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg">
+                        <span>Regras de Estrutura</span>
+                        <span class="text-gray-400">▼</span>
+                    </summary>
+                    <div class="px-4 pb-4">
+                        <table class="w-full text-sm">
+                            <thead class="bg-gray-50 dark:bg-gray-800">
+                                <tr>
+                                    <th class="text-left p-2 font-medium">Elemento</th>
+                                    <th class="text-left p-2 font-medium">Regra</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                                <tr><td class="p-2">Primeiras 100 palavras</td><td class="p-2">Devem responder à pergunta principal</td></tr>
+                                <tr><td class="p-2">Answer Capsule</td><td class="p-2">50-80 palavras após cada H2</td></tr>
+                                <tr><td class="p-2">Parágrafos</td><td class="p-2">Máximo 60-100 palavras (uma ideia por parágrafo)</td></tr>
+                                <tr><td class="p-2">Hierarquia de headings</td><td class="p-2">H1 → H2 → H3 → H4 (nunca pular níveis)</td></tr>
+                                <tr><td class="p-2">Links internos</td><td class="p-2">3-5 por post</td></tr>
+                                <tr><td class="p-2">Artigo completo</td><td class="p-2">2000-2500 palavras ideal</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </details>
+
+                <details class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
+                    <summary class="p-4 font-semibold flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg">
+                        <span>Headers em Formato de Pergunta</span>
+                        <span class="text-gray-400">▼</span>
+                    </summary>
+                    <div class="px-4 pb-4">
+                        <p class="text-sm text-gray-600 dark:text-gray-400 mb-3">IAs são treinadas para reconhecer padrões pergunta-resposta. Quanto mais específico, melhor.</p>
+                        <table class="w-full text-sm">
+                            <thead class="bg-gray-50 dark:bg-gray-800">
+                                <tr>
+                                    <th class="text-left p-2 font-medium">Evitar</th>
+                                    <th class="text-left p-2 font-medium text-brand">Preferir</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                                <tr><td class="p-2 text-gray-500">"Estratégias de RAG"</td><td class="p-2">"Quando usar RAG em vez de fine-tuning?"</td></tr>
+                                <tr><td class="p-2 text-gray-500">"ROI de IA"</td><td class="p-2">"Como calcular o ROI real de um projeto de IA?"</td></tr>
+                                <tr><td class="p-2 text-gray-500">"Implementação de Agents"</td><td class="p-2">"Qual a arquitetura mínima para agents em produção?"</td></tr>
+                                <tr><td class="p-2 text-gray-500">"Custos de LLM"</td><td class="p-2">"Quanto custa manter um LLM em produção por mês?"</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </details>
+
+                <details class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
+                    <summary class="p-4 font-semibold flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg">
+                        <span>Exemplo Prático de Answer Capsule</span>
+                        <span class="text-gray-400">▼</span>
+                    </summary>
+                    <div class="px-4 pb-4">
+                        <div class="answer-capsule p-4 rounded-r-lg mb-4">
+                            <p class="font-semibold text-black dark:text-white mb-2">## Quanto tempo leva para implementar RAG em uma empresa média?</p>
+                            <p class="text-gray-700 dark:text-gray-300"><strong>Na maioria dos casos, uma implementação de RAG robusta leva 8-12 semanas quando há dados limpos e uma equipe dedicada. O MVP funcional sai em 3-4 semanas, mas a fase de ajuste de prompts e qualidade das respostas consome o restante. Em uma empresa do setor financeiro, o processo levou 11 semanas até produção, sendo 6 semanas só em curadoria de documentos.</strong></p>
+                            <p class="text-gray-500 mt-3 text-sm">Esse timeline assume alguns pré-requisitos que muitas empresas ignoram...</p>
+                        </div>
+                        <p class="text-sm text-gray-500">Note: resposta direta, métricas específicas, caso real — tudo em ~70 palavras.</p>
+                    </div>
+                </details>
+            </div>
+        </section>
+
+        <!-- Configurações Técnicas -->
+        <section id="tecnico" class="mb-12">
+            <h2 class="text-2xl font-bold text-black dark:text-white mb-6 pb-2 border-b-2 border-brand">3. Configurações Técnicas</h2>
+            
+            <div class="grid md:grid-cols-2 gap-6">
+                <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-5 card-hover">
+                    <h3 class="font-semibold text-black dark:text-white mb-3">SEO Title</h3>
+                    <ul class="text-sm space-y-2 text-gray-600 dark:text-gray-400">
+                        <li>• Máximo <strong class="text-black dark:text-white">60 caracteres</strong></li>
+                        <li>• Palavra-chave nos <strong class="text-black dark:text-white">primeiros 30 caracteres</strong></li>
+                        <li>• Ser compelling E pesquisável</li>
+                    </ul>
+                    <div class="mt-3 text-xs">
+                        <p class="text-gray-400">Evitar: "Minhas Reflexões sobre RAG"</p>
+                        <p class="text-black dark:text-white font-medium">Preferir: "RAG para Empresas: 5 Erros que Custam Milhões"</p>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-5 card-hover">
+                    <h3 class="font-semibold text-black dark:text-white mb-3">Meta Description</h3>
+                    <ul class="text-sm space-y-2 text-gray-600 dark:text-gray-400">
+                        <li>• <strong class="text-black dark:text-white">155-160 caracteres</strong></li>
+                        <li>• Keywords primária e secundária natural</li>
+                        <li>• É seu elevator pitch para desconhecidos</li>
+                    </ul>
+                    <div class="mt-3 p-2 bg-gray-50 dark:bg-gray-800 rounded text-xs text-gray-600 dark:text-gray-400">
+                        "Framework prático de ROI para projetos de IA que implementei em 3 empresas. Métricas reais, erros comuns e o que funcionou. Para CTOs e líderes de tecnologia."
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-5 card-hover">
+                    <h3 class="font-semibold text-black dark:text-white mb-3">URL Slug</h3>
+                    <ul class="text-sm space-y-2 text-gray-600 dark:text-gray-400">
+                        <li>• Apenas <strong class="text-black dark:text-white">palavras-chave</strong></li>
+                        <li>• Separar com <strong class="text-black dark:text-white">hífens (-)</strong></li>
+                        <li>• Tudo minúsculo, sem stop words</li>
+                        <li>• <strong class="text-black dark:text-white">Máximo 5 palavras</strong></li>
+                        <li>• <span class="text-brand font-medium">Definir ANTES de publicar (imutável)</span></li>
+                    </ul>
+                    <div class="mt-3 text-xs">
+                        <p class="text-gray-400">Evitar: /p/minhas-reflexoes-sobre-implementacao-de-rag-em-2025</p>
+                        <p class="text-black dark:text-white font-medium">Preferir: /p/rag-empresas-erros-comuns</p>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-5 card-hover">
+                    <h3 class="font-semibold text-black dark:text-white mb-3">Imagem de Preview</h3>
+                    <ul class="text-sm space-y-2 text-gray-600 dark:text-gray-400">
+                        <li>• Tamanho: <strong class="text-black dark:text-white">1456 × 1048 pixels</strong></li>
+                        <li>• Posts com preview: <strong class="text-black dark:text-white">2x mais signups</strong></li>
+                        <li>• <strong class="text-black dark:text-white">40% mais cliques</strong> nos resultados</li>
+                    </ul>
+                    <div class="mt-3 p-2 bg-gray-50 dark:bg-gray-800 rounded text-xs text-gray-600 dark:text-gray-400">
+                        Template recomendado: título do post + nome/logo + cores consistentes
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-6 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-5">
+                <h3 class="font-semibold text-black dark:text-white mb-3">Requisitos para Indexação por IAs</h3>
+                <div class="grid md:grid-cols-2 gap-4 text-sm">
+                    <ul class="space-y-1 text-gray-600 dark:text-gray-400">
+                        <li>• Permitir PerplexityBot, BingPreview, OAI-SearchBot no robots.txt</li>
+                        <li>• Schema markup: FAQ, Article, HowTo, Author</li>
+                        <li>• Render server-side quando possível</li>
+                    </ul>
+                    <ul class="space-y-1 text-gray-600 dark:text-gray-400">
+                        <li>• Conteúdo principal em texto (não em JS pesado)</li>
+                        <li>• Site mobile-friendly, rápido, HTTPS</li>
+                        <li>• Considerar implementar llms.txt</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- AEO/GEO -->
+        <section id="aeo" class="mb-12">
+            <h2 class="text-2xl font-bold text-black dark:text-white mb-6 pb-2 border-b-2 border-brand">4. Otimização para IA (AEO/GEO)</h2>
+            
+            <div class="bg-amber-50 dark:bg-amber-950/30 border border-brand/30 rounded-xl p-6 mb-6">
+                <h3 class="font-semibold text-black dark:text-white mb-3">As 5 Táticas Essenciais</h3>
+                <div class="space-y-4">
+                    <div class="flex gap-3">
+                        <span class="bg-black dark:bg-brand text-brand dark:text-black w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">1</span>
+                        <div>
+                            <p class="font-medium text-black dark:text-white">Answer Capsules</p>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">Resposta direta de 50-80 palavras após cada H2. Técnica #1.</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-3">
+                        <span class="bg-black dark:bg-brand text-brand dark:text-black w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">2</span>
+                        <div>
+                            <p class="font-medium text-black dark:text-white">Dados Originais</p>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">Conteúdo com dados proprietários é citado <strong class="text-black dark:text-white">4,1x mais</strong>. Números + contexto + fonte.</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-3">
+                        <span class="bg-black dark:bg-brand text-brand dark:text-black w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">3</span>
+                        <div>
+                            <p class="font-medium text-black dark:text-white">Links Mínimos no Answer Capsule</p>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">IAs preferem respostas limpas e standalone. Links vão no contexto, não na resposta.</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-3">
+                        <span class="bg-black dark:bg-brand text-brand dark:text-black w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">4</span>
+                        <div>
+                            <p class="font-medium text-black dark:text-white">Parágrafos Curtos</p>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">60-100 palavras máximo. Uma ideia por parágrafo. IAs extraem em chunks.</p>
+                        </div>
+                    </div>
+                    <div class="flex gap-3">
+                        <span class="bg-black dark:bg-brand text-brand dark:text-black w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">5</span>
+                        <div>
+                            <p class="font-medium text-black dark:text-white">Variação Semântica (não keyword stuffing)</p>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">IAs entendem contexto. Use sinônimos naturais: implementar, construir, desenvolver, criar.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-6">
+                <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-5">
+                    <h3 class="font-semibold text-black dark:text-white mb-3">O que IAs Adoram</h3>
+                    <ul class="text-sm space-y-2 text-gray-600 dark:text-gray-400">
+                        <li>• Respostas claras e diretas sem preâmbulos</li>
+                        <li>• Estrutura de pergunta seguida de resposta explícita</li>
+                        <li>• Definições no início de cada seção</li>
+                        <li>• Frameworks nomeados (ex: "Modelo de 4 Etapas")</li>
+                        <li>• Números com contexto: unidade, período, fonte</li>
+                        <li>• Tabelas e dados estruturados</li>
+                        <li>• "Fact blocks" extraíveis e autossuficientes</li>
+                    </ul>
+                </div>
+
+                <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-5">
+                    <h3 class="font-semibold text-black dark:text-white mb-3">O que Evitar</h3>
+                    <ul class="text-sm space-y-2 text-gray-600 dark:text-gray-400">
+                        <li>• Corporate speak e linguagem de marketing</li>
+                        <li>• Enterrar a resposta em parágrafos extensos</li>
+                        <li>• Headings vagos ou criativos demais</li>
+                        <li>• Blocos longos de texto sem formatação</li>
+                        <li>• Conteúdo genérico sem perspectiva única</li>
+                        <li>• Keyword stuffing</li>
+                        <li>• Jargão vazio: "sinergia", "revolucionário", "disruptivo"</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- E-E-A-T -->
+        <section id="eeat" class="mb-12">
+            <h2 class="text-2xl font-bold text-black dark:text-white mb-6 pb-2 border-b-2 border-brand">5. E-E-A-T (Experiência, Expertise, Autoridade, Confiança)</h2>
+            
+            <p class="text-gray-600 dark:text-gray-400 mb-6">Google e IAs avaliam esses sinais para decidir quais fontes citar.</p>
+
+            <div class="grid md:grid-cols-2 gap-6">
+                <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-5 card-hover">
+                    <h3 class="font-semibold text-black dark:text-white mb-3 flex items-center gap-2">
+                        <span class="w-2 h-2 bg-brand rounded-full"></span>
+                        Experience (Experiência)
+                    </h3>
+                    <ul class="text-sm space-y-2 text-gray-600 dark:text-gray-400">
+                        <li>☐ Autor identificado com nome completo</li>
+                        <li>☐ Mini bio com cargo e experiência real</li>
+                        <li>☐ Links para LinkedIn/perfil profissional</li>
+                        <li>☐ Menção a projetos específicos que comprovam experiência</li>
+                    </ul>
+                </div>
+
+                <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-5 card-hover">
+                    <h3 class="font-semibold text-black dark:text-white mb-3 flex items-center gap-2">
+                        <span class="w-2 h-2 bg-brand rounded-full"></span>
+                        Expertise (Especialização)
+                    </h3>
+                    <ul class="text-sm space-y-2 text-gray-600 dark:text-gray-400">
+                        <li>☐ Profundidade técnica demonstrada</li>
+                        <li>☐ Terminologia correta usada consistentemente</li>
+                        <li>☐ Nuances e trade-offs discutidos</li>
+                        <li>☐ Dados específicos e métricas incluídos</li>
+                    </ul>
+                </div>
+
+                <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-5 card-hover">
+                    <h3 class="font-semibold text-black dark:text-white mb-3 flex items-center gap-2">
+                        <span class="w-2 h-2 bg-brand rounded-full"></span>
+                        Authoritativeness (Autoridade)
+                    </h3>
+                    <ul class="text-sm space-y-2 text-gray-600 dark:text-gray-400">
+                        <li>☐ Citações de fontes confiáveis (papers, dados oficiais)</li>
+                        <li>☐ Referências a trabalhos anteriores</li>
+                        <li>☐ Links internos para outros artigos</li>
+                        <li>☐ Reconhecimento de limitações</li>
+                    </ul>
+                </div>
+
+                <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-5 card-hover">
+                    <h3 class="font-semibold text-black dark:text-white mb-3 flex items-center gap-2">
+                        <span class="w-2 h-2 bg-brand rounded-full"></span>
+                        Trustworthiness (Confiança)
+                    </h3>
+                    <ul class="text-sm space-y-2 text-gray-600 dark:text-gray-400">
+                        <li>☐ Data de publicação visível</li>
+                        <li>☐ Data de última atualização (se aplicável)</li>
+                        <li>☐ Fontes verificáveis citadas</li>
+                        <li>☐ Erros admitidos abertamente quando ocorrem</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="mt-6 bg-amber-50 dark:bg-amber-950/30 border-l-4 border-brand rounded-r-lg p-5">
+                <h3 class="font-semibold text-black dark:text-white mb-2">Sinais Humanos (Diferenciação de Conteúdo IA)</h3>
+                <p class="text-sm text-gray-700 dark:text-gray-300">IAs tendem a ignorar conteúdo que parece gerado por outras IAs. Inclua: experiências práticas, screenshots originais, dados proprietários, opiniões formadas, erros e fracassos com transparência, contexto específico local.</p>
+            </div>
+        </section>
+
+        <!-- Plataformas de IA -->
+        <section id="plataformas" class="mb-12">
+            <h2 class="text-2xl font-bold text-black dark:text-white mb-6 pb-2 border-b-2 border-brand">6. Diferenças por Plataforma de IA</h2>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
+                    <thead class="bg-gray-50 dark:bg-gray-800">
+                        <tr>
+                            <th class="text-left p-4 font-semibold">Plataforma</th>
+                            <th class="text-left p-4 font-semibold">O que Prioriza</th>
+                            <th class="text-left p-4 font-semibold">Como Adaptar</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                        <tr>
+                            <td class="p-4 font-medium">ChatGPT</td>
+                            <td class="p-4 text-gray-600 dark:text-gray-400">Clareza conceitual, metodologias estruturadas</td>
+                            <td class="p-4 text-gray-600 dark:text-gray-400">Diagramas rotulados, processos numerados, definições explícitas</td>
+                        </tr>
+                        <tr>
+                            <td class="p-4 font-medium">Perplexity</td>
+                            <td class="p-4 text-gray-600 dark:text-gray-400">Experiências reais, histórias práticas, frescor</td>
+                            <td class="p-4 text-gray-600 dark:text-gray-400">Autenticidade sobre marketing polido, casos reais com detalhes</td>
+                        </tr>
+                        <tr>
+                            <td class="p-4 font-medium">Gemini</td>
+                            <td class="p-4 text-gray-600 dark:text-gray-400">Evidências com nuances contextuais</td>
+                            <td class="p-4 text-gray-600 dark:text-gray-400">Ressalvas, trade-offs, "quando NÃO usar"</td>
+                        </tr>
+                        <tr>
+                            <td class="p-4 font-medium">Claude</td>
+                            <td class="p-4 text-gray-600 dark:text-gray-400">Precisão técnica, estrutura lógica</td>
+                            <td class="p-4 text-gray-600 dark:text-gray-400">Ser honesto sobre limitações, não oversimplificar</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="mt-6 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-5">
+                <h3 class="font-semibold text-black dark:text-white mb-2">Para Performar em Todas</h3>
+                <p class="text-sm text-gray-700 dark:text-gray-300">Um mesmo artigo pode ir bem em todas se incluir: Answer Capsule claro (todas), experiência/case real (Perplexity), trade-offs e "quando NÃO usar" (Gemini), admissão de limitações (Claude), dados originais (todas).</p>
+            </div>
+        </section>
+
+        <!-- Medição -->
+        <section class="mb-12">
+            <h2 class="text-2xl font-bold text-black dark:text-white mb-6 pb-2 border-b-2 border-brand">7. Medição e Monitoramento</h2>
+            
+            <div class="grid md:grid-cols-2 gap-6">
+                <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-5">
+                    <h3 class="font-semibold text-black dark:text-white mb-3">Ferramentas Gratuitas</h3>
+                    <ul class="text-sm space-y-2 text-gray-600 dark:text-gray-400">
+                        <li><strong class="text-black dark:text-white">Google Search Console</strong> — queries, posições, CTR</li>
+                        <li><strong class="text-black dark:text-white">UTM ChatGPT</strong> — utm_source=chatgpt.com</li>
+                        <li><strong class="text-black dark:text-white">HubSpot AEO Grader</strong> — visibilidade em IAs</li>
+                        <li><strong class="text-black dark:text-white">Testes manuais</strong> — perguntar às IAs sobre seus tópicos</li>
+                    </ul>
+                </div>
+
+                <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-5">
+                    <h3 class="font-semibold text-black dark:text-white mb-3">O Que Monitorar</h3>
+                    <ul class="text-sm space-y-2 text-gray-600 dark:text-gray-400">
+                        <li>• Tráfego de busca orgânica (semanal)</li>
+                        <li>• % posts indexados no Search Console (meta: 80%+)</li>
+                        <li>• Citações em ChatGPT/Perplexity (mensal)</li>
+                        <li>• Novos assinantes via busca (meta: 20%+ do total)</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="mt-6 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-5">
+                <h3 class="font-semibold text-black dark:text-white mb-3">Timeline Realista</h3>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div class="bg-white dark:bg-gray-800 p-3 rounded border border-gray-200 dark:border-gray-700">
+                        <p class="font-medium text-black dark:text-white">Mês 1-2</p>
+                        <p class="text-gray-600 dark:text-gray-400">Posts indexados, poucos rankings</p>
+                    </div>
+                    <div class="bg-white dark:bg-gray-800 p-3 rounded border border-gray-200 dark:border-gray-700">
+                        <p class="font-medium text-black dark:text-white">Mês 3-4</p>
+                        <p class="text-gray-600 dark:text-gray-400">Primeiros rankings, tráfego começando</p>
+                    </div>
+                    <div class="bg-white dark:bg-gray-800 p-3 rounded border border-gray-200 dark:border-gray-700">
+                        <p class="font-medium text-black dark:text-white">Mês 5-6</p>
+                        <p class="text-gray-600 dark:text-gray-400">Tráfego consistente, primeiras citações IA</p>
+                    </div>
+                    <div class="bg-white dark:bg-gray-800 p-3 rounded border border-gray-200 dark:border-gray-700">
+                        <p class="font-medium text-black dark:text-white">Mês 6-12</p>
+                        <p class="text-gray-600 dark:text-gray-400">Efeito composto, posts antigos gerando tráfego</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Estratégia de Paywall -->
+        <section class="mb-12">
+            <h2 class="text-2xl font-bold text-black dark:text-white mb-6 pb-2 border-b-2 border-brand">8. Estratégia de Paywall</h2>
+            
+            <div class="bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded-lg p-5 mb-6">
+                <h3 class="font-semibold text-black dark:text-white mb-2">O Problema</h3>
+                <p class="text-sm text-gray-700 dark:text-gray-300">Conteúdo atrás de paywall é <strong class="text-black dark:text-white">INVISÍVEL</strong> para Google, ChatGPT, Perplexity. Seu artigo de 3.000 palavras parece um teaser de 300 palavras para os motores de descoberta.</p>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-6">
+                <div class="bg-amber-50 dark:bg-amber-950/30 border border-brand/30 rounded-lg p-5">
+                    <h3 class="font-semibold text-black dark:text-white mb-3">Conteúdo Livre (Motor de Descoberta)</h3>
+                    <ul class="text-sm space-y-1 text-gray-700 dark:text-gray-300">
+                        <li>• Cases detalhados com métricas</li>
+                        <li>• Frameworks de decisão</li>
+                        <li>• Comparativos técnicos</li>
+                        <li>• Guias completos</li>
+                        <li>• Tutoriais conceituais</li>
+                    </ul>
+                </div>
+                <div class="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg p-5">
+                    <h3 class="font-semibold text-black dark:text-white mb-3">Conteúdo Pago (Motor de Retenção)</h3>
+                    <ul class="text-sm space-y-1 text-gray-600 dark:text-gray-400">
+                        <li>• Q&As exclusivos</li>
+                        <li>• Deep dives muito nichados</li>
+                        <li>• Sessões de mentoria/comunidade</li>
+                        <li>• Templates e recursos</li>
+                        <li>• Acesso antecipado</li>
+                    </ul>
+                </div>
+            </div>
+
+            <p class="text-sm text-gray-600 dark:text-gray-400 mt-4"><strong class="text-black dark:text-white">Regra:</strong> Nunca coloque seu melhor conteúdo atrás de paywall enquanto ainda está crescendo audiência.</p>
+        </section>
+
+        <!-- Checklist Final -->
+        <section id="checklist" class="mb-12">
+            <h2 class="text-2xl font-bold text-black dark:text-white mb-6 pb-2 border-b-2 border-brand">9. Checklist Pré-Publicação</h2>
+            
+            <div class="space-y-6">
+                <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-5">
+                    <h3 class="font-semibold text-black dark:text-white mb-4">Configurações Técnicas <span class="text-gray-400 font-normal text-sm">(5 min)</span></h3>
+                    <div class="space-y-2 text-sm">
+                        <label class="checklist-item flex items-start gap-2 cursor-pointer">
+                            <input type="checkbox" class="mt-1 accent-amber-500">
+                            <span>Título SEO definido (&lt; 60 chars, keyword nos primeiros 30)</span>
+                        </label>
+                        <label class="checklist-item flex items-start gap-2 cursor-pointer">
+                            <input type="checkbox" class="mt-1 accent-amber-500">
+                            <span>Meta descrição escrita (155-160 chars, keywords incluídas)</span>
+                        </label>
+                        <label class="checklist-item flex items-start gap-2 cursor-pointer">
+                            <input type="checkbox" class="mt-1 accent-amber-500">
+                            <span>URL slug customizado ANTES de publicar (só keywords, minúsculo, hífens)</span>
+                        </label>
+                        <label class="checklist-item flex items-start gap-2 cursor-pointer">
+                            <input type="checkbox" class="mt-1 accent-amber-500">
+                            <span>Imagem de preview social configurada (1456 × 1048 px)</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-5">
+                    <h3 class="font-semibold text-black dark:text-white mb-4">Estrutura de Conteúdo <span class="text-gray-400 font-normal text-sm">(5 min)</span></h3>
+                    <div class="space-y-2 text-sm">
+                        <label class="checklist-item flex items-start gap-2 cursor-pointer">
+                            <input type="checkbox" class="mt-1 accent-amber-500">
+                            <span>Resposta curta nos primeiros 100 palavras?</span>
+                        </label>
+                        <label class="checklist-item flex items-start gap-2 cursor-pointer">
+                            <input type="checkbox" class="mt-1 accent-amber-500">
+                            <span>Answer Capsules (50-80 palavras) após cada H2 principal?</span>
+                        </label>
+                        <label class="checklist-item flex items-start gap-2 cursor-pointer">
+                            <input type="checkbox" class="mt-1 accent-amber-500">
+                            <span>Headings em formato de pergunta?</span>
+                        </label>
+                        <label class="checklist-item flex items-start gap-2 cursor-pointer">
+                            <input type="checkbox" class="mt-1 accent-amber-500">
+                            <span>Hierarquia correta (H1 → H2 → H3, sem pular)?</span>
+                        </label>
+                        <label class="checklist-item flex items-start gap-2 cursor-pointer">
+                            <input type="checkbox" class="mt-1 accent-amber-500">
+                            <span>Parágrafos curtos (máximo 100 palavras cada)?</span>
+                        </label>
+                        <label class="checklist-item flex items-start gap-2 cursor-pointer">
+                            <input type="checkbox" class="mt-1 accent-amber-500">
+                            <span>3-5 links internos para posts anteriores?</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-5">
+                    <h3 class="font-semibold text-black dark:text-white mb-4">Qualidade de Conteúdo</h3>
+                    <div class="space-y-2 text-sm">
+                        <label class="checklist-item flex items-start gap-2 cursor-pointer">
+                            <input type="checkbox" class="mt-1 accent-amber-500">
+                            <span>Abre com case real ou situação específica?</span>
+                        </label>
+                        <label class="checklist-item flex items-start gap-2 cursor-pointer">
+                            <input type="checkbox" class="mt-1 accent-amber-500">
+                            <span>Tem métricas quantificadas (antes/depois)?</span>
+                        </label>
+                        <label class="checklist-item flex items-start gap-2 cursor-pointer">
+                            <input type="checkbox" class="mt-1 accent-amber-500">
+                            <span>Explica o "porquê" das decisões, não só o "o quê"?</span>
+                        </label>
+                        <label class="checklist-item flex items-start gap-2 cursor-pointer">
+                            <input type="checkbox" class="mt-1 accent-amber-500">
+                            <span>Inclui lições aprendidas ou armadilhas a evitar?</span>
+                        </label>
+                        <label class="checklist-item flex items-start gap-2 cursor-pointer">
+                            <input type="checkbox" class="mt-1 accent-amber-500">
+                            <span>O leitor sabe o que fazer com essa informação?</span>
+                        </label>
+                        <label class="checklist-item flex items-start gap-2 cursor-pointer">
+                            <input type="checkbox" class="mt-1 accent-amber-500">
+                            <span>Trade-offs e limitações discutidos?</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-5">
+                    <h3 class="font-semibold text-black dark:text-white mb-4">AEO/Citação por IA</h3>
+                    <div class="space-y-2 text-sm">
+                        <label class="checklist-item flex items-start gap-2 cursor-pointer">
+                            <input type="checkbox" class="mt-1 accent-amber-500">
+                            <span>Answer Capsules são autossuficientes (fazem sentido fora de contexto)?</span>
+                        </label>
+                        <label class="checklist-item flex items-start gap-2 cursor-pointer">
+                            <input type="checkbox" class="mt-1 accent-amber-500">
+                            <span>Links mínimos dentro dos Answer Capsules?</span>
+                        </label>
+                        <label class="checklist-item flex items-start gap-2 cursor-pointer">
+                            <input type="checkbox" class="mt-1 accent-amber-500">
+                            <span>Dados originais incluídos quando possível?</span>
+                        </label>
+                        <label class="checklist-item flex items-start gap-2 cursor-pointer">
+                            <input type="checkbox" class="mt-1 accent-amber-500">
+                            <span>Autor e credenciais mencionados?</span>
+                        </label>
+                        <label class="checklist-item flex items-start gap-2 cursor-pointer">
+                            <input type="checkbox" class="mt-1 accent-amber-500">
+                            <span>Data de publicação visível?</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-5">
+                    <h3 class="font-semibold text-black dark:text-white mb-4">Após Publicar</h3>
+                    <div class="space-y-2 text-sm">
+                        <label class="checklist-item flex items-start gap-2 cursor-pointer">
+                            <input type="checkbox" class="mt-1 accent-amber-500">
+                            <span>Verificar indexação no Search Console</span>
+                        </label>
+                        <label class="checklist-item flex items-start gap-2 cursor-pointer">
+                            <input type="checkbox" class="mt-1 accent-amber-500">
+                            <span>Testar citação no ChatGPT/Perplexity após 1 semana</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="border-t border-gray-200 dark:border-gray-800 pt-8 mt-12">
+            <div class="text-center text-gray-500 text-sm">
+                <p class="mb-2"><strong class="text-black dark:text-white">Framework SEO + AEO/GEO</strong></p>
+                <p>Versão 1.0 — Dezembro 2025</p>
+                <p class="mt-4">Atualizar trimestralmente conforme evolução dos algoritmos</p>
+                <p class="mt-6 text-xs">
+                    <a href="https://guifav.github.io" class="hover:text-brand">guifav.github.io</a> · 
+                    Guilherme Favaron
+                </p>
+            </div>
+        </footer>
+
+    </main>
+
+    <!-- Theme Toggle Script -->
+    <script>
+        const themeToggle = document.getElementById('theme-toggle');
+        const sunIcon = document.getElementById('sun-icon');
+        const moonIcon = document.getElementById('moon-icon');
+        const html = document.documentElement;
+
+        // Check for saved theme preference or default to system preference
+        function getThemePreference() {
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme) {
+                return savedTheme;
+            }
+            return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+
+        // Apply theme
+        function applyTheme(theme) {
+            if (theme === 'dark') {
+                html.classList.add('dark');
+                sunIcon.classList.remove('hidden');
+                moonIcon.classList.add('hidden');
+            } else {
+                html.classList.remove('dark');
+                sunIcon.classList.add('hidden');
+                moonIcon.classList.remove('hidden');
+            }
+            localStorage.setItem('theme', theme);
+        }
+
+        // Initialize theme
+        applyTheme(getThemePreference());
+
+        // Toggle theme on button click
+        themeToggle.addEventListener('click', () => {
+            const currentTheme = html.classList.contains('dark') ? 'dark' : 'light';
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            applyTheme(newTheme);
+        });
+
+        // Listen for system theme changes
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+            if (!localStorage.getItem('theme')) {
+                applyTheme(e.matches ? 'dark' : 'light');
+            }
+        });
+    </script>
+
+</body>
+</html>
