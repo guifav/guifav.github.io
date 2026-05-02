@@ -56,6 +56,8 @@
             --border: #e5e5e5;
             --accent: #171717;
             --accent-hover: #404040;
+            --highlight: #FFBE00;
+            --highlight-hover: #e6ab00;
             --tag-bg: #f5f5f5;
             --tag-text: #525252;
         }
@@ -68,6 +70,8 @@
             --border: #262626;
             --accent: #fafafa;
             --accent-hover: #d4d4d4;
+            --highlight: #FFBE00;
+            --highlight-hover: #e6ab00;
             --tag-bg: #262626;
             --tag-text: #a3a3a3;
         }
@@ -110,7 +114,7 @@
             transition: color 0.15s;
         }
 
-        .nav-links a:hover { color: var(--text); }
+        .nav-links a:hover { color: var(--highlight); }
 
         #theme-toggle {
             background: none;
@@ -152,7 +156,7 @@
             transition: color 0.15s;
         }
 
-        .social-link:hover { color: var(--text); }
+        .social-link:hover { color: var(--highlight); }
 
         /* Sections */
         section { padding: 48px 0; border-top: 1px solid var(--border); }
@@ -180,7 +184,7 @@
             line-height: 1.7;
         }
 
-        .about-grid a { color: var(--text); }
+        .about-grid a { color: var(--highlight); }
 
         .stats-list { list-style: none; }
 
@@ -191,7 +195,7 @@
             border-bottom: 1px solid var(--border);
         }
 
-        .stats-list li strong { color: var(--text); }
+        .stats-list li strong { color: var(--highlight); }
 
         /* Product cards (from mindapps) */
         .product-card {
@@ -203,7 +207,7 @@
             transition: border-color 0.15s;
         }
 
-        .product-card:hover { border-color: var(--text-secondary); }
+        .product-card:hover { border-color: var(--highlight); }
 
         .product-header {
             display: flex;
@@ -242,7 +246,7 @@
             font-weight: 500;
         }
 
-        .product-links a:hover { color: var(--text-secondary); }
+        .product-links a:hover { color: var(--highlight); }
 
         /* Skills */
         .skills-grid {
@@ -286,7 +290,7 @@
 
         .content-card p { font-size: 14px; color: var(--text-secondary); margin-bottom: 12px; }
 
-        .content-card a { font-size: 13px; color: var(--text); text-decoration: none; font-weight: 500; }
+        .content-card a { font-size: 13px; color: var(--highlight); text-decoration: none; font-weight: 500; }
 
         /* Services */
         .services-grid {
@@ -306,10 +310,10 @@
 
         .service-card p { font-size: 14px; color: var(--text-secondary); margin-bottom: 12px; }
 
-        .service-card a { font-size: 13px; color: var(--text); text-decoration: none; font-weight: 500; }
+        .service-card a { font-size: 13px; color: var(--highlight); text-decoration: none; font-weight: 500; }
 
         .cta-card {
-            border: 2px solid var(--accent);
+            border: 2px solid var(--highlight);
             border-radius: 12px;
             padding: 28px;
             margin-bottom: 24px;
@@ -330,12 +334,12 @@
             font-size: 14px;
             font-weight: 500;
             text-decoration: none;
-            background: var(--accent);
-            color: var(--bg);
+            background: var(--highlight);
+            color: #171717;
             transition: background 0.15s;
         }
 
-        .btn:hover { background: var(--accent-hover); }
+        .btn:hover { background: var(--highlight-hover); }
 
         /* Newsletter */
         .newsletter-box {
@@ -361,7 +365,7 @@
 
         footer a { color: var(--text-secondary); text-decoration: none; }
 
-        footer a:hover { color: var(--text); }
+        footer a:hover { color: var(--highlight); }
 
         @media (max-width: 640px) {
             .hero h1 { font-size: 28px; }
