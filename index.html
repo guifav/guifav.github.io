@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <meta name="description" content="Guilherme Favaron — VP de Tecnologia com 18+ anos de experiencia. IA em producao, nao em PowerPoint. Newsletter, produtos, consultoria."/>
+    <meta name="description" content="Guilherme Favaron — VP de Tecnologia com 18+ anos. IA em producao, nao em PowerPoint. Newsletter, produtos, consultoria."/>
     <title>Guilherme Favaron — Applied AI | VP of Technology</title>
     <meta name="author" content="Guilherme Favaron">
     <meta property="og:title" content="Guilherme Favaron — Applied AI | VP of Technology">
@@ -11,367 +11,58 @@
     <meta property="og:url" content="https://guifav.github.io">
     <meta property="og:type" content="profile">
     <link rel="canonical" href="https://guifav.github.io">
-
-    <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-K7Y87QNCX8"></script>
-    <script>
-        window.dataLayer = window.dataLayer || [];
-        function gtag(){dataLayer.push(arguments);}
-        gtag('js', new Date());
-        gtag('config', 'G-K7Y87QNCX8');
-    </script>
-
-    <script type="application/ld+json">
-    {
-        "@context": "https://schema.org",
-        "@type": "Person",
-        "@id": "https://guifav.github.io/#person",
-        "name": "Guilherme de Mauro Favaron",
-        "givenName": "Guilherme",
-        "familyName": "Favaron",
-        "url": "https://guifav.github.io",
-        "description": "VP de Tecnologia com 18+ anos construindo IA em producao. Autor, builder, 10+ apps em producao, 20+ apps open source.",
-        "jobTitle": "VP de Tecnologia",
-        "worksFor": { "@type": "Organization", "name": "GRI Institute", "url": "https://www.griclub.org" },
-        "knowsAbout": ["Machine Learning", "Applied AI", "LLMs", "RAG", "MLOps", "Python", "Next.js", "Cloud Run"],
-        "sameAs": [
-            "https://www.linkedin.com/in/guilhermefavaron",
-            "https://github.com/guifav",
-            "https://guilhermefavaron.com.br",
-            "https://mindapps.ai",
-            "https://virtuagency.ai",
-            "https://tramline.ai",
-            "https://huggingface.co/guifav",
-            "https://youtube.com/@ia-aplicada-guilhermefavaron"
-        ]
-    }
-    </script>
-
+    <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-K7Y87QNCX8');</script>
+    <script type="application/ld+json">{"@context":"https://schema.org","@type":"Person","@id":"https://guifav.github.io/#person","name":"Guilherme de Mauro Favaron","url":"https://guifav.github.io","description":"VP de Tecnologia com 18+ anos construindo IA em producao.","jobTitle":"VP de Tecnologia","worksFor":{"@type":"Organization","name":"GRI Institute","url":"https://www.griclub.org"},"sameAs":["https://www.linkedin.com/in/guilhermefavaron","https://github.com/guifav","https://guilhermefavaron.com.br","https://mindapps.ai","https://virtuagency.ai","https://tramline.ai","https://huggingface.co/guifav","https://youtube.com/@ia-aplicada-guilhermefavaron"]}</script>
     <style>
-        :root {
-            --bg: #fafafa;
-            --bg-card: #ffffff;
-            --text: #171717;
-            --text-secondary: #525252;
-            --border: #e5e5e5;
-            --accent: #171717;
-            --accent-hover: #404040;
-            --highlight: #FFBE00;
-            --highlight-hover: #e6ab00;
-            --tag-bg: #f5f5f5;
-            --tag-text: #525252;
-        }
-
-        [data-theme="dark"] {
-            --bg: #0a0a0a;
-            --bg-card: #171717;
-            --text: #fafafa;
-            --text-secondary: #a3a3a3;
-            --border: #262626;
-            --accent: #fafafa;
-            --accent-hover: #d4d4d4;
-            --highlight: #FFBE00;
-            --highlight-hover: #e6ab00;
-            --tag-bg: #262626;
-            --tag-text: #a3a3a3;
-        }
-
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            line-height: 1.6;
-            -webkit-font-smoothing: antialiased;
-        }
-
-        .container { max-width: 960px; margin: 0 auto; padding: 0 24px; }
-
-        /* Nav */
-        nav {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 24px 0;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .nav-name {
-            font-size: 18px;
-            font-weight: 700;
-            letter-spacing: -0.5px;
-            color: var(--text);
-            text-decoration: none;
-        }
-
-        .nav-links { display: flex; gap: 24px; align-items: center; }
-
-        .nav-links a {
-            font-size: 14px;
-            color: var(--text-secondary);
-            text-decoration: none;
-            transition: color 0.15s;
-        }
-
-        .nav-links a:hover { color: var(--highlight); }
-
-        #theme-toggle {
-            background: none;
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            padding: 6px 8px;
-            cursor: pointer;
-            color: var(--text-secondary);
-            font-size: 14px;
-            line-height: 1;
-        }
-
-        #theme-toggle:hover { color: var(--text); border-color: var(--text-secondary); }
-
-        /* Hero */
-        .hero { padding: 80px 0 60px; }
-
-        .hero h1 {
-            font-size: 40px;
-            font-weight: 700;
-            letter-spacing: -1.5px;
-            line-height: 1.15;
-            margin-bottom: 16px;
-        }
-
-        .hero .subtitle {
-            font-size: 18px;
-            color: var(--text-secondary);
-            margin-bottom: 24px;
-            max-width: 600px;
-        }
-
-        .hero-links { display: flex; gap: 16px; flex-wrap: wrap; }
-
-        .social-link {
-            font-size: 14px;
-            color: var(--text-secondary);
-            text-decoration: none;
-            transition: color 0.15s;
-        }
-
-        .social-link:hover { color: var(--highlight); }
-
-        /* Sections */
-        section { padding: 48px 0; border-top: 1px solid var(--border); }
-
-        .section-label {
-            font-size: 12px;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-            color: var(--text-secondary);
-            margin-bottom: 24px;
-        }
-
-        /* About */
-        .about-grid {
-            display: grid;
-            grid-template-columns: 2fr 1fr;
-            gap: 40px;
-        }
-
-        .about-grid p {
-            font-size: 15px;
-            color: var(--text-secondary);
-            margin-bottom: 12px;
-            line-height: 1.7;
-        }
-
-        .about-grid a { color: var(--highlight); }
-
-        .stats-list { list-style: none; }
-
-        .stats-list li {
-            font-size: 14px;
-            color: var(--text-secondary);
-            padding: 8px 0;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .stats-list li strong { color: var(--highlight); }
-
-        /* Product cards (from mindapps) */
-        .product-card {
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 28px;
-            margin-bottom: 16px;
-            background: var(--bg-card);
-            transition: border-color 0.15s;
-        }
-
-        .product-card:hover { border-color: var(--highlight); }
-
-        .product-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 8px;
-            flex-wrap: wrap;
-            gap: 8px;
-        }
-
-        .product-name { font-size: 18px; font-weight: 700; letter-spacing: -0.3px; }
-
-        .product-tags { display: flex; gap: 6px; flex-wrap: wrap; }
-
-        .tag {
-            font-size: 11px;
-            padding: 3px 9px;
-            border-radius: 100px;
-            background: var(--tag-bg);
-            color: var(--tag-text);
-            font-weight: 500;
-        }
-
-        .product-desc {
-            font-size: 14px;
-            color: var(--text-secondary);
-            margin-bottom: 12px;
-        }
-
-        .product-links { display: flex; gap: 16px; flex-wrap: wrap; }
-
-        .product-links a {
-            font-size: 13px;
-            color: var(--text);
-            text-decoration: none;
-            font-weight: 500;
-        }
-
-        .product-links a:hover { color: var(--highlight); }
-
-        /* Skills */
-        .skills-grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 24px;
-        }
-
-        .skill-group h3 {
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--text-secondary);
-            margin-bottom: 10px;
-        }
-
-        .pill {
-            display: inline-block;
-            font-size: 12px;
-            padding: 4px 10px;
-            border-radius: 100px;
-            background: var(--tag-bg);
-            color: var(--tag-text);
-            margin: 0 4px 6px 0;
-        }
-
-        /* Content cards */
-        .content-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 16px;
-        }
-
-        .content-card {
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 24px;
-            background: var(--bg-card);
-        }
-
-        .content-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
-
-        .content-card p { font-size: 14px; color: var(--text-secondary); margin-bottom: 12px; }
-
-        .content-card a { font-size: 13px; color: var(--highlight); text-decoration: none; font-weight: 500; }
-
-        /* Services */
-        .services-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 16px;
-        }
-
-        .service-card {
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 24px;
-            background: var(--bg-card);
-        }
-
-        .service-card h3 { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
-
-        .service-card p { font-size: 14px; color: var(--text-secondary); margin-bottom: 12px; }
-
-        .service-card a { font-size: 13px; color: var(--highlight); text-decoration: none; font-weight: 500; }
-
-        .cta-card {
-            border: 2px solid var(--highlight);
-            border-radius: 12px;
-            padding: 28px;
-            margin-bottom: 24px;
-            text-align: center;
-        }
-
-        .cta-card h3 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
-
-        .cta-card p { font-size: 15px; color: var(--text-secondary); margin-bottom: 16px; }
-
-        .cta-card .price { font-size: 18px; font-weight: 700; margin-bottom: 16px; }
-
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            padding: 10px 20px;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 500;
-            text-decoration: none;
-            background: var(--highlight);
-            color: #171717;
-            transition: background 0.15s;
-        }
-
-        .btn:hover { background: var(--highlight-hover); }
-
-        /* Newsletter */
-        .newsletter-box {
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 32px;
-            text-align: center;
-            background: var(--bg-card);
-        }
-
-        .newsletter-box h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
-
-        .newsletter-box p { font-size: 14px; color: var(--text-secondary); margin-bottom: 16px; }
-
-        /* Footer */
-        footer {
-            padding: 32px 0;
-            border-top: 1px solid var(--border);
-            text-align: center;
-        }
-
-        footer p { font-size: 13px; color: var(--text-secondary); }
-
-        footer a { color: var(--text-secondary); text-decoration: none; }
-
-        footer a:hover { color: var(--highlight); }
-
-        @media (max-width: 640px) {
-            .hero h1 { font-size: 28px; }
-            .about-grid { grid-template-columns: 1fr; }
-            .skills-grid { grid-template-columns: 1fr; }
-        }
+        :root{--bg:#fafafa;--bg-card:#fff;--text:#171717;--text-secondary:#525252;--border:#e5e5e5;--accent:#171717;--accent-hover:#404040;--hl:#FFBE00;--hl-hover:#e6ab00;--tag-bg:#f5f5f5;--tag-text:#525252}
+        [data-theme="dark"]{--bg:#0a0a0a;--bg-card:#171717;--text:#fafafa;--text-secondary:#a3a3a3;--border:#262626;--accent:#fafafa;--accent-hover:#d4d4d4;--hl:#FFBE00;--hl-hover:#e6ab00;--tag-bg:#262626;--tag-text:#a3a3a3}
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased}
+        .container{max-width:960px;margin:0 auto;padding:0 24px}
+        nav{display:flex;justify-content:space-between;align-items:center;padding:24px 0;border-bottom:1px solid var(--border)}
+        .nav-name{font-size:18px;font-weight:700;letter-spacing:-.5px;color:var(--text);text-decoration:none}
+        .nav-links{display:flex;gap:20px;align-items:center}
+        .nav-links a{font-size:14px;color:var(--text-secondary);text-decoration:none;transition:color .15s}.nav-links a:hover{color:var(--hl)}
+        .nav-btn{background:none;border:1px solid var(--border);border-radius:6px;padding:5px 8px;cursor:pointer;color:var(--text-secondary);font-size:13px;line-height:1}.nav-btn:hover{color:var(--text);border-color:var(--text-secondary)}
+        .lang-toggle{font-weight:600;min-width:36px;text-align:center}
+        .hero{padding:80px 0 60px}
+        .hero h1{font-size:40px;font-weight:700;letter-spacing:-1.5px;line-height:1.15;margin-bottom:16px}
+        .hero .subtitle{font-size:18px;color:var(--text-secondary);margin-bottom:24px;max-width:600px}
+        .hero-links{display:flex;gap:16px;flex-wrap:wrap}
+        .social-link{font-size:14px;color:var(--text-secondary);text-decoration:none;transition:color .15s}.social-link:hover{color:var(--hl)}
+        section{padding:48px 0;border-top:1px solid var(--border)}
+        .section-label{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:var(--text-secondary);margin-bottom:24px}
+        .about-grid{display:grid;grid-template-columns:2fr 1fr;gap:40px}
+        .about-grid p{font-size:15px;color:var(--text-secondary);margin-bottom:12px;line-height:1.7}.about-grid a{color:var(--hl)}
+        .stats-list{list-style:none}.stats-list li{font-size:14px;color:var(--text-secondary);padding:8px 0;border-bottom:1px solid var(--border)}.stats-list li strong{color:var(--hl)}
+        .product-card{border:1px solid var(--border);border-radius:12px;padding:28px;margin-bottom:16px;background:var(--bg-card);transition:border-color .15s}.product-card:hover{border-color:var(--hl)}
+        .product-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;flex-wrap:wrap;gap:8px}
+        .product-name{font-size:18px;font-weight:700;letter-spacing:-.3px}
+        .product-tags{display:flex;gap:6px;flex-wrap:wrap}
+        .tag{font-size:11px;padding:3px 9px;border-radius:100px;background:var(--tag-bg);color:var(--tag-text);font-weight:500}
+        .product-desc{font-size:14px;color:var(--text-secondary);margin-bottom:12px}
+        .product-links{display:flex;gap:16px;flex-wrap:wrap}
+        .product-links a{font-size:13px;color:var(--text);text-decoration:none;font-weight:500}.product-links a:hover{color:var(--hl)}
+        .grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+        .card{border:1px solid var(--border);border-radius:10px;padding:24px;background:var(--bg-card)}
+        .card h3{font-size:16px;font-weight:600;margin-bottom:6px}
+        .card p{font-size:14px;color:var(--text-secondary);margin-bottom:12px}
+        .card a{font-size:13px;color:var(--hl);text-decoration:none;font-weight:500}
+        .skills-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+        .skill-group h3{font-size:13px;font-weight:600;color:var(--text-secondary);margin-bottom:10px}
+        .pill{display:inline-block;font-size:12px;padding:4px 10px;border-radius:100px;background:var(--tag-bg);color:var(--tag-text);margin:0 4px 6px 0}
+        .cta-card{border:2px solid var(--hl);border-radius:12px;padding:28px;margin-bottom:24px;text-align:center}
+        .cta-card h3{font-size:20px;font-weight:700;margin-bottom:8px}
+        .cta-card p{font-size:15px;color:var(--text-secondary);margin-bottom:16px}
+        .cta-card .price{font-size:18px;font-weight:700;margin-bottom:16px}
+        .btn{display:inline-flex;align-items:center;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:500;text-decoration:none;background:var(--hl);color:#171717;transition:background .15s}.btn:hover{background:var(--hl-hover)}
+        .newsletter-box{border:1px solid var(--border);border-radius:12px;padding:32px;text-align:center;background:var(--bg-card)}
+        .newsletter-box h3{font-size:18px;font-weight:700;margin-bottom:8px}
+        .newsletter-box p{font-size:14px;color:var(--text-secondary);margin-bottom:16px}
+        footer{padding:32px 0;border-top:1px solid var(--border);text-align:center}
+        footer p{font-size:13px;color:var(--text-secondary)}footer a{color:var(--text-secondary);text-decoration:none}footer a:hover{color:var(--hl)}
+        @media(max-width:640px){.hero h1{font-size:28px}.about-grid{grid-template-columns:1fr}.skills-grid{grid-template-columns:1fr}}
     </style>
 </head>
 <body>
@@ -379,16 +70,17 @@
         <nav>
             <a href="/" class="nav-name">Guilherme Favaron</a>
             <div class="nav-links">
-                <a href="#about">About</a>
-                <a href="#products">Products</a>
-                <a href="#services">Services</a>
-                <button id="theme-toggle" aria-label="Toggle theme">&#9790;</button>
+                <a href="#about" data-i18n="nav_about">Sobre</a>
+                <a href="#products" data-i18n="nav_products">Produtos</a>
+                <a href="#services" data-i18n="nav_services">Servicos</a>
+                <button id="lang-toggle" class="nav-btn lang-toggle" aria-label="Toggle language">EN</button>
+                <button id="theme-toggle" class="nav-btn" aria-label="Toggle theme">&#9790;</button>
             </div>
         </nav>
 
         <div class="hero">
-            <h1>Applied AI.<br>From code to production.</h1>
-            <p class="subtitle">VP of Technology with 18+ years building digital products. I write code, lead teams, and ship AI that works in the real world — not in slides.</p>
+            <h1 data-i18n="hero_title">IA Aplicada.<br>Do codigo a producao.</h1>
+            <p class="subtitle" data-i18n="hero_desc">VP de Tecnologia com 18+ anos construindo produtos digitais. Escrevo codigo, lidero times e entrego IA que funciona no mundo real — nao em slides.</p>
             <div class="hero-links">
                 <a href="https://github.com/guifav" target="_blank" class="social-link">GitHub</a>
                 <a href="https://linkedin.com/in/guilhermefavaron" target="_blank" class="social-link">LinkedIn</a>
@@ -400,71 +92,65 @@
         </div>
 
         <section>
-            <div class="section-label">Tools</div>
-            <div class="content-grid">
-                <div class="content-card">
+            <div class="section-label" data-i18n="section_tools">Ferramentas</div>
+            <div class="grid-2">
+                <div class="card">
                     <h3>LLM Ranking</h3>
-                    <p>Ranking interativo de 277 modelos com comparacoes, correlacoes e analises avancadas por categoria, tipo e empresa.</p>
-                    <a href="/llm-ranking/">Abrir ferramenta &#8599;</a>
+                    <p data-i18n="tool_llm">Ranking interativo de 277 modelos com comparacoes, correlacoes e analises avancadas por categoria, tipo e empresa.</p>
+                    <a href="/llm-ranking/" data-i18n="tool_open">Abrir ferramenta &#8599;</a>
                 </div>
-                <div class="content-card">
+                <div class="card">
                     <h3>Framework SEO + AEO/GEO</h3>
-                    <p>Guia pratico para ser encontrado no Google e citado por ChatGPT, Perplexity e outras IAs. Answer Capsules, estrutura e checklist.</p>
-                    <a href="/seo-geo-aeo-framework/framework-seo-aeo.html">Abrir framework &#8599;</a>
+                    <p data-i18n="tool_seo">Guia pratico para ser encontrado no Google e citado por ChatGPT, Perplexity e outras IAs. Answer Capsules, estrutura e checklist.</p>
+                    <a href="/seo-geo-aeo-framework/framework-seo-aeo.html" data-i18n="tool_open_fw">Abrir framework &#8599;</a>
                 </div>
             </div>
         </section>
 
         <section id="about">
-            <div class="section-label">About</div>
+            <div class="section-label" data-i18n="section_about">Sobre</div>
             <div class="about-grid">
                 <div>
-                    <p>Builder focado em IA aplicada e arquiteturas escalaveis. Desenvolvo desde modelos de ML em producao ate aplicacoes completas com LLMs, priorizando performance, custo-eficiencia e manutenibilidade.</p>
-                    <p>18+ anos liderando transformacoes digitais, com passagens pela AES Corporation (portfolio de $30M em inovacao) e GRI Institute (onde lidero a area de tecnologia). Combino visao estrategica com execucao tecnica — gerencio times e escrevo codigo em producao.</p>
-                    <p>Criador do <a href="https://mindapps.ai" target="_blank">MindApps</a> — lab de produtos de IA. Autor de <a href="https://www.guilhermefavaron.com.br/p/livro-ia-inteligencia-artificial-portugues-gratuito" target="_blank">"Desbloqueando a Inteligencia Artificial"</a>, disponivel gratuitamente.</p>
+                    <p data-i18n="about_p1">Builder focado em IA aplicada e arquiteturas escalaveis. Desenvolvo desde modelos de ML em producao ate aplicacoes completas com LLMs, priorizando performance, custo-eficiencia e manutenibilidade.</p>
+                    <p data-i18n="about_p2">18+ anos liderando transformacoes digitais, com passagens pela AES Corporation (portfolio de $30M em inovacao) e GRI Institute (onde lidero a area de tecnologia). Combino visao estrategica com execucao tecnica — gerencio times e escrevo codigo em producao.</p>
+                    <p data-i18n="about_p3">Criador do <a href="https://mindapps.ai" target="_blank">MindApps</a> — lab de produtos de IA. Autor de <a href="https://www.guilhermefavaron.com.br/p/livro-ia-inteligencia-artificial-portugues-gratuito" target="_blank">"Desbloqueando a Inteligencia Artificial"</a>, disponivel gratuitamente.</p>
                 </div>
                 <div>
                     <ul class="stats-list">
-                        <li><strong>18+</strong> anos em tecnologia</li>
-                        <li><strong>10+</strong> apps em producao</li>
-                        <li><strong>3</strong> produtos proprios</li>
-                        <li><strong>20+</strong> projetos open source</li>
-                        <li><strong>$30M+</strong> em portfolios gerenciados</li>
-                        <li><strong>100+</strong> projetos liderados</li>
+                        <li><strong>18+</strong> <span data-i18n="stat_years">anos em tecnologia</span></li>
+                        <li><strong>10+</strong> <span data-i18n="stat_apps">apps em producao</span></li>
+                        <li><strong>4</strong> <span data-i18n="stat_products">produtos proprios</span></li>
+                        <li><strong>20+</strong> <span data-i18n="stat_oss">projetos open source</span></li>
+                        <li><strong>$30M+</strong> <span data-i18n="stat_portfolio">em portfolios gerenciados</span></li>
+                        <li><strong>100+</strong> <span data-i18n="stat_projects">projetos liderados</span></li>
                     </ul>
                 </div>
             </div>
         </section>
 
         <section id="products">
-            <div class="section-label">Products &middot; <a href="https://mindapps.ai" target="_blank" style="color: var(--text-secondary); text-decoration: none; font-size: 12px;">mindapps.ai</a></div>
+            <div class="section-label" data-i18n="section_products">Produtos &middot; <a href="https://mindapps.ai" target="_blank" style="color:var(--text-secondary);text-decoration:none;font-size:12px">mindapps.ai</a></div>
 
             <div class="product-card">
                 <div class="product-header">
                     <div class="product-name">Market Intelligence Radar</div>
-                    <div class="product-tags">
-                        <span class="tag">Open Source</span>
-                        <span class="tag">Self-hosted</span>
-                    </div>
+                    <div class="product-tags"><span class="tag">Open Source</span><span class="tag">Self-hosted</span></div>
                 </div>
-                <p class="product-desc">AI-powered platform that scans news sources, extracts structured intelligence, matches against your CRM, and presents everything in a real-time dashboard.</p>
+                <p class="product-desc" data-i18n="mir_desc">Plataforma com IA que varre fontes de noticias, extrai inteligencia estruturada, cruza com seu CRM e apresenta tudo em um dashboard em tempo real.</p>
                 <div class="product-links">
                     <a href="https://github.com/guifav/market-intelligence-radar" target="_blank">GitHub &#8599;</a>
-                    <a href="https://www.guilhermefavaron.com.br/p/radar-inteligencia-mercado-open-source" target="_blank">Read the story &#8599;</a>
+                    <a href="https://www.guilhermefavaron.com.br/p/radar-inteligencia-mercado-open-source" target="_blank" data-i18n="mir_story">Leia a historia &#8599;</a>
                 </div>
             </div>
 
             <div class="product-card">
                 <div class="product-header">
                     <div class="product-name">VirtuAgency.ai</div>
-                    <div class="product-tags">
-                        <span class="tag">SaaS</span>
-                        <span class="tag">Live</span>
-                    </div>
+                    <div class="product-tags"><span class="tag">SaaS</span><span class="tag">Live</span></div>
                 </div>
-                <p class="product-desc">AI-powered marketing agency platform for SMB in-house teams. Briefing-driven content generation, multi-format output, brand context, team collaboration.</p>
+                <p class="product-desc" data-i18n="va_desc">Plataforma de agencia de marketing com IA para times internos de PMEs. Geracao de conteudo multi-formato baseada em briefing, colaboracao em equipe, revisao e publicacao.</p>
                 <div class="product-links">
-                    <a href="https://virtuagency.ai" target="_blank">Visit site &#8599;</a>
+                    <a href="https://virtuagency.ai" target="_blank" data-i18n="link_visit">Visitar site &#8599;</a>
                     <a href="https://github.com/guifav/virtuagency.ai" target="_blank">GitHub &#8599;</a>
                 </div>
             </div>
@@ -472,15 +158,23 @@
             <div class="product-card">
                 <div class="product-header">
                     <div class="product-name">Tramline</div>
-                    <div class="product-tags">
-                        <span class="tag">Open Source</span>
-                        <span class="tag">Infrastructure</span>
-                    </div>
+                    <div class="product-tags"><span class="tag">Open Source</span><span class="tag" data-i18n="tag_infra">Infraestrutura</span></div>
                 </div>
-                <p class="product-desc">Governance rails for citizen development and AI-assisted coding on AWS. IaC template with 3-zone classification, automated CI/CD, per-app secrets and monitoring.</p>
+                <p class="product-desc" data-i18n="tl_desc">Trilhos de governanca para citizen development e coding assistido por IA na AWS. Template IaC com classificacao em 3 zonas, CI/CD automatizado, secrets e monitoramento por app.</p>
                 <div class="product-links">
-                    <a href="https://tramline.ai" target="_blank">Visit site &#8599;</a>
+                    <a href="https://tramline.ai" target="_blank" data-i18n="link_visit">Visitar site &#8599;</a>
                     <a href="https://github.com/guifav/tramline" target="_blank">GitHub &#8599;</a>
+                </div>
+            </div>
+
+            <div class="product-card">
+                <div class="product-header">
+                    <div class="product-name">Academia da IA</div>
+                    <div class="product-tags"><span class="tag" data-i18n="tag_free">Gratuito</span><span class="tag">Lead Gen</span></div>
+                </div>
+                <p class="product-desc" data-i18n="ac_desc">Programa gratuito de 30 dias com exercicios de 10 min/dia para gestores brasileiros fazerem a IA trabalhar no trabalho real — status pra diretoria, 1:1, performance review, decisoes dificeis.</p>
+                <div class="product-links">
+                    <a href="https://github.com/guifav/academia-ia" target="_blank">GitHub &#8599;</a>
                 </div>
             </div>
         </section>
@@ -490,86 +184,64 @@
             <div class="skills-grid">
                 <div class="skill-group">
                     <h3>Machine Learning & AI</h3>
-                    <span class="pill">Python</span>
-                    <span class="pill">Scikit-Learn</span>
-                    <span class="pill">LangChain</span>
-                    <span class="pill">TensorFlow</span>
-                    <span class="pill">PyTorch</span>
-                    <span class="pill">RAG Systems</span>
-                    <span class="pill">LLMs</span>
-                    <span class="pill">NLP</span>
-                    <span class="pill">Fine-tuning</span>
+                    <span class="pill">Python</span><span class="pill">Scikit-Learn</span><span class="pill">LangChain</span><span class="pill">TensorFlow</span><span class="pill">PyTorch</span><span class="pill">RAG Systems</span><span class="pill">LLMs</span><span class="pill">NLP</span><span class="pill">Fine-tuning</span>
                 </div>
                 <div class="skill-group">
                     <h3>MLOps & Infrastructure</h3>
-                    <span class="pill">Docker</span>
-                    <span class="pill">AWS</span>
-                    <span class="pill">GCP / Cloud Run</span>
-                    <span class="pill">Data Pipelines</span>
-                    <span class="pill">Vector DBs</span>
-                    <span class="pill">CI/CD</span>
-                    <span class="pill">MLflow</span>
+                    <span class="pill">Docker</span><span class="pill">AWS</span><span class="pill">GCP / Cloud Run</span><span class="pill">Data Pipelines</span><span class="pill">Vector DBs</span><span class="pill">CI/CD</span><span class="pill">MLflow</span>
                 </div>
                 <div class="skill-group">
                     <h3>Development</h3>
-                    <span class="pill">Next.js</span>
-                    <span class="pill">TypeScript</span>
-                    <span class="pill">FastAPI</span>
-                    <span class="pill">React</span>
-                    <span class="pill">Node.js</span>
-                    <span class="pill">PostgreSQL</span>
-                    <span class="pill">BigQuery</span>
+                    <span class="pill">Next.js</span><span class="pill">TypeScript</span><span class="pill">FastAPI</span><span class="pill">React</span><span class="pill">Node.js</span><span class="pill">PostgreSQL</span><span class="pill">BigQuery</span>
                 </div>
             </div>
         </section>
 
         <section>
-            <div class="section-label">Content</div>
-            <div class="content-grid">
-                <div class="content-card">
-                    <h3>Weekly Newsletter</h3>
-                    <p>Real AI implementations with code, production architectures, quantified ROI. Every Thursday.</p>
-                    <a href="https://guilhermefavaron.com.br" target="_blank">Subscribe &#8599;</a>
+            <div class="section-label" data-i18n="section_content">Conteudo</div>
+            <div class="grid-2">
+                <div class="card">
+                    <h3 data-i18n="content_news_t">Newsletter Semanal</h3>
+                    <p data-i18n="content_news_d">Implementacoes reais de IA com codigo, arquiteturas de producao, ROI quantificado. Toda quinta-feira.</p>
+                    <a href="https://guilhermefavaron.com.br" target="_blank" data-i18n="content_news_a">Inscrever-se &#8599;</a>
                 </div>
-                <div class="content-card">
-                    <h3>Book: Desbloqueando a IA</h3>
-                    <p>Guia pratico sobre IA aplicada para empresarios. Publicado em 2024, disponivel gratuitamente.</p>
+                <div class="card">
+                    <h3 data-i18n="content_book_t">Livro: Desbloqueando a IA</h3>
+                    <p data-i18n="content_book_d">Guia pratico sobre IA aplicada para empresarios. Publicado em 2024, disponivel gratuitamente.</p>
                     <a href="https://www.guilhermefavaron.com.br/p/livro-ia-inteligencia-artificial-portugues-gratuito" target="_blank">Download &#8599;</a>
                 </div>
-                <div class="content-card">
+                <div class="card">
                     <h3>YouTube: IA Aplicada</h3>
-                    <p>Videos sobre implementacoes reais, cases praticos e analises tecnicas.</p>
-                    <a href="https://youtube.com/@ia-aplicada-guilhermefavaron" target="_blank">Watch &#8599;</a>
+                    <p data-i18n="content_yt_d">Videos sobre implementacoes reais, cases praticos e analises tecnicas.</p>
+                    <a href="https://youtube.com/@ia-aplicada-guilhermefavaron" target="_blank" data-i18n="content_yt_a">Assistir &#8599;</a>
                 </div>
             </div>
         </section>
 
         <section id="services">
-            <div class="section-label">Services</div>
-
+            <div class="section-label" data-i18n="section_services">Servicos</div>
             <div class="cta-card">
-                <h3>Consultoria por Hora</h3>
-                <p>Sessao de 1 hora para desafios em IA, arquitetura de sistemas, viabilidade tecnica, roadmap e estrategia de implementacao.</p>
-                <div class="price">R$ 500/hora</div>
-                <a href="https://calendar.app.google/DmYwGeyh67m2nBD39" target="_blank" class="btn">Agendar &#8599;</a>
+                <h3 data-i18n="svc_cta_t">Consultoria por Hora</h3>
+                <p data-i18n="svc_cta_d">Sessao de 1 hora para desafios em IA, arquitetura de sistemas, viabilidade tecnica, roadmap e estrategia de implementacao.</p>
+                <div class="price">R$ 500/<span data-i18n="svc_hour">hora</span></div>
+                <a href="https://calendar.app.google/DmYwGeyh67m2nBD39" target="_blank" class="btn" data-i18n="svc_cta_btn">Agendar &#8599;</a>
             </div>
-
-            <div class="services-grid">
-                <div class="service-card">
-                    <h3>AI Architecture</h3>
-                    <p>Design de arquiteturas para producao. Escolha de tecnologias, deployment, roadmap tecnico.</p>
+            <div class="grid-2">
+                <div class="card">
+                    <h3 data-i18n="svc_arch_t">Arquitetura de IA</h3>
+                    <p data-i18n="svc_arch_d">Design de arquiteturas para producao. Escolha de tecnologias, deployment, roadmap tecnico.</p>
                 </div>
-                <div class="service-card">
+                <div class="card">
                     <h3>MLOps & Implementation</h3>
-                    <p>Modelos em producao. Stack tecnologico, automacao de pipelines, praticas de MLOps.</p>
+                    <p data-i18n="svc_mlops_d">Modelos em producao. Stack tecnologico, automacao de pipelines, praticas de MLOps.</p>
                 </div>
-                <div class="service-card">
-                    <h3>AI Literacy for Teams</h3>
-                    <p>Treinamento pratico em IA para profissionais nao-tecnicos. ChatGPT, Claude, Gemini aplicados a problemas reais.</p>
+                <div class="card">
+                    <h3 data-i18n="svc_lit_t">AI Literacy para Times</h3>
+                    <p data-i18n="svc_lit_d">Treinamento pratico em IA para profissionais nao-tecnicos. ChatGPT, Claude, Gemini aplicados a problemas reais.</p>
                 </div>
-                <div class="service-card">
-                    <h3>Speaking</h3>
-                    <p>IA aplicada aos negocios com resultados quantificados. Transformacao digital e lideranca de times tecnicos.</p>
+                <div class="card">
+                    <h3 data-i18n="svc_speak_t">Palestras</h3>
+                    <p data-i18n="svc_speak_d">IA aplicada aos negocios com resultados quantificados. Transformacao digital e lideranca de times tecnicos.</p>
                 </div>
             </div>
         </section>
@@ -577,8 +249,8 @@
         <section>
             <div class="newsletter-box">
                 <h3>Newsletter: IA Aplicada</h3>
-                <p>Implementacoes reais com codigo, arquiteturas de producao, ROI quantificado. Toda quinta-feira.</p>
-                <iframe src="https://www.guilhermefavaron.com.br/embed" width="100%" height="160" style="border: none; max-width: 480px;" frameborder="0" scrolling="no"></iframe>
+                <p data-i18n="nl_desc">Implementacoes reais com codigo, arquiteturas de producao, ROI quantificado. Toda quinta-feira.</p>
+                <iframe src="https://www.guilhermefavaron.com.br/embed" width="100%" height="160" style="border:none;max-width:480px" frameborder="0" scrolling="no"></iframe>
             </div>
         </section>
 
@@ -594,22 +266,71 @@
     </div>
 
     <script>
-        (function() {
-            const toggle = document.getElementById('theme-toggle');
-            const stored = localStorage.getItem('theme');
-            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            const initial = stored || (prefersDark ? 'dark' : 'light');
-            document.body.setAttribute('data-theme', initial);
-            toggle.textContent = initial === 'dark' ? '\u2600' : '\u263E';
+    (function(){
+        // Theme
+        var tt=document.getElementById('theme-toggle'),st=localStorage.getItem('theme'),pd=window.matchMedia('(prefers-color-scheme:dark)').matches,ti=st||(pd?'dark':'light');
+        document.body.setAttribute('data-theme',ti);tt.textContent=ti==='dark'?'\u2600':'\u263E';
+        tt.addEventListener('click',function(){var c=document.body.getAttribute('data-theme'),n=c==='dark'?'light':'dark';document.body.setAttribute('data-theme',n);localStorage.setItem('theme',n);tt.textContent=n==='dark'?'\u2600':'\u263E';});
 
-            toggle.addEventListener('click', () => {
-                const current = document.body.getAttribute('data-theme');
-                const next = current === 'dark' ? 'light' : 'dark';
-                document.body.setAttribute('data-theme', next);
-                localStorage.setItem('theme', next);
-                toggle.textContent = next === 'dark' ? '\u2600' : '\u263E';
+        // i18n
+        var translations = {
+            en: {
+                nav_about:"About",nav_products:"Products",nav_services:"Services",
+                hero_title:"Applied AI.<br>From code to production.",
+                hero_desc:"VP of Technology with 18+ years building digital products. I write code, lead teams, and ship AI that works in the real world — not in slides.",
+                section_tools:"Tools",
+                tool_llm:"Interactive ranking of 277 models with comparisons, correlations, and advanced analysis by category, type, and organization.",
+                tool_seo:"Practical guide to being found on Google and cited by ChatGPT, Perplexity, and other AIs. Answer Capsules, structure, and checklist.",
+                tool_open:"Open tool &#8599;",tool_open_fw:"Open framework &#8599;",
+                section_about:"About",
+                about_p1:"Builder focused on applied AI and scalable architectures. I build everything from ML models in production to full LLM applications, prioritizing performance, cost-efficiency, and maintainability.",
+                about_p2:"18+ years leading digital transformations at AES Corporation ($30M innovation portfolio) and GRI Institute (where I lead the technology area). I combine strategic vision with technical execution — I manage teams and write production code.",
+                about_p3:"Creator of <a href='https://mindapps.ai' target='_blank'>MindApps</a> — an AI product lab. Author of <a href='https://www.guilhermefavaron.com.br/p/livro-ia-inteligencia-artificial-portugues-gratuito' target='_blank'>\"Unlocking Artificial Intelligence\"</a>, available for free.",
+                stat_years:"years in technology",stat_apps:"apps in production",stat_products:"own products",stat_oss:"open source projects",stat_portfolio:"in managed portfolios",stat_projects:"projects led",
+                section_products:"Products &middot; <a href='https://mindapps.ai' target='_blank' style='color:var(--text-secondary);text-decoration:none;font-size:12px'>mindapps.ai</a>",
+                mir_desc:"AI-powered platform that scans news sources, extracts structured intelligence, matches against your CRM, and presents everything in a real-time dashboard.",
+                mir_story:"Read the story &#8599;",
+                va_desc:"AI-powered marketing agency platform for SMB in-house teams. Briefing-driven multi-format content generation, team collaboration, review, and publishing.",
+                link_visit:"Visit site &#8599;",tag_infra:"Infrastructure",
+                tl_desc:"Governance rails for citizen development and AI-assisted coding on AWS. IaC template with 3-zone classification, automated CI/CD, per-app secrets and monitoring.",
+                tag_free:"Free",
+                ac_desc:"Free 30-day program with 10 min/day exercises for Brazilian managers to make AI work in real work — board updates, 1:1s, performance reviews, tough decisions.",
+                section_content:"Content",
+                content_news_t:"Weekly Newsletter",content_news_d:"Real AI implementations with code, production architectures, quantified ROI. Every Thursday.",content_news_a:"Subscribe &#8599;",
+                content_book_t:"Book: Unlocking AI",content_book_d:"Practical guide on applied AI for business leaders. Published in 2024, available for free.",
+                content_yt_d:"Videos on real implementations, practical cases, and technical analysis.",content_yt_a:"Watch &#8599;",
+                section_services:"Services",
+                svc_cta_t:"Hourly Consulting",svc_cta_d:"1-hour session for AI challenges, system architecture, technical feasibility, roadmap, and implementation strategy.",svc_hour:"hour",svc_cta_btn:"Book &#8599;",
+                svc_arch_t:"AI Architecture",svc_arch_d:"Production architecture design. Technology selection, deployment, technical roadmap.",
+                svc_mlops_d:"Models in production. Tech stack, pipeline automation, MLOps practices.",
+                svc_lit_t:"AI Literacy for Teams",svc_lit_d:"Hands-on AI training for non-technical professionals. ChatGPT, Claude, Gemini applied to real problems.",
+                svc_speak_t:"Speaking",svc_speak_d:"Applied AI for business with quantified results. Digital transformation and technical team leadership.",
+                nl_desc:"Real implementations with code, production architectures, quantified ROI. Every Thursday."
+            }
+        };
+
+        var lang='pt';
+        var originals={};
+        var lt=document.getElementById('lang-toggle');
+
+        document.querySelectorAll('[data-i18n]').forEach(function(el){
+            originals[el.getAttribute('data-i18n')]=el.innerHTML;
+        });
+
+        lt.addEventListener('click',function(){
+            lang=lang==='pt'?'en':'pt';
+            lt.textContent=lang==='pt'?'EN':'PT';
+            document.documentElement.lang=lang==='pt'?'pt-BR':'en';
+            document.querySelectorAll('[data-i18n]').forEach(function(el){
+                var key=el.getAttribute('data-i18n');
+                el.innerHTML=lang==='en'?(translations.en[key]||originals[key]):originals[key];
             });
-        })();
+            localStorage.setItem('lang',lang);
+        });
+
+        var saved=localStorage.getItem('lang');
+        if(saved==='en'){lt.click();}
+    })();
     </script>
 </body>
 </html>
