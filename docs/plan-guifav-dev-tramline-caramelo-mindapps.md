@@ -1,7 +1,9 @@
 # Plano: guifav.dev, Tramline, Caramelo e MindApps
 
-Status: aprovado para planejamento, nao executar implementacao ainda.
+Status: registro historico, superseded pela issue #2 em 2026-09-16 (ver nota abaixo).
 Data: 2026-07-09.
+
+Atualizacao 2026-09-16 (issue #2): o MindApps foi descontinuado e removido do site; `mindapps.ai` nao responde mais. O destaque do site migrou do Tramline para o TalkWithData (talkwithdata.ai, beta aberto), e o posicionamento passou de "builder de IA aplicada" para "CTO e engenheiro de software; software que resolve problemas reais". O restante deste plano permanece como registro historico.
 
 ## Papel deste projeto
 
