@@ -3,6 +3,8 @@
 Status: aprovado para planejamento, nao executar implementacao ainda.
 Data: 2026-07-09.
 
+Atualizacao 2026-09-16 (issue #2): o MindApps foi descontinuado e removido do site; `mindapps.ai` nao responde mais. O destaque do site migrou do Tramline para o TalkWithData (talkwithdata.ai, beta aberto), e o posicionamento passou de "builder de IA aplicada" para "CTO e engenheiro de software; software que resolve problemas reais e roda em producao". O restante deste plano permanece como registro historico.
+
 ## Papel deste projeto
 
 `guifav.github.io` sera a pagina pessoal / developer profile de Guilherme Favaron. O dominio publico desejado e `guifav.dev`, hospedado via GitHub Pages neste repositorio.
