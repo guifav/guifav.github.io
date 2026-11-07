@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>VirtuAgency</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --background: #ffffff; --foreground: #0a0a0a; --primary: #171717; --primary-fg: #fafafa;
+    --secondary: #f5f5f5; --muted: #f5f5f5; --muted-fg: #737373; --border: #e5e5e5;
+    --sidebar: #fafafa; --accent: #f5f5f5;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1440px; height: 900px; overflow: hidden; }
+  body { font-family: 'Inter', sans-serif; background: var(--background); color: var(--foreground); -webkit-font-smoothing: antialiased; display: flex; }
+  svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+
+  /* sidebar */
+  aside { width: 256px; flex-shrink: 0; height: 900px; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--sidebar); }
+  .logo { height: 64px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); padding: 0 12px; }
+  .logo a { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+  .logo .tog { padding: 6px; border-radius: 6px; color: rgba(10,10,10,.5); display: flex; }
+  nav.side { flex: 1; padding: 8px; }
+  .blabel { padding: 16px 12px 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: rgba(10,10,10,.3); }
+  .blabel.first { padding-top: 8px; }
+  .item { display: flex; align-items: center; gap: 12px; border-radius: 6px; padding: 8px 12px; font-size: 14px; font-weight: 500; color: rgba(10,10,10,.7); margin-top: 2px; }
+  .item.active { background: #ececec; color: #171717; }
+  .sep { margin: 8px 0; border-top: 1px solid rgba(229,229,229,.8); }
+  .psec { display: flex; align-items: center; gap: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: rgba(10,10,10,.5); margin-top: 8px; }
+  .psec .ct { margin-left: auto; font-size: 10px; font-weight: 400; background: #ececec; border-radius: 999px; padding: 2px 6px; letter-spacing: 0; color: #404040; }
+  .psec svg.i { width: 12px; height: 12px; }
+  .sfoot { padding: 16px; border-top: 1px solid var(--border); }
+  .sfoot p { font-size: 12px; color: var(--muted-fg); }
+  .sfoot .mono { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: rgba(115,115,115,.6); margin-top: 2px; }
+
+  /* coluna */
+  .col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  header { height: 64px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; }
+  .switch { min-width: 144px; height: 32px; display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid var(--border); border-radius: 6px; padding: 0 10px 0 8px; font-size: 14px; font-weight: 500; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+  .switch .bm { width: 20px; height: 20px; border-radius: 5px; background: #7c4a2d; color: #fbe9d7; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .hright { display: flex; align-items: center; gap: 8px; }
+  .iconbtn { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 6px; color: #262626; }
+  .avatar { width: 32px; height: 32px; border-radius: 999px; background: var(--muted); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 500; color: #262626; }
+
+  .rail { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); padding: 8px 24px; }
+  .step { display: flex; align-items: center; gap: 8px; }
+  .step .ln { height: 1px; width: 16px; background: var(--border); }
+  .step .ln.on { background: #171717; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; border-radius: 999px; border: 1px solid; padding: 4px 12px; font-size: 12px; font-weight: 500; line-height: 16px; }
+  .pill svg.i { width: 12px; height: 12px; }
+  .pill.done { border-color: #171717; background: #171717; color: #fafafa; }
+  .pill.current { border-color: #171717; background: rgba(23,23,23,.08); color: #171717; box-shadow: 0 0 0 3px rgba(23,23,23,.05); }
+  .pill.locked { border-color: var(--border); background: rgba(245,245,245,.6); color: var(--muted-fg); }
+  .rail .meta { margin-left: auto; font-size: 12px; color: var(--muted-fg); display: flex; align-items: center; gap: 6px; }
+
+  main { flex: 1; padding: 24px; overflow: hidden; }
+  .wrap { max-width: 1152px; margin: 0 auto; }
+  .stack > * + * { margin-top: 20px; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; border-radius: 6px; font-size: 14px; font-weight: 500; }
+  .btn.sm { height: 32px; padding: 0 12px; font-size: 13.5px; }
+  .btn.xs { height: 24px; padding: 0 8px; font-size: 12px; gap: 4px; }
+  .btn.default { background: #171717; color: #fafafa; }
+  .btn.outline { border: 1px solid var(--border); background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+  .btn.ghost { color: #171717; }
+  .btn.back { margin-left: -12px; }
+  .btn svg.i { width: 15px; height: 15px; }
+  .btn.xs svg.i { width: 12px; height: 12px; }
+  .titlebar { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+  h1 { font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: -0.02em; }
+  .lead { font-size: 14px; color: var(--muted-fg); line-height: 20px; }
+  .actions { display: flex; gap: 8px; }
+  .count { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted-fg); }
+  .sel { width: 80px; height: 32px; display: inline-flex; align-items: center; justify-content: space-between; border: 1px solid var(--border); border-radius: 6px; padding: 0 10px; color: var(--foreground); font-size: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+  .count .hint { margin-left: 8px; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+  .count .dot { width: 6px; height: 6px; border-radius: 999px; background: #16a34a; box-shadow: 0 0 0 3px rgba(22,163,74,.15); }
+
+  section .sh { display: flex; align-items: center; gap: 8px; }
+  section h2 { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: .025em; color: var(--muted-fg); }
+  section .sd { font-size: 12px; color: var(--muted-fg); margin-top: 4px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
+  .badge { display: inline-flex; align-items: center; justify-content: center; gap: 4px; border-radius: 999px; border: 1px solid transparent; padding: 2px 8px; font-size: 12px; font-weight: 500; white-space: nowrap; line-height: 16px; }
+  .badge svg.i { width: 11px; height: 11px; }
+  .b-default { background: #171717; color: #fafafa; }
+  .b-secondary { background: var(--secondary); color: #171717; }
+  .b-outline { border-color: var(--border); color: var(--foreground); }
+  .b-ghost { color: #404040; }
+  .b-ok { background: #ecfdf3; color: #15803d; border-color: #bbf7d0; }
+
+  .card { border: 1px solid var(--border); border-radius: 14px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.05); padding: 18px 20px 16px; display: flex; flex-direction: column; }
+  .card.pri { border-color: #d4d4d4; }
+  .card h3 { font-size: 16px; line-height: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  .card .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .card .body { margin-top: 14px; font-size: 14px; line-height: 20px; color: var(--muted-fg); }
+  .card .body p + p { margin-top: 6px; }
+  .card .body b { font-weight: 500; color: var(--foreground); }
+  .chan { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 8px; }
+  .chan span.l { font-size: 12px; font-weight: 500; color: var(--muted-fg); margin-right: 2px; }
+  .card .acts { display: flex; gap: 8px; padding-top: 12px; margin-top: auto; }
+</style>
+</head>
+<body>
+<aside>
+  <div class="logo">
+    <a>
+      <svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true">
+        <polygon points="16,3 3,27 29,27" fill="#111" stroke="#000" stroke-width="0.5" stroke-linejoin="round"/>
+        <line x1="0" y1="17" x2="9.5" y2="17" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="22.5" y1="13" x2="32" y2="7" stroke="#fff" stroke-width="0.8" stroke-linecap="round"/>
+        <line x1="22.5" y1="14.5" x2="32" y2="11" stroke="#ccc" stroke-width="0.8" stroke-linecap="round"/>
+        <line x1="22.5" y1="16" x2="32" y2="15" stroke="#aaa" stroke-width="0.8" stroke-linecap="round"/>
+        <line x1="22.5" y1="17.5" x2="32" y2="19" stroke="#888" stroke-width="0.8" stroke-linecap="round"/>
+        <line x1="22.5" y1="19" x2="32" y2="23" stroke="#666" stroke-width="0.8" stroke-linecap="round"/>
+      </svg>
+      VirtuAgency
+    </a>
+    <span class="tog"><svg class="i" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/></svg></span>
+  </div>
+  <nav class="side">
+    <p class="blabel first">Workflow</p>
+    <a class="item"><svg class="i" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>Dashboard</a>
+    <div class="sep"></div>
+    <p class="blabel">Sources</p>
+    <a class="item"><svg class="i" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Chat</a>
+    <div class="sep"></div>
+    <p class="blabel">Tools</p>
+    <a class="item active"><svg class="i" viewBox="0 0 24 24"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>Marcas</a>
+    <a class="item"><svg class="i" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>My Media</a>
+    <a class="item"><svg class="i" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>Settings</a>
+    <a class="item"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>Help</a>
+    <div class="sep"></div>
+    <div class="psec"><svg class="i" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>My Projects<span class="ct">3</span></div>
+    <div class="psec" style="margin-top:2px"><svg class="i" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg><svg class="i" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Team Projects<span class="ct">5</span></div>
+  </nav>
+  <div class="sfoot">
+    <p>VirtuAgency.ai</p>
+    <p class="mono">v2.18.0 · 4f9c2ab</p>
+  </div>
+</aside>
+
+<div class="col">
+  <header>
+    <span class="switch"><span style="display:flex;align-items:center;gap:8px"><span class="bm">MC</span>Moinho Café &amp; Torrefação</span><svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px;opacity:.6"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg></span>
+    <div class="hright">
+      <span class="iconbtn"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg></span>
+      <span class="avatar">LM</span>
+    </div>
+  </header>
+
+  <nav class="rail" aria-label="Progresso do funil">
+    <div class="step"><span class="pill done"><svg class="i" viewBox="0 0 24 24" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>Marca</span></div>
+    <div class="step"><span class="ln on"></span><span class="pill done"><svg class="i" viewBox="0 0 24 24" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>Posicionamento</span></div>
+    <div class="step"><span class="ln on"></span><span class="pill current">Ideias</span></div>
+    <div class="step"><span class="ln"></span><span class="pill locked"><svg class="i" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Campanhas</span></div>
+    <div class="step"><span class="ln"></span><span class="pill locked"><svg class="i" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Ativos</span></div>
+    <div class="step"><span class="ln"></span><span class="pill locked"><svg class="i" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Divulgação</span></div>
+  </nav>
+
+  <main>
+    <div class="wrap stack">
+      <span class="btn sm ghost back"><svg class="i" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>Voltar para a marca</span>
+
+      <div class="titlebar">
+        <div>
+          <h1>Canvas de Ideias</h1>
+          <p class="lead">Gere, priorize e agregue ideias de conteúdo a partir do branding doc.</p>
+        </div>
+        <div class="actions">
+          <span class="btn sm outline"><svg class="i" viewBox="0 0 24 24"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>Agregar</span>
+          <span class="btn sm outline"><svg class="i" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Criar ideia</span>
+          <span class="btn sm default"><svg class="i" viewBox="0 0 24 24"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/></svg>Gerar ideias</span>
+        </div>
+      </div>
+
+      <div class="count">
+        <span>Quantas ideias gerar?</span>
+        <span class="sel">5<svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px;opacity:.5"><path d="m6 9 6 6 6-6"/></svg></span>
+        <span class="hint"><span class="dot"></span>6 seções core aprovadas no branding doc</span>
+      </div>
+
+      <section>
+        <div class="sh"><h2>Propostas</h2><span class="badge b-secondary">4</span></div>
+        <p class="sd">Sugestões aguardando priorização</p>
+        <div class="grid">
+          <div class="card">
+            <h3>Série "Do grão à xícara" nos Reels</h3>
+            <div class="badges"><span class="badge b-outline">Awareness</span><span class="badge b-secondary">Esforço médio</span><span class="badge b-default"><svg class="i" viewBox="0 0 24 24"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>IA</span></div>
+            <div class="body">
+              <p><b>Hipótese: </b>Mostrar a torra da semana em vídeos curtos aproxima o cliente da origem do café e diferencia a casa das redes de franquia.</p>
+              <p><b>Público: </b>Moradores do bairro, 25 a 45 anos, que já consomem café especial.</p>
+              <div class="chan"><span class="l">Canais:</span><span class="badge b-outline">Instagram</span><span class="badge b-outline">Reels</span><span class="badge b-outline">TikTok</span></div>
+            </div>
+            <div class="acts"><span class="btn xs default">Priorizar</span><span class="btn xs ghost">Arquivar</span><span class="btn xs ghost">Editar</span></div>
+          </div>
+          <div class="card">
+            <h3>Clube de assinatura com microlotes do mês</h3>
+            <div class="badges"><span class="badge b-outline">Vendas</span><span class="badge b-secondary">Esforço alto</span><span class="badge b-default"><svg class="i" viewBox="0 0 24 24"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>IA</span></div>
+            <div class="body">
+              <p><b>Hipótese: </b>Clientes recorrentes trocam a compra avulsa por assinatura se tiverem prioridade nos lotes pequenos e um convite de degustação.</p>
+              <p><b>Público: </b>Clientes com três ou mais visitas por mês.</p>
+              <div class="chan"><span class="l">Canais:</span><span class="badge b-outline">E-mail</span><span class="badge b-outline">WhatsApp</span><span class="badge b-outline">Balcão</span></div>
+            </div>
+            <div class="acts"><span class="btn xs default">Priorizar</span><span class="btn xs ghost">Arquivar</span><span class="btn xs ghost">Editar</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="sh"><h2>Priorizadas</h2><span class="badge b-secondary">2</span></div>
+        <p class="sd">Aprovadas para execução</p>
+        <div class="grid">
+          <div class="card pri">
+            <h3>Oficina de V60 aos sábados de manhã</h3>
+            <div class="badges"><span class="badge b-outline">Leads</span><span class="badge b-secondary">Esforço baixo</span><span class="badge b-ghost">Manual</span><span class="badge b-ok"><svg class="i" viewBox="0 0 24 24" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>Aprovada</span></div>
+            <div class="body">
+              <p><b>Hipótese: </b>Uma aula gratuita de 40 minutos transforma curiosos em compradores de grão para preparo em casa.</p>
+              <div class="chan"><span class="l">Canais:</span><span class="badge b-outline">Instagram</span><span class="badge b-outline">Google Business</span></div>
+            </div>
+            <div class="acts"><span class="btn xs outline">Reservar</span><span class="btn xs ghost">Arquivar</span><span class="btn xs ghost">Editar</span></div>
+          </div>
+          <div class="card pri">
+            <h3>Combo café + pão de fermentação natural às 7h</h3>
+            <div class="badges"><span class="badge b-outline">Vendas</span><span class="badge b-secondary">Esforço baixo</span><span class="badge b-default"><svg class="i" viewBox="0 0 24 24"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>IA</span><span class="badge b-ok"><svg class="i" viewBox="0 0 24 24" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>Aprovada</span></div>
+            <div class="body">
+              <p><b>Hipótese: </b>Quem passa a caminho do trabalho compra mais quando o combo já está pronto no balcão.</p>
+              <div class="chan"><span class="l">Canais:</span><span class="badge b-outline">Balcão</span><span class="badge b-outline">Stories</span><span class="badge b-outline">Google Ads</span></div>
+            </div>
+            <div class="acts"><span class="btn xs outline">Reservar</span><span class="btn xs ghost">Arquivar</span><span class="btn xs ghost">Editar</span></div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+</body>
+</html>

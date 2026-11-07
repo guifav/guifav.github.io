@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>Caramelo - chat</title>
+<!--
+  Recriação do app de chat do Caramelo (/app): gateway/static/index.html (layout, CSS),
+  gateway/static/app.js (rótulo "caramelo" com monograma, botão "copiar", render de
+  markdown), gateway/_src.css (tokens: preto, âmbar #ffbe00) e static/favicon.svg.
+  Conversa, títulos de sessão e usuário fictícios.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #000000; --surface: #0d0d0d; --elevated: #161616; --line: #2a2a2a;
+    --tx: #ffffff; --mut: #a0a0a0; --acct: #ffbe00; --ok: #4caf50;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 900px; overflow: hidden; }
+  body { width: 1440px; font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--tx); -webkit-font-smoothing: antialiased; display: flex; }
+  svg { flex: none; display: block; }
+
+  .sidebar { width: 280px; background: var(--surface); border-right: 1px solid var(--line); display: flex; flex-direction: column; flex-shrink: 0; height: 900px; }
+  .sidebar-brand { padding: 16px 16px 4px; }
+  .sidebar-brand a { display: flex; align-items: center; gap: 8px; }
+  .mono { width: 26px; height: 26px; border-radius: 7px; background: var(--acct); display: grid; place-items: center; flex-shrink: 0; }
+  .word { font-size: 15px; font-weight: 600; }
+  .new-chat { padding: 12px 16px; }
+  .new-chat span.btn { width: 100%; padding: 9px 10px; border-radius: 8px; font-weight: 500; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  .new-chat .plus { color: var(--acct); font-weight: 700; }
+  .sessions { flex: 1; padding: 4px 8px; overflow: hidden; }
+  .session { padding: 8px 10px; border-radius: 8px; font-size: 13px; color: var(--mut); margin-bottom: 2px; display: flex; align-items: center; gap: 8px; }
+  .session .title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .session.active { background: var(--elevated); color: var(--tx); }
+  .session .delete { color: var(--mut); font-size: 13px; opacity: .7; padding: 0 3px; }
+  .sidebar-footer { border-top: 1px solid var(--line); padding: 8px; }
+  .menu-link { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-radius: 8px; font-size: 13px; }
+  .user-info { display: flex; align-items: center; gap: 8px; padding: 9px 10px; font-size: 13px; }
+  .user-info .av { width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg, #3b5bdb, #7048e8); display: grid; place-items: center; font-size: 10px; font-weight: 600; flex-shrink: 0; }
+  .user-info .uname { flex: 1; }
+  .user-info .out { color: var(--mut); font-size: 12px; padding: 4px 6px; }
+
+  .chat-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); height: 900px; }
+  .topbar { min-height: 52px; padding: 0 16px; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+  .model-switch { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .model-switch span { color: var(--mut); border-right: 1px solid var(--line); padding: 5px 11px; font-size: 12.5px; }
+  .model-switch span:last-child { border-right: 0; }
+  .model-switch span.on { background: var(--elevated); color: var(--tx); font-weight: 600; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+
+  .chat-messages { flex: 1; overflow: hidden; padding: 12px 20px 20px; display: flex; flex-direction: column; justify-content: flex-end; }
+  .msg { width: 720px; max-width: 720px; margin: 0 auto 18px; display: flex; flex-direction: column; }
+  .msg:last-child { margin-bottom: 4px; }
+  .role { font-size: 12px; color: var(--mut); margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+  .mono-mini { width: 16px; height: 16px; border-radius: 5px; background: var(--acct); color: #171717; display: grid; place-items: center; font-weight: 800; font-size: 9.5px; }
+  .bubble { font-size: 14px; line-height: 1.6; }
+  .msg.user { align-items: flex-end; }
+  .msg.user .bubble { background: var(--elevated); border-radius: 18px; max-width: 85%; padding: 10px 16px; }
+  .bubble p { margin: 0 0 .6em; }
+  .bubble p:last-child { margin-bottom: 0; }
+  .bubble ul { padding-left: 1.4em; margin: .4em 0 .6em; }
+  .bubble li { margin: .25em 0; }
+  .bubble li::marker { color: var(--mut); }
+  .bubble strong { font-weight: 600; }
+  .bubble code { font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace; background: var(--elevated); padding: 1px 5px; border-radius: 4px; font-size: 13px; }
+  .msg-copy { margin-top: 8px; align-self: flex-start; border: 1px solid var(--line); color: var(--mut); border-radius: 6px; padding: 3px 10px; font-size: 11.5px; }
+
+  .chat-input { padding: 12px 20px 16px; border-top: 1px solid var(--line); flex-shrink: 0; }
+  .row { max-width: 720px; margin: 0 auto; display: flex; align-items: flex-end; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 6px 6px 6px 16px; }
+  .row .ph { flex: 1; padding: 8px 0; color: #6f6f6f; font-size: 14px; }
+  .send { width: 36px; height: 36px; background: var(--acct); color: #171717; border-radius: 50%; display: grid; place-items: center; }
+  .composer-note { max-width: 720px; margin: 8px auto 0; text-align: center; font-size: 11.5px; color: var(--mut); }
+  .composer-note u { text-underline-offset: 2px; }
+</style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="sidebar-brand">
+      <a>
+        <span class="mono"><svg width="26" height="26" viewBox="0 0 32 32"><path d="M20.8 10.3 A7.5 7.5 0 1 0 20.8 21.7" fill="none" stroke="#000" stroke-width="4" stroke-linecap="round"/></svg></span>
+        <span class="word">caramelo</span>
+      </a>
+    </div>
+    <div class="new-chat"><span class="btn"><span class="plus">+</span> Nova conversa</span></div>
+    <div class="sessions">
+      <div class="session active"><span class="title">o que é um data warehouse? em uma frase</span><span class="delete">×</span></div>
+      <div class="session"><span class="title">resume a ata da reunião de segunda</span></div>
+      <div class="session"><span class="title">traduz pro inglês o parágrafo da proposta</span></div>
+      <div class="session"><span class="title">10 títulos pro post sobre onboarding</span></div>
+      <div class="session"><span class="title">classificar tickets do suporte por tema</span></div>
+      <div class="session"><span class="title">e-mail de follow-up depois da demo</span></div>
+      <div class="session"><span class="title">explica juros compostos pra quem odeia matemática</span></div>
+      <div class="session"><span class="title">padroniza esses nomes de produto</span></div>
+      <div class="session"><span class="title">diferença entre KPI e OKR</span></div>
+      <div class="session"><span class="title">sim ou não: esse texto tem tom agressivo?</span></div>
+    </div>
+    <div class="sidebar-footer">
+      <div class="menu-link">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>
+        Chaves de API
+      </div>
+      <div class="user-info">
+        <span class="av">LR</span>
+        <span class="uname">Lívia Ramos</span>
+        <span class="out">sair</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="chat-main">
+    <div class="topbar">
+      <div class="model-switch"><span class="on">Caramelo</span><span>Caramelo Code</span></div>
+      <span class="dot"></span>
+    </div>
+
+    <div class="chat-messages">
+      <div class="msg user"><div class="bubble">o que é um data warehouse? em uma frase</div></div>
+      <div class="msg assistant">
+        <div class="role"><span class="mono-mini">C</span>caramelo</div>
+        <div class="bubble"><p>É um banco feito pra análise, não pra operação: junta os dados de vários sistemas num lugar só, já limpos, pra você responder pergunta de negócio sem pesar no sistema que vende.</p></div>
+        <span class="msg-copy">copiar</span>
+      </div>
+
+      <div class="msg user"><div class="bubble">deixa mais direto: "Gostaríamos de informar que, devido a questões operacionais, a reunião prevista para quinta-feira precisará ser remarcada para uma data ainda a ser definida."</div></div>
+      <div class="msg assistant">
+        <div class="role"><span class="mono-mini">C</span>caramelo</div>
+        <div class="bubble">
+          <p><strong>A reunião de quinta foi adiada. Mando a nova data até sexta.</strong></p>
+          <p>O que mudou:</p>
+          <ul>
+            <li><strong>Saiu o "gostaríamos de informar".</strong> A frase já informa. Anunciar que vai informar é enchimento.</li>
+            <li><strong>Saiu o "questões operacionais".</strong> Não explica nada. Se o motivo importa, diga qual; se não importa, corte.</li>
+            <li><strong>Entrou um prazo.</strong> "Data a ser definida" deixa quem lê esperando sem saber até quando.</li>
+          </ul>
+        </div>
+        <span class="msg-copy">copiar</span>
+      </div>
+
+      <div class="msg user"><div class="bubble">classifica o sentimento: "entregaram no prazo, mas a caixa veio amassada"</div></div>
+      <div class="msg assistant">
+        <div class="role"><span class="mono-mini">C</span>caramelo</div>
+        <div class="bubble"><p><strong>Neutro.</strong> Tem um elogio (prazo) e uma reclamação (embalagem) com o mesmo peso. Se precisar escolher entre os dois lados, eu marcaria negativo: quem escreve isso lembra da caixa, não do prazo.</p></div>
+        <span class="msg-copy">copiar</span>
+      </div>
+    </div>
+
+    <div class="chat-input">
+      <div class="row">
+        <span class="ph">Manda a pergunta...</span>
+        <span class="send"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></span>
+      </div>
+      <div class="composer-note">Caramelo pode errar. <u>v4.4.1 · novidades</u></div>
+    </div>
+  </div>
+</body>
+</html>

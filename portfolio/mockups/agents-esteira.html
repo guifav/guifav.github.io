@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>Esteira de agentes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1440px; height: 900px; overflow: hidden; }
+  body { font-family: 'Inter', -apple-system, sans-serif; -webkit-font-smoothing: antialiased; display: flex; background: #fff; color: #18181b; }
+  svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+  /* ---------- app de exemplo ---------- */
+  .app { position: relative; width: 920px; height: 900px; background: #f7f7f5; overflow: hidden; }
+  .bar { height: 56px; display: flex; align-items: center; gap: 10px; padding: 0 24px; background: #fff; border-bottom: 1px solid #e7e5e0; }
+  .bar .logo { width: 26px; height: 26px; border-radius: 7px; background: #1f4d3f; display: flex; align-items: center; justify-content: center; color: #e9f3ee; }
+  .bar b { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; }
+  .bar nav { display: flex; gap: 4px; margin-left: 24px; }
+  .bar nav span { font-size: 13px; color: #6b6b66; padding: 6px 10px; border-radius: 6px; }
+  .bar nav span.on { background: #eef3f0; color: #1f4d3f; font-weight: 600; }
+  .bar .me { margin-left: auto; width: 28px; height: 28px; border-radius: 999px; background: #e8e3d8; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; color: #57534e; }
+  .app main { padding: 24px; }
+  .app h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+  .app .sub { font-size: 13px; color: #78716c; margin-top: 2px; }
+  .toolbar { display: flex; align-items: center; gap: 8px; margin: 18px 0 14px; }
+  .month { display: inline-flex; align-items: center; gap: 10px; background: #fff; border: 1px solid #e7e5e0; border-radius: 8px; padding: 6px 10px; font-size: 13px; font-weight: 600; }
+  .month svg.i { width: 14px; height: 14px; color: #78716c; }
+  .chip { font-size: 12px; padding: 5px 10px; border-radius: 999px; background: #fff; border: 1px solid #e7e5e0; color: #57534e; }
+  .newbtn { margin-left: auto; font-size: 13px; font-weight: 600; background: #1f4d3f; color: #fff; padding: 8px 14px; border-radius: 8px; }
+  .cal { background: #fff; border: 1px solid #e7e5e0; border-radius: 12px; overflow: hidden; }
+  .cal .dow, .cal .wk { display: grid; grid-template-columns: repeat(7, 1fr); }
+  .cal .dow span { font-size: 11px; font-weight: 600; color: #a8a29e; text-transform: uppercase; letter-spacing: .05em; padding: 10px 12px; border-bottom: 1px solid #efede8; }
+  .cal .d { height: 118px; border-right: 1px solid #f1efea; border-bottom: 1px solid #f1efea; padding: 8px 10px; font-size: 12px; color: #57534e; }
+  .cal .d:nth-child(7n) { border-right: 0; }
+  .cal .d.out { color: #c4c0b8; background: #fbfbf9; }
+  .cal .d.today .n { background: #1f4d3f; color: #fff; border-radius: 999px; width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; margin: -3px 0 0 -4px; }
+  .ev { margin-top: 6px; font-size: 11px; line-height: 14px; padding: 4px 6px; border-radius: 5px; border-left: 3px solid; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ev.g { background: #eaf3ee; border-color: #3d8b6a; color: #1f4d3f; }
+  .ev.a { background: #fbf1e2; border-color: #d39a3a; color: #7a5212; }
+  .ev.b { background: #ebf0fa; border-color: #5b7ec4; color: #2b467d; }
+
+  .scrim { position: absolute; inset: 0; background: rgba(0,0,0,.18); }
+  .trigger-ghost { display: none; }
+
+  /* ---------- widget (preset neutro) ---------- */
+  .panel { position: absolute; right: 20px; bottom: 20px; width: 360px; background: #fff; border: 1px solid #e4e4e7; border-radius: 16px;
+    box-shadow: 0 16px 48px rgba(0,0,0,.16), 0 2px 6px rgba(0,0,0,.06); font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif; font-size: 14px; line-height: 1.45; color: #18181b; }
+  .head { display: flex; align-items: center; gap: 10px; padding: 14px 14px 10px; }
+  .head .mark { width: 30px; height: 30px; border-radius: 8px; background: #1f4d3f; color: #e9f3ee; display: flex; align-items: center; justify-content: center; }
+  .head .titles { flex: 1; min-width: 0; }
+  .head h2 { font-weight: 600; font-size: 18px; letter-spacing: -0.01em; }
+  .head .s { font-size: 12.5px; color: #52525b; margin-top: 2px; }
+  .x { width: 32px; height: 32px; border-radius: 999px; border: 1px solid #e4e4e7; color: #3f3f46; display: inline-flex; align-items: center; justify-content: center; }
+  .pb { padding: 2px 14px 14px; }
+  .seg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 12px; }
+  .seg span { font-size: 13px; font-weight: 600; color: #3f3f46; border: 1px solid #d4d4d8; border-radius: 999px; padding: 7px 6px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+  .seg span svg.i { width: 14px; height: 14px; }
+  .seg span.on { background: #f4f4f5; border-color: #18181b; color: #18181b; }
+  .intro { font-size: 13px; color: #3f3f46; margin-bottom: 12px; }
+  .fl { display: block; font-size: 12.5px; font-weight: 700; color: #52525b; margin-bottom: 5px; }
+  .fld { margin-bottom: 11px; }
+  .inp { width: 100%; font-size: 14px; border: 1px solid #d4d4d8; border-radius: 12px; padding: 10px 12px; }
+  .inp.ta { min-height: 92px; }
+  .inp.focus { border-color: #18181b; box-shadow: 0 0 0 3px rgba(24,24,27,.12); }
+  .count { text-align: right; font-size: 11.5px; color: #52525b; margin-top: 3px; }
+  .shot-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .shot { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+  .thumb { width: 100%; aspect-ratio: 16/10; border: 1px solid #d4d4d8; border-radius: 8px; background: #f7f7f5; overflow: hidden; position: relative; }
+  .thumb .tb { height: 9px; background: #fff; border-bottom: 1px solid #e7e5e0; display: flex; align-items: center; gap: 3px; padding: 0 5px; }
+  .thumb .tb i { display: block; width: 6px; height: 6px; border-radius: 2px; background: #1f4d3f; }
+  .thumb .tb u { display: block; width: 26px; height: 3px; border-radius: 2px; background: #d6d3cd; }
+  .thumb .grid { position: absolute; left: 6px; right: 6px; top: 22px; bottom: 6px; background: #fff; border: 1px solid #ebe8e2; border-radius: 3px;
+    background-image: linear-gradient(#f1efea 1px, transparent 1px), linear-gradient(90deg, #f1efea 1px, transparent 1px); background-size: 100% 25%, 14.28% 100%; }
+  .thumb .ttl { position: absolute; left: 6px; top: 13px; width: 40px; height: 4px; border-radius: 2px; background: #a8a29e; }
+  .thumb .e1, .thumb .e2, .thumb .e3 { position: absolute; height: 4px; border-radius: 1px; }
+  .thumb .e1 { left: 18%; top: 38%; width: 10%; background: #9ccbb4; }
+  .thumb .e2 { left: 47%; top: 60%; width: 10%; background: #edc98d; }
+  .thumb .e3 { left: 75%; top: 38%; width: 10%; background: #a9bde6; }
+  .thumb .hl { position: absolute; left: 44%; top: 52%; width: 16%; height: 22%; border: 1.5px solid #dc2626; border-radius: 3px; }
+  .link { font-size: 12.5px; color: #52525b; text-decoration: underline; }
+  .shot-note { font-size: 12px; color: #3f3f46; margin-top: 6px; }
+  .addbtn { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: #3f3f46; border: 1px solid #d4d4d8; border-radius: 999px; padding: 7px 14px; margin-bottom: 8px; }
+  .addbtn svg.i { width: 15px; height: 15px; }
+  .addshot { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: #3f3f46; border: 1px solid #d4d4d8; border-radius: 999px; padding: 6px 12px; height: 100%; aspect-ratio: 16/10; width: 100%; justify-content: center; flex-direction: column; border-style: dashed; border-radius: 8px; font-weight: 600; font-size: 12px; color: #52525b; }
+  .tip { display: flex; gap: 8px; align-items: flex-start; border-radius: 12px; padding: 9px 11px; font-size: 12.5px; background: #f4f4f5; color: #3f3f46; margin: 12px 0; }
+  .tip svg.i { width: 16px; height: 16px; margin-top: 1px; color: #18181b; }
+  .ctx { font-size: 11.5px; color: #52525b; margin-bottom: 12px; }
+  .row { display: flex; align-items: center; justify-content: space-between; }
+  .send { font-size: 14px; font-weight: 700; border-radius: 999px; padding: 10px 18px; background: #18181b; color: #fafafa; display: inline-flex; align-items: center; gap: 8px; }
+
+  /* ---------- esteira ---------- */
+  .lane { width: 520px; height: 900px; border-left: 1px solid #e4e4e7; background: #fafafa; display: flex; flex-direction: column; }
+  .lh { padding: 20px 28px 18px; background: #fff; border-bottom: 1px solid #e4e4e7; }
+  .eyebrow { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: #71717a; }
+  .eyebrow .live { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; letter-spacing: 0; text-transform: none; font-size: 12px; font-weight: 500; color: #15803d; background: #f0fdf4; border: 1px solid #bbf7d0; padding: 2px 9px; border-radius: 999px; }
+  .eyebrow .live i { width: 6px; height: 6px; border-radius: 999px; background: #16a34a; display: block; }
+  .lh h2 { margin-top: 10px; font-size: 18px; font-weight: 600; letter-spacing: -0.015em; line-height: 24px; }
+  .meta { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .tag { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 500; padding: 3px 9px; border-radius: 999px; border: 1px solid #e4e4e7; background: #fff; color: #3f3f46; white-space: nowrap; }
+  .tag svg.i { width: 12px; height: 12px; }
+  .tag.dark { background: #18181b; color: #fafafa; border-color: #18181b; }
+  .tag.p1 { background: #fff7ed; border-color: #fed7aa; color: #c2410c; font-weight: 600; }
+  .tag.ok { background: #f0fdf4; border-color: #bbf7d0; color: #15803d; }
+
+  .tl { flex: 1; padding: 24px 28px 0; position: relative; }
+  .st { position: relative; display: grid; grid-template-columns: 32px 1fr auto; gap: 0 14px; padding-bottom: 30px; }
+  .st:not(:last-child)::before { content: ''; position: absolute; left: 15.5px; top: 32px; bottom: 0; width: 1px; background: #d4d4d8; }
+  .dotc { width: 32px; height: 32px; border-radius: 999px; display: flex; align-items: center; justify-content: center; background: #fff; border: 1px solid #e4e4e7; color: #3f3f46; position: relative; z-index: 1; }
+  .dotc svg.i { width: 15px; height: 15px; }
+  .dotc.agent { background: #18181b; border-color: #18181b; color: #fafafa; }
+  .dotc.human { background: #fff; border: 1.5px solid #18181b; color: #18181b; }
+  .dotc.live { background: #16a34a; border-color: #16a34a; color: #fff; box-shadow: 0 0 0 4px rgba(22,163,74,.14); }
+  .sb { padding-top: 5px; min-width: 0; }
+  .sb .t { font-size: 14px; font-weight: 600; line-height: 20px; display: flex; align-items: center; gap: 8px; }
+  .sb .who { font-size: 12px; font-weight: 500; color: #71717a; }
+  .sb .d { font-size: 12.5px; color: #52525b; line-height: 18px; margin-top: 2px; }
+  .sb .d code { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; background: #f4f4f5; border: 1px solid #ececee; border-radius: 5px; padding: 0 5px; color: #18181b; }
+  .tm { padding-top: 6px; text-align: right; }
+  .tm b { display: block; font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; color: #18181b; }
+  .tm span { display: block; font-size: 11px; color: #a1a1aa; font-variant-numeric: tabular-nums; margin-top: 1px; }
+  .pill-human { font-size: 10.5px; font-weight: 600; letter-spacing: .02em; padding: 1px 7px; border-radius: 999px; border: 1px solid #18181b; color: #18181b; }
+
+  .lf { margin: 0 28px 24px; background: #fff; border: 1px solid #e4e4e7; border-radius: 14px; padding: 14px 16px; display: grid; grid-template-columns: repeat(3, 1fr); }
+  .lf div + div { border-left: 1px solid #f0f0f1; padding-left: 16px; }
+  .lf b { display: block; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .lf span { font-size: 11.5px; color: #71717a; }
+</style>
+</head>
+<body>
+
+<!-- App de exemplo com o widget aberto -->
+<div class="app">
+  <div class="bar">
+    <span class="logo"><svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px" stroke-width="2.4"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg></span>
+    <b>Lumen Salas</b>
+    <nav><span class="on">Agenda</span><span>Salas</span><span>Equipe</span><span>Relatórios</span></nav>
+    <span class="me">TB</span>
+  </div>
+  <main>
+    <h1>Agenda de salas</h1>
+    <p class="sub">Reservas do coworking, por mês. Clique num dia para reservar.</p>
+    <div class="toolbar">
+      <span class="month"><svg class="i" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>Novembro 2026<svg class="i" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span>
+      <span class="chip">Todas as salas</span><span class="chip">Só minhas</span>
+      <span class="newbtn">Nova reserva</span>
+    </div>
+    <div class="cal">
+      <div class="dow"><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span><span>Dom</span></div>
+      <div class="wk">
+        <div class="d out">26</div><div class="d out">27</div><div class="d out">28</div><div class="d out">29</div><div class="d out">30</div><div class="d out">31</div><div class="d">1</div>
+        <div class="d">2<div class="ev g">09:00 Sala Ipê</div></div><div class="d">3<div class="ev a">14:00 Auditório</div></div><div class="d">4</div><div class="d today"><span class="n">5</span><div class="ev b">10:00 Sala Jatobá</div><div class="ev g">16:00 Sala Ipê</div></div><div class="d">6<div class="ev g">08:30 Sala Ipê</div></div><div class="d">7</div><div class="d">8</div>
+        <div class="d">9<div class="ev b">11:00 Sala Jatobá</div></div><div class="d">10</div><div class="d">11<div class="ev a">15:00 Auditório</div></div><div class="d">12</div><div class="d">13<div class="ev g">09:00 Sala Ipê</div></div><div class="d">14</div><div class="d">15</div>
+        <div class="d">16</div><div class="d">17<div class="ev b">13:30 Sala Jatobá</div></div><div class="d">18</div><div class="d">19<div class="ev g">10:00 Sala Ipê</div></div><div class="d">20</div><div class="d">21</div><div class="d">22</div>
+        <div class="d">23</div><div class="d">24</div><div class="d">25</div><div class="d">26</div><div class="d">27</div><div class="d">28</div><div class="d">29</div>
+      </div>
+    </div>
+  </main>
+  <div class="scrim"></div>
+
+  <div class="panel" role="dialog">
+    <div class="head">
+      <span class="mark"><svg class="i" viewBox="0 0 24 24" style="width:15px;height:15px" stroke-width="2.4"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg></span>
+      <div class="titles"><h2>Sugestões e críticas</h2><div class="s">Vai direto para a equipe da plataforma</div></div>
+      <span class="x"><svg class="i" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg></span>
+    </div>
+    <div class="pb">
+      <div class="seg">
+        <span><svg class="i" viewBox="0 0 24 24"><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.3 1 2.3h6c0-1 .4-1.8 1-2.3A7 7 0 0 0 12 2z"/></svg>Sugestão</span>
+        <span><svg class="i" viewBox="0 0 24 24"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.7a2 2 0 0 0-2 1.7l-1.4 9A2 2 0 0 0 4.3 15zM17 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg>Crítica</span>
+        <span class="on"><svg class="i" viewBox="0 0 24 24"><path d="M8 2l1.9 1.9M16 2l-1.9 1.9M9 7.1v-1a3 3 0 1 1 6 0v1M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6zM12 20v-9M6 13H2M22 13h-4"/></svg>Problema</span>
+      </div>
+      <p class="intro">O que aconteceu? Conte o que você fez, o que esperava e o que apareceu.</p>
+      <div class="fld"><span class="fl">Título</span><div class="inp">Reserva some ao voltar para o mês anterior</div></div>
+      <div class="fld"><span class="fl">Descrição</span>
+        <div class="inp ta focus">Reservei a Sala Jatobá para o dia 11, avancei para dezembro e voltei. A reserva não aparece mais no calendário, mas continua na lista de &ldquo;Minhas reservas&rdquo;.</div>
+        <div class="count">171 / 3000</div></div>
+      <div class="fld">
+        <span class="addbtn"><svg class="i" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/></svg>Adicionar print da tela</span>
+        <div class="shot-list">
+          <div class="shot"><div class="thumb"><div class="tb"><i></i><u></u></div><div class="ttl"></div><div class="grid"></div><div class="e1"></div><div class="e2"></div><div class="e3"></div><div class="hl"></div></div><span class="link">Remover</span></div>
+        </div>
+        <p class="shot-note">O print vai junto com o relato.</p>
+      </div>
+      <div class="tip"><svg class="i" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg><span>Não inclua dados pessoais de terceiros.</span></div>
+      <p class="ctx">Enviamos junto a tela em que você está e a versão da plataforma.</p>
+      <div class="row"><span class="link">Cancelar</span><span class="send"><svg class="i" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4zM22 2 11 13"/></svg>Enviar</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Esteira do ticket -->
+<div class="lane">
+  <div class="lh">
+    <div class="eyebrow">Esteira de agentes <span class="mono" style="letter-spacing:0;text-transform:none;font-weight:500;color:#3f3f46">FB-8KQ2TD</span><span class="live"><i></i>no ar</span></div>
+    <h2>Reserva some ao voltar para o mês anterior</h2>
+    <div class="meta">
+      <span class="tag">lumen-salas</span>
+      <span class="tag"><svg class="i" viewBox="0 0 24 24"><path d="M8 2l1.9 1.9M16 2l-1.9 1.9M9 7.1v-1a3 3 0 1 1 6 0v1M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6zM12 20v-9M6 13H2M22 13h-4"/></svg>Problema</span>
+      <span class="tag p1">P1</span>
+      <span class="tag">sem área crítica</span>
+      <span class="tag"><svg class="i" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3"/></svg>1 print</span>
+    </div>
+  </div>
+
+  <div class="tl">
+    <div class="st">
+      <span class="dotc"><svg class="i" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+      <div class="sb"><p class="t">Relato recebido <span class="who">widget</span></p><p class="d">Gravado no banco dos agentes e entregue ao Paperclip.</p></div>
+      <div class="tm"><b>09:12</b><span>início</span></div>
+    </div>
+    <div class="st">
+      <span class="dotc agent"><svg class="i" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/></svg></span>
+      <div class="sb"><p class="t">Triagem <span class="who">agente Triagem</span></p><p class="d">Classificou como P1, sem área crítica: segue direto para o Implementador.</p></div>
+      <div class="tm"><b>09:14</b><span>+2 min</span></div>
+    </div>
+    <div class="st">
+      <span class="dotc agent"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1"/></svg></span>
+      <div class="sb"><p class="t">Issue e plano <span class="who">agente Implementador</span></p><p class="d">Abriu a issue <code>#142</code> com causa provável e plano de correção.</p></div>
+      <div class="tm"><b>09:23</b><span>+9 min</span></div>
+    </div>
+    <div class="st">
+      <span class="dotc agent"><svg class="i" viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" x2="6" y1="9" y2="21"/></svg></span>
+      <div class="sb"><p class="t">Pull request <span class="who">agente Implementador</span></p><p class="d"><code>#143</code> fix: mantém reservas ao trocar de mês, com teste de regressão.</p></div>
+      <div class="tm"><b>09:51</b><span>+28 min</span></div>
+    </div>
+    <div class="st">
+      <span class="dotc agent"><svg class="i" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg></span>
+      <div class="sb"><p class="t">Validação <span class="who">agente Validador</span></p><p class="d">Review no PR: aprovado no mesmo head, CI verde.</p></div>
+      <div class="tm"><b>10:06</b><span>+15 min</span></div>
+    </div>
+    <div class="st">
+      <span class="dotc human"><svg class="i" viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/></svg></span>
+      <div class="sb"><p class="t">Merge <span class="pill-human">humano</span></p><p class="d">Aprovação final e merge feitos por uma pessoa, nunca por agente.</p></div>
+      <div class="tm"><b>10:34</b><span>+28 min</span></div>
+    </div>
+    <div class="st">
+      <span class="dotc live"><svg class="i" viewBox="0 0 24 24" stroke-width="2.6"><path d="M20 6 9 17l-5-5"/></svg></span>
+      <div class="sb"><p class="t">No ar <span class="who">deploy de produção</span></p><p class="d">Commit do merge confirmado no deploy <code>a71c9e0</code>.</p></div>
+      <div class="tm"><b>10:43</b><span>+9 min</span></div>
+    </div>
+  </div>
+
+  <div class="lf">
+    <div><b>1h31</b><span>do relato ao ar</span></div>
+    <div><b>3</b><span>agentes na esteira</span></div>
+    <div><b>1</b><span>decisão humana</span></div>
+  </div>
+</div>
+</body>
+</html>

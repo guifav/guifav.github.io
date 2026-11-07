@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>Sales Coach · Avaliação de call</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #ffffff; --bg-subtle: #fafaf9; --bg-muted: #f5f5f4; --bg-hover: #ebeae8;
+    --surface: #ffffff;
+    --border: #e7e5e4; --border-subtle: #efeeed; --border-strong: #d6d3d1;
+    --text-1: #0c0c0c; --text-2: #525252; --text-3: #78716c; --text-4: #a8a29e; --text-inverse: #fafaf9;
+    --avatar-bg: #e7e5e4;
+    --accent: #3b82f6; --accent-hover: #2563eb; --accent-weak: #eff6ff; --accent-border: #bfdbfe;
+    --positive: #15803d; --positive-weak: #f0fdf4; --positive-border: #bbf7d0;
+    --attention: #b45309; --attention-weak: #fffbeb; --attention-border: #fde68a;
+    --coach: #7c3aed; --coach-weak: #f5f3ff; --coach-border: #ddd6fe;
+    --r-sm: 4px; --r-md: 6px; --r-lg: 8px;
+    --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    font-family: var(--font-sans); font-size: 13px; line-height: 1.5; color: var(--text-1);
+    background: var(--bg); font-feature-settings: "cv11", "ss01"; -webkit-font-smoothing: antialiased;
+    font-variant-numeric: tabular-nums;
+  }
+  svg.i { width: 14px; height: 14px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .mono { font-family: var(--font-mono); font-size: 0.94em; letter-spacing: -0.01em; }
+
+  .app { display: grid; grid-template-columns: 220px minmax(0, 1fr); grid-template-rows: 48px 1fr; height: 900px; overflow: hidden; }
+
+  /* Sidebar */
+  .app-sidebar { grid-row: 1 / 3; grid-column: 1; border-right: 1px solid var(--border); background: var(--bg-subtle); display: flex; flex-direction: column; }
+  .sb-brand { display: flex; align-items: center; gap: 8px; padding: 12px 14px; height: 48px; font-weight: 600; font-size: 13px; border-bottom: 1px solid var(--border-subtle); }
+  .sb-brand-dot { width: 18px; height: 18px; border-radius: 4px; display: block; }
+  .sb-nav { padding: 8px; display: flex; flex-direction: column; gap: 1px; flex: 1; overflow: hidden; }
+  .sb-group-label { padding: 10px 10px 4px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-4); font-weight: 600; }
+  .sb-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: var(--r-md); font-size: 12.5px; color: var(--text-2); }
+  .sb-item.active { background: var(--bg-hover); color: var(--text-1); font-weight: 500; }
+  .sb-item .ml { margin-left: auto; }
+  .sb-footer { padding: 10px; border-top: 1px solid var(--border-subtle); display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-2); }
+  .sb-avatar { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 10px; font-weight: 600; color: #fff; background: linear-gradient(135deg, #a8a29e, #78716c); flex-shrink: 0; }
+
+  /* Topbar */
+  .app-topbar { grid-row: 1; grid-column: 2; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; padding: 0 16px; gap: 12px; }
+  .tb-crumbs { font-size: 12.5px; color: var(--text-3); display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .tb-crumbs .current { color: var(--text-1); font-weight: 500; }
+  .tb-spacer { flex: 1; }
+  .tb-btn { height: 28px; padding: 0 10px; border-radius: var(--r-md); background: var(--surface); border: 1px solid var(--border); color: var(--text-1); font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px; font-family: inherit; white-space: nowrap; }
+  .tb-btn svg.i { width: 13px; height: 13px; color: var(--text-3); }
+  .tb-btn-primary { background: var(--text-1); color: var(--text-inverse); border-color: var(--text-1); }
+  .tb-btn-primary svg.i { color: var(--text-inverse); }
+  .tb-search-trigger { color: var(--text-3); background: var(--bg-muted); border-color: transparent; min-width: 230px; justify-content: flex-start; padding: 0 6px 0 8px; }
+  .tb-search-trigger .lbl { flex: 1; text-align: left; font-size: 12px; }
+  .tb-search-kbd { font-size: 10px; padding: 1px 5px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text-3); }
+  .tb-icon-btn { width: 28px; height: 28px; border-radius: var(--r-md); display: grid; place-items: center; position: relative; color: var(--text-2); }
+  .tb-icon-btn .badge { position: absolute; top: 5px; right: 5px; width: 6px; height: 6px; border-radius: 50%; background: var(--attention); box-shadow: 0 0 0 2px var(--surface); }
+  .tb-lang-trigger { height: 28px; padding: 0 8px; display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; letter-spacing: 0.04em; color: var(--text-2); }
+  .tb-lang-trigger svg.i { width: 11px; height: 11px; color: var(--text-4); }
+
+  /* Main */
+  .app-main { grid-row: 2; grid-column: 2; overflow: hidden; background: var(--bg); }
+  .page { padding: 16px 20px 32px; max-width: 1440px; margin: 0 auto; }
+  .back { display: inline-flex; align-items: center; gap: 4px; height: 24px; font-size: 12px; color: var(--text-3); }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg); box-shadow: 0 1px 2px rgba(0,0,0,0.03); }
+  .page-title { font-size: 18px; font-weight: 600; color: var(--text-1); letter-spacing: -0.01em; margin: 0 0 2px; }
+  .chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 500; background: var(--bg-muted); color: var(--text-2); border: 1px solid var(--border-subtle); white-space: nowrap; }
+  .chip.accent { background: var(--accent-weak); color: var(--accent); border-color: var(--accent-border); }
+  .chip.positive { background: var(--positive-weak); color: var(--positive); border-color: var(--positive-border); }
+  .chip.flat { border-color: transparent; }
+  .ic-link { color: var(--accent); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent); text-underline-offset: 3px; }
+  .av { width: 20px; height: 20px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 9px; font-weight: 600; color: #fff; flex-shrink: 0; }
+
+  .meta { display: flex; flex-direction: column; gap: 3px; margin-bottom: 10px; font-size: 12px; }
+  .meta-row { display: flex; align-items: center; gap: 6px; }
+  .pfx { color: var(--text-4); font-weight: 500; }
+  .val { color: var(--text-2); }
+  .dot { color: var(--text-4); }
+
+  .tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+  .tab { padding-bottom: 8px; font-size: 12.5px; color: var(--text-3); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tab.active { color: var(--text-1); font-weight: 600; border-bottom-color: var(--text-1); }
+
+  .sec-head { padding: 12px 20px; background: var(--bg-subtle); border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center; }
+  .sec-label { font-size: 11.5px; font-weight: 600; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.04em; }
+
+  .grid2 { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+
+  .stage { padding: 14px 20px; border-bottom: 1px solid var(--border-subtle); }
+  .stage:last-child { border-bottom: none; }
+  .stage-top { display: flex; align-items: center; gap: 12px; margin-bottom: 7px; }
+  .stage-n { width: 16px; font-size: 11px; font-weight: 500; color: var(--text-4); }
+  .stage-name { flex: 1; font-size: 13px; font-weight: 500; }
+  .bar { width: 120px; height: 4px; background: var(--bg-muted); border-radius: 2px; overflow: hidden; }
+  .bar > div { height: 100%; }
+  .stage-score { font-size: 12.5px; font-weight: 500; min-width: 40px; text-align: right; }
+  .stage-just { padding-left: 28px; font-size: 12px; color: var(--text-2); line-height: 1.55; }
+
+  .co { padding: 12px 18px; border-bottom: 1px solid var(--border-subtle); }
+  .co:last-child { border-bottom: none; }
+  .co-h { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 13px; font-weight: 600; }
+  .co-t { font-size: 12.5px; color: var(--text-2); line-height: 1.6; }
+
+  .tr-row { display: grid; grid-template-columns: 38px 92px 1fr; gap: 10px; padding: 8px 16px; border-bottom: 1px solid var(--border-subtle); }
+  .tr-row:last-child { border-bottom: none; }
+  .tr-time { font-size: 11px; color: var(--text-4); padding-top: 1px; }
+  .tr-spk { font-size: 11.5px; font-weight: 600; }
+  .tr-txt { font-size: 12.5px; color: var(--text-1); line-height: 1.55; }
+
+  .chat-fab { position: absolute; bottom: 24px; right: 24px; height: 44px; padding: 0 18px 0 14px; border-radius: 9999px; display: inline-flex; align-items: center; gap: 8px; background: var(--coach); color: #fff; font-size: 13px; font-weight: 600; box-shadow: 0 8px 24px rgba(124,58,237,0.28), 0 2px 6px rgba(0,0,0,0.08); }
+  .chat-fab svg.i { width: 18px; height: 18px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 12l9-9 9 9"/><path d="M5 10v10h14V10"/></symbol>
+    <symbol id="i-trending" viewBox="0 0 24 24"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></symbol>
+    <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M6 9H4.5a2.5 2.5 0 010-5H6"/><path d="M18 9h1.5a2.5 2.5 0 000-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17a2 2 0 01-.34 2H7.66a2 2 0 01-.34-2v-2.34"/><path d="M14 14.66V17a2 2 0 00.34 2h1.68a2 2 0 00.34-2v-2.34"/><path d="M18 2H6v7a6 6 0 0012 0V2z"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></symbol>
+    <symbol id="i-book-user" viewBox="0 0 24 24"><path d="M4 4a2 2 0 012-2h13v20H6a2 2 0 01-2-2z"/><path d="M2 7h2"/><path d="M2 12h2"/><path d="M2 17h2"/><circle cx="12" cy="10" r="2.5"/><path d="M8 17a4 4 0 018 0"/></symbol>
+    <symbol id="i-building" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01M16 6h.01M12 6h.01M12 10h.01M12 14h.01M16 10h.01M16 14h.01M8 10h.01M8 14h.01"/></symbol>
+    <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"/><path d="M19 14l.8 2.4L22 17l-2.2.6L19 20l-.8-2.4L16 17l2.2-.6L19 14z"/><path d="M5 14l.6 1.8L7 16.5l-1.4.5L5 19l-.6-1.8L3 16.5l1.4-.5L5 14z"/></symbol>
+    <symbol id="i-dumbbell" viewBox="0 0 24 24"><path d="m6.5 6.5 11 11"/><path d="m21 21-1-1"/><path d="m3 3 1 1"/><path d="m18 22 4-4"/><path d="m2 6 4-4"/><path d="m3 10 7-7"/><path d="m14 21 7-7"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></symbol>
+    <symbol id="i-book-open" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></symbol>
+    <symbol id="i-megaphone" viewBox="0 0 24 24"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></symbol>
+    <symbol id="i-ext" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+    <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+    <symbol id="i-chev-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-chev-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></symbol>
+    <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61"/><line x1="2" x2="22" y1="2" y2="22"/></symbol>
+    <symbol id="i-msg-plus" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" x2="15" y1="10" y2="10"/><line x1="12" x2="12" y1="7" y2="13"/></symbol>
+    <symbol id="i-list-checks" viewBox="0 0 24 24"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></symbol>
+    <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+    <symbol id="i-languages" viewBox="0 0 24 24"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></symbol>
+  </defs>
+</svg>
+
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="app-sidebar">
+    <div class="sb-brand">
+      <svg class="sb-brand-dot" viewBox="0 0 1024 1024"><rect width="1024" height="1024" rx="230" fill="#0e0e0e"/><path d="M308 235h408c59 0 108 49 108 108v214c0 59-49 108-108 108H485L330 820V665h-22c-59 0-108-49-108-108V343c0-59 49-108 108-108z" fill="#fff"/><path d="M300 558l130-130 108 68 180-170M600 329h118v118" fill="none" stroke="#0e0e0e" stroke-width="56" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Sales Coach
+    </div>
+    <nav class="sb-nav">
+      <div class="sb-group-label">Início</div>
+      <div class="sb-item"><svg class="i"><use href="#i-home"/></svg>Início</div>
+      <div class="sb-item"><svg class="i"><use href="#i-trending"/></svg>Minha Performance</div>
+
+      <div class="sb-group-label">Operação</div>
+      <div class="sb-item active"><svg class="i"><use href="#i-phone"/></svg>Chamadas</div>
+      <div class="sb-item"><svg class="i"><use href="#i-mic"/></svg>Gravador de Áudio<span class="chip accent ml" style="font-size:10px;padding:1px 6px">BETA</span></div>
+      <div class="sb-item"><svg class="i"><use href="#i-users"/></svg>Time</div>
+      <div class="sb-item"><svg class="i"><use href="#i-trophy"/></svg>Ranking</div>
+
+      <div class="sb-group-label">Vendas</div>
+      <div class="sb-item"><svg class="i"><use href="#i-calendar"/></svg>Preparação de Reunião</div>
+      <div class="sb-item"><svg class="i"><use href="#i-book-user"/></svg>Contatos/Leads</div>
+      <div class="sb-item"><svg class="i"><use href="#i-building"/></svg>Contas</div>
+
+      <div class="sb-group-label">Análise</div>
+      <div class="sb-item"><svg class="i"><use href="#i-sparkles"/></svg>Insights</div>
+
+      <div class="sb-group-label">T&amp;D</div>
+      <div class="sb-item"><svg class="i"><use href="#i-dumbbell"/></svg>Sparring<span class="chip accent ml" style="font-size:10px;padding:1px 6px">BETA</span></div>
+
+      <div class="sb-group-label">Conhecimento</div>
+      <div class="sb-item"><svg class="i"><use href="#i-layers"/></svg>Frameworks</div>
+      <div class="sb-item"><svg class="i"><use href="#i-book"/></svg>Biblioteca</div>
+      <div class="sb-item"><svg class="i"><use href="#i-book-open"/></svg>Guia de uso<svg class="i ml" style="width:12px;height:12px;opacity:.6"><use href="#i-ext"/></svg></div>
+      <div class="sb-item"><svg class="i"><use href="#i-megaphone"/></svg>Novidades<span class="chip accent ml">Nova</span></div>
+
+      <div class="sb-group-label">Administração</div>
+      <div class="sb-item"><svg class="i"><use href="#i-bell"/></svg>Notificações<span class="chip attention ml" style="background:var(--attention-weak);color:var(--attention);border-color:var(--attention-border)">3</span></div>
+      <div class="sb-item"><svg class="i"><use href="#i-settings"/></svg>Configurações</div>
+    </nav>
+    <div class="sb-footer">
+      <div class="sb-avatar" style="background:linear-gradient(135deg,#60a5fa,#2563eb)">LV</div>
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.25">
+        <span style="color:var(--text-1);font-weight:500;font-size:12px">Larissa Vidal</span>
+        <span style="color:var(--text-4);font-size:11px">Hunter · Brasil</span>
+      </div>
+      <span style="width:26px;height:26px;display:grid;place-items:center;color:var(--text-3)"><svg class="i"><use href="#i-logout"/></svg></span>
+    </div>
+  </aside>
+
+  <!-- Topbar -->
+  <header class="app-topbar">
+    <div class="tb-crumbs">
+      <span>Dashboard</span><span>›</span><span>Chamadas</span><span>›</span><span class="current">Henrique Saldanha</span>
+    </div>
+    <div class="tb-spacer"></div>
+    <div style="display:inline-flex;align-items:center;gap:6px">
+      <span class="tb-btn tb-search-trigger"><svg class="i"><use href="#i-search"/></svg><span class="lbl">Buscar calls e Representantes…</span><span class="tb-search-kbd">⌘K</span></span>
+      <span class="tb-btn tb-btn-primary"><svg class="i"><use href="#i-upload"/></svg>Enviar gravação</span>
+      <span class="tb-icon-btn"><svg class="i"><use href="#i-moon"/></svg></span>
+      <span class="tb-lang-trigger">PT<svg class="i"><use href="#i-chev-down"/></svg></span>
+      <span class="tb-icon-btn"><svg class="i"><use href="#i-bell"/></svg><span class="badge"></span></span>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <main class="app-main">
+    <div class="page">
+      <div style="margin-bottom:10px"><span class="back"><svg class="i" style="width:13px;height:13px"><use href="#i-chev-left"/></svg>Voltar</span></div>
+
+      <!-- Call header -->
+      <div class="card" style="padding:20px">
+        <div style="display:flex;align-items:center;gap:24px">
+          <div style="flex:1;min-width:0">
+            <div class="meta">
+              <div class="meta-row">
+                <span class="pfx">Call</span><span class="val">22/10/2026 15:30</span>
+                <span class="dot">·</span><span class="mono" style="color:var(--text-3)">31m 48s</span>
+                <span class="dot">·</span><span class="mono ic-link" style="font-size:11.5px">00T8c00000QxRr2EAF</span>
+              </div>
+              <div class="meta-row" style="color:var(--text-3)">
+                <span class="pfx">Avaliação</span><span class="mono">#40218</span><span class="pfx">em</span><span>22/10/2026 15:54</span>
+              </div>
+            </div>
+            <h1 class="page-title"><span class="ic-link">Henrique Saldanha</span></h1>
+            <div style="color:var(--text-3);font-size:12.5px;margin-bottom:10px">Aurora Logística Investimentos</div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span class="av" style="background:linear-gradient(135deg,#60a5fa,#2563eb)">LV</span>
+              <span style="font-size:13px;font-weight:500"><span class="ic-link">Larissa Vidal</span></span>
+              <span style="color:var(--text-4)">·</span>
+              <span style="color:var(--text-3);font-size:12px">Hunter</span>
+            </div>
+          </div>
+
+          <div style="text-align:right;flex-shrink:0">
+            <div style="color:var(--text-3);font-size:11px">Score final</div>
+            <div style="font-size:32px;font-weight:500;color:var(--text-1);line-height:1;letter-spacing:-0.02em;margin-top:2px">4,2<span style="font-size:16px;color:var(--text-4);font-weight:400">/5,0</span></div>
+            <div style="margin-top:10px;display:flex;gap:6px;justify-content:flex-end">
+              <span class="chip flat">Categoria A</span>
+              <span class="chip flat accent">Qualificação com handoff</span>
+              <span class="chip flat">Pensando</span>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;padding-left:20px;border-left:1px solid var(--border-subtle)">
+            <span class="tb-btn"><svg class="i"><use href="#i-dumbbell"/></svg>Treinar a partir desta call</span>
+            <span class="tb-btn"><svg class="i"><use href="#i-sliders"/></svg>Corrigir</span>
+            <span class="tb-btn"><svg class="i"><use href="#i-eye-off"/></svg>Desconsiderar</span>
+            <span class="tb-btn"><svg class="i"><use href="#i-msg-plus"/></svg>Adicionar self-feedback</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs" style="margin-top:20px">
+        <span class="tab active">Avaliação</span>
+        <span class="tab">Transcrição</span>
+        <span class="tab">Vídeo</span>
+        <span class="tab">Inteligência</span>
+        <span class="tab">Coaching</span>
+        <span class="tab">Histórico</span>
+      </div>
+
+      <div class="grid2">
+        <!-- Scorecard -->
+        <div class="card" style="overflow:hidden">
+          <div class="sec-head">
+            <div>
+              <span class="sec-label">Avaliação por stage</span>
+              <div class="mono" style="font-size:11px;color:var(--text-4);margin-top:2px">hunters · evaluate_category_a · v18</div>
+            </div>
+            <span class="mono" style="font-size:12px;font-weight:500">25/30 pts</span>
+          </div>
+
+          <div class="stage">
+            <div class="stage-top"><div class="stage-n">1</div><div class="stage-name">Continuidade e rapport</div><div class="bar"><div style="width:100%;background:var(--positive)"></div></div><div class="stage-score mono">5/5</div></div>
+            <div class="stage-just">Retomou a conversa de setembro pelo nome do fundo e pelo galpão em Extrema, sem repetir a apresentação.</div>
+          </div>
+          <div class="stage">
+            <div class="stage-top"><div class="stage-n">2</div><div class="stage-name">Aprofundamento da qualificação</div><div class="bar"><div style="width:80%;background:var(--positive)"></div></div><div class="stage-score mono">4/5</div></div>
+            <div class="stage-just">Mapeou tese, ticket e horizonte de investimento; faltou confirmar quem mais participa da decisão.</div>
+          </div>
+          <div class="stage">
+            <div class="stage-top"><div class="stage-n">3</div><div class="stage-name">Pitch de valor avançado</div><div class="bar"><div style="width:80%;background:var(--positive)"></div></div><div class="stage-score mono">4/5</div></div>
+            <div class="stage-just">Ligou o Comitê de Logística à busca por coinvestidores. Citou dois pares do setor sem expor nomes.</div>
+          </div>
+          <div class="stage">
+            <div class="stage-top"><div class="stage-n">4</div><div class="stage-name">Solução e preço</div><div class="bar"><div style="width:60%;background:var(--text-2)"></div></div><div class="stage-score mono">3/5</div></div>
+            <div class="stage-just">Apresentou o valor antes de ancorar o benefício; a objeção de orçamento ficou sem resposta estruturada.</div>
+          </div>
+          <div class="stage">
+            <div class="stage-top"><div class="stage-n">5</div><div class="stage-name">Fechamento e compromisso</div><div class="bar"><div style="width:80%;background:var(--positive)"></div></div><div class="stage-score mono">4/5</div></div>
+            <div class="stage-just">Saiu com reunião marcada com o sócio e envio da proposta até sexta, ambos confirmados pelo cliente.</div>
+          </div>
+          <div class="stage">
+            <div class="stage-top"><div class="stage-n">6</div><div class="stage-name">Integridade de preço e política</div><div class="bar"><div style="width:100%;background:var(--positive)"></div></div><div class="stage-score mono">5/5</div></div>
+            <div class="stage-just">Manteve a tabela e explicou o Approval Council sem prometer aprovação ou condição fora da política.</div>
+          </div>
+        </div>
+
+        <!-- Right column -->
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="card" style="overflow:hidden">
+            <div class="sec-head" style="justify-content:flex-start;gap:8px;padding:12px 18px">
+              <svg class="i" style="color:var(--accent)"><use href="#i-sparkles"/></svg>
+              <span class="sec-label" style="flex:1">Sugestões de coaching</span>
+              <span style="font-size:11px;color:var(--text-4)">3 seções</span>
+              <svg class="i" style="width:16px;height:16px;color:var(--text-3);transform:rotate(180deg)"><use href="#i-chev-down"/></svg>
+            </div>
+            <div class="co">
+              <div class="co-h"><svg class="i" style="color:var(--positive)"><use href="#i-trending"/></svg>Pontos fortes</div>
+              <div class="co-t">Continuidade impecável e escuta ativa: cada pergunta partiu de algo que o cliente tinha dito na call anterior.</div>
+            </div>
+            <div class="co">
+              <div class="co-h"><svg class="i" style="color:var(--attention)"><use href="#i-alert"/></svg>Pontos fracos</div>
+              <div class="co-t">O preço entrou antes do valor. Quando o cliente citou orçamento, a resposta foi desconto, não retorno.</div>
+            </div>
+            <div class="co">
+              <div class="co-h"><svg class="i" style="color:var(--accent)"><use href="#i-target"/></svg>Prioridade</div>
+              <div class="co-t">Na reunião com o sócio, abrir pelo pipeline de coinvestimento e só então apresentar a proposta.</div>
+            </div>
+          </div>
+
+          <div class="card" style="overflow:hidden">
+            <div class="sec-head" style="padding:10px 16px">
+              <div style="display:flex;align-items:center;gap:10px">
+                <span class="sec-label">Transcrição</span>
+                <span style="font-size:11px;padding:1px 8px;border-radius:999px;background:var(--bg-muted);color:var(--text-3);border:1px solid var(--border-subtle)">Original • EN</span>
+              </div>
+              <span class="tb-btn" style="height:26px;font-size:12px"><svg class="i"><use href="#i-languages"/></svg>Traduzir para PT</span>
+            </div>
+            <div class="tr-row"><span class="mono tr-time">18:42</span><span class="tr-spk" style="color:var(--accent)">Henrique S.</span><span class="tr-txt">This year's budget is already committed.</span></div>
+            <div class="tr-row"><span class="mono tr-time">18:51</span><span class="tr-spk" style="color:var(--text-2)">Larissa Vidal</span><span class="tr-txt">What is that co-investor pipeline worth?</span></div>
+            <div class="tr-row"><span class="mono tr-time">19:07</span><span class="tr-spk" style="color:var(--accent)">Henrique S.</span><span class="tr-txt">Fair. Let's bring my partner in on that.</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<span class="chat-fab"><svg class="i"><use href="#i-sparkles"/></svg>Sales Coach</span>
+</body>
+</html>

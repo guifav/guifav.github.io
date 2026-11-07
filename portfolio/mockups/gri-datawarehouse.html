@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>GRI Data Warehouse — arquitetura</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0a0a0a;--card:#121212;--card2:#171717;--line:#262626;--fg:#fafafa;--mut:#a3a3a3;--dim:#737373;--acc:#FFBE00}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1440px;height:900px;overflow:hidden}
+  body{background:var(--bg);color:var(--fg);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;position:relative;
+    background-image:radial-gradient(circle at 1px 1px,#1c1c1c 1px,transparent 0);background-size:24px 24px}
+  .glow{position:absolute;left:475px;top:210px;width:520px;height:520px;border-radius:50%;background:radial-gradient(closest-side,rgba(255,190,0,.10),rgba(255,190,0,0));pointer-events:none}
+  .mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+  svg.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+
+  .hdr{position:absolute;left:56px;top:44px;right:56px;display:flex;justify-content:space-between;align-items:flex-end}
+  .eyebrow{font-size:11px;letter-spacing:.16em;color:var(--acc);text-transform:uppercase}
+  h1{font-size:32px;font-weight:600;letter-spacing:-.025em;margin-top:10px;line-height:1.15}
+  .lead{font-size:14px;color:var(--mut);margin-top:8px;max-width:640px;line-height:1.5}
+  .legend{display:flex;gap:20px;font-size:12px;color:var(--mut)}
+  .legend span{display:flex;align-items:center;gap:8px}
+  .lg-line{width:22px;height:2px;background:linear-gradient(90deg,rgba(255,190,0,.15),var(--acc));border-radius:2px}
+  .lg-gate{width:12px;height:12px;border:1.5px solid var(--acc);border-radius:3px;background:rgba(255,190,0,.12)}
+
+  .col{position:absolute;top:216px}
+  .clab{position:absolute;top:188px;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+  .clab b{color:var(--acc);font-weight:500;margin-right:6px}
+
+  .src{display:flex;align-items:center;gap:10px;height:56px;padding:0 12px;background:var(--card);border:1px solid var(--line);border-radius:12px;margin-bottom:9px}
+  .ib{width:30px;height:30px;border-radius:8px;background:#1d1d1d;border:1px solid #2a2a2a;display:flex;align-items:center;justify-content:center;color:#d4d4d4}
+  .t{font-size:13.5px;font-weight:500;line-height:1.25}
+  .s{font-size:11px;color:var(--dim);margin-top:1px}
+
+  .big{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;height:467px;display:flex;flex-direction:column}
+  .bh{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+  .bh .t{font-size:15px;font-weight:600}
+  .step{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-top:1px dashed #262626}
+  .step:first-of-type{border-top:none}
+  .num{width:20px;height:20px;border-radius:6px;background:#1f1f1f;color:var(--acc);font-size:10.5px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+  .step .t{font-size:13px}
+  .foot{margin-top:auto;padding:10px 12px;border-radius:10px;background:var(--card2);border:1px solid #242424;display:flex;align-items:center;gap:10px;font-size:12px;color:var(--mut)}
+  .foot svg{color:var(--acc)}
+
+  .wh{border-color:rgba(255,190,0,.55);box-shadow:0 0 0 1px rgba(255,190,0,.08),0 20px 60px -20px rgba(255,190,0,.25)}
+  .wh .ib{background:rgba(255,190,0,.12);border-color:rgba(255,190,0,.35);color:var(--acc)}
+  .layer{border:1px solid #262626;background:var(--card2);border-radius:10px;padding:10px 12px;margin-bottom:8px}
+  .layer .k{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim)}
+  .layer .t{font-size:13px;margin-top:3px}
+  .layer .s{margin-top:2px}
+  .tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px}
+  .tag{font-size:10.5px;color:#d4d4d4;border:1px solid #2e2e2e;border-radius:999px;padding:2px 8px;background:#1b1b1b}
+  .gate{margin-top:auto;border:1.5px solid var(--acc);background:rgba(255,190,0,.07);border-radius:10px;padding:10px 12px;display:flex;gap:10px;align-items:flex-start}
+  .gate svg{color:var(--acc);margin-top:1px}
+  .gate .t{font-size:13px;color:var(--fg)}
+  .gate .s{color:#bdbdbd}
+
+  .ctr{display:flex;align-items:center;gap:10px;height:66px;padding:0 14px 0 0;background:var(--card);border:1px solid var(--line);border-radius:12px;margin-bottom:13px;overflow:hidden}
+  .ctr .bar{width:3px;align-self:stretch;background:var(--acc);margin-right:4px}
+  .ctr .ib{color:var(--acc)}
+  .ver{margin-left:auto;font-size:10px;color:var(--dim);border:1px solid #2a2a2a;border-radius:6px;padding:2px 6px}
+
+  .app{display:flex;align-items:center;gap:10px;height:66px;padding:0 12px;background:var(--card);border:1px solid var(--line);border-radius:12px;margin-bottom:13px}
+
+  .gov{position:absolute;left:56px;right:56px;top:722px;height:132px;border:1px solid var(--line);border-radius:16px;background:rgba(18,18,18,.85);display:grid;grid-template-columns:200px repeat(4,1fr);align-items:stretch}
+  .gov .gl{padding:20px;border-right:1px solid var(--line);display:flex;flex-direction:column;justify-content:center}
+  .gov .gl .eyebrow{font-size:10.5px}
+  .gov .gl .t{font-size:16px;font-weight:600;margin-top:6px;line-height:1.3}
+  .gi{padding:20px;display:flex;gap:12px;align-items:flex-start;border-right:1px solid #1f1f1f}
+  .gi:last-child{border-right:none}
+  .gi .ib{color:var(--acc)}
+  .gi .t{font-size:13.5px}
+  .gi .s{font-size:11.5px;line-height:1.45;margin-top:4px;color:#8a8a8a}
+
+  #wires{position:absolute;left:0;top:0;width:1440px;height:900px;pointer-events:none}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="cloud" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></symbol>
+  <symbol id="db" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></symbol>
+  <symbol id="mail" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol>
+  <symbol id="activity" viewBox="0 0 24 24"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></symbol>
+  <symbol id="cal" viewBox="0 0 24 24"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/></symbol>
+  <symbol id="clip" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></symbol>
+  <symbol id="share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.59 13.51 6.83 3.98"/><path d="m15.41 6.51-6.82 3.98"/></symbol>
+  <symbol id="workflow" viewBox="0 0 24 24"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></symbol>
+  <symbol id="layers" viewBox="0 0 24 24"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></symbol>
+  <symbol id="shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m9 15 2 2 4-4"/></symbol>
+  <symbol id="bot" viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></symbol>
+  <symbol id="target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+  <symbol id="spark" viewBox="0 0 24 24"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></symbol>
+  <symbol id="route" viewBox="0 0 24 24"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></symbol>
+  <symbol id="dash" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></symbol>
+  <symbol id="merge" viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/></symbol>
+  <symbol id="lineage" viewBox="0 0 24 24"><circle cx="5" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="12" r="2"/><path d="M7 6h3a4 4 0 0 1 4 4v0a2 2 0 0 0 2 2h1"/><path d="M7 18h3a4 4 0 0 0 4-4"/></symbol>
+  <symbol id="undo" viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></symbol>
+  <symbol id="book" viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/></symbol>
+  <symbol id="flask" viewBox="0 0 24 24"><path d="M10 2v7.31"/><path d="M14 9.3V1.99"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/></symbol>
+  <symbol id="key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></symbol>
+</svg>
+
+<div class="glow"></div>
+<svg id="wires"></svg>
+
+<div class="hdr">
+  <div>
+    <div class="eyebrow mono">Arquitetura · GRI Data Warehouse</div>
+    <h1>Cada aplicação lê um contrato de dados</h1>
+    <p class="lead">ETL versionado carrega o Redshift a partir do CRM e do banco da plataforma. Cada aplicação consome um contrato de dados com dono, teste e portão de qualidade.</p>
+  </div>
+  <div class="legend">
+    <span><i class="lg-line"></i>fluxo de dados</span>
+    <span><i class="lg-gate"></i>portão de qualidade</span>
+  </div>
+</div>
+
+<div class="clab mono" style="left:56px"><b>01</b>Fontes</div>
+<div class="clab mono" style="left:330px"><b>02</b>ETL</div>
+<div class="clab mono" style="left:604px"><b>03</b>Warehouse</div>
+<div class="clab mono" style="left:920px"><b>04</b>Contratos de dados</div>
+<div class="clab mono" style="left:1188px"><b>05</b>Aplicações</div>
+
+<!-- 01 Fontes -->
+<div class="col" style="left:56px;width:224px;top:216px" id="sources">
+  <div class="src"><div class="ib"><svg class="i"><use href="#cloud"/></svg></div><div><div class="t">CRM (Salesforce)</div><div class="s">contas, contatos, vendas</div></div></div>
+  <div class="src"><div class="ib"><svg class="i"><use href="#db"/></svg></div><div><div class="t">Banco da plataforma</div><div class="s">logins, reuniões, intros</div></div></div>
+  <div class="src"><div class="ib"><svg class="i"><use href="#cal"/></svg></div><div><div class="t">Eventos e check-in</div><div class="s">inscrições, presença</div></div></div>
+  <div class="src"><div class="ib"><svg class="i"><use href="#mail"/></svg></div><div><div class="t">Marketing Cloud</div><div class="s">envios, aberturas, cliques</div></div></div>
+  <div class="src"><div class="ib"><svg class="i"><use href="#activity"/></svg></div><div><div class="t">Analytics web</div><div class="s">páginas, sessões, origem</div></div></div>
+  <div class="src"><div class="ib"><svg class="i"><use href="#clip"/></svg></div><div><div class="t">Pesquisas e NPS</div><div class="s">respostas pós-evento</div></div></div>
+  <div class="src" style="margin-bottom:0"><div class="ib"><svg class="i"><use href="#share"/></svg></div><div><div class="t">Notícias e redes</div><div class="s">menções e conteúdo</div></div></div>
+</div>
+
+<!-- 02 ETL -->
+<div class="col" style="left:330px;width:222px" id="etl">
+  <div class="big">
+    <div class="bh"><div class="ib"><svg class="i"><use href="#workflow"/></svg></div><div><div class="t">Jobs de ETL</div><div class="s">AWS Glue · SQL versionado</div></div></div>
+    <div class="step"><div class="num mono">1</div><div><div class="t">Extração incremental</div><div class="s">réplica numa foto única por carga</div></div></div>
+    <div class="step"><div class="num mono">2</div><div><div class="t">Identidade única</div><div class="s">pessoa e conta no ID do CRM</div></div></div>
+    <div class="step"><div class="num mono">3</div><div><div class="t">Regras fixadas</div><div class="s">a regra original roda como está, conferida por paridade</div></div></div>
+    <div class="step"><div class="num mono">4</div><div><div class="t">Ensaio antes de publicar</div><div class="s">carga em destino próprio, comparada com produção</div></div></div>
+    <div class="step"><div class="num mono">5</div><div><div class="t">Publicação com trava</div><div class="s">dado só chega ao usuário em dia verde</div></div></div>
+    <div class="foot"><svg class="i"><use href="#route"/></svg><span>Workflow com gatilhos e alarme por job</span></div>
+  </div>
+</div>
+
+<!-- 03 Warehouse -->
+<div class="col" style="left:604px;width:262px" id="wh">
+  <div class="big wh">
+    <div class="bh"><div class="ib"><svg class="i"><use href="#layers"/></svg></div><div><div class="t">Amazon Redshift</div><div class="s">fonte oficial para métricas</div></div></div>
+    <div class="layer"><div class="k mono">Camada 1</div><div class="t">Réplicas das fontes</div><div class="s">espelho fiel, sem regra de negócio</div></div>
+    <div class="layer"><div class="k mono">Camada 2</div><div class="t">Dimensões e fatos</div><div class="tags"><span class="tag">pessoas</span><span class="tag">contas</span><span class="tag">eventos</span><span class="tag">participações</span><span class="tag">vendas</span></div></div>
+    <div class="layer" style="margin-bottom:0"><div class="k mono">Camada 3</div><div class="t">Modelos analíticos</div><div class="tags"><span class="tag">calor</span><span class="tag">clusters</span><span class="tag">matchmaking</span><span class="tag">funil</span></div></div>
+    <div class="gate" style="margin-top:12px"><svg class="i"><use href="#shield"/></svg><div><div class="t">Contrato de qualidade</div><div class="s">checagem diária; falha conhecida tem dono e prazo</div></div></div>
+  </div>
+</div>
+
+<!-- 04 Contratos -->
+<div class="col" style="left:920px;width:196px;top:258px" id="contracts">
+  <div class="ctr"><span class="bar"></span><div class="ib"><svg class="i"><use href="#file"/></svg></div><div><div class="t">Engajamento</div><div class="s">estado por pessoa</div></div></div>
+  <div class="ctr"><span class="bar"></span><div class="ib"><svg class="i"><use href="#file"/></svg></div><div><div class="t">Segmentos</div><div class="s">clusters de audiência</div></div></div>
+  <div class="ctr"><span class="bar"></span><div class="ib"><svg class="i"><use href="#file"/></svg></div><div><div class="t">Matchmaking</div><div class="s">pares e histórico</div></div></div>
+  <div class="ctr"><span class="bar"></span><div class="ib"><svg class="i"><use href="#file"/></svg></div><div><div class="t">Funil</div><div class="s">comercial e marketing</div></div></div>
+  <div class="ctr" style="margin-bottom:0"><span class="bar"></span><div class="ib"><svg class="i"><use href="#file"/></svg></div><div><div class="t">Calor</div><div class="s">nível de relação</div></div></div>
+</div>
+
+<!-- 05 Aplicações -->
+<div class="col" style="left:1188px;width:196px;top:258px" id="apps">
+  <div class="app"><div class="ib"><svg class="i"><use href="#bot"/></svg></div><div><div class="t">Data Hub</div><div class="s">contexto para agentes</div></div></div>
+  <div class="app"><div class="ib"><svg class="i"><use href="#target"/></svg></div><div><div class="t">Sales Coach</div><div class="s">carteira e fila do SDR</div></div></div>
+  <div class="app"><div class="ib"><svg class="i"><use href="#spark"/></svg></div><div><div class="t">Concierge</div><div class="s">eventos e conexões</div></div></div>
+  <div class="app"><div class="ib"><svg class="i"><use href="#route"/></svg></div><div><div class="t">Orquestrador</div><div class="s">jornadas de e-mail</div></div></div>
+  <div class="app" style="margin-bottom:0"><div class="ib"><svg class="i"><use href="#dash"/></svg></div><div><div class="t">Dashboards</div><div class="s">analytics e relatórios</div></div></div>
+</div>
+
+<!-- Governança -->
+<div class="gov">
+  <div class="gl"><div class="eyebrow mono">Governança</div><div class="t">Como o dado chega confiável</div></div>
+  <div class="gi"><div class="ib"><svg class="i"><use href="#merge"/></svg></div><div><div class="t">Toda mudança por MR</div><div class="s">revisão independente por modelos de IA diferentes antes do merge</div></div></div>
+  <div class="gi"><div class="ib"><svg class="i"><use href="#lineage"/></svg></div><div><div class="t">Linhagem no CI</div><div class="s">dicionário e linhagem de cada objeto checados no pipeline</div></div></div>
+  <div class="gi"><div class="ib"><svg class="i"><use href="#flask"/></svg></div><div><div class="t">Paridade provada</div><div class="s">migração só entra com conferência contra o sistema de origem</div></div></div>
+  <div class="gi"><div class="ib"><svg class="i"><use href="#key"/></svg></div><div><div class="t">Acesso mínimo</div><div class="s">cada consumidor lê só o contrato publicado, com grant próprio</div></div></div>
+</div>
+
+<script>
+(function(){
+  const svg=document.getElementById('wires');
+  const NS='http://www.w3.org/2000/svg';
+  const defs=document.createElementNS(NS,'defs');
+  defs.innerHTML='<linearGradient id="g" x1="0" x2="1" y1="0" y2="0"><stop offset="0" stop-color="#FFBE00" stop-opacity=".12"/><stop offset="1" stop-color="#FFBE00" stop-opacity=".85"/></linearGradient>';
+  svg.appendChild(defs);
+  const r=(el)=>el.getBoundingClientRect();
+  function curve(x1,y1,x2,y2,w,op){
+    const p=document.createElementNS(NS,'path');
+    const dx=(x2-x1)*0.5;
+    p.setAttribute('d',`M${x1} ${y1} C${x1+dx} ${y1}, ${x2-dx} ${y2}, ${x2} ${y2}`);
+    p.setAttribute('fill','none');p.setAttribute('stroke','url(#g)');p.setAttribute('stroke-width',w||1.5);
+    if(op) p.setAttribute('opacity',op);
+    svg.appendChild(p);
+  }
+  function dot(x,y,c){const d=document.createElementNS(NS,'circle');d.setAttribute('cx',x);d.setAttribute('cy',y);d.setAttribute('r',3);d.setAttribute('fill',c||'#FFBE00');svg.appendChild(d)}
+  const srcs=[...document.querySelectorAll('#sources .src')];
+  const etl=r(document.querySelector('#etl .big'));
+  const wh=r(document.querySelector('#wh .big'));
+  const ctrs=[...document.querySelectorAll('#contracts .ctr')];
+  const apps=[...document.querySelectorAll('#apps .app')];
+  // sources -> ETL (fan-in)
+  const inTop=etl.top+150, inBot=etl.bottom-150;
+  srcs.forEach((s,i)=>{const b=r(s);const y2=inTop+(inBot-inTop)*(i/(srcs.length-1));curve(b.right,b.top+b.height/2,etl.left,y2,1.4);});
+  dot(etl.left,inTop);dot(etl.left,inBot);
+  // ETL -> Warehouse (three thick lanes)
+  [-40,0,40].forEach(o=>{const y=etl.top+etl.height/2+o;curve(etl.right,y,wh.left,y,2.2);});
+  // Warehouse -> contracts (fan-out)
+  const oTop=wh.top+170,oBot=wh.bottom-170;
+  ctrs.forEach((c,i)=>{const b=r(c);const y1=oTop+(oBot-oTop)*(i/(ctrs.length-1));curve(wh.right,y1,b.left,b.top+b.height/2,1.6);});
+  // contracts -> apps (consumption map)
+  const map=[[0,0],[0,3],[1,1],[1,4],[2,2],[2,0],[3,0],[3,1],[3,4],[4,1],[4,3]];
+  map.forEach(([c,a])=>{const cb=r(ctrs[c]),ab=r(apps[a]);curve(cb.right,cb.top+cb.height/2+(a-c)*3,ab.left,ab.top+ab.height/2+(c-a)*3,1.2,.8);});
+  ctrs.forEach(c=>{const b=r(c);dot(b.right,b.top+b.height/2,'#FFBE00')});
+})();
+</script>
+</body>
+</html>

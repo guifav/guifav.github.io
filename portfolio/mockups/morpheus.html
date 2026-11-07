@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>Morpheus · Signals</title>
+<style>
+  :root {
+    --background: #0a0a0a;
+    --foreground: #fafafa;
+    --muted: #171717;
+    --muted-foreground: #a3a3a3;
+    --border: #262626;
+    --card: #0a0a0a;
+    --accent: #262626;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1440px; height: 900px; overflow: hidden; }
+  body { background: var(--background); color: var(--foreground); font-family: system-ui, -apple-system, sans-serif; -webkit-font-smoothing: antialiased; }
+  .i { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+  .i.b { stroke-width: 2; }
+  .i-12 { width: 12px; height: 12px; stroke-width: 2; }
+  .i-10 { width: 10px; height: 10px; stroke-width: 2; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .muted { color: var(--muted-foreground); }
+
+  .shell { display: flex; height: 900px; }
+  aside { width: 224px; border-right: 1px solid var(--border); background: var(--background); display: flex; flex-direction: column; flex-shrink: 0; }
+  .brand { padding: 16px; border-bottom: 1px solid var(--border); }
+  .brand h2 { font-size: 14px; font-weight: 700; letter-spacing: -0.02em; line-height: 20px; }
+  .brand p { font-size: 10px; color: var(--muted-foreground); line-height: 15px; }
+  nav { flex: 1; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+  .nl { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 4px; font-size: 12px; font-weight: 500; color: var(--muted-foreground); line-height: 16px; }
+  .nl.active { background: var(--accent); color: var(--foreground); }
+  .nav-bottom { padding: 0 8px 4px; display: flex; flex-direction: column; gap: 2px; }
+  .user { padding: 12px 16px; border-top: 1px solid var(--border); }
+  .user .row { display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: var(--muted-foreground); }
+  .user .row .ic { display: flex; gap: 8px; }
+  .user .ver { font-size: 9px; color: rgba(163,163,163,.5); margin-top: 4px; }
+
+  main { flex: 1; min-width: 0; overflow: hidden; }
+  .topbar { height: 57px; border-bottom: 1px solid var(--border); background: var(--background); padding: 12px 24px; display: flex; justify-content: flex-end; align-items: center; }
+  .sel { height: 32px; border-radius: 4px; border: 1px solid var(--border); background: var(--muted); padding: 0 10px 0 12px; font-size: 12px; display: inline-flex; align-items: center; gap: 18px; }
+  .content { padding: 24px; }
+  .grid3 { display: grid; grid-template-columns: 220px 1fr 1fr; gap: 16px; }
+  .p1 { border-right: 1px solid var(--border); padding-right: 16px; }
+  .p3 { border-left: 1px solid var(--border); padding-left: 16px; min-width: 0; }
+  .p2 { min-width: 0; }
+  .ph { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted-foreground); margin-bottom: 12px; font-weight: 500; line-height: 15px; }
+
+  /* Taxonomy nav */
+  .toggle { display: flex; gap: 4px; padding: 2px; border-radius: 4px; background: var(--muted); margin-bottom: 16px; }
+  .toggle span { flex: 1; text-align: center; font-size: 10px; padding: 6px 0; border-radius: 4px; color: var(--muted-foreground); line-height: 15px; }
+  .toggle span.on { background: var(--foreground); color: var(--background); font-weight: 500; }
+  .flab { font-size: 9px; color: var(--muted-foreground); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 4px; line-height: 13px; }
+  .dsel { width: 100%; font-size: 11px; padding: 6px 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--card); display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; line-height: 16px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 12px; }
+  .chip { font-size: 10px; padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border); color: var(--muted-foreground); line-height: 15px; }
+  .chip.on { border-color: var(--foreground); background: var(--foreground); color: var(--background); }
+
+  /* Sector grid */
+  .cnt { font-size: 10px; color: var(--muted-foreground); margin-bottom: 12px; line-height: 15px; }
+  .sectors { display: flex; flex-direction: column; gap: 4px; height: 600px; overflow: hidden; }
+  .sector { padding: 9px 12px; border-radius: 4px; border: 1px solid transparent; }
+  .sector.on { border-color: var(--foreground); background: rgba(250,250,250,.05); }
+  .sector .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .sector .name { font-size: 11px; color: var(--muted-foreground); line-height: 16px; }
+  .sector.on .name { color: var(--foreground); font-weight: 500; }
+  .sector .r { display: flex; align-items: center; gap: 8px; }
+  .ibar { display: flex; width: 48px; height: 6px; border-radius: 999px; overflow: hidden; background: var(--muted); }
+  .ibar i { display: block; height: 100%; }
+  .num { font-size: 11px; font-weight: 500; width: 28px; text-align: right; }
+  .cbar { height: 4px; border-radius: 999px; background: var(--muted); overflow: hidden; }
+  .cbar i { display: block; height: 100%; border-radius: 999px; background: var(--foreground); opacity: .4; }
+  .sector.on .cbar i { opacity: 1; }
+  .acts { display: flex; gap: 4px; margin-top: 5px; }
+  .acts span { font-size: 8px; padding: 1px 4px; border-radius: 3px; background: var(--muted); color: var(--muted-foreground); line-height: 12px; }
+
+  /* Signal list */
+  .ctx { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .ctx .t { font-size: 10px; color: var(--muted-foreground); }
+  .ctx .t b { color: var(--foreground); font-weight: 500; }
+  .sort { display: flex; gap: 4px; }
+  .sort span { font-size: 9px; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--border); color: var(--muted-foreground); line-height: 14px; }
+  .sort span.on { border-color: var(--foreground); background: var(--foreground); color: var(--background); }
+  .summary { margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .srow { display: flex; align-items: center; gap: 8px; font-size: 10px; flex-wrap: wrap; line-height: 15px; }
+  .srow .l { width: 48px; color: var(--muted-foreground); }
+  .srow .pill { padding: 1px 6px; border-radius: 4px; background: var(--muted); color: var(--muted-foreground); }
+  .srow .pill.fg { background: rgba(250,250,250,.1); color: var(--foreground); }
+  .srow .imp { margin-right: 4px; }
+  .signals { display: flex; flex-direction: column; gap: 8px; height: 594px; overflow: hidden; }
+  .sig { border: 1px solid var(--border); border-radius: 4px; padding: 12px; }
+  .sig .h { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .sig .ty { font-size: 10px; font-weight: 500; }
+  .sig .act { font-size: 9px; padding: 1px 6px; border-radius: 4px; background: rgba(250,250,250,.1); font-weight: 500; line-height: 14px; }
+  .sig .imp { margin-left: auto; display: flex; align-items: center; gap: 4px; }
+  .sig .imp .bar { width: 32px; height: 4px; border-radius: 999px; background: var(--muted); overflow: hidden; }
+  .sig .imp .bar i { display: block; height: 100%; border-radius: 999px; background: var(--foreground); }
+  .sig .imp span { font-size: 9px; color: var(--muted-foreground); }
+  .sig p { font-size: 11px; color: var(--muted-foreground); line-height: 1.625; margin-bottom: 6px; }
+  .sig p b { color: var(--foreground); font-weight: 500; }
+  .sig .f { display: flex; align-items: center; gap: 8px; }
+  .sig .sec { font-size: 9px; padding: 1px 4px; border-radius: 3px; background: var(--muted); color: var(--muted-foreground); line-height: 13px; }
+  .sig .src { margin-left: auto; font-size: 9px; color: var(--muted-foreground); display: inline-flex; align-items: center; gap: 4px; }
+  .pag { display: flex; justify-content: space-between; align-items: center; padding-top: 16px; margin-top: 12px; }
+  .pag .r { display: flex; align-items: center; gap: 4px; font-size: 11px; }
+  .pag .btn { padding: 4px; border-radius: 4px; border: 1px solid var(--border); display: inline-flex; }
+  .pag .btn.dis { opacity: .3; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-chart-column" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></symbol>
+<symbol id="i-newspaper" viewBox="0 0 24 24"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+<symbol id="i-building-2" viewBox="0 0 24 24"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></symbol>
+<symbol id="i-handshake" viewBox="0 0 24 24"><path d="m11 17 2 2a1 1 0 1 0 3-3"/><path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4"/><path d="m21 3 1 11h-2"/><path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3"/><path d="M3 4h8"/></symbol>
+<symbol id="i-triangle-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+<symbol id="i-circle-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+<symbol id="i-log-out" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></symbol>
+<symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="i-external-link" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+<symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+<symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+</defs></svg>
+<div class="shell">
+  <aside>
+    <div class="brand"><h2>Morpheus</h2><p>Market Intelligence Radar</p></div>
+    <nav>
+      <span class="nl"><svg class="i"><use href="#i-chart-column"/></svg>Overview</span>
+      <span class="nl"><svg class="i"><use href="#i-newspaper"/></svg>Articles</span>
+      <span class="nl"><svg class="i"><use href="#i-users"/></svg>People</span>
+      <span class="nl"><svg class="i"><use href="#i-building-2"/></svg>Companies</span>
+      <span class="nl"><svg class="i"><use href="#i-handshake"/></svg>Deals</span>
+      <span class="nl active"><svg class="i b"><use href="#i-triangle-alert"/></svg>Signals</span>
+    </nav>
+    <div class="nav-bottom">
+      <span class="nl"><svg class="i"><use href="#i-circle-help"/></svg>Help</span>
+      <span class="nl"><svg class="i"><use href="#i-settings"/></svg>Admin</span>
+    </div>
+    <div class="user">
+      <div class="row"><span>marina.teixeira</span><span class="ic"><svg class="i i-12"><use href="#i-sun"/></svg><svg class="i i-12"><use href="#i-log-out"/></svg></span></div>
+      <div class="ver">v3.8.2 · 4e1c9a7</div>
+    </div>
+  </aside>
+
+  <main>
+    <header class="topbar"><span class="sel">RE Brazil<svg class="i i-12"><use href="#i-chevron-down"/></svg></span></header>
+    <div class="content">
+      <div class="grid3">
+        <!-- Panel 1 -->
+        <div class="p1">
+          <h2 class="ph">Signal Explorer</h2>
+          <div class="toggle"><span class="on">By Division</span><span>Matrix</span></div>
+          <div class="flab">Division</div>
+          <div class="dsel">RE Brazil<svg class="i i-10"><use href="#i-chevron-down"/></svg></div>
+          <div class="flab">Impact</div>
+          <div class="chips"><span class="chip on">All</span><span class="chip">High</span><span class="chip">Medium</span><span class="chip">Low</span></div>
+          <div class="flab">Signal Type</div>
+          <div class="chips"><span class="chip on">All</span><span class="chip">Regulatory</span><span class="chip">Policy</span><span class="chip">Market Shift</span><span class="chip">New Development</span><span class="chip">Technology</span><span class="chip">Sustainability</span><span class="chip">Risk</span></div>
+          <div class="flab">Capital Action</div>
+          <div class="chips"><span class="chip on">All</span><span class="chip">Acquisition</span><span class="chip">Deployment</span><span class="chip">Capital Allocation</span><span class="chip">Fundraising</span><span class="chip">Development</span><span class="chip">Partnership</span><span class="chip">Platform Build</span><span class="chip">Quote/Appt</span><span class="chip">Mandate</span><span class="chip">No Action</span></div>
+        </div>
+
+        <!-- Panel 2 -->
+        <div class="p2">
+          <h2 class="ph">Sectors by Signal Volume</h2>
+          <div class="cnt">1486 signals across 17 sectors</div>
+          <div class="sectors" id="sectors"></div>
+        </div>
+
+        <!-- Panel 3 -->
+        <div class="p3">
+          <h2 class="ph">Signals: Logistics / RE Brazil</h2>
+          <div class="ctx"><div class="t">214 signals for <b>Logistics / RE Brazil</b></div><div class="sort"><span class="on">Latest</span><span>Impact</span></div></div>
+          <div class="summary">
+            <div class="srow"><span class="l">Impact:</span>
+              <span class="mono"><b class="imp" style="opacity:1;font-weight:500">41</b><span class="muted">high (19%)</span></span>
+              <span class="mono"><b class="imp" style="opacity:.6;font-weight:500">96</b><span class="muted">medium (45%)</span></span>
+              <span class="mono"><b class="imp" style="opacity:.3;font-weight:500">77</b><span class="muted">low (36%)</span></span>
+            </div>
+            <div class="srow"><span class="l">Types:</span><span class="pill mono">Market Shift 74</span><span class="pill mono">New Development 58</span><span class="pill mono">Regulatory 31</span></div>
+            <div class="srow"><span class="l">Actions:</span><span class="pill fg mono">Acquisition 38</span><span class="pill fg mono">Development 29</span><span class="pill fg mono">Fundraising 21</span></div>
+          </div>
+          <div class="signals">
+            <div class="sig">
+              <div class="h"><span class="ty">Market Shift</span><span class="act">Acquisition</span><span class="imp"><span class="bar"><i style="width:100%"></i></span><span>high</span></span></div>
+              <p><b>Vetora Logística</b> acquired a 210,000 m² portfolio of last-mile warehouses in greater São Paulo from <b>Cedro Real Estate</b>, its largest deal of the year and a bet on urban delivery hubs.</p>
+              <div class="f"><span class="sec">Logistics</span><span class="sec">Industrial</span><span class="src">Radar Imobiliário<svg class="i i-10"><use href="#i-external-link"/></svg></span></div>
+            </div>
+            <div class="sig">
+              <div class="h"><span class="ty">New Development</span><span class="act">Fundraising</span><span class="imp"><span class="bar"><i style="width:100%"></i></span><span>high</span></span></div>
+              <p><b>Pampa Infra Partners</b> held the first close of a R$ 1.2 bn fund to develop build-to-suit logistics parks in the South, anchored by two pension funds and a family office from Curitiba.</p>
+              <div class="f"><span class="sec">Logistics</span><span class="sec">Infrastructure</span><span class="sec">Land</span><span class="src">Mercado &amp; Capital<svg class="i i-10"><use href="#i-external-link"/></svg></span></div>
+            </div>
+            <div class="sig">
+              <div class="h"><span class="ty">Market Shift</span><span class="act">Quote/Appt</span><span class="imp"><span class="bar"><i style="width:60%;opacity:.6"></i></span><span>medium</span></span></div>
+              <p><b>Helena Duarte</b> was appointed CEO of <b>Âncora Logistics REIT</b>, replacing Paulo Siqueira. She previously led industrial investments at <b>Tamarindo Capital</b>.</p>
+              <div class="f"><span class="sec">Logistics</span><span class="sec">REITs</span><span class="src">Jornal do Investidor<svg class="i i-10"><use href="#i-external-link"/></svg></span></div>
+            </div>
+            <div class="sig">
+              <div class="h"><span class="ty">New Development</span><span class="act">Partnership</span><span class="imp"><span class="bar"><i style="width:60%;opacity:.6"></i></span><span>medium</span></span></div>
+              <p><b>Porto Nascente</b> and <b>Linha Azul Logística</b> signed a partnership to build a 90,000 m² bonded warehouse next to a new port terminal in Santa Catarina.</p>
+              <div class="f"><span class="sec">Logistics</span><span class="sec">Ports</span><span class="src">Portos &amp; Cargas<svg class="i i-10"><use href="#i-external-link"/></svg></span></div>
+            </div>
+            <div class="sig">
+              <div class="h"><span class="ty">Risk</span><span class="imp"><span class="bar"><i style="width:30%;opacity:.3"></i></span><span>low</span></span></div>
+              <p>Developers report up to nine-month delays in substation connections for new warehouses in the Cajamar corridor.</p>
+              <div class="f"><span class="sec">Logistics</span><span class="sec">Energy</span><span class="src">Radar Imobiliário<svg class="i i-10"><use href="#i-external-link"/></svg></span></div>
+            </div>
+            <div class="sig">
+              <div class="h"><span class="ty">Market Shift</span><span class="act">Capital Allocation</span><span class="imp"><span class="bar"><i style="width:60%;opacity:.6"></i></span><span>medium</span></span></div>
+              <p><b>Norte Verde Asset</b> raised its logistics allocation to 35% of the portfolio, citing falling vacancy in AAA condos.</p>
+              <div class="f"><span class="sec">Logistics</span><span class="src">Mercado &amp; Capital<svg class="i i-10"><use href="#i-external-link"/></svg></span></div>
+            </div>
+          </div>
+          <div class="pag"><span class="muted" style="font-size:10px">1–30 of 214</span><div class="r"><span class="btn dis"><svg class="i b"><use href="#i-chevron-left"/></svg></span><span style="padding:0 8px">1 / 8</span><span class="btn"><svg class="i b"><use href="#i-chevron-right"/></svg></span></div></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script>
+  // Fictitious sector volumes (key, total, high, medium, low, top actions)
+  const rows = [
+    ["Logistics", 214, 41, 96, 77, [["Acq", 38], ["Dev", 29], ["Fund", 21]]],
+    ["Residential", 188, 28, 92, 68, [["Dev", 44], ["Fund", 19], ["Acq", 16]]],
+    ["Office", 161, 19, 71, 71, [["Acq", 23], ["Cap", 14], ["Quote", 12]]],
+    ["Data Centers", 142, 46, 61, 35, [["Dev", 31], ["Part", 18], ["Fund", 15]]],
+    ["Infrastructure", 131, 33, 58, 40, [["Man", 22], ["Dev", 20], ["Part", 11]]],
+    ["Energy", 118, 27, 52, 39, [["Dev", 25], ["Fund", 13], ["Part", 10]]],
+    ["Retail", 97, 11, 43, 43, [["Acq", 17], ["Plat", 8], ["Quote", 7]]],
+    ["Hospitality", 84, 12, 39, 33, [["Acq", 14], ["Dev", 12], ["Cap", 6]]],
+    ["Industrial", 79, 14, 35, 30, [["Acq", 11], ["Dev", 10], ["Fund", 6]]],
+    ["Healthcare", 61, 9, 26, 26, [["Dev", 9], ["Part", 7], ["Acq", 5]]],
+  ];
+  const max = rows[0][1];
+  document.getElementById("sectors").innerHTML = rows.map(([k, t, h, m, l, a], idx) => {
+    const tot = h + m + l;
+    return `<div class="sector${idx === 0 ? " on" : ""}">
+      <div class="top"><span class="name">${k}</span><div class="r">
+        <div class="ibar"><i style="width:${h / tot * 100}%;background:var(--foreground)"></i><i style="width:${m / tot * 100}%;background:var(--muted-foreground);opacity:.6"></i><i style="width:${l / tot * 100}%;background:var(--muted-foreground);opacity:.3"></i></div>
+        <span class="num mono">${t}</span></div></div>
+      <div class="cbar"><i style="width:${t / max * 100}%"></i></div>
+      <div class="acts">${a.map(([n, c]) => `<span>${n} ${c}</span>`).join("")}</div>
+    </div>`;
+  }).join("");
+</script>
+</body>
+</html>
