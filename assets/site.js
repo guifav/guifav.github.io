@@ -1,6 +1,6 @@
-// Tema claro/escuro e troca PT/EN, compartilhados pelas páginas do site.
+// Tema claro/escuro, troca PT/EN e vitrine de projetos, compartilhados pelas páginas do site.
 // Cada página traz as traduções em <script type="application/json" id="i18n-en">,
-// com uma chave para cada data-i18n (innerHTML) e data-i18n-alt (atributo alt) da página.
+// com uma chave para cada data-i18n (innerHTML), data-i18n-alt (alt) e data-i18n-aria (aria-label).
 (function () {
   var store = {
     get: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
@@ -27,9 +27,11 @@
 
   var html = document.querySelectorAll('[data-i18n]');
   var alts = document.querySelectorAll('[data-i18n-alt]');
-  var pt = {}, ptAlt = {};
+  var arias = document.querySelectorAll('[data-i18n-aria]');
+  var pt = {}, ptAlt = {}, ptAria = {};
   html.forEach(function (el) { pt[el.getAttribute('data-i18n')] = el.innerHTML; });
   alts.forEach(function (el) { ptAlt[el.getAttribute('data-i18n-alt')] = el.getAttribute('alt'); });
+  arias.forEach(function (el) { ptAria[el.getAttribute('data-i18n-aria')] = el.getAttribute('aria-label'); });
 
   var lang = 'pt';
   var lt = document.getElementById('lang-toggle');
@@ -45,10 +47,89 @@
       var k = el.getAttribute('data-i18n-alt');
       el.setAttribute('alt', l === 'en' && en[k] !== undefined ? en[k] : ptAlt[k]);
     });
+    arias.forEach(function (el) {
+      var k = el.getAttribute('data-i18n-aria');
+      el.setAttribute('aria-label', l === 'en' && en[k] !== undefined ? en[k] : ptAria[k]);
+    });
   }
   lt.addEventListener('click', function () {
     applyLang(lang === 'pt' ? 'en' : 'pt');
     store.set('lang', lang);
   });
   if (store.get('lang') === 'en') applyLang('en');
+
+  // Vitrine em carrossel: o projeto ativo fica no centro, de frente; os demais recolhem para os lados.
+  var cf = document.getElementById('coverflow');
+  if (cf) {
+    var stage = cf.querySelector('.cf-stage');
+    var items = Array.prototype.slice.call(cf.querySelectorAll('.cf-item'));
+    var caps = cf.querySelectorAll('.cf-cap');
+    var count = cf.querySelector('.cf-count');
+    var active = Math.min(parseInt(cf.getAttribute('data-start'), 10) || 0, items.length - 1);
+
+    var render = function () {
+      var w = items[0].offsetWidth;
+      var narrow = w < 480;
+      items.forEach(function (el, i) {
+        var d = i - active, a = Math.abs(d), s = d < 0 ? -1 : 1;
+        var t;
+        if (d === 0) {
+          t = 'translateX(0) translateZ(0) rotateY(0deg)';
+        } else {
+          var x = s * (w * (narrow ? 0.42 : 0.62) + (a - 1) * w * (narrow ? 0.1 : 0.2));
+          t = 'translateX(' + x + 'px) translateZ(' + (-w * 0.38) + 'px) rotateY(' + (-s * 62) + 'deg)';
+        }
+        el.style.transform = t;
+        el.style.zIndex = String(100 - a);
+        el.style.opacity = a > (narrow ? 2 : 4) ? '0' : '1';
+        el.style.pointerEvents = a > (narrow ? 2 : 4) ? 'none' : '';
+        el.classList.toggle('is-active', d === 0);
+        el.setAttribute('aria-selected', d === 0 ? 'true' : 'false');
+        el.tabIndex = -1;
+      });
+      caps.forEach(function (c, i) { c.hidden = i !== active; });
+      count.textContent = (active + 1) + ' / ' + items.length;
+    };
+    var go = function (i) { active = Math.max(0, Math.min(items.length - 1, i)); render(); };
+
+    items.forEach(function (el, i) {
+      el.setAttribute('role', 'option');
+      el.addEventListener('click', function () {
+        if (swiped) { swiped = false; return; }
+        if (i === active) { window.location.href = el.getAttribute('data-href'); } else { go(i); }
+      });
+    });
+    cf.querySelectorAll('.cf-arrow').forEach(function (b) {
+      b.addEventListener('click', function () { go(active + parseInt(b.getAttribute('data-dir'), 10)); });
+    });
+    stage.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowLeft') { go(active - 1); e.preventDefault(); }
+      else if (e.key === 'ArrowRight') { go(active + 1); e.preventDefault(); }
+      else if (e.key === 'Enter') { window.location.href = items[active].getAttribute('data-href'); }
+    });
+    var x0 = null, swiped = false;
+    stage.addEventListener('pointerdown', function (e) { x0 = e.clientX; });
+    stage.addEventListener('pointerup', function (e) {
+      if (x0 === null) return;
+      var dx = e.clientX - x0; x0 = null;
+      if (Math.abs(dx) > 40) { swiped = true; go(active + (dx < 0 ? 1 : -1)); }
+    });
+    window.addEventListener('resize', render);
+    render();
+  }
+
+  // Filtro do portfólio por área: mostra só o grupo escolhido; "Todos" mostra tudo.
+  var fbtns = document.querySelectorAll('.pf-filter button');
+  if (fbtns.length) {
+    var groups = document.querySelectorAll('[data-group]');
+    var applyFilter = function (f) {
+      fbtns.forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-filter') === f ? 'true' : 'false'); });
+      groups.forEach(function (g) { g.hidden = f !== 'all' && g.getAttribute('data-group') !== f; });
+    };
+    fbtns.forEach(function (b) {
+      b.addEventListener('click', function () { applyFilter(b.getAttribute('data-filter')); });
+    });
+    // Link direto para um projeto (#slug) sempre mostra a página inteira.
+    window.addEventListener('hashchange', function () { applyFilter('all'); });
+  }
 })();
