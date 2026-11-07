@@ -3,10 +3,10 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <meta name="description" content="Portfolio de Guilherme Favaron: 22 projetos que liderou, entre produtos próprios, sistemas para clientes e plataformas internas do GRI Institute, com o problema que cada um resolve."/>
-  <title>Portfolio, Guilherme Favaron</title>
+  <meta name="description" content="Portfólio de Guilherme Favaron: 22 projetos que liderou, entre produtos próprios, sistemas para clientes e plataformas internas do GRI Institute, com o problema que cada um resolve."/>
+  <title>Portfólio, Guilherme Favaron</title>
   <meta name="author" content="Guilherme Favaron">
-  <meta property="og:title" content="Portfolio, Guilherme Favaron">
+  <meta property="og:title" content="Portfólio, Guilherme Favaron">
   <meta property="og:description" content="22 projetos: produtos próprios, sistemas para clientes e plataformas internas do GRI Institute.">
   <meta property="og:url" content="https://guifav.dev/portfolio/"/>
   <meta property="og:image" content="https://guifav.dev/og-image.png"/>
@@ -14,14 +14,14 @@
   <meta property="og:image:height" content="630"/>
   <meta property="og:type" content="website">
   <meta name="twitter:card" content="summary_large_image"/>
-  <meta name="twitter:title" content="Portfolio, Guilherme Favaron"/>
+  <meta name="twitter:title" content="Portfólio, Guilherme Favaron"/>
   <meta name="twitter:description" content="22 projetos: produtos próprios, sistemas para clientes e plataformas internas do GRI Institute."/>
   <meta name="twitter:image" content="https://guifav.dev/og-image.png"/>
   <link rel="canonical" href="https://guifav.dev/portfolio/">
   <link rel="stylesheet" href="/assets/site.css">
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-K7Y87QNCX8"></script>
   <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-K7Y87QNCX8');</script>
-  <script type="application/ld+json">{"@context":"https://schema.org","@type":"CollectionPage","name":"Portfolio, Guilherme Favaron","url":"https://guifav.dev/portfolio/","inLanguage":"pt-BR","about":{"@id":"https://guifav.dev/#person"},"author":{"@type":"Person","@id":"https://guifav.dev/#person","name":"Guilherme de Mauro Favaron","url":"https://guifav.dev","jobTitle":"CTO"}}</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"CollectionPage","name":"Portfólio, Guilherme Favaron","url":"https://guifav.dev/portfolio/","inLanguage":"pt-BR","about":{"@id":"https://guifav.dev/#person"},"author":{"@type":"Person","@id":"https://guifav.dev/#person","name":"Guilherme de Mauro Favaron","url":"https://guifav.dev","jobTitle":"CTO"}}</script>
 </head>
 <body>
   <div class="container">
@@ -32,14 +32,14 @@
         <a href="/#consulting" data-i18n="nav_consulting">Consultoria</a>
         <a href="/#research" data-i18n="nav_research">Pesquisa</a>
         <a href="/#content" data-i18n="nav_content">Conteúdo</a>
-        <a href="/portfolio/" aria-current="page">Portfolio</a>
+        <a href="/portfolio/" aria-current="page" data-i18n="nav_portfolio">Portfólio</a>
         <button id="lang-toggle" class="nav-btn lang-toggle" aria-label="Toggle language">EN</button>
         <button id="theme-toggle" class="nav-btn" aria-label="Toggle theme">&#9790;</button>
       </div>
     </nav>
 
     <div class="hero">
-      <div class="eyebrow">Portfolio</div>
+      <div class="eyebrow" data-i18n="nav_portfolio">Portfólio</div>
       <h1 data-i18n="pf_title">Projetos que liderei.</h1>
       <p class="subtitle" data-i18n="pf_desc">Produtos próprios, sistemas para clientes e as plataformas internas do GRI Institute. Em todos liderei o desenvolvimento. Cada projeto mostra o que é, que problema resolve e quem usa. As telas usam dados fictícios.</p>
       <div class="pf-jump">
@@ -193,7 +193,7 @@
           <h3>Data warehouse</h3>
           <div class="product-tags"><span class="tag tag-hl" data-i18n="k_internal_gri">Uso interno · GRI Institute</span><span class="tag" data-i18n="s_prod">Em produção</span></div>
           <dl>
-            <div><dt data-i18n="dt_what">O que é</dt><dd data-i18n="dw_what">ETL que carrega o data warehouse a partir do CRM e do banco da plataforma e publica contratos de dados (engajamento, segmentos, matchmaking, funil) que os apps consomem.</dd></div>
+            <div><dt data-i18n="dt_what">O que é</dt><dd data-i18n="dw_what">ETL que carrega o data warehouse a partir do CRM e do banco da plataforma e publica contratos de dados (engajamento, segmentos, matchmaking, funil) para os apps. A ligação desses contratos com cada app está em implantação.</dd></div>
             <div><dt data-i18n="dt_pain">Dor que resolve</dt><dd data-i18n="dw_pain">Cada app calculava o mesmo indicador do seu jeito, e uma mesma métrica chegava a ter três números diferentes.</dd></div>
           </dl>
           <div class="stack"><span class="pill">AWS Redshift</span><span class="pill">AWS Glue</span><span class="pill">SQL</span><span class="pill">Python</span><span class="pill">GitLab CI</span></div>
@@ -374,6 +374,7 @@
     "nav_consulting": "Consulting",
     "nav_research": "Research",
     "nav_content": "Content",
+    "nav_portfolio": "Portfolio",
     "pf_title": "Projects I have led.",
     "pf_desc": "My own products, systems built for clients and the internal platforms of GRI Institute. I led the development of every one of them. Each project shows what it is, which problem it solves and who uses it. Screens use fictitious data.",
     "g_products": "My own products",
@@ -435,7 +436,7 @@
     "met_what": "A single document that defines how the technology team works, with people and AI agents in the same flow: scoped issue, branch, merge request, independent review by different AI models, merge by the system owner, deploy and acceptance by the requester.",
     "met_pain": "There were three competing process documents, deliveries stuck without acceptance and changes reaching production outside the pipeline.",
     "dw_alt": "Data warehouse architecture: sources, ETL, data contracts and consuming apps",
-    "dw_what": "ETL that loads the data warehouse from the CRM and the platform database and publishes data contracts (engagement, segments, matchmaking, funnel) that the apps consume.",
+    "dw_what": "ETL that loads the data warehouse from the CRM and the platform database and publishes data contracts (engagement, segments, matchmaking, funnel) for the apps. Wiring each app to its contracts is being rolled out.",
     "dw_pain": "Each app computed the same indicator its own way, and a single metric could have three different numbers.",
     "cul_alt": "360 profile of a fictitious contact in Culkin",
     "cul_what": "Data lake that unified Salesforce, platform databases, Marketing Cloud, GA4, Search Console and ads, enriched about 310 thousand contacts with AI and exposed everything through APIs and MCP, for natural-language questions. In November 2026 the enrichment started being rebuilt in the data warehouse, and Culkin remains the source of analytics data.",
