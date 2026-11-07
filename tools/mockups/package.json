@@ -1,0 +1,12 @@
+{
+  "name": "guifav-dev-mockups",
+  "private": true,
+  "type": "module",
+  "description": "Renderiza os mockups HTML de portfolio/mockups/ como WebP em portfolio/img/.",
+  "scripts": {
+    "render": "node render.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.65.0"
+  }
+}
