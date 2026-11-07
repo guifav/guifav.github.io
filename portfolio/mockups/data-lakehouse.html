@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>Data lakehouse em camadas: bronze, prata e ouro</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0a0a0a;--card:#121212;--card2:#171717;--line:#262626;--fg:#fafafa;--mut:#a3a3a3;--dim:#737373;--acc:#FFBE00;
+    --bronze:#c98a53;--silver:#c3cad4;--gold:#FFBE00}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1440px;height:900px;overflow:hidden}
+  body{background:var(--bg);color:var(--fg);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;position:relative;
+    background-image:radial-gradient(circle at 1px 1px,#1c1c1c 1px,transparent 0);background-size:24px 24px}
+  .glow{position:absolute;left:760px;top:200px;width:560px;height:560px;border-radius:50%;background:radial-gradient(closest-side,rgba(255,190,0,.10),rgba(255,190,0,0));pointer-events:none}
+  .mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+  svg.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+
+  .hdr{position:absolute;left:56px;top:44px;right:56px;display:flex;justify-content:space-between;align-items:flex-end}
+  .eyebrow{font-size:11px;letter-spacing:.16em;color:var(--acc);text-transform:uppercase}
+  h1{font-size:32px;font-weight:600;letter-spacing:-.025em;margin-top:10px;line-height:1.15}
+  .lead{font-size:14px;color:var(--mut);margin-top:8px;max-width:680px;line-height:1.5}
+  .legend{display:flex;gap:18px;font-size:12px;color:var(--mut)}
+  .legend span{display:flex;align-items:center;gap:8px}
+  .dot{width:10px;height:10px;border-radius:50%}
+
+  .clab{position:absolute;top:188px;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+  .clab b{color:var(--acc);font-weight:500;margin-right:6px}
+  .col{position:absolute;top:216px;height:467px}
+
+  .srcs{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  .src{display:flex;align-items:center;gap:8px;height:52px;padding:0 10px;background:var(--card);border:1px solid var(--line);border-radius:10px}
+  .src .t{font-size:12px;font-weight:500;line-height:1.2}
+  .src.ext{border-style:dashed;border-color:#3a3a3a}
+  .ib{width:26px;height:26px;border-radius:7px;background:#1d1d1d;border:1px solid #2a2a2a;display:flex;align-items:center;justify-content:center;color:#d4d4d4;flex-shrink:0}
+  .ib svg.i{width:14px;height:14px}
+
+  .med{height:100%;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;position:relative;overflow:hidden}
+  .med::before{content:"";position:absolute;left:0;top:0;right:0;height:3px;background:var(--m)}
+  .med .badge{display:inline-flex;align-items:center;gap:8px;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--m)}
+  .med .badge i{width:10px;height:10px;border-radius:50%;background:var(--m);box-shadow:0 0 12px var(--m)}
+  .med h3{font-size:18px;font-weight:600;letter-spacing:-.01em;margin-top:8px}
+  .med .sub{font-size:12px;color:var(--mut);margin-top:3px;line-height:1.45}
+  .step{display:flex;gap:10px;align-items:flex-start;padding:11px 0;border-top:1px dashed #262626}
+  .step:first-of-type{margin-top:12px}
+  .step svg{color:var(--m);margin-top:1px}
+  .step .t{font-size:13px;font-weight:500;line-height:1.3}
+  .step .s{font-size:11px;color:var(--dim);margin-top:2px;line-height:1.4}
+  .med .foot{margin-top:auto;font-size:11px;color:var(--mut);border:1px solid #262626;background:var(--card2);border-radius:9px;padding:9px 11px;line-height:1.4}
+  .gold{border-color:rgba(255,190,0,.55);box-shadow:0 0 0 1px rgba(255,190,0,.08),0 20px 60px -20px rgba(255,190,0,.28)}
+  .gold .foot{border-color:rgba(255,190,0,.4);background:rgba(255,190,0,.07);color:#e9e2cf}
+  .gold .foot b{color:var(--acc);font-weight:600}
+
+  .use{display:flex;align-items:center;gap:10px;height:104px;padding:0 14px;background:var(--card);border:1px solid var(--line);border-radius:12px;margin-bottom:17px}
+  .use:last-child{margin-bottom:0}
+  .use .ib{width:32px;height:32px;border-radius:9px;color:var(--acc);background:rgba(255,190,0,.08);border-color:rgba(255,190,0,.28)}
+  .use .ib svg.i{width:16px;height:16px}
+  .use .t{font-size:14px;font-weight:600}
+  .use .s{font-size:11.5px;color:var(--dim);margin-top:3px;line-height:1.4}
+
+  .band{position:absolute;left:56px;right:56px;top:722px;height:132px;border:1px solid var(--line);border-radius:16px;background:rgba(18,18,18,.85);display:grid;grid-template-columns:200px repeat(4,1fr)}
+  .band .gl{padding:20px;border-right:1px solid var(--line);display:flex;flex-direction:column;justify-content:center}
+  .band .gl .t{font-size:16px;font-weight:600;margin-top:6px;line-height:1.3}
+  .gi{padding:20px;display:flex;gap:12px;align-items:flex-start;border-right:1px solid #1f1f1f}
+  .gi:last-child{border-right:none}
+  .gi .ib{width:30px;height:30px;color:var(--acc)}
+  .gi .t{font-size:13.5px;font-weight:500}
+  .gi .s{font-size:11.5px;line-height:1.45;margin-top:4px;color:#8a8a8a}
+
+  #wires{position:absolute;left:0;top:0;width:1440px;height:900px;pointer-events:none}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="db" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></symbol>
+  <symbol id="mail" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol>
+  <symbol id="users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="news" viewBox="0 0 24 24"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></symbol>
+  <symbol id="box" viewBox="0 0 24 24"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></symbol>
+  <symbol id="chart" viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></symbol>
+  <symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="mega" viewBox="0 0 24 24"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></symbol>
+  <symbol id="play" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="5" rx="3"/><path d="m10 9 5 3-5 3V9Z"/></symbol>
+  <symbol id="bot" viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></symbol>
+  <symbol id="globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></symbol>
+  <symbol id="copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+  <symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+  <symbol id="filter" viewBox="0 0 24 24"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></symbol>
+  <symbol id="tag" viewBox="0 0 24 24"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5"/></symbol>
+  <symbol id="fp" viewBox="0 0 24 24"><path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M2 12a10 10 0 0 1 18-6"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .131-5.354 0-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M9 6.8a6 6 0 0 1 9 5.2v2"/></symbol>
+  <symbol id="check" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="layers" viewBox="0 0 24 24"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></symbol>
+  <symbol id="target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+  <symbol id="link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+  <symbol id="spark" viewBox="0 0 24 24"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></symbol>
+  <symbol id="gauge" viewBox="0 0 24 24"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></symbol>
+  <symbol id="dash" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></symbol>
+  <symbol id="api" viewBox="0 0 24 24"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></symbol>
+  <symbol id="zap" viewBox="0 0 24 24"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></symbol>
+  <symbol id="undo" viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></symbol>
+  <symbol id="lineage" viewBox="0 0 24 24"><circle cx="5" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="12" r="2"/><path d="M7 6h3a4 4 0 0 1 4 4v0a2 2 0 0 0 2 2h1"/><path d="M7 18h3a4 4 0 0 0 4-4"/></symbol>
+</svg>
+
+<div class="glow"></div>
+<svg id="wires" viewBox="0 0 1440 900">
+  <defs>
+    <linearGradient id="w" x1="0" x2="1"><stop offset="0" stop-color="#FFBE00" stop-opacity=".12"/><stop offset="1" stop-color="#FFBE00" stop-opacity=".9"/></linearGradient>
+    <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 10 5 0 10z" fill="#FFBE00"/></marker>
+  </defs>
+  <g stroke="url(#w)" stroke-width="2" fill="none" marker-end="url(#ah)">
+    <path d="M478 449 H506"/>
+    <path d="M718 449 H746"/>
+    <path d="M958 449 H986"/>
+    <path d="M1214 449 H1242"/>
+  </g>
+  <path d="M1100 683 V703 H267 V689" stroke="#FFBE00" stroke-opacity=".45" stroke-width="1.5" stroke-dasharray="4 5" fill="none" marker-end="url(#ah)"/>
+  <rect x="514" y="693" width="320" height="20" rx="10" fill="#0a0a0a"/>
+  <text x="674" y="707" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10.5" fill="#bfa24a" letter-spacing=".08em">REESCRITA: SCORES E SINAIS VOLTAM À ORIGEM</text>
+</svg>
+
+<div class="hdr">
+  <div>
+    <div class="eyebrow mono">Arquitetura de dados</div>
+    <h1>Do caos operacional ao dado pronto para IA</h1>
+    <p class="lead">Fontes internas, externas e web scraping entram intocadas, ganham confiança a cada camada e chegam ao consumo como dado de negócio, para dashboards, APIs, automações e agentes.</p>
+  </div>
+  <div class="legend">
+    <span><i class="dot" style="background:var(--bronze)"></i>Bronze</span>
+    <span><i class="dot" style="background:var(--silver)"></i>Prata</span>
+    <span><i class="dot" style="background:var(--gold)"></i>Ouro</span>
+  </div>
+</div>
+
+<div class="clab mono" style="left:56px"><b>01</b>Fontes</div>
+<div class="clab mono" style="left:506px"><b>02</b>Bronze</div>
+<div class="clab mono" style="left:746px"><b>03</b>Prata</div>
+<div class="clab mono" style="left:986px"><b>04</b>Ouro</div>
+<div class="clab mono" style="left:1242px"><b>05</b>Consumo</div>
+
+<!-- 01 Fontes -->
+<div class="col" style="left:56px;width:422px">
+  <div class="srcs">
+    <div class="src"><div class="ib"><svg class="i"><use href="#users"/></svg></div><div class="t">CRM</div></div>
+    <div class="src"><div class="ib"><svg class="i"><use href="#mail"/></svg></div><div class="t">Automação de marketing</div></div>
+    <div class="src"><div class="ib"><svg class="i"><use href="#db"/></svg></div><div class="t">Banco transacional</div></div>
+    <div class="src"><div class="ib"><svg class="i"><use href="#layers"/></svg></div><div class="t">Plataforma de membros</div></div>
+    <div class="src"><div class="ib"><svg class="i"><use href="#news"/></svg></div><div class="t">Portal de notícias</div></div>
+    <div class="src"><div class="ib"><svg class="i"><use href="#box"/></svg></div><div class="t">Arquivos em object storage</div></div>
+    <div class="src"><div class="ib"><svg class="i"><use href="#chart"/></svg></div><div class="t">Google Analytics 4</div></div>
+    <div class="src"><div class="ib"><svg class="i"><use href="#search"/></svg></div><div class="t">Search Console</div></div>
+    <div class="src"><div class="ib"><svg class="i"><use href="#mega"/></svg></div><div class="t">LinkedIn, Google e Meta Ads</div></div>
+    <div class="src"><div class="ib"><svg class="i"><use href="#play"/></svg></div><div class="t">YouTube</div></div>
+    <div class="src"><div class="ib"><svg class="i"><use href="#bot"/></svg></div><div class="t">Visibilidade em buscas de IA</div></div>
+    <div class="src"><div class="ib"><svg class="i"><use href="#spark"/></svg></div><div class="t">Transcrições e notas comerciais</div></div>
+    <div class="src ext"><div class="ib"><svg class="i"><use href="#api"/></svg></div><div class="t">APIs de enriquecimento</div></div>
+    <div class="src ext"><div class="ib"><svg class="i"><use href="#globe"/></svg></div><div class="t">Web scraping</div></div>
+  </div>
+</div>
+
+<!-- 02 Bronze -->
+<div class="col" style="left:506px;width:212px">
+  <div class="med" style="--m:var(--bronze)">
+    <div class="badge"><i></i>Bronze</div>
+    <h3>Dado bruto</h3>
+    <div class="sub">Cópia fiel de cada fonte, sem regra de negócio.</div>
+    <div class="step"><svg class="i"><use href="#copy"/></svg><div><div class="t">Réplica byte a byte</div><div class="s">schema-on-read, conferida contra a origem</div></div></div>
+    <div class="step"><svg class="i"><use href="#clock"/></svg><div><div class="t">Histórico imutável</div><div class="s">nada se apaga, tudo se reprocessa</div></div></div>
+    <div class="step"><svg class="i"><use href="#refresh"/></svg><div><div class="t">Carga incremental</div><div class="s">checkpoint só após gravação durável</div></div></div>
+    <div class="foot">As aplicações de origem seguem intocadas.</div>
+  </div>
+</div>
+
+<!-- 03 Prata -->
+<div class="col" style="left:746px;width:212px">
+  <div class="med" style="--m:var(--silver)">
+    <div class="badge"><i></i>Prata</div>
+    <h3>Dado confiável</h3>
+    <div class="sub">Limpo, tipado e com a mesma linguagem em todas as fontes.</div>
+    <div class="step"><svg class="i"><use href="#filter"/></svg><div><div class="t">Limpeza e deduplicação</div><div class="s">tipagem e normalização de entidades</div></div></div>
+    <div class="step"><svg class="i"><use href="#fp"/></svg><div><div class="t">Identidade única</div><div class="s">uma chave por pessoa em todas as fontes</div></div></div>
+    <div class="step"><svg class="i"><use href="#tag"/></svg><div><div class="t">Taxonomia canônica</div><div class="s">território, setor e segmento com fonte única</div></div></div>
+    <div class="foot">Falha de qualidade barra a carga antes de seguir.</div>
+  </div>
+</div>
+
+<!-- 04 Ouro -->
+<div class="col" style="left:986px;width:228px">
+  <div class="med gold" style="--m:var(--gold)">
+    <div class="badge"><i></i>Ouro</div>
+    <h3>Dado de negócio</h3>
+    <div class="sub">Modelo unificado, pronto para decidir e para a IA usar.</div>
+    <div class="step"><svg class="i"><use href="#link"/></svg><div><div class="t">Modelo 360</div><div class="s">pessoas, empresas, eventos e jornadas</div></div></div>
+    <div class="step"><svg class="i"><use href="#gauge"/></svg><div><div class="t">Scoring e ML</div><div class="s">propensão, nível de relação e risco</div></div></div>
+    <div class="step"><svg class="i"><use href="#target"/></svg><div><div class="t">Matchmaking</div><div class="s">cruzamento de perfis e recomendações</div></div></div>
+    <div class="step"><svg class="i"><use href="#spark"/></svg><div><div class="t">Enriquecimento com IA</div><div class="s">cargo, setor, interesses e país</div></div></div>
+    <div class="foot"><b>1M+</b> contatos e prospects enriquecidos por IA</div>
+  </div>
+</div>
+
+<!-- 05 Consumo -->
+<div class="col" style="left:1242px;width:142px">
+  <div class="use" style="flex-direction:column;align-items:flex-start;justify-content:center;gap:8px"><div class="ib"><svg class="i"><use href="#dash"/></svg></div><div><div class="t">Dashboards</div><div class="s">BI e KPIs prontos</div></div></div>
+  <div class="use" style="flex-direction:column;align-items:flex-start;justify-content:center;gap:8px"><div class="ib"><svg class="i"><use href="#api"/></svg></div><div><div class="t">APIs</div><div class="s">endpoints com IA embutida</div></div></div>
+  <div class="use" style="flex-direction:column;align-items:flex-start;justify-content:center;gap:8px"><div class="ib"><svg class="i"><use href="#zap"/></svg></div><div><div class="t">Automações</div><div class="s">gatilhos, alertas e sinais</div></div></div>
+  <div class="use" style="flex-direction:column;align-items:flex-start;justify-content:center;gap:8px"><div class="ib"><svg class="i"><use href="#bot"/></svg></div><div><div class="t">Agentes de IA</div><div class="s">contexto via MCP</div></div></div>
+</div>
+
+<!-- Transversal -->
+<div class="band">
+  <div class="gl"><div class="eyebrow mono">Transversal</div><div class="t">O que mantém o dado confiável</div></div>
+  <div class="gi"><div class="ib"><svg class="i"><use href="#check"/></svg></div><div><div class="t">Qualidade por contrato</div><div class="s">checagem a cada carga, com dono e prazo para cada falha conhecida</div></div></div>
+  <div class="gi"><div class="ib"><svg class="i"><use href="#lineage"/></svg></div><div><div class="t">Linhagem e dicionário</div><div class="s">cada coluna documentada, da origem ao consumo</div></div></div>
+  <div class="gi"><div class="ib"><svg class="i"><use href="#undo"/></svg></div><div><div class="t">Reescrita na origem</div><div class="s">scores, sinais e enriquecimento voltam ao CRM e ao marketing</div></div></div>
+  <div class="gi"><div class="ib"><svg class="i"><use href="#refresh"/></svg></div><div><div class="t">Feedback contínuo</div><div class="s">o uso nas aplicações retroalimenta todas as camadas</div></div></div>
+</div>
+</body>
+</html>
