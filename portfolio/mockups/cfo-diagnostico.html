@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>Pré-diagnóstico</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f8fafb; --card: #ffffff; --line: #e4e8ec; --line-soft: #f0f3f5;
+    --ink: #101b28; --ink-2: #3f4e5f; --ink-3: #71808f;
+    --navy: #0b1d33; --navy-soft: #e3f1fa;
+    --accent: #2e9bd6; --accent-strong: #1f7fb8; --secondary: #f1f4f7;
+    --ok: #16a34a; --ok-bg: #f0fdf4; --warn: #a16207; --warn-bg: #fefce8; --crit: #dc2626; --crit-bg: #fef2f2;
+    --band-a: #ecd3d3; --band-b: #eedfc0; --band-c: #d3e8d9; --band-d: #bddcc7;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1440px; height: 900px; overflow: hidden; }
+  body { font-family: 'Inter', -apple-system, sans-serif; background: var(--paper); color: var(--ink); -webkit-font-smoothing: antialiased; font-feature-settings: "cv11", "ss01"; }
+  b { font-weight: 600; }
+  svg.i { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+
+  header { display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--line); background: var(--card); padding: 12px 20px; height: 54px; }
+  .brand { display: flex; align-items: center; gap: 9px; }
+  .brand .mark { width: 28px; height: 28px; border-radius: 7px; background: var(--navy); color: #fff; display: flex; align-items: center; justify-content: center; }
+  .brand .wm { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink); }
+  .brand .wm span { color: var(--accent-strong); font-weight: 600; }
+  .crumb { border-left: 1px solid var(--line); padding-left: 14px; font-size: 13px; font-weight: 500; color: var(--ink-2); }
+  .hr { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .saved { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--ok); font-weight: 500; }
+  .muted { font-size: 12px; color: var(--ink-3); }
+  .avatar { width: 28px; height: 28px; border-radius: 999px; background: var(--navy-soft); color: var(--accent-strong); font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+  .tenant { font-size: 13px; font-weight: 600; }
+
+  main { max-width: 1280px; margin: 0 auto; padding: 20px; display: grid; grid-template-columns: 280px minmax(0, 1fr) 340px; gap: 20px; align-items: start; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 1px 2px rgba(0,0,0,.05); overflow: hidden; }
+  .ch { display: flex; min-height: 52px; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line-soft); padding: 12px 20px; }
+  .ct { font-size: 13px; font-weight: 600; letter-spacing: 0.025em; }
+  .badge { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 10px; font-size: 11px; font-weight: 500; white-space: nowrap; line-height: 16px; }
+  .b-neutral { background: var(--secondary); color: var(--ink-2); }
+  .b-info { background: var(--navy-soft); color: var(--accent-strong); }
+  .b-crit { background: var(--crit-bg); color: var(--crit); }
+  .b-ok { background: var(--ok-bg); color: var(--ok); }
+  .foot { border-top: 1px solid var(--line-soft); padding: 10px 20px; font-size: 11px; line-height: 1.6; color: var(--ink-3); }
+
+  /* blocos */
+  .row { display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--line-soft); padding: 8px 16px; font-size: 12.5px; height: 37px; }
+  .row:last-of-type { border-bottom: 0; }
+  .row.cur { background: var(--navy-soft); font-weight: 600; }
+  .row .ic { width: 18px; height: 18px; border-radius: 999px; display: flex; align-items: center; justify-content: center; font-size: 9.5px; font-weight: 600; background: var(--secondary); color: var(--ink-2); flex-shrink: 0; }
+  .row .ic.done { background: #e6f4ec; color: var(--ok); }
+  .row.cur .ic { background: var(--navy); color: #fff; }
+  .row .lb { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .rt { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .row .nt { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .row .wt { font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; width: 26px; text-align: right; font-weight: 400; }
+  .row .fx { font-size: 11px; color: var(--ink-3); font-weight: 400; }
+
+  /* bloco atual */
+  .center { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .q { border-bottom: 1px solid var(--line-soft); padding: 14px 20px; }
+  .q:last-child { border-bottom: 0; }
+  .q p.t { margin-bottom: 9px; font-size: 13px; line-height: 20px; }
+  .q .n { display: inline-flex; min-width: 20px; justify-content: flex-end; margin-right: 8px; font-size: 11.5px; font-weight: 600; color: var(--ink-3); }
+  .opts { display: flex; flex-wrap: wrap; gap: 8px; padding-left: 28px; }
+  .opt { border: 1px solid var(--line); background: var(--card); color: var(--ink-2); border-radius: 999px; padding: 6px 14px; font-size: 12.5px; line-height: 18px; }
+  .opt.on { border-color: var(--navy); background: var(--navy); color: #fff; }
+  .hint { margin-top: 6px; padding-left: 28px; font-size: 11px; color: var(--ink-3); }
+  .q.pending p.t { color: var(--ink); }
+  .q.pending .n { color: var(--accent-strong); }
+  .actions { display: flex; align-items: center; gap: 12px; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 6px; height: 32px; padding: 0 12px; font-size: 13px; font-weight: 500; white-space: nowrap; }
+  .btn.primary { background: var(--navy); color: #fff; }
+  .btn.ghost { color: var(--ink-2); padding: 0 8px; }
+  .actions .note { white-space: nowrap; }
+  .actions .note { margin-right: auto; font-size: 11.5px; color: var(--ink-3); }
+
+  /* painel */
+  .side { display: flex; flex-direction: column; gap: 20px; }
+  .score { padding: 16px 20px 8px; }
+  .big { font-size: 40px; line-height: 40px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .big small { font-size: 16px; font-weight: 500; color: var(--ink-3); letter-spacing: 0; }
+  .delta { margin-left: 8px; font-size: 11.5px; font-weight: 500; color: var(--ok); vertical-align: 6px; letter-spacing: 0; }
+  .bands { position: relative; margin-top: 12px; display: flex; height: 8px; border-radius: 999px; }
+  .bands span.s { height: 100%; }
+  .bands span.s:first-child { border-radius: 999px 0 0 999px; }
+  .bands span.s:last-of-type { border-radius: 0 999px 999px 0; }
+  .marker { position: absolute; top: 50%; width: 3px; height: 16px; transform: translate(-50%, -50%); border-radius: 999px; background: var(--ink); box-shadow: 0 0 0 2px #fff; }
+  .scale { margin-top: 8px; font-size: 10px; line-height: 16px; color: var(--ink-3); }
+  .cls { margin-top: 6px; font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .cls i { width: 8px; height: 8px; border-radius: 2px; background: #c9b98f; display: inline-block; }
+  .kv { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--line-soft); padding: 8px 20px; font-size: 12.5px; }
+  .kv span { color: var(--ink-3); }
+  .kv b { font-variant-numeric: tabular-nums; }
+  .rule { display: flex; align-items: flex-start; gap: 10px; border-bottom: 1px solid var(--line-soft); padding: 10px 20px; }
+  .rule:last-of-type { border-bottom: 0; }
+  .rule .tx { font-size: 12.5px; line-height: 20px; color: var(--ink-2); }
+  .rule .tx b { color: var(--ink); }
+  .rule .code { display: block; font-size: 10.5px; color: var(--ink-3); line-height: 14px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; }
+  ol.next { list-style: none; display: flex; flex-direction: column; gap: 9px; padding: 12px 20px 14px; font-size: 12.5px; color: var(--ink-2); line-height: 18px; }
+  ol.next li { display: flex; gap: 10px; align-items: flex-start; }
+  ol.next .badge { padding: 1px 7px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <span class="mark"><svg class="i" width="15" height="15" viewBox="0 0 24 24" stroke-width="2.4"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m7 14 4-4 4 4 5-6"/></svg></span>
+    <span class="wm">Diagnóstico <span>Financeiro</span></span>
+  </div>
+  <span class="crumb">Pré-diagnóstico · questionário</span>
+  <div class="hr">
+    <span class="saved"><svg class="i" width="13" height="13" viewBox="0 0 24 24" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>salvo</span>
+    <span class="muted">respostas salvas automaticamente</span>
+    <span class="avatar">IR</span>
+    <span class="tenant">Ipê Roxo Incorporadora</span>
+  </div>
+</header>
+
+<main>
+  <!-- blocos -->
+  <div class="card">
+    <div class="ch"><h3 class="ct">Blocos</h3><span class="badge b-neutral">29 de 52 respondidas</span></div>
+    <div>
+      <div class="row"><span class="ic done"><svg class="i" width="10" height="10" viewBox="0 0 24 24" stroke-width="3.2"><path d="M20 6 9 17l-5-5"/></svg></span><span class="lb">Abertura</span><span class="rt"><span class="fx">fora do score</span></span></div>
+      <div class="row"><span class="ic">#</span><span class="lb">Métricas da operação</span><span class="rt"><span class="fx">6/6</span></span></div>
+      <div class="row"><span class="ic done"><svg class="i" width="10" height="10" viewBox="0 0 24 24" stroke-width="3.2"><path d="M20 6 9 17l-5-5"/></svg></span><span class="lb">Governança e decisão</span><span class="rt"><span class="nt">7,5</span><span class="wt">10%</span></span></div>
+      <div class="row"><span class="ic done"><svg class="i" width="10" height="10" viewBox="0 0 24 24" stroke-width="3.2"><path d="M20 6 9 17l-5-5"/></svg></span><span class="lb">Contabilidade e números</span><span class="rt"><span class="nt">6,0</span><span class="wt">10%</span></span></div>
+      <div class="row"><span class="ic done"><svg class="i" width="10" height="10" viewBox="0 0 24 24" stroke-width="3.2"><path d="M20 6 9 17l-5-5"/></svg></span><span class="lb">Planejamento e controle</span><span class="rt"><span class="nt">5,4</span><span class="wt">10%</span></span></div>
+      <div class="row"><span class="ic done"><svg class="i" width="10" height="10" viewBox="0 0 24 24" stroke-width="3.2"><path d="M20 6 9 17l-5-5"/></svg></span><span class="lb">Viabilidade das obras</span><span class="rt"><span class="nt">7,8</span><span class="wt">15%</span></span></div>
+      <div class="row cur"><span class="ic">5</span><span class="lb">Caixa e repasse</span><span class="rt"><span class="wt">15%</span></span></div>
+      <div class="row"><span class="ic">6</span><span class="lb">Endividamento</span><span class="rt"><span class="wt">12%</span></span></div>
+      <div class="row"><span class="ic">7</span><span class="lb">Crédito imobiliário</span><span class="rt"><span class="wt">8%</span></span></div>
+      <div class="row"><span class="ic">8</span><span class="lb">Banco de terrenos</span><span class="rt"><span class="wt">5%</span></span></div>
+      <div class="row"><span class="ic">9</span><span class="lb">Sistemas e dados</span><span class="rt"><span class="wt">5%</span></span></div>
+      <div class="row"><span class="ic">10</span><span class="lb">Custos e precificação</span><span class="rt"><span class="wt">5%</span></span></div>
+      <div class="row"><span class="ic">11</span><span class="lb">Resultado e performance</span><span class="rt"><span class="wt">5%</span></span></div>
+      <p class="foot">Cada pergunta vale de 0 a 10. O bloco recebe a média e entra no score final pelo peso ao lado.</p>
+    </div>
+  </div>
+
+  <!-- passo atual -->
+  <div class="center">
+    <div class="card">
+      <div class="ch"><h3 class="ct">Bloco 5 · Caixa e repasse</h3><span class="badge b-info">peso 15% · 6 perguntas</span></div>
+      <div>
+        <div class="q">
+          <p class="t"><span class="n">24</span>Existe projeção de caixa semanal cobrindo pelo menos os próximos 90 dias?</p>
+          <div class="opts"><span class="opt">Sim</span><span class="opt on">Parcial</span><span class="opt">Não</span><span class="opt">Não sabe</span></div>
+        </div>
+        <div class="q">
+          <p class="t"><span class="n">25</span>Com que frequência o caixa realizado é comparado ao projetado?</p>
+          <div class="opts"><span class="opt">Semanalmente</span><span class="opt on">Mensalmente</span><span class="opt">Raramente</span><span class="opt">Nunca</span></div>
+        </div>
+        <div class="q">
+          <p class="t"><span class="n">26</span>Qual é a inadimplência média da carteira de recebíveis nos últimos 12 meses?</p>
+          <div class="opts"><span class="opt">Menos de 3%</span><span class="opt on">De 3% a 6%</span><span class="opt">Mais de 6%</span><span class="opt">Não sabe</span></div>
+        </div>
+        <div class="q">
+          <p class="t"><span class="n">27</span>O repasse das unidades ao banco acontece em até 60 dias após o habite-se?</p>
+          <div class="opts"><span class="opt">Sempre</span><span class="opt on">Às vezes</span><span class="opt">Não</span></div>
+        </div>
+        <div class="q">
+          <p class="t"><span class="n">28</span>Quais instrumentos de proteção de caixa a empresa mantém hoje?</p>
+          <div class="opts"><span class="opt on">Conta reserva por obra</span><span class="opt on">Linha de crédito pré-aprovada</span><span class="opt">Seguro de término de obra</span><span class="opt">Nenhum</span></div>
+          <p class="hint">marque todas as que se aplicam; a opção que exclui as outras anula o resto</p>
+        </div>
+        <div class="q pending">
+          <p class="t"><span class="n">29</span>A empresa conhece a exposição máxima de caixa de cada obra em andamento?</p>
+          <div class="opts"><span class="opt">Sim</span><span class="opt">Parcial</span><span class="opt">Não</span><span class="opt">Não sabe</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="actions">
+      <span class="btn ghost">Salvar e voltar</span>
+      <span class="note">nada se perde: continue de outro dispositivo</span>
+      <span class="btn primary">Próximo: Endividamento <svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span>
+    </div>
+  </div>
+
+  <!-- painel -->
+  <div class="side">
+    <div class="card">
+      <div class="ch"><h3 class="ct">Score em tempo real</h3><span class="badge b-info">parcial</span></div>
+      <div class="score">
+        <p class="big">63<small> /100</small><span class="delta">+4 neste bloco</span></p>
+        <div class="bands">
+          <span class="s" style="width:40%;background:var(--band-a)"></span>
+          <span class="s" style="width:30%;background:var(--band-b)"></span>
+          <span class="s" style="width:15%;background:var(--band-c)"></span>
+          <span class="s" style="width:15%;background:var(--band-d)"></span>
+          <span class="marker" style="left:63%"></span>
+        </div>
+        <p class="scale">0 a 39 crítica · 40 a 64 em atenção · 65 a 84 saudável · 85 a 100 referência</p>
+        <p class="cls"><i></i>Empresa em atenção</p>
+      </div>
+      <div class="kv"><span>Peso já respondido</span><b>45%</b></div>
+      <div class="kv"><span>Perguntas respondidas</span><b>29/52</b></div>
+      <p class="foot">O score é recalculado no servidor a cada resposta e só vira oficial na conclusão.</p>
+    </div>
+
+    <div class="card">
+      <div class="ch"><h3 class="ct">Regras críticas acionadas</h3><span class="badge b-crit">2</span></div>
+      <div>
+        <div class="rule"><svg class="i" width="15" height="15" viewBox="0 0 24 24" style="color:var(--crit);margin-top:2px"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><span class="tx"><b>Caixa sem horizonte de projeção</b><span class="code">R-05 · CASH_FORECAST_GAP</span></span></div>
+        <div class="rule"><svg class="i" width="15" height="15" viewBox="0 0 24 24" style="color:var(--warn);margin-top:2px"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><span class="tx"><b>Repasse fora do prazo</b><span class="code">R-06 · LATE_TRANSFER</span></span></div>
+        <p class="foot">12 regras rodam em paralelo ao score. Pesos e regras são metodologia proprietária, versionados no Admin.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ch"><h3 class="ct">Ao concluir</h3></div>
+      <ol class="next">
+        <li><span class="badge b-info">1</span><span>Relatório de pré-diagnóstico com score, blocos, forças e plano prioritário.</span></li>
+        <li><span class="badge b-info">2</span><span>O raio-x do portal é atualizado com a classificação.</span></li>
+        <li><span class="badge b-info">3</span><span>As respostas alimentam o motor do diagnóstico completo como evidência.</span></li>
+      </ol>
+    </div>
+  </div>
+</main>
+</body>
+</html>

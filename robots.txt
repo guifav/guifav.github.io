@@ -1,0 +1,5 @@
+User-agent: *
+Disallow: /portfolio/mockups/
+Disallow: /tools/
+
+Sitemap: https://guifav.dev/sitemap.xml

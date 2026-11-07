@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="description" content="Portfólio de Guilherme Favaron: 22 projetos que liderou, entre produtos próprios, sistemas para clientes e plataformas internas do GRI Institute, com o problema que cada um resolve."/>
+  <title>Portfólio, Guilherme Favaron</title>
+  <meta name="author" content="Guilherme Favaron">
+  <meta property="og:title" content="Portfólio, Guilherme Favaron">
+  <meta property="og:description" content="22 projetos: produtos próprios, sistemas para clientes e plataformas internas do GRI Institute.">
+  <meta property="og:url" content="https://guifav.dev/portfolio/"/>
+  <meta property="og:image" content="https://guifav.dev/og-image.png"/>
+  <meta property="og:image:width" content="1200"/>
+  <meta property="og:image:height" content="630"/>
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image"/>
+  <meta name="twitter:title" content="Portfólio, Guilherme Favaron"/>
+  <meta name="twitter:description" content="22 projetos: produtos próprios, sistemas para clientes e plataformas internas do GRI Institute."/>
+  <meta name="twitter:image" content="https://guifav.dev/og-image.png"/>
+  <link rel="canonical" href="https://guifav.dev/portfolio/">
+  <link rel="stylesheet" href="/assets/site.css">
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-K7Y87QNCX8"></script>
+  <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-K7Y87QNCX8');</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"CollectionPage","name":"Portfólio, Guilherme Favaron","url":"https://guifav.dev/portfolio/","inLanguage":"pt-BR","about":{"@id":"https://guifav.dev/#person"},"author":{"@type":"Person","@id":"https://guifav.dev/#person","name":"Guilherme de Mauro Favaron","url":"https://guifav.dev","jobTitle":"CTO"}}</script>
+</head>
+<body>
+  <div class="container">
+    <nav>
+      <a href="/" class="nav-name">Guilherme Favaron</a>
+      <div class="nav-links">
+        <a href="/#about" data-i18n="nav_about">Sobre</a>
+        <a href="/#consulting" data-i18n="nav_consulting">Consultoria</a>
+        <a href="/#research" data-i18n="nav_research">Pesquisa</a>
+        <a href="/#content" data-i18n="nav_content">Conteúdo</a>
+        <a href="/portfolio/" aria-current="page" data-i18n="nav_portfolio">Portfólio</a>
+        <button id="lang-toggle" class="nav-btn lang-toggle" aria-label="Toggle language">EN</button>
+        <button id="theme-toggle" class="nav-btn" aria-label="Toggle theme">&#9790;</button>
+      </div>
+    </nav>
+
+    <div class="hero">
+      <div class="eyebrow" data-i18n="nav_portfolio">Portfólio</div>
+      <h1 data-i18n="pf_title">Projetos que liderei.</h1>
+      <p class="subtitle" data-i18n="pf_desc">Produtos próprios, sistemas para clientes e as plataformas internas do GRI Institute. Em todos liderei o desenvolvimento. Cada projeto mostra o que é, que problema resolve e quem usa. As telas usam dados fictícios.</p>
+      <div class="pf-jump">
+        <a href="#produtos" data-i18n="g_products">Produtos próprios</a>
+        <a href="#clientes" data-i18n="g_clients">Para clientes</a>
+        <a href="#gri">GRI Institute</a>
+        <a href="#ferramentas" data-i18n="g_tools">Ferramentas e open source</a>
+      </div>
+    </div>
+
+    <!-- ===================== PRODUTOS ===================== -->
+    <section id="produtos">
+      <div class="section-label" data-i18n="g_products">Produtos próprios</div>
+      <p class="pf-group-intro" data-i18n="g_products_d">Produtos que eu fundei e opero, abertos para quem quiser usar.</p>
+
+      <article class="project" id="talkwithdata">
+        <div class="project-media"><a class="frame" href="/portfolio/img/talkwithdata.webp" target="_blank" rel="noopener"><div class="frame-bar"><span></span><span></span><span></span></div><img src="/portfolio/img/talkwithdata.webp" width="1600" height="1000" loading="lazy" alt="TalkWithData respondendo uma pergunta em linguagem natural com número, gráfico e o SQL executado" data-i18n-alt="twd_alt"></a></div>
+        <div class="project-body">
+          <h3>TalkWithData</h3>
+          <div class="product-tags"><span class="tag tag-hl" data-i18n="k_market_b2b">Produto de mercado · B2B</span><span class="tag" data-i18n="s_open_beta">Beta aberto</span></div>
+          <dl>
+            <div><dt data-i18n="dt_what">O que é</dt><dd data-i18n="twd_what">Plataforma em que a empresa conecta planilhas e bancos de dados (PostgreSQL, MySQL, Redshift) e faz perguntas em linguagem natural. Cada resposta vem com o SQL que a gerou, e cada número é conferido contra o resultado da consulta antes de aparecer na tela.</dd></div>
+            <div><dt data-i18n="dt_pain">Dor que resolve</dt><dd data-i18n="twd_pain">Times sem analista dependem de fila de relatório, fórmula e tabela dinâmica para responder perguntas simples sobre o próprio negócio. Quando uma IA responde, ninguém sabe se o número está certo.</dd></div>
+          </dl>
+          <div class="stack"><span class="pill">Next.js</span><span class="pill">TypeScript</span><span class="pill">PostgreSQL</span><span class="pill">OpenRouter</span><span class="pill">Docker</span><span class="pill">Stripe</span></div>
+          <div class="product-links"><a href="https://talkwithdata.ai" target="_blank" rel="noopener">talkwithdata.ai &#8599;</a><a href="https://github.com/guifav/TalkWithData" target="_blank" rel="noopener" data-i18n="twd_oss">GitHub (versão open source) &#8599;</a></div>
+        </div>
+      </article>
+
+      <article class="project flip" id="virtuagency">
+        <div class="project-media"><a class="frame" href="/portfolio/img/virtuagency.webp" target="_blank" rel="noopener"><div class="frame-bar"><span></span><span></span><span></span></div><img src="/portfolio/img/virtuagency.webp" width="1600" height="1000" loading="lazy" alt="VirtuAgency.ai com o funil de marketing de uma marca fictícia" data-i18n-alt="va_alt"></a></div>
+        <div class="project-body">
+          <h3>VirtuAgency.ai</h3>
+          <div class="product-tags"><span class="tag tag-hl" data-i18n="k_market_saas">Produto de mercado · SaaS</span><span class="tag">Beta</span></div>
+          <dl>
+            <div><dt data-i18n="dt_what">O que é</dt><dd data-i18n="va_what">Agência de marketing com IA para times internos de PMEs. Um funil guiado por conversa organiza empresa, posicionamento, ideias, campanhas e ativos, e gera peças coordenadas em oito formatos, para uma ou várias marcas.</dd></div>
+            <div><dt data-i18n="dt_pain">Dor que resolve</dt><dd data-i18n="va_pain">PMEs sem agência nem time grande de marketing não conseguem manter conteúdo consistente em vários canais, e contratar uma agência externa custa caro e demora.</dd></div>
+          </dl>
+          <div class="stack"><span class="pill">Next.js</span><span class="pill">Firebase</span><span class="pill">Cloud Run</span><span class="pill">Claude</span><span class="pill">Gemini</span><span class="pill">Stripe</span></div>
+          <div class="product-links"><a href="https://virtuagency.ai" target="_blank" rel="noopener">virtuagency.ai &#8599;</a></div>
+        </div>
+      </article>
+
+      <article class="project" id="tennis-go">
+        <div class="project-media"><a class="frame" href="/portfolio/img/tennis-go.webp" target="_blank" rel="noopener"><div class="frame-bar"><span></span><span></span><span></span></div><img src="/portfolio/img/tennis-go.webp" width="1600" height="1000" loading="lazy" alt="Tennis Go com a chave de um campeonato de jogadores fictícios" data-i18n-alt="tg_alt"></a></div>
+        <div class="project-body">
+          <h3>Tennis Go</h3>
+          <div class="product-tags"><span class="tag tag-hl" data-i18n="k_b2c">App B2C</span><span class="tag" data-i18n="s_prod">Em produção</span></div>
+          <dl>
+            <div><dt data-i18n="dt_what">O que é</dt><dd data-i18n="tg_what">App web de tênis com rankings por pontos e em escada, campeonatos em vários formatos, placar confirmado pelo adversário, clubes, reserva de quadra, aulas e perfis de crianças administrados pelo responsável.</dd></div>
+            <div><dt data-i18n="dt_pain">Dor que resolve</dt><dd data-i18n="tg_pain">Os apps de tênis do mercado são complexos demais para um grupo pequeno de adultos e crianças organizar ranking e campeonato, e tudo acaba em planilha e grupo de WhatsApp.</dd></div>
+          </dl>
+          <div class="stack"><span class="pill">Next.js</span><span class="pill">TypeScript</span><span class="pill">Supabase</span><span class="pill">Vercel</span><span class="pill">Web Push</span></div>
+          <div class="product-links"><a href="https://tennis-go.app" target="_blank" rel="noopener">tennis-go.app &#8599;</a></div>
+        </div>
+      </article>
+
+      <article class="project flip" id="caramelo">
+        <div class="project-media"><a class="frame" href="/portfolio/img/caramelo.webp" target="_blank" rel="noopener"><div class="frame-bar"><span></span><span></span><span></span></div><img src="/portfolio/img/caramelo.webp" width="1600" height="1000" loading="lazy" alt="Chat do Caramelo com uma conversa fictícia em português" data-i18n-alt="car_alt"></a></div>
+        <div class="project-body">
+          <h3>Caramelo</h3>
+          <div class="product-tags"><span class="tag tag-hl" data-i18n="k_open_model">Modelo aberto</span><span class="tag" data-i18n="s_prod">Em produção</span></div>
+          <dl>
+            <div><dt data-i18n="dt_what">O que é</dt><dd data-i18n="car_what">Modelo de linguagem brasileiro pequeno (Gemma 4 E4B com LoRA), ajustado na minha escrita e servido em CPU, com API compatível com OpenAI, app de chat e CLI. Modelo, adapter e dataset estão publicados no Hugging Face.</dd></div>
+            <div><dt data-i18n="dt_pain">Dor que resolve</dt><dd data-i18n="car_pain">Empresas pagam modelos grandes e genéricos para tarefas repetitivas e bem definidas. O Caramelo é a prova pública da tese da Tramline: em teste cego, um modelo pequeno e ajustado venceu o modelo base na tarefa para a qual foi treinado, rodando sem GPU.</dd></div>
+          </dl>
+          <div class="stack"><span class="pill">Gemma</span><span class="pill">LoRA</span><span class="pill">llama.cpp</span><span class="pill">FastAPI</span><span class="pill">Hugging Face</span></div>
+          <div class="product-links"><a href="https://ia-caramelo.com" target="_blank" rel="noopener">ia-caramelo.com &#8599;</a><a href="https://huggingface.co/guifav/caramelo-gemma4-e4b" target="_blank" rel="noopener">Hugging Face &#8599;</a><a href="https://tramline.ai" target="_blank" rel="noopener">Tramline &#8599;</a></div>
+        </div>
+      </article>
+    </section>
+
+    <!-- ===================== CLIENTES ===================== -->
+    <section id="clientes">
+      <div class="section-label" data-i18n="g_clients">Para clientes</div>
+      <p class="pf-group-intro" data-i18n="g_clients_d">Sistemas sob encomenda, feitos para a operação de outras empresas.</p>
+
+      <article class="project" id="tinna">
+        <div class="project-media"><a class="frame" href="/portfolio/img/tinna.webp" target="_blank" rel="noopener"><div class="frame-bar"><span></span><span></span><span></span></div><img src="/portfolio/img/tinna.webp" width="1440" height="900" loading="lazy" alt="Visão geral de uma pesquisa de demonstração na plataforma Pesquisas de Cura" data-i18n-alt="tin_alt"></a></div>
+        <div class="project-body">
+          <h3 data-i18n="tin_t">Pesquisas de Cura</h3>
+          <div class="product-tags"><span class="tag tag-hl" data-i18n="k_client_igs">Cliente · Instituto Ganz Sanchez</span><span class="tag" data-i18n="s_prod">Em produção</span></div>
+          <dl>
+            <div><dt data-i18n="dt_what">O que é</dt><dd data-i18n="tin_what">Plataforma de estudo longitudinal e demográfico sobre zumbido, sem uso para diagnóstico ou tratamento: várias pesquisas em paralelo, formulários enviados ao paciente por link, ficha de acompanhamento, comparação entre grupos, exportação estatística, canal de WhatsApp e tratamento de dado de saúde conforme a LGPD.</dd></div>
+            <div><dt data-i18n="dt_pain">Dor que resolve</dt><dd data-i18n="tin_pain">O acompanhamento de remissão e recidiva vivia em planilhas: coleta manual, dados inconsistentes entre estudos e análise refeita a cada novo levantamento.</dd></div>
+          </dl>
+          <div class="stack"><span class="pill">Next.js</span><span class="pill">Prisma</span><span class="pill">PostgreSQL</span><span class="pill">Cloud Run</span><span class="pill">WhatsApp</span><span class="pill">MCP</span></div>
+        </div>
+      </article>
+
+      <article class="project flip" id="sbs-sgq">
+        <div class="project-media"><a class="frame" href="/portfolio/img/sbs-sgq.webp" target="_blank" rel="noopener"><div class="frame-bar"><span></span><span></span><span></span></div><img src="/portfolio/img/sbs-sgq.webp" width="1600" height="1000" loading="lazy" alt="Portal do Sistema de Gestão da Qualidade com procedimentos fictícios" data-i18n-alt="sbs_alt"></a></div>
+        <div class="project-body">
+          <h3 data-i18n="sbs_t">Portal do Sistema de Gestão da Qualidade</h3>
+          <div class="product-tags"><span class="tag tag-hl" data-i18n="k_client_sbs">Cliente · SBS Distribuidora</span><span class="tag" data-i18n="s_prod">Em produção</span></div>
+          <dl>
+            <div><dt data-i18n="dt_what">O que é</dt><dd data-i18n="sbs_what">Portal dos procedimentos de qualidade, com versionamento formal e rastreável, visualizador de PDF, grafo de correlação entre documentos, painel de pendências, três perfis de acesso e trilha de auditoria.</dd></div>
+            <div><dt data-i18n="dt_pain">Dor que resolve</dt><dd data-i18n="sbs_pain">Procedimentos espalhados, sem controle de versão e sem visibilidade de quais documentos citados ainda não existiam.</dd></div>
+          </dl>
+          <div class="stack"><span class="pill">Next.js</span><span class="pill">TypeScript</span><span class="pill">Firebase</span><span class="pill">Cloud Run</span><span class="pill">Cloudflare</span></div>
+        </div>
+      </article>
+
+      <article class="project" id="cfo-diagnostico">
+        <div class="project-media"><a class="frame" href="/portfolio/img/cfo-diagnostico.webp" target="_blank" rel="noopener"><div class="frame-bar"><span></span><span></span><span></span></div><img src="/portfolio/img/cfo-diagnostico.webp" width="1600" height="1000" loading="lazy" alt="Pré-diagnóstico financeiro de uma incorporadora fictícia com score ao vivo" data-i18n-alt="cfo_alt"></a></div>
+        <div class="project-body">
+          <h3 data-i18n="cfo_t">CFO as a service para incorporadoras</h3>
+          <div class="product-tags"><span class="tag tag-hl" data-i18n="k_client_cfo">Cliente · consultoria financeira</span><span class="tag" data-i18n="s_prod">Em produção</span></div>
+          <dl>
+            <div><dt data-i18n="dt_what">O que é</dt><dd data-i18n="cfo_what">Plataforma B2B de uma consultoria de CFO para incorporadoras: pré-diagnóstico financeiro por questionário ponderado com score ao vivo, portal do cliente e, nas próximas fases, diagnóstico com IA validado pelos sócios.</dd></div>
+            <div><dt data-i18n="dt_pain">Dor que resolve</dt><dd data-i18n="cfo_pain">O método de CFO fracionado dependia de horas de consultor por cliente. Virar produto permite que cada consultor atenda várias incorporadoras ao mesmo tempo, com o mesmo padrão de análise.</dd></div>
+          </dl>
+          <div class="stack"><span class="pill">Next.js</span><span class="pill">PostgreSQL</span><span class="pill">Prisma</span><span class="pill">Terraform</span><span class="pill">GCP</span><span class="pill">Cloudflare</span></div>
+        </div>
+      </article>
+
+      <article class="project text-only" id="cms">
+        <div class="project-body">
+          <h3 data-i18n="cms_t">Site institucional com CMS</h3>
+          <div class="product-tags"><span class="tag tag-hl" data-i18n="k_client_group">Cliente · grupo empresarial</span></div>
+          <dl>
+            <div><dt data-i18n="dt_what">O que é</dt><dd data-i18n="cms_what">Site institucional multilíngue com CMS, entregue a um grupo empresarial com operação em mais de um país para que o próprio cliente edite o conteúdo.</dd></div>
+            <div><dt data-i18n="dt_pain">Dor que resolve</dt><dd data-i18n="cms_pain">Cada alteração de texto, página ou idioma dependia de um desenvolvedor.</dd></div>
+          </dl>
+          <div class="stack"><span class="pill">Payload CMS</span><span class="pill">Next.js</span><span class="pill">MongoDB</span><span class="pill">Docker</span></div>
+        </div>
+      </article>
+    </section>
+
+    <!-- ===================== GRI ===================== -->
+    <section id="gri">
+      <div class="section-label">GRI Institute</div>
+      <p class="pf-group-intro" data-i18n="g_gri_d">Sou CTO do GRI Institute, think tank global de real estate e infraestrutura com membros em mais de 100 países. Estas são plataformas de uso interno que o time de tecnologia constrói e mantém.</p>
+
+      <article class="project" id="metodologia">
+        <div class="project-media"><a class="frame" href="/portfolio/img/metodologia.webp" target="_blank" rel="noopener"><div class="frame-bar"><span></span><span></span><span></span></div><img src="/portfolio/img/metodologia.webp" width="1600" height="1000" loading="lazy" alt="Fluxo de desenvolvimento com pessoas e agentes de IA, da demanda ao aceite" data-i18n-alt="met_alt"></a></div>
+        <div class="project-body">
+          <h3 data-i18n="met_t">Metodologia de desenvolvimento humano + IA</h3>
+          <div class="product-tags"><span class="tag tag-hl" data-i18n="k_internal_gri">Uso interno · GRI Institute</span><span class="tag" data-i18n="s_in_force">Em vigor</span></div>
+          <dl>
+            <div><dt data-i18n="dt_what">O que é</dt><dd data-i18n="met_what">Documento único que define como o time de tecnologia trabalha, com pessoas e agentes de IA no mesmo fluxo: issue com escopo, branch, merge request, revisão independente por modelos de IA diferentes, merge pelo dono do sistema, deploy e aceite de quem pediu.</dd></div>
+            <div><dt data-i18n="dt_pain">Dor que resolve</dt><dd data-i18n="met_pain">Havia três textos de processo concorrentes, entregas paradas sem aceite e mudanças que iam para produção por fora do pipeline.</dd></div>
+          </dl>
+          <div class="stack"><span class="pill">GitLab CI/CD</span><span class="pill">CODEOWNERS</span><span class="pill">AGENTS.md</span><span class="pill">Notion</span></div>
+        </div>
+      </article>
+
+      <article class="project flip" id="datawarehouse">
+        <div class="project-media"><a class="frame" href="/portfolio/img/gri-datawarehouse.webp" target="_blank" rel="noopener"><div class="frame-bar"><span></span><span></span><span></span></div><img src="/portfolio/img/gri-datawarehouse.webp" width="1600" height="1000" loading="lazy" alt="Arquitetura do data warehouse: fontes, ETL, contratos de dados e os apps que estão sendo ligados a eles" data-i18n-alt="dw_alt"></a></div>
+        <div class="project-body">
+          <h3>Data warehouse</h3>
+          <div class="product-tags"><span class="tag tag-hl" data-i18n="k_internal_gri">Uso interno · GRI Institute</span><span class="tag" data-i18n="s_prod">Em produção</span></div>
+          <dl>
+            <div><dt data-i18n="dt_what">O que é</dt><dd data-i18n="dw_what">ETL que carrega o data warehouse a partir do CRM e do banco da plataforma e publica contratos de dados (engajamento, segmentos, matchmaking, funil) para os apps. A ligação desses contratos com cada app está em implantação.</dd></div>
+            <div><dt data-i18n="dt_pain">Dor que resolve</dt><dd data-i18n="dw_pain">Cada app calculava o mesmo indicador do seu jeito, e uma mesma métrica chegava a ter três números diferentes.</dd></div>
+          </dl>
+          <div class="stack"><span class="pill">AWS Redshift</span><span class="pill">AWS Glue</span><span class="pill">SQL</span><span class="pill">Python</span><span class="pill">GitLab CI</span></div>
+        </div>
+      </article>
+
+      <article class="project" id="culkin">
+        <div class="project-media"><a class="frame" href="/portfolio/img/culkin.webp" target="_blank" rel="noopener"><div class="frame-bar"><span></span><span></span><span></span></div><img src="/portfolio/img/culkin.webp" width="1600" height="1000" loading="lazy" alt="Perfil 360 de um contato fictício no Culkin" data-i18n-alt="cul_alt"></a></div>
+        <div class="project-body">
+          <h3>Culkin</h3>
+          <div class="product-tags"><span class="tag tag-hl" data-i18n="k_internal_gri">Uso interno · GRI Institute</span><span class="tag" data-i18n="s_transition">Em transição</span></div>
+          <dl>
+            <div><dt data-i18n="dt_what">O que é</dt><dd data-i18n="cul_what">Data lake que unificou Salesforce, bancos da plataforma, Marketing Cloud, GA4, Search Console e ads, enriqueceu cerca de 310 mil contatos com IA e expôs tudo por API e MCP, para perguntas em linguagem natural. Em novembro de 2026 o enriquecimento passou a ser refeito no data warehouse, e o Culkin segue como fonte dos dados de analytics.</dd></div>
+            <div><dt data-i18n="dt_pain">Dor que resolve</dt><dd data-i18n="cul_pain">O dado de cada membro estava fragmentado em vários sistemas, e cada app reconstruía o perfil do contato por conta própria.</dd></div>
+          </dl>
+          <div class="stack"><span class="pill">BigQuery</span><span class="pill">Next.js</span><span class="pill">Cloud Run</span><span class="pill">MCP</span><span class="pill">Claude</span></div>
+        </div>
+      </article>
+
+      <article class="project flip" id="dashs">
+        <div class="project-media"><a class="frame" href="/portfolio/img/dashs.webp" target="_blank" rel="noopener"><div class="frame-bar"><span></span><span></span><span></span></div><img src="/portfolio/img/dashs.webp" width="1600" height="1000" loading="lazy" alt="Dashs gerando um dashboard a partir de um pedido em linguagem natural" data-i18n-alt="dsh_alt"></a></div>
+        <div class="project-body">
+          <h3>Dashs</h3>
+          <div class="product-tags"><span class="tag tag-hl" data-i18n="k_internal_gri">Uso interno · GRI Institute</span><span class="tag" data-i18n="s_prod">Em produção</span></div>
+          <dl>
+            <div><dt data-i18n="dt_what">O que é</dt><dd data-i18n="dsh_what">Plataforma para criar dashboards e mini-apps a partir de um pedido em linguagem natural, publicar, versionar e compartilhar com controle de acesso, ligados a dados vivos via MCP.</dd></div>
+            <div><dt data-i18n="dt_pain">Dor que resolve</dt><dd data-i18n="dsh_pain">As análises de cada divisão viviam em laptops, no Drive e em anexos, sem lugar comum nem permissão, e toda visualização nova entrava na fila do time de tecnologia.</dd></div>
+          </dl>
+          <div class="stack"><span class="pill">Next.js</span><span class="pill">Tailwind</span><span class="pill">Firebase</span><span class="pill">PostgreSQL</span><span class="pill">Claude</span><span class="pill">MCP</span></div>
+        </div>
+      </article>
+
+      <article class="project" id="prism">
+        <div class="project-media"><a class="frame" href="/portfolio/img/prism.webp" target="_blank" rel="noopener"><div class="frame-bar"><span></span><span></span><span></span></div><img src="/portfolio/img/prism.webp" width="1600" height="1000" loading="lazy" alt="Marketing Hub gerando um ativo de marketing a partir de material-fonte" data-i18n-alt="prism_alt"></a></div>
+        <div class="project-body">
+          <h3>Marketing Hub</h3>
+          <div class="product-tags"><span class="tag tag-hl" data-i18n="k_internal_gri">Uso interno · GRI Institute</span><span class="tag" data-i18n="s_prod">Em produção</span></div>
+          <dl>
+            <div><dt data-i18n="dt_what">O que é</dt><dd data-i18n="prism_what">Plataforma que transforma materiais-fonte (PDF, áudio, vídeo, link) em 12 tipos de ativo de marketing, como artigos, whitepapers, posts, e-mails, anúncios e imagens, na voz da marca, com clusters de audiência para as campanhas.</dd></div>
+            <div><dt data-i18n="dt_pain">Dor que resolve</dt><dd data-i18n="prism_pain">Cada evento e divisão produzia seus ativos à mão, e o marketing precisava de audiência curada sem acesso direto ao banco de dados.</dd></div>
+          </dl>
+          <div class="stack"><span class="pill">Next.js</span><span class="pill">Cloud Run</span><span class="pill">Firestore</span><span class="pill">BigQuery</span><span class="pill">Claude</span><span class="pill">Gemini</span></div>
+        </div>
+      </article>
+
+      <article class="project flip" id="delorean">
+        <div class="project-media"><a class="frame" href="/portfolio/img/delorean.webp" target="_blank" rel="noopener"><div class="frame-bar"><span></span><span></span><span></span></div><img src="/portfolio/img/delorean.webp" width="1600" height="1000" loading="lazy" alt="Fila de artigos do Delorean com lacuna de conteúdo e nota de checagem de fatos" data-i18n-alt="del_alt"></a></div>
+        <div class="project-body">
+          <h3>Delorean</h3>
+          <div class="product-tags"><span class="tag tag-hl" data-i18n="k_internal_gri">Uso interno · GRI Institute</span><span class="tag" data-i18n="s_prod">Em produção</span></div>
+          <dl>
+            <div><dt data-i18n="dt_what">O que é</dt><dd data-i18n="del_what">Pipeline que encontra lacunas entre o que o público busca e o que o site oferece, pesquisa fontes primárias, escreve, checa os fatos e traduz o artigo, que passa por revisão humana antes de ser publicado.</dd></div>
+            <div><dt data-i18n="dt_pain">Dor que resolve</dt><dd data-i18n="del_pain">O público procurava temas que o portal de notícias não cobria, e escrever cada pauta à mão não acompanhava a demanda das divisões.</dd></div>
+          </dl>
+          <div class="stack"><span class="pill">React</span><span class="pill">Node.js</span><span class="pill">PostgreSQL</span><span class="pill">Claude</span><span class="pill">Gemini</span><span class="pill">Docker</span></div>
+        </div>
+      </article>
+
+      <article class="project" id="morpheus">
+        <div class="project-media"><a class="frame" href="/portfolio/img/morpheus.webp" target="_blank" rel="noopener"><div class="frame-bar"><span></span><span></span><span></span></div><img src="/portfolio/img/morpheus.webp" width="1600" height="1000" loading="lazy" alt="Sinais de mercado do Morpheus com empresas e pessoas fictícias" data-i18n-alt="mor_alt"></a></div>
+        <div class="project-body">
+          <h3>Morpheus</h3>
+          <div class="product-tags"><span class="tag tag-hl" data-i18n="k_internal_gri">Uso interno · GRI Institute</span><span class="tag" data-i18n="s_prod">Em produção</span></div>
+          <dl>
+            <div><dt data-i18n="dt_what">O que é</dt><dd data-i18n="mor_what">Radar diário que coleta notícias de fontes setoriais, extrai pessoas, empresas, negócios e sinais com IA, enriquece os contatos, cruza com o CRM e prioriza pelo perfil de cliente ideal.</dd></div>
+            <div><dt data-i18n="dt_pain">Dor que resolve</dt><dd data-i18n="mor_pain">Aquisições, mudanças de cargo e captações de membros e prospects chegavam ao time comercial tarde, quando chegavam.</dd></div>
+          </dl>
+          <div class="stack"><span class="pill">Python</span><span class="pill">Firecrawl</span><span class="pill">Claude</span><span class="pill">Next.js</span><span class="pill">PostgreSQL</span><span class="pill">BigQuery</span></div>
+        </div>
+      </article>
+
+      <article class="project flip" id="sales">
+        <div class="project-media"><a class="frame" href="/portfolio/img/sales.webp" target="_blank" rel="noopener"><div class="frame-bar"><span></span><span></span><span></span></div><img src="/portfolio/img/sales.webp" width="1600" height="1000" loading="lazy" alt="Avaliação de uma call de vendas fictícia no Sales Coach" data-i18n-alt="sal_alt"></a></div>
+        <div class="project-body">
+          <h3>Sales Coach</h3>
+          <div class="product-tags"><span class="tag tag-hl" data-i18n="k_internal_gri">Uso interno · GRI Institute</span><span class="tag" data-i18n="s_prod">Em produção</span></div>
+          <dl>
+            <div><dt data-i18n="dt_what">O que é</dt><dd data-i18n="sal_what">Hub de inteligência comercial que grava, transcreve e avalia calls com rubrica por LLM, faz coaching e treino por voz e monta o briefing antes de cada reunião a partir do CRM e do data lake.</dd></div>
+            <div><dt data-i18n="dt_pain">Dor que resolve</dt><dd data-i18n="sal_pain">Vendedores entravam nas calls sem contexto unificado do cliente e saíam sem feedback estruturado do que funcionou.</dd></div>
+          </dl>
+          <div class="stack"><span class="pill">Next.js</span><span class="pill">PostgreSQL</span><span class="pill">Prisma</span><span class="pill">Claude</span><span class="pill">Gemini</span><span class="pill">ElevenLabs</span></div>
+        </div>
+      </article>
+
+      <article class="project" id="cs-command-center">
+        <div class="project-media"><a class="frame" href="/portfolio/img/cs-command-center.webp" target="_blank" rel="noopener"><div class="frame-bar"><span></span><span></span><span></span></div><img src="/portfolio/img/cs-command-center.webp" width="1600" height="1000" loading="lazy" alt="Hub de indicadores de Customer Success com dados fictícios" data-i18n-alt="cs_alt"></a></div>
+        <div class="project-body">
+          <h3>CS Command Center</h3>
+          <div class="product-tags"><span class="tag tag-hl" data-i18n="k_internal_gri">Uso interno · GRI Institute</span><span class="tag" data-i18n="s_prod">Em produção</span></div>
+          <dl>
+            <div><dt data-i18n="dt_what">O que é</dt><dd data-i18n="cs_what">Portal de Customer Success com dashboards de renovação, retenção, engajamento em eventos, onboarding e esforço do cliente, por gestor de conta e por divisão.</dd></div>
+            <div><dt data-i18n="dt_pain">Dor que resolve</dt><dd data-i18n="cs_pain">A gestão da carteira de membros estava espalhada no CRM, sem visão de renovação, risco e engajamento por responsável.</dd></div>
+          </dl>
+          <div class="stack"><span class="pill">Python</span><span class="pill">FastAPI</span><span class="pill">Chart.js</span><span class="pill">PostgreSQL</span><span class="pill">AWS</span></div>
+        </div>
+      </article>
+
+      <article class="project flip" id="concierge">
+        <div class="project-media"><a class="frame" href="/portfolio/img/concierge.webp" target="_blank" rel="noopener"><div class="frame-bar"><span></span><span></span><span></span></div><img src="/portfolio/img/concierge.webp" width="1600" height="1000" loading="lazy" alt="Concierge Console com uma conversa de WhatsApp fictícia" data-i18n-alt="con_alt"></a></div>
+        <div class="project-body">
+          <h3>Concierge Console</h3>
+          <div class="product-tags"><span class="tag tag-hl" data-i18n="k_internal_gri">Uso interno · GRI Institute</span><span class="tag" data-i18n="s_prod">Em produção</span></div>
+          <dl>
+            <div><dt data-i18n="dt_what">O que é</dt><dd data-i18n="con_what">Console de mensageria pelo WhatsApp oficial, com campanhas disparadas por gatilho, painel de operador, tradução e um agente conversacional, integrado ao CRM.</dd></div>
+            <div><dt data-i18n="dt_pain">Dor que resolve</dt><dd data-i18n="con_pain">O relacionamento com membros por WhatsApp não tinha canal oficial nem registro no CRM, e regras como janela de envio, idioma e template estavam presas no código.</dd></div>
+          </dl>
+          <div class="stack"><span class="pill">Next.js</span><span class="pill">PostgreSQL</span><span class="pill">Twilio</span><span class="pill">LangGraph</span><span class="pill">pg-boss</span></div>
+        </div>
+      </article>
+
+      <article class="project text-only" id="churn">
+        <div class="project-body">
+          <h3 data-i18n="churn_t">Previsão de churn</h3>
+          <div class="product-tags"><span class="tag tag-hl" data-i18n="k_internal_gri">Uso interno · GRI Institute</span><span class="tag" data-i18n="s_poc">Prova de conceito</span></div>
+          <dl>
+            <div><dt data-i18n="dt_what">O que é</dt><dd data-i18n="churn_what">Protótipo de escore de risco de saída de membros pagantes num horizonte de 90 dias, com um agente de RAG que explica o risco de cada conta ao time de Customer Success. Construído com práticas de MLOps: versionamento de dados, rastreio de experimentos, avaliação do agente e guardrails. AUC de 0,97 num conjunto de teste com divisão aleatória; a validação temporal, que mede a previsão de fato, ainda está pendente.</dd></div>
+            <div><dt data-i18n="dt_pain">Dor que resolve</dt><dd data-i18n="churn_pain">O time de Customer Success não sabia quem estava perto de sair nem por quê, e o score de risco anterior acertava pouco.</dd></div>
+          </dl>
+          <div class="stack"><span class="pill">Python</span><span class="pill">XGBoost</span><span class="pill">LangGraph</span><span class="pill">Vertex AI</span><span class="pill">MLflow</span><span class="pill">DVC</span></div>
+        </div>
+      </article>
+    </section>
+
+    <!-- ===================== FERRAMENTAS ===================== -->
+    <section id="ferramentas">
+      <div class="section-label" data-i18n="g_tools">Ferramentas e open source</div>
+      <p class="pf-group-intro" data-i18n="g_tools_d">O que uso para tocar meus próprios negócios, e o que abri para outras pessoas usarem.</p>
+
+      <article class="project" id="crm">
+        <div class="project-media"><a class="frame" href="/portfolio/img/crm.webp" target="_blank" rel="noopener"><div class="frame-bar"><span></span><span></span><span></span></div><img src="/portfolio/img/crm.webp" width="1600" height="1000" loading="lazy" alt="CRM com lista de prospects fictícios enriquecida por IA" data-i18n-alt="crm_alt"></a></div>
+        <div class="project-body">
+          <h3 data-i18n="crm_t">CRM com prospecção por IA</h3>
+          <div class="product-tags"><span class="tag tag-hl" data-i18n="k_internal_mine">Uso interno · minhas empresas</span><span class="tag" data-i18n="s_in_use">Em uso</span></div>
+          <dl>
+            <div><dt data-i18n="dt_what">O que é</dt><dd data-i18n="crm_what">CRM open source (Twenty) que hospedo e estendi com automações próprias: captura de novos leads, enriquecimento de pessoas e empresas, listas montadas com IA e acesso por MCP para os meus agentes.</dd></div>
+            <div><dt data-i18n="dt_pain">Dor que resolve</dt><dd data-i18n="crm_pain">Os leads das minhas frentes de negócio ficavam espalhados entre e-mail, planilha e LinkedIn, e completar cada contato custava horas de pesquisa manual.</dd></div>
+          </dl>
+          <div class="stack"><span class="pill">Twenty</span><span class="pill">PostgreSQL</span><span class="pill">Docker</span><span class="pill">Apollo</span><span class="pill">OpenRouter</span><span class="pill">MCP</span></div>
+        </div>
+      </article>
+
+      <article class="project flip" id="agents-esteira">
+        <div class="project-media"><a class="frame" href="/portfolio/img/agents-esteira.webp" target="_blank" rel="noopener"><div class="frame-bar"><span></span><span></span><span></span></div><img src="/portfolio/img/agents-esteira.webp" width="1600" height="1000" loading="lazy" alt="Relato de usuário percorrendo a esteira de agentes até o pull request" data-i18n-alt="ag_alt"></a></div>
+        <div class="project-body">
+          <h3 data-i18n="ag_t">Esteira de agentes</h3>
+          <div class="product-tags"><span class="tag tag-hl" data-i18n="k_internal_products">Uso interno · meus produtos</span><span class="tag" data-i18n="s_in_use">Em uso</span></div>
+          <dl>
+            <div><dt data-i18n="dt_what">O que é</dt><dd data-i18n="ag_what">Widget de feedback embutido nos meus apps. Cada relato vira um ticket, e agentes de IA fazem a triagem, abrem a issue, implementam e validam o pull request; o merge é sempre meu.</dd></div>
+            <div><dt data-i18n="dt_pain">Dor que resolve</dt><dd data-i18n="ag_pain">Cada relato de usuário esperava eu ler, triar e priorizar antes de alguém começar a corrigir, e o problema ficava no ar esse tempo todo.</dd></div>
+          </dl>
+          <div class="stack"><span class="pill">Paperclip</span><span class="pill">TypeScript</span><span class="pill">Hono</span><span class="pill">PostgreSQL</span><span class="pill">Docker</span></div>
+        </div>
+      </article>
+
+      <article class="project" id="mir">
+        <div class="project-media"><a class="frame" href="/portfolio/img/mir.webp" target="_blank" rel="noopener"><div class="frame-bar"><span></span><span></span><span></span></div><img src="/portfolio/img/mir.webp" width="1600" height="1000" loading="lazy" alt="Dashboard do Market Intelligence Radar com dados genéricos" data-i18n-alt="mir_alt"></a></div>
+        <div class="project-body">
+          <h3>Market Intelligence Radar</h3>
+          <div class="product-tags"><span class="tag tag-hl">Open source</span><span class="tag">MIT</span></div>
+          <dl>
+            <div><dt data-i18n="dt_what">O que é</dt><dd data-i18n="mir_what">Versão open source e agnóstica de setor do Morpheus: varre fontes de notícia, extrai pessoas, empresas, negócios e sinais com o LLM de sua escolha, cruza com os contatos do CRM e mostra tudo num dashboard.</dd></div>
+            <div><dt data-i18n="dt_pain">Dor que resolve</dt><dd data-i18n="mir_pain">Monitorar notícias do setor à mão para achar oportunidades comerciais, sem saber quais delas envolvem gente que já está na sua base.</dd></div>
+          </dl>
+          <div class="stack"><span class="pill">Python</span><span class="pill">Next.js</span><span class="pill">PostgreSQL</span><span class="pill">Docker</span><span class="pill">Firecrawl</span></div>
+          <div class="product-links"><a href="https://github.com/guifav/market-intelligence-radar" target="_blank" rel="noopener">GitHub &#8599;</a></div>
+        </div>
+      </article>
+    </section>
+
+    <section>
+      <div class="newsletter-box"><h3 data-i18n="pf_cta_t">Tem um problema parecido?</h3><p data-i18n="pf_cta_d">Conto como eu resolveria e quanto custaria.</p><a href="mailto:guifav-guifav@proton.me" class="btn btn-primary" data-i18n="pf_cta_a">Falar sobre um projeto</a></div>
+    </section>
+
+    <footer><p><a href="/" data-i18n="ft_home">Início</a> &middot; <a href="https://talkwithdata.ai" target="_blank" rel="noopener">TalkWithData</a> &middot; <a href="https://github.com/guifav" target="_blank" rel="noopener">GitHub</a> &middot; <a href="https://linkedin.com/in/guilhermefavaron" target="_blank" rel="noopener">LinkedIn</a> &middot; <a href="https://guilhermefavaron.com.br" target="_blank" rel="noopener">Newsletter</a></p></footer>
+  </div>
+  <script type="application/json" id="i18n-en">{
+    "nav_about": "About",
+    "nav_consulting": "Consulting",
+    "nav_research": "Research",
+    "nav_content": "Content",
+    "nav_portfolio": "Portfolio",
+    "pf_title": "Projects I have led.",
+    "pf_desc": "My own products, systems built for clients and the internal platforms of GRI Institute. I led the development of every one of them. Each project shows what it is, which problem it solves and who uses it. Screens use fictitious data.",
+    "g_products": "My own products",
+    "g_products_d": "Products I founded and run, open to anyone who wants to use them.",
+    "g_clients": "For clients",
+    "g_clients_d": "Custom systems, built for other companies' operations.",
+    "g_gri_d": "I am CTO at GRI Institute, a global real estate and infrastructure think tank with members in more than 100 countries. These are internal platforms the technology team builds and maintains.",
+    "g_tools": "Tools and open source",
+    "g_tools_d": "What I use to run my own businesses, and what I opened for other people to use.",
+    "dt_what": "What it is",
+    "dt_pain": "Problem it solves",
+    "k_market_b2b": "Market product · B2B",
+    "k_market_saas": "Market product · SaaS",
+    "k_b2c": "B2C app",
+    "k_open_model": "Open model",
+    "k_client_igs": "Client · Instituto Ganz Sanchez",
+    "k_client_sbs": "Client · SBS Distribuidora",
+    "k_client_cfo": "Client · financial consultancy",
+    "k_client_group": "Client · business group",
+    "k_internal_gri": "Internal · GRI Institute",
+    "k_internal_mine": "Internal · my companies",
+    "k_internal_products": "Internal · my products",
+    "s_open_beta": "Open beta",
+    "s_prod": "In production",
+    "s_in_force": "In force",
+    "s_in_use": "In use",
+    "s_poc": "Proof of concept",
+    "s_transition": "In transition",
+    "twd_alt": "TalkWithData answering a natural-language question with a number, a chart and the executed SQL",
+    "twd_what": "Platform where a company connects spreadsheets and databases (PostgreSQL, MySQL, Redshift) and asks questions in natural language. Every answer comes with the SQL that produced it, and every number is checked against the query result before it reaches the screen.",
+    "twd_pain": "Teams without an analyst depend on report queues, formulas and pivot tables to answer simple questions about their own business. When an AI answers, nobody knows whether the number is right.",
+    "twd_oss": "GitHub (open-source version) &#8599;",
+    "va_alt": "VirtuAgency.ai with the marketing funnel of a fictitious brand",
+    "va_what": "AI marketing agency for SMB in-house teams. A conversation-led funnel organizes company, positioning, ideas, campaigns and assets, and generates coordinated pieces in eight formats, for one or several brands.",
+    "va_pain": "SMBs without an agency or a large marketing team cannot keep consistent content across channels, and hiring an outside agency is expensive and slow.",
+    "tg_alt": "Tennis Go with a tournament bracket of fictitious players",
+    "tg_what": "Tennis web app with points and ladder rankings, tournaments in several formats, scores confirmed by the opponent, clubs, court booking, lessons and children's profiles managed by a guardian.",
+    "tg_pain": "Tennis apps on the market are too complex for a small group of adults and kids to run a ranking and a tournament, so everything ends up in spreadsheets and WhatsApp groups.",
+    "car_alt": "Caramelo chat with a fictitious conversation in Portuguese",
+    "car_what": "A small Brazilian language model (Gemma 4 E4B with LoRA), tuned on my writing and served on CPU, with an OpenAI-compatible API, a chat app and a CLI. The model, adapter and dataset are published on Hugging Face.",
+    "car_pain": "Companies pay for large, generic models to run repetitive, well-defined tasks. Caramelo is the public proof of Tramline's thesis: in a blind test, a small tuned model beat the base model on the task it was trained for, running without a GPU.",
+    "tin_alt": "Overview of a demo study on the Pesquisas de Cura platform",
+    "tin_t": "Pesquisas de Cura (tinnitus research)",
+    "tin_what": "Platform for a longitudinal, demographic study on tinnitus, not used for diagnosis or treatment: several studies in parallel, forms sent to patients by link, follow-up records, group comparison, statistical export, a WhatsApp channel and health-data handling under Brazil's data protection law (LGPD).",
+    "tin_pain": "Remission and relapse tracking lived in spreadsheets: manual collection, inconsistent data across studies and analysis redone for every new survey.",
+    "sbs_alt": "Quality Management System portal with fictitious procedures",
+    "sbs_t": "Quality Management System portal",
+    "sbs_what": "Portal for quality procedures, with formal, traceable versioning, a PDF viewer, a correlation graph between documents, a pending-items panel, three access profiles and an audit trail.",
+    "sbs_pain": "Procedures were scattered, with no version control and no visibility into which referenced documents did not exist yet.",
+    "cfo_alt": "Financial pre-diagnosis of a fictitious real estate developer with a live score",
+    "cfo_t": "CFO as a service for real estate developers",
+    "cfo_what": "B2B platform for a CFO consultancy serving real estate developers: financial pre-diagnosis through a weighted questionnaire with a live score, a client portal and, in the next phases, AI diagnosis validated by the partners.",
+    "cfo_pain": "The fractional CFO method depended on consultant hours for each client. Turning it into a product lets each consultant serve several developers at once, with the same analysis standard.",
+    "cms_t": "Corporate website with a CMS",
+    "cms_what": "Multilingual corporate website with a CMS, delivered to a business group operating in more than one country so the client can edit the content itself.",
+    "cms_pain": "Every change to text, pages or languages depended on a developer.",
+    "met_alt": "Development flow with people and AI agents, from request to acceptance",
+    "met_t": "Human + AI development methodology",
+    "met_what": "A single document that defines how the technology team works, with people and AI agents in the same flow: scoped issue, branch, merge request, independent review by different AI models, merge by the system owner, deploy and acceptance by the requester.",
+    "met_pain": "There were three competing process documents, deliveries stuck without acceptance and changes reaching production outside the pipeline.",
+    "dw_alt": "Data warehouse architecture: sources, ETL, data contracts and the apps being wired to them",
+    "dw_what": "ETL that loads the data warehouse from the CRM and the platform database and publishes data contracts (engagement, segments, matchmaking, funnel) for the apps. Wiring each app to its contracts is being rolled out.",
+    "dw_pain": "Each app computed the same indicator its own way, and a single metric could have three different numbers.",
+    "cul_alt": "360 profile of a fictitious contact in Culkin",
+    "cul_what": "Data lake that unified Salesforce, platform databases, Marketing Cloud, GA4, Search Console and ads, enriched about 310 thousand contacts with AI and exposed everything through APIs and MCP, for natural-language questions. In November 2026 the enrichment started being rebuilt in the data warehouse, and Culkin remains the source of analytics data.",
+    "cul_pain": "Each member's data was fragmented across several systems, and every app rebuilt the contact profile on its own.",
+    "dsh_alt": "Dashs generating a dashboard from a natural-language request",
+    "dsh_what": "Platform to create dashboards and mini-apps from a natural-language request, then publish, version and share them with access control, connected to live data over MCP.",
+    "dsh_pain": "Each division's analyses lived on laptops, in Drive and in attachments, with no shared place or permissions, and every new visualization went into the technology team's queue.",
+    "prism_alt": "Marketing Hub generating a marketing asset from source material",
+    "prism_what": "Platform that turns source material (PDF, audio, video, link) into 12 kinds of marketing assets, such as articles, whitepapers, posts, emails, ads and images, in the brand's voice, with audience clusters for campaigns.",
+    "prism_pain": "Each event and division produced its assets by hand, and marketing needed curated audiences without direct database access.",
+    "del_alt": "Delorean article queue with content gap and fact-check score",
+    "del_what": "Pipeline that finds gaps between what the audience searches for and what the website offers, researches primary sources, writes, fact-checks and translates the article, which goes through human review before publishing.",
+    "del_pain": "The audience searched for topics the news portal did not cover, and writing each story by hand could not keep up with the divisions' demand.",
+    "mor_alt": "Morpheus market signals with fictitious companies and people",
+    "mor_what": "Daily radar that collects news from industry sources, extracts people, companies, deals and signals with AI, enriches the contacts, matches them against the CRM and ranks them by ideal customer profile.",
+    "mor_pain": "Acquisitions, job changes and fundraisings of members and prospects reached the commercial team late, if at all.",
+    "sal_alt": "Evaluation of a fictitious sales call in Sales Coach",
+    "sal_what": "Sales intelligence hub that records, transcribes and evaluates calls with an LLM rubric, offers coaching and voice practice and builds a briefing before every meeting from the CRM and the data lake.",
+    "sal_pain": "Sales reps went into calls without a unified view of the client and came out without structured feedback on what worked.",
+    "cs_alt": "Customer Success KPI hub with fictitious data",
+    "cs_what": "Customer Success portal with dashboards for renewal, retention, event engagement, onboarding and customer effort, by account manager and by division.",
+    "cs_pain": "Member portfolio management was scattered across the CRM, with no view of renewal, risk and engagement per owner.",
+    "con_alt": "Concierge Console with a fictitious WhatsApp conversation",
+    "con_what": "Messaging console on the official WhatsApp channel, with trigger-based campaigns, an operator panel, translation and a conversational agent, integrated with the CRM.",
+    "con_pain": "Member relations over WhatsApp had no official channel and no CRM record, and rules such as sending window, language and templates were locked in code.",
+    "churn_t": "Churn prediction",
+    "churn_what": "Prototype risk score for paying members leaving within a 90-day horizon, with a RAG agent that explains each account's risk to the Customer Success team. Built with MLOps practices: data versioning, experiment tracking, agent evaluation and guardrails. AUC of 0.97 on a randomly split test set; temporal validation, which measures actual forecasting, is still pending.",
+    "churn_pain": "The Customer Success team did not know who was about to leave or why, and the previous risk score was rarely right.",
+    "crm_alt": "CRM with a list of fictitious prospects enriched by AI",
+    "crm_t": "CRM with AI prospecting",
+    "crm_what": "Open-source CRM (Twenty) that I host and extended with my own automations: capture of new leads, enrichment of people and companies, AI-built lists and MCP access for my agents.",
+    "crm_pain": "Leads from my business ventures were scattered across email, spreadsheets and LinkedIn, and completing each contact took hours of manual research.",
+    "ag_alt": "A user report moving through the agent pipeline up to the pull request",
+    "ag_t": "Agent pipeline",
+    "ag_what": "Feedback widget embedded in my apps. Each report becomes a ticket, and AI agents triage it, open the issue, implement and validate the pull request; the merge is always mine.",
+    "ag_pain": "Every user report waited for me to read, triage and prioritize it before anyone started fixing it, and the problem stayed live the whole time.",
+    "mir_alt": "Market Intelligence Radar dashboard with generic data",
+    "mir_what": "Open-source, industry-agnostic version of Morpheus: it scans news sources, extracts people, companies, deals and signals with the LLM of your choice, matches them against your CRM contacts and shows everything in a dashboard.",
+    "mir_pain": "Monitoring industry news by hand to find commercial opportunities, without knowing which of them involve people already in your base.",
+    "pf_cta_t": "Have a similar problem?",
+    "pf_cta_d": "I will tell you how I would solve it and what it would cost.",
+    "pf_cta_a": "Talk about a project",
+    "ft_home": "Home"
+  }</script>
+  <script src="/assets/site.js"></script>
+</body>
+</html>

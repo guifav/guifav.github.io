@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>GRI Dashboards - GRI Institute</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --background:#ffffff; --foreground:#0a0a0a; --card:#ffffff; --primary:#171717; --primary-fg:#fafafa;
+    --muted:#f5f5f5; --muted-fg:#737373; --border:#e5e5e5; --radius:10px;
+    --gri-ink:#1a1a2e; --gri-accent:#e94560;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1440px;height:900px;overflow:hidden;background:var(--background);color:var(--foreground);
+    font-family:Inter,ui-sans-serif,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:14px;line-height:1.45}
+  svg.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+  svg.i.s3{width:12px;height:12px} svg.i.s35{width:14px;height:14px} svg.i.s5{width:20px;height:20px}
+
+  /* App shell */
+  .top{height:56px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 24px}
+  .logo{display:flex;align-items:center;gap:8px;font-size:18px;font-weight:600;letter-spacing:-.01em}
+  .nav{display:flex;align-items:center;gap:4px}
+  .nav a{display:flex;align-items:center;gap:4px;padding:6px 12px;font-size:14px;color:var(--muted-fg);text-decoration:none}
+  .iconbtn{width:36px;height:36px;border-radius:6px;display:flex;align-items:center;justify-content:center}
+  .avatar{width:32px;height:32px;border-radius:50%;background:var(--muted);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;margin-left:4px}
+
+  main{padding:24px;height:844px}
+  .head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+  .head .l{display:flex;align-items:center;gap:12px}
+  .head h1{font-size:18px;font-weight:600;display:flex;align-items:center;gap:8px;line-height:1.4}
+  .head p{font-size:14px;color:var(--muted-fg)}
+  .btn-primary{height:32px;padding:0 12px 0 10px;border-radius:6px;background:var(--primary);color:var(--primary-fg);font-size:14px;font-weight:500;display:inline-flex;align-items:center;gap:6px}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;height:708px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:0 1px 2px rgba(0,0,0,.05);display:flex;flex-direction:column;overflow:hidden}
+
+  /* Chat */
+  .msgs{flex:1;padding:20px 16px;display:flex;flex-direction:column;gap:16px;overflow:hidden}
+  .row{display:flex}
+  .row.u{justify-content:flex-end}
+  .bubble{max-width:85%;border-radius:8px;padding:10px 16px;font-size:14px;line-height:1.55}
+  .u .bubble{background:var(--primary);color:var(--primary-fg)}
+  .a .bubble{background:var(--muted)}
+  .tools{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+  .tbadge{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--border);background:#fff;border-radius:999px;padding:2px 8px;font-size:12px;font-weight:500;color:var(--foreground)}
+  .tbadge svg{color:var(--muted-fg)}
+  .bubble ul{margin:6px 0 2px 18px}
+  .bubble li{margin:2px 0}
+  .bubble b{font-weight:600}
+  .inputarea{border-top:1px solid var(--border);padding:12px;display:flex;flex-direction:column;gap:8px}
+  .ctrls{display:flex;align-items:center;gap:12px}
+  .outline-sm{height:32px;border:1px solid var(--border);border-radius:6px;padding:0 10px;display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:500;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  .dbtoggle{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:6px;font-size:12px;font-weight:500;background:var(--muted);color:var(--muted-fg)}
+  .files{display:flex;gap:6px}
+  .fchip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:6px;background:var(--muted);font-size:12px}
+  .form{display:flex;align-items:center;gap:8px}
+  .ghost{width:36px;height:36px;border-radius:6px;display:flex;align-items:center;justify-content:center;color:var(--foreground)}
+  .inp{flex:1;height:36px;border:1px solid var(--border);border-radius:6px;padding:0 12px;display:flex;align-items:center;font-size:14px;color:var(--muted-fg);box-shadow:0 1px 2px rgba(0,0,0,.04)}
+  .send{width:36px;height:36px;border-radius:6px;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;opacity:.5}
+
+  /* Generated dashboard (iframe content) */
+  .dash{flex:1;background:#f6f6f9;display:flex;flex-direction:column;font-size:12px;color:#1f2133}
+  .dh{background:var(--gri-ink);color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:space-between}
+  .dh h2{font-size:16px;font-weight:700;letter-spacing:-.01em}
+  .dh .s{font-size:11px;color:#a9abc4;margin-top:1px}
+  .dh .ts{font-size:10.5px;color:#a9abc4;display:flex;align-items:center;gap:6px}
+  .dh .ts i{width:6px;height:6px;border-radius:50%;background:#3ddc97;display:block}
+  .db{padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .kpi{background:#fff;border-radius:8px;padding:8px 12px;border:1px solid #ebebf2;border-top:3px solid var(--gri-ink)}
+  .kpi.hl{border-top-color:var(--gri-accent)}
+  .kpi .k{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#6b6d85;font-weight:600}
+  .kpi .v{font-size:20px;font-weight:700;margin-top:2px;letter-spacing:-.02em;color:var(--gri-ink)}
+  .kpi .d{font-size:10.5px;color:#1f9d63;font-weight:600}
+  .kpi .d.n{color:#6b6d85;font-weight:500}
+  .panel{background:#fff;border-radius:8px;border:1px solid #ebebf2;padding:10px 14px}
+  .panel h3{font-size:12px;font-weight:700;color:var(--gri-ink);margin-bottom:6px;display:flex;justify-content:space-between;align-items:baseline}
+  .panel h3 span{font-size:10px;font-weight:500;color:#8b8da3}
+  .r2{display:grid;grid-template-columns:1.45fr 1fr;gap:12px}
+  .hb{display:flex;flex-direction:column;gap:5px}
+  .hbr{display:grid;grid-template-columns:74px 1fr 40px;align-items:center;gap:8px;font-size:11px}
+  .hbr .n{color:#4a4c63}
+  .hbr .t{height:12px;background:#f0f0f5;border-radius:3px;overflow:hidden}
+  .hbr .t i{display:block;height:100%;background:var(--gri-ink);border-radius:3px}
+  .hbr .t i.ac{background:var(--gri-accent)}
+  .hbr .val{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+  .donut{display:flex;align-items:center;gap:14px}
+  .leg{display:flex;flex-direction:column;gap:6px;font-size:11px}
+  .leg div{display:flex;align-items:center;gap:6px}
+  .leg i{width:8px;height:8px;border-radius:2px;display:block}
+  .leg b{font-weight:600;margin-left:auto;padding-left:8px;font-variant-numeric:tabular-nums}
+  table{width:100%;border-collapse:collapse;font-size:11px}
+  th{text-align:left;font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;color:#8b8da3;font-weight:600;padding:0 6px 6px;border-bottom:1px solid #ebebf2}
+  td{padding:5px 6px;border-bottom:1px solid #f2f2f6;font-variant-numeric:tabular-nums}
+  tr:last-child td{border-bottom:none}
+  td.num,th.num{text-align:right}
+  .pill{display:inline-block;padding:1px 7px;border-radius:999px;font-size:10px;font-weight:600}
+  .p-re{background:#ececf4;color:var(--gri-ink)}
+  .p-in{background:#fde8ec;color:#c22d4b}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="i-dash" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m16.24 7.76-1.804 5.411a2 2 0 0 1-1.265 1.265L7.76 16.24l1.804-5.411a2 2 0 0 1 1.265-1.265z"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/></symbol>
+  <symbol id="i-save" viewBox="0 0 24 24"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></symbol>
+  <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
+  <symbol id="i-db" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></symbol>
+  <symbol id="i-sheet" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M8 13h2"/><path d="M14 13h2"/><path d="M8 17h2"/><path d="M14 17h2"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+</svg>
+
+<div class="top">
+  <div class="logo"><svg class="i s5"><use href="#i-dash"/></svg>GRI Dashboards</div>
+  <div class="nav">
+    <a><svg class="i"><use href="#i-home"/></svg>Início</a>
+    <a><svg class="i"><use href="#i-compass"/></svg>Explorar</a>
+    <a><svg class="i"><use href="#i-help"/></svg>Guia</a>
+    <a><svg class="i"><use href="#i-shield"/></svg>Admin</a>
+    <div class="iconbtn"><svg class="i"><use href="#i-sun"/></svg></div>
+    <div class="avatar">LC</div>
+  </div>
+</div>
+
+<main>
+  <div class="head">
+    <div class="l">
+      <div class="iconbtn"><svg class="i"><use href="#i-left"/></svg></div>
+      <div>
+        <h1><svg class="i s5"><use href="#i-spark"/></svg>AI Dashboard Builder</h1>
+        <p>Describe the dashboard you want and AI will build it with real data</p>
+      </div>
+    </div>
+    <div class="btn-primary"><svg class="i"><use href="#i-save"/></svg>Save Dashboard</div>
+  </div>
+
+  <div class="grid">
+    <!-- Chat panel -->
+    <div class="card">
+      <div class="msgs">
+        <div class="row u"><div class="bubble">Monte um dashboard de participação em eventos de 2026 por divisão: total de participantes, taxa de check-in, perfil do público e os eventos com maior público.</div></div>
+        <div class="row a"><div class="bubble">
+          <div class="tools">
+            <span class="tbadge"><svg class="i s3"><use href="#i-wrench"/></svg>events list</span>
+            <span class="tbadge"><svg class="i s3"><use href="#i-wrench"/></svg>event funnel</span>
+            <span class="tbadge"><svg class="i s3"><use href="#i-wrench"/></svg>event report</span>
+            <span class="tbadge"><svg class="i s3"><use href="#i-wrench"/></svg>base explorer composition</span>
+          </div>
+          Pronto. Cruzei a lista de eventos do ano com o funil de inscrição e a composição do público. O dashboard tem:
+          <ul>
+            <li>4 indicadores no topo, com a variação contra 2025;</li>
+            <li>participantes por divisão e perfil do público;</li>
+            <li>a tabela dos eventos com maior público e o check-in de cada um.</li>
+          </ul>
+        </div></div>
+        <div class="row u"><div class="bubble">Destaque as divisões de infraestrutura na cor de acento e coloque a planilha de metas do comitê ao lado do realizado.</div></div>
+        <div class="row a"><div class="bubble">
+          <div class="tools">
+            <span class="tbadge"><svg class="i s3"><use href="#i-wrench"/></svg>event funnel</span>
+          </div>
+          Feito. <b>Infra Brazil</b> e <b>Infra Latam</b> aparecem em vermelho no ranking e na tabela, e o KPI de participantes agora mostra o percentual da meta anual lida de <b>metas-eventos-2026.xlsx</b>. A taxa de check-in ficou em 78,6%, acima da meta de 75%.
+        </div></div>
+      </div>
+      <div class="inputarea">
+        <div class="ctrls">
+          <span class="outline-sm"><svg class="i s35"><use href="#i-db"/></svg>Data Sources (3/3)<svg class="i s3"><use href="#i-down"/></svg></span>
+          <span class="dbtoggle"><svg class="i s3"><use href="#i-db"/></svg>Database</span>
+        </div>
+        <div class="files"><span class="fchip"><svg class="i s3"><use href="#i-sheet"/></svg>metas-eventos-2026.xlsx<svg class="i s3" style="margin-left:2px;color:#737373"><use href="#i-x"/></svg></span></div>
+        <div class="form">
+          <div class="ghost"><svg class="i"><use href="#i-clip"/></svg></div>
+          <div class="inp">Describe the dashboard you want...</div>
+          <div class="send"><svg class="i"><use href="#i-send"/></svg></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Preview panel: generated dashboard -->
+    <div class="card">
+      <div class="dash">
+        <div class="dh">
+          <div>
+            <h2>Participação em Eventos · 2026</h2>
+            <div class="s">Real Estate e Infraestrutura · todas as divisões</div>
+          </div>
+          <div class="ts"><i></i>Atualizado em 06/11/2026, 09:30</div>
+        </div>
+        <div class="db">
+          <div class="kpis">
+            <div class="kpi hl"><div class="k">Participantes</div><div class="v">12.480</div><div class="d">83% da meta anual</div></div>
+            <div class="kpi"><div class="k">Check-in</div><div class="v">78,6%</div><div class="d">+3,1 p.p. vs 2025</div></div>
+            <div class="kpi"><div class="k">Eventos realizados</div><div class="v">42</div><div class="d n">8 até dezembro</div></div>
+            <div class="kpi"><div class="k">NPS médio</div><div class="v">72</div><div class="d">+5 vs 2025</div></div>
+          </div>
+
+          <div class="r2">
+            <div class="panel">
+              <h3>Participantes por divisão <span>jan–out</span></h3>
+              <div class="hb">
+                <div class="hbr"><span class="n">RE Brazil</span><span class="t"><i style="width:100%"></i></span><span class="val">3.120</span></div>
+                <div class="hbr"><span class="n">Infra Brazil</span><span class="t"><i class="ac" style="width:82%"></i></span><span class="val">2.560</span></div>
+                <div class="hbr"><span class="n">RE Europe</span><span class="t"><i style="width:61%"></i></span><span class="val">1.904</span></div>
+                <div class="hbr"><span class="n">RE Latam</span><span class="t"><i style="width:52%"></i></span><span class="val">1.622</span></div>
+                <div class="hbr"><span class="n">Infra Latam</span><span class="t"><i class="ac" style="width:45%"></i></span><span class="val">1.398</span></div>
+                <div class="hbr"><span class="n">RE India</span><span class="t"><i style="width:33%"></i></span><span class="val">1.031</span></div>
+                <div class="hbr"><span class="n">GCC</span><span class="t"><i style="width:27%"></i></span><span class="val">845</span></div>
+              </div>
+            </div>
+            <div class="panel">
+              <h3>Perfil do público <span>% dos participantes</span></h3>
+              <div class="donut">
+                <svg width="100" height="100" viewBox="0 0 42 42">
+                  <circle cx="21" cy="21" r="15.915" fill="none" stroke="#f0f0f5" stroke-width="6"/>
+                  <circle cx="21" cy="21" r="15.915" fill="none" stroke="#1a1a2e" stroke-width="6" stroke-dasharray="34 66" stroke-dashoffset="25"/>
+                  <circle cx="21" cy="21" r="15.915" fill="none" stroke="#e94560" stroke-width="6" stroke-dasharray="22 78" stroke-dashoffset="-9"/>
+                  <circle cx="21" cy="21" r="15.915" fill="none" stroke="#4b5bd6" stroke-width="6" stroke-dasharray="18 82" stroke-dashoffset="-31"/>
+                  <circle cx="21" cy="21" r="15.915" fill="none" stroke="#8f93b8" stroke-width="6" stroke-dasharray="14 86" stroke-dashoffset="-49"/>
+                  <circle cx="21" cy="21" r="15.915" fill="none" stroke="#cfd1e3" stroke-width="6" stroke-dasharray="12 88" stroke-dashoffset="-63"/>
+                  <text x="21" y="21" text-anchor="middle" font-size="6.2" font-weight="700" fill="#1a1a2e" font-family="Inter">5</text>
+                  <text x="21" y="26" text-anchor="middle" font-size="2.6" fill="#8b8da3" font-family="Inter">perfis</text>
+                </svg>
+                <div class="leg">
+                  <div><i style="background:#1a1a2e"></i>Investidores<b>34%</b></div>
+                  <div><i style="background:#e94560"></i>Incorporadores<b>22%</b></div>
+                  <div><i style="background:#4b5bd6"></i>Consultorias<b>18%</b></div>
+                  <div><i style="background:#8f93b8"></i>Setor público<b>14%</b></div>
+                  <div><i style="background:#cfd1e3"></i>Outros<b>12%</b></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h3>Check-in mensal <span>% dos inscritos · meta 75%</span></h3>
+            <svg width="100%" height="96" viewBox="0 0 640 96" style="display:block">
+              <g font-family="Inter" font-size="9" fill="#8b8da3">
+                <line x1="28" x2="636" y1="8.0" y2="8.0" stroke="#f0f0f5"/><text x="22" y="11" text-anchor="end">90</text>
+                <line x1="28" x2="636" y1="33.0" y2="33.0" stroke="#f0f0f5"/><text x="22" y="36" text-anchor="end">80</text>
+                <line x1="28" x2="636" y1="57.9" y2="57.9" stroke="#f0f0f5"/><text x="22" y="61" text-anchor="end">70</text>
+                <line x1="28" x2="636" y1="45.4" y2="45.4" stroke="#e94560" stroke-dasharray="4 4" stroke-opacity=".55"/>
+                <text x="44" y="92">jan</text><text x="108" y="92">fev</text><text x="172" y="92">mar</text><text x="236" y="92">abr</text><text x="300" y="92">mai</text><text x="364" y="92">jun</text><text x="428" y="92">jul</text><text x="492" y="92">ago</text><text x="556" y="92">set</text><text x="616" y="92">out</text>
+              </g>
+              <path d="M50 53.2 L114 47.8 L178 43.1 L242 45.4 L306 36.1 L370 33.0 L434 38.4 L498 30.6 L562 26.7 L626 24.4 L626 75.1 L50 75.1 Z" fill="#1a1a2e" fill-opacity=".06"/>
+              <path d="M50 53.2 L114 47.8 L178 43.1 L242 45.4 L306 36.1 L370 33.0 L434 38.4 L498 30.6 L562 26.7 L626 24.4" fill="none" stroke="#1a1a2e" stroke-width="2.2"/>
+              <path d="M50 62.6 L114 57.9 L178 54.8 L242 50.1 L306 47.0 L370 43.1 L434 40.8 L498 37.6 L562 35.3 L626 31.4" fill="none" stroke="#e94560" stroke-width="2.2"/>
+              <g fill="#fff" stroke-width="2">
+                <circle cx="626" cy="24.4" r="3.2" stroke="#1a1a2e"/><circle cx="626" cy="31.4" r="3.2" stroke="#e94560"/>
+              </g>
+            </svg>
+            <div style="display:flex;gap:14px;font-size:10.5px;color:#4a4c63;margin-top:4px">
+              <span style="display:flex;align-items:center;gap:5px"><i style="width:10px;height:2px;background:#1a1a2e;display:block"></i>Real Estate</span>
+              <span style="display:flex;align-items:center;gap:5px"><i style="width:10px;height:2px;background:#e94560;display:block"></i>Infraestrutura</span>
+            </div>
+          </div>
+
+          <div class="panel">
+            <h3>Eventos com maior público <span>top 3</span></h3>
+            <table>
+              <thead><tr><th>Evento</th><th>Divisão</th><th>Data</th><th class="num">Participantes</th><th class="num">Check-in</th></tr></thead>
+              <tbody>
+                <tr><td>Fórum de Concessões e Logística</td><td><span class="pill p-in">Infra Brazil</span></td><td>12/05</td><td class="num">684</td><td class="num">82%</td></tr>
+                <tr><td>Encontro de Incorporação Residencial</td><td><span class="pill p-re">RE Brazil</span></td><td>24/03</td><td class="num">612</td><td class="num">79%</td></tr>
+                <tr><td>Comitê de Data Centers e Energia</td><td><span class="pill p-in">Infra Latam</span></td><td>18/08</td><td class="num">455</td><td class="num">84%</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+</body>
+</html>
