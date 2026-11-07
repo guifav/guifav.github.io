@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="mockup-viewport" content="1440x900">
-<title>GRI Data Warehouse — arquitetura</title>
+<title>Data warehouse — arquitetura</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -109,7 +109,7 @@
 
 <div class="hdr">
   <div>
-    <div class="eyebrow mono">Arquitetura · GRI Data Warehouse</div>
+    <div class="eyebrow mono">Arquitetura · Data warehouse</div>
     <h1>Um contrato de dados para cada aplicação</h1>
     <p class="lead">ETL versionado carrega o Redshift a partir do CRM e do banco da plataforma e publica contratos de dados com dono, teste e portão de qualidade. A ligação de cada aplicação ao seu contrato está em implantação.</p>
   </div>
@@ -181,10 +181,10 @@
 <!-- Governança -->
 <div class="gov">
   <div class="gl"><div class="eyebrow mono">Governança</div><div class="t">Como o dado chega confiável</div></div>
-  <div class="gi"><div class="ib"><svg class="i"><use href="#merge"/></svg></div><div><div class="t">Toda mudança por MR</div><div class="s">revisão independente por modelos de IA diferentes antes do merge</div></div></div>
-  <div class="gi"><div class="ib"><svg class="i"><use href="#lineage"/></svg></div><div><div class="t">Linhagem no CI</div><div class="s">dicionário e linhagem de cada objeto checados no pipeline</div></div></div>
-  <div class="gi"><div class="ib"><svg class="i"><use href="#flask"/></svg></div><div><div class="t">Paridade provada</div><div class="s">migração só entra com conferência contra o sistema de origem</div></div></div>
-  <div class="gi"><div class="ib"><svg class="i"><use href="#key"/></svg></div><div><div class="t">Acesso mínimo</div><div class="s">cada consumidor lê só o contrato publicado, com grant próprio</div></div></div>
+  <div class="gi"><div class="ib"><svg class="i"><use href="#merge"/></svg></div><div><div class="t">Um número por indicador</div><div class="s">cada métrica tem uma definição oficial, usada por todas as aplicações</div></div></div>
+  <div class="gi"><div class="ib"><svg class="i"><use href="#lineage"/></svg></div><div><div class="t">Origem rastreável</div><div class="s">cada número mostra de onde veio e como foi calculado</div></div></div>
+  <div class="gi"><div class="ib"><svg class="i"><use href="#flask"/></svg></div><div><div class="t">Migração sem surpresa</div><div class="s">um cálculo novo só substitui o antigo depois de bater com ele</div></div></div>
+  <div class="gi"><div class="ib"><svg class="i"><use href="#key"/></svg></div><div><div class="t">Dado protegido</div><div class="s">cada aplicação vê só o que precisa, com acesso auditado</div></div></div>
 </div>
 
 <script>

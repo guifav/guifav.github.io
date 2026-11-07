@@ -8,13 +8,13 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  :root{--bg:#0a0a0a;--card:#121212;--card2:#171717;--line:#262626;--fg:#fafafa;--mut:#a3a3a3;--dim:#737373;--acc:#FFBE00;
-    --bronze:#c98a53;--silver:#c3cad4;--gold:#FFBE00}
+  :root{--bg:#f6f4ef;--card:#ffffff;--card2:#faf8f4;--line:#e4e0d6;--fg:#1c1917;--mut:#57534e;--dim:#8a847b;--acc:#a87800;
+    --bronze:#b06d36;--silver:#7d8794;--gold:#d9a100}
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{width:1440px;height:900px;overflow:hidden}
   body{background:var(--bg);color:var(--fg);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;position:relative;
-    background-image:radial-gradient(circle at 1px 1px,#1c1c1c 1px,transparent 0);background-size:24px 24px}
-  .glow{position:absolute;left:760px;top:200px;width:560px;height:560px;border-radius:50%;background:radial-gradient(closest-side,rgba(255,190,0,.10),rgba(255,190,0,0));pointer-events:none}
+    background-image:radial-gradient(circle at 1px 1px,#e2ded3 1px,transparent 0);background-size:24px 24px}
+  .glow{position:absolute;left:760px;top:200px;width:560px;height:560px;border-radius:50%;background:radial-gradient(closest-side,rgba(255,190,0,.16),rgba(255,190,0,0));pointer-events:none}
   .mono{font-family:"JetBrains Mono",ui-monospace,monospace}
   svg.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
 
@@ -33,41 +33,41 @@
   .srcs{display:grid;grid-template-columns:1fr 1fr;gap:7px}
   .src{display:flex;align-items:center;gap:8px;height:52px;padding:0 10px;background:var(--card);border:1px solid var(--line);border-radius:10px}
   .src .t{font-size:12px;font-weight:500;line-height:1.2}
-  .src.ext{border-style:dashed;border-color:#3a3a3a}
-  .ib{width:26px;height:26px;border-radius:7px;background:#1d1d1d;border:1px solid #2a2a2a;display:flex;align-items:center;justify-content:center;color:#d4d4d4;flex-shrink:0}
+  .src.ext{border-style:dashed;border-color:#cfc9bb}
+  .ib{width:26px;height:26px;border-radius:7px;background:#f3f0e9;border:1px solid #e4e0d6;display:flex;align-items:center;justify-content:center;color:#57534e;flex-shrink:0}
   .ib svg.i{width:14px;height:14px}
 
-  .med{height:100%;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;position:relative;overflow:hidden}
+  .med{height:100%;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;box-shadow:0 1px 2px rgba(28,25,23,.04),0 12px 30px -18px rgba(28,25,23,.18);display:flex;flex-direction:column;position:relative;overflow:hidden}
   .med::before{content:"";position:absolute;left:0;top:0;right:0;height:3px;background:var(--m)}
   .med .badge{display:inline-flex;align-items:center;gap:8px;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--m)}
   .med .badge i{width:10px;height:10px;border-radius:50%;background:var(--m);box-shadow:0 0 12px var(--m)}
   .med h3{font-size:18px;font-weight:600;letter-spacing:-.01em;margin-top:8px}
   .med .sub{font-size:12px;color:var(--mut);margin-top:3px;line-height:1.45}
-  .step{display:flex;gap:10px;align-items:flex-start;padding:11px 0;border-top:1px dashed #262626}
+  .step{display:flex;gap:10px;align-items:flex-start;padding:11px 0;border-top:1px dashed #e4e0d6}
   .step:first-of-type{margin-top:12px}
   .step svg{color:var(--m);margin-top:1px}
   .step .t{font-size:13px;font-weight:500;line-height:1.3}
   .step .s{font-size:11px;color:var(--dim);margin-top:2px;line-height:1.4}
-  .med .foot{margin-top:auto;font-size:11px;color:var(--mut);border:1px solid #262626;background:var(--card2);border-radius:9px;padding:9px 11px;line-height:1.4}
-  .gold{border-color:rgba(255,190,0,.55);box-shadow:0 0 0 1px rgba(255,190,0,.08),0 20px 60px -20px rgba(255,190,0,.28)}
-  .gold .foot{border-color:rgba(255,190,0,.4);background:rgba(255,190,0,.07);color:#e9e2cf}
+  .med .foot{margin-top:auto;font-size:11px;color:var(--mut);border:1px solid #ebe7de;background:var(--card2);border-radius:9px;padding:9px 11px;line-height:1.4}
+  .gold{border-color:rgba(217,161,0,.65);box-shadow:0 0 0 1px rgba(217,161,0,.12),0 20px 50px -20px rgba(217,161,0,.45)}
+  .gold .foot{border-color:rgba(217,161,0,.45);background:rgba(255,190,0,.12);color:#5b4a14}
   .gold .foot b{color:var(--acc);font-weight:600}
 
   .use{display:flex;align-items:center;gap:10px;height:104px;padding:0 14px;background:var(--card);border:1px solid var(--line);border-radius:12px;margin-bottom:17px}
   .use:last-child{margin-bottom:0}
-  .use .ib{width:32px;height:32px;border-radius:9px;color:var(--acc);background:rgba(255,190,0,.08);border-color:rgba(255,190,0,.28)}
+  .use .ib{width:32px;height:32px;border-radius:9px;color:var(--acc);background:rgba(255,190,0,.14);border-color:rgba(217,161,0,.35)}
   .use .ib svg.i{width:16px;height:16px}
   .use .t{font-size:14px;font-weight:600}
   .use .s{font-size:11.5px;color:var(--dim);margin-top:3px;line-height:1.4}
 
-  .band{position:absolute;left:56px;right:56px;top:722px;height:132px;border:1px solid var(--line);border-radius:16px;background:rgba(18,18,18,.85);display:grid;grid-template-columns:200px repeat(4,1fr)}
+  .band{position:absolute;left:56px;right:56px;top:722px;height:132px;border:1px solid var(--line);border-radius:16px;background:#ffffff;display:grid;grid-template-columns:200px repeat(4,1fr)}
   .band .gl{padding:20px;border-right:1px solid var(--line);display:flex;flex-direction:column;justify-content:center}
   .band .gl .t{font-size:16px;font-weight:600;margin-top:6px;line-height:1.3}
-  .gi{padding:20px;display:flex;gap:12px;align-items:flex-start;border-right:1px solid #1f1f1f}
+  .gi{padding:20px;display:flex;gap:12px;align-items:flex-start;border-right:1px solid #efebe3}
   .gi:last-child{border-right:none}
   .gi .ib{width:30px;height:30px;color:var(--acc)}
   .gi .t{font-size:13.5px;font-weight:500}
-  .gi .s{font-size:11.5px;line-height:1.45;margin-top:4px;color:#8a8a8a}
+  .gi .s{font-size:11.5px;line-height:1.45;margin-top:4px;color:var(--dim)}
 
   #wires{position:absolute;left:0;top:0;width:1440px;height:900px;pointer-events:none}
 </style>
@@ -107,8 +107,8 @@
 <div class="glow"></div>
 <svg id="wires" viewBox="0 0 1440 900">
   <defs>
-    <linearGradient id="w" x1="0" x2="1"><stop offset="0" stop-color="#FFBE00" stop-opacity=".12"/><stop offset="1" stop-color="#FFBE00" stop-opacity=".9"/></linearGradient>
-    <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 10 5 0 10z" fill="#FFBE00"/></marker>
+    <linearGradient id="w" x1="0" x2="1"><stop offset="0" stop-color="#d9a100" stop-opacity=".2"/><stop offset="1" stop-color="#d9a100" stop-opacity="1"/></linearGradient>
+    <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 10 5 0 10z" fill="#d9a100"/></marker>
   </defs>
   <g stroke="url(#w)" stroke-width="2" fill="none" marker-end="url(#ah)">
     <path d="M478 449 H506"/>
@@ -116,9 +116,9 @@
     <path d="M958 449 H986"/>
     <path d="M1214 449 H1242"/>
   </g>
-  <path d="M1100 683 V703 H267 V689" stroke="#FFBE00" stroke-opacity=".45" stroke-width="1.5" stroke-dasharray="4 5" fill="none" marker-end="url(#ah)"/>
-  <rect x="514" y="693" width="320" height="20" rx="10" fill="#0a0a0a"/>
-  <text x="674" y="707" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10.5" fill="#bfa24a" letter-spacing=".08em">REESCRITA: SCORES E SINAIS VOLTAM À ORIGEM</text>
+  <path d="M1100 683 V703 H267 V689" stroke="#b88a00" stroke-opacity=".6" stroke-width="1.5" stroke-dasharray="4 5" fill="none" marker-end="url(#ah)"/>
+  <rect x="514" y="693" width="320" height="20" rx="10" fill="#f6f4ef"/>
+  <text x="674" y="707" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="10.5" fill="#8a6a00" letter-spacing=".08em">REESCRITA: SCORES E SINAIS VOLTAM À ORIGEM</text>
 </svg>
 
 <div class="hdr">
