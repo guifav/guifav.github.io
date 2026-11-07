@@ -117,4 +117,19 @@
     window.addEventListener('resize', render);
     render();
   }
+
+  // Filtro do portfólio por área: mostra só o grupo escolhido; "Todos" mostra tudo.
+  var fbtns = document.querySelectorAll('.pf-filter button');
+  if (fbtns.length) {
+    var groups = document.querySelectorAll('[data-group]');
+    var applyFilter = function (f) {
+      fbtns.forEach(function (b) { b.setAttribute('aria-pressed', b.getAttribute('data-filter') === f ? 'true' : 'false'); });
+      groups.forEach(function (g) { g.hidden = f !== 'all' && g.getAttribute('data-group') !== f; });
+    };
+    fbtns.forEach(function (b) {
+      b.addEventListener('click', function () { applyFilter(b.getAttribute('data-filter')); });
+    });
+    // Link direto para um projeto (#slug) sempre mostra a página inteira.
+    window.addEventListener('hashchange', function () { applyFilter('all'); });
+  }
 })();
