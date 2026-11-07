@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>TalkWithData - chat</title>
+<!--
+  Recriação da tela de conversa do TalkWithData como o código da main renderiza hoje
+  (não o redesign #831, ainda aberto):
+  - casca: src/components/dashboard/sidebar.tsx, workspace-switcher.tsx, conversation-tree.tsx,
+    recent-filter.tsx, brand-mark.tsx (monograma TWD), src/app/globals.css (tema escuro);
+  - conversa: src/app/dashboard/chat/page.tsx (caminho Assunto > conversa, ChatSourcesPanel,
+    composer), chat-message.tsx (bolha do usuário com hora, prosa, "How I got here",
+    SQL / view query, copiar e salvar como artefato), turn-checklist.tsx,
+    results-block.tsx (barra com Barras/Pizza/CSV, gráfico, tabela), visual-chart.tsx
+    (barras horizontais, eixo com "mi"), virtualized-table.tsx.
+  Dados 100% fictícios.
+-->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: oklch(0.145 0 0);
+    --surface: oklch(0.185 0 0);
+    --border: oklch(1 0 0 / 12%);
+    --text: oklch(0.985 0 0);
+    --text2: oklch(0.65 0 0);
+    --accent: oklch(0.922 0 0);
+    --accent-fg: oklch(0.205 0 0);
+    --brand: #f5b400;
+    --chart-1: oklch(0.72 0.14 200);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 900px; overflow: hidden; }
+  body { width: 1440px; background: var(--bg); color: var(--text); font: 14px/1.5 Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  svg { flex: none; display: block; }
+  .t2 { color: var(--text2); }
+  .app { display: flex; height: 900px; }
+
+  /* Sidebar (sidebar.tsx: w-72, bg-surface) */
+  .sidebar { position: relative; width: 288px; flex: none; height: 900px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+  .collapse { position: absolute; right: -14px; top: 64px; z-index: 5; width: 28px; height: 28px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); color: var(--text2); display: grid; place-items: center; }
+  .s-head { height: 56px; display: flex; align-items: center; gap: 4px; padding: 0 12px; flex: none; }
+  .badge { width: 32px; height: 32px; border-radius: 8px; background: var(--brand); display: grid; place-items: center; flex: none; }
+  .switch { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 8px; font-size: 14px; font-weight: 600; }
+  .switch span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ibtn { width: 36px; height: 36px; border-radius: 8px; display: grid; place-items: center; color: var(--text2); flex: none; }
+  .s-links { padding: 0 12px; display: flex; flex-direction: column; gap: 4px; flex: none; }
+  .link { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 8px; font-size: 14px; font-weight: 500; color: var(--text2); }
+  .link .kbd { margin-left: auto; border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; font-size: 10px; line-height: 1; }
+  .tree { margin-top: 12px; padding: 0 8px 12px; flex: 1; min-height: 0; overflow: hidden; }
+  .sec { border-top: 1px solid var(--border); padding-top: 12px; }
+  .sec + .sec { margin-top: 14px; }
+  .sec-h { display: flex; align-items: center; justify-content: space-between; padding: 0 8px 4px; font-size: 12px; font-weight: 500; color: var(--text2); }
+  .proj { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 8px; font-size: 14px; color: var(--text2); }
+  .proj .chev { color: var(--text2); }
+  .proj.open { color: var(--text); }
+  .chat { padding: 6px 8px 6px 32px; border-radius: 8px; font-size: 13px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chat.flat { padding-left: 8px; }
+  .chat.on { background: color-mix(in oklch, var(--text) 10%, transparent); color: var(--text); }
+  .s-foot-links { padding: 0 12px 8px; flex: none; }
+  .s-user { border-top: 1px solid var(--border); padding: 12px; flex: none; }
+  .s-user > div { display: flex; align-items: center; gap: 8px; padding: 4px; }
+  .av { width: 32px; height: 32px; border-radius: 999px; background: color-mix(in oklch, var(--text) 10%, transparent); display: grid; place-items: center; font-size: 14px; font-weight: 600; flex: none; }
+
+  /* Conversa (chat/page.tsx) */
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 900px; position: relative; }
+  .c-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 24px; border-bottom: 1px solid var(--border); flex: none; }
+  .path { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+  .src-btn { display: flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px; font-size: 12px; color: var(--text2); }
+  .list { flex: 1; overflow: hidden; padding: 14px 24px 12px; }
+  .col { max-width: 768px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+
+  .u { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+  .u .b { max-width: min(85%, 42rem); border: 1px solid var(--border); background: var(--surface); border-radius: 16px 16px 6px 16px; padding: 10px 16px; font-size: 14px; line-height: 1.625; }
+  .time { font-size: 10px; color: color-mix(in oklch, var(--text2) 60%, transparent); padding-right: 4px; }
+
+  .a { max-width: 704px; }
+  .md p { margin: 0; font-size: 14px; line-height: 1.6; }
+  .md strong { font-weight: 700; }
+  .box { margin-top: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); overflow: hidden; }
+  .bar-h { display: flex; align-items: center; gap: 8px; padding: 6px 12px; }
+  .cap { font-size: 12px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.025em; color: var(--text2); }
+  .sm { font-size: 11px; color: color-mix(in oklch, var(--text2) 80%, transparent); }
+  .ml { margin-left: auto; color: var(--text2); }
+
+  .r-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--border); }
+  .r-head .l { display: flex; align-items: center; gap: 8px; }
+  .r-head .n { font-size: 10px; color: color-mix(in oklch, var(--text2) 70%, transparent); }
+  .pick { display: flex; align-items: center; gap: 4px; }
+  .pbtn { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; font-size: 10px; font-weight: 500; color: var(--text2); background: var(--bg); }
+  .pbtn.on { border-color: var(--accent); background: color-mix(in oklch, var(--accent) 10%, transparent); color: var(--accent); }
+  .sub { padding: 8px 12px 0; font-size: 12px; color: var(--text2); }
+  .chart { padding: 8px 8px 4px; border-bottom: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { border-bottom: 1px solid var(--border); padding: 6px 12px; font-weight: 500; color: var(--text2); text-align: left; white-space: nowrap; }
+  td { padding: 0 12px; height: 29px; border-bottom: 1px solid color-mix(in oklch, var(--border) 50%, transparent); white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  .actions { margin-top: 8px; display: flex; align-items: center; justify-content: space-between; }
+  .actions .g { display: flex; align-items: center; gap: 4px; }
+  .cbtn { width: 36px; height: 36px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); display: grid; place-items: center; color: var(--text2); }
+  .sbtn { width: 36px; height: 36px; border-radius: 6px; display: grid; place-items: center; color: var(--text2); }
+
+  .composer { border-top: 1px solid var(--border); background: var(--surface); padding: 16px 24px; flex: none; }
+  .composer > div { max-width: 768px; margin: 0 auto; display: flex; align-items: center; gap: 8px; }
+  .ta { flex: 1; height: 66px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); padding: 12px 16px; font-size: 14px; color: color-mix(in oklch, var(--text2) 50%, transparent); }
+  .send { width: 44px; height: 44px; border-radius: 8px; background: var(--accent); color: var(--accent-fg); display: grid; place-items: center; }
+  .fab { position: absolute; right: 24px; bottom: 112px; width: 52px; height: 52px; border-radius: 999px; background: var(--accent); color: var(--accent-fg); display: grid; place-items: center; box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.35), 0 4px 6px -4px rgb(0 0 0 / 0.35); }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <span class="collapse"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></span>
+
+    <div class="s-head">
+      <span class="badge"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 7.5H5.5M3.25 7.5V16.5"/><path d="M9 7.5L10.625 16.5L12.25 11L13.875 16.5L15.5 7.5"/><path d="M19 7.5V16.5H19.5A3.5 4.5 0 0 0 19.5 7.5Z"/></svg></span>
+      <span class="switch"><span>Vale Norte · Sales</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="t2"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg></span>
+      <span class="ibtn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg></span>
+    </div>
+
+    <div class="s-links">
+      <span class="link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>Search chats<span class="kbd">⌘K</span></span>
+      <span class="link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></svg>My files</span>
+      <span class="link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"/></svg>Artifacts</span>
+    </div>
+
+    <nav class="tree">
+      <section class="sec">
+        <div class="sec-h"><span>Topics</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M12 5v14"/></svg></div>
+        <div class="proj open"><svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg><span>Half-year close</span></div>
+        <div class="chat on">H1 revenue</div>
+        <div class="chat">Margin by product line</div>
+        <div class="proj"><svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg><span>Targets by sales rep</span></div>
+        <div class="proj"><svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg><span>Inventory and stockouts</span></div>
+      </section>
+      <section class="sec">
+        <div class="sec-h"><span>Recent</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M7 12h10M10 18h4"/></svg></div>
+        <div class="chat flat">Average order value by channel</div>
+        <div class="chat flat">Customers inactive for 90 days</div>
+        <div class="chat flat">Top 10 SKUs by margin</div>
+        <div class="chat flat">Returns by carrier</div>
+        <div class="chat flat">Late orders in October</div>
+      </section>
+    </nav>
+
+    <div class="s-foot-links">
+      <span class="link"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4M10 10h4M10 14h4M10 18h4"/></svg>Organization</span>
+    </div>
+    <div class="s-user">
+      <div>
+        <span class="av">M</span>
+        <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:500">Marina Teixeira</div><div class="t2" style="font-size:12px">Owner</div></div>
+        <span class="ibtn"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></span>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="c-head">
+      <nav class="path">
+        <span class="t2">Half-year close</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="t2"><path d="m9 18 6-6-6-6"/></svg>
+        <span style="font-weight:500">H1 revenue</span>
+      </nav>
+      <span class="src-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></svg>
+        1 of 1 topic sources
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+      </span>
+    </header>
+
+    <div class="list">
+      <div class="col">
+        <div class="u">
+          <div class="b">What was our first-half revenue, by region?</div>
+          <span class="time">14:32</span>
+        </div>
+
+        <div class="a">
+          <div class="md"><p>I summed the 41,876 orders invoiced from January to June 2026: <strong>R$ 18,412,730</strong> for the half, 12.6% above the same period in 2025. The Southeast accounts for 42%; the South and Northeast add another 39%.</p></div>
+
+          <div class="box"><div class="bar-h">
+            <span class="cap">How I got here</span><span class="sm">1 query</span>
+            <svg class="ml" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </div></div>
+
+          <div class="box">
+            <div class="r-head">
+              <div class="l">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="oklch(0.922 0 0)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18M3 15h18"/></svg>
+                <span class="cap">Revenue by region</span>
+                <span class="n">5 rows</span>
+              </div>
+              <div class="pick">
+                <span class="pbtn on"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9M13 17V5M8 17v-3"/></svg>Bars</span>
+                <span class="pbtn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12c.552 0 1.005-.449.95-.998a10 10 0 0 0-8.953-8.951c-.55-.055-.998.398-.998.95v8a1 1 0 0 0 1 1z"/><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/></svg>Pie</span>
+                <span class="pbtn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>CSV</span>
+              </div>
+            </div>
+            <div class="sub">sales_2026.xlsx · Jan to Jun 2026</div>
+            <div class="chart">
+              <svg width="686" height="190" viewBox="0 0 686 190" font-family="Inter, sans-serif">
+                <g stroke="oklch(1 0 0 / 12%)" stroke-dasharray="3 3">
+                  <path d="M251 4V166M392 4V166M533 4V166M674 4V166"/>
+                </g>
+                <path d="M110 4V166H674" stroke="oklch(1 0 0 / 12%)" fill="none"/>
+                <g fill="oklch(0.72 0.14 200)">
+                  <path d="M110 9h548a3 3 0 0 1 3 3v18a3 3 0 0 1-3 3H110z"/>
+                  <path d="M110 41h290a3 3 0 0 1 3 3v18a3 3 0 0 1-3 3H110z"/>
+                  <path d="M110 73h213a3 3 0 0 1 3 3v18a3 3 0 0 1-3 3H110z"/>
+                  <path d="M110 105h153a3 3 0 0 1 3 3v18a3 3 0 0 1-3 3H110z"/>
+                  <path d="M110 137h79a3 3 0 0 1 3 3v18a3 3 0 0 1-3 3H110z"/>
+                </g>
+                <g fill="oklch(0.65 0 0)" font-size="10" text-anchor="end">
+                  <text x="104" y="24.5">Southeast</text>
+                  <text x="104" y="56.5">South</text>
+                  <text x="104" y="88.5">Northeast</text>
+                  <text x="104" y="120.5">Central-West</text>
+                  <text x="104" y="152.5">North</text>
+                </g>
+                <g fill="oklch(0.65 0 0)" font-size="10" text-anchor="middle">
+                  <text x="110" y="182">0</text>
+                  <text x="251" y="182">2M</text>
+                  <text x="392" y="182">4M</text>
+                  <text x="533" y="182">6M</text>
+                  <text x="674" y="182" text-anchor="end">8M</text>
+                </g>
+              </svg>
+            </div>
+            <table>
+              <thead><tr><th>region</th><th class="num">revenue</th></tr></thead>
+              <tbody>
+                <tr><td>Southeast</td><td class="num">7,824,110</td></tr>
+                <tr><td>South</td><td class="num">4,152,480</td></tr>
+                <tr><td>Northeast</td><td class="num">3,061,920</td></tr>
+                <tr><td>Central-West</td><td class="num">2,208,640</td></tr>
+                <tr><td>North</td><td class="num">1,165,580</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="box"><div class="bar-h">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="oklch(0.922 0 0)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/></svg>
+            <span class="cap">SQL</span><span class="sm">view query</span>
+            <svg class="ml" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+          </div></div>
+
+          <div class="actions">
+            <div class="g">
+              <span class="cbtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg></span>
+              <span class="sbtn"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></svg></span>
+            </div>
+            <span class="time">14:32</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="composer">
+      <div>
+        <div class="ta">Ask a question about your data...</div>
+        <span class="send"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg></span>
+      </div>
+    </div>
+    <span class="fab"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14M12 5v14"/></svg></span>
+  </main>
+</div>
+</body>
+</html>
