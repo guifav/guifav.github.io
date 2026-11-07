@@ -27,6 +27,10 @@ npm run render -- culkin    # um ou mais slugs
 
 Requer `cwebp` (`brew install webp`). Todas as telas são de computador: viewport 1440x900 a 2x, salvo com 1600 px de largura.
 
+## Versões em inglês
+
+Cada tela com texto em português tem uma versão em inglês em `portfolio/mockups/<slug>.en.html`, renderizada como `portfolio/img/<slug>.en.webp` (`npm run render -- <slug>.en`). Nas páginas, a imagem leva `data-src-en` com o caminho da versão em inglês, e o `site.js` troca a imagem (e o link que a amplia) quando o visitante muda o idioma. Ficam sem versão em inglês as telas que já são em inglês e o Caramelo, cuja conversa em português é a própria demonstração do produto.
+
 ## Regras para um mockup recriado
 
 - **Arquivo único** em `portfolio/mockups/<slug>.html`, com `<meta name="mockup-viewport" content="1440x900">`. CSS inline. Ícones em SVG inline (os paths do lucide servem). A única requisição externa permitida é Google Fonts; o renderizador falha se qualquer requisição falhar.

@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>AI Newsroom · Real Estate Brazil</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --blue: #18181b;
+    --blue-lighter: #f4f4f5;
+    --gold: #a1a1aa;
+    --gray-50: #fafafa;
+    --gray-100: #f4f4f5;
+    --gray-200: #e4e4e7;
+    --gray-300: #d4d4d8;
+    --gray-400: #a1a1aa;
+    --gray-500: #71717a;
+    --gray-700: #3f3f46;
+    --gray-900: #18181b;
+    --accent: #2563eb;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1440px; height: 900px; overflow: hidden; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: var(--gray-900); background: var(--gray-50); line-height: 1.6; -webkit-font-smoothing: antialiased; font-feature-settings: "cv11", "ss01"; }
+  .i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+  .i-14 { width: 14px; height: 14px; }
+  .i-12 { width: 12px; height: 12px; }
+  .container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+
+  /* Header */
+  .header { background: var(--blue); color: #fff; padding: 16px 0; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+  .header .container { display: flex; align-items: center; justify-content: space-between; }
+  .header h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.3px; line-height: 32px; }
+  .header h1 span { color: var(--gold); }
+  .header-user { display: flex; align-items: center; gap: 12px; font-size: 14px; }
+  .hbtn { background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.28); color: #fff; padding: 5px 14px; border-radius: 6px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; line-height: 20px; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #52525b, #27272a); border: 1px solid rgba(255,255,255,.25); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; }
+
+  /* Division detail */
+  .division-detail { padding: 28px 0 0; }
+  .back-link { display: inline-flex; align-items: center; gap: 6px; color: var(--blue); margin-bottom: 18px; font-size: 14px; font-weight: 500; }
+  .division-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; gap: 12px; }
+  .division-header h2 { font-size: 26px; color: var(--blue); letter-spacing: -0.4px; line-height: 1.3; display: flex; align-items: center; gap: 12px; }
+  .lang-badge { display: inline-block; background: #fff; border: 1px solid var(--gray-200); color: var(--gray-700); padding: 1px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; letter-spacing: .02em; line-height: 18px; }
+  .btn-generate { display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; background: var(--accent); color: #fff; border-radius: 8px; font-size: 14px; font-weight: 600; line-height: 20px; box-shadow: 0 1px 2px rgba(37,99,235,.2), 0 4px 12px -2px rgba(37,99,235,.28); }
+  .list-title { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
+  .list-title h3 { font-size: 18px; color: var(--gray-500); font-weight: 600; }
+  .list-title .legend { display: flex; gap: 14px; font-size: 12px; color: var(--gray-500); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+  .opportunity-card { background: #fff; border-radius: 12px; padding: 22px 24px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); display: flex; gap: 12px; }
+  .opp-checkbox { margin-top: 3px; width: 18px; height: 18px; border: 1.5px solid var(--gray-300); border-radius: 4px; background: #fff; flex-shrink: 0; }
+  .opp-main { flex: 1; min-width: 0; display: grid; grid-template-columns: 1fr 336px; gap: 28px; }
+  .opp-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .type-badge { display: inline-block; padding: 3px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; line-height: 16px; }
+  .type-radar { background: #dbeafe; color: #1d4ed8; }
+  .type-analise { background: #fef3c7; color: #92400e; }
+  .opp-date { font-size: 12px; color: var(--gray-500); font-weight: 500; }
+  .opportunity-card h3 { font-size: 16px; color: var(--blue); margin-bottom: 6px; line-height: 1.45; letter-spacing: -0.1px; }
+  .rationale { font-size: 14px; color: var(--gray-700); margin-bottom: 12px; line-height: 1.55; }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+  .tag { background: var(--blue-lighter); color: var(--blue); padding: 3px 10px; border-radius: 4px; font-size: 12px; line-height: 18px; }
+
+  .gap { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--gray-200); border-radius: 8px; overflow: hidden; }
+  .gap > div { padding: 10px 14px; }
+  .gap > div + div { border-left: 1px solid var(--gray-200); background: #fffbeb; }
+  .gap .k { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--gray-500); margin-bottom: 3px; }
+  .gap > div + div .k { color: #92400e; }
+  .gap .v { font-size: 13px; color: var(--gray-700); line-height: 1.5; }
+  .gap .num { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--gray-900); }
+  .potential { font-size: 13px; color: var(--gray-500); margin-top: 10px; }
+  .potential strong { color: var(--gray-700); font-weight: 600; }
+
+  .opp-article-link { background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 8px; padding: 14px 16px; align-self: start; }
+  .opp-article-link .lbl { font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--gray-400); margin-bottom: 6px; }
+  .opp-article-link .hl { font-weight: 600; font-size: 14px; line-height: 1.45; margin-bottom: 10px; color: var(--gray-900); }
+  .scores { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .score-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; line-height: 18px; font-variant-numeric: tabular-nums; }
+  .score-badge.green { background: #dcfce7; color: #15803d; }
+  .score-badge.yellow { background: #fef9c3; color: #a16207; }
+  .score-badge.red { background: #fee2e2; color: #b91c1c; }
+  .status { display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; line-height: 18px; margin-bottom: 10px; }
+  .st-review { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+  .st-sent { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
+  .reason { font-size: 12px; color: var(--gray-500); line-height: 1.5; margin: -2px 0 10px; }
+  .more { color: var(--accent); font-size: 13px; font-weight: 600; display: block; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-log-out" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></symbol>
+<symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></symbol>
+<symbol id="i-refresh-cw" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+<symbol id="i-file-question" viewBox="0 0 24 24"><path d="M12 17h.01"/><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M9.1 9a3 3 0 0 1 5.82 1c0 2-3 3-3 3"/></symbol>
+<symbol id="i-triangle-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+</defs></svg>
+<header class="header">
+  <div class="container">
+    <h1><span>AI Newsroom</span></h1>
+    <div class="header-user">
+      <span class="hbtn"><svg class="i i-14"><use href="#i-settings"/></svg>Settings</span>
+      <span class="avatar">MT</span>
+      <span>Marina Teixeira</span>
+      <span class="hbtn"><svg class="i i-14"><use href="#i-log-out"/></svg>Logout</span>
+    </div>
+  </div>
+</header>
+
+<div class="division-detail container">
+  <span class="back-link"><svg class="i"><use href="#i-arrow-left"/></svg>Back to Dashboard</span>
+  <div class="division-header">
+    <h2>Real Estate Brazil <span class="lang-badge">en-US</span></h2>
+    <span class="btn-generate"><svg class="i"><use href="#i-refresh-cw"/></svg>Generate 2 More Articles</span>
+  </div>
+
+  <div class="list-title">
+    <h3>Opportunities Identified (14)</h3>
+    <div class="legend">
+      <span><i class="dot" style="background:#f59e0b"></i>Needs Human Review · 3</span>
+      <span><i class="dot" style="background:#22c55e"></i>Sent to Hub · 9</span>
+      <span><i class="dot" style="background:#d4d4d8"></i>Awaiting Generation · 2</span>
+    </div>
+  </div>
+
+  <div class="opportunity-card">
+    <span class="opp-checkbox"></span>
+    <div class="opp-main">
+      <div>
+        <div class="opp-top"><span class="type-badge type-radar">Market Radar</span><span class="opp-date">Nov 5, 2026</span></div>
+        <h3>Last-mile warehouses within 30 km: vacancy, rents and the impact of new 2027 supply</h3>
+        <p class="rationale">Queries on urban warehouse vacancy and rents show high impressions and low CTR; the site is already associated with the topic, but no page answers the question with 2026 data.</p>
+        <div class="tags">
+          <span class="tag">logistics warehouse vacancy 2026</span>
+          <span class="tag">last mile warehouse rent per m2</span>
+          <span class="tag">new logistics supply 2027</span>
+          <span class="tag">class A logistics park</span>
+        </div>
+        <div class="gap">
+          <div><div class="k"><svg class="i i-12"><use href="#i-search"/></svg>What people search</div><div class="v"><span class="num">3,420</span> impressions in 30 days, <span class="num">0.8%</span> CTR, average position <span class="num">11.6</span></div></div>
+          <div><div class="k"><svg class="i i-12"><use href="#i-file-question"/></svg>What the site offers</div><div class="v">Only a 2024 note on logistics in general, with no vacancy by radius and no outlook for 2027 supply</div></div>
+        </div>
+        <p class="potential"><strong>AEO:</strong> direct answer to "is a last-mile warehouse worth it?" · <strong>GEO:</strong> citable data by region</p>
+      </div>
+      <div class="opp-article-link">
+        <div class="lbl">Generated article</div>
+        <div class="hl">Last-mile warehouses: vacancy falls, but 2027 supply already weighs on rents</div>
+        <div class="scores">
+          <span class="score-badge green">SEO: 88</span>
+          <span class="score-badge green">AEO: 84</span>
+          <span class="score-badge yellow">GEO: 76</span>
+          <span class="score-badge yellow">Fact-Check: 78</span>
+        </div>
+        <span class="status st-review"><svg class="i i-12"><use href="#i-triangle-alert"/></svg>Needs Human Review</span>
+        <p class="reason">2 claims without a primary source: Q3 absorption rate and average lease term.</p>
+        <span class="more">View article →</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="opportunity-card">
+    <span class="opp-checkbox"></span>
+    <div class="opp-main">
+      <div>
+        <div class="opp-top"><span class="type-badge type-analise">Strategic Analysis</span><span class="opp-date">Nov 5, 2026</span></div>
+        <h3>Data centers beyond the Southeast: power, land and what changes for real estate investors</h3>
+        <p class="rationale">Searches for data centers in Brazil's Northeast grow month over month and the site ranks on page two; what's missing is a real estate and infrastructure take that ties together renewables, land and returns.</p>
+        <div class="tags">
+          <span class="tag">data center northeast brazil</span>
+          <span class="tag">renewable energy data center</span>
+          <span class="tag">data center investment brazil</span>
+          <span class="tag">land for data centers</span>
+        </div>
+        <div class="gap">
+          <div><div class="k"><svg class="i i-12"><use href="#i-search"/></svg>What people search</div><div class="v">Trending query: <span class="num">+64%</span> this month, <span class="num">1,980</span> impressions, average position <span class="num">14.2</span></div></div>
+          <div><div class="k"><svg class="i i-12"><use href="#i-file-question"/></svg>What the site offers</div><div class="v">Event coverage on data centers, but no analysis of location, power and land cost</div></div>
+        </div>
+        <p class="potential"><strong>AEO:</strong> clear comparison across regions · <strong>GEO:</strong> primary sources on power and auctions</p>
+      </div>
+      <div class="opp-article-link">
+        <div class="lbl">Generated article</div>
+        <div class="hl">Northeast data centers: why cheap power alone doesn't add up</div>
+        <div class="scores">
+          <span class="score-badge green">SEO: 91</span>
+          <span class="score-badge green">AEO: 89</span>
+          <span class="score-badge green">GEO: 86</span>
+          <span class="score-badge green">Fact-Check: 97</span>
+        </div>
+        <span class="status st-sent"><svg class="i i-12"><use href="#i-check"/></svg>Sent to Hub</span>
+        <p class="reason">Approved by M. Teixeira and published to the portal.</p>
+        <span class="more">View article →</span>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

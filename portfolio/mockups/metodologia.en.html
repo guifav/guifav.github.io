@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>Human + AI methodology</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0a0a0a;--card:#121212;--card2:#171717;--line:#262626;--fg:#fafafa;--mut:#a3a3a3;--dim:#737373;--acc:#FFBE00}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1440px;height:900px;overflow:hidden}
+  body{background:var(--bg);color:var(--fg);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;position:relative;
+    background-image:radial-gradient(circle at 1px 1px,#1c1c1c 1px,transparent 0);background-size:24px 24px}
+  .mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+  svg.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+  svg.i.sm{width:12px;height:12px}
+
+  .hdr{position:absolute;left:56px;top:40px;right:56px;display:flex;justify-content:space-between;align-items:flex-end}
+  .eyebrow{font-size:11px;letter-spacing:.16em;color:var(--acc);text-transform:uppercase}
+  h1{font-size:32px;font-weight:600;letter-spacing:-.025em;margin-top:10px;line-height:1.15}
+  .lead{font-size:14px;color:var(--mut);margin-top:8px;max-width:700px;line-height:1.5}
+  .legend{display:flex;gap:18px;font-size:12px;color:var(--mut)}
+  .legend span{display:flex;align-items:center;gap:7px}
+  .lg{width:10px;height:10px;border-radius:3px}
+  .lg.h{background:#fafafa}
+  .lg.a{background:var(--acc)}
+  .lg.p{background:transparent;border:1.5px dashed #8a8a8a}
+
+  .lane{position:absolute;left:56px;right:56px;border:1px solid #1f1f1f;border-radius:14px;background:rgba(17,17,17,.55)}
+  .lane.ag{background:rgba(255,190,0,.025);border-color:rgba(255,190,0,.14)}
+  .ll{position:absolute;left:0;top:0;bottom:0;width:44px;border-right:1px solid #1f1f1f;display:flex;align-items:center;justify-content:center}
+  .ll span{transform:rotate(-90deg);white-space:nowrap;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:#d4d4d4}
+  .node{position:absolute;width:142px;background:var(--card);border:1px solid #2c2c2c;border-radius:12px;padding:11px 12px;display:flex;flex-direction:column}
+  .node.h{border-color:#4a4a4a}
+  .node.a{border-color:rgba(255,190,0,.5);box-shadow:0 10px 40px -18px rgba(255,190,0,.35)}
+  .node.p{border-style:dashed;border-color:#4a4a4a;background:#101010}
+  .node.ghost{border-style:dashed;border-color:#3a3a3a;background:rgba(18,18,18,.6)}
+  .n{font-size:10.5px;color:var(--acc);letter-spacing:.06em}
+  .node.h .n{color:#e5e5e5}
+  .node.p .n{color:#a3a3a3}
+  .tt{font-size:13.5px;font-weight:600;margin-top:4px;line-height:1.25}
+  .ds{font-size:11px;color:#8f8f8f;margin-top:5px;line-height:1.42}
+  .chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:auto;padding-top:8px}
+  .chip{font-size:10px;border-radius:999px;padding:2px 7px;border:1px solid #2f2f2f;color:#d4d4d4;background:#1a1a1a;white-space:nowrap}
+  .chip.y{border-color:rgba(255,190,0,.4);color:var(--acc);background:rgba(255,190,0,.07)}
+  .rev{display:flex;flex-direction:column;gap:4px;margin-top:8px}
+  .rv{display:flex;align-items:center;gap:6px;font-size:10.5px;color:#d4d4d4}
+  .rv b{width:16px;height:16px;border-radius:5px;font-size:9px;display:flex;align-items:center;justify-content:center;font-weight:600;color:#0a0a0a}
+  .rv .ok{margin-left:auto;color:#4ade80;stroke-width:2.5}
+
+  .rules{position:absolute;left:56px;right:56px;top:748px;height:108px;border:1px solid var(--line);border-radius:16px;background:rgba(18,18,18,.85);display:grid;grid-template-columns:196px repeat(5,1fr)}
+  .rules .gl{padding:18px 20px;border-right:1px solid var(--line);display:flex;flex-direction:column;justify-content:center}
+  .rules .gl .eyebrow{font-size:10.5px}
+  .rules .gl .t{font-size:15px;font-weight:600;margin-top:6px;line-height:1.3}
+  .ru{padding:18px 16px;border-right:1px solid #1f1f1f;display:flex;gap:10px;align-items:flex-start}
+  .ru:last-child{border-right:none}
+  .ib{width:28px;height:28px;border-radius:8px;background:#1d1d1d;border:1px solid #2a2a2a;display:flex;align-items:center;justify-content:center;color:var(--acc);flex-shrink:0}
+  .ru .t{font-size:13px;font-weight:500}
+  .ru .s{font-size:11px;color:#8a8a8a;line-height:1.42;margin-top:3px}
+
+  .loopl{position:absolute;font-size:10.5px;color:#bdbdbd;background:var(--bg);padding:0 8px;display:flex;align-items:center;gap:6px}
+  .loopl i{width:6px;height:6px;border-radius:50%;background:#f87171;display:block}
+  #wires{position:absolute;left:0;top:0;width:1440px;height:900px;pointer-events:none}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="ci" viewBox="0 0 24 24"><path d="M12 2v4"/><path d="m16.2 7.8 2.9-2.9"/><path d="M18 12h4"/><path d="m16.2 16.2 2.9 2.9"/><path d="M12 18v4"/><path d="m4.9 19.1 2.9-2.9"/><path d="M2 12h4"/><path d="m4.9 4.9 2.9 2.9"/></symbol>
+  <symbol id="tag" viewBox="0 0 24 24"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></symbol>
+  <symbol id="user" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+  <symbol id="book" viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/></symbol>
+  <symbol id="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+</svg>
+
+<svg id="wires"></svg>
+
+<div class="hdr">
+  <div>
+    <div class="eyebrow mono">Methodology · Technology team</div>
+    <h1>Humans decide, agents execute, different models review</h1>
+    <p class="lead">Every request becomes a scoped issue, goes through independent AI review and closes only when the requester confirms, in production, that it is solved.</p>
+  </div>
+  <div class="legend">
+    <span><i class="lg h"></i>human</span>
+    <span><i class="lg a"></i>AI agent</span>
+    <span><i class="lg p"></i>pipeline</span>
+  </div>
+</div>
+
+<!-- Lanes -->
+<div class="lane" style="top:214px;height:164px"><div class="ll"><span class="mono">Human</span></div></div>
+<div class="lane ag" style="top:392px;height:212px"><div class="ll"><span class="mono" style="color:#FFBE00">AI agent</span></div></div>
+<div class="lane" style="top:618px;height:106px"><div class="ll"><span class="mono">Pipeline</span></div></div>
+
+<div class="node h" id="n1" style="left:116px;top:230px;height:132px">
+  <div class="n mono">01</div><div class="tt">Request</div><div class="ds">Logged on the card with who asked and the problem.</div>
+  <div class="chips"><span class="chip">requester</span></div>
+</div>
+
+<div class="node a" id="n2" style="left:274px;top:408px;height:180px">
+  <div class="n mono">02</div><div class="tt">Scoped issue</div><div class="ds">What is in, what is out and the definition of done.</div>
+  <div class="chips"><span class="chip y">agent drafts</span><span class="chip">dev approves</span></div>
+</div>
+
+<div class="node a" id="n3" style="left:432px;top:408px;height:180px">
+  <div class="n mono">03</div><div class="tt">Branch</div><div class="ds">Isolated code, small commits and docs in the same MR.</div>
+  <div class="chips"><span class="chip y">executor</span></div>
+</div>
+
+<div class="node a" id="n4" style="left:590px;top:408px;height:180px">
+  <div class="n mono">04</div><div class="tt">Merge request</div><div class="ds">What changed, how to test it and the issue link.</div>
+  <div class="chips"><span class="chip y">executor</span><span class="chip">CI</span></div>
+</div>
+<div class="node p" id="n4b" style="left:590px;top:632px;height:78px">
+  <div class="n mono">CI</div><div class="ds" style="margin-top:3px">tests, lint and documentation checks</div>
+</div>
+
+<div class="node a" id="n5" style="left:748px;top:408px;height:180px">
+  <div class="n mono">05</div><div class="tt">Independent review</div>
+  <div class="rev">
+    <div class="rv"><b style="background:#FFBE00">A</b>model A<svg class="i sm ok"><use href="#check"/></svg></div>
+    <div class="rv"><b style="background:#fafafa">B</b>model B<svg class="i sm ok"><use href="#check"/></svg></div>
+    <div class="rv"><b style="background:#8b8b8b">C</b>model C<svg class="i sm ok"><use href="#check"/></svg></div>
+  </div>
+  <div class="chips"><span class="chip y">fresh session</span></div>
+</div>
+<div class="node ghost" id="n5h" style="left:748px;top:230px;height:132px">
+  <div class="n mono" style="color:#a3a3a3">+ human</div><div class="tt">Critical path</div><div class="ds">Money, customer data, permissions and migrations.</div>
+</div>
+
+<div class="node h" id="n6" style="left:906px;top:230px;height:132px">
+  <div class="n mono">06</div><div class="tt">Owner merges</div><div class="ds">Green pipeline, APPROVED from all on the same head.</div>
+  <div class="chips"><span class="chip">owner dev</span></div>
+</div>
+
+<div class="node p" id="n7" style="left:1064px;top:632px;height:78px">
+  <div class="n mono">07</div><div class="tt">Deploy</div><div class="ds" style="margin-top:2px">version tag</div>
+</div>
+
+<div class="node h" id="n8" style="left:1222px;top:230px;height:132px">
+  <div class="n mono">08</div><div class="tt">Requester acceptance</div><div class="ds">Checked in production; 5 silent workdays mean yes.</div>
+</div>
+
+<div class="loopl" id="lbl1"><i></i>rejected in production comes back as a fix</div>
+<div class="loopl" id="lbl2"><i style="background:#FFBE00"></i>review findings go back to the executor</div>
+
+
+<!-- Regras de base -->
+<div class="rules">
+  <div class="gl"><div class="eyebrow mono">Ground rules</div><div class="t">Apply to every application</div></div>
+  <div class="ru"><div class="ib"><svg class="i"><use href="#ci"/></svg></div><div><div class="t">CI/CD always</div><div class="s">nothing reaches production without a pipeline</div></div></div>
+  <div class="ru"><div class="ib"><svg class="i"><use href="#tag"/></svg></div><div><div class="t">Everything versioned</div><div class="s">a tag and notes for every release</div></div></div>
+  <div class="ru"><div class="ib"><svg class="i"><use href="#user"/></svg></div><div><div class="t">The dev is the owner</div><div class="s">every project has a human owner</div></div></div>
+  <div class="ru"><div class="ib"><svg class="i"><use href="#book"/></svg></div><div><div class="t">Docs in the same MR</div><div class="s">missing docs are a review finding</div></div></div>
+  <div class="ru"><div class="ib"><svg class="i"><use href="#lock"/></svg></div><div><div class="t">Card always current</div><div class="s">status follows the workflow, never hand-edited</div></div></div>
+</div>
+
+<script>
+(function(){
+  const svg=document.getElementById('wires');
+  const NS='http://www.w3.org/2000/svg';
+  svg.innerHTML='<defs><marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 L9 5 L0 9 z" fill="#FFBE00"/></marker><marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1 L9 5 L0 9 z" fill="#f87171"/></marker><marker id="arg" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 1 L9 5 L0 9 z" fill="#8a8a8a"/></marker></defs>';
+  const R=id=>document.getElementById(id).getBoundingClientRect();
+  function path(d,opt){const p=document.createElementNS(NS,'path');p.setAttribute('d',d);p.setAttribute('fill','none');
+    p.setAttribute('stroke',opt.c||'#FFBE00');p.setAttribute('stroke-width',opt.w||1.8);if(opt.dash)p.setAttribute('stroke-dasharray',opt.dash);
+    if(opt.m)p.setAttribute('marker-end','url(#'+opt.m+')');if(opt.o)p.setAttribute('opacity',opt.o);svg.appendChild(p);return p;}
+  function link(a,b,opt){const A=R(a),B=R(b);const x1=A.right,y1=A.top+A.height/2,x2=B.left-2,y2=B.top+B.height/2;
+    const dx=(x2-x1)*0.55;path(`M${x1} ${y1} C${x1+dx} ${y1}, ${x2-dx} ${y2}, ${x2} ${y2}`,Object.assign({m:'ar'},opt||{}));}
+  function vlink(a,b,fromTop,opt){const A=R(a),B=R(b);
+    const x1=A.left+A.width/2, y1=fromTop?A.top:A.bottom, x2=B.left+B.width/2, y2=fromTop?B.bottom+2:B.top-2;
+    const my=(y1+y2)/2; path(`M${x1} ${y1} C${x1} ${my}, ${x2} ${my}, ${x2} ${y2}`,Object.assign({m:'ar'},opt||{}));}
+  vlink('n1','n2',false); link('n2','n3'); link('n3','n4'); link('n4','n5');
+  vlink('n5','n6',true); vlink('n6','n7',false); vlink('n7','n8',true);
+  const m=R('n4'),c=R('n4b');
+  path(`M${m.left+m.width/2} ${m.bottom} L${c.left+c.width/2} ${c.top-2}`,{c:'#8a8a8a',w:1.4,dash:'3 4',m:'arg'});
+  const r=R('n5'),h=R('n5h');
+  path(`M${r.left+r.width/2-36} ${r.top} L${h.left+h.width/2-36} ${h.bottom+2}`,{c:'#8a8a8a',w:1.4,dash:'3 4',m:'arg'});
+  // reject loop: 08 top -> above lanes -> 02
+  const e=R('n8'),s2=R('n2');const yTop=198;
+  const x8=e.left+e.width/2, x2=s2.left+s2.width/2+30;
+  path(`M${x8} ${e.top} L${x8} ${yTop+10} Q${x8} ${yTop} ${x8-10} ${yTop} L${x2+10} ${yTop} Q${x2} ${yTop} ${x2} ${yTop+10} L${x2} ${s2.top-2}`,{c:'#f87171',w:1.4,dash:'5 5',m:'arr',o:.9});
+  const l1=document.getElementById('lbl1');l1.style.left=(x2+(x8-x2)/2-120)+'px';l1.style.top=(yTop-8)+'px';
+  // review loop: 05 -> gap above agent lane -> 03
+  const n3=R('n3');const yt=385;const x5=r.left+24, x3=n3.left+n3.width/2;
+  path(`M${x5} ${r.top} L${x5} ${yt+4} Q${x5} ${yt} ${x5-4} ${yt} L${x3+4} ${yt} Q${x3} ${yt} ${x3} ${yt+4} L${x3} ${n3.top-2}`,{c:'#FFBE00',w:1.2,dash:'4 4',m:'ar',o:.75});
+  const l2=document.getElementById('lbl2');l2.style.left=(x3+(x5-x3)/2-105)+'px';l2.style.top=(yt-8)+'px';
+})();
+</script>
+</body>
+</html>

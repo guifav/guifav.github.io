@@ -28,6 +28,14 @@
   var html = document.querySelectorAll('[data-i18n]');
   var alts = document.querySelectorAll('[data-i18n-alt]');
   var arias = document.querySelectorAll('[data-i18n-aria]');
+  // Imagens com versão em inglês: data-src-en aponta para ela. O link que abre a imagem
+  // ampliada (quando aponta para o mesmo arquivo) acompanha a troca.
+  var srcs = document.querySelectorAll('img[data-src-en]');
+  srcs.forEach(function (img) {
+    img.setAttribute('data-src-pt', img.getAttribute('src'));
+    var a = img.closest('a');
+    if (a && a.getAttribute('href') === img.getAttribute('src')) a.setAttribute('data-follow-img', '');
+  });
   var pt = {}, ptAlt = {}, ptAria = {};
   html.forEach(function (el) { pt[el.getAttribute('data-i18n')] = el.innerHTML; });
   alts.forEach(function (el) { ptAlt[el.getAttribute('data-i18n-alt')] = el.getAttribute('alt'); });
@@ -50,6 +58,12 @@
     arias.forEach(function (el) {
       var k = el.getAttribute('data-i18n-aria');
       el.setAttribute('aria-label', l === 'en' && en[k] !== undefined ? en[k] : ptAria[k]);
+    });
+    srcs.forEach(function (img) {
+      var src = img.getAttribute(l === 'en' ? 'data-src-en' : 'data-src-pt');
+      img.setAttribute('src', src);
+      var a = img.closest('a[data-follow-img]');
+      if (a) a.setAttribute('href', src);
     });
   }
   lt.addEventListener('click', function () {
