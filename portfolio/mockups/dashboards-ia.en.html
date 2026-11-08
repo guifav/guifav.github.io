@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="mockup-viewport" content="1440x900">
 <title>AI Dashboards</title>
+<!-- Tela principal recriada com contexto B2B genérico (distribuidora fictícia). Dados 100% fictícios. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -100,6 +101,7 @@
   .pill{display:inline-block;padding:1px 7px;border-radius:999px;font-size:10px;font-weight:600}
   .p-re{background:#ececf4;color:var(--brand-ink)}
   .p-in{background:#fde8ec;color:#c22d4b}
+  .hbr{grid-template-columns:90px 1fr 32px}
 </style>
 </head>
 <body>
@@ -140,7 +142,7 @@
       <div class="iconbtn"><svg class="i"><use href="#i-left"/></svg></div>
       <div>
         <h1><svg class="i s5"><use href="#i-spark"/></svg>AI Dashboard Builder</h1>
-        <p>Describe the dashboard you want and AI will build it with real data</p>
+        <p>Describe the dashboard you want and AI will build it with live data</p>
       </div>
     </div>
     <div class="btn-primary"><svg class="i"><use href="#i-save"/></svg>Save Dashboard</div>
@@ -150,27 +152,27 @@
     <!-- Chat panel -->
     <div class="card">
       <div class="msgs">
-        <div class="row u"><div class="bubble">Build a dashboard of 2026 event attendance by division: total attendees, check-in rate, audience profile and the best-attended events.</div></div>
+        <div class="row u"><div class="bubble">Build a 2026 sales dashboard by branch: revenue, orders, average order value, on-time delivery, product line mix and the best-selling products.</div></div>
         <div class="row a"><div class="bubble">
           <div class="tools">
-            <span class="tbadge"><svg class="i s3"><use href="#i-wrench"/></svg>events list</span>
-            <span class="tbadge"><svg class="i s3"><use href="#i-wrench"/></svg>event funnel</span>
-            <span class="tbadge"><svg class="i s3"><use href="#i-wrench"/></svg>event report</span>
-            <span class="tbadge"><svg class="i s3"><use href="#i-wrench"/></svg>base explorer composition</span>
+            <span class="tbadge"><svg class="i s3"><use href="#i-wrench"/></svg>sales_by_branch</span>
+            <span class="tbadge"><svg class="i s3"><use href="#i-wrench"/></svg>orders_report</span>
+            <span class="tbadge"><svg class="i s3"><use href="#i-wrench"/></svg>delivery_sla</span>
+            <span class="tbadge"><svg class="i s3"><use href="#i-wrench"/></svg>product_mix</span>
           </div>
-          Done. I crossed this year's event list with the registration funnel and the audience breakdown. The dashboard has:
+          Done. I joined ERP sales with orders and deliveries, all live via MCP. The dashboard has:
           <ul>
             <li>4 KPIs at the top, with the change vs. 2025;</li>
-            <li>attendees by division and audience profile;</li>
-            <li>a table of the best-attended events with check-in for each.</li>
+            <li>revenue by branch and product line mix;</li>
+            <li>a table of best sellers with on-time delivery for each.</li>
           </ul>
         </div></div>
-        <div class="row u"><div class="bubble">Highlight the infrastructure divisions in the accent color and put the committee's targets spreadsheet next to the actuals.</div></div>
+        <div class="row u"><div class="bubble">Highlight the branches below target in the accent color and put the targets sheet next to actuals.</div></div>
         <div class="row a"><div class="bubble">
           <div class="tools">
-            <span class="tbadge"><svg class="i s3"><use href="#i-wrench"/></svg>event funnel</span>
+            <span class="tbadge"><svg class="i s3"><use href="#i-wrench"/></svg>sales_by_branch</span>
           </div>
-          Done. <b>Infra Brazil</b> and <b>Infra Latam</b> now show in red in the ranking and the table, and the attendees KPI shows progress toward the annual target read from <b>event-targets-2026.xlsx</b>. Check-in came in at 78.6%, above the 75% target.
+          Done. <b>Minas Gerais</b> and <b>Bahia</b> now show in red in the ranking and the table, and the revenue KPI shows progress against the annual target read from <b>sales-targets-2026.xlsx</b>. On-time delivery is 78.6%, above the 75% target.
         </div></div>
       </div>
       <div class="inputarea">
@@ -178,7 +180,7 @@
           <span class="outline-sm"><svg class="i s35"><use href="#i-db"/></svg>Data Sources (3/3)<svg class="i s3"><use href="#i-down"/></svg></span>
           <span class="dbtoggle"><svg class="i s3"><use href="#i-db"/></svg>Database</span>
         </div>
-        <div class="files"><span class="fchip"><svg class="i s3"><use href="#i-sheet"/></svg>event-targets-2026.xlsx<svg class="i s3" style="margin-left:2px;color:#737373"><use href="#i-x"/></svg></span></div>
+        <div class="files"><span class="fchip"><svg class="i s3"><use href="#i-sheet"/></svg>sales-targets-2026.xlsx<svg class="i s3" style="margin-left:2px;color:#737373"><use href="#i-x"/></svg></span></div>
         <div class="form">
           <div class="ghost"><svg class="i"><use href="#i-clip"/></svg></div>
           <div class="inp">Describe the dashboard you want...</div>
@@ -192,34 +194,34 @@
       <div class="dash">
         <div class="dh">
           <div>
-            <h2>Event Attendance · 2026</h2>
-            <div class="s">Real Estate and Infrastructure · all divisions</div>
+            <h2>Sales by branch · 2026</h2>
+            <div class="s">Distributor · all branches · Jan–Oct</div>
           </div>
-          <div class="ts"><i></i>Updated 11/06/2026, 9:30 AM</div>
+          <div class="ts"><i></i>Live via MCP · 11/06/2026, 9:30 AM</div>
         </div>
         <div class="db">
           <div class="kpis">
-            <div class="kpi hl"><div class="k">Attendees</div><div class="v">12,480</div><div class="d">83% of annual target</div></div>
-            <div class="kpi"><div class="k">Check-in</div><div class="v">78.6%</div><div class="d">+3.1 pts vs 2025</div></div>
-            <div class="kpi"><div class="k">Events held</div><div class="v">42</div><div class="d n">8 more by December</div></div>
+            <div class="kpi hl"><div class="k">Revenue</div><div class="v">US$ 31.2M</div><div class="d">83% of annual target</div></div>
+            <div class="kpi"><div class="k">Orders</div><div class="v">70.4K</div><div class="d">+6.2% vs 2025</div></div>
+            <div class="kpi"><div class="k">Avg. order value</div><div class="v">US$ 443</div><div class="d">+3.1% vs 2025</div></div>
             <div class="kpi"><div class="k">Avg. NPS</div><div class="v">72</div><div class="d">+5 vs 2025</div></div>
           </div>
 
           <div class="r2">
             <div class="panel">
-              <h3>Attendees by division <span>Jan–Oct</span></h3>
+              <h3>Revenue by branch <span>US$ M · Jan–Oct</span></h3>
               <div class="hb">
-                <div class="hbr"><span class="n">RE Brazil</span><span class="t"><i style="width:100%"></i></span><span class="val">3,120</span></div>
-                <div class="hbr"><span class="n">Infra Brazil</span><span class="t"><i class="ac" style="width:82%"></i></span><span class="val">2,560</span></div>
-                <div class="hbr"><span class="n">RE Europe</span><span class="t"><i style="width:61%"></i></span><span class="val">1,904</span></div>
-                <div class="hbr"><span class="n">RE Latam</span><span class="t"><i style="width:52%"></i></span><span class="val">1,622</span></div>
-                <div class="hbr"><span class="n">Infra Latam</span><span class="t"><i class="ac" style="width:45%"></i></span><span class="val">1,398</span></div>
-                <div class="hbr"><span class="n">RE India</span><span class="t"><i style="width:33%"></i></span><span class="val">1,031</span></div>
-                <div class="hbr"><span class="n">GCC</span><span class="t"><i style="width:27%"></i></span><span class="val">845</span></div>
+                <div class="hbr"><span class="n">São Paulo</span><span class="t"><i style="width:100%"></i></span><span class="val">8.4</span></div>
+                <div class="hbr"><span class="n">Rio de Janeiro</span><span class="t"><i style="width:67%"></i></span><span class="val">5.6</span></div>
+                <div class="hbr"><span class="n">Minas Gerais</span><span class="t"><i class="ac" style="width:56%"></i></span><span class="val">4.7</span></div>
+                <div class="hbr"><span class="n">Paraná</span><span class="t"><i style="width:49%"></i></span><span class="val">4.1</span></div>
+                <div class="hbr"><span class="n">Bahia</span><span class="t"><i class="ac" style="width:42%"></i></span><span class="val">3.5</span></div>
+                <div class="hbr"><span class="n">Pernambuco</span><span class="t"><i style="width:33%"></i></span><span class="val">2.8</span></div>
+                <div class="hbr"><span class="n">Goiás</span><span class="t"><i style="width:25%"></i></span><span class="val">2.1</span></div>
               </div>
             </div>
             <div class="panel">
-              <h3>Audience profile <span>% of attendees</span></h3>
+              <h3>Product line mix <span>% of revenue</span></h3>
               <div class="donut">
                 <svg width="100" height="100" viewBox="0 0 42 42">
                   <circle cx="21" cy="21" r="15.915" fill="none" stroke="#f0f0f5" stroke-width="6"/>
@@ -229,13 +231,13 @@
                   <circle cx="21" cy="21" r="15.915" fill="none" stroke="#8f93b8" stroke-width="6" stroke-dasharray="14 86" stroke-dashoffset="-49"/>
                   <circle cx="21" cy="21" r="15.915" fill="none" stroke="#cfd1e3" stroke-width="6" stroke-dasharray="12 88" stroke-dashoffset="-63"/>
                   <text x="21" y="21" text-anchor="middle" font-size="6.2" font-weight="700" fill="#1a1a2e" font-family="Inter">5</text>
-                  <text x="21" y="26" text-anchor="middle" font-size="2.6" fill="#8b8da3" font-family="Inter">profiles</text>
+                  <text x="21" y="26" text-anchor="middle" font-size="2.6" fill="#8b8da3" font-family="Inter">lines</text>
                 </svg>
                 <div class="leg">
-                  <div><i style="background:#1a1a2e"></i>Investors<b>34%</b></div>
-                  <div><i style="background:#e94560"></i>Developers<b>22%</b></div>
-                  <div><i style="background:#4b5bd6"></i>Consultancies<b>18%</b></div>
-                  <div><i style="background:#8f93b8"></i>Public sector<b>14%</b></div>
+                  <div><i style="background:#1a1a2e"></i>Pro line<b>34%</b></div>
+                  <div><i style="background:#e94560"></i>Home line<b>22%</b></div>
+                  <div><i style="background:#4b5bd6"></i>Accessories<b>18%</b></div>
+                  <div><i style="background:#8f93b8"></i>Spare parts<b>14%</b></div>
                   <div><i style="background:#cfd1e3"></i>Other<b>12%</b></div>
                 </div>
               </div>
@@ -243,7 +245,7 @@
           </div>
 
           <div class="panel">
-            <h3>Monthly check-in <span>% of registrants · target 75%</span></h3>
+            <h3>On-time delivery by month <span>% of orders · target 75%</span></h3>
             <svg width="100%" height="96" viewBox="0 0 640 96" style="display:block">
               <g font-family="Inter" font-size="9" fill="#8b8da3">
                 <line x1="28" x2="636" y1="8.0" y2="8.0" stroke="#f0f0f5"/><text x="22" y="11" text-anchor="end">90</text>
@@ -260,19 +262,19 @@
               </g>
             </svg>
             <div style="display:flex;gap:14px;font-size:10.5px;color:#4a4c63;margin-top:4px">
-              <span style="display:flex;align-items:center;gap:5px"><i style="width:10px;height:2px;background:#1a1a2e;display:block"></i>Real Estate</span>
-              <span style="display:flex;align-items:center;gap:5px"><i style="width:10px;height:2px;background:#e94560;display:block"></i>Infrastructure</span>
+              <span style="display:flex;align-items:center;gap:5px"><i style="width:10px;height:2px;background:#1a1a2e;display:block"></i>Retail</span>
+              <span style="display:flex;align-items:center;gap:5px"><i style="width:10px;height:2px;background:#e94560;display:block"></i>Wholesale</span>
             </div>
           </div>
 
           <div class="panel">
-            <h3>Best-attended events <span>top 3</span></h3>
+            <h3>Best-selling products <span>top 3</span></h3>
             <table>
-              <thead><tr><th>Event</th><th>Division</th><th>Date</th><th class="num">Attendees</th><th class="num">Check-in</th></tr></thead>
+              <thead><tr><th>Product</th><th>Top branch</th><th class="num">Orders</th><th class="num">Revenue</th><th class="num">On time</th></tr></thead>
               <tbody>
-                <tr><td>Concessions and Logistics Forum</td><td><span class="pill p-in">Infra Brazil</span></td><td>05/12</td><td class="num">684</td><td class="num">82%</td></tr>
-                <tr><td>Residential Development Meetup</td><td><span class="pill p-re">RE Brazil</span></td><td>03/24</td><td class="num">612</td><td class="num">79%</td></tr>
-                <tr><td>Data Centers and Energy Committee</td><td><span class="pill p-in">Infra Latam</span></td><td>08/18</td><td class="num">455</td><td class="num">84%</td></tr>
+                <tr><td>Pro 750 W drill</td><td><span class="pill p-re">São Paulo</span></td><td class="num">6,840</td><td class="num">US$ 2.9M</td><td class="num">82%</td></tr>
+                <tr><td>Home organizer kit</td><td><span class="pill p-in">Minas Gerais</span></td><td class="num">5,120</td><td class="num">US$ 1.4M</td><td class="num">79%</td></tr>
+                <tr><td>40-piece wrench set</td><td><span class="pill p-in">Bahia</span></td><td class="num">4,550</td><td class="num">US$ 0.9M</td><td class="num">84%</td></tr>
               </tbody>
             </table>
           </div>

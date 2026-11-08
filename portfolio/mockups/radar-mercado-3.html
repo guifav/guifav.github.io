@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="pt-BR" class="dark">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>Radar · Detalhe do sinal</title>
+<!-- Tela conceitual. Empresas, pessoas, fontes e valores são fictícios. -->
+<style>
+  :root {
+    --background: #0a0a0a;
+    --foreground: #fafafa;
+    --muted: #171717;
+    --muted-foreground: #a3a3a3;
+    --border: #262626;
+    --card: #0a0a0a;
+    --accent: #262626;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1440px; height: 900px; overflow: hidden; }
+  body { background: var(--background); color: var(--foreground); font-family: system-ui, -apple-system, sans-serif; -webkit-font-smoothing: antialiased; }
+  .i { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+  .i.b { stroke-width: 2; }
+  .i-12 { width: 12px; height: 12px; stroke-width: 2; }
+  .i-10 { width: 10px; height: 10px; stroke-width: 2; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .muted { color: var(--muted-foreground); }
+
+  .shell { display: flex; height: 900px; }
+  aside { width: 224px; border-right: 1px solid var(--border); background: var(--background); display: flex; flex-direction: column; flex-shrink: 0; }
+  .brand { padding: 16px; border-bottom: 1px solid var(--border); }
+  .brand h2 { font-size: 14px; font-weight: 700; letter-spacing: -0.02em; line-height: 20px; }
+  .brand p { font-size: 10px; color: var(--muted-foreground); line-height: 15px; }
+  nav { flex: 1; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+  .nl { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 4px; font-size: 12px; font-weight: 500; color: var(--muted-foreground); line-height: 16px; }
+  .nl.active, .nl.on { background: var(--accent); color: var(--foreground); }
+  .nav-bottom { padding: 0 8px 4px; display: flex; flex-direction: column; gap: 2px; }
+  .user { padding: 12px 16px; border-top: 1px solid var(--border); }
+  .user .row { display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: var(--muted-foreground); }
+  .user .row .ic { display: flex; gap: 8px; }
+  .user .ver { font-size: 9px; color: rgba(163,163,163,.5); margin-top: 4px; }
+
+  main { flex: 1; min-width: 0; overflow: hidden; }
+  .topbar { height: 57px; border-bottom: 1px solid var(--border); background: var(--background); padding: 12px 24px; display: flex; justify-content: flex-end; align-items: center; }
+  .sel { height: 32px; border-radius: 4px; border: 1px solid var(--border); background: var(--muted); padding: 0 10px 0 12px; font-size: 12px; display: inline-flex; align-items: center; gap: 18px; }
+  .content { padding: 24px; }
+  .grid3 { display: grid; grid-template-columns: 220px 1fr 1fr; gap: 16px; }
+  .p1 { border-right: 1px solid var(--border); padding-right: 16px; }
+  .p3 { border-left: 1px solid var(--border); padding-left: 16px; min-width: 0; }
+  .p2 { min-width: 0; }
+  .ph { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted-foreground); margin-bottom: 12px; font-weight: 500; line-height: 15px; }
+  .chip { font-size: 10px; padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border); color: var(--muted-foreground); line-height: 15px; white-space: nowrap; }
+  .chip.on { border-color: var(--foreground); background: var(--foreground); color: var(--background); }
+  .pill { font-size: 10px; padding: 1px 6px; border-radius: 4px; background: var(--muted); color: var(--muted-foreground); line-height: 15px; white-space: nowrap; }
+  .pill.fg { background: rgba(250,250,250,.1); color: var(--foreground); }
+  .ibar { display: inline-flex; width: 32px; height: 4px; border-radius: 999px; background: var(--muted); overflow: hidden; }
+  .ibar i { display: block; height: 100%; border-radius: 999px; background: var(--foreground); }
+  .box { border: 1px solid var(--border); border-radius: 6px; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 4px; border: 1px solid var(--border); font-size: 11px; color: var(--foreground); background: var(--background); white-space: nowrap; }
+  .btn.pri { background: var(--foreground); color: var(--background); border-color: var(--foreground); font-weight: 500; }
+  .ok { color: #4ade80; } .warn { color: #fbbf24; } .bad { color: #f87171; }
+
+  .content { padding: 18px 24px; height: 843px; display: flex; flex-direction: column; gap: 16px; }
+  .back { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted-foreground); }
+  .hd { display: flex; align-items: flex-start; gap: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+  .hd h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.3; margin: 8px 0 6px; }
+  .hd .meta { display: flex; gap: 14px; font-size: 11px; color: var(--muted-foreground); align-items: center; }
+  .score { text-align: right; flex-shrink: 0; }
+  .score b { display: block; font-size: 30px; font-weight: 600; letter-spacing: -0.03em; line-height: 1; }
+  .score span { font-size: 10px; color: var(--muted-foreground); }
+  .grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 520px; gap: 20px; }
+  .col { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+  .card { border: 1px solid var(--border); border-radius: 6px; }
+  .ch { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  .ch h3 { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted-foreground); font-weight: 500; flex: 1; }
+  .sum { padding: 12px 14px; font-size: 12px; line-height: 1.7; color: #d4d4d4; }
+  .sum b { color: var(--foreground); font-weight: 500; }
+  .quote { margin: 0 14px 14px; padding: 10px 12px; border-left: 2px solid var(--border); font-size: 11.5px; color: var(--muted-foreground); line-height: 1.65; font-style: italic; background: rgba(250,250,250,.02); }
+  .quote mark { background: rgba(250,250,250,.12); color: var(--foreground); font-style: normal; padding: 0 2px; border-radius: 2px; }
+  .ent { display: grid; grid-template-columns: 80px minmax(0, 1fr) 150px 36px; gap: 10px; align-items: center; padding: 0 14px; height: 50px; border-bottom: 1px solid var(--border); font-size: 11px; }
+  .ent:last-child { border-bottom: none; }
+  .ent.th { height: 30px; font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted-foreground); }
+  .ent .k { font-size: 10px; color: var(--muted-foreground); }
+  .ent .v b { display: block; font-weight: 500; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ent .v span { display: block; font-size: 10px; color: var(--muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .m { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; padding: 2px 7px; border-radius: 4px; white-space: nowrap; }
+  .m.ex { background: rgba(74,222,128,.1); color: #4ade80; }
+  .m.nw { background: rgba(96,165,250,.12); color: #93c5fd; }
+  .m.na { background: var(--muted); color: var(--muted-foreground); }
+  .ent .fit { font-family: ui-monospace, Menlo, monospace; font-size: 11px; text-align: right; }
+  .steps { padding: 6px 14px 10px; }
+  .st { display: grid; grid-template-columns: 18px 1fr auto; gap: 10px; align-items: start; padding: 7px 0; position: relative; }
+  .st:not(:last-child)::before { content: ""; position: absolute; left: 8.5px; top: 24px; bottom: -6px; width: 1px; background: var(--border); }
+  .st .d { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--border); display: grid; place-items: center; background: var(--background); position: relative; z-index: 1; }
+  .st b { display: block; font-size: 11.5px; font-weight: 500; }
+  .st span { display: block; font-size: 10px; color: var(--muted-foreground); margin-top: 1px; }
+  .st time { font-size: 10px; color: var(--muted-foreground); font-family: ui-monospace, Menlo, monospace; }
+  .st .d.ok { color: #4ade80; border-color: rgba(74,222,128,.35); }
+  .act { padding: 12px 14px; display: flex; gap: 12px; align-items: center; }
+  .act p { font-size: 11.5px; color: #d4d4d4; line-height: 1.6; flex: 1; }
+  .act p b { color: var(--foreground); font-weight: 500; }
+  .w { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; padding: 9px 14px; border-bottom: 1px solid var(--border); }
+  .w:last-child { border-bottom: none; }
+  .w b { font-size: 11.5px; font-weight: 500; }
+  .w span { font-size: 10px; color: var(--muted-foreground); grid-column: 1; }
+  .w time { grid-row: 1 / 3; grid-column: 2; font-size: 10px; color: var(--muted-foreground); align-self: center; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-chart-column" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></symbol>
+<symbol id="i-newspaper" viewBox="0 0 24 24"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+<symbol id="i-building-2" viewBox="0 0 24 24"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></symbol>
+<symbol id="i-handshake" viewBox="0 0 24 24"><path d="m11 17 2 2a1 1 0 1 0 3-3"/><path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4"/><path d="m21 3 1 11h-2"/><path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3"/><path d="M3 4h8"/></symbol>
+<symbol id="i-triangle-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+<symbol id="i-circle-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+<symbol id="i-log-out" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></symbol>
+<symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="i-external-link" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+<symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+<symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+</defs></svg>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-mail" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol>
+<symbol id="i-scale" viewBox="0 0 24 24"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></symbol>
+<symbol id="i-monitor" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></symbol>
+<symbol id="i-phone" viewBox="0 0 24 24"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></symbol>
+<symbol id="i-send" viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+<symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></symbol>
+<symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+<symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></symbol>
+<symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></symbol>
+<symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+<symbol id="i-file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></symbol>
+<symbol id="i-rotate" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+<symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+</defs></svg>
+
+<div class="shell">
+  <aside>
+    <div class="brand"><h2>Radar</h2><p>Sinais de mercado</p></div>
+    <nav>
+      <span class="nl "><svg class="i"><use href="#i-chart-column"/></svg>Visão geral</span>
+      <span class="nl "><svg class="i"><use href="#i-newspaper"/></svg>Artigos</span>
+      <span class="nl "><svg class="i"><use href="#i-users"/></svg>Pessoas</span>
+      <span class="nl "><svg class="i"><use href="#i-building-2"/></svg>Empresas</span>
+      <span class="nl "><svg class="i"><use href="#i-handshake"/></svg>Negócios</span>
+      <span class="nl on"><svg class="i"><use href="#i-triangle-alert"/></svg>Sinais</span>
+      <span class="nl "><svg class="i"><use href="#i-mail"/></svg>Resumo diário</span>
+      <span class="nl "><svg class="i"><use href="#i-scale"/></svg>Regulatório</span>
+    </nav>
+    <div class="nav-bottom">
+      <span class="nl"><svg class="i"><use href="#i-circle-help"/></svg>Ajuda</span>
+      <span class="nl"><svg class="i"><use href="#i-settings"/></svg>Admin</span>
+    </div>
+    <div class="user">
+      <div class="row"><span>marina.teixeira</span><span class="ic"><svg class="i i-12"><use href="#i-sun"/></svg><svg class="i i-12"><use href="#i-log-out"/></svg></span></div>
+      <div class="ver">v3.8.2 · 4e1c9a7</div>
+    </div>
+  </aside>
+
+  <main>
+    <header class="topbar"><span class="sel">Brasil · 4 setores<svg class="i i-12"><use href="#i-chevron-down"/></svg></span></header>
+    <div class="content">
+      <div class="hd">
+        <div style="flex:1;min-width:0">
+          <span class="back"><svg class="i i-12"><use href="#i-chevron-left"/></svg>Sinais · Software</span>
+          <div style="display:flex;gap:6px;margin-top:10px;align-items:center"><span class="pill fg">Movimento de mercado</span><span class="pill fg">Aquisição</span><span class="pill">Software</span><span class="pill">Logística</span><span style="display:inline-flex;align-items:center;gap:6px;margin-left:6px"><span class="ibar"><i style="width:100%"></i></span><span style="font-size:10px;color:var(--muted-foreground)">alto</span></span></div>
+          <h1>Lumen Software compra a RotaViva e entra no mercado de roteirização de frotas</h1>
+          <div class="meta"><span style="display:inline-flex;align-items:center;gap:5px"><svg class="i i-12"><use href="#i-newspaper"/></svg>Jornal da Tecnologia</span><span>06/11/2026, 18:40</span><span style="display:inline-flex;align-items:center;gap:5px"><svg class="i i-12"><use href="#i-globe"/></svg>Brasil · português</span><span style="display:inline-flex;align-items:center;gap:5px"><svg class="i i-12"><use href="#i-external-link"/></svg>Abrir artigo</span></div>
+        </div>
+        <div class="score"><span>Prioridade (ICP)</span><b>86</b><span>de 100</span></div>
+        <div style="display:flex;flex-direction:column;gap:6px"><span class="btn pri"><svg class="i i-12"><use href="#i-plus"/></svg>Criar tarefa no CRM</span><span class="btn"><svg class="i i-12"><use href="#i-mail"/></svg>Incluído no resumo de hoje</span></div>
+      </div>
+
+      <div class="grid">
+        <div class="col">
+          <div class="card">
+            <div class="ch"><svg class="i i-12"><use href="#i-sparkles"/></svg><h3>Resumo extraído por IA</h3><span class="pill">confiança 0,94</span></div>
+            <div class="sum">A <b>Lumen Software</b>, de gestão de transportes, comprou a <b>RotaViva</b>, startup de roteirização com cerca de 320 funcionários, por <b>R$ 120 milhões</b>. O módulo de rotas passa a ser vendido à base de transportadoras da Lumen a partir do primeiro trimestre. <b>Helena Prates</b>, até então diretora de produto da RotaViva, assume como VP de operações da operação combinada.</div>
+            <div class="quote">“A aquisição de <mark>R$ 120 milhões</mark> deve ser concluída em janeiro, segundo <mark>Marcos Vidal</mark>, fundador da RotaViva, que segue como consultor…”</div>
+          </div>
+          <div class="card">
+            <div class="ch"><svg class="i i-12"><use href="#i-rotate"/></svg><h3>Caminho do sinal</h3><span style="font-size:10px;color:var(--muted-foreground)">total 3 min 12 s</span></div>
+            <div class="steps">
+              <div class="st"><span class="d ok"><svg class="i i-10"><use href="#i-check"/></svg></span><div><b>Coleta</b><span>Extração principal falhou (paywall); o extrator alternativo recuperou o texto</span></div><time>05:12</time></div>
+              <div class="st"><span class="d ok"><svg class="i i-10"><use href="#i-check"/></svg></span><div><b>Extração de entidades e classificação</b><span>2 empresas, 2 pessoas, 1 negócio · tipo, ação e impacto</span></div><time>05:13</time></div>
+              <div class="st"><span class="d ok"><svg class="i i-10"><use href="#i-check"/></svg></span><div><b>Enriquecimento</b><span>Cargo, LinkedIn e porte buscados para quem não estava no CRM</span></div><time>05:14</time></div>
+              <div class="st"><span class="d ok"><svg class="i i-10"><use href="#i-check"/></svg></span><div><b>Cruzamento com o CRM</b><span>1 conta e 1 contato já existentes; 2 registros novos sugeridos</span></div><time>05:15</time></div>
+              <div class="st"><span class="d ok"><svg class="i i-10"><use href="#i-check"/></svg></span><div><b>Priorização pelo perfil de cliente ideal</b><span>Setor, cargo e país dentro das regras do Admin · nota 86</span></div><time>05:15</time></div>
+              <div class="st"><span class="d"><svg class="i i-10"><use href="#i-mail"/></svg></span><div><b>Resumo diário</b><span>Primeiro item da edição de 07:00, em português e inglês</span></div><time>07:00</time></div>
+            </div>
+          </div>
+          <div class="card" style="flex:1">
+            <div class="ch"><svg class="i i-12"><use href="#i-link"/></svg><h3>Mesmo fato em outras fontes</h3><span class="pill">agrupado</span></div>
+            <div class="w"><b>Lumen anuncia compra da RotaViva</b><span>Portal Logística Hoje · 06/11, 19:05 · 92% de similaridade</span><time>duplicata</time></div>
+            <div class="w"><b>RotaViva vendida por R$ 120 milhões</b><span>Boletim Startups · 07/11, 06:30 · 88% de similaridade</span><time>duplicata</time></div>
+          </div>
+        </div>
+
+        <div class="col">
+          <div class="card">
+            <div class="ch"><svg class="i i-12"><use href="#i-database"/></svg><h3>Entidades e cruzamento com o CRM</h3><span class="pill">6</span></div>
+            <div class="ent th"><span>Tipo</span><span>Entidade</span><span>CRM</span><span style="text-align:right">ICP</span></div>
+            <div class="ent"><span class="k">Empresa · compradora</span><div class="v"><b>Lumen Software</b><span>Software · 1.100 funcionários</span></div><span><span class="m ex"><svg class="i i-10"><use href="#i-check"/></svg>Conta · Ana Ribeiro</span></span><span class="fit">86</span></div>
+            <div class="ent"><span class="k">Empresa · comprada</span><div class="v"><b>RotaViva</b><span>Logística · 320 funcionários</span></div><span><span class="m nw"><svg class="i i-10"><use href="#i-plus"/></svg>Nova · enriquecida</span></span><span class="fit">72</span></div>
+            <div class="ent"><span class="k">Pessoa · novo cargo</span><div class="v"><b>Helena Prates</b><span>VP de Operações · Lumen Software</span></div><span><span class="m nw"><svg class="i i-10"><use href="#i-plus"/></svg>Novo contato</span></span><span class="fit">91</span></div>
+            <div class="ent"><span class="k">Pessoa · citada</span><div class="v"><b>Marcos Vidal</b><span>Fundador · RotaViva</span></div><span><span class="m ex"><svg class="i i-10"><use href="#i-check"/></svg>Contato existente</span></span><span class="fit">64</span></div>
+            <div class="ent"><span class="k">Negócio</span><div class="v"><b>R$ 120 milhões</b><span>Aquisição · conclusão prevista em janeiro</span></div><span><span class="m na">Não se aplica</span></span><span class="fit">—</span></div>
+            <div class="ent"><span class="k">Local</span><div class="v"><b>São Paulo, Brasil</b><span>Mercado regional: Brasil</span></div><span><span class="m na">Não se aplica</span></span><span class="fit">—</span></div>
+          </div>
+          <div class="card">
+            <div class="act"><svg class="i" style="color:var(--foreground)"><use href="#i-target"/></svg><p><b>Ação sugerida para Ana Ribeiro:</b> parabenizar a Lumen e apresentar o pacote para frotas, agora que a base de clientes dela vai crescer.</p><span class="btn">Criar tarefa</span></div>
+          </div>
+          <div class="card" style="flex:1">
+            <div class="ch"><svg class="i i-12"><use href="#i-scale"/></svg><h3>Monitoramento regulatório das contas</h3><span class="pill">3</span></div>
+            <div class="w"><b>Órgão de defesa da concorrência: aprovação pendente</b><span>Lumen Software · ato de concentração protocolado</span><time>hoje</time></div>
+            <div class="w"><b>Nova regra de jornada para motoristas entra em vigor</b><span>Afeta 14 contas de logística no CRM</span><time>ontem</time></div>
+            <div class="w"><b>Consulta pública sobre geração distribuída</b><span>Solaris Energia e mais 2 contas · contribuições até 12/12</span><time>05/11</time></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

@@ -3,10 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="mockup-viewport" content="1440x900">
-<title>Sales Intelligence · Call review</title>
+<title>Sales Intelligence · Call evaluation</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- Tela conceitual. Pessoas, empresas e notas são fictícias. -->
 <style>
   :root {
     --bg: #ffffff; --bg-subtle: #fafaf9; --bg-muted: #f5f5f4; --bg-hover: #ebeae8;
@@ -41,7 +42,7 @@
   .sb-nav { padding: 8px; display: flex; flex-direction: column; gap: 1px; flex: 1; overflow: hidden; }
   .sb-group-label { padding: 10px 10px 4px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-4); font-weight: 600; }
   .sb-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: var(--r-md); font-size: 12.5px; color: var(--text-2); }
-  .sb-item.active { background: var(--bg-hover); color: var(--text-1); font-weight: 500; }
+  .sb-item.active, .sb-item.on { background: var(--bg-hover); color: var(--text-1); font-weight: 500; }
   .sb-item .ml { margin-left: auto; }
   .sb-footer { padding: 10px; border-top: 1px solid var(--border-subtle); display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-2); }
   .sb-avatar { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 10px; font-weight: 600; color: #fff; background: linear-gradient(135deg, #a8a29e, #78716c); flex-shrink: 0; }
@@ -114,6 +115,7 @@
 
   .chat-fab { position: absolute; bottom: 24px; right: 24px; height: 44px; padding: 0 18px 0 14px; border-radius: 9999px; display: inline-flex; align-items: center; gap: 8px; background: var(--coach); color: #fff; font-size: 13px; font-weight: 600; box-shadow: 0 8px 24px rgba(124,58,237,0.28), 0 2px 6px rgba(0,0,0,0.08); }
   .chat-fab svg.i { width: 18px; height: 18px; }
+
 </style>
 </head>
 <body>
@@ -153,8 +155,8 @@
   </defs>
 </svg>
 
+
 <div class="app">
-  <!-- Sidebar -->
   <aside class="app-sidebar">
     <div class="sb-brand">
       <svg class="sb-brand-dot" viewBox="0 0 1024 1024"><rect width="1024" height="1024" rx="230" fill="#0e0e0e"/><path d="M308 235h408c59 0 108 49 108 108v214c0 59-49 108-108 108H485L330 820V665h-22c-59 0-108-49-108-108V343c0-59 49-108 108-108z" fill="#fff"/><path d="M300 558l130-130 108 68 180-170M600 329h118v118" fill="none" stroke="#0e0e0e" stroke-width="56" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -162,31 +164,31 @@
     </div>
     <nav class="sb-nav">
       <div class="sb-group-label">Home</div>
-      <div class="sb-item"><svg class="i"><use href="#i-home"/></svg>Home</div>
-      <div class="sb-item"><svg class="i"><use href="#i-trending"/></svg>My Performance</div>
+      <div class="sb-item "><svg class="i"><use href="#i-home"/></svg>Home</div>
+      <div class="sb-item "><svg class="i"><use href="#i-trending"/></svg>My Performance</div>
 
       <div class="sb-group-label">Operations</div>
-      <div class="sb-item active"><svg class="i"><use href="#i-phone"/></svg>Calls</div>
+      <div class="sb-item on"><svg class="i"><use href="#i-phone"/></svg>Calls</div>
       <div class="sb-item"><svg class="i"><use href="#i-mic"/></svg>Audio Recorder<span class="chip accent ml" style="font-size:10px;padding:1px 6px">BETA</span></div>
-      <div class="sb-item"><svg class="i"><use href="#i-users"/></svg>Team</div>
-      <div class="sb-item"><svg class="i"><use href="#i-trophy"/></svg>Leaderboard</div>
+      <div class="sb-item "><svg class="i"><use href="#i-users"/></svg>Team</div>
+      <div class="sb-item"><svg class="i"><use href="#i-trophy"/></svg>Ranking</div>
 
       <div class="sb-group-label">Sales</div>
-      <div class="sb-item"><svg class="i"><use href="#i-calendar"/></svg>Meeting Prep</div>
+      <div class="sb-item "><svg class="i"><use href="#i-calendar"/></svg>Meeting Prep</div>
       <div class="sb-item"><svg class="i"><use href="#i-book-user"/></svg>Contacts/Leads</div>
       <div class="sb-item"><svg class="i"><use href="#i-building"/></svg>Accounts</div>
 
       <div class="sb-group-label">Analysis</div>
       <div class="sb-item"><svg class="i"><use href="#i-sparkles"/></svg>Insights</div>
 
-      <div class="sb-group-label">L&amp;D</div>
-      <div class="sb-item"><svg class="i"><use href="#i-dumbbell"/></svg>Sparring<span class="chip accent ml" style="font-size:10px;padding:1px 6px">BETA</span></div>
+      <div class="sb-group-label">Training</div>
+      <div class="sb-item "><svg class="i"><use href="#i-dumbbell"/></svg>Sparring<span class="chip accent ml" style="font-size:10px;padding:1px 6px">BETA</span></div>
 
       <div class="sb-group-label">Knowledge</div>
       <div class="sb-item"><svg class="i"><use href="#i-layers"/></svg>Frameworks</div>
       <div class="sb-item"><svg class="i"><use href="#i-book"/></svg>Library</div>
-      <div class="sb-item"><svg class="i"><use href="#i-book-open"/></svg>User Guide<svg class="i ml" style="width:12px;height:12px;opacity:.6"><use href="#i-ext"/></svg></div>
-      <div class="sb-item"><svg class="i"><use href="#i-megaphone"/></svg>What's New<span class="chip accent ml">New</span></div>
+      <div class="sb-item"><svg class="i"><use href="#i-book-open"/></svg>User guide<svg class="i ml" style="width:12px;height:12px;opacity:.6"><use href="#i-ext"/></svg></div>
+      <div class="sb-item"><svg class="i"><use href="#i-megaphone"/></svg>What's new<span class="chip accent ml">New</span></div>
 
       <div class="sb-group-label">Admin</div>
       <div class="sb-item"><svg class="i"><use href="#i-bell"/></svg>Notifications<span class="chip attention ml" style="background:var(--attention-weak);color:var(--attention);border-color:var(--attention-border)">3</span></div>
@@ -202,11 +204,9 @@
     </div>
   </aside>
 
-  <!-- Topbar -->
+
   <header class="app-topbar">
-    <div class="tb-crumbs">
-      <span>Dashboard</span><span>›</span><span>Calls</span><span>›</span><span class="current">Henrique Saldanha</span>
-    </div>
+    <div class="tb-crumbs"><span>Dashboard</span><span>›</span><span>Calls</span><span>›</span><span class="current">Marcos Lacerda</span></div>
     <div class="tb-spacer"></div>
     <div style="display:inline-flex;align-items:center;gap:6px">
       <span class="tb-btn tb-search-trigger"><svg class="i"><use href="#i-search"/></svg><span class="lbl">Search calls and reps…</span><span class="tb-search-kbd">⌘K</span></span>
@@ -217,27 +217,26 @@
     </div>
   </header>
 
-  <!-- Main -->
   <main class="app-main">
     <div class="page">
       <div style="margin-bottom:10px"><span class="back"><svg class="i" style="width:13px;height:13px"><use href="#i-chev-left"/></svg>Back</span></div>
 
-      <!-- Call header -->
       <div class="card" style="padding:20px">
         <div style="display:flex;align-items:center;gap:24px">
           <div style="flex:1;min-width:0">
             <div class="meta">
               <div class="meta-row">
-                <span class="pfx">Call</span><span class="val">10/22/2026 3:30 PM</span>
-                <span class="dot">·</span><span class="mono" style="color:var(--text-3)">31m 48s</span>
-                <span class="dot">·</span><span class="mono ic-link" style="font-size:11.5px">00T8c00000QxRr2EAF</span>
+                <span class="pfx">Call</span><span class="val">10/28/2026 10:00 AM</span>
+                <span class="dot">·</span><span class="mono" style="color:var(--text-3)">38m 12s</span>
+                <span class="dot">·</span><span style="color:var(--text-3)">Google Meet</span>
+                <span class="dot">·</span><span class="mono ic-link" style="font-size:11.5px">00T8c00000QyTs4EAF</span>
               </div>
               <div class="meta-row" style="color:var(--text-3)">
-                <span class="pfx">Review</span><span class="mono">#40218</span><span class="pfx">on</span><span>10/22/2026 3:54 PM</span>
+                <span class="pfx">Evaluation</span><span class="mono">#41307</span><span class="pfx">on</span><span>10/28/2026 10:52 AM</span>
               </div>
             </div>
-            <h1 class="page-title"><span class="ic-link">Henrique Saldanha</span></h1>
-            <div style="color:var(--text-3);font-size:12.5px;margin-bottom:10px">Aurora Logística Investimentos</div>
+            <h1 class="page-title"><span class="ic-link">Marcos Lacerda</span></h1>
+            <div style="color:var(--text-3);font-size:12.5px;margin-bottom:10px">Industrial Director · Vértice Alimentos</div>
             <div style="display:flex;align-items:center;gap:10px">
               <span class="av" style="background:linear-gradient(135deg,#60a5fa,#2563eb)">LV</span>
               <span style="font-size:13px;font-weight:500"><span class="ic-link">Larissa Vidal</span></span>
@@ -248,26 +247,25 @@
 
           <div style="text-align:right;flex-shrink:0">
             <div style="color:var(--text-3);font-size:11px">Final score</div>
-            <div style="font-size:32px;font-weight:500;color:var(--text-1);line-height:1;letter-spacing:-0.02em;margin-top:2px">4.2<span style="font-size:16px;color:var(--text-4);font-weight:400">/5.0</span></div>
+            <div style="font-size:32px;font-weight:500;color:var(--text-1);line-height:1;letter-spacing:-0.02em;margin-top:2px">4.3<span style="font-size:16px;color:var(--text-4);font-weight:400">/5.0</span></div>
             <div style="margin-top:10px;display:flex;gap:6px;justify-content:flex-end">
               <span class="chip flat">Category A</span>
-              <span class="chip flat accent">Qualified with handoff</span>
-              <span class="chip flat">Considering</span>
+              <span class="chip flat accent">Discovery to proposal</span>
+              <span class="chip flat positive">Advanced</span>
             </div>
           </div>
 
           <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;padding-left:20px;border-left:1px solid var(--border-subtle)">
-            <span class="tb-btn"><svg class="i"><use href="#i-dumbbell"/></svg>Practice from this call</span>
-            <span class="tb-btn"><svg class="i"><use href="#i-sliders"/></svg>Correct</span>
+            <span class="tb-btn"><svg class="i"><use href="#i-dumbbell"/></svg>Train from this call</span>
+            <span class="tb-btn"><svg class="i"><use href="#i-sliders"/></svg>Adjust</span>
             <span class="tb-btn"><svg class="i"><use href="#i-eye-off"/></svg>Exclude</span>
             <span class="tb-btn"><svg class="i"><use href="#i-msg-plus"/></svg>Add self-feedback</span>
           </div>
         </div>
       </div>
 
-      <!-- Tabs -->
       <div class="tabs" style="margin-top:20px">
-        <span class="tab active">Review</span>
+        <span class="tab active">Evaluation</span>
         <span class="tab">Transcript</span>
         <span class="tab">Video</span>
         <span class="tab">Intelligence</span>
@@ -276,43 +274,41 @@
       </div>
 
       <div class="grid2">
-        <!-- Scorecard -->
         <div class="card" style="overflow:hidden">
           <div class="sec-head">
             <div>
-              <span class="sec-label">Score by stage</span>
+              <span class="sec-label">Evaluation by stage</span>
               <div class="mono" style="font-size:11px;color:var(--text-4);margin-top:2px">hunters · evaluate_category_a · v18</div>
             </div>
-            <span class="mono" style="font-size:12px;font-weight:500">25/30 pts</span>
+            <span class="mono" style="font-size:12px;font-weight:500">26/30 pts</span>
           </div>
 
           <div class="stage">
             <div class="stage-top"><div class="stage-n">1</div><div class="stage-name">Continuity and rapport</div><div class="bar"><div style="width:100%;background:var(--positive)"></div></div><div class="stage-score mono">5/5</div></div>
-            <div class="stage-just">Resumed September's talk by naming the fund and the Extrema warehouse, with no repeated intro.</div>
+            <div class="stage-just">Picked up the October conversation from the 40 hours of downtime per quarter, without repeating the pitch.</div>
           </div>
           <div class="stage">
             <div class="stage-top"><div class="stage-n">2</div><div class="stage-name">Deeper qualification</div><div class="bar"><div style="width:80%;background:var(--positive)"></div></div><div class="stage-score mono">4/5</div></div>
-            <div class="stage-just">Mapped thesis, ticket size and investment horizon; did not confirm who else is part of the decision.</div>
+            <div class="stage-just">Mapped pain, impact and the pre-summer deadline; did not confirm who else joins the decision.</div>
           </div>
           <div class="stage">
-            <div class="stage-top"><div class="stage-n">3</div><div class="stage-name">Advanced value pitch</div><div class="bar"><div style="width:80%;background:var(--positive)"></div></div><div class="stage-score mono">4/5</div></div>
-            <div class="stage-just">Tied the Logistics Committee to the search for co-investors. Cited two industry peers without naming them.</div>
+            <div class="stage-top"><div class="stage-n">3</div><div class="stage-name">Advanced value pitch</div><div class="bar"><div style="width:100%;background:var(--positive)"></div></div><div class="stage-score mono">5/5</div></div>
+            <div class="stage-just">Tied downtime cost to the pilot's payback and cited a same-industry customer without naming it.</div>
           </div>
           <div class="stage">
-            <div class="stage-top"><div class="stage-n">4</div><div class="stage-name">Solution and pricing</div><div class="bar"><div style="width:60%;background:var(--text-2)"></div></div><div class="stage-score mono">3/5</div></div>
-            <div class="stage-just">Stated the price before anchoring the benefit; the budget objection got no structured answer.</div>
+            <div class="stage-top"><div class="stage-n">4</div><div class="stage-name">Solution and price</div><div class="bar"><div style="width:80%;background:var(--positive)"></div></div><div class="stage-score mono">4/5</div></div>
+            <div class="stage-just">Showed the phased rollout before the price; payment terms were left for the proposal.</div>
           </div>
           <div class="stage">
             <div class="stage-top"><div class="stage-n">5</div><div class="stage-name">Close and commitment</div><div class="bar"><div style="width:80%;background:var(--positive)"></div></div><div class="stage-score mono">4/5</div></div>
-            <div class="stage-just">Left with a meeting booked with the partner and the proposal due Friday, both confirmed by the client.</div>
+            <div class="stage-just">Left with the proposal meeting booked for Nov 10 and a request to include the maintenance manager.</div>
           </div>
           <div class="stage">
-            <div class="stage-top"><div class="stage-n">6</div><div class="stage-name">Pricing and policy integrity</div><div class="bar"><div style="width:100%;background:var(--positive)"></div></div><div class="stage-score mono">5/5</div></div>
-            <div class="stage-just">Held list price and explained the approval committee without promising approval or off-policy terms.</div>
+            <div class="stage-top"><div class="stage-n">6</div><div class="stage-name">Pricing integrity and policy</div><div class="bar"><div style="width:80%;background:var(--positive)"></div></div><div class="stage-score mono">4/5</div></div>
+            <div class="stage-just">Kept list price, but hinted at a volume discount before the customer asked for any terms.</div>
           </div>
         </div>
 
-        <!-- Right column -->
         <div style="display:flex;flex-direction:column;gap:16px">
           <div class="card" style="overflow:hidden">
             <div class="sec-head" style="justify-content:flex-start;gap:8px;padding:12px 18px">
@@ -323,15 +319,15 @@
             </div>
             <div class="co">
               <div class="co-h"><svg class="i" style="color:var(--positive)"><use href="#i-trending"/></svg>Strengths</div>
-              <div class="co-t">Flawless continuity and active listening: every question built on something the client said in the previous call.</div>
+              <div class="co-t">Quantified discovery: the customer did the downtime math himself.</div>
             </div>
             <div class="co">
               <div class="co-h"><svg class="i" style="color:var(--attention)"><use href="#i-alert"/></svg>Weaknesses</div>
-              <div class="co-t">Price came before value. When the client raised budget, the answer went straight to a discount.</div>
+              <div class="co-t">No one from finance on the call: payback has no owner yet.</div>
             </div>
             <div class="co">
               <div class="co-h"><svg class="i" style="color:var(--accent)"><use href="#i-target"/></svg>Priority</div>
-              <div class="co-t">In the meeting with the partner, open with the co-investment pipeline and only then present the proposal.</div>
+              <div class="co-t">In the proposal, bring the controller and lead with 12-month payback.</div>
             </div>
           </div>
 
@@ -339,13 +335,13 @@
             <div class="sec-head" style="padding:10px 16px">
               <div style="display:flex;align-items:center;gap:10px">
                 <span class="sec-label">Transcript</span>
-                <span style="font-size:11px;padding:1px 8px;border-radius:999px;background:var(--bg-muted);color:var(--text-3);border:1px solid var(--border-subtle)">Original • EN</span>
+                <span style="font-size:11px;padding:1px 8px;border-radius:999px;background:var(--bg-muted);color:var(--text-3);border:1px solid var(--border-subtle)">Translated • PT → EN</span>
               </div>
-              <span class="tb-btn" style="height:26px;font-size:12px"><svg class="i"><use href="#i-languages"/></svg>Translate to PT</span>
+              <span class="tb-btn" style="height:26px;font-size:12px"><svg class="i"><use href="#i-languages"/></svg>Show original</span>
             </div>
-            <div class="tr-row"><span class="mono tr-time">18:42</span><span class="tr-spk" style="color:var(--accent)">Henrique S.</span><span class="tr-txt">This year's budget is already committed.</span></div>
-            <div class="tr-row"><span class="mono tr-time">18:51</span><span class="tr-spk" style="color:var(--text-2)">Larissa Vidal</span><span class="tr-txt">What is that co-investor pipeline worth?</span></div>
-            <div class="tr-row"><span class="mono tr-time">19:07</span><span class="tr-spk" style="color:var(--accent)">Henrique S.</span><span class="tr-txt">Fair. Let's bring my partner in on that.</span></div>
+            <div class="tr-row"><span class="mono tr-time">18:42</span><span class="tr-spk" style="color:var(--accent)">Marcos L.</span><span class="tr-txt">That's forty hours down every quarter.</span></div>
+            <div class="tr-row"><span class="mono tr-time">18:55</span><span class="tr-spk" style="color:var(--text-2)">Larissa Vidal</span><span class="tr-txt">What if the pilot cuts that in half?</span></div>
+            <div class="tr-row"><span class="mono tr-time">19:10</span><span class="tr-spk" style="color:var(--accent)">Marcos L.</span><span class="tr-txt">Then send me the phased proposal.</span></div>
           </div>
         </div>
       </div>

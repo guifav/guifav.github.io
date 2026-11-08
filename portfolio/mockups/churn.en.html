@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>Risk portfolio · Churn forecast</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- Tela conceitual. Contas, pessoas e números são fictícios. -->
+<style>
+  :root {
+    --bg: #ffffff; --bg-app: #f7f7f5; --bg-subtle: #fafaf9; --bg-muted: #f2f2f0; --bg-hover: #ebebe8;
+    --border: #e6e5e1; --border-subtle: #efeeeb; --border-strong: #d4d3ce;
+    --t1: #111110; --t2: #4a4a46; --t3: #75746e; --t4: #a3a29b;
+    --accent: #4f46e5; --accent-weak: #eef0ff; --accent-border: #c9cdfb;
+    --high: #d93a3f; --high-weak: #fdeeee; --high-border: #f6c9ca;
+    --med: #c26d08; --med-weak: #fdf4e6; --med-border: #f3d7ad;
+    --low: #1f8a5b; --low-weak: #e9f6ef; --low-border: #bfe4cf;
+    --neg: #0f7c8c; --neg-weak: #e6f5f7;
+    --font: "Inter", ui-sans-serif, system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1440px; height: 900px; overflow: hidden; }
+  body { font-family: var(--font); font-size: 13px; line-height: 1.45; color: var(--t1); background: var(--bg-app); -webkit-font-smoothing: antialiased; font-feature-settings: "cv11", "ss01"; font-variant-numeric: tabular-nums; }
+  svg.i { width: 15px; height: 15px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  svg.i.sm { width: 13px; height: 13px; }
+  svg.i.xs { width: 11px; height: 11px; stroke-width: 2.2; }
+  .mono { font-family: var(--mono); letter-spacing: -0.02em; }
+  .app { display: flex; height: 900px; }
+
+  /* Sidebar */
+  .sb { width: 224px; flex-shrink: 0; background: var(--bg-app); display: flex; flex-direction: column; padding: 12px 10px; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 4px 6px 14px; }
+  .logo { width: 26px; height: 26px; border-radius: 7px; background: linear-gradient(140deg, #6366f1, #3730a3); display: grid; place-items: center; box-shadow: inset 0 0 0 1px rgba(255,255,255,.15), 0 1px 2px rgba(55,48,163,.3); }
+  .brand b { display: block; font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand span { display: block; font-size: 11px; color: var(--t3); }
+  .sb-search { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border-radius: 7px; background: var(--bg); border: 1px solid var(--border); color: var(--t4); font-size: 12px; margin-bottom: 14px; }
+  .sb-search kbd { margin-left: auto; font-family: var(--font); font-size: 10px; color: var(--t3); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+  .grp { font-size: 10.5px; font-weight: 600; color: var(--t4); letter-spacing: .04em; text-transform: uppercase; padding: 12px 8px 5px; }
+  .ni { display: flex; align-items: center; gap: 9px; height: 30px; padding: 0 8px; border-radius: 7px; color: var(--t2); font-size: 12.5px; font-weight: 500; }
+  .ni svg.i { color: var(--t3); }
+  .ni.on { background: var(--bg); color: var(--t1); box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgba(0,0,0,.04); }
+  .ni.on svg.i { color: var(--accent); }
+  .ni .ct { margin-left: auto; font-size: 11px; color: var(--t3); font-weight: 500; }
+  .ni .ct.red { color: var(--high); background: var(--high-weak); border-radius: 999px; padding: 0 6px; }
+  .sb-foot { margin-top: auto; display: flex; align-items: center; gap: 9px; padding: 10px 6px 2px; border-top: 1px solid var(--border); }
+  .avt { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 10px; font-weight: 600; color: #fff; flex-shrink: 0; }
+  .sb-foot b { display: block; font-size: 12px; font-weight: 500; }
+  .sb-foot span { display: block; font-size: 11px; color: var(--t3); }
+
+  /* Main frame */
+  .main { flex: 1; min-width: 0; margin: 8px 8px 8px 0; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.03); }
+  .top { height: 50px; flex-shrink: 0; border-bottom: 1px solid var(--border-subtle); display: flex; align-items: center; gap: 10px; padding: 0 20px; }
+  .crumbs { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--t3); }
+  .crumbs .cur { color: var(--t1); font-weight: 500; }
+  .sp { flex: 1; }
+  .btn { height: 30px; display: inline-flex; align-items: center; gap: 6px; padding: 0 11px; border-radius: 7px; border: 1px solid var(--border); background: var(--bg); color: var(--t1); font-size: 12.5px; font-weight: 500; white-space: nowrap; box-shadow: 0 1px 1px rgba(0,0,0,.03); }
+  .btn svg.i { color: var(--t3); }
+  .btn.pri { background: var(--t1); color: #fff; border-color: var(--t1); }
+  .btn.pri svg.i { color: #fff; }
+  .seg { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--bg-muted); border: 1px solid var(--border-subtle); }
+  .seg span { padding: 3px 10px; border-radius: 6px; font-size: 12px; color: var(--t3); font-weight: 500; }
+  .seg span.on { background: var(--bg); color: var(--t1); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .pill { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 11.5px; font-weight: 500; border: 1px solid var(--border); background: var(--bg-subtle); color: var(--t2); white-space: nowrap; }
+  .pill.acc { background: var(--accent-weak); border-color: var(--accent-border); color: var(--accent); }
+  .pill.high { background: var(--high-weak); border-color: var(--high-border); color: var(--high); }
+  .pill.med { background: var(--med-weak); border-color: var(--med-border); color: var(--med); }
+  .pill.low { background: var(--low-weak); border-color: var(--low-border); color: var(--low); }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+  .card { border: 1px solid var(--border); border-radius: 10px; background: var(--bg); }
+  .card-h { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); }
+  .card-h h3 { font-size: 12.5px; font-weight: 600; }
+  .card-h .sub { font-size: 11.5px; color: var(--t3); }
+  .lbl { font-size: 11.5px; color: var(--t3); font-weight: 500; }
+  h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
+  .muted { color: var(--t3); }
+
+  .content { flex: 1; min-height: 0; padding: 18px 22px 0; display: flex; flex-direction: column; gap: 14px; }
+  .head { display: flex; align-items: flex-end; gap: 16px; }
+  .head p { font-size: 12.5px; color: var(--t3); margin-top: 3px; }
+  .kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+  .kpi { padding: 12px 14px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg); }
+  .kpi .v { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; margin-top: 4px; display: flex; align-items: baseline; gap: 8px; }
+  .kpi .v small { font-size: 11.5px; font-weight: 500; }
+  .kpi .f { font-size: 11px; color: var(--t3); margin-top: 2px; }
+  .up { color: var(--high); } .down { color: var(--low); }
+  .body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 14px; }
+  .tbl { border: 1px solid var(--border); border-radius: 10px 10px 0 0; border-bottom: none; overflow: hidden; display: flex; flex-direction: column; }
+  .tbl-bar { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--border-subtle); }
+  .row { display: grid; grid-template-columns: 188px 112px 64px minmax(0, 1fr) 88px; align-items: center; gap: 12px; padding: 0 14px; height: 43px; border-bottom: 1px solid var(--border-subtle); }
+  .row.th { height: 32px; background: var(--bg-subtle); font-size: 11px; font-weight: 500; color: var(--t3); }
+  .row.sel { background: #f7f7ff; box-shadow: inset 2px 0 0 var(--accent); }
+  .acc b { display: block; font-size: 12.5px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .acc span { display: block; font-size: 11px; color: var(--t3); }
+  .risk { display: flex; align-items: center; gap: 8px; }
+  .risk .track { flex: 1; height: 6px; border-radius: 99px; background: var(--bg-muted); overflow: hidden; }
+  .risk .track i { display: block; height: 100%; border-radius: 99px; }
+  .risk .n { font-size: 12px; font-weight: 600; width: 32px; text-align: right; }
+  .drv { display: flex; gap: 5px; overflow: hidden; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 7px; border-radius: 6px; background: var(--bg-subtle); border: 1px solid var(--border-subtle); font-size: 11px; color: var(--t2); white-space: nowrap; }
+  .chip .s { font-family: var(--mono); font-size: 10px; color: var(--high); font-weight: 500; }
+  .chip .s.n { color: var(--neg); }
+  .own { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--t2); }
+  .own .avt { width: 20px; height: 20px; font-size: 8.5px; }
+  .side { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+  .hist { padding: 14px 16px 12px; }
+  .bars { display: flex; align-items: flex-end; gap: 4px; height: 92px; position: relative; margin-top: 10px; }
+  .bars i { flex: 1; border-radius: 3px 3px 0 0; display: block; }
+  .bars .thr { position: absolute; top: -6px; bottom: 0; left: 50%; border-left: 1.5px dashed var(--t3); }
+  .bars .thr span { position: absolute; top: -4px; left: 6px; font-size: 10px; color: var(--t3); white-space: nowrap; }
+  .axis { display: flex; justify-content: space-between; font-size: 10px; color: var(--t4); margin-top: 5px; font-family: var(--mono); }
+  .imp { padding: 4px 16px 10px; }
+  .imp-row span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .imp-row { display: grid; grid-template-columns: 1fr 96px 38px; align-items: center; gap: 10px; height: 27px; font-size: 12px; color: var(--t2); }
+  .imp-row .b { height: 6px; border-radius: 99px; background: var(--bg-muted); overflow: hidden; }
+  .imp-row .b i { display: block; height: 100%; background: #8b87f0; border-radius: 99px; }
+  .imp-row .n { font-family: var(--mono); font-size: 11px; color: var(--t3); text-align: right; }
+  .agent { padding: 14px 16px; background: linear-gradient(180deg, #f8f8ff, #fff 70%); }
+  .agent p { font-size: 12px; color: var(--t2); line-height: 1.6; margin-top: 8px; }
+  .agent p b { color: var(--t1); font-weight: 600; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-gauge" viewBox="0 0 24 24"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></symbol>
+<symbol id="i-building" viewBox="0 0 24 24"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></symbol>
+<symbol id="i-bot" viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></symbol>
+<symbol id="i-book-check" viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/><path d="m9 9.5 2 2 4-4"/></symbol>
+<symbol id="i-box" viewBox="0 0 24 24"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></symbol>
+<symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+<symbol id="i-flask" viewBox="0 0 24 24"><path d="M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/></symbol>
+<symbol id="i-file-text" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></symbol>
+<symbol id="i-chev-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="i-chev-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+<symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/></symbol>
+<symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></symbol>
+<symbol id="i-arrow-down" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></symbol>
+<symbol id="i-arrow-up-right" viewBox="0 0 24 24"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></symbol>
+<symbol id="i-filter" viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></symbol>
+<symbol id="i-calendar" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></symbol>
+<symbol id="i-git-commit" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><line x1="3" x2="9" y1="12" y2="12"/><line x1="15" x2="21" y1="12" y2="12"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="i-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+<symbol id="i-send" viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></symbol>
+<symbol id="i-ticket" viewBox="0 0 24 24"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/></symbol>
+<symbol id="i-bar-chart" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></symbol>
+<symbol id="i-message" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></symbol>
+<symbol id="i-mail" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></symbol>
+<symbol id="i-rocket" viewBox="0 0 24 24"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></symbol>
+<symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></symbol>
+<symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+<symbol id="i-paperclip" viewBox="0 0 24 24"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></symbol>
+</defs></svg>
+
+<div class="app">
+  <aside class="sb">
+    <div class="brand">
+      <div class="logo"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 3 8-9"/><path d="M15 6h5v5"/></svg></div>
+      <div><b>Retention AI</b><span>Customer Success</span></div>
+    </div>
+    <div class="sb-search"><svg class="i sm"><use href="#i-search"/></svg>Search accounts<kbd>⌘K</kbd></div>
+    <div class="grp">Operations</div>
+    <div class="ni on"><svg class="i"><use href="#i-gauge"/></svg>Risk portfolio<span class="ct red">84</span></div>
+    <div class="ni "><svg class="i"><use href="#i-building"/></svg>Accounts</div>
+    <div class="ni "><svg class="i"><use href="#i-bot"/></svg>Retention agent</div>
+    <div class="ni "><svg class="i"><use href="#i-book-check"/></svg>Playbooks<span class="ct">12</span></div>
+    <div class="grp">MLOps</div>
+    <div class="ni "><svg class="i"><use href="#i-box"/></svg>Model registry</div>
+    <div class="ni "><svg class="i"><use href="#i-activity"/></svg>Monitoring</div>
+    <div class="ni "><svg class="i"><use href="#i-flask"/></svg>Experiments</div>
+    <div class="ni "><svg class="i"><use href="#i-database"/></svg>Data and features</div>
+    <div class="grp">Governance</div>
+    <div class="ni "><svg class="i"><use href="#i-file-text"/></svg>Model card</div>
+    <div class="ni "><svg class="i"><use href="#i-shield"/></svg>Privacy and bias</div>
+    <div class="ni "><svg class="i"><use href="#i-settings"/></svg>Settings</div>
+    <div class="sb-foot">
+      <div class="avt" style="background:linear-gradient(135deg,#f59e0b,#d97706)">CR</div>
+      <div><b>Camila Ramos</b><span>CS Lead</span></div>
+    </div>
+  </aside>
+
+  <section class="main">
+    <header class="top">
+      <div class="crumbs"><span>Operations</span><svg class="i xs"><use href="#i-chev-right"/></svg><span class="cur">Risk portfolio</span></div>
+      <div class="sp"></div>
+      <span class="pill acc"><span class="dot"></span>churn-xgb v4.2 · production</span>
+      <span class="pill"><svg class="i xs"><use href="#i-calendar"/></svg>Updated today, 6:10 AM</span>
+      <span class="btn"><svg class="i sm"><use href="#i-download"/></svg>Export</span>
+      <span class="btn pri"><svg class="i sm"><use href="#i-sparkles"/></svg>Ask the agent</span>
+    </header>
+    <div class="content">
+      <div class="head">
+        <div style="flex:1">
+          <h1>Risk portfolio</h1>
+          <p>Probability that each paying customer cancels in the next 90 days, with the drivers behind every score.</p>
+        </div>
+        <div class="seg"><span>30 days</span><span>60 days</span><span class="on">90 days</span></div>
+      </div>
+
+      <div class="kpis">
+        <div class="kpi"><div class="lbl">Accounts monitored</div><div class="v">1,200</div><div class="f">Demo dataset</div></div>
+        <div class="kpi"><div class="lbl">High risk (≥ 60%)</div><div class="v" style="color:var(--high)">84<small class="up">+12 this week</small></div><div class="f">7% of the portfolio</div></div>
+        <div class="kpi"><div class="lbl">Medium risk (40–60%)</div><div class="v" style="color:var(--med)">210<small class="down">−8</small></div><div class="f">18% of the portfolio</div></div>
+        <div class="kpi"><div class="lbl">Annual value at risk</div><div class="v">US$ 3.6M</div><div class="f">Probability-weighted</div></div>
+        <div class="kpi"><div class="lbl">Model quality</div><div class="v">0.89<small class="muted">AUC</small></div><div class="f">Previous score: 0.65</div></div>
+      </div>
+
+      <div class="body">
+        <div class="tbl">
+          <div class="tbl-bar">
+            <span class="pill"><svg class="i xs"><use href="#i-filter"/></svg>Risk ≥ 40%</span>
+            <span class="pill">Segment: all<svg class="i xs"><use href="#i-chev-down"/></svg></span>
+            <span class="pill">Owner: all<svg class="i xs"><use href="#i-chev-down"/></svg></span>
+            <span class="pill">Renewal within 120 days</span>
+            <span class="sp"></span>
+            <span class="lbl">294 accounts · sorted by risk</span>
+          </div>
+          <div class="row th"><span>Account</span><span>90-day risk</span><span>7 days</span><span>Top drivers (SHAP)</span><span>Owner</span></div>
+          <div id="rows"></div>
+        </div>
+
+        <div class="side">
+          <div class="card hist">
+            <div style="display:flex;align-items:center;justify-content:space-between"><h3 style="font-size:12.5px;font-weight:600">Risk distribution</h3><span class="lbl">1,200 accounts</span></div>
+            <div class="bars" id="hist"><div class="thr"><span>action threshold 50%</span></div></div>
+            <div class="axis"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>
+          </div>
+          <div class="card">
+            <div class="card-h"><h3>Top portfolio drivers</h3><span class="sp"></span><span class="sub">mean |SHAP|</span></div>
+            <div class="imp" id="imp"></div>
+          </div>
+          <div class="card agent">
+            <div style="display:flex;align-items:center;gap:8px"><svg class="i" style="color:var(--accent)"><use href="#i-sparkles"/></svg><h3 style="font-size:12.5px;font-weight:600">Weekly summary</h3><span class="sp"></span><span class="pill" style="height:20px;font-size:10.5px">faithfulness 0.99</span></div>
+            <p>Twelve accounts moved into <b>high risk</b>, nine of them after a <b>usage drop following a sponsor change</b>. The executive re-engagement playbook recovered 6 of 10 accounts last quarter.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+<script>
+  const PT = document.documentElement.lang.startsWith('pt');
+  const dec = (x, d = 2) => x.toFixed(d).replace('.', PT ? ',' : '.');
+  // Contas fictícias: nome, segmento, risco, delta 7d, fatores [rótulo, shap], responsável [iniciais, nome, cor]
+  const rows = [
+    ['Nortec Sistemas', 'Software · Enterprise', 82, +9, [['Usage −38% in 30 days', .21], ['Sponsor left', .14], ['3 critical tickets', .09]], ['RA', 'Rafael', '#6366f1'], true],
+    ['Vale Azul Transportes', 'Logistics · Mid-market', 77, +4, [['Integration down for 21 days', .19], ['NPS 3', .08]], ['JM', 'Júlia', '#0ea5e9']],
+    ['Brisa Varejo', 'Retail · Enterprise', 71, +11, [['Renewal in 40 days', .12], ['Admin logins −60%', .11]], ['CR', 'Camila', '#f59e0b']],
+    ['Solaris Energia', 'Energy · Mid-market', 68, +2, [['45% idle seats', .13], ['Overdue invoice', .07]], ['RA', 'Rafael', '#6366f1']],
+    ['Clínica Horizonte', 'Healthcare · SMB', 64, -3, [['Incomplete onboarding', .15], ['No QBR in 6 months', .06]], ['LT', 'Lucas', '#10b981']],
+    ['Ferro Norte Indústria', 'Manufacturing · Enterprise', 61, +6, [['Asked to downsize', .17], ['Usage −12%', .04]], ['JM', 'Júlia', '#0ea5e9']],
+    ['Quilha Pay', 'Fin. services · Mid', 58, +1, [['2 critical tickets', .08], ['Recent expansion', -.05]], ['LT', 'Lucas', '#10b981']],
+    ['Grão Fino Alimentos', 'Manufacturing · Mid-market', 55, -6, [['Sponsor left', .12], ['Stable usage', -.04]], ['CR', 'Camila', '#f59e0b']],
+    ['Órbita Software', 'Software · SMB', 52, +3, [['Competitor named in ticket', .10]], ['RA', 'Rafael', '#6366f1']],
+    ['Maré Alta Logística', 'Logistics · SMB', 49, -2, [['NPS 5', .05], ['Training completed', -.06]], ['JM', 'Júlia', '#0ea5e9']],
+    ['Trilha Educação', 'Services · SMB', 46, +5, [['Renewal in 60 days', .07]], ['LT', 'Lucas', '#10b981']],
+    ['Pulsar Seguros', 'Fin. services · Ent.', 43, -1, [['Usage −9%', .04], ['Multi-product', -.08]], ['CR', 'Camila', '#f59e0b']],
+    ['Atlas Engenharia', 'Services · Mid-market', 41, -4, [['Sponsor promoted', .06], ['Usage +14%', -.07]], ['RA', 'Rafael', '#6366f1']],
+  ];
+  const col = (r) => r >= 60 ? 'var(--high)' : r >= 40 ? 'var(--med)' : 'var(--low)';
+  const spark = (d) => {
+    const pts = Array.from({ length: 8 }, (_, i) => {
+      const y = 20 - (i / 7) * d * 1.3 + Math.sin(i * 1.7) * 1.6;
+      return `${(i * 52 / 7).toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+    const c = d > 0 ? 'var(--high)' : 'var(--low)';
+    return `<span style="display:flex;align-items:center;gap:6px"><svg width="34" height="22" viewBox="0 0 52 40" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="${c}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="mono" style="font-size:11px;color:${c}">${d > 0 ? '+' : '−'}${Math.abs(d)}</span></span>`;
+  };
+  document.getElementById('rows').innerHTML = rows.map(([n, s, r, d, f, o, sel]) => `
+    <div class="row${sel ? ' sel' : ''}">
+      <div class="acc"><b>${n}</b><span>${s}</span></div>
+      <div class="risk"><div class="track"><i style="width:${r}%;background:${col(r)}"></i></div><span class="n" style="color:${col(r)}">${r}%</span></div>
+      ${spark(d)}
+      <div class="drv">${f.map(([l, v]) => `<span class="chip">${l}<span class="s${v < 0 ? ' n' : ''}">${v > 0 ? '+' : '−'}${dec(Math.abs(v))}</span></span>`).join('')}</div>
+      <div class="own"><span class="avt" style="background:${o[2]}">${o[0]}</span>${o[1]}</div>
+    </div>`).join('');
+  // Remove chips que não cabem inteiros na coluna
+  document.querySelectorAll('.drv').forEach((d) => { const r = d.getBoundingClientRect().right; [...d.children].forEach((c) => { if (c.getBoundingClientRect().right > r + 0.5) c.remove(); }); });
+  // Histograma fictício (20 faixas de 5%)
+  const h = [62, 118, 160, 171, 150, 122, 98, 74, 58, 43, 34, 26, 21, 15, 11, 8, 6, 4, 3, 2];
+  const mx = Math.max(...h);
+  document.getElementById('hist').insertAdjacentHTML('beforeend', h.map((v, i) => `<i style="height:${Math.max(3, v / mx * 100)}%;background:${i >= 12 ? '#e9787b' : i >= 8 ? '#f0b866' : '#c9c8f5'}"></i>`).join(''));
+  const imp = [['Usage change (30d)', .142], ['Open critical tickets', .091], ['Sponsor change', .077], ['Days to renewal', .063], ['Idle seats', .052], ['NPS', .041], ['Active integrations', .033]];
+  document.getElementById('imp').innerHTML = imp.map(([l, v]) => `<div class="imp-row"><span>${l}</span><span class="b"><i style="width:${v / .142 * 100}%"></i></span><span class="n">${dec(v, 3)}</span></div>`).join('');
+</script>
+</body>
+</html>

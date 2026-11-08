@@ -27,6 +27,10 @@ npm run render -- culkin    # um ou mais slugs
 
 Requer `cwebp` (`brew install webp`). Todas as telas são de computador: viewport 1440x900 a 2x, salvo com 1600 px de largura.
 
+## Várias telas por projeto
+
+Cada projeto mostra até três telas levemente sobrepostas: a principal (`<slug>`) e duas facetas extras (`<slug>-2`, `<slug>-3`), cada uma com a sua versão em inglês. As telas mostram o conceito e o potencial do produto, inclusive recursos que ainda não existem ou já existiram; mais importante que reproduzir a interface real é comunicar o que a aplicação faz. Termos que remetem ao empregador ou a clientes (eventos, membros, inscritos, divisões, setor imobiliário, Redshift, Marketing Cloud, matchmaking) não entram.
+
 ## Versões em inglês
 
 Cada tela com texto em português tem uma versão em inglês em `portfolio/mockups/<slug>.en.html`, renderizada como `portfolio/img/<slug>.en.webp` (`npm run render -- <slug>.en`). Nas páginas, a imagem leva `data-src-en` com o caminho da versão em inglês, e o `site.js` troca a imagem (e o link que a amplia) quando o visitante muda o idioma. Ficam sem versão em inglês as telas que já são em inglês e o Caramelo, cuja conversa em português é a própria demonstração do produto.

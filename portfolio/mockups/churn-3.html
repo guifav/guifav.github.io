@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>Registro de modelos · Previsão de churn</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- Tela conceitual. Métricas, hashes e nomes são fictícios. -->
+<style>
+  :root {
+    --bg: #ffffff; --bg-app: #f7f7f5; --bg-subtle: #fafaf9; --bg-muted: #f2f2f0; --bg-hover: #ebebe8;
+    --border: #e6e5e1; --border-subtle: #efeeeb; --border-strong: #d4d3ce;
+    --t1: #111110; --t2: #4a4a46; --t3: #75746e; --t4: #a3a29b;
+    --accent: #4f46e5; --accent-weak: #eef0ff; --accent-border: #c9cdfb;
+    --high: #d93a3f; --high-weak: #fdeeee; --high-border: #f6c9ca;
+    --med: #c26d08; --med-weak: #fdf4e6; --med-border: #f3d7ad;
+    --low: #1f8a5b; --low-weak: #e9f6ef; --low-border: #bfe4cf;
+    --neg: #0f7c8c; --neg-weak: #e6f5f7;
+    --font: "Inter", ui-sans-serif, system-ui, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1440px; height: 900px; overflow: hidden; }
+  body { font-family: var(--font); font-size: 13px; line-height: 1.45; color: var(--t1); background: var(--bg-app); -webkit-font-smoothing: antialiased; font-feature-settings: "cv11", "ss01"; font-variant-numeric: tabular-nums; }
+  svg.i { width: 15px; height: 15px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  svg.i.sm { width: 13px; height: 13px; }
+  svg.i.xs { width: 11px; height: 11px; stroke-width: 2.2; }
+  .mono { font-family: var(--mono); letter-spacing: -0.02em; }
+  .app { display: flex; height: 900px; }
+
+  /* Sidebar */
+  .sb { width: 224px; flex-shrink: 0; background: var(--bg-app); display: flex; flex-direction: column; padding: 12px 10px; }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 4px 6px 14px; }
+  .logo { width: 26px; height: 26px; border-radius: 7px; background: linear-gradient(140deg, #6366f1, #3730a3); display: grid; place-items: center; box-shadow: inset 0 0 0 1px rgba(255,255,255,.15), 0 1px 2px rgba(55,48,163,.3); }
+  .brand b { display: block; font-size: 13px; font-weight: 600; letter-spacing: -0.01em; }
+  .brand span { display: block; font-size: 11px; color: var(--t3); }
+  .sb-search { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border-radius: 7px; background: var(--bg); border: 1px solid var(--border); color: var(--t4); font-size: 12px; margin-bottom: 14px; }
+  .sb-search kbd { margin-left: auto; font-family: var(--font); font-size: 10px; color: var(--t3); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+  .grp { font-size: 10.5px; font-weight: 600; color: var(--t4); letter-spacing: .04em; text-transform: uppercase; padding: 12px 8px 5px; }
+  .ni { display: flex; align-items: center; gap: 9px; height: 30px; padding: 0 8px; border-radius: 7px; color: var(--t2); font-size: 12.5px; font-weight: 500; }
+  .ni svg.i { color: var(--t3); }
+  .ni.on { background: var(--bg); color: var(--t1); box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgba(0,0,0,.04); }
+  .ni.on svg.i { color: var(--accent); }
+  .ni .ct { margin-left: auto; font-size: 11px; color: var(--t3); font-weight: 500; }
+  .ni .ct.red { color: var(--high); background: var(--high-weak); border-radius: 999px; padding: 0 6px; }
+  .sb-foot { margin-top: auto; display: flex; align-items: center; gap: 9px; padding: 10px 6px 2px; border-top: 1px solid var(--border); }
+  .avt { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 10px; font-weight: 600; color: #fff; flex-shrink: 0; }
+  .sb-foot b { display: block; font-size: 12px; font-weight: 500; }
+  .sb-foot span { display: block; font-size: 11px; color: var(--t3); }
+
+  /* Main frame */
+  .main { flex: 1; min-width: 0; margin: 8px 8px 8px 0; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.03); }
+  .top { height: 50px; flex-shrink: 0; border-bottom: 1px solid var(--border-subtle); display: flex; align-items: center; gap: 10px; padding: 0 20px; }
+  .crumbs { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--t3); }
+  .crumbs .cur { color: var(--t1); font-weight: 500; }
+  .sp { flex: 1; }
+  .btn { height: 30px; display: inline-flex; align-items: center; gap: 6px; padding: 0 11px; border-radius: 7px; border: 1px solid var(--border); background: var(--bg); color: var(--t1); font-size: 12.5px; font-weight: 500; white-space: nowrap; box-shadow: 0 1px 1px rgba(0,0,0,.03); }
+  .btn svg.i { color: var(--t3); }
+  .btn.pri { background: var(--t1); color: #fff; border-color: var(--t1); }
+  .btn.pri svg.i { color: #fff; }
+  .seg { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--bg-muted); border: 1px solid var(--border-subtle); }
+  .seg span { padding: 3px 10px; border-radius: 6px; font-size: 12px; color: var(--t3); font-weight: 500; }
+  .seg span.on { background: var(--bg); color: var(--t1); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .pill { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 11.5px; font-weight: 500; border: 1px solid var(--border); background: var(--bg-subtle); color: var(--t2); white-space: nowrap; }
+  .pill.acc { background: var(--accent-weak); border-color: var(--accent-border); color: var(--accent); }
+  .pill.high { background: var(--high-weak); border-color: var(--high-border); color: var(--high); }
+  .pill.med { background: var(--med-weak); border-color: var(--med-border); color: var(--med); }
+  .pill.low { background: var(--low-weak); border-color: var(--low-border); color: var(--low); }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+  .card { border: 1px solid var(--border); border-radius: 10px; background: var(--bg); }
+  .card-h { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); }
+  .card-h h3 { font-size: 12.5px; font-weight: 600; }
+  .card-h .sub { font-size: 11.5px; color: var(--t3); }
+  .lbl { font-size: 11.5px; color: var(--t3); font-weight: 500; }
+  h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
+  .muted { color: var(--t3); }
+
+  .content { flex: 1; min-height: 0; padding: 16px 22px 18px; display: flex; flex-direction: column; gap: 14px; }
+  .mh { display: flex; align-items: center; gap: 12px; }
+  .mh .mi { width: 38px; height: 38px; border-radius: 10px; background: var(--accent-weak); border: 1px solid var(--accent-border); color: var(--accent); display: grid; place-items: center; }
+  .mh h1 { font-size: 18px; font-family: var(--mono); letter-spacing: -0.03em; }
+  .mh p { font-size: 12px; color: var(--t3); margin-top: 1px; }
+  .tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--border); margin-top: -2px; }
+  .tabs span { padding: 0 0 9px; font-size: 12.5px; color: var(--t3); font-weight: 500; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tabs span.on { color: var(--t1); border-bottom-color: var(--t1); }
+  .r1 { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+  .r2 { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; }
+  .vt { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .vt th { text-align: left; font-size: 11px; font-weight: 500; color: var(--t3); padding: 8px 10px; background: var(--bg-subtle); border-bottom: 1px solid var(--border-subtle); white-space: nowrap; }
+  .vt td { padding: 0 10px; height: 40px; border-bottom: 1px solid var(--border-subtle); white-space: nowrap; }
+  .vt tr:last-child td { border-bottom: none; }
+  .vt th:first-child, .vt td:first-child { padding-left: 16px; }
+  .vt .num { font-family: var(--mono); font-size: 11.5px; text-align: right; }
+  .vt th.num { font-family: var(--font); }
+  .vt .hash { font-family: var(--mono); font-size: 11px; color: var(--t3); }
+  .vt .best { color: var(--low); font-weight: 600; }
+  .vt tr.prod td { background: #fbfbff; }
+  .gate { display: grid; grid-template-columns: 18px 1fr auto; gap: 8px; align-items: center; padding: 0 16px; height: 33px; border-bottom: 1px solid var(--border-subtle); font-size: 12px; color: var(--t2); }
+  .gate:last-child { border-bottom: none; }
+  .gate .v { font-family: var(--mono); font-size: 11px; color: var(--t3); }
+  .ok { color: var(--low); } .warn { color: var(--med); } .bad { color: var(--high); }
+  .drift { padding: 0; }
+  .dr { display: grid; grid-template-columns: 1fr 110px 64px 96px; align-items: center; gap: 12px; padding: 0 16px; height: 38px; border-bottom: 1px solid var(--border-subtle); font-size: 12px; }
+  .dr.th { height: 30px; background: var(--bg-subtle); font-size: 11px; color: var(--t3); font-weight: 500; }
+  .dr .f { font-family: var(--mono); font-size: 11.5px; color: var(--t1); }
+  .dr .psi { font-family: var(--mono); font-size: 11.5px; text-align: right; }
+  .pipe { padding: 10px 16px 6px; }
+  .st { display: grid; grid-template-columns: 26px 1fr auto; gap: 12px; position: relative; padding-bottom: 12px; }
+  .st:not(:last-child)::before { content: ""; position: absolute; left: 12px; top: 26px; bottom: 0; width: 1.5px; background: var(--border); }
+  .st .ic { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--low-weak); color: var(--low); border: 1px solid var(--low-border); position: relative; z-index: 1; }
+  .st.wait .ic { background: var(--med-weak); color: var(--med); border-color: var(--med-border); }
+  .st b { display: block; font-size: 12.5px; font-weight: 600; margin-top: 3px; }
+  .st span { display: block; font-size: 11.5px; color: var(--t3); }
+  .st .tg { display: flex; gap: 4px; margin-top: 5px; flex-wrap: wrap; }
+  .st .tg i { font-style: normal; font-size: 10.5px; padding: 1px 6px; border-radius: 5px; background: var(--bg-muted); color: var(--t2); font-family: var(--mono); }
+  .st time { font-size: 11px; color: var(--t4); font-family: var(--mono); margin-top: 4px; }
+  .note { margin: 0 16px 14px; padding: 10px 12px; border-radius: 8px; background: var(--med-weak); border: 1px solid var(--med-border); font-size: 11.5px; color: #7a4a0b; display: flex; gap: 8px; line-height: 1.5; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-gauge" viewBox="0 0 24 24"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></symbol>
+<symbol id="i-building" viewBox="0 0 24 24"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></symbol>
+<symbol id="i-bot" viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></symbol>
+<symbol id="i-book-check" viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/><path d="m9 9.5 2 2 4-4"/></symbol>
+<symbol id="i-box" viewBox="0 0 24 24"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></symbol>
+<symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></symbol>
+<symbol id="i-flask" viewBox="0 0 24 24"><path d="M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/></symbol>
+<symbol id="i-file-text" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></symbol>
+<symbol id="i-chev-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="i-chev-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+<symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/></symbol>
+<symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></symbol>
+<symbol id="i-arrow-down" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></symbol>
+<symbol id="i-arrow-up-right" viewBox="0 0 24 24"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></symbol>
+<symbol id="i-filter" viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></symbol>
+<symbol id="i-calendar" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></symbol>
+<symbol id="i-git-commit" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><line x1="3" x2="9" y1="12" y2="12"/><line x1="15" x2="21" y1="12" y2="12"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="i-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+<symbol id="i-send" viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></symbol>
+<symbol id="i-ticket" viewBox="0 0 24 24"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/></symbol>
+<symbol id="i-bar-chart" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></symbol>
+<symbol id="i-message" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></symbol>
+<symbol id="i-mail" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></symbol>
+<symbol id="i-rocket" viewBox="0 0 24 24"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></symbol>
+<symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></symbol>
+<symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+<symbol id="i-paperclip" viewBox="0 0 24 24"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></symbol>
+</defs></svg>
+
+<div class="app">
+  <aside class="sb">
+    <div class="brand">
+      <div class="logo"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 3 8-9"/><path d="M15 6h5v5"/></svg></div>
+      <div><b>Retenção IA</b><span>Customer Success</span></div>
+    </div>
+    <div class="sb-search"><svg class="i sm"><use href="#i-search"/></svg>Buscar contas<kbd>⌘K</kbd></div>
+    <div class="grp">Operação</div>
+    <div class="ni "><svg class="i"><use href="#i-gauge"/></svg>Carteira de risco<span class="ct red">84</span></div>
+    <div class="ni "><svg class="i"><use href="#i-building"/></svg>Contas</div>
+    <div class="ni "><svg class="i"><use href="#i-bot"/></svg>Agente de retenção</div>
+    <div class="ni "><svg class="i"><use href="#i-book-check"/></svg>Playbooks<span class="ct">12</span></div>
+    <div class="grp">MLOps</div>
+    <div class="ni on"><svg class="i"><use href="#i-box"/></svg>Registro de modelos</div>
+    <div class="ni "><svg class="i"><use href="#i-activity"/></svg>Monitoramento</div>
+    <div class="ni "><svg class="i"><use href="#i-flask"/></svg>Experimentos</div>
+    <div class="ni "><svg class="i"><use href="#i-database"/></svg>Dados e features</div>
+    <div class="grp">Governança</div>
+    <div class="ni "><svg class="i"><use href="#i-file-text"/></svg>Model card</div>
+    <div class="ni "><svg class="i"><use href="#i-shield"/></svg>Privacidade e vieses</div>
+    <div class="ni "><svg class="i"><use href="#i-settings"/></svg>Configurações</div>
+    <div class="sb-foot">
+      <div class="avt" style="background:linear-gradient(135deg,#f59e0b,#d97706)">CR</div>
+      <div><b>Camila Ramos</b><span>Líder de CS</span></div>
+    </div>
+  </aside>
+
+  <section class="main">
+    <header class="top">
+      <div class="crumbs"><span>MLOps</span><svg class="i xs"><use href="#i-chev-right"/></svg><span>Registro de modelos</span><svg class="i xs"><use href="#i-chev-right"/></svg><span class="cur">churn-xgb</span></div>
+      <div class="sp"></div>
+      <span class="pill"><svg class="i xs"><use href="#i-git-commit"/></svg>main · 9e41b0d</span>
+      <span class="btn"><svg class="i sm"><use href="#i-bar-chart"/></svg>Comparar versões</span>
+      <span class="btn pri"><svg class="i sm"><use href="#i-rocket"/></svg>Promover v4.3 para produção</span>
+    </header>
+    <div class="content">
+      <div class="mh">
+        <div class="mi"><svg class="i"><use href="#i-box"/></svg></div>
+        <div style="flex:1"><div style="display:flex;align-items:center;gap:10px"><h1>churn-xgb</h1><span class="pill acc"><span class="dot"></span>v4.2 em produção</span><span class="pill med"><span class="dot"></span>v4.3 em homologação</span></div>
+        <p>XGBoost calibrado · risco de cancelamento em 90 dias · 64 features · servido por FastAPI · retreino mensal</p></div>
+        <div style="display:flex;gap:18px;text-align:right">
+          <div><div class="lbl">Latência p95</div><div class="mono" style="font-size:15px;font-weight:500">38 ms</div></div>
+          <div><div class="lbl">Previsões/dia</div><div class="mono" style="font-size:15px;font-weight:500">1.200</div></div>
+          <div><div class="lbl">Último treino</div><div style="font-size:15px;font-weight:500">há 2 h</div></div>
+        </div>
+      </div>
+      <div class="tabs"><span class="on">Visão geral</span><span>Versões</span><span>Avaliação</span><span>Monitoramento</span><span>Linhagem</span><span>Model card</span></div>
+
+      <div class="r1">
+        <div class="card" style="overflow:hidden">
+          <div class="card-h"><h3>Versões</h3><span class="sub">validação temporal · janela fora do treino</span></div>
+          <table class="vt">
+            <tr><th>Versão</th><th>Estágio</th><th class="num">AUC</th><th class="num">PR-AUC</th><th class="num">Brier</th><th>Dados (DVC)</th></tr>
+            <tr><td class="mono" style="font-weight:500">v4.3</td><td><span class="pill med" style="height:20px">Homologação</span></td><td class="num best">0,90</td><td class="num best">0,61</td><td class="num best">0,081</td><td class="hash">7f3a2c1</td></tr>
+            <tr class="prod"><td class="mono" style="font-weight:500">v4.2</td><td><span class="pill acc" style="height:20px">Produção</span></td><td class="num">0,89</td><td class="num">0,58</td><td class="num">0,084</td><td class="hash">c19e04b</td></tr>
+            <tr><td class="mono" style="font-weight:500">v4.1</td><td><span class="pill" style="height:20px">Arquivado</span></td><td class="num">0,86</td><td class="num">0,52</td><td class="num">0,092</td><td class="hash">a4d7710</td></tr>
+            <tr><td class="mono" style="font-weight:500">v3.0</td><td><span class="pill" style="height:20px">Arquivado</span></td><td class="num">0,81</td><td class="num">0,44</td><td class="num">0,103</td><td class="hash">5be2f98</td></tr>
+            <tr><td style="color:var(--t3)">Escore anterior</td><td><span class="pill" style="height:20px">Regras</span></td><td class="num" style="color:var(--t3)">0,65</td><td class="num" style="color:var(--t3)">0,21</td><td class="num" style="color:var(--t3)">—</td><td class="hash">—</td></tr>
+          </table>
+        </div>
+        <div class="card">
+          <div class="card-h"><h3>Curva ROC</h3><span class="sp"></span><span class="sub">teste fora do tempo</span></div>
+          <div id="roc" style="padding:8px 12px 4px"></div>
+        </div>
+        <div class="card" style="overflow:hidden">
+          <div class="card-h"><h3>Critérios para promover a v4.3</h3><span class="sp"></span><span class="sub ok">6/7</span></div>
+          <div class="gate"><svg class="i sm ok"><use href="#i-check-circle"/></svg>AUC temporal ≥ 0,85<span class="v">0,90</span></div>
+          <div class="gate"><svg class="i sm ok"><use href="#i-check-circle"/></svg>Erro de calibração ≤ 0,05<span class="v">0,031</span></div>
+          <div class="gate"><svg class="i sm ok"><use href="#i-check-circle"/></svg>Paridade de recall entre segmentos<span class="v">Δ 0,03</span></div>
+          <div class="gate"><svg class="i sm ok"><use href="#i-check-circle"/></svg>Sem dado pessoal nas features<span class="v">Presidio</span></div>
+          <div class="gate"><svg class="i sm ok"><use href="#i-check-circle"/></svg>Reproduzível a partir do commit<span class="v">9e41b0d</span></div>
+          <div class="gate"><svg class="i sm ok"><use href="#i-check-circle"/></svg>Model card e plano LGPD atualizados<span class="v">v4.3</span></div>
+          <div class="gate"><svg class="i sm warn"><use href="#i-alert"/></svg>Aprovação humana<span class="v warn" style="font-family:var(--font)">pendente · C. Ramos</span></div>
+        </div>
+      </div>
+
+      <div class="r2">
+        <div class="card" style="overflow:hidden;display:flex;flex-direction:column">
+          <div class="card-h"><h3>Monitoramento de drift</h3><span class="sub">produção · últimos 7 dias vs. treino</span><span class="sp"></span><span class="pill">Evidently</span><span class="pill">Prometheus</span></div>
+          <div class="drift">
+            <div class="dr th"><span>Feature</span><span>Tendência (8 sem.)</span><span style="text-align:right">PSI</span><span>Status</span></div>
+            <div id="drift"></div>
+          </div>
+          <div class="note" style="margin-top:auto"><svg class="i sm" style="margin-top:1px"><use href="#i-alert"/></svg><span><b>nps_ultima_pesquisa</b> passou do limite de PSI 0,20 depois da mudança na escala da pesquisa. Retreino agendado com a feature recalibrada na v4.3.</span></div>
+        </div>
+        <div class="card">
+          <div class="card-h"><h3>Pipeline da v4.3</h3><span class="sub">execução #212</span><span class="sp"></span><span class="pill">GitHub Actions</span></div>
+          <div class="pipe">
+            <div class="st"><span class="ic"><svg class="i xs"><use href="#i-check"/></svg></span><div><b>Snapshot dos dados</b><span>BigQuery para DVC · 1,8 milhão de linhas</span><div class="tg"><i>dvc:7f3a2c1</i></div></div><time>4m 12s</time></div>
+            <div class="st"><span class="ic"><svg class="i xs"><use href="#i-check"/></svg></span><div><b>Treino e busca de hiperparâmetros</b><span>48 execuções rastreadas no MLflow</span><div class="tg"><i>xgboost</i><i>optuna</i><i>mlflow:run-8c2</i></div></div><time>21m 40s</time></div>
+            <div class="st"><span class="ic"><svg class="i xs"><use href="#i-check"/></svg></span><div><b>Avaliação, vieses e explicabilidade</b><span>SHAP global e local · análise por segmento e porte</span></div><time>6m 03s</time></div>
+            <div class="st"><span class="ic"><svg class="i xs"><use href="#i-check"/></svg></span><div><b>Imagem e testes de contrato da API</b><span>FastAPI em Docker · 42 testes</span></div><time>3m 18s</time></div>
+            <div class="st wait"><span class="ic"><svg class="i xs"><use href="#i-lock"/></svg></span><div><b>Promoção para produção</b><span>Aguardando aprovação humana</span></div><time>—</time></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+<script>
+  const PT = document.documentElement.lang.startsWith('pt');
+  const dec = (x, d = 2) => x.toFixed(d).replace('.', PT ? ',' : '.');
+  // ROC fictícia
+  const el = document.getElementById('roc');
+  const W = el.clientWidth - 24, H = 214, p = 28;
+  const sx = (v) => p + v * (W - p - 6), sy = (v) => H - 20 - v * (H - 30);
+  const curve = (k) => Array.from({ length: 41 }, (_, i) => { const f = i / 40; const t = 1 - Math.pow(1 - f, k); return `${i ? 'L' : 'M'}${sx(f).toFixed(1)},${sy(t).toFixed(1)}`; }).join(' ');
+  const ticks = [0, .5, 1].map((t) => `<text x="${sx(t)}" y="${H - 5}" font-size="9.5" fill="#a3a29b" text-anchor="${t === 1 ? 'end' : t === 0 ? 'start' : 'middle'}" font-family="JetBrains Mono">${dec(t, 1)}</text><text x="${p - 6}" y="${sy(t) + 3}" font-size="9.5" fill="#a3a29b" text-anchor="end" font-family="JetBrains Mono">${dec(t, 1)}</text>`).join('');
+  el.innerHTML = `<svg width="${W}" height="${H}">
+    <rect x="${sx(0)}" y="${sy(1)}" width="${sx(1) - sx(0)}" height="${sy(0) - sy(1)}" fill="none" stroke="#efeeeb"/>
+    <line x1="${sx(0)}" y1="${sy(0)}" x2="${sx(1)}" y2="${sy(1)}" stroke="#d4d3ce" stroke-dasharray="3 3"/>
+    ${ticks}
+    <path d="${curve(1.75)}" fill="none" stroke="#a3a29b" stroke-width="1.6" stroke-dasharray="4 3"/>
+    <path d="${curve(5.2)} L${sx(1)},${sy(0)} L${sx(0)},${sy(0)} Z" fill="#4f46e5" fill-opacity=".07"/>
+    <path d="${curve(5.2)}" fill="none" stroke="#4f46e5" stroke-width="2.2"/>
+    <rect x="${sx(.42)}" y="${sy(.34)}" width="${W - sx(.42) - 10}" height="44" rx="6" fill="#fff" stroke="#e6e5e1"/>
+    <line x1="${sx(.42) + 10}" x2="${sx(.42) + 24}" y1="${sy(.34) + 15}" y2="${sy(.34) + 15}" stroke="#4f46e5" stroke-width="2.2"/>
+    <text x="${sx(.42) + 30}" y="${sy(.34) + 18.5}" font-size="10.5" fill="#111110" font-family="Inter">v4.2 · AUC ${dec(.89)}</text>
+    <line x1="${sx(.42) + 10}" x2="${sx(.42) + 24}" y1="${sy(.34) + 31}" y2="${sy(.34) + 31}" stroke="#a3a29b" stroke-width="1.6" stroke-dasharray="4 3"/>
+    <text x="${sx(.42) + 30}" y="${sy(.34) + 34.5}" font-size="10.5" fill="#75746e" font-family="Inter">${PT ? 'Escore anterior' : 'Previous score'} · ${dec(.65)}</text>
+  </svg>`;
+  // Drift fictício
+  const feats = [
+    ['uso_variacao_30d', .04, [3, 4, 3, 5, 4, 4, 3, 4]], ['tickets_criticos_abertos', .06, [4, 5, 5, 6, 5, 6, 7, 6]],
+    ['dias_ate_renovacao', .02, [2, 2, 3, 2, 2, 3, 2, 2]], ['licencas_ociosas_pct', .13, [5, 6, 7, 8, 9, 11, 12, 13]],
+    ['nps_ultima_pesquisa', .24, [4, 4, 5, 5, 6, 14, 21, 24]], ['integracoes_ativas', .03, [3, 3, 2, 3, 3, 2, 3, 3]],
+    ['previsão (saída)', .05, [3, 4, 4, 5, 4, 5, 5, 5]],
+  ];
+  const en = { uso_variacao_30d: 'usage_change_30d', tickets_criticos_abertos: 'open_critical_tickets', dias_ate_renovacao: 'days_to_renewal', licencas_ociosas_pct: 'idle_seats_pct', nps_ultima_pesquisa: 'nps_last_survey', integracoes_ativas: 'active_integrations' };
+  const stat = (v) => v >= .2 ? ['high', PT ? 'Alerta' : 'Alert'] : v >= .1 ? ['med', PT ? 'Atenção' : 'Watch'] : ['low', PT ? 'Estável' : 'Stable'];
+  document.getElementById('drift').innerHTML = feats.map(([f, v, s]) => {
+    const [c, l] = stat(v); const mx = 25;
+    const pts = s.map((y, i) => `${(i * 100 / 7).toFixed(1)},${(26 - y / mx * 24).toFixed(1)}`).join(' ');
+    return `<div class="dr"><span class="f">${PT ? f : (en[f] || f)}</span><svg width="110" height="26" viewBox="0 0 100 28" preserveAspectRatio="none"><line x1="0" x2="100" y1="${26 - .2 / mx * 24}" y2="${26 - .2 / mx * 24}" stroke="#f6c9ca" stroke-dasharray="2 2"/><polyline points="${pts}" fill="none" stroke="var(--${c})" stroke-width="1.8"/></svg><span class="psi" style="color:var(--${c})">${dec(v)}</span><span><span class="pill ${c}" style="height:20px"><span class="dot"></span>${l}</span></span></div>`;
+  }).join('');
+</script>
+</body>
+</html>

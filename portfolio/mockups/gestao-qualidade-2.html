@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>Portal SGQ · Grafo de correlação</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1440px; height: 900px; overflow: hidden; }
+  body {
+    font-family: 'Manrope', sans-serif; color: #0f172a; -webkit-font-smoothing: antialiased;
+    background: radial-gradient(circle at top, #f8fafc 0%, #f1f5f9 45%, #e2e8f0 100%);
+  }
+  .serif { font-family: 'Source Serif 4', serif; }
+  svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+
+  header { border-bottom: 1px solid #e2e8f0; background: rgba(255,255,255,.92); }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 0 32px; }
+  .hbar { display: flex; align-items: center; justify-content: space-between; padding: 12px 32px; }
+  .hleft { display: flex; align-items: center; gap: 12px; }
+  .menu-btn { width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid #e2e8f0; border-radius: 6px; background: #fff; color: #334155; }
+  .app-name { font-size: 14px; font-weight: 600; color: #0f172a; line-height: 20px; }
+  .app-sub { font-size: 12px; color: #64748b; line-height: 16px; }
+  .hright { display: flex; align-items: center; gap: 10px; }
+  .badge { display: inline-flex; align-items: center; gap: 4px; border-radius: 6px; border: 1px solid transparent; padding: 2px 10px; font-size: 12px; font-weight: 600; line-height: 16px; }
+  .badge.secondary { background: #f1f5f9; color: #0f172a; }
+  .badge.outline { border-color: #cbd5e1; color: #334155; }
+  .badge svg.i { width: 14px; height: 14px; }
+  .email { font-size: 12px; color: #64748b; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 6px; font-size: 14px; font-weight: 500; height: 36px; padding: 0 16px; white-space: nowrap; }
+  .btn.sm { height: 32px; padding: 0 12px; font-size: 13.5px; }
+  .btn.default { background: #0f172a; color: #fff; }
+  .btn.secondary { background: #f1f5f9; color: #0f172a; }
+  .btn.outline { border: 1px solid #cbd5e1; background: #fff; color: #0f172a; }
+
+
+  main.wrap { padding-top: 26px; }
+  .page-head { display: flex; align-items: flex-end; justify-content: space-between; }
+  h1 { font-family: 'Source Serif 4', serif; font-size: 24px; line-height: 32px; font-weight: 600; color: #0f172a; letter-spacing: -0.005em; }
+  .lead { font-size: 14px; color: #475569; line-height: 20px; }
+  .actions { display: flex; gap: 8px; }
+  .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; box-shadow: 0 1px 2px rgba(15,23,42,.05); }
+  .ct { font-family: 'Source Serif 4', serif; font-weight: 600; letter-spacing: -0.01em; line-height: 1; }
+  .board { margin-top: 20px; height: 718px; display: grid; grid-template-columns: 232px minmax(0,1fr) 300px; overflow: hidden; }
+  .filters { border-right: 1px solid #e2e8f0; padding: 18px 16px; background: #fcfdfe; }
+  .fh { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: #64748b; margin-bottom: 10px; }
+  .fh + .fh, .grp + .fh { margin-top: 22px; }
+  .chk { display: flex; align-items: center; gap: 9px; font-size: 13px; color: #334155; padding: 5px 0; }
+  .chk .box { width: 15px; height: 15px; border-radius: 4px; border: 1.5px solid #cbd5e1; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .chk .box.on { background: #0f172a; border-color: #0f172a; color: #fff; }
+  .chk .box svg.i { width: 11px; height: 11px; stroke-width: 3; }
+  .chk .dot { width: 8px; height: 8px; border-radius: 2px; }
+  .chk .n { margin-left: auto; font-size: 12px; color: #94a3b8; font-variant-numeric: tabular-nums; }
+  .sw { display: flex; align-items: center; justify-content: space-between; font-size: 13px; color: #334155; padding: 6px 0; }
+  .tg { width: 30px; height: 17px; border-radius: 999px; background: #cbd5e1; position: relative; flex-shrink: 0; }
+  .tg::after { content: ""; position: absolute; left: 2px; top: 2px; width: 13px; height: 13px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+  .tg.on { background: #059669; } .tg.on::after { left: 15px; }
+  .lg { display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: #475569; padding: 5px 0; }
+  .lg svg { flex-shrink: 0; }
+  .canvas { position: relative; overflow: hidden; background-color: #f8fafc; background-image: radial-gradient(#cbd5e1 1px, transparent 1px); background-size: 18px 18px; }
+  .canvas > svg { position: absolute; left: 0; top: 0; }
+  .node { position: absolute; width: 172px; height: 54px; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 7px 10px; box-shadow: 0 1px 3px rgba(15,23,42,.08); border-left-width: 3px; }
+  .node .nc { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: #0f172a; }
+  .node .nc .badge { font-size: 9.5px; padding: 0 5px; line-height: 14px; border-radius: 4px; }
+  .node .nt { font-size: 12px; color: #475569; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .node.sel { border-color: #059669; box-shadow: 0 0 0 3px rgba(16,185,129,.22), 0 4px 12px -2px rgba(15,23,42,.12); }
+  .b-GQ { border-left-color: #06b6d4; } .b-AL { border-left-color: #10b981; } .b-DC { border-left-color: #f59e0b; } .b-SEG { border-left-color: #f43f5e; } .b-ADM { border-left-color: #94a3b8; } .b-MANUAL { border-left-color: #8b5cf6; }
+  .node.sel.b-GQ { border-left-color: #059669; }
+  .node.miss { background: #fff7ed; border: 1.5px dashed #fb923c; height: 62px; top: 0; box-shadow: none; padding-top: 6px; }
+  .node.miss .nc { color: #c2410c; }
+  .node.miss .mk { width: 14px; height: 14px; border-radius: 50%; background: #ea580c; color: #fff; font-size: 10px; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; }
+  .node.miss .nt { color: #9a3412; }
+  .node.miss .nm { font-size: 10.5px; color: #c2410c; margin-top: 1px; }
+  .ctrl { position: absolute; left: 14px; bottom: 14px; background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; box-shadow: 0 1px 3px rgba(15,23,42,.08); display: flex; flex-direction: column; }
+  .ctrl span { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; color: #334155; }
+  .ctrl span + span { border-top: 1px solid #e2e8f0; }
+  .ctrl svg.i { width: 14px; height: 14px; }
+  .mini { position: absolute; right: 14px; bottom: 12px; width: 124px; height: 72px; background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; box-shadow: 0 1px 3px rgba(15,23,42,.08); overflow: hidden; }
+  .zoom { position: absolute; left: 14px; top: 14px; font-size: 11.5px; color: #64748b; background: rgba(255,255,255,.9); border: 1px solid #e2e8f0; border-radius: 6px; padding: 3px 8px; }
+  .detail { border-left: 1px solid #e2e8f0; padding: 18px 18px; display: flex; flex-direction: column; gap: 16px; overflow: hidden; }
+  .dt-code { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #64748b; }
+  .dt-title { font-family: 'Source Serif 4', serif; font-size: 18px; line-height: 24px; font-weight: 600; color: #0f172a; margin-top: 6px; }
+  .dt-meta { display: flex; gap: 6px; margin-top: 10px; }
+  .sec h4 { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: #64748b; margin-bottom: 6px; display: flex; justify-content: space-between; }
+  .sec h4 span { color: #94a3b8; }
+  .rl { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 12.5px; color: #0f172a; border-bottom: 1px solid #f1f5f9; }
+  .rl:last-child { border-bottom: 0; }
+  .rl .cd { font-weight: 600; width: 56px; flex-shrink: 0; }
+  .rl .tt { color: #475569; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+  .rl.miss .cd, .rl.miss .tt { color: #c2410c; }
+  .rl .act { font-size: 11.5px; font-weight: 600; color: #c2410c; white-space: nowrap; }
+  .rl .au { font-size: 10.5px; color: #059669; background: #ecfdf5; border-radius: 4px; padding: 0 5px; line-height: 16px; white-space: nowrap; }
+  .rl .ma { font-size: 10.5px; color: #475569; background: #f1f5f9; border-radius: 4px; padding: 0 5px; line-height: 16px; white-space: nowrap; }
+  .quote { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px 12px; font-size: 12.5px; line-height: 19px; color: #334155; }
+  .quote mark { background: #ffedd5; color: #9a3412; border-radius: 3px; padding: 0 2px; }
+  .quote .src { display: block; margin-top: 6px; font-size: 11px; color: #94a3b8; }
+  .c-MISS { background: #ffedd5; color: #9a3412; }
+  .c-ADM { background: #f1f5f9; color: #1e293b; }
+  .c-AL { background: #d1fae5; color: #065f46; }
+  .c-DC { background: #fef3c7; color: #92400e; }
+  .c-GQ { background: #cffafe; color: #155e75; }
+  .c-MANUAL { background: #ede9fe; color: #5b21b6; }
+  .c-SEG { background: #ffe4e6; color: #9f1239; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap hbar">
+    <div class="hleft">
+      <span class="menu-btn"><svg class="i" viewBox="0 0 24 24"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg></span>
+      <svg viewBox="0 0 64 64" width="40" height="40" aria-hidden="true">
+        <defs><linearGradient id="g" x1="8" x2="56" y1="8" y2="56" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#0f172a"/><stop offset="100%" stop-color="#1e293b"/></linearGradient></defs>
+        <rect width="64" height="64" rx="18" fill="url(#g)"/>
+        <rect x="5" y="5" width="54" height="54" rx="15" fill="none" opacity="0.18" stroke="#cbd5e1" stroke-width="1.5"/>
+        <text x="32" y="39" fill="#f8fafc" font-family="Georgia, 'Times New Roman', serif" font-size="20" font-weight="700" letter-spacing="1.8" text-anchor="middle">SGQ</text>
+      </svg>
+      <div>
+        <p class="app-name">Portal SGQ</p>
+        <p class="app-sub">Sistema de Gestão da Qualidade</p>
+      </div>
+    </div>
+    <div class="hright">
+      <span class="badge secondary"><svg class="i" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>Admin</span>
+      <span class="email">marina.qualidade@example.com</span>
+      <span class="btn sm outline">Sair</span>
+    </div>
+  </div>
+</header>
+<main class="wrap">
+  <div class="page-head">
+    <div>
+      <h1>Grafo de correlação</h1>
+      <p class="lead">Referências entre procedimentos lidas de cada PDF. Em laranja, documentos citados que ainda não existem.</p>
+    </div>
+    <div class="actions">
+      <span class="btn outline"><svg class="i" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>Reprocessar PDFs</span>
+      <span class="btn default"><svg class="i" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>Exportar lacunas</span>
+    </div>
+  </div>
+
+  <div class="card board">
+    <div class="filters">
+      <p class="fh">Categorias</p>
+      <div class="grp"><div class="chk"><span class="box on"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><span class="dot" style="background:#06b6d4"></span>Garantia da Qualidade<span class="n">19</span></div><div class="chk"><span class="box on"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><span class="dot" style="background:#10b981"></span>Almoxarifado<span class="n">9</span></div><div class="chk"><span class="box on"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><span class="dot" style="background:#f59e0b"></span>Compras<span class="n">6</span></div><div class="chk"><span class="box on"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><span class="dot" style="background:#f43f5e"></span>Segurança<span class="n">11</span></div><div class="chk"><span class="box on"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><span class="dot" style="background:#94a3b8"></span>Administrativo<span class="n">7</span></div><div class="chk"><span class="box on"><svg class="i" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span><span class="dot" style="background:#8b5cf6"></span>Manual<span class="n">2</span></div></div>
+      <p class="fh">Exibir</p>
+      <div class="grp">
+        <div class="sw">Referências ausentes<span class="tg on"></span></div>
+        <div class="sw">Só a vizinhança<span class="tg on"></span></div>
+        <div class="sw">Documentos inativos<span class="tg"></span></div>
+      </div>
+      <p class="fh">Legenda</p>
+      <div class="grp">
+        <div class="lg"><svg width="30" height="8"><line x1="0" y1="4" x2="30" y2="4" stroke="#059669" stroke-width="2"/></svg>Cita (selecionado)</div>
+        <div class="lg"><svg width="30" height="8"><line x1="0" y1="4" x2="30" y2="4" stroke="#0f172a" stroke-width="1.6"/></svg>É citado por</div>
+        <div class="lg"><svg width="30" height="8"><line x1="0" y1="4" x2="30" y2="4" stroke="#ea580c" stroke-width="2" stroke-dasharray="5 4"/></svg>Citação sem documento</div>
+        <div class="lg"><svg width="30" height="8"><line x1="0" y1="4" x2="30" y2="4" stroke="#cbd5e1" stroke-width="1.6"/></svg>Outras relações</div>
+      </div>
+    </div>
+
+    <div class="canvas">
+      <svg width="684" height="718" viewBox="0 0 684 718">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" fill="#059669"/></marker>
+          <marker id="ad" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" fill="#0f172a"/></marker>
+          <marker id="ao" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" fill="#ea580c"/></marker>
+          <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10z" fill="#cbd5e1"/></marker>
+        </defs>
+        <path d="M308 290 C308 227, 287 177, 224 177" fill="none" stroke="#059669" stroke-width="2" marker-end="url(#ah)"/><path d="M440 317 C460 317, 464 317, 484 317" fill="none" stroke="#059669" stroke-width="2" marker-end="url(#ah)"/><path d="M354 344 C354 378, 354 386, 354 420" fill="none" stroke="#ea580c" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#ao)"/><path d="M410 344 C410 405, 423 457, 484 457" fill="none" stroke="#059669" stroke-width="2" marker-end="url(#ah)"/><path d="M224 317 C244 317, 248 317, 268 317" fill="none" stroke="#0f172a" stroke-width="1.6" marker-end="url(#ad)"/><path d="M524 204 C524 272, 400 222, 400 290" fill="none" stroke="#0f172a" stroke-width="1.6" marker-end="url(#ad)"/><path d="M268 57 C196 57, 138 78, 138 150" fill="none" stroke="#cbd5e1" stroke-width="1.4" marker-end="url(#ag)"/><path d="M440 57 C512 57, 570 78, 570 150" fill="none" stroke="#cbd5e1" stroke-width="1.4" marker-end="url(#ag)"/><path d="M138 344 C138 383, 138 391, 138 430" fill="none" stroke="#cbd5e1" stroke-width="1.4" marker-end="url(#ag)"/><path d="M138 560 C138 526, 138 518, 138 484" fill="none" stroke="#cbd5e1" stroke-width="1.4" marker-end="url(#ag)"/><path d="M600 204 C600 243, 600 251, 600 290" fill="none" stroke="#cbd5e1" stroke-width="1.4" marker-end="url(#ag)"/><path d="M570 344 C570 424, 570 480, 570 560" fill="none" stroke="#cbd5e1" stroke-width="1.4" marker-end="url(#ag)"/><path d="M484 587 C464 587, 460 583, 440 583" fill="none" stroke="#fb923c" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#ao)"/>
+      </svg>
+      <div class="node  b-MANUAL" style="left:268px;top:30px"><p class="nc"><span class="badge c-MANUAL">MAN</span>MAN 001</p><p class="nt">Manual da Qualidade</p></div><div class="node  b-GQ" style="left:52px;top:150px"><p class="nc"><span class="badge c-GQ">GQ</span>GQ 001</p><p class="nt">Controle de documentos</p></div><div class="node  b-GQ" style="left:484px;top:150px"><p class="nc"><span class="badge c-GQ">GQ</span>GQ 007</p><p class="nt">Auditoria interna</p></div><div class="node  b-AL" style="left:52px;top:290px"><p class="nc"><span class="badge c-AL">AL</span>AL 006</p><p class="nt">Lotes, validade e FEFO</p></div><div class="node sel b-GQ" style="left:268px;top:290px"><p class="nc"><span class="badge c-GQ">GQ</span>GQ 004</p><p class="nt">Produto não conforme</p></div><div class="node  b-DC" style="left:484px;top:290px"><p class="nc"><span class="badge c-DC">DC</span>DC 003</p><p class="nt">Qualificação de fornecedores</p></div><div class="node  b-AL" style="left:52px;top:430px"><p class="nc"><span class="badge c-AL">AL</span>AL 002</p><p class="nt">Temperatura e umidade</p></div><div class="node miss" style="left:268px;top:420px"><p class="nc"><span class="mk">!</span>GQ 012</p><p class="nt">Análise de causa raiz</p><p class="nm">Citado, ainda não existe</p></div><div class="node  b-SEG" style="left:484px;top:430px"><p class="nc"><span class="badge c-SEG">SEG</span>SEG 005</p><p class="nt">Descarte de resíduos</p></div><div class="node  b-ADM" style="left:52px;top:560px"><p class="nc"><span class="badge c-ADM">ADM</span>ADM 003</p><p class="nt">Treinamento e competências</p></div><div class="node miss" style="left:268px;top:552px"><p class="nc"><span class="mk">!</span>FQ 021</p><p class="nt">Registro de desvio</p><p class="nm">Citado, ainda não existe</p></div><div class="node  b-DC" style="left:484px;top:560px"><p class="nc"><span class="badge c-DC">DC</span>DC 001</p><p class="nt">Compras e pedidos</p></div>
+      <span class="zoom">Zoom 100% · 12 de 54 documentos</span>
+      <div class="ctrl"><span><svg class="i" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg></span><span><svg class="i" viewBox="0 0 24 24"><path d="M5 12h14"/></svg></span><span><svg class="i" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/></svg></span><span><svg class="i" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span></div>
+      <div class="mini"><svg width="124" height="72"><rect x="48" y="8" width="26" height="6" rx="1.5" fill="#cbd5e1"/><rect x="13" y="20" width="26" height="6" rx="1.5" fill="#cbd5e1"/><rect x="84" y="20" width="26" height="6" rx="1.5" fill="#cbd5e1"/><rect x="13" y="34" width="26" height="6" rx="1.5" fill="#cbd5e1"/><rect x="48" y="34" width="26" height="6" rx="1.5" fill="#10b981"/><rect x="84" y="34" width="26" height="6" rx="1.5" fill="#cbd5e1"/><rect x="13" y="48" width="26" height="6" rx="1.5" fill="#cbd5e1"/><rect x="48" y="47" width="26" height="6" rx="1.5" fill="#fdba74"/><rect x="84" y="48" width="26" height="6" rx="1.5" fill="#cbd5e1"/><rect x="13" y="61" width="26" height="6" rx="1.5" fill="#cbd5e1"/><rect x="48" y="60" width="26" height="6" rx="1.5" fill="#fdba74"/><rect x="84" y="61" width="26" height="6" rx="1.5" fill="#cbd5e1"/><rect x="3" y="3" width="118" height="66" fill="none" stroke="#94a3b8" stroke-width="1" rx="3"/></svg></div>
+    </div>
+
+    <div class="detail">
+      <div>
+        <p class="dt-code"><span class="badge c-GQ">GQ</span>GQ 004 · Revisão 4</p>
+        <p class="dt-title">Controle de produto não conforme</p>
+        <div class="dt-meta"><span class="badge secondary">ACTIVE</span><span class="badge outline"><svg class="i" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>PDF · 6 páginas</span></div>
+      </div>
+      <div class="sec">
+        <h4>Cita <span>4</span></h4>
+        <div class="rl"><span class="cd">GQ 001</span><span class="tt">Controle de documentos</span><span class="au">auto</span></div>
+        <div class="rl"><span class="cd">DC 003</span><span class="tt">Qualificação de fornecedores</span><span class="au">auto</span></div>
+        <div class="rl"><span class="cd">SEG 005</span><span class="tt">Descarte de resíduos</span><span class="ma">manual</span></div>
+        <div class="rl miss"><span class="cd">GQ 012</span><span class="tt">Análise de causa raiz</span><span class="act">Criar</span></div>
+      </div>
+      <div class="sec">
+        <h4>É citado por <span>2</span></h4>
+        <div class="rl"><span class="cd">AL 006</span><span class="tt">Lotes, validade e FEFO</span><span class="au">auto</span></div>
+        <div class="rl"><span class="cd">GQ 007</span><span class="tt">Auditoria interna</span><span class="au">auto</span></div>
+      </div>
+      <div class="sec">
+        <h4>Trecho detectado no PDF</h4>
+        <div class="quote">…a disposição do lote segregado segue o procedimento <mark>GQ 012 – Análise de causa raiz</mark>, com registro no formulário de desvio…<span class="src">Página 3, seção 6.2</span></div>
+      </div>
+    </div>
+  </div>
+</main>
+</body>
+</html>

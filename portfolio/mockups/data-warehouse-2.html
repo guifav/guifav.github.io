@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>Data warehouse — contrato e linhagem</title>
+<!-- Tela conceitual: monitor de um contrato de dados, com linhagem, testes de qualidade e histórico de cargas. Dados 100% fictícios. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0a0a0a;--side:#0e0e0e;--card:#121212;--card2:#171717;--line:#242424;--line2:#1c1c1c;--fg:#fafafa;--mut:#a3a3a3;--dim:#737373;--acc:#FFBE00;--ok:#34d399;--warn:#fbbf24;--err:#f87171}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1440px;height:900px;overflow:hidden}
+  body{background:var(--bg);color:var(--fg);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:13px;line-height:1.4;display:flex}
+  .mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+  svg.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+  svg.i.sm{width:14px;height:14px}
+  svg.i.xs{width:12px;height:12px}
+
+  .side{width:232px;flex:none;height:900px;background:var(--side);border-right:1px solid var(--line2);display:flex;flex-direction:column;padding:16px 12px}
+  .brand{display:flex;align-items:center;gap:10px;padding:4px 6px 18px}
+  .logo{width:30px;height:30px;border-radius:8px;background:var(--acc);color:#0a0a0a;display:flex;align-items:center;justify-content:center}
+  .brand .t{font-size:14px;font-weight:600;letter-spacing:-.01em}
+  .brand .s{font-size:11px;color:var(--dim);white-space:nowrap}
+  .env{margin-left:auto;font-size:10px;color:var(--ok);border:1px solid rgba(52,211,153,.35);background:rgba(52,211,153,.08);border-radius:999px;padding:2px 7px}
+  .search{display:flex;align-items:center;gap:8px;height:34px;border:1px solid var(--line);border-radius:8px;padding:0 10px;color:var(--dim);font-size:12px;margin-bottom:16px;background:#111}
+  .search .k{margin-left:auto;font-size:10px;border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+  .grp{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:#5c5c5c;padding:10px 8px 6px}
+  .nav{display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:8px;color:var(--mut);font-size:13px;font-weight:500}
+  .nav .c{margin-left:auto;font-size:11px;color:var(--dim)}
+  .nav.on{background:#1a1a1a;color:var(--fg);box-shadow:inset 0 0 0 1px #262626}
+  .nav.on svg{color:var(--acc)}
+  .mcp{margin-top:auto;border:1px solid var(--line);border-radius:12px;background:var(--card);padding:12px}
+  .mcp .h{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600}
+  .mcp .h i{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok)}
+  .mcp .s{font-size:11px;color:var(--dim);margin-top:4px;line-height:1.45}
+  .me{display:flex;align-items:center;gap:10px;padding:14px 6px 0}
+  .av{width:28px;height:28px;border-radius:50%;background:#262626;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#d4d4d4;flex:none}
+  .me .t{font-size:12.5px;font-weight:500}
+  .me .s{font-size:11px;color:var(--dim)}
+
+  .main{flex:1;min-width:0;height:900px;padding:0 28px;position:relative}
+  .top{height:56px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line2);font-size:12.5px;color:var(--dim)}
+  .top b{color:var(--fg);font-weight:500}
+  .top .r{margin-left:auto;display:flex;align-items:center;gap:8px}
+  .btn{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 12px;border-radius:8px;border:1px solid var(--line);background:#141414;color:#e5e5e5;font-size:12.5px;font-weight:500}
+  .btn.p{background:var(--acc);border-color:var(--acc);color:#0a0a0a}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px}
+  .ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line2)}
+  .ch .t{font-size:13.5px;font-weight:600}
+  .ch .s{font-size:11.5px;color:var(--dim)}
+  .ch .r{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--dim)}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;border-radius:999px;padding:2px 9px;border:1px solid var(--line);color:var(--mut);background:#161616;white-space:nowrap}
+  .pill.ok{color:var(--ok);border-color:rgba(52,211,153,.3);background:rgba(52,211,153,.07)}
+  .pill.acc{color:var(--acc);border-color:rgba(255,190,0,.35);background:rgba(255,190,0,.08)}
+  .pill.warn{color:var(--warn);border-color:rgba(251,191,36,.3);background:rgba(251,191,36,.07)}
+  .pill i{width:6px;height:6px;border-radius:50%;background:currentColor}
+
+  .nav[data-k="contracts"]{background:#1a1a1a;color:var(--fg);box-shadow:inset 0 0 0 1px #262626}
+  .nav[data-k="contracts"] svg{color:var(--acc)}
+
+  .head{display:flex;align-items:flex-start;gap:14px;padding:20px 0 0}
+  .hic{width:42px;height:42px;border-radius:11px;background:rgba(255,190,0,.1);border:1px solid rgba(255,190,0,.35);color:var(--acc);display:flex;align-items:center;justify-content:center;flex:none}
+  .hic svg.i{width:20px;height:20px}
+  .hrow{display:flex;align-items:center;gap:10px}
+  h1{font-size:22px;font-weight:600;letter-spacing:-.02em}
+  .hs{font-size:13px;color:var(--mut);margin-top:3px}
+  .meta{display:flex;gap:22px;margin-top:10px;font-size:12px;color:var(--dim)}
+  .meta span{display:flex;align-items:center;gap:6px}
+  .meta b{color:#d4d4d4;font-weight:500}
+  .tabs{display:flex;gap:22px;border-bottom:1px solid var(--line2);margin-top:16px;height:38px;align-items:flex-end}
+  .tab{font-size:13px;color:var(--dim);padding-bottom:10px;display:flex;gap:6px;align-items:center}
+  .tab .n{font-size:10.5px;color:#5c5c5c}
+  .tab.on{color:var(--fg);box-shadow:inset 0 -2px 0 var(--acc);font-weight:500}
+
+  .grid{display:grid;grid-template-columns:744px 1fr;gap:16px;margin-top:18px}
+  .lin{height:432px;display:flex;flex-direction:column}
+  .graph{position:relative;height:282px;margin:14px 16px 0}
+  .graph svg.w{position:absolute;left:0;top:0;width:712px;height:282px;overflow:visible}
+  .cl{position:absolute;top:0;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#5c5c5c}
+  .nd{position:absolute;width:128px;height:48px;border:1px solid #2a2a2a;background:#171717;border-radius:9px;padding:7px 9px;display:flex;flex-direction:column;justify-content:center}
+  .nd .n{font-size:10px;color:#e5e5e5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .nd .s{font-size:10px;color:var(--dim);margin-top:2px;white-space:nowrap;display:flex;align-items:center;gap:5px}
+  .nd.hl{border-color:rgba(255,190,0,.5)}
+  .nd .dot{width:6px;height:6px;border-radius:50%;background:var(--ok);flex:none}
+  .nd .dot.w{background:var(--warn)}
+  .nd.ct{height:100px;border:1.5px solid var(--acc);background:linear-gradient(180deg,rgba(255,190,0,.10),rgba(255,190,0,.03));box-shadow:0 0 0 4px rgba(255,190,0,.06),0 18px 40px -16px rgba(255,190,0,.35);justify-content:flex-start;padding:10px}
+  .nd.ct .n{color:var(--fg);font-weight:500;font-size:11px}
+  .nd.ct .k{font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--acc)}
+  .nd.ct .row{display:flex;gap:6px;margin-top:8px}
+  .nd.ct .row span{font-size:9.5px;color:#d4d4d4;background:#1f1f1f;border:1px solid #2c2c2c;border-radius:5px;padding:1px 5px}
+  .trace{margin:auto 16px 16px;border:1px solid var(--line);border-radius:10px;background:#0f0f0f;padding:10px 12px}
+  .trace .h{font-size:11px;color:var(--dim);display:flex;align-items:center;gap:6px}
+  .trace .h b{color:var(--acc);font-weight:500}
+  .chain{display:flex;align-items:center;gap:6px;margin-top:7px;flex-wrap:nowrap}
+  .chain .c{font-size:10.5px;color:#e5e5e5;background:#181818;border:1px solid #2a2a2a;border-radius:6px;padding:3px 7px;white-space:nowrap}
+  .chain .c.f{border-color:rgba(255,190,0,.45);color:var(--acc)}
+  .chain svg{color:#5c5c5c}
+  .chain .note{font-size:10.5px;color:var(--dim);white-space:nowrap}
+
+  .q{height:432px;display:flex;flex-direction:column}
+  .prog{height:4px;border-radius:4px;background:#222;margin:12px 16px 4px;overflow:hidden}
+  .prog i{display:block;height:100%;width:91.6%;background:linear-gradient(90deg,#1f9c6e,var(--ok))}
+  .tst{display:flex;gap:10px;align-items:flex-start;padding:9px 16px;border-bottom:1px solid var(--line2)}
+  .tst:last-of-type{border-bottom:none}
+  .tst svg.i{margin-top:1px}
+  .tst .ok{color:var(--ok)} .tst .w{color:var(--warn)}
+  .tst .t{font-size:12.5px;color:#e5e5e5}
+  .tst .s{font-size:11px;color:var(--dim);margin-top:1px}
+  .tst .v{margin-left:auto;font-size:10.5px;color:var(--mut);white-space:nowrap;padding-top:1px}
+  .known{margin:6px 12px 12px;border:1px solid rgba(251,191,36,.35);background:rgba(251,191,36,.06);border-radius:10px;padding:10px 12px;display:flex;gap:10px}
+  .known svg{color:var(--warn);margin-top:1px}
+  .known .t{font-size:12.5px;color:#f5f5f5}
+  .known .s{font-size:11px;color:#bdb6a0;margin-top:2px}
+
+  .loads{margin-top:16px;height:196px;display:flex}
+  .lc{flex:1;padding:14px 18px;display:flex;flex-direction:column}
+  .lh{display:flex;align-items:center;gap:10px}
+  .lh .t{font-size:13.5px;font-weight:600}
+  .lg{margin-left:auto;display:flex;gap:14px;font-size:11px;color:var(--dim)}
+  .lg span{display:flex;align-items:center;gap:6px}
+  .lg i{width:9px;height:9px;border-radius:2px;display:block}
+  .bars{flex:1;display:flex;align-items:flex-end;gap:2px;margin-top:14px;border-bottom:1px solid #262626;padding-bottom:1px;position:relative}
+  .bars b{flex:1;border-radius:2px 2px 0 0;background:#3a3a3a;display:block}
+  .bars b.p{background:linear-gradient(180deg,rgba(255,190,0,.85),rgba(255,190,0,.35))}
+  .bars b.x{background:var(--err)}
+  .bars b.e{background:transparent;border:1px dashed rgba(255,190,0,.7);border-bottom:none}
+  .ax{display:flex;justify-content:space-between;font-size:10px;color:#5c5c5c;margin-top:6px}
+  .ev{width:368px;border-left:1px solid var(--line2);padding:14px 18px;display:flex;flex-direction:column}
+  .ev .k{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--err)}
+  .ev .t{font-size:13px;font-weight:600;margin-top:8px;line-height:1.35}
+  .ev .s{font-size:11.5px;color:var(--mut);margin-top:6px;line-height:1.5}
+  .ev .f{margin-top:auto;display:flex;gap:8px}
+  .mk{position:absolute;transform:translateX(-50%);font-size:9.5px;color:var(--err);white-space:nowrap;background:#121212;border:1px solid rgba(248,113,113,.4);border-radius:4px;padding:0 4px}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="layers" viewBox="0 0 24 24"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></symbol>
+  <symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="home" viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m9 15 2 2 4-4"/></symbol>
+  <symbol id="sigma" viewBox="0 0 24 24"><path d="M18 7V5a1 1 0 0 0-1-1H6.5a.5.5 0 0 0-.4.8l4.5 6a2 2 0 0 1 0 2.4l-4.5 6a.5.5 0 0 0 .4.8H17a1 1 0 0 0 1-1v-2"/></symbol>
+  <symbol id="lineage" viewBox="0 0 24 24"><circle cx="5" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="12" r="2"/><path d="M7 6h3a4 4 0 0 1 4 4v0a2 2 0 0 0 2 2h1"/><path d="M7 18h3a4 4 0 0 0 4-4"/></symbol>
+  <symbol id="shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="workflow" viewBox="0 0 24 24"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></symbol>
+  <symbol id="book" viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/></symbol>
+  <symbol id="key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></symbol>
+  <symbol id="bot" viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></symbol>
+  <symbol id="check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+  <symbol id="octx" viewBox="0 0 24 24"><path d="M2.586 16.726A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2h6.624a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586z"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></symbol>
+  <symbol id="db" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></symbol>
+  <symbol id="code" viewBox="0 0 24 24"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></symbol>
+  <symbol id="bell" viewBox="0 0 24 24"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></symbol>
+  <symbol id="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="user" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+  <symbol id="dash" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></symbol>
+  <symbol id="target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+  <symbol id="mail" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol>
+  <symbol id="filter" viewBox="0 0 24 24"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></symbol>
+  <symbol id="badge" viewBox="0 0 24 24"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="git" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><line x1="3" x2="9" y1="12" y2="12"/><line x1="15" x2="21" y1="12" y2="12"/></symbol>
+  <symbol id="plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+</svg>
+<aside class="side">
+  <div class="brand"><div class="logo"><svg class="i"><use href="#layers"/></svg></div><div><div class="t">Warehouse</div><div class="s">dados oficiais</div></div><span class="env mono">produção</span></div>
+  <div class="search"><svg class="i sm"><use href="#search"/></svg>Buscar no catálogo<span class="k mono">⌘K</span></div>
+  <div class="nav" data-k="home"><svg class="i"><use href="#home"/></svg>Visão geral</div>
+  <div class="grp mono">Catálogo</div>
+  <div class="nav" data-k="contracts"><svg class="i"><use href="#file"/></svg>Contratos de dados<span class="c mono">14</span></div>
+  <div class="nav" data-k="metrics"><svg class="i"><use href="#sigma"/></svg>Métricas<span class="c mono">38</span></div>
+  <div class="nav" data-k="lineage"><svg class="i"><use href="#lineage"/></svg>Linhagem</div>
+  <div class="nav" data-k="dict"><svg class="i"><use href="#book"/></svg>Dicionário</div>
+  <div class="grp mono">Operação</div>
+  <div class="nav" data-k="quality"><svg class="i"><use href="#shield"/></svg>Qualidade<span class="c mono" style="color:var(--warn)">1</span></div>
+  <div class="nav" data-k="loads"><svg class="i"><use href="#workflow"/></svg>Cargas</div>
+  <div class="nav" data-k="access"><svg class="i"><use href="#key"/></svg>Acessos</div>
+  <div class="mcp">
+    <div class="h"><i></i>Servidor MCP ativo</div>
+    <div class="s">Agentes de IA leem os contratos publicados, nunca as tabelas brutas.</div>
+  </div>
+  <div class="me"><div class="av">AR</div><div><div class="t">Ana Ribeiro</div><div class="s">Engenharia de dados</div></div></div>
+</aside>
+
+
+<main class="main">
+  <div class="top">
+    <span>Contratos de dados</span><svg class="i xs"><use href="#chev"/></svg>
+    <span>comercial</span><svg class="i xs"><use href="#chev"/></svg>
+    <b class="mono">funil_comercial</b>
+    <div class="r">
+      <span class="btn"><svg class="i sm"><use href="#code"/></svg>Ver SQL</span>
+      <span class="btn p"><svg class="i sm"><use href="#bell"/></svg>Assinar alertas</span>
+    </div>
+  </div>
+
+  <div class="head">
+    <div class="hic"><svg class="i"><use href="#file"/></svg></div>
+    <div style="flex:1">
+      <div class="hrow"><h1 class="mono">funil_comercial</h1><span class="pill acc mono">v3.2</span><span class="pill ok"><i></i>Saudável · publicado</span></div>
+      <div class="hs">Funil comercial por conta e etapa, calculado uma única vez e servido a aplicações e agentes de IA.</div>
+      <div class="meta">
+        <span><svg class="i xs"><use href="#user"/></svg>Dono <b>Dados Comerciais</b></span>
+        <span><svg class="i xs"><use href="#clock"/></svg>Atualização <b>a cada 15 min</b></span>
+        <span><svg class="i xs"><use href="#workflow"/></svg>Última carga <b>há 6 min</b></span>
+        <span><svg class="i xs"><use href="#db"/></svg>Colunas <b>24</b></span>
+        <span><svg class="i xs"><use href="#bot"/></svg>Consumidores <b>4</b></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <span class="tab">Visão geral</span>
+    <span class="tab">Esquema<span class="n mono">24</span></span>
+    <span class="tab">Testes<span class="n mono">12</span></span>
+    <span class="tab on">Linhagem e qualidade</span>
+    <span class="tab">Consumidores<span class="n mono">4</span></span>
+    <span class="tab">Histórico de versões</span>
+  </div>
+
+  <div class="grid">
+    <section class="card lin">
+      <div class="ch"><svg class="i" style="color:var(--acc)"><use href="#lineage"/></svg><span class="t">Linhagem</span><span class="s">da réplica da fonte ao consumo</span>
+        <div class="r"><span class="pill mono">gerada do código</span></div></div>
+      <div class="graph" id="g">
+        <svg class="w" id="w"></svg>
+        <span class="cl mono" style="left:0">Fonte</span>
+        <span class="cl mono" style="left:146px">Staging</span>
+        <span class="cl mono" style="left:292px">Modelo</span>
+        <span class="cl mono" style="left:438px">Contrato</span>
+        <span class="cl mono" style="left:584px">Consumo</span>
+
+        <div class="nd hl" id="s1" style="left:0;top:24px"><div class="n mono">crm.oportunidades</div><div class="s"><i class="dot"></i>réplica · 3 min</div></div>
+        <div class="nd" id="s2" style="left:0;top:92px"><div class="n mono">crm.contas</div><div class="s"><i class="dot"></i>réplica · 3 min</div></div>
+        <div class="nd" id="s3" style="left:0;top:160px"><div class="n mono">portal.reunioes</div><div class="s"><i class="dot"></i>réplica · 5 min</div></div>
+        <div class="nd" id="s4" style="left:0;top:228px"><div class="n mono">marketing.envios</div><div class="s"><i class="dot"></i>réplica · 9 min</div></div>
+
+        <div class="nd hl" id="t1" style="left:146px;top:24px"><div class="n mono">stg_oportunidades</div><div class="s"><i class="dot"></i>4 testes</div></div>
+        <div class="nd" id="t2" style="left:146px;top:92px"><div class="n mono">stg_contas</div><div class="s"><i class="dot w"></i>falha conhecida</div></div>
+        <div class="nd" id="t3" style="left:146px;top:160px"><div class="n mono">stg_reunioes</div><div class="s"><i class="dot"></i>3 testes</div></div>
+        <div class="nd" id="t4" style="left:146px;top:228px"><div class="n mono">stg_envios</div><div class="s"><i class="dot"></i>2 testes</div></div>
+
+        <div class="nd" id="m1" style="left:292px;top:58px"><div class="n mono">dim_conta</div><div class="s"><i class="dot"></i>ID único do CRM</div></div>
+        <div class="nd hl" id="m2" style="left:292px;top:160px"><div class="n mono">fct_funil</div><div class="s"><i class="dot"></i>conta × etapa</div></div>
+
+        <div class="nd ct" id="c1" style="left:438px;top:96px"><div class="k mono">este contrato</div><div class="n mono" style="margin-top:5px">funil_comercial</div><div class="s"><i class="dot"></i>11 de 12 testes</div><div class="row"><span class="mono">v3.2</span><span class="mono">SLA 15m</span></div></div>
+
+        <div class="nd hl" id="a1" style="left:584px;top:24px"><div class="n">App comercial</div><div class="s">fila do SDR</div></div>
+        <div class="nd" id="a2" style="left:584px;top:92px"><div class="n">Agente de IA</div><div class="s">via MCP</div></div>
+        <div class="nd" id="a3" style="left:584px;top:160px"><div class="n">Dashboard executivo</div><div class="s">diretoria</div></div>
+        <div class="nd" id="a4" style="left:584px;top:228px"><div class="n">Orquestrador</div><div class="s">jornadas de e-mail</div></div>
+      </div>
+      <div class="trace">
+        <div class="h"><svg class="i xs"><use href="#search"/></svg>Rastro da coluna <b class="mono">etapa</b> · normalizada em 7 valores, do CRM ao contrato</div>
+        <div class="chain">
+          <span class="c mono">crm.oportunidades.stage_name</span><svg class="i xs"><use href="#chev"/></svg>
+          <span class="c mono">stg_oportunidades.etapa</span><svg class="i xs"><use href="#chev"/></svg>
+          <span class="c mono">fct_funil.etapa</span><svg class="i xs"><use href="#chev"/></svg>
+          <span class="c f mono">funil_comercial.etapa</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="card q">
+      <div class="ch"><svg class="i" style="color:var(--acc)"><use href="#shield"/></svg><span class="t">Contrato de qualidade</span><div class="r"><span class="mono" style="color:var(--ok)">11/12</span>aprovados</div></div>
+      <div class="prog"><i></i></div>
+      <div class="tst"><svg class="i ok"><use href="#check"/></svg><div><div class="t">Volume dentro da faixa esperada</div><div class="s">faixa móvel de 28 dias; fora dela, a carga aborta</div></div><span class="v mono">48,2 mil</span></div>
+      <div class="tst"><svg class="i ok"><use href="#check"/></svg><div><div class="t">Uma linha por conta e etapa</div><div class="s">chave única, sem duplicatas</div></div><span class="v mono">0 dup</span></div>
+      <div class="tst"><svg class="i ok"><use href="#check"/></svg><div><div class="t">conta_id sem nulos</div><div class="s">toda linha liga a uma conta do CRM</div></div><span class="v mono">0</span></div>
+      <div class="tst"><svg class="i ok"><use href="#check"/></svg><div><div class="t">Paridade com a regra anterior</div><div class="s">mesma resposta antes de substituir</div></div><span class="v mono">1.200/1.200</span></div>
+      <div class="tst"><svg class="i ok"><use href="#check"/></svg><div><div class="t">Tráfego de robôs e interno excluído</div><div class="s">cliques de filtros de segurança e da equipe</div></div><span class="v mono">filtrado</span></div>
+      <div class="known"><svg class="i"><use href="#alert"/></svg><div><div class="t">Falha conhecida: 0,4% das contas sem segmento</div><div class="s">Dona: Ana Ribeiro · prazo 14/11 · não bloqueia a publicação</div></div></div>
+    </section>
+  </div>
+
+  <section class="card loads">
+    <div class="lc">
+      <div class="lh"><svg class="i" style="color:var(--acc)"><use href="#workflow"/></svg><span class="t">Cargas nas últimas 24 horas</span><span class="pill mono">96 execuções</span>
+        <div class="lg"><span><i style="background:var(--acc)"></i>publicada</span><span><i style="background:var(--err)"></i>abortada</span><span><i style="border:1px dashed var(--acc)"></i>em ensaio</span></div></div>
+      <div class="bars" id="bars"></div>
+      <div class="ax mono"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>agora</span></div>
+    </div>
+    <div class="ev">
+      <div class="k mono"><svg class="i xs"><use href="#octx"/></svg>03:15 · carga abortada sozinha</div>
+      <div class="t">O volume de oportunidades caiu 62% em relação à faixa esperada</div>
+      <div class="s">A publicação travou e os consumidores seguiram com a carga das 03:00. A réplica normalizou e a carga das 03:30 passou em todos os testes.</div>
+      <div class="f"><span class="pill ok"><i></i>resolvido sem intervenção</span></div>
+    </div>
+  </section>
+</main>
+
+<script>
+  // Arestas da linhagem
+  var edges = "s1>t1*,s2>t2,s3>t3,s4>t4,t1>m2*,t2>m1,t3>m2,t4>m2,m1>c1,m2>c1*,c1>a1*,c1>a2,c1>a3,c1>a4".split(",");
+  var g = document.getElementById("g"), w = document.getElementById("w"), gr = g.getBoundingClientRect();
+  var ns = "http://www.w3.org/2000/svg", out = "";
+  edges.forEach(function (e) {
+    var hot = e.indexOf("*") > -1; e = e.replace("*", "");
+    var p = e.split(">"), a = document.getElementById(p[0]).getBoundingClientRect(), b = document.getElementById(p[1]).getBoundingClientRect();
+    var x1 = a.right - gr.left, y1 = a.top + a.height / 2 - gr.top, x2 = b.left - gr.left, y2 = b.top + b.height / 2 - gr.top, mx = (x1 + x2) / 2;
+    out += '<path d="M' + x1 + ' ' + y1 + ' C' + mx + ' ' + y1 + ' ' + mx + ' ' + y2 + ' ' + x2 + ' ' + y2 + '" fill="none" stroke="' + (hot ? "#FFBE00" : "#3a3a3a") + '" stroke-width="' + (hot ? 1.6 : 1.2) + '"' + (hot ? ' opacity=".9"' : '') + '/>';
+    out += '<circle cx="' + x2 + '" cy="' + y2 + '" r="2.4" fill="' + (hot ? "#FFBE00" : "#4a4a4a") + '"/>';
+  });
+  w.innerHTML = out;
+
+  // Barras de carga (determinísticas)
+  var bars = document.getElementById("bars"), html = "", seed = 7;
+  function rnd() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; }
+  for (var k = 0; k < 96; k++) {
+    var day = 0.55 + 0.25 * Math.sin((k - 30) / 96 * Math.PI * 2) + rnd() * 0.12;
+    var h = Math.round(Math.max(0.3, Math.min(0.95, day)) * 100), cls = "p";
+    if (k === 13) { h = 24; cls = "x"; }
+    if (k === 95) { cls = "e"; }
+    html += '<b class="' + cls + '" style="height:' + h + '%"></b>';
+  }
+  bars.innerHTML = html + '<span class="mk mono" style="left:' + (13.5 / 96 * 100) + '%;bottom:58%">03:15</span>';
+</script>
+</body>
+</html>

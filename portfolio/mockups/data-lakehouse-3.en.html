@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>Lakehouse — identity and enrichment</title>
+<!-- Tela conceitual: console de resolução de identidade e enriquecimento por IA. Dados 100% fictícios. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#f6f4ef;--side:#fbfaf7;--card:#ffffff;--card2:#faf8f4;--line:#e4e0d6;--line2:#efebe3;--fg:#1c1917;--mut:#57534e;--dim:#8a847b;--acc:#a87800;
+    --bronze:#b06d36;--silver:#7d8794;--gold:#d9a100;--ok:#15803d;--warn:#b45309}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1440px;height:900px;overflow:hidden}
+  body{background:var(--bg);color:var(--fg);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:13px;line-height:1.4;display:flex}
+  .mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+  svg.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+  svg.i.sm{width:14px;height:14px}
+  svg.i.xs{width:12px;height:12px}
+
+  .side{width:232px;flex:none;height:900px;background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:16px 12px}
+  .brand{display:flex;align-items:center;gap:10px;padding:4px 6px 18px}
+  .logo{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,#f2c230,#d9a100);color:#1c1917;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px -4px rgba(217,161,0,.6)}
+  .brand .t{font-size:14px;font-weight:600;letter-spacing:-.01em}
+  .brand .s{font-size:11px;color:var(--dim)}
+  .search{display:flex;align-items:center;gap:8px;height:34px;border:1px solid var(--line);border-radius:8px;padding:0 10px;color:var(--dim);font-size:12px;margin-bottom:16px;background:#fff}
+  .search .k{margin-left:auto;font-size:10px;border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+  .grp{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:#a8a196;padding:10px 8px 6px}
+  .nav{display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:8px;color:var(--mut);font-size:13px;font-weight:500}
+  .nav .c{margin-left:auto;font-size:11px;color:var(--dim)}
+  .layers{margin-top:auto;border:1px solid var(--line);border-radius:12px;background:#fff;padding:12px}
+  .layers .h{font-size:11.5px;font-weight:600;margin-bottom:8px;display:flex;justify-content:space-between}
+  .layers .h span{font-weight:400;color:var(--dim)}
+  .ly{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mut);padding:3px 0}
+  .ly i{width:8px;height:8px;border-radius:50%;flex:none}
+  .ly span{margin-left:auto;font-size:10.5px;color:var(--ok)}
+  .me{display:flex;align-items:center;gap:10px;padding:14px 6px 0}
+  .av{width:28px;height:28px;border-radius:50%;background:#ece8df;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:var(--mut);flex:none}
+  .me .t{font-size:12.5px;font-weight:500}
+  .me .s{font-size:11px;color:var(--dim)}
+
+  .main{flex:1;min-width:0;height:900px;padding:0 28px;position:relative}
+  .top{height:56px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--dim)}
+  .top b{color:var(--fg);font-weight:500}
+  .top .r{margin-left:auto;display:flex;align-items:center;gap:8px}
+  .btn{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 12px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--fg);font-size:12.5px;font-weight:500;box-shadow:0 1px 2px rgba(28,25,23,.04)}
+  .btn.p{background:#1c1917;border-color:#1c1917;color:#fff}
+  .btn.p svg{color:var(--gold)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 1px 2px rgba(28,25,23,.04),0 12px 30px -22px rgba(28,25,23,.25)}
+  .ch{display:flex;align-items:center;gap:8px;padding:14px 16px 10px}
+  .ch .t{font-size:13.5px;font-weight:600}
+  .ch svg{color:var(--acc)}
+  .ch .r{margin-left:auto;font-size:11.5px;color:var(--dim);display:flex;align-items:center;gap:6px}
+  .pill{display:inline-flex;align-items:center;gap:5px;font-size:11px;border-radius:999px;padding:2px 9px;border:1px solid var(--line);color:var(--mut);background:#faf8f4;white-space:nowrap}
+  .pill.gold{color:#7a5a00;border-color:rgba(217,161,0,.45);background:rgba(255,190,0,.13)}
+  .pill.ok{color:var(--ok);border-color:rgba(21,128,61,.25);background:rgba(21,128,61,.07)}
+  .pill.warn{color:var(--warn);border-color:rgba(180,83,9,.25);background:rgba(180,83,9,.07)}
+  .pill i{width:6px;height:6px;border-radius:50%;background:currentColor}
+
+  .nav[data-k="identity"]{background:#fff;color:var(--fg);box-shadow:0 0 0 1px var(--line),0 1px 2px rgba(28,25,23,.05)}
+  .nav[data-k="identity"] svg{color:var(--acc)}
+
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:20px}
+  .kp{height:80px;padding:13px 16px;display:flex;gap:12px;align-items:flex-start}
+  .kp .ib{width:32px;height:32px;border-radius:9px;background:#f5f2ec;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--acc);flex:none}
+  .kp .k{font-size:11px;color:var(--dim)}
+  .kp .v{font-size:15px;font-weight:600;margin-top:3px;letter-spacing:-.01em}
+  .kp .s{font-size:11px;color:var(--dim);margin-top:2px}
+
+  .grid{display:grid;grid-template-columns:280px 1fr;gap:16px;margin-top:14px;height:694px}
+  .q{display:flex;flex-direction:column;overflow:hidden}
+  .seg{display:flex;margin:0 16px 8px;background:#f3f0e9;border-radius:9px;padding:3px}
+  .seg span{flex:1;text-align:center;font-size:12px;padding:5px 0;border-radius:7px;color:var(--mut)}
+  .seg span.on{background:#fff;color:var(--fg);font-weight:500;box-shadow:0 1px 2px rgba(28,25,23,.08)}
+  .qi{display:flex;align-items:center;gap:10px;padding:10px 16px;border-top:1px solid var(--line2);position:relative}
+  .qi .av{width:30px;height:30px;font-size:11px}
+  .qi .t{font-size:12.5px;font-weight:500}
+  .qi .s{font-size:10.5px;color:var(--dim);margin-top:1px}
+  .qi .c{margin-left:auto;font-size:11px;font-weight:500;color:var(--acc)}
+  .qi.on{background:linear-gradient(90deg,rgba(255,190,0,.12),rgba(255,190,0,0) 80%)}
+  .qi.on::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:3px;background:var(--gold)}
+  .qi.on .av{background:#1c1917;color:#f5e6b8}
+
+  .right{display:flex;flex-direction:column;gap:14px;min-width:0}
+  .cmp{height:398px;display:flex;flex-direction:column}
+  .cmph{display:flex;align-items:center;gap:12px;padding:14px 18px 12px}
+  .cmph .t{font-size:15px;font-weight:600}
+  .cmph .s{font-size:11.5px;color:var(--dim);margin-top:1px}
+  .conf{margin-left:auto;display:flex;align-items:center;gap:12px}
+  .conf .v{font-size:24px;font-weight:600;letter-spacing:-.02em}
+  .conf .l{font-size:10.5px;color:var(--dim);text-align:right;line-height:1.35}
+  .gauge{width:120px;height:6px;border-radius:6px;background:linear-gradient(90deg,#efebe3 0 80%,rgba(217,161,0,.22) 80% 95%,rgba(21,128,61,.18) 95%);position:relative}
+  .gauge i{position:absolute;left:93%;top:-4px;width:3px;height:14px;border-radius:2px;background:#1c1917}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{font-size:10.5px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);text-align:left;padding:8px 10px;border-top:1px solid var(--line2);border-bottom:1px solid var(--line2);background:var(--card2);white-space:nowrap}
+  th:first-child,td:first-child{padding-left:18px}
+  td{padding:0 10px;height:35px;border-bottom:1px solid var(--line2);white-space:nowrap;color:var(--fg)}
+  td.k{color:var(--dim);font-size:11.5px}
+  td.e{color:#b9b2a6}
+  td.ag{background:rgba(21,128,61,.05)}
+  td.cf{background:rgba(180,83,9,.06);color:#8a4b0b}
+  th.res,td.res{background:rgba(255,190,0,.09);border-left:1px solid rgba(217,161,0,.4);font-weight:500}
+  th.res{color:#7a5a00}
+  .ai{font-size:9.5px;color:#7a5a00;border:1px solid rgba(217,161,0,.5);border-radius:4px;padding:0 4px;margin-left:5px;font-weight:500}
+  .act{display:flex;align-items:center;gap:8px;padding:12px 18px;margin-top:auto}
+  .act .n{font-size:11.5px;color:var(--dim);margin-left:auto;display:flex;align-items:center;gap:6px}
+
+  .bot{display:grid;grid-template-columns:1fr 1.1fr;gap:14px;height:282px}
+  .ev{display:grid;grid-template-columns:1fr 80px 44px;align-items:center;gap:10px;padding:7px 18px;white-space:nowrap;font-size:12px}
+  .ev .b{height:6px;border-radius:6px;background:#f0ece4;position:relative;overflow:hidden}
+  .ev .b i{position:absolute;left:0;top:0;bottom:0;border-radius:6px;background:linear-gradient(90deg,#e8c25a,var(--gold))}
+  .ev .b i.n{background:#d97706;opacity:.6}
+  .ev .v{font-size:11px;text-align:right;color:var(--mut)}
+  .ev .s{display:block;font-size:10.5px;color:var(--dim);margin-top:1px}
+  .tot{display:flex;align-items:center;margin:6px 18px 0;padding-top:10px;border-top:1px dashed var(--line);font-size:12px;font-weight:600}
+  .tot span{margin-left:auto}
+  .en{display:grid;grid-template-columns:96px 1fr 100px;align-items:center;gap:10px;padding:8px 18px;border-top:1px solid var(--line2);font-size:12px}
+  .en .k{color:var(--dim);font-size:11.5px}
+  .en .v{font-weight:500}
+  .en .src{display:block;font-size:10.5px;color:var(--dim);font-weight:400;margin-top:1px}
+  .en .c{display:flex;align-items:center;gap:6px;justify-content:flex-end;font-size:10.5px;color:var(--mut)}
+  .en .c .b{width:40px;height:5px;border-radius:5px;background:#f0ece4;overflow:hidden}
+  .en .c .b i{display:block;height:100%;background:var(--gold)}
+  .tg{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--mut)}
+  .sw{width:28px;height:16px;border-radius:999px;background:#1c1917;position:relative}
+  .sw::after{content:"";position:absolute;right:2px;top:2px;width:12px;height:12px;border-radius:50%;background:var(--gold)}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="layers" viewBox="0 0 24 24"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></symbol>
+  <symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="home" viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="building" viewBox="0 0 24 24"><rect width="16" height="20" x="4" y="2" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></symbol>
+  <symbol id="fp" viewBox="0 0 24 24"><path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M2 12a10 10 0 0 1 18-6"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .131-5.354 0-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M9 6.8a6 6 0 0 1 9 5.2v2"/></symbol>
+  <symbol id="spark" viewBox="0 0 24 24"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></symbol>
+  <symbol id="shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="plug" viewBox="0 0 24 24"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></symbol>
+  <symbol id="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="ext" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+  <symbol id="bot" viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></symbol>
+  <symbol id="cloud" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></symbol>
+  <symbol id="db" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></symbol>
+  <symbol id="mail" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol>
+  <symbol id="chart" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/></symbol>
+  <symbol id="mega" viewBox="0 0 24 24"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></symbol>
+  <symbol id="mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></symbol>
+  <symbol id="globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></symbol>
+  <symbol id="cal" viewBox="0 0 24 24"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></symbol>
+  <symbol id="life" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/><circle cx="12" cy="12" r="4"/></symbol>
+  <symbol id="undo" viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></symbol>
+  <symbol id="target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+  <symbol id="merge" viewBox="0 0 24 24"><path d="m8 6 4-4 4 4"/><path d="M12 2v10.3a4 4 0 0 1-1.172 2.872L4 22"/><path d="m20 22-5-5"/></symbol>
+  <symbol id="split" viewBox="0 0 24 24"><path d="M16 3h5v5"/><path d="M8 3H3v5"/><path d="M12 22v-8.3a4 4 0 0 0-1.172-2.872L3 3"/><path d="m15 9 6-6"/></symbol>
+  <symbol id="x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="filter" viewBox="0 0 24 24"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></symbol>
+  <symbol id="phone" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></symbol>
+</svg>
+<aside class="side">
+  <div class="brand"><div class="logo"><svg class="i"><use href="#layers"/></svg></div><div><div class="t">Lakehouse</div><div class="s">BigQuery</div></div></div>
+  <div class="search"><svg class="i sm"><use href="#search"/></svg>Search profiles<span class="k mono">⌘K</span></div>
+  <div class="nav" data-k="home"><svg class="i"><use href="#home"/></svg>Overview</div>
+  <div class="grp mono">Customers</div>
+  <div class="nav" data-k="people"><svg class="i"><use href="#users"/></svg>360 profiles</div>
+  <div class="nav" data-k="companies"><svg class="i"><use href="#building"/></svg>Companies</div>
+  <div class="grp mono">Silver and gold</div>
+  <div class="nav" data-k="identity"><svg class="i"><use href="#fp"/></svg>Identity resolution<span class="c mono">128</span></div>
+  <div class="nav" data-k="enrich"><svg class="i"><use href="#spark"/></svg>Enrichment</div>
+  <div class="nav" data-k="quality"><svg class="i"><use href="#shield"/></svg>Quality</div>
+  <div class="nav" data-k="api"><svg class="i"><use href="#plug"/></svg>API and MCP</div>
+  <div class="layers">
+    <div class="h">Layers<span>4 min ago</span></div>
+    <div class="ly"><i style="background:var(--bronze)"></i>Bronze · raw replica<span>ok</span></div>
+    <div class="ly"><i style="background:var(--silver)"></i>Silver · trusted<span>ok</span></div>
+    <div class="ly"><i style="background:var(--gold)"></i>Gold · business<span>ok</span></div>
+  </div>
+  <div class="me"><div class="av">TM</div><div><div class="t">Tiago Moreira</div><div class="s">Revenue operations</div></div></div>
+</aside>
+
+
+<main class="main">
+  <div class="top">
+    <span>Identity resolution</span><svg class="i xs"><use href="#chev"/></svg>
+    <b>Review queue</b>
+    <div class="r">
+      <span class="btn"><svg class="i sm"><use href="#filter"/></svg>Matching rules</span>
+      <span class="btn p"><svg class="i sm"><use href="#spark"/></svg>Run enrichment</span>
+    </div>
+  </div>
+
+  <div class="kpis">
+    <div class="card kp"><div class="ib"><svg class="i sm"><use href="#users"/></svg></div><div><div class="k">Unified base</div><div class="v">Hundreds of thousands</div><div class="s">contacts and companies, one ID</div></div></div>
+    <div class="card kp"><div class="ib"><svg class="i sm"><use href="#merge"/></svg></div><div><div class="k">Auto-merge</div><div class="v">confidence ≥ 0.95</div><div class="s">no human step</div></div></div>
+    <div class="card kp"><div class="ib"><svg class="i sm"><use href="#fp"/></svg></div><div><div class="k">Human review</div><div class="v">0.80 to 0.95</div><div class="s">128 cases in today's queue</div></div></div>
+    <div class="card kp"><div class="ib"><svg class="i sm"><use href="#spark"/></svg></div><div><div class="k">AI enrichment</div><div class="v">Empty fields only</div><div class="s">never overwrites the CRM</div></div></div>
+  </div>
+
+  <div class="grid">
+    <section class="card q">
+      <div class="ch"><svg class="i"><use href="#fp"/></svg><span class="t">Candidates</span><span class="r">by confidence</span></div>
+      <div class="seg"><span class="on">People</span><span>Companies</span></div>
+      <div class="qi on"><div class="av">RC</div><div><div class="t">Rafael Costa</div><div class="s">3 records · 3 sources</div></div><span class="c mono">0.93</span></div>
+      <div class="qi"><div class="av">ML</div><div><div class="t">Marina Lopes</div><div class="s">2 records · 2 sources</div></div><span class="c mono">0.91</span></div>
+      <div class="qi"><div class="av">JA</div><div><div class="t">J. Albuquerque</div><div class="s">2 records · 2 sources</div></div><span class="c mono">0.89</span></div>
+      <div class="qi"><div class="av">CF</div><div><div class="t">Carla N. Freitas</div><div class="s">3 records · 2 sources</div></div><span class="c mono">0.87</span></div>
+      <div class="qi"><div class="av">OB</div><div><div class="t">Otávio Brandão</div><div class="s">2 records · 2 sources</div></div><span class="c mono">0.85</span></div>
+      <div class="qi"><div class="av">PS</div><div><div class="t">Patrícia Sá</div><div class="s">2 records · 2 sources</div></div><span class="c mono">0.84</span></div>
+      <div class="qi"><div class="av">LM</div><div><div class="t">Lucas Matos</div><div class="s">4 records · 3 sources</div></div><span class="c mono">0.83</span></div>
+      <div class="qi"><div class="av">BT</div><div><div class="t">Beatriz Teles</div><div class="s">2 records · 2 sources</div></div><span class="c mono">0.82</span></div>
+      <div class="qi"><div class="av">GN</div><div><div class="t">Gustavo Nery</div><div class="s">2 records · 2 sources</div></div><span class="c mono">0.81</span></div>
+      <div class="qi"><div class="av">VP</div><div><div class="t">Vitória Pacheco</div><div class="s">3 records · 2 sources</div></div><span class="c mono">0.80</span></div>
+    </section>
+
+    <div class="right">
+      <section class="card cmp">
+        <div class="cmph">
+          <div class="av" style="width:38px;height:38px;background:#1c1917;color:#f5e6b8;font-size:13px">RC</div>
+          <div><div class="t">Rafael Costa · 3 candidate records</div><div class="s">Same person in three systems? The silver layer proposes one ID.</div></div>
+          <div class="conf"><div class="l">confidence<br>review band</div><div class="gauge"><i></i></div><div class="v mono">0.93</div></div>
+        </div>
+        <table>
+          <thead><tr><th>Field</th><th>CRM</th><th>Platform</th><th>Marketing automation</th><th class="res">Golden record</th></tr></thead>
+          <tbody>
+            <tr><td class="k">Name</td><td>Rafael M. Costa</td><td>Rafael Costa</td><td>rafael costa</td><td class="res">Rafael Moura Costa</td></tr>
+            <tr><td class="k">E-mail</td><td class="ag mono" style="font-size:11px">rafael.costa@example.com</td><td class="mono" style="font-size:11px">r.costa@example.com</td><td class="ag mono" style="font-size:11px">rafael.costa@example.com</td><td class="res mono" style="font-size:11px">rafael.costa@example.com</td></tr>
+            <tr><td class="k">Company</td><td class="ag">Ferraz Autopeças</td><td class="ag">Ferraz Autopeças S.A.</td><td class="e">—</td><td class="res">Ferraz Autopeças</td></tr>
+            <tr><td class="k">Title</td><td class="e">—</td><td>Buyer</td><td class="e">—</td><td class="res">Purchasing Manager<span class="ai mono">AI</span></td></tr>
+            <tr><td class="k">Phone</td><td class="mono" style="font-size:11px">+55 11 0000-0000</td><td class="e">—</td><td class="e">—</td><td class="res mono" style="font-size:11px">+55 11 0000-0000</td></tr>
+            <tr><td class="k">City</td><td class="ag">São Paulo</td><td class="cf">Guarulhos</td><td class="ag">São Paulo</td><td class="res">São Paulo</td></tr>
+            <tr><td class="k">Updated</td><td>2 days ago</td><td>5 h ago</td><td>today</td><td class="res">on merge</td></tr>
+          </tbody>
+        </table>
+        <div class="act">
+          <span class="btn p"><svg class="i sm"><use href="#merge"/></svg>Merge into one ID</span>
+          <span class="btn"><svg class="i sm"><use href="#split"/></svg>Keep separate</span>
+          <span class="btn"><svg class="i sm"><use href="#clock"/></svg>Review later</span>
+          <span class="n"><svg class="i xs"><use href="#undo"/></svg>Every merge can be undone; bronze keeps the original</span>
+        </div>
+      </section>
+
+      <div class="bot">
+        <section class="card">
+          <div class="ch"><svg class="i"><use href="#check"/></svg><span class="t">Why they look like one person</span></div>
+          <div class="ev"><div>Same email in 2 sources</div><span class="b"><i style="width:90%"></i></span><span class="v mono">+0.45</span></div>
+          <div class="ev"><div>Normalized name match</div><span class="b"><i style="width:40%"></i></span><span class="v mono">+0.20</span></div>
+          <div class="ev"><div>Company email domain</div><span class="b"><i style="width:36%"></i></span><span class="v mono">+0.18</span></div>
+          <div class="ev"><div>Same phone in 2 sources</div><span class="b"><i style="width:24%"></i></span><span class="v mono">+0.12</span></div>
+          <div class="ev"><div>City differs in 1 source</div><span class="b"><i class="n" style="width:6%"></i></span><span class="v mono">−0.02</span></div>
+          <div class="tot">Combined confidence<span class="mono">0.93</span></div>
+        </section>
+        <section class="card">
+          <div class="ch"><svg class="i"><use href="#spark"/></svg><span class="t">AI enrichment</span><span class="r"><span class="tg">Fill empty fields only<i class="sw"></i></span></span></div>
+          <div class="en"><span class="k">Title</span><span class="v">Purchasing Manager<span class="src">company website · team page</span></span><span class="c mono">0.88<span class="b"><i style="width:88%"></i></span></span></div>
+          <div class="en"><span class="k">Industry</span><span class="v">Manufacturing · Auto parts<span class="src">public company registry</span></span><span class="c mono">0.95<span class="b"><i style="width:95%"></i></span></span></div>
+          <div class="en"><span class="k">Size</span><span class="v">200 to 500 people<span class="src">enrichment API</span></span><span class="c mono">0.81<span class="b"><i style="width:81%"></i></span></span></div>
+          <div class="en"><span class="k">Interests</span><span class="v">Parts replenishment<span class="src">sales notes summary</span></span><span class="c mono">0.77<span class="b"><i style="width:77%"></i></span></span></div>
+        </section>
+      </div>
+    </div>
+  </div>
+</main>
+</body>
+</html>

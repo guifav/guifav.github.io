@@ -1,299 +1,338 @@
 <!doctype html>
-<html lang="en" data-theme="dark">
+<html lang="pt-BR">
 <head>
 <meta charset="utf-8">
 <meta name="mockup-viewport" content="1440x900">
-<title>Console WhatsApp</title>
+<title>Console WhatsApp · Caixa de entrada</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
   --font: "Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
-  --bg: #131210; --surface: #1a1916; --surface-2: #1f1d19; --surface-3: #25231e;
+  --mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+  --bg: #131210; --surface: #1a1916; --surface-2: #1f1d19; --surface-3: #25231e; --surface-4: #2c2a24;
   --border: #2c2a25; --border-2: #232220; --border-3: #3a382f;
-  --text-1: #f4f1e9; --text-2: #d3cfc4; --text-3: #8a8579; --text-4: #5e5a51; --text-inv: #131210;
-  --accent: #d6ae5b; --accent-2: #f1cd7c; --accent-soft: #2a2418; --accent-glow: rgba(214,174,91,.18);
+  --t1: #f4f1e9; --t2: #d3cfc4; --t3: #8a8579; --t4: #5e5a51; --inv: #131210;
+  --accent: #d6ae5b; --accent-2: #f1cd7c; --accent-soft: #2a2418;
   --ok: #62b78a; --ok-soft: #1a2a22; --warn: #e0a14b; --warn-soft: #2c2317; --err: #e5685a; --err-soft: #2c1c1a;
   --info: #6da4dc; --info-soft: #1a2330;
-  --rad: 4px; --rad-2: 6px;
+  --r: 4px; --r2: 6px;
 }
-* { box-sizing: border-box; }
-html, body { margin: 0; padding: 0; height: 900px; overflow: hidden; }
-body { font-family: var(--font); font-size: 13px; line-height: 1.4; color: var(--text-1); background: var(--bg); -webkit-font-smoothing: antialiased; }
-svg.i { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
-.t-mono { font-family: var(--font-mono); font-feature-settings: "tnum" 1; }
-.t-mute { color: var(--text-3); }
-.t-xs { font-size: 11px; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1440px; height: 900px; overflow: hidden; }
+body { font-family: var(--font); font-size: 13px; line-height: 1.4; color: var(--t1); background: var(--bg); -webkit-font-smoothing: antialiased; }
+svg.i { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+svg.i.s11 { width: 11px; height: 11px; stroke-width: 1.9; }
+svg.i.s12 { width: 12px; height: 12px; stroke-width: 1.8; }
+svg.i.s16 { width: 16px; height: 16px; }
+.mono { font-family: var(--mono); font-feature-settings: "tnum" 1; }
+.t3 { color: var(--t3); } .t4 { color: var(--t4); }
 
-.app { display: grid; grid-template-columns: 232px 1fr; height: 900px; }
-.app__main { display: flex; flex-direction: column; height: 900px; min-width: 0; }
-.page { flex: 1; min-height: 0; padding: 20px; display: flex; flex-direction: column; }
+.app { display: grid; grid-template-columns: 224px 1fr; height: 900px; }
+.side { background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 14px 0 8px; }
+.brand { display: flex; align-items: center; gap: 9px; padding: 6px 16px 16px; margin-bottom: 6px; border-bottom: 1px solid var(--border-2); font-size: 13px; font-weight: 600; }
+.mark { width: 24px; height: 24px; border-radius: 6px; background: var(--accent); color: var(--inv); display: grid; place-items: center; }
+.mark svg { fill: currentColor; stroke: none; width: 14px; height: 14px; }
+.grp { padding: 0 8px; margin-bottom: 4px; }
+.gt { font-size: 9.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; color: var(--t4); padding: 8px 8px 4px; }
+.it { display: grid; grid-template-columns: 14px 1fr auto; gap: 10px; align-items: center; height: 29px; padding: 0 8px; border-radius: var(--r); color: var(--t2); font-size: 12.5px; font-weight: 500; position: relative; }
+.it .c { font-size: 10px; color: var(--t4); font-family: var(--mono); }
+.it.on { background: var(--surface-3); color: var(--t1); font-weight: 600; }
+.it.on::before { content: ''; position: absolute; left: -8px; top: 6px; bottom: 6px; width: 2px; border-radius: 0 2px 2px 0; background: var(--accent); }
+.it.on .c { color: var(--t3); }
+.sfoot { margin-top: auto; padding: 12px 16px 4px; border-top: 1px solid var(--border-2); display: flex; align-items: center; gap: 8px; font-size: 10.5px; color: var(--t3); }
+.hdot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
 
-/* Sidebar */
-.sidebar { background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 14px 0 8px; }
-.sidebar__brand { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 6px 16px 16px; margin: 0 0 8px; border-bottom: 1px solid var(--border-2); }
-.sidebar__brand-logo { height: 20px; width: auto; display: block; }
-.sidebar__brand-product { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: var(--text-1); }
-.brand-mark { flex-shrink: 0; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; background: var(--accent); color: var(--text-inv); }
-.brand-mark svg { fill: currentColor; }
-.sidebar__group { padding: 0 8px; margin-bottom: 6px; }
-.sidebar__group-title { font-size: 9.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; color: var(--text-4); padding: 8px 8px 4px; }
-.sidebar__item { display: grid; grid-template-columns: 14px 1fr auto; gap: 10px; align-items: center; height: 30px; padding: 0 8px; border-radius: var(--rad); color: var(--text-2); font-size: 12.5px; font-weight: 500; position: relative; }
-.sidebar__item.is-active { background: var(--surface-3); color: var(--text-1); font-weight: 600; }
-.sidebar__item.is-active::before { content: ''; position: absolute; left: -8px; top: 6px; bottom: 6px; width: 2px; border-radius: 0 2px 2px 0; background: var(--accent); }
-.sidebar__item-count { font-size: 10px; color: var(--text-4); font-family: var(--font-mono); }
-.sidebar__item.is-active .sidebar__item-count { color: var(--text-3); }
-.sidebar__footer { margin-top: auto; padding: 12px 16px; border-top: 1px solid var(--border-2); display: flex; align-items: center; gap: 8px; font-size: 10.5px; color: var(--text-3); }
-.sidebar__health-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
+.main { display: flex; flex-direction: column; min-width: 0; height: 900px; }
+.topbar { height: 48px; flex-shrink: 0; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; gap: 10px; padding: 0 20px; }
+.topbar .sp { flex: 1; }
+.crumb { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--t3); }
+.crumb b { color: var(--t1); font-weight: 600; }
+.envpill { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; padding: 4px 8px; border-radius: var(--r); border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent-2); }
+.tbi { width: 30px; height: 30px; display: grid; place-items: center; color: var(--t2); }
+.me { display: flex; align-items: center; gap: 8px; padding-left: 10px; border-left: 1px solid var(--border); margin-left: 4px; line-height: 1.15; }
+.me .av { width: 28px; height: 28px; border-radius: 50%; background: var(--t1); color: #8c6f24; display: grid; place-items: center; font-weight: 700; font-size: 10.5px; }
+.me .n { font-size: 11.5px; font-weight: 600; }
+.me .r { font-size: 10px; color: var(--t3); letter-spacing: .06em; text-transform: uppercase; }
 
-/* Topbar */
-.topbar { height: 48px; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; gap: 10px; padding: 0 20px; flex-shrink: 0; }
-.topbar__spacer { flex: 1; }
-.topbar__pill { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; padding: 4px 8px; border-radius: var(--rad); border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent-2); }
-.topbar__icon { width: 30px; height: 30px; display: grid; place-items: center; border-radius: var(--rad); color: var(--text-2); }
-.topbar__avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--text-1); color: #8c6f24; display: grid; place-items: center; font-weight: 700; font-size: 10.5px; margin-left: 8px; }
+.btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: var(--r); border: 1px solid var(--border); background: var(--surface); color: var(--t1); font-size: 12px; font-weight: 500; white-space: nowrap; }
+.btn.sm { height: 26px; padding: 0 9px; font-size: 11.5px; }
+.btn.pri { background: var(--t1); color: var(--inv); border-color: var(--t1); font-weight: 600; }
+.btn.gold { background: var(--accent); color: var(--inv); border-color: var(--accent); font-weight: 600; }
 
-/* Page header */
-.page-header { display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap; padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
-.page-header__title-block { flex: 1 1 360px; min-width: 0; }
-.page-header__crumb { font-size: 11px; color: var(--text-3); margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
-.page-header__title { font-size: 28px; font-weight: 600; letter-spacing: -.02em; margin: 0; display: flex; align-items: center; gap: 12px; }
-.page-header__actions { display: flex; gap: 8px; align-items: center; }
-.page-header__meta { flex-basis: 100%; min-width: 0; }
-.conv-manage { display: flex; gap: 8px; align-items: center; padding-left: 8px; border-left: 1px solid var(--border); }
-.btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: var(--rad); border: 1px solid var(--border); background: var(--surface); color: var(--text-1); font-size: 12px; font-weight: 500; white-space: nowrap; }
-.btn--sm { height: 24px; padding: 0 8px; font-size: 11.5px; }
-.btn--primary { background: var(--text-1); color: var(--bg); border-color: var(--text-1); }
-.input { height: 24px; padding: 0 26px 0 8px; border: 1px solid var(--border); border-radius: var(--rad); background: var(--surface); color: var(--text-1); font-size: 11.5px; display: inline-flex; align-items: center; position: relative; }
-.input::after { content: ''; position: absolute; right: 10px; top: 50%; width: 4px; height: 4px; border-right: 1.5px solid var(--text-3); border-bottom: 1.5px solid var(--text-3); transform: translateY(-70%) rotate(45deg); }
+.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; border: 1px solid; white-space: nowrap; line-height: 1.4; }
+.pill .d { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.pill.ok { color: var(--ok); background: var(--ok-soft); border-color: rgba(98,183,138,.25); }
+.pill.warn { color: var(--warn); background: var(--warn-soft); border-color: rgba(224,161,75,.25); }
+.pill.err { color: var(--err); background: var(--err-soft); border-color: rgba(229,104,90,.25); }
+.pill.info { color: var(--info); background: var(--info-soft); border-color: rgba(109,164,220,.25); }
+.pill.gold { color: var(--accent-2); background: var(--accent-soft); border-color: rgba(214,174,91,.3); }
+.pill.neu { color: var(--t2); background: var(--surface-2); border-color: var(--border); }
+.tag { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--t2); padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-2); white-space: nowrap; }
+.tag svg { color: var(--t3); }
 
-.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; padding: 2px 8px; border-radius: 3px; border: 1px solid; white-space: nowrap; line-height: 1.4; }
-.pill__dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 25%, transparent); }
-.pill--live { color: var(--ok); background: var(--ok-soft); border-color: color-mix(in srgb, var(--ok) 25%, transparent); }
-.pill--paused { color: var(--warn); background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 25%, transparent); }
-.pill--neutral { color: var(--text-2); background: var(--surface-2); border-color: var(--border); }
-.pill--title { font-size: 11px; padding: 3px 9px; }
-
-.conv-facts { display: flex; flex-wrap: wrap; gap: 8px 28px; margin: 0; }
-.conv-facts__item { display: flex; flex-direction: column; gap: 2px; }
-.conv-facts dt { font-size: 11px; color: var(--text-3); }
-.conv-facts dd { margin: 0; font-size: 12.5px; color: var(--text-1); }
-.conv-facts dd .t-mono { font-size: 12px; }
-.cfg__link { display: inline-flex; align-items: center; gap: 6px; padding: 0 6px; margin-left: -6px; border-radius: 3px; color: var(--text-1); font-family: var(--font-mono); font-size: 12px; }
-.cfg__link svg { color: var(--text-3); }
-
-/* Conversation layout */
-.conv-layout { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 461px; grid-template-rows: minmax(0, 1fr); gap: 16px; }
-.conv-thread-col { display: flex; flex-direction: column; min-height: 0; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
-.conv-thread-bar { padding: 6px 10px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 6px; }
-.conv-thread { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 12px; padding: 14px 14px 16px; background: var(--surface);
-  background-image: radial-gradient(rgba(244,241,233,.025) 1px, transparent 1px); background-size: 18px 18px; }
-.day-sep { align-self: center; font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-4); padding: 2px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-2); }
-.bubble { max-width: 78%; padding: 9px 13px; border-radius: 8px; display: flex; flex-direction: column; gap: 4px; }
-.bubble--in { align-self: flex-start; background: var(--surface-3); border-top-left-radius: 2px; }
-.bubble--out { align-self: flex-end; background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 16%, transparent); border-top-right-radius: 2px; }
-.bubble__meta { font-size: 11px; color: var(--text-3); }
-.bubble__meta b { font-weight: 600; color: var(--text-2); }
-.bubble__body { font-size: 14px; line-height: 1.45; color: var(--text-1); }
-.bubble__body .tr { font-size: 11px; color: var(--text-3); white-space: nowrap; }
-.bubble__delivery { margin-top: 2px; align-self: flex-end; }
-.conv-dock { padding: 10px 14px 12px; background: var(--surface); border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
-.stat__label { font-size: 10.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); }
-.conv-dock__window { font-size: 10px; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text-3); }
-.conv-dock__row { display: flex; gap: 8px; align-items: flex-end; }
-.conv-dock__ta { flex: 1; height: 38px; padding: 9px 11px; font-size: 12.5px; line-height: 1.5; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text-4); }
-
-/* Side */
-.conv-side { display: flex; flex-direction: column; gap: 14px; min-height: 0; overflow: hidden; }
-.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--rad-2); }
-.card__head { padding: 10px 14px; border-bottom: 1px solid var(--border-2); display: flex; align-items: center; gap: 12px; }
-.card__title { font-size: 12px; font-weight: 600; color: var(--text-1); display: flex; align-items: center; gap: 8px; margin: 0; }
-.card__sub { font-size: 11.5px; color: var(--text-3); margin-top: 1px; }
-.card__head-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
-.conv-side__count { font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; color: var(--text-3); padding: 0 5px; border: 1px solid var(--border); border-radius: 3px; background: var(--surface-2); }
-.conv-side__body { padding: 12px 14px 14px; font-size: 12.5px; }
-.conv-summary { margin: 0; line-height: 1.55; color: var(--text-1); }
-.interests { display: flex; flex-direction: column; gap: 12px; }
-.interests__label { font-size: 11px; color: var(--text-3); margin-bottom: 4px; }
-.interests__items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.interests__item { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 10px; row-gap: 3px; align-items: baseline; }
-.interests__value { color: var(--text-1); font-weight: 500; }
-.interests__value .cfg__link { font-family: var(--font); font-size: 12.5px; font-weight: 500; }
-.interests__confidence { font-family: var(--font-mono); font-size: 11px; color: var(--text-3); }
-.interests__quote { quotes: "\201C" "\201D"; grid-column: 1 / -1; padding-left: 8px; border-left: 2px solid var(--border-3); font-size: 11.5px; line-height: 1.45; color: var(--text-3); }
-.outcomes-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 9px; }
-.outcome-item { font-size: 13px; display: flex; align-items: center; gap: 6px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r2); min-width: 0; }
+.ch { padding: 10px 14px; border-bottom: 1px solid var(--border-2); display: flex; align-items: center; gap: 10px; }
+.ch h3 { font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.ch .sub { font-size: 11px; color: var(--t3); }
+.ch .sp { flex: 1; }
+.cnt { font-family: var(--mono); font-size: 10.5px; font-weight: 600; color: var(--t3); padding: 0 5px; border: 1px solid var(--border); border-radius: 3px; background: var(--surface-2); }
+.lbl { font-size: 10.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--t3); }
+.tgl { width: 28px; height: 16px; border-radius: 999px; background: var(--surface-4); border: 1px solid var(--border-3); position: relative; flex-shrink: 0; }
+.tgl::after { content: ''; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 50%; background: var(--t3); }
+.tgl.on { background: var(--accent); border-color: var(--accent); }
+.tgl.on::after { left: 14px; background: var(--inv); }
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="home" viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z"/></symbol>
+<symbol id="inbox" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+<symbol id="zap" viewBox="0 0 24 24"><path d="M13 2 3 14h7l-1 8 11-13h-7Z"/></symbol>
+<symbol id="runs" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 4v4h-4"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 20v-4h4"/></symbol>
+<symbol id="users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+<symbol id="gauge" viewBox="0 0 24 24"><path d="M12 14l4-4"/><path d="M3 14a9 9 0 1 1 18 0"/><path d="M3 14h2"/><path d="M19 14h2"/></symbol>
+<symbol id="file" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"/><path d="M14 3v6h6"/></symbol>
+<symbol id="book" viewBox="0 0 24 24"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></symbol>
+<symbol id="bot" viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></symbol>
+<symbol id="shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="flask" viewBox="0 0 24 24"><path d="M9 3h6"/><path d="M10 3v7L4 20a2 2 0 0 0 1.7 3h12.6A2 2 0 0 0 20 20l-6-10V3"/><path d="M6 16h12"/></symbol>
+<symbol id="key" viewBox="0 0 24 24"><path d="M5 11h14v10H5z"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+<symbol id="gear" viewBox="0 0 24 24"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></symbol>
+<symbol id="sun" viewBox="0 0 24 24"><path d="M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z"/><path d="M12 1v2"/><path d="M12 21v2"/><path d="M4.2 4.2l1.4 1.4"/><path d="M18.4 18.4l1.4 1.4"/><path d="M1 12h2"/><path d="M21 12h2"/><path d="M4.2 19.8l1.4-1.4"/><path d="M18.4 5.6l1.4-1.4"/></symbol>
+<symbol id="bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M14 21a2 2 0 0 1-4 0"/></symbol>
+<symbol id="chat" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12Z"/></symbol>
+<symbol id="chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+<symbol id="chevd" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+<symbol id="out" viewBox="0 0 24 24"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></symbol>
+<symbol id="lang" viewBox="0 0 24 24"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></symbol>
+<symbol id="pause" viewBox="0 0 24 24"><rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/></symbol>
+<symbol id="hand" viewBox="0 0 24 24"><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></symbol>
+<symbol id="db" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></symbol>
+<symbol id="note" viewBox="0 0 24 24"><path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3Z"/><path d="M15 3v6h6"/><path d="M7 13h6"/><path d="M7 17h10"/></symbol>
+<symbol id="target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+<symbol id="send" viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2l-7 20-4-9-9-4Z"/></symbol>
+<symbol id="spark" viewBox="0 0 24 24"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></symbol>
+<symbol id="lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+<symbol id="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="checks" viewBox="0 0 24 24"><path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/></symbol>
+<symbol id="alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+<symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+<symbol id="cal" viewBox="0 0 24 24"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></symbol>
+<symbol id="filter" viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></symbol>
+<symbol id="plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+<symbol id="building" viewBox="0 0 24 24"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></symbol>
+<symbol id="user" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+<symbol id="paper" viewBox="0 0 24 24"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></symbol>
+<symbol id="grip" viewBox="0 0 24 24"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></symbol>
+<symbol id="more" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+<symbol id="mail" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol>
+<symbol id="globe" viewBox="0 0 24 24"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z"/><path d="M2 12h20"/><path d="M12 2a14 14 0 0 1 0 20"/><path d="M12 2a14 14 0 0 0 0 20"/></symbol>
+<symbol id="ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></symbol>
+<symbol id="history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></symbol>
+<symbol id="cpu" viewBox="0 0 24 24"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></symbol>
+</defs></svg>
+<style>
+.panes { flex: 1; min-height: 0; display: grid; grid-template-columns: 292px minmax(0,1fr) 336px; }
+.lst { border-right: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; min-height: 0; }
+.lst-h { padding: 14px 14px 10px; display: flex; flex-direction: column; gap: 10px; border-bottom: 1px solid var(--border-2); }
+.lst-h .t { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; }
+.srch { height: 30px; border: 1px solid var(--border); border-radius: var(--r); background: var(--bg); display: flex; align-items: center; gap: 8px; padding: 0 10px; color: var(--t4); font-size: 12px; white-space: nowrap; }
+.ftabs { display: flex; gap: 2px; }
+.ftabs span { font-size: 11px; font-weight: 500; color: var(--t3); padding: 4px 6px; border-radius: var(--r); display: inline-flex; gap: 4px; align-items: center; white-space: nowrap; }
+.ftabs span b { font-family: var(--mono); font-size: 10px; font-weight: 500; color: var(--t4); }
+.ftabs span.on { background: var(--surface-3); color: var(--t1); }
+.ftabs span.on b { color: var(--t3); }
+.cv { display: grid; grid-template-columns: 32px 1fr auto; gap: 4px 10px; padding: 11px 14px; border-bottom: 1px solid var(--border-2); position: relative; }
+.cv.on { background: var(--surface-3); }
+.cv.on::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--accent); }
+.cv .av { grid-row: span 2; width: 32px; height: 32px; border-radius: 50%; background: var(--surface-4); color: var(--t2); display: grid; place-items: center; font-size: 11px; font-weight: 600; border: 1px solid var(--border-3); }
+.cv .n { font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cv .n small { font-weight: 500; color: var(--t3); font-size: 11px; margin-left: 4px; }
+.cv .tm { font-size: 10.5px; color: var(--t4); font-family: var(--mono); }
+.cv .m { font-size: 11.5px; color: var(--t3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cv .b { grid-column: 2 / -1; display: flex; gap: 5px; margin-top: 3px; }
+.cv .lng { font-family: var(--mono); font-size: 9.5px; color: var(--t3); border: 1px solid var(--border-3); border-radius: 3px; padding: 0 4px; line-height: 15px; }
+
+.th { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg); }
+.th-h { padding: 12px 18px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+.th-h .av { flex-shrink: 0; width: 36px; height: 36px; border-radius: 50%; background: var(--t1); color: #8c6f24; display: grid; place-items: center; font-weight: 700; font-size: 12px; }
+.th-h .n { white-space: nowrap; font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.th-h .s { white-space: nowrap; font-size: 11.5px; color: var(--t3); margin-top: 2px; display: flex; gap: 8px; align-items: center; }
+.th-h .sp { flex: 1; }
+.th-bar { white-space: nowrap; padding: 7px 18px; border-bottom: 1px solid var(--border-2); background: var(--surface-2); display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--t3); }
+.th-bar .sp { flex: 1; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; }
+.seg span { font-size: 11px; padding: 3px 9px; color: var(--t3); }
+.seg span.on { background: var(--surface-3); color: var(--t1); }
+.msgs { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 11px; padding: 14px 18px;
+  background-image: radial-gradient(rgba(244,241,233,.025) 1px, transparent 1px); background-size: 18px 18px; }
+.day { align-self: center; font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--t4); padding: 2px 10px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-2); }
+.bb { max-width: 80%; padding: 9px 12px; border-radius: 8px; display: flex; flex-direction: column; gap: 4px; }
+.bb.in { align-self: flex-start; background: var(--surface-3); border-top-left-radius: 2px; }
+.bb.out { align-self: flex-end; background: var(--accent-soft); border: 1px solid rgba(214,174,91,.16); border-top-right-radius: 2px; }
+.bb .mt { font-size: 10.5px; color: var(--t3); display: flex; align-items: center; gap: 6px; }
+.bb .mt b { font-weight: 600; color: var(--t2); }
+.bb .tx { font-size: 13px; line-height: 1.45; }
+.bb .tr { font-size: 10.5px; color: var(--t3); white-space: nowrap; }
+.src { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 3px; align-items: center; }
+.src .k { font-size: 10px; color: var(--t3); text-transform: uppercase; letter-spacing: .08em; font-weight: 600; margin-right: 2px; }
+.src .s { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-family: var(--mono); color: var(--accent-2); background: rgba(214,174,91,.08); border: 1px solid rgba(214,174,91,.2); border-radius: 3px; padding: 0 5px; line-height: 17px; }
+.dl { align-self: flex-end; display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--info); }
+.held { align-self: stretch; border: 1px solid rgba(224,161,75,.35); background: linear-gradient(0deg, rgba(224,161,75,.05), rgba(224,161,75,.05)), var(--surface); border-radius: 8px; padding: 11px 13px; display: flex; gap: 11px; }
+.held .ic { width: 28px; height: 28px; border-radius: 6px; background: var(--warn-soft); color: var(--warn); display: grid; place-items: center; flex-shrink: 0; }
+.held .h1 { font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.held .p { font-size: 12px; color: var(--t2); margin-top: 3px; line-height: 1.45; }
+.held .f { display: flex; gap: 6px; margin-top: 8px; align-items: center; flex-wrap: wrap; }
+.held .f .who { font-size: 11px; color: var(--t3); margin-left: 4px; }
+.dock { background: var(--surface); border-top: 1px solid var(--border); padding: 10px 18px 12px; display: flex; flex-direction: column; gap: 8px; }
+.dock .r1 { display: flex; align-items: center; gap: 8px; }
+.dock .r1 .sp { flex: 1; }
+.wnd { font-size: 10px; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); color: var(--t3); display: inline-flex; align-items: center; gap: 5px; }
+.draft { border: 1px solid var(--border-3); border-radius: 6px; background: var(--bg); padding: 9px 11px; font-size: 12.5px; line-height: 1.5; color: var(--t1); }
+.draft .k { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--accent-2); font-weight: 600; margin-bottom: 4px; }
+.dock .r2 { display: flex; align-items: center; gap: 8px; }
+.dock .r2 .sp { flex: 1; }
+
+.ctx { border-left: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.sec { padding: 13px 16px; border-bottom: 1px solid var(--border-2); }
+.sec .hd { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.sec .hd .sp { flex: 1; }
+.sec .hd a { font-size: 11px; color: var(--accent-2); display: inline-flex; gap: 4px; align-items: center; }
+.kv { display: grid; grid-template-columns: 120px 1fr; gap: 7px 8px; font-size: 12px; }
+.kv dt { color: var(--t3); }
+.kv dd { color: var(--t1); }
+.box { border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); padding: 10px 12px; }
+.box .t { font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.box .p { font-size: 11.5px; color: var(--t2); margin-top: 6px; line-height: 1.5; }
+.box .f { display: flex; align-items: center; gap: 8px; margin-top: 9px; font-size: 10.5px; color: var(--t3); }
+.box .f .sp { flex: 1; }
+.hs3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+.hs3 div { border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; background: var(--surface-2); }
+.hs3 b { display: block; font-size: 16px; font-weight: 600; font-family: var(--mono); }
+.hs3 span { font-size: 10.5px; color: var(--t3); line-height: 1.3; display: block; margin-top: 2px; }
+.conf { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 10.5px; color: var(--t3); }
+.conf .bar { flex: 1; height: 4px; background: var(--surface-4); border-radius: 999px; overflow: hidden; }
+.conf .bar i { display: block; height: 100%; background: var(--ok); }
+</style>
 <div class="app">
-  <aside class="sidebar">
-    <div class="sidebar__brand">
-      <div class="sidebar__brand-product"><span class="brand-mark"><svg width="15" height="15" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12Z"/></svg></span>Console WhatsApp</div>
+  <aside class="side">
+    <div class="brand"><span class="mark"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12Z"/></svg></span>Console WhatsApp</div>
+    <div class="grp"><div class="gt">Operação</div>
+      <div class="it"><svg class="i"><use href="#home"/></svg><span>Painel</span></div>
+      <div class="it on"><svg class="i"><use href="#inbox"/></svg><span>Caixa de entrada</span><span class="c">38</span></div>
+      <div class="it"><svg class="i"><use href="#zap"/></svg><span>Campanhas</span><span class="c">5/7</span></div>
+      <div class="it"><svg class="i"><use href="#runs"/></svg><span>Execuções</span><span class="c">12 hoje</span></div>
+      <div class="it"><svg class="i"><use href="#users"/></svg><span>Contatos</span></div>
+      <div class="it"><svg class="i"><use href="#gauge"/></svg><span>Conversão</span></div>
     </div>
-    <div class="sidebar__group">
-      <div class="sidebar__group-title">Operate</div>
-      <div class="sidebar__item"><svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z"/></svg><span>Dashboard</span></div>
-      <div class="sidebar__item"><svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M13 2 3 14h7l-1 8 11-13h-7Z"/></svg><span>Triggers</span><span class="sidebar__item-count">5/7</span></div>
-      <div class="sidebar__item"><svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 4v4h-4"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 20v-4h4"/></svg><span>Runs</span><span class="sidebar__item-count">12 today</span></div>
-      <div class="sidebar__item is-active"><svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12Z"/></svg><span>Conversations</span><span class="sidebar__item-count">38 open</span></div>
-      <div class="sidebar__item"><svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/><path d="M22 21v-2a4 4 0 0 0-3-3.9"/><path d="M16 3.1A4 4 0 0 1 16 11.1"/></svg><span>Members</span></div>
-      <div class="sidebar__item"><svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M12 14l4-4"/><path d="M3 14a9 9 0 1 1 18 0"/><path d="M3 14h2"/><path d="M19 14h2"/></svg><span>Conversion</span></div>
-      <div class="sidebar__item"><svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2l-7 20-4-9-9-4Z"/></svg><span>Broadcasts</span></div>
+    <div class="grp"><div class="gt">Catálogo</div>
+      <div class="it"><svg class="i"><use href="#file"/></svg><span>Templates</span><span class="c">22</span></div>
+      <div class="it"><svg class="i"><use href="#book"/></svg><span>Base de conhecimento</span></div>
     </div>
-    <div class="sidebar__group">
-      <div class="sidebar__group-title">Catalog</div>
-      <div class="sidebar__item"><svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"/><path d="M14 3v6h6"/></svg><span>Templates</span><span class="sidebar__item-count">22</span></div>
+    <div class="grp"><div class="gt">Agente de IA</div>
+      <div class="it"><svg class="i"><use href="#bot"/></svg><span>Configuração</span></div>
+      <div class="it"><svg class="i"><use href="#shield"/></svg><span>Guardrails</span></div>
+      <div class="it"><svg class="i"><use href="#flask"/></svg><span>Teste de conversa</span></div>
     </div>
-    <div class="sidebar__group">
-      <div class="sidebar__group-title">Tools</div>
-      <div class="sidebar__item"><svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M9 3h6"/><path d="M10 3v7L4 20a2 2 0 0 0 1.7 3h12.6A2 2 0 0 0 20 20l-6-10V3"/><path d="M6 16h12"/></svg><span>Test chat</span></div>
-      <div class="sidebar__item"><svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg><span>Jobs</span></div>
-      <div class="sidebar__item"><svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M5 11h14v10H5z"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>API keys</span></div>
-      <div class="sidebar__item"><svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z"/><path d="M2 12h20"/><path d="M12 2a14 14 0 0 1 0 20"/><path d="M12 2a14 14 0 0 0 0 20"/></svg><span>API docs</span></div>
-      <div class="sidebar__item"><svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg><span>Settings</span></div>
-      <div class="sidebar__item"><svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12Z"/></svg><span>Feedback</span></div>
+    <div class="grp"><div class="gt">Ferramentas</div>
+      <div class="it"><svg class="i"><use href="#key"/></svg><span>Chaves de API</span></div>
+      <div class="it"><svg class="i"><use href="#gear"/></svg><span>Configurações</span></div>
     </div>
-    <div class="sidebar__footer"><span class="sidebar__health-dot"></span>All systems operational</div>
+    <div class="sfoot"><span class="hdot"></span>Todos os sistemas operando</div>
   </aside>
 
-  <div class="app__main">
+  <div class="main">
     <header class="topbar">
-      <div class="topbar__spacer"></div>
-      <div class="topbar__pill">production</div>
-      <span class="topbar__icon"><svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z"/><path d="M12 1v2"/><path d="M12 21v2"/><path d="M4.2 4.2l1.4 1.4"/><path d="M18.4 18.4l1.4 1.4"/><path d="M1 12h2"/><path d="M21 12h2"/><path d="M4.2 19.8l1.4-1.4"/><path d="M18.4 5.6l1.4-1.4"/></svg></span>
-      <span class="topbar__icon" style="opacity:.5"><svg class="i" width="16" height="16" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M14 21a2 2 0 0 1-4 0"/></svg></span>
-      <div style="display:flex;align-items:center;gap:8px;padding-left:4px;border-left:1px solid var(--border);margin-left:4px">
-        <span class="topbar__avatar">HE</span>
-        <div style="line-height:1.1">
-          <div style="font-size:11.5px;font-weight:600">helena.prado@example.com</div>
-          <div style="font-size:10.5px;color:var(--text-3);letter-spacing:.04em;text-transform:uppercase">Operator</div>
-        </div>
-      </div>
+      <div class="crumb"><svg class="i s12"><use href="#inbox"/></svg>Caixa de entrada<svg class="i s11"><use href="#chev"/></svg><b>Valeria Ortiz</b></div>
+      <div class="sp"></div>
+      <span class="envpill">produção</span>
+      <span class="tbi"><svg class="i s16"><use href="#sun"/></svg></span>
+      <span class="tbi" style="opacity:.6"><svg class="i s16"><use href="#bell"/></svg></span>
+      <div class="me"><span class="av">HP</span><div><div class="n">helena.prado@example.com</div><div class="r">Operadora</div></div></div>
     </header>
 
-    <div class="page">
-      <div class="page-header">
-        <div class="page-header__title-block">
-          <div class="page-header__crumb">
-            <svg class="i" width="11" height="11" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12Z"/></svg>
-            <span>Conversations</span>
-            <svg class="i" width="11" height="11" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></svg>
-            <span style="color:var(--text-2)">Valeria Ortiz Lozano</span>
-          </div>
-          <h1 class="page-header__title">Valeria Ortiz Lozano <span class="pill pill--live pill--title"><span class="pill__dot"></span>Open</span></h1>
+    <div class="panes">
+      <section class="lst">
+        <div class="lst-h">
+          <div class="t">Conversas <span class="cnt">38</span></div>
+          <div class="srch"><svg class="i s12"><use href="#search"/></svg>Buscar nome, empresa ou número</div>
+          <div class="ftabs"><span class="on">Todas <b>38</b></span><span>Agente <b>29</b></span><span>Retidas <b>4</b></span><span>Comigo <b>5</b></span></div>
         </div>
-        <div class="page-header__actions" style="padding-top:18px">
-          <span class="btn btn--sm"><svg class="i" width="11" height="11" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z"/><path d="M22 21v-2a4 4 0 0 0-3-3.9"/><path d="M16 3.1A4 4 0 0 1 16 11.1"/></svg> Member profile</span>
-          <div class="conv-manage">
-            <span class="btn btn--sm">Force opt-out</span>
-            <span class="btn btn--sm">Reset agent memory</span>
-            <span class="btn btn--sm"><svg class="i" width="11" height="11" viewBox="0 0 24 24"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z"/><path d="M5 5l14 14"/></svg> Close conversation</span>
-          </div>
+        <div class="cv on"><span class="av">VO</span><div class="n">Valeria Ortiz<small>Andino Retail</small></div><span class="tm">10:07</span><div class="m">¿El conector con SAP está incluido en mi plan?</div><div class="b"><span class="pill warn"><span class="d"></span>Retida</span><span class="lng">ES</span></div></div>
+        <div class="cv"><span class="av">TB</span><div class="n">Thomas Becker<small>Nordwerk</small></div><span class="tm">09:58</span><div class="m">Thanks, the invoice link worked.</div><div class="b"><span class="pill gold">Agente</span><span class="lng">EN</span></div></div>
+        <div class="cv"><span class="av">JP</span><div class="n">Juliana Prates<small>Clínica Viva</small></div><span class="tm">09:41</span><div class="m">Consigo adicionar mais 5 usuários?</div><div class="b"><span class="pill gold">Agente</span><span class="lng">PT</span></div></div>
+        <div class="cv"><span class="av">RL</span><div class="n">Rafael Lima<small>prospect</small></div><span class="tm">09:20</span><div class="m">Quero entender os planos para 50 usuários</div><div class="b"><span class="pill ok">Lead criado</span><span class="lng">PT</span></div></div>
+        <div class="cv"><span class="av">AC</span><div class="n">Ana Cunha<small>Bravo Transportes</small></div><span class="tm">08:55</span><div class="m">O relatório de rotas não está carregando</div><div class="b"><span class="pill info">Operador</span><span class="lng">PT</span></div></div>
+        <div class="cv"><span class="av">KM</span><div class="n">Kenji Mori<small>Sora Freight</small></div><span class="tm">ontem</span><div class="m">Can we move the onboarding call to Thursday?</div><div class="b"><span class="pill gold">Agente</span><span class="lng">EN</span></div></div>
+        <div class="cv"><span class="av">LF</span><div class="n">Lucía Fernández<small>Cafetal</small></div><span class="tm">ontem</span><div class="m">Gracias, quedó resuelto.</div><div class="b"><span class="pill neu">Encerrada</span><span class="lng">ES</span></div></div>
+      </section>
+
+      <section class="th">
+        <div class="th-h">
+          <span class="av">VO</span>
+          <div><div class="n">Valeria Ortiz <span class="pill warn"><span class="d"></span>Com operador</span></div>
+            <div class="s"><span>Grupo Andino Retail · cliente</span><span>·</span><span class="mono">+52 55 0000 4127</span></div></div>
+          <div class="sp"></div>
+          <span class="btn sm"><svg class="i s11"><use href="#bot"/></svg>Devolver ao agente</span>
         </div>
-        <div class="page-header__meta">
-          <dl class="conv-facts">
-            <div class="conv-facts__item"><dt>Phone</dt><dd><span class="t-mono">+52 55 0000 4127</span></dd></div>
-            <div class="conv-facts__item"><dt>Contact ID</dt><dd><span class="cfg__link"><svg class="i" width="11" height="11" viewBox="0 0 24 24"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg> 003Ux00000KqT9mIAF</span></dd></div>
-            <div class="conv-facts__item"><dt>Country</dt><dd>Mexico</dd></div>
-            <div class="conv-facts__item"><dt>Language</dt><dd>es-ES</dd></div>
-            <div class="conv-facts__item"><dt>Proactive messages</dt><dd>Receiving</dd></div>
-            <div class="conv-facts__item"><dt>Opened</dt><dd>3h ago</dd></div>
-            <div class="conv-facts__item"><dt>Started by</dt><dd><span class="cfg__link">agent_kickoff</span></dd></div>
-            <div class="conv-facts__item"><dt>Event</dt><dd><span class="cfg__link"><svg class="i" width="11" height="11" viewBox="0 0 24 24"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg> a0E8d00000Rk3wQEAR</span></dd></div>
+        <div class="th-bar"><svg class="i s12"><use href="#lang"/></svg>Cliente escreve em espanhol (es-MX) · tradução para português<span class="sp"></span><div class="seg"><span class="on">Traduzido</span><span>Original</span></div></div>
+        <div class="msgs">
+          <span class="day">Hoje</span>
+          <div class="bb in"><div class="mt"><b>Valeria</b> · 10:02</div><div class="tx">Oi! Vamos levar a plataforma para a filial de Monterrey. Quantas licenças ainda temos disponíveis? <span class="tr">· traduzido</span></div></div>
+          <div class="bb out"><div class="mt"><svg class="i s11"><use href="#bot"/></svg><b>Agente de IA</b> · 10:02</div><div class="tx">Olá, Valeria! Pelo contrato vigente, a Andino tem 40 licenças e 34 estão em uso, então restam 6. Quer que eu envie o passo a passo para convidar os novos usuários? <span class="tr">· enviado em espanhol</span></div>
+            <div class="src"><span class="k">Lastro</span><span class="s"><svg class="i s11"><use href="#db"/></svg>Contrato CT-2291</span><span class="s"><svg class="i s11"><use href="#db"/></svg>Licenças ativas</span></div>
+            <div class="dl"><svg class="i s12"><use href="#checks"/></svg>Lida</div></div>
+          <div class="bb in"><div class="mt"><b>Valeria</b> · 10:05</div><div class="tx">Sim, por favor. E o conector com o SAP já está incluído no nosso plano? Precisamos dele até o fim do mês. <span class="tr">· traduzido</span></div></div>
+          <div class="held"><span class="ic"><svg class="i"><use href="#hand"/></svg></span><div>
+            <div class="h1">Resposta retida pelo agente <span class="pill warn">Sem lastro no CRM</span></div>
+            <div class="p">O plano registrado no CRM não inclui o conector SAP e não há prazo de implantação cadastrado. O agente não respondeu e passou a conversa para um operador.</div>
+            <div class="f"><span class="tag">Confiança 0,41 · mínimo 0,70</span><span class="tag">Regra: nunca prometer prazos</span><span class="who">Atribuída a Helena Prado · 10:07</span></div>
+          </div></div>
+        </div>
+        <div class="dock">
+          <div class="r1"><span class="lbl">Responder como operadora</span><span class="sp"></span><span class="wnd"><svg class="i s11"><use href="#clock"/></svg>Janela de 24 h fecha em 23h 52m</span></div>
+          <div class="draft"><div class="k"><svg class="i s11"><use href="#spark"/></svg>Rascunho sugerido com base no CRM</div>Valeria, o conector SAP é um módulo adicional ao seu plano. Vou pedir ao seu gestor de conta uma proposta com prazo de implantação e retorno ainda hoje.</div>
+          <div class="r2"><span class="tag"><svg class="i s11"><use href="#lang"/></svg>Enviar em espanhol (es-MX)</span><span class="tag"><svg class="i s11"><use href="#file"/></svg>Template</span><span class="sp"></span><span class="btn sm">Editar</span><span class="btn sm gold"><svg class="i s11"><use href="#send"/></svg>Enviar</span></div>
+        </div>
+      </section>
+
+      <aside class="ctx">
+        <div class="sec">
+          <div class="hd"><span class="lbl">Contexto do CRM</span><span class="sp"></span><a><svg class="i s11"><use href="#out"/></svg>Abrir no CRM</a></div>
+          <dl class="kv">
+            <dt>Conta</dt><dd>Grupo Andino Retail</dd>
+            <dt>Plano</dt><dd>Business · 40 licenças</dd>
+            <dt>Em uso</dt><dd>34 licenças</dd>
+            <dt>Gestor de conta</dt><dd>Marcos Vidal</dd>
+            <dt>Chamados</dt><dd>Nenhum aberto</dd>
+            <dt>Idioma</dt><dd>Espanhol (México)</dd>
+            <dt>Identidade</dt><dd style="display:flex;align-items:center;gap:6px;color:var(--ok)"><svg class="i s12"><use href="#lock"/></svg>Confirmada por e-mail</dd>
           </dl>
         </div>
-      </div>
-
-      <div class="conv-layout">
-        <div class="conv-thread-col">
-          <div class="conv-thread-bar">
-            <span class="input">Português (Brasil)</span>
-            <span class="btn btn--sm">Translate</span>
-            <span class="btn btn--sm">Show original</span>
-          </div>
-          <div class="conv-thread">
-            <div class="bubble bubble--out"><div class="bubble__meta"><span>Template: AgentKickoff · es-ES</span><span> · 3h ago</span></div><div class="bubble__body"><span lang="pt-BR">Olá Valeria, aqui é a equipe de relacionamento. Selecionei eventos alinhados ao seu perfil. Quer que eu te mostre?</span><span class="tr"> · Translated</span></div><div class="bubble__delivery"><span class="pill" style="background:var(--ok-soft);color:var(--ok);border-color:color-mix(in srgb, var(--ok) 25%, transparent)">Read</span></div></div>
-            <div class="bubble bubble--in"><div class="bubble__meta"><span>Member message</span><span> · 2h ago</span></div><div class="bubble__body"><span lang="pt-BR">Sim, me interessa o de São Paulo. Busco sócios para projetos solares no Bajío.</span><span class="tr"> · Translated</span></div></div>
-            <div class="bubble bubble--out"><div class="bubble__meta"><span>Agent reply</span><span> · 2h ago</span></div><div class="bubble__body"><span lang="pt-BR">O Infra Summit São Paulo é em 18 de março, com investidores de energia no painel de transição. Faço sua inscrição?</span><span class="tr"> · Translated</span></div><div class="bubble__delivery"><span class="pill" style="background:var(--ok-soft);color:var(--ok);border-color:color-mix(in srgb, var(--ok) 25%, transparent)">Read</span></div></div>
-            <div class="bubble bubble--in"><div class="bubble__meta"><span>Member message</span><span> · 1h ago</span></div><div class="bubble__body"><span lang="pt-BR">Pode, por favor. Quero conhecer alguém desse painel.</span><span class="tr"> · Translated</span></div></div>
-            <div class="bubble bubble--out"><div class="bubble__meta"><span>Agent reply</span><span> · 52m ago</span></div><div class="bubble__body"><span lang="pt-BR">Pronto, inscrição confirmada. Também pedi uma apresentação a um dos palestrantes do painel.</span><span class="tr"> · Translated</span></div><div class="bubble__delivery"><span class="pill" style="background:var(--ok-soft);color:var(--ok);border-color:color-mix(in srgb, var(--ok) 25%, transparent)">Delivered</span></div></div>
-          </div>
-          <div class="conv-dock">
-            <div style="display:flex;justify-content:space-between;align-items:center">
-              <span class="stat__label">Reply as operator</span>
-              <span class="conv-dock__window">Window closes in 22h 41m</span>
-            </div>
-            <div class="conv-dock__row">
-              <div class="conv-dock__ta">Message to Valeria…</div>
-              <span class="btn btn--primary" style="height:38px;opacity:.5"><svg class="i" width="12" height="12" viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2l-7 20-4-9-9-4Z"/></svg> Send</span>
-            </div>
-          </div>
+        <div class="sec">
+          <div class="hd"><span class="lbl">Nota no CRM</span><span class="sp"></span><span class="pill neu">Rascunho</span></div>
+          <div class="box"><div class="t"><svg class="i s12"><use href="#note"/></svg>Resumo da conversa</div>
+            <div class="p">Cliente vai ampliar o uso para a filial de Monterrey (6 licenças livres confirmadas). Perguntou pelo conector SAP, que não faz parte do plano; agente reteve a resposta e a conversa seguiu com operador.</div>
+            <div class="f"><svg class="i s11"><use href="#spark"/></svg>Gerado por IA<span class="sp"></span>Salva ao encerrar</div></div>
         </div>
-
-        <aside class="conv-side">
-          <section class="card">
-            <div class="card__head">
-              <div><h2 class="card__title">Summary</h2></div>
-              <div class="card__head-actions"><span class="cfg__link" style="font-family:var(--font);font-size:12px"><svg class="i" width="11" height="11" viewBox="0 0 24 24"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg> Open in Salesforce</span></div>
-            </div>
-            <div class="conv-side__body">
-              <p class="conv-summary">Valeria answered the event invitation and chose the infrastructure summit in São Paulo. The agent registered her and requested an introduction to the energy transition panel. She prefers to be contacted on WhatsApp, in Spanish.</p>
-            </div>
-          </section>
-
-          <section class="card">
-            <div class="card__head">
-              <div>
-                <h2 class="card__title">Interests <span class="conv-side__count">4</span></h2>
-                <div class="card__sub">What the member showed interest in here, captured after the conversation ended</div>
-              </div>
-            </div>
-            <div class="conv-side__body">
-              <div class="interests">
-                <div>
-                  <div class="interests__label">People to meet</div>
-                  <ul class="interests__items">
-                    <li class="interests__item"><span class="interests__value">Speakers of the energy transition panel</span><span class="interests__confidence">81%</span><q class="interests__quote">Me gustaría conocer a alguien de ese panel.</q></li>
-                  </ul>
-                </div>
-                <div>
-                  <div class="interests__label">Events</div>
-                  <ul class="interests__items">
-                    <li class="interests__item"><span class="interests__value"><span class="cfg__link"><svg class="i" width="11" height="11" viewBox="0 0 24 24"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg> Infra Summit São Paulo</span></span><span class="interests__confidence">96%</span><q class="interests__quote">Sí, me interesa el de São Paulo.</q></li>
-                  </ul>
-                </div>
-                <div>
-                  <div class="interests__label">Sectors</div>
-                  <ul class="interests__items">
-                    <li class="interests__item"><span class="interests__value">Renewable energy</span><span class="interests__confidence">88%</span><q class="interests__quote">Busco socios para proyectos solares en el Bajío.</q></li>
-                  </ul>
-                </div>
-                <div>
-                  <div class="interests__label">Countries</div>
-                  <ul class="interests__items">
-                    <li class="interests__item"><span class="interests__value">Brazil</span><span class="interests__confidence">74%</span></li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section class="card">
-            <div class="card__head"><h2 class="card__title">Outcomes <span class="conv-side__count">2</span></h2></div>
-            <div class="conv-side__body">
-              <ul class="outcomes-list">
-                <li class="outcome-item"><span class="pill pill--live">Event registered</span><span class="t-xs t-mute">via agent, 1h ago</span></li>
-                <li class="outcome-item"><span class="pill pill--live">Introduction at event</span><span class="t-xs t-mute">via agent, 52m ago</span></li>
-              </ul>
-            </div>
-          </section>
-        </aside>
-      </div>
+        <div class="sec" style="border-bottom:0">
+          <div class="hd"><span class="lbl">Lead criado</span><span class="sp"></span><a><svg class="i s11"><use href="#out"/></svg>Ver no CRM</a></div>
+          <div class="box"><div class="t"><svg class="i s12"><use href="#target"/></svg>Conector SAP · Grupo Andino Retail <span class="pill ok">Novo</span></div>
+            <div class="p">Precisa do conector até o fim do mês para a operação de Monterrey. Encaminhado ao gestor de conta com o resumo da conversa.</div>
+            <div class="conf"><span>Interesse</span><span class="bar"><i style="width:86%"></i></span><span class="mono">0,86</span></div>
+            <div class="f"><svg class="i s11"><use href="#user"/></svg>Responsável: Marcos Vidal<span class="sp"></span>há 2 min</div></div>
+        </div>
+        <div class="sec" style="border-bottom:0;margin-top:auto;border-top:1px solid var(--border-2)">
+          <div class="hd"><span class="lbl">Histórico com a conta</span></div>
+          <div class="hs3"><div><b>12</b><span>conversas</span></div><div><b>9</b><span>resolvidas pelo agente</span></div><div><b>4,6</b><span>satisfação</span></div></div>
+        </div>
+      </aside>
     </div>
   </div>
 </div>
+
 </body>
 </html>

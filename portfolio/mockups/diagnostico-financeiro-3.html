@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>Carteira</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f8fafb; --card: #ffffff; --line: #e4e8ec; --line-soft: #f0f3f5;
+    --ink: #101b28; --ink-2: #3f4e5f; --ink-3: #71808f;
+    --navy: #0b1d33; --navy-soft: #e3f1fa;
+    --accent: #2e9bd6; --accent-strong: #1f7fb8; --secondary: #f1f4f7;
+    --ok: #16a34a; --ok-bg: #f0fdf4; --warn: #a16207; --warn-bg: #fefce8; --crit: #dc2626; --crit-bg: #fef2f2;
+    --band-a: #ecd3d3; --band-b: #eedfc0; --band-c: #d3e8d9; --band-d: #bddcc7;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1440px; height: 900px; overflow: hidden; }
+  body { font-family: 'Inter', -apple-system, sans-serif; background: var(--paper); color: var(--ink); -webkit-font-smoothing: antialiased; font-feature-settings: "cv11", "ss01"; }
+  b { font-weight: 600; }
+  svg.i { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+
+  header { display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--line); background: var(--card); padding: 12px 20px; height: 54px; }
+  .brand { display: flex; align-items: center; gap: 9px; }
+  .brand .mark { width: 28px; height: 28px; border-radius: 7px; background: var(--navy); color: #fff; display: flex; align-items: center; justify-content: center; }
+  .brand .wm { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink); }
+  .brand .wm span { color: var(--accent-strong); font-weight: 600; }
+  .crumb { border-left: 1px solid var(--line); padding-left: 14px; font-size: 13px; font-weight: 500; color: var(--ink-2); }
+  .hr { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .saved { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--ok); font-weight: 500; }
+  .muted { font-size: 12px; color: var(--ink-3); }
+  .avatar { width: 28px; height: 28px; border-radius: 999px; background: var(--navy-soft); color: var(--accent-strong); font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+  .tenant { font-size: 13px; font-weight: 600; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 1px 2px rgba(0,0,0,.05); overflow: hidden; }
+  .ch { display: flex; min-height: 52px; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line-soft); padding: 12px 20px; }
+  .ct { font-size: 13px; font-weight: 600; letter-spacing: 0.025em; }
+  .badge { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 10px; font-size: 11px; font-weight: 500; white-space: nowrap; line-height: 16px; }
+  .b-neutral { background: var(--secondary); color: var(--ink-2); }
+  .b-info { background: var(--navy-soft); color: var(--accent-strong); }
+  .b-crit { background: var(--crit-bg); color: var(--crit); }
+  .b-ok { background: var(--ok-bg); color: var(--ok); }
+  .foot { border-top: 1px solid var(--line-soft); padding: 10px 20px; font-size: 11px; line-height: 1.6; color: var(--ink-3); }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 6px; height: 32px; padding: 0 12px; font-size: 13px; font-weight: 500; white-space: nowrap; }
+  .btn.primary { background: var(--navy); color: #fff; }
+  .btn.outline { border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+  .btn.ghost { color: var(--ink-2); padding: 0 8px; }
+  .b-warn { background: var(--warn-bg); color: var(--warn); }
+  .mono { font-family: ui-monospace, 'SF Mono', Menlo, monospace; }
+
+  .shell { display: grid; grid-template-columns: 216px minmax(0,1fr); height: 846px; }
+  nav.sb { background: var(--card); border-right: 1px solid var(--line); padding: 16px 12px; display: flex; flex-direction: column; gap: 2px; }
+  .sbl { font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); padding: 12px 10px 6px; }
+  .sbl:first-child { padding-top: 0; }
+  .ni { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; font-size: 13px; font-weight: 500; color: var(--ink-2); }
+  .ni.on { background: var(--navy-soft); color: var(--navy); font-weight: 600; }
+  .ni .ct { margin-left: auto; font-size: 11px; color: var(--ink-3); font-weight: 500; }
+  .sb .sec { margin-top: auto; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 11px; line-height: 16px; color: var(--ink-3); }
+  .sb .sec b { display: flex; align-items: center; gap: 6px; color: var(--ink); font-size: 11.5px; margin-bottom: 4px; }
+
+  .content { padding: 20px 24px; display: grid; grid-template-columns: minmax(0,1fr) 344px; gap: 20px; align-content: start; }
+  .head { grid-column: 1 / -1; display: flex; align-items: flex-end; justify-content: space-between; }
+  .head h1 { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
+  .head p { font-size: 12.5px; color: var(--ink-3); margin-top: 3px; }
+  .head .acts { display: flex; gap: 8px; }
+  .kpis { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .kpi { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+  .kpi .l { font-size: 11.5px; color: var(--ink-3); font-weight: 500; }
+  .kpi .v { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; margin-top: 4px; font-variant-numeric: tabular-nums; display: flex; align-items: baseline; gap: 8px; }
+  .kpi .v small { font-size: 11.5px; font-weight: 500; color: var(--ink-3); letter-spacing: 0; }
+  .kpi .dist { display: flex; height: 6px; border-radius: 999px; overflow: hidden; margin-top: 8px; gap: 2px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 11px; font-weight: 600; color: var(--ink-3); letter-spacing: .02em; padding: 9px 12px; border-bottom: 1px solid var(--line); background: #fbfcfd; white-space: nowrap; }
+  td { padding: 0 12px; height: 48px; border-bottom: 1px solid var(--line-soft); font-size: 12.5px; vertical-align: middle; white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  th:first-child, td:first-child { padding-left: 18px; }
+  .co { display: flex; align-items: center; gap: 10px; }
+  .co .lg { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 700; color: #fff; flex-shrink: 0; }
+  .co .nm { font-weight: 600; font-size: 12.5px; line-height: 16px; }
+  .co .sc { font-size: 11px; color: var(--ink-3); line-height: 14px; }
+  .prog { display: flex; align-items: center; gap: 8px; }
+  .prog .tk { width: 64px; height: 5px; border-radius: 999px; background: #eef1f4; overflow: hidden; }
+  .prog .tk span { display: block; height: 100%; background: var(--accent); border-radius: 999px; }
+  .prog .p { font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; width: 30px; }
+  .sco { display: flex; align-items: center; gap: 7px; font-variant-numeric: tabular-nums; }
+  .sco b { font-weight: 700; width: 20px; }
+  .sco .cl { font-size: 11px; color: var(--ink-3); }
+  .sco i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+  .k-cr { background: #d98a8a; } .k-at { background: #d9b46a; } .k-ok { background: #6fb98b; } .k-rf { background: #3f9a63; }
+  .dash { color: #b6c0ca; }
+  .av { width: 24px; height: 24px; border-radius: 999px; background: var(--navy-soft); color: var(--accent-strong); font-size: 9.5px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; }
+  .vt { font-size: 11px; color: var(--ink-3); font-family: ui-monospace, 'SF Mono', Menlo, monospace; }
+  .upd { font-size: 11.5px; color: var(--ink-3); }
+
+  .mside { display: flex; flex-direction: column; gap: 16px; }
+  .ver { display: grid; grid-template-columns: 18px 1fr auto; gap: 10px; align-items: start; padding: 11px 18px; border-bottom: 1px solid var(--line-soft); }
+  .ver:last-child { border-bottom: 0; }
+  .ver .vd { width: 10px; height: 10px; border-radius: 999px; margin-top: 4px; border: 2px solid var(--line); background: #fff; }
+  .ver .vd.pub { border-color: var(--ok); background: var(--ok); }
+  .ver .vd.dr { border-color: var(--accent); }
+  .ver .vn { font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .ver .vm { font-size: 11px; color: var(--ink-3); margin-top: 2px; line-height: 15px; }
+  .ver .vc { font-size: 11px; color: var(--ink-3); text-align: right; white-space: nowrap; margin-top: 2px; }
+  .diff { padding: 4px 18px 6px; }
+  .dl { display: grid; grid-template-columns: 16px 1fr; gap: 8px; padding: 7px 0; border-bottom: 1px dashed var(--line); font-size: 12px; line-height: 17px; color: var(--ink-2); }
+  .dl:last-child { border-bottom: 0; }
+  .dl .sg { width: 16px; height: 16px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; margin-top: 1px; }
+  .sg.m { background: var(--warn-bg); color: var(--warn); } .sg.a { background: var(--ok-bg); color: var(--ok); }
+  .dl b { color: var(--ink); font-weight: 600; }
+  .dl s { color: var(--ink-3); }
+  .pubbar { display: flex; align-items: center; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--line-soft); }
+  .pubbar .note { font-size: 11px; color: var(--ink-3); line-height: 15px; flex: 1; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <span class="mark"><svg class="i" width="15" height="15" viewBox="0 0 24 24" stroke-width="2.4"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m7 14 4-4 4 4 5-6"/></svg></span>
+    <span class="wm">Diagnóstico <span>Financeiro</span></span>
+  </div>
+  <span class="crumb">Portal da consultoria</span>
+  <div class="hr">
+    <span class="muted">Prumo Consultoria Financeira</span>
+    <span class="avatar">RA</span>
+    <span class="tenant">Ricardo Antunes</span>
+  </div>
+</header>
+
+<div class="shell">
+  <nav class="sb">
+    <p class="sbl">Carteira</p>
+    <span class="ni on"><svg class="i" width="15" height="15" viewBox="0 0 24 24"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></svg>Empresas<span class="ct">10</span></span>
+    <span class="ni"><svg class="i" width="15" height="15" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>Convites<span class="ct">2</span></span>
+    <span class="ni"><svg class="i" width="15" height="15" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>Relatórios<span class="ct">1</span></span>
+    <p class="sbl">Método</p>
+    <span class="ni"><svg class="i" width="15" height="15" viewBox="0 0 24 24"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg>Metodologia</span>
+    <span class="ni"><svg class="i" width="15" height="15" viewBox="0 0 24 24"><path d="M12 3v18"/><path d="m19 8 3 8a5 5 0 0 1-6 0zV7"/><path d="M3 7h1a17 17 0 0 0 8-2 17 17 0 0 0 8 2h1"/><path d="m5 8 3 8a5 5 0 0 1-6 0zV7"/><path d="M7 21h10"/></svg>Pesos e regras</span>
+    <p class="sbl">Administração</p>
+    <span class="ni"><svg class="i" width="15" height="15" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Equipe</span>
+    <span class="ni"><svg class="i" width="15" height="15" viewBox="0 0 24 24"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M12 6v6l4 2"/></svg>Auditoria</span>
+    <div class="sec"><b><svg class="i" width="13" height="13" viewBox="0 0 24 24" style="color:var(--ok)"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>Dados protegidos</b>Isolamento por empresa no banco, MFA obrigatório e trilha de auditoria.</div>
+  </nav>
+
+  <div class="content">
+    <div class="head">
+      <div><h1>Empresas da carteira</h1><p>Cada empresa responde no próprio portal; a consultoria acompanha, revisa e entrega.</p></div>
+      <div class="acts">
+        <span class="btn outline"><svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/></svg>Filtrar</span>
+        <span class="btn primary"><svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Convidar empresa</span>
+      </div>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi"><p class="l">Empresas ativas</p><p class="v">10<small>em 9 setores</small></p></div>
+      <div class="kpi"><p class="l">Em preenchimento</p><p class="v">3<small>média de 61% respondido</small></p></div>
+      <div class="kpi"><p class="l">Relatórios em revisão</p><p class="v">1<small>aguarda o sócio</small></p></div>
+      <div class="kpi"><p class="l">Distribuição dos scores</p><p class="v">61<small>média · 5 concluídas</small></p><div class="dist"><span class="k-cr" style="flex:1"></span><span class="k-at" style="flex:2"></span><span class="k-ok" style="flex:1"></span><span class="k-rf" style="flex:1"></span></div></div>
+    </div>
+
+    <div class="card">
+      <table>
+        <thead><tr><th>Empresa</th><th>Etapa</th><th>Progresso</th><th>Score</th><th>Versão</th><th>Resp.</th><th>Atualizado</th></tr></thead>
+        <tbody>
+          <tr><td><div class="co"><span class="lg" style="background:#2f6f4f">VN</span><div><p class="nm">Vale Norte Alimentos</p><p class="sc">Indústria de alimentos</p></div></div></td><td><span class="badge b-warn">Em revisão</span></td><td><div class="prog"><span class="tk"><span style="width:100%"></span></span><span class="p">100%</span></div></td><td><div class="sco"><i class="k-at"></i><b>62</b><span class="cl">atenção</span></div></td><td><span class="vt">v3.2</span></td><td><span class="av">MT</span></td><td class="upd">há 12 min</td></tr>
+          <tr><td><div class="co"><span class="lg" style="background:#4b57c6">LS</span><div><p class="nm">Lumen Sistemas</p><p class="sc">Software B2B</p></div></div></td><td><span class="badge b-ok">Entregue</span></td><td><div class="prog"><span class="tk"><span style="width:100%"></span></span><span class="p">100%</span></div></td><td><div class="sco"><i class="k-ok"></i><b>78</b><span class="cl">saudável</span></div></td><td><span class="vt">v3.2</span></td><td><span class="av">RA</span></td><td class="upd">ontem</td></tr>
+          <tr><td><div class="co"><span class="lg" style="background:#1f7fb8">SA</span><div><p class="nm">Transportes Serra Azul</p><p class="sc">Logística</p></div></div></td><td><span class="badge b-info">Preenchendo</span></td><td><div class="prog"><span class="tk"><span style="width:64%"></span></span><span class="p">64%</span></div></td><td><div class="sco"><i class="k-at"></i><b>55</b><span class="cl">parcial</span></div></td><td><span class="vt">v3.2</span></td><td><span class="av">MT</span></td><td class="upd">há 2 h</td></tr>
+          <tr><td><div class="co"><span class="lg" style="background:#7a4fb5">GF</span><div><p class="nm">Grão Fino Distribuidora</p><p class="sc">Distribuição</p></div></div></td><td><span class="badge b-ok">Entregue</span></td><td><div class="prog"><span class="tk"><span style="width:100%"></span></span><span class="p">100%</span></div></td><td><div class="sco"><i class="k-rf"></i><b>86</b><span class="cl">referência</span></div></td><td><span class="vt">v3.1</span></td><td><span class="av">RA</span></td><td class="upd">02/11</td></tr>
+          <tr><td><div class="co"><span class="lg" style="background:#c0563b">MP</span><div><p class="nm">Metalúrgica Primavera</p><p class="sc">Indústria metalúrgica</p></div></div></td><td><span class="badge b-info">Preenchendo</span></td><td><div class="prog"><span class="tk"><span style="width:81%"></span></span><span class="p">81%</span></div></td><td><div class="sco"><i class="k-at"></i><b>58</b><span class="cl">parcial</span></div></td><td><span class="vt">v3.2</span></td><td><span class="av">JC</span></td><td class="upd">há 5 h</td></tr>
+          <tr><td><div class="co"><span class="lg" style="background:#0f8a8a">CH</span><div><p class="nm">Clínica Horizonte</p><p class="sc">Saúde</p></div></div></td><td><span class="badge b-info">Preenchendo</span></td><td><div class="prog"><span class="tk"><span style="width:38%"></span></span><span class="p">38%</span></div></td><td><span class="dash">—</span></td><td><span class="vt">v3.2</span></td><td><span class="av">JC</span></td><td class="upd">ontem</td></tr>
+          <tr><td><div class="co"><span class="lg" style="background:#8a6d1f">FB</span><div><p class="nm">Ferragens Bom Jesus</p><p class="sc">Varejo</p></div></div></td><td><span class="badge b-ok">Entregue</span></td><td><div class="prog"><span class="tk"><span style="width:100%"></span></span><span class="p">100%</span></div></td><td><div class="sco"><i class="k-at"></i><b>47</b><span class="cl">atenção</span></div></td><td><span class="vt">v3.1</span></td><td><span class="av">MT</span></td><td class="upd">28/10</td></tr>
+          <tr><td><div class="co"><span class="lg" style="background:#5d6b7a">CA</span><div><p class="nm">Aurora Serviços Contábeis</p><p class="sc">Serviços profissionais</p></div></div></td><td><span class="badge b-ok">Entregue</span></td><td><div class="prog"><span class="tk"><span style="width:100%"></span></span><span class="p">100%</span></div></td><td><div class="sco"><i class="k-cr"></i><b>34</b><span class="cl">crítica</span></div></td><td><span class="vt">v3.1</span></td><td><span class="av">JC</span></td><td class="upd">21/10</td></tr>
+          <tr><td><div class="co"><span class="lg" style="background:#d08a1e">VS</span><div><p class="nm">Ventura Energia Solar</p><p class="sc">Energia</p></div></div></td><td><span class="badge b-neutral">Convidada</span></td><td><div class="prog"><span class="tk"><span style="width:0%"></span></span><span class="p">0%</span></div></td><td><span class="dash">—</span></td><td><span class="vt">v3.2</span></td><td><span class="av">RA</span></td><td class="upd">há 3 dias</td></tr>
+          <tr><td><div class="co"><span class="lg" style="background:#b8456b">BV</span><div><p class="nm">Farmácias Bem Viver</p><p class="sc">Varejo farmacêutico</p></div></div></td><td><span class="badge b-neutral">Convidada</span></td><td><div class="prog"><span class="tk"><span style="width:0%"></span></span><span class="p">0%</span></div></td><td><span class="dash">—</span></td><td><span class="vt">v3.2</span></td><td><span class="av">MT</span></td><td class="upd">há 1 h</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="mside">
+      <div class="card">
+        <div class="ch"><h3 class="ct">Versões da metodologia</h3><span class="badge b-neutral">4 versões</span></div>
+        <div class="ver"><span class="vd dr"></span><div><p class="vn">v3.3 <span class="badge b-info">rascunho</span></p><p class="vm">3 alterações · editada por Ricardo Antunes</p></div><span class="vc">hoje</span></div>
+        <div class="ver"><span class="vd pub"></span><div><p class="vn">v3.2 <span class="badge b-ok">publicada</span></p><p class="vm">congelada em 03/09/2026 · 52 perguntas · 12 regras</p></div><span class="vc">7 empresas</span></div>
+        <div class="ver"><span class="vd"></span><div><p class="vn">v3.1</p><p class="vm">congelada em 12/06/2026 · 50 perguntas · 11 regras</p></div><span class="vc">3 empresas</span></div>
+        <div class="ver"><span class="vd"></span><div><p class="vn">v3.0</p><p class="vm">congelada em 20/03/2026 · arquivada</p></div><span class="vc">—</span></div>
+      </div>
+
+      <div class="card">
+        <div class="ch"><h3 class="ct">O que muda na v3.3</h3><span class="badge b-warn">não publicada</span></div>
+        <div class="diff">
+          <div class="dl"><span class="sg m">~</span><span>Peso de <b>Caixa e capital de giro</b> <s>15%</s> → <b>16%</b></span></div>
+          <div class="dl"><span class="sg m">~</span><span>Peso de <b>Sistemas e dados</b> <s>5%</s> → <b>4%</b></span></div>
+          <div class="dl"><span class="sg a">+</span><span>Regra <b>R-13</b>: um cliente acima de 30% da receita</span></div>
+        </div>
+        <div class="pubbar"><span class="note">Publicar congela pesos, perguntas e regras. Diagnósticos em andamento seguem na versão em que começaram.</span><span class="btn primary">Publicar</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

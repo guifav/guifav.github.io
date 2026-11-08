@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>Redação IA · Revisão</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --z50: #fafafa; --z100: #f4f4f5; --z200: #e4e4e7; --z300: #d4d4d8; --z400: #a1a1aa; --z500: #71717a; --z600: #52525b; --z700: #3f3f46; --z800: #27272a; --z900: #18181b;
+    --green: #15803d; --green-bg: #ecfdf3; --green-line: #bbf7d0;
+    --amber: #b45309; --amber-bg: #fffbeb; --amber-line: #fde68a;
+    --red: #b91c1c; --red-bg: #fef2f2; --red-line: #fecaca;
+    --blue: #2563eb; --blue-bg: #eff6ff; --blue-line: #bfdbfe;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1440px; height: 900px; overflow: hidden; }
+  body { font-family: 'Inter', -apple-system, sans-serif; color: var(--z900); background: #fff; -webkit-font-smoothing: antialiased; font-feature-settings: "cv11", "ss01"; display: flex; }
+  .i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+  .i-12 { width: 12px; height: 12px; } .i-14 { width: 14px; height: 14px; }
+  .tnum { font-variant-numeric: tabular-nums; }
+
+  aside { width: 232px; height: 900px; flex-shrink: 0; background: var(--z50); border-right: 1px solid var(--z200); display: flex; flex-direction: column; padding: 14px 10px; }
+  .brand { display: flex; align-items: center; gap: 9px; padding: 4px 8px 14px; }
+  .logo { width: 26px; height: 26px; border-radius: 7px; background: var(--z900); color: #fff; display: flex; align-items: center; justify-content: center; }
+  .brand b { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+  .pubsw { margin: 0 2px 16px; border: 1px solid var(--z200); background: #fff; border-radius: 8px; padding: 8px 10px; display: flex; align-items: center; gap: 10px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+  .pubsw .av { width: 28px; height: 28px; border-radius: 6px; background: linear-gradient(135deg, #0f766e, #134e4a); color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .pubsw .n { font-size: 13px; font-weight: 600; line-height: 16px; }
+  .pubsw .s { font-size: 11px; color: var(--z500); line-height: 14px; }
+  .pubsw .i { margin-left: auto; color: var(--z400); }
+  .nl { font-size: 11px; font-weight: 500; color: var(--z400); padding: 10px 10px 6px; }
+  nav a { display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px; border-radius: 6px; font-size: 13px; color: var(--z600); font-weight: 500; }
+  nav a .i { color: var(--z400); }
+  nav a.on { background: #fff; color: var(--z900); box-shadow: 0 0 0 1px var(--z200), 0 1px 2px rgba(0,0,0,.04); }
+  nav a.on .i { color: var(--z900); }
+  nav a .ct { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--z500); }
+  nav a .ct.warn { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-line); border-radius: 999px; padding: 0 6px; line-height: 16px; }
+  .me { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px; border-top: 1px solid var(--z200); }
+  .me .av { width: 28px; height: 28px; border-radius: 50%; background: var(--z800); color: #fff; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+  .me .n { font-size: 12.5px; font-weight: 600; line-height: 16px; }
+  .me .s { font-size: 11px; color: var(--z500); line-height: 14px; }
+
+  main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .top { height: 52px; border-bottom: 1px solid var(--z200); display: flex; align-items: center; padding: 0 24px 0 32px; gap: 10px; font-size: 13px; color: var(--z500); flex-shrink: 0; }
+  .top .cur { color: var(--z900); font-weight: 500; }
+  .top .sp { flex: 1; }
+  .btn { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 12px; border-radius: 7px; font-size: 13px; font-weight: 500; white-space: nowrap; }
+  .btn.pri { background: var(--z900); color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+  .btn.out { border: 1px solid var(--z200); background: #fff; color: var(--z800); box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+  .split { flex: 1; min-height: 0; display: flex; }
+
+  /* article */
+  .doc { flex: 1; min-width: 0; padding: 0 40px; overflow: hidden; }
+  .bar { height: 52px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--z100); }
+  .tabs { display: inline-flex; background: var(--z100); border-radius: 8px; padding: 3px; gap: 2px; }
+  .tab { font-size: 12px; font-weight: 500; color: var(--z500); padding: 4px 10px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px; }
+  .tab.on { background: #fff; color: var(--z900); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .tab .ok { color: var(--green); }
+  .bar .meta { font-size: 12px; color: var(--z500); display: flex; gap: 14px; }
+  .bar .meta span { display: inline-flex; align-items: center; gap: 5px; }
+  article { max-width: 680px; margin: 0 auto; padding-top: 26px; }
+  .kick { font-size: 11.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: #0f766e; }
+  h1 { font-family: 'Source Serif 4', Georgia, serif; font-size: 32px; line-height: 38px; font-weight: 700; letter-spacing: -0.015em; margin-top: 8px; }
+  .dek { font-family: 'Source Serif 4', Georgia, serif; font-size: 17px; line-height: 26px; color: var(--z600); margin-top: 10px; }
+  .by { margin-top: 14px; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--z500); padding-bottom: 16px; border-bottom: 1px solid var(--z100); }
+  .by .dot { width: 3px; height: 3px; border-radius: 50%; background: var(--z300); }
+  .body { font-family: 'Source Serif 4', Georgia, serif; font-size: 16px; line-height: 27px; color: var(--z800); }
+  .body p { margin-top: 14px; }
+  .body h3 { font-family: 'Inter', sans-serif; font-size: 15px; font-weight: 600; margin-top: 20px; color: var(--z900); letter-spacing: -0.01em; }
+  .cl { background: linear-gradient(transparent 62%, rgba(34,197,94,.20) 62%); }
+  .cl.adj { background: linear-gradient(transparent 0, rgba(245,158,11,.20) 0); border-radius: 3px; box-shadow: 0 0 0 2px rgba(245,158,11,.35); }
+  sup { line-height: 0; font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 600; color: var(--blue); margin-left: 1px; }
+  .refs { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--z100); }
+  .refs h4 { font-size: 11.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--z500); }
+  .ref { display: flex; align-items: center; gap: 10px; padding: 7px 0; font-size: 12.5px; color: var(--z700); border-bottom: 1px dashed var(--z200); }
+  .ref:last-child { border-bottom: 0; }
+  .ref .n { width: 20px; height: 20px; border-radius: 5px; background: var(--blue-bg); color: var(--blue); font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .ref .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ref .t b { font-weight: 500; color: var(--z900); }
+  .ref .ty { font-size: 10.5px; font-weight: 600; color: var(--z500); border: 1px solid var(--z200); border-radius: 4px; padding: 0 5px; line-height: 16px; }
+  .ref .u { color: var(--z400); font-size: 11.5px; }
+
+  /* check panel */
+  .panel { width: 412px; flex-shrink: 0; border-left: 1px solid var(--z200); background: var(--z50); padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
+  .ph { display: flex; align-items: center; justify-content: space-between; }
+  .ph h2 { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 7px; }
+  .ph h2 .i { color: var(--green); }
+  .ph .m { font-size: 11.5px; color: var(--z500); }
+  .card { background: #fff; border: 1px solid var(--z200); border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.03); }
+  .score { padding: 16px; display: flex; gap: 16px; align-items: center; }
+  .gauge { position: relative; width: 84px; height: 84px; flex-shrink: 0; }
+  .gauge .v { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .gauge .v b { font-size: 26px; font-weight: 700; letter-spacing: -0.03em; line-height: 28px; }
+  .gauge .v span { font-size: 10px; color: var(--z500); }
+  .sc-t { font-size: 13px; font-weight: 600; }
+  .sc-d { font-size: 12px; color: var(--z500); margin-top: 2px; line-height: 17px; }
+  .rounds { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
+  .rd { font-size: 11.5px; border-radius: 6px; padding: 2px 7px; border: 1px solid; font-weight: 600; white-space: nowrap; }
+  .rd.r1 { color: var(--red); background: var(--red-bg); border-color: var(--red-line); }
+  .rd.r2 { color: var(--green); background: var(--green-bg); border-color: var(--green-line); }
+  .rd small { font-weight: 500; opacity: .8; }
+  .arrow { color: var(--z400); font-size: 11px; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+  .subs { padding: 4px 16px 12px; border-top: 1px solid var(--z100); }
+  .sub { display: grid; grid-template-columns: 128px 1fr 30px; align-items: center; gap: 10px; padding: 6px 0; font-size: 12px; color: var(--z600); }
+  .sub .tr { height: 5px; background: var(--z100); border-radius: 999px; overflow: hidden; }
+  .sub .tr span { display: block; height: 100%; background: #22c55e; border-radius: 999px; }
+  .sub b { text-align: right; font-weight: 600; color: var(--z900); }
+  .claims h3 { font-size: 12px; font-weight: 600; color: var(--z700); display: flex; justify-content: space-between; margin-bottom: 8px; }
+  .claims h3 span { color: var(--z500); font-weight: 500; }
+  .claim { padding: 11px 13px; }
+  .claim + .claim { border-top: 1px solid var(--z100); }
+  .claim .hd { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
+  .tag { font-size: 10.5px; font-weight: 600; border-radius: 999px; padding: 1px 7px; border: 1px solid; display: inline-flex; align-items: center; gap: 4px; }
+  .tag.ok { color: var(--green); background: var(--green-bg); border-color: var(--green-line); }
+  .tag.adj { color: var(--amber); background: var(--amber-bg); border-color: var(--amber-line); }
+  .tag.rm { color: var(--red); background: var(--red-bg); border-color: var(--red-line); }
+  .claim .src { margin-left: auto; font-size: 11px; color: var(--blue); font-weight: 500; }
+  .claim .q { font-size: 12.5px; line-height: 18px; color: var(--z800); }
+  .claim .q s { color: var(--z400); }
+  .claim .why { font-size: 11.5px; color: var(--z500); margin-top: 4px; line-height: 16px; }
+  .claim.sel { background: #fffdf5; box-shadow: inset 3px 0 0 #f59e0b; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-feather" viewBox="0 0 24 24"><path d="M12.67 19a2 2 0 0 0 1.416-.588l6.154-6.172a6 6 0 0 0-8.49-8.49L5.586 9.914A2 2 0 0 0 5 11.328V18a1 1 0 0 0 1 1z"/><path d="M16 8 2 22"/><path d="M17.5 15H9"/></symbol>
+<symbol id="i-chevrons" viewBox="0 0 24 24"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></symbol>
+<symbol id="i-layers" viewBox="0 0 24 24"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+<symbol id="i-book" viewBox="0 0 24 24"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></symbol>
+<symbol id="i-pen" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="i-inbox" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+<symbol id="i-news" viewBox="0 0 24 24"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+<symbol id="i-file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></symbol>
+<symbol id="i-msg" viewBox="0 0 24 24"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></symbol>
+<symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+<symbol id="i-rotate" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+</defs></svg>
+
+<aside>
+  <div class="brand"><span class="logo"><svg class="i i-14"><use href="#i-feather"/></svg></span><b>Redação IA</b></div>
+  <div class="pubsw"><span class="av">HE</span><div><p class="n">Horizonte Energia</p><p class="s">Portal · PT · EN · ES</p></div><svg class="i i-14"><use href="#i-chevrons"/></svg></div>
+  <nav>
+    <a><svg class="i"><use href="#i-layers"/></svg>Lote de hoje</a>
+    <a><svg class="i"><use href="#i-search"/></svg>Lacunas de busca<span class="ct">14</span></a>
+    <a><svg class="i"><use href="#i-activity"/></svg>Sinais de mercado</a>
+    <a class="on"><svg class="i"><use href="#i-inbox"/></svg>Revisão<span class="ct warn">3</span></a>
+    <a><svg class="i"><use href="#i-news"/></svg>Publicados</a>
+  </nav>
+  <p class="nl">Base editorial</p>
+  <nav>
+    <a><svg class="i"><use href="#i-book"/></svg>Fontes primárias</a>
+    <a><svg class="i"><use href="#i-pen"/></svg>Guia de estilo</a>
+    <a><svg class="i"><use href="#i-settings"/></svg>Configurações</a>
+  </nav>
+  <div class="me"><span class="av">HD</span><div><p class="n">Helena Duarte</p><p class="s">Editora-chefe</p></div></div>
+</aside>
+
+<main>
+  <div class="top">
+    <span>Revisão</span><span>/</span><span class="cur">Baterias na rede: quanto custa armazenar 1 MWh</span>
+    <span class="sp"></span>
+    <span class="btn out"><svg class="i i-14"><use href="#i-msg"/></svg>Pedir ajuste</span>
+    <span class="btn pri"><svg class="i i-14"><use href="#i-check"/></svg>Aprovar e publicar</span>
+  </div>
+  <div class="split">
+    <div class="doc">
+      <div class="bar">
+        <div class="tabs">
+          <span class="tab on">Português<svg class="i i-12 ok"><use href="#i-check"/></svg></span>
+          <span class="tab">English<svg class="i i-12 ok"><use href="#i-check"/></svg></span>
+          <span class="tab">Español<svg class="i i-12 ok"><use href="#i-check"/></svg></span>
+        </div>
+        <div class="meta"><span><svg class="i i-12"><use href="#i-file"/></svg>1.480 palavras</span><span><svg class="i i-12"><use href="#i-clock"/></svg>6 min de leitura</span><span><svg class="i i-12"><use href="#i-book"/></svg>4 fontes primárias</span></div>
+      </div>
+      <article>
+        <p class="kick">Armazenamento · Análise</p>
+        <h1>Baterias na rede: quanto custa armazenar 1 MWh em 2026</h1>
+        <p class="dek">O preço das células caiu, mas conexão, terreno e contrato ainda decidem se um projeto de armazenamento fecha a conta.</p>
+        <p class="by">Rascunho gerado às 06:04<span class="dot"></span>2 rodadas de checagem<span class="dot"></span>Revisão: Helena Duarte</p>
+        <div class="body">
+          <p><span class="cl">O custo médio de um sistema de baterias em escala de rede caiu cerca de 18% em doze meses</span><sup>1</sup>, puxado pela oferta de células de fosfato de ferro-lítio. O equipamento, porém, já responde por menos da metade do investimento total.</p>
+          <p>Nos leilões mais recentes, <span class="cl adj">os projetos contratados somaram 1,2 GW de potência</span><sup>2</sup>, com contratos de 15 anos e exigência de quatro horas de descarga<sup>3</sup>. É esse prazo que dá previsibilidade ao financiamento.</p>
+          <h3>Onde o custo mora agora</h3>
+          <p><span class="cl">Conexão à rede e obras civis já representam até 35% do orçamento</span><sup>4</sup>, segundo os dados abertos de projetos homologados.</p>
+        </div>
+        <div class="refs">
+          <h4>Fontes primárias</h4>
+          <div class="ref"><span class="n">1</span><span class="t"><b>Relatório anual de custos de armazenamento 2026</b>, p. 14</span><span class="ty">PDF</span></div>
+          <div class="ref"><span class="n">2</span><span class="t"><b>Resultado do leilão de capacidade 02/2026</b>, tabela 3</span><span class="ty">Edital</span></div>
+          <div class="ref"><span class="n">3</span><span class="t"><b>Minuta de contrato padrão de armazenamento</b>, cláusula 4.2</span><span class="ty">Contrato</span></div>
+          <div class="ref"><span class="n">4</span><span class="t"><b>Painel de projetos homologados</b>, extração de 6 nov</span><span class="ty">Dados abertos</span></div>
+        </div>
+      </article>
+    </div>
+
+    <div class="panel">
+      <div class="ph"><h2><svg class="i i-14"><use href="#i-shield"/></svg>Checagem de fatos</h2><span class="m">Concluída às 06:09</span></div>
+      <div class="card">
+        <div class="score">
+          <div class="gauge">
+            <svg width="84" height="84" viewBox="0 0 84 84"><circle cx="42" cy="42" r="36" fill="none" stroke="#f4f4f5" stroke-width="8"/><circle cx="42" cy="42" r="36" fill="none" stroke="#22c55e" stroke-width="8" stroke-linecap="round" stroke-dasharray="219.4 226.2" transform="rotate(-90 42 42)"/></svg>
+            <div class="v"><b class="tnum">97</b><span>de 100</span></div>
+          </div>
+          <div>
+            <p class="sc-t">Passou na 2ª rodada</p>
+            <p class="sc-d">Mínimo exigido: 90. A primeira versão tinha um número divergente e uma projeção sem fonte.</p>
+            <div class="rounds"><span class="rd r1 tnum">81 <small>R1</small></span><span class="arrow"><svg class="i i-12"><use href="#i-rotate"/></svg>reescrita</span><span class="rd r2 tnum">97 <small>R2</small></span></div>
+          </div>
+        </div>
+        <div class="subs">
+          <div class="sub"><span>Precisão dos números</span><span class="tr"><span style="width:98%"></span></span><b class="tnum">98</b></div>
+          <div class="sub"><span>Fontes primárias</span><span class="tr"><span style="width:100%"></span></span><b class="tnum">100</b></div>
+          <div class="sub"><span>Atualidade dos dados</span><span class="tr"><span style="width:95%"></span></span><b class="tnum">95</b></div>
+          <div class="sub"><span>Afirmações neutras</span><span class="tr"><span style="width:94%"></span></span><b class="tnum">94</b></div>
+        </div>
+      </div>
+
+      <div class="claims">
+        <h3>Afirmações verificadas <span>12 de 12</span></h3>
+        <div class="card">
+          <div class="claim">
+            <div class="hd"><span class="tag ok"><svg class="i i-12"><use href="#i-check"/></svg>Confirmada</span><span class="src">Fonte 1</span></div>
+            <p class="q">Custo médio do sistema caiu cerca de 18% em doze meses.</p>
+          </div>
+          <div class="claim sel">
+            <div class="hd"><span class="tag adj"><svg class="i i-12"><use href="#i-rotate"/></svg>Corrigida na reescrita</span><span class="src">Fonte 2</span></div>
+            <p class="q">Projetos contratados somaram <s>1,8 GW</s> 1,2 GW de potência.</p>
+            <p class="why">O rascunho somava projetos habilitados, não contratados. A tabela 3 do resultado oficial traz 1,2 GW.</p>
+          </div>
+          <div class="claim">
+            <div class="hd"><span class="tag ok"><svg class="i i-12"><use href="#i-check"/></svg>Confirmada</span><span class="src">Fonte 4</span></div>
+            <p class="q">Conexão e obras civis chegam a 35% do orçamento.</p>
+          </div>
+          <div class="claim">
+            <div class="hd"><span class="tag rm"><svg class="i i-12"><use href="#i-x"/></svg>Removida</span></div>
+            <p class="q"><s>O preço deve cair pela metade até 2028.</s></p>
+            <p class="why">Projeção sem fonte primária. A regra do pipeline bloqueia números sem origem.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+</body>
+</html>

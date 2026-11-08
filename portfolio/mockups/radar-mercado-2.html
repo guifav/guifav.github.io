@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="pt-BR" class="dark">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>Radar · Resumo diário</title>
+<!-- Tela conceitual. Empresas, pessoas, fontes e números são fictícios. -->
+<style>
+  :root {
+    --background: #0a0a0a;
+    --foreground: #fafafa;
+    --muted: #171717;
+    --muted-foreground: #a3a3a3;
+    --border: #262626;
+    --card: #0a0a0a;
+    --accent: #262626;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1440px; height: 900px; overflow: hidden; }
+  body { background: var(--background); color: var(--foreground); font-family: system-ui, -apple-system, sans-serif; -webkit-font-smoothing: antialiased; }
+  .i { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+  .i.b { stroke-width: 2; }
+  .i-12 { width: 12px; height: 12px; stroke-width: 2; }
+  .i-10 { width: 10px; height: 10px; stroke-width: 2; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .muted { color: var(--muted-foreground); }
+
+  .shell { display: flex; height: 900px; }
+  aside { width: 224px; border-right: 1px solid var(--border); background: var(--background); display: flex; flex-direction: column; flex-shrink: 0; }
+  .brand { padding: 16px; border-bottom: 1px solid var(--border); }
+  .brand h2 { font-size: 14px; font-weight: 700; letter-spacing: -0.02em; line-height: 20px; }
+  .brand p { font-size: 10px; color: var(--muted-foreground); line-height: 15px; }
+  nav { flex: 1; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+  .nl { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 4px; font-size: 12px; font-weight: 500; color: var(--muted-foreground); line-height: 16px; }
+  .nl.active, .nl.on { background: var(--accent); color: var(--foreground); }
+  .nav-bottom { padding: 0 8px 4px; display: flex; flex-direction: column; gap: 2px; }
+  .user { padding: 12px 16px; border-top: 1px solid var(--border); }
+  .user .row { display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: var(--muted-foreground); }
+  .user .row .ic { display: flex; gap: 8px; }
+  .user .ver { font-size: 9px; color: rgba(163,163,163,.5); margin-top: 4px; }
+
+  main { flex: 1; min-width: 0; overflow: hidden; }
+  .topbar { height: 57px; border-bottom: 1px solid var(--border); background: var(--background); padding: 12px 24px; display: flex; justify-content: flex-end; align-items: center; }
+  .sel { height: 32px; border-radius: 4px; border: 1px solid var(--border); background: var(--muted); padding: 0 10px 0 12px; font-size: 12px; display: inline-flex; align-items: center; gap: 18px; }
+  .content { padding: 24px; }
+  .grid3 { display: grid; grid-template-columns: 220px 1fr 1fr; gap: 16px; }
+  .p1 { border-right: 1px solid var(--border); padding-right: 16px; }
+  .p3 { border-left: 1px solid var(--border); padding-left: 16px; min-width: 0; }
+  .p2 { min-width: 0; }
+  .ph { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted-foreground); margin-bottom: 12px; font-weight: 500; line-height: 15px; }
+  .chip { font-size: 10px; padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border); color: var(--muted-foreground); line-height: 15px; white-space: nowrap; }
+  .chip.on { border-color: var(--foreground); background: var(--foreground); color: var(--background); }
+  .pill { font-size: 10px; padding: 1px 6px; border-radius: 4px; background: var(--muted); color: var(--muted-foreground); line-height: 15px; white-space: nowrap; }
+  .pill.fg { background: rgba(250,250,250,.1); color: var(--foreground); }
+  .ibar { display: inline-flex; width: 32px; height: 4px; border-radius: 999px; background: var(--muted); overflow: hidden; }
+  .ibar i { display: block; height: 100%; border-radius: 999px; background: var(--foreground); }
+  .box { border: 1px solid var(--border); border-radius: 6px; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 4px; border: 1px solid var(--border); font-size: 11px; color: var(--foreground); background: var(--background); white-space: nowrap; }
+  .btn.pri { background: var(--foreground); color: var(--background); border-color: var(--foreground); font-weight: 500; }
+  .ok { color: #4ade80; } .warn { color: #fbbf24; } .bad { color: #f87171; }
+
+  .content { padding: 20px 24px; display: grid; grid-template-columns: 236px minmax(0, 1fr) 286px; gap: 20px; height: 843px; }
+  .ed { display: flex; flex-direction: column; gap: 6px; }
+  .e { padding: 10px 12px; border-radius: 6px; border: 1px solid transparent; }
+  .e.on { border-color: var(--foreground); background: rgba(250,250,250,.05); }
+  .e .d { font-size: 12px; font-weight: 500; display: flex; justify-content: space-between; align-items: center; }
+  .e .m { font-size: 10px; color: var(--muted-foreground); margin-top: 3px; line-height: 15px; }
+  .e .s { display: flex; gap: 10px; margin-top: 6px; font-size: 10px; color: var(--muted-foreground); }
+  .e .s b { color: var(--foreground); font-weight: 500; }
+  .stage { display: flex; flex-direction: column; min-width: 0; }
+  .tool { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .tog { display: flex; gap: 2px; padding: 2px; border-radius: 4px; background: var(--muted); }
+  .tog span { font-size: 10px; padding: 4px 10px; border-radius: 3px; color: var(--muted-foreground); display: inline-flex; align-items: center; gap: 5px; }
+  .tog span.on { background: var(--foreground); color: var(--background); font-weight: 500; }
+  .mail { flex: 1; min-height: 0; background: #fafaf9; color: #18181b; border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; }
+  .mh { padding: 12px 18px; border-bottom: 1px solid #e7e5e4; font-size: 11px; color: #71717a; display: grid; grid-template-columns: 50px 1fr; row-gap: 3px; background: #fff; }
+  .mh b { color: #18181b; font-weight: 500; }
+  .mb { padding: 18px 28px; overflow: hidden; }
+  .mb .brand-m { display: flex; align-items: center; justify-content: space-between; padding-bottom: 12px; border-bottom: 2px solid #18181b; }
+  .mb .brand-m b { font-size: 17px; letter-spacing: -0.03em; }
+  .mb .brand-m span { font-size: 11px; color: #71717a; }
+  .mb .lead { font-size: 12.5px; color: #3f3f46; line-height: 1.6; margin: 12px 0 4px; }
+  .mb h5 { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: #71717a; margin: 14px 0 6px; font-weight: 600; }
+  .it { padding: 9px 0; border-bottom: 1px solid #e7e5e4; }
+  .it:last-child { border-bottom: none; }
+  .it .t { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
+  .it .t .sc { font-size: 9.5px; padding: 1px 6px; border-radius: 3px; background: #f4f4f5; color: #52525b; border: 1px solid #e4e4e7; }
+  .it .t .hi { font-size: 9.5px; padding: 1px 6px; border-radius: 3px; background: #18181b; color: #fafafa; }
+  .it .t .crm { margin-left: auto; font-size: 10px; color: #15803d; display: inline-flex; align-items: center; gap: 4px; }
+  .it p { font-size: 12.5px; line-height: 1.55; color: #27272a; }
+  .it p b { font-weight: 600; color: #09090b; }
+  .it .why { font-size: 11px; color: #71717a; margin-top: 3px; }
+  .flab { font-size: 9px; color: var(--muted-foreground); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; line-height: 13px; }
+  .cfg { display: flex; flex-direction: column; gap: 16px; }
+  .row { display: flex; justify-content: space-between; align-items: center; font-size: 11px; padding: 7px 0; border-bottom: 1px solid var(--border); }
+  .row span:first-child { color: var(--muted-foreground); }
+  .sw { width: 26px; height: 15px; border-radius: 999px; background: var(--foreground); position: relative; }
+  .sw::after { content: ""; position: absolute; right: 2px; top: 2px; width: 11px; height: 11px; border-radius: 50%; background: var(--background); }
+  .kp { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .kp div { border: 1px solid var(--border); border-radius: 6px; padding: 10px; }
+  .kp b { display: block; font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
+  .kp span { font-size: 10px; color: var(--muted-foreground); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-chart-column" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></symbol>
+<symbol id="i-newspaper" viewBox="0 0 24 24"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+<symbol id="i-building-2" viewBox="0 0 24 24"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></symbol>
+<symbol id="i-handshake" viewBox="0 0 24 24"><path d="m11 17 2 2a1 1 0 1 0 3-3"/><path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4"/><path d="m21 3 1 11h-2"/><path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3"/><path d="M3 4h8"/></symbol>
+<symbol id="i-triangle-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+<symbol id="i-circle-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+<symbol id="i-log-out" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></symbol>
+<symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="i-external-link" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+<symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+<symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+</defs></svg>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-mail" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol>
+<symbol id="i-scale" viewBox="0 0 24 24"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></symbol>
+<symbol id="i-monitor" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></symbol>
+<symbol id="i-phone" viewBox="0 0 24 24"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></symbol>
+<symbol id="i-send" viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+<symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></symbol>
+<symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+<symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></symbol>
+<symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></symbol>
+<symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+<symbol id="i-file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></symbol>
+<symbol id="i-rotate" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+<symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+</defs></svg>
+
+<div class="shell">
+  <aside>
+    <div class="brand"><h2>Radar</h2><p>Sinais de mercado</p></div>
+    <nav>
+      <span class="nl "><svg class="i"><use href="#i-chart-column"/></svg>Visão geral</span>
+      <span class="nl "><svg class="i"><use href="#i-newspaper"/></svg>Artigos</span>
+      <span class="nl "><svg class="i"><use href="#i-users"/></svg>Pessoas</span>
+      <span class="nl "><svg class="i"><use href="#i-building-2"/></svg>Empresas</span>
+      <span class="nl "><svg class="i"><use href="#i-handshake"/></svg>Negócios</span>
+      <span class="nl "><svg class="i"><use href="#i-triangle-alert"/></svg>Sinais</span>
+      <span class="nl on"><svg class="i"><use href="#i-mail"/></svg>Resumo diário</span>
+      <span class="nl "><svg class="i"><use href="#i-scale"/></svg>Regulatório</span>
+    </nav>
+    <div class="nav-bottom">
+      <span class="nl"><svg class="i"><use href="#i-circle-help"/></svg>Ajuda</span>
+      <span class="nl"><svg class="i"><use href="#i-settings"/></svg>Admin</span>
+    </div>
+    <div class="user">
+      <div class="row"><span>marina.teixeira</span><span class="ic"><svg class="i i-12"><use href="#i-sun"/></svg><svg class="i i-12"><use href="#i-log-out"/></svg></span></div>
+      <div class="ver">v3.8.2 · 4e1c9a7</div>
+    </div>
+  </aside>
+
+  <main>
+    <header class="topbar"><span class="sel">Brasil · 4 setores<svg class="i i-12"><use href="#i-chevron-down"/></svg></span></header>
+    <div class="content">
+      <div style="border-right:1px solid var(--border);padding-right:16px;min-width:0">
+        <h2 class="ph">Edições</h2>
+        <div class="ed" id="ed"></div>
+      </div>
+
+      <div class="stage">
+        <div class="tool">
+          <h2 class="ph" style="margin:0;flex:1">Prévia · edição de hoje</h2>
+          <div class="tog"><span class="on">PT</span><span class="">EN</span></div>
+          <div class="tog"><span class="on"><svg class="i i-12"><use href="#i-monitor"/></svg></span><span><svg class="i i-12"><use href="#i-phone"/></svg></span></div>
+          <span class="btn"><svg class="i i-12"><use href="#i-send"/></svg>Enviar teste</span>
+        </div>
+        <div class="mail">
+          <div class="mh"><span>De</span><b>Radar &lt;radar@example.com&gt;</b><span>Para</span><span>comercial@example.com, cs@example.com e mais 3 listas</span><span>Assunto</span><b>Radar diário · 18 sinais, 5 em contas do CRM</b></div>
+          <div class="mb">
+            <div class="brand-m"><b>Radar</b><span>Sexta-feira, 7 de novembro de 2026</span></div>
+            <p class="lead">Bom dia. Lemos <b>164 fontes</b> nas últimas 24 horas e separamos <b>18 sinais</b> nos seus setores. Cinco tocam contas que já estão no CRM e aparecem primeiro.</p>
+            <h5>Em contas do CRM</h5>
+            <div class="it"><div class="t"><span class="hi">Aquisição</span><span class="sc">Software</span><span class="crm"><svg class="i i-10"><use href="#i-check"/></svg>Conta de Ana Ribeiro</span></div><p><b>Lumen Software</b> comprou a <b>RotaViva</b>, de roteirização de frotas, e passa a vender o módulo para transportadoras.</p><div class="why">Por que importa: abre conversa de expansão; aderência ao ICP 86.</div></div>
+            <div class="it"><div class="t"><span class="hi">Cargo</span><span class="sc">Varejo</span><span class="crm"><svg class="i i-10"><use href="#i-check"/></svg>Conta de Bruno Lima</span></div><p><b>Carla Mendes</b> assume como diretora de operações da <b>Brisa Varejo</b>, vinda da Vitral Varejo.</p><div class="why">Por que importa: nova decisora numa conta com renovação em 40 dias.</div></div>
+            <div class="it"><div class="t"><span class="hi">Captação</span><span class="sc">Energia</span><span class="crm"><svg class="i i-10"><use href="#i-check"/></svg>Prospect da lista ICP</span></div><p><b>Solaris Energia</b> captou R$ 80 milhões para expandir a geração distribuída no Nordeste.</p></div>
+            <h5>Mercado</h5>
+            <div class="it"><div class="t"><span class="sc">Logística</span><span class="sc">Expansão</span></div><p><b>Via Serra Cargas</b> abre dois centros de distribuição em Minas e contrata 300 pessoas.</p></div>
+            <div class="it"><div class="t"><span class="sc">Software</span><span class="sc">Parceria</span></div><p><b>Órbita Software</b> e <b>Quilha Pay</b> lançam conta digital integrada para pequenas empresas.</p></div>
+            <h5>Regulatório</h5>
+            <div class="it"><div class="t"><span class="hi" style="background:#b45309">Atenção</span><span class="sc">Energia</span><span class="crm" style="color:#b45309"><svg class="i i-10"><use href="#i-scale"/></svg>2 empresas acompanhadas</span></div><p>Agência reguladora abre consulta pública sobre novas regras de conexão para <b>geração distribuída</b>; prazo para contribuições até 12 de dezembro.</p></div>
+            <div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#71717a"><span style="display:inline-flex;padding:6px 12px;border-radius:4px;background:#18181b;color:#fafafa;font-weight:500">Ver os 18 sinais no Radar</span><span>Mais 12 sinais de prioridade média na versão completa</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cfg" style="border-left:1px solid var(--border);padding-left:16px">
+        <div>
+          <h2 class="ph">Configuração</h2>
+          <div class="row"><span>Envio</span><span>Dias úteis, 07:00</span></div>
+          <div class="row"><span>Idiomas</span><span>Português e inglês</span></div>
+          <div class="row"><span>Destinatários</span><span>5 listas · 42 pessoas</span></div>
+          <div class="row"><span>Prioridade mínima</span><span>ICP ≥ 70</span></div>
+          <div class="row"><span>Contas do CRM primeiro</span><span class="sw"></span></div>
+          <div class="row"><span>Incluir regulatório</span><span class="sw"></span></div>
+        </div>
+        <div>
+          <div class="flab">Setores</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px"><span class="chip on">Software</span><span class="chip on">Logística</span><span class="chip on">Energia</span><span class="chip on">Varejo</span><span class="chip">Saúde</span><span class="chip">Serv. financeiros</span></div>
+        </div>
+        <div>
+          <div class="flab">Tipos de sinal</div>
+          <div style="display:flex;flex-wrap:wrap;gap:4px"><span class="chip on">Aquisição</span><span class="chip on">Troca de cargo</span><span class="chip on">Captação</span><span class="chip on">Expansão</span><span class="chip">Parceria</span><span class="chip on">Regulatório</span></div>
+        </div>
+        <div>
+          <h2 class="ph" style="margin-bottom:8px">Últimos 30 dias</h2>
+          <div class="kp"><div><b>64%</b><span>abertura média</span></div><div><b>23%</b><span>cliques em sinais</span></div><div><b>11</b><span>tarefas criadas no CRM</span></div><div><b>0</b><span>envios com falha</span></div></div>
+        </div>
+        <div class="box" style="padding:10px 12px;font-size:11px;color:var(--muted-foreground);line-height:1.6;display:flex;gap:8px"><svg class="i" style="margin-top:2px;color:var(--foreground)"><use href="#i-sparkles"/></svg><span>Resumos escritos por IA a partir dos sinais extraídos; cada item linka para o artigo original e para o registro no CRM.</span></div>
+      </div>
+    </div>
+  </main>
+</div>
+<script>
+  const PT = document.documentElement.lang.startsWith('pt');
+  // Edições fictícias: data, sinais, contas no CRM, abertura
+  const eds = PT
+    ? [['Hoje · 07:00', 18, 5, null], ['Qui, 6 nov', 21, 4, 66], ['Qua, 5 nov', 15, 2, 61], ['Ter, 4 nov', 24, 6, 70], ['Seg, 3 nov', 19, 3, 63], ['Sex, 31 out', 17, 3, 59], ['Qui, 30 out', 22, 5, 68], ['Qua, 29 out', 16, 2, 62]]
+    : [['Today · 7:00 AM', 18, 5, null], ['Thu, Nov 6', 21, 4, 66], ['Wed, Nov 5', 15, 2, 61], ['Tue, Nov 4', 24, 6, 70], ['Mon, Nov 3', 19, 3, 63], ['Fri, Oct 31', 17, 3, 59], ['Thu, Oct 30', 22, 5, 68], ['Wed, Oct 29', 16, 2, 62]];
+  document.getElementById('ed').innerHTML = eds.map(([d, s, c, o], i) => `
+    <div class="e${i === 0 ? ' on' : ''}">
+      <div class="d">${d}${i === 0 ? `<span class="pill fg">${PT ? 'agendado' : 'scheduled'}</span>` : `<span class="ok" style="font-size:10px">${PT ? 'enviado' : 'sent'}</span>`}</div>
+      <div class="m">${PT ? 'PT e EN · 42 destinatários' : 'PT and EN · 42 recipients'}</div>
+      <div class="s"><span><b>${s}</b> ${PT ? 'sinais' : 'signals'}</span><span><b>${c}</b> CRM</span>${o ? `<span><b>${o}%</b> ${PT ? 'abertura' : 'opened'}</span>` : ''}</div>
+    </div>`).join('');
+</script>
+</body>
+</html>

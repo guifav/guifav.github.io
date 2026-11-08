@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>WhatsApp Console · Agent</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --font: "Montserrat", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+  --bg: #131210; --surface: #1a1916; --surface-2: #1f1d19; --surface-3: #25231e; --surface-4: #2c2a24;
+  --border: #2c2a25; --border-2: #232220; --border-3: #3a382f;
+  --t1: #f4f1e9; --t2: #d3cfc4; --t3: #8a8579; --t4: #5e5a51; --inv: #131210;
+  --accent: #d6ae5b; --accent-2: #f1cd7c; --accent-soft: #2a2418;
+  --ok: #62b78a; --ok-soft: #1a2a22; --warn: #e0a14b; --warn-soft: #2c2317; --err: #e5685a; --err-soft: #2c1c1a;
+  --info: #6da4dc; --info-soft: #1a2330;
+  --r: 4px; --r2: 6px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1440px; height: 900px; overflow: hidden; }
+body { font-family: var(--font); font-size: 13px; line-height: 1.4; color: var(--t1); background: var(--bg); -webkit-font-smoothing: antialiased; }
+svg.i { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+svg.i.s11 { width: 11px; height: 11px; stroke-width: 1.9; }
+svg.i.s12 { width: 12px; height: 12px; stroke-width: 1.8; }
+svg.i.s16 { width: 16px; height: 16px; }
+.mono { font-family: var(--mono); font-feature-settings: "tnum" 1; }
+.t3 { color: var(--t3); } .t4 { color: var(--t4); }
+
+.app { display: grid; grid-template-columns: 224px 1fr; height: 900px; }
+.side { background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 14px 0 8px; }
+.brand { display: flex; align-items: center; gap: 9px; padding: 6px 16px 16px; margin-bottom: 6px; border-bottom: 1px solid var(--border-2); font-size: 13px; font-weight: 600; }
+.mark { width: 24px; height: 24px; border-radius: 6px; background: var(--accent); color: var(--inv); display: grid; place-items: center; }
+.mark svg { fill: currentColor; stroke: none; width: 14px; height: 14px; }
+.grp { padding: 0 8px; margin-bottom: 4px; }
+.gt { font-size: 9.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; color: var(--t4); padding: 8px 8px 4px; }
+.it { display: grid; grid-template-columns: 14px 1fr auto; gap: 10px; align-items: center; height: 29px; padding: 0 8px; border-radius: var(--r); color: var(--t2); font-size: 12.5px; font-weight: 500; position: relative; }
+.it .c { font-size: 10px; color: var(--t4); font-family: var(--mono); }
+.it.on { background: var(--surface-3); color: var(--t1); font-weight: 600; }
+.it.on::before { content: ''; position: absolute; left: -8px; top: 6px; bottom: 6px; width: 2px; border-radius: 0 2px 2px 0; background: var(--accent); }
+.it.on .c { color: var(--t3); }
+.sfoot { margin-top: auto; padding: 12px 16px 4px; border-top: 1px solid var(--border-2); display: flex; align-items: center; gap: 8px; font-size: 10.5px; color: var(--t3); }
+.hdot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
+
+.main { display: flex; flex-direction: column; min-width: 0; height: 900px; }
+.topbar { height: 48px; flex-shrink: 0; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; gap: 10px; padding: 0 20px; }
+.topbar .sp { flex: 1; }
+.crumb { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--t3); }
+.crumb b { color: var(--t1); font-weight: 600; }
+.envpill { font-size: 10.5px; font-weight: 600; text-transform: uppercase; letter-spacing: .12em; padding: 4px 8px; border-radius: var(--r); border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent-2); }
+.tbi { width: 30px; height: 30px; display: grid; place-items: center; color: var(--t2); }
+.me { display: flex; align-items: center; gap: 8px; padding-left: 10px; border-left: 1px solid var(--border); margin-left: 4px; line-height: 1.15; }
+.me .av { width: 28px; height: 28px; border-radius: 50%; background: var(--t1); color: #8c6f24; display: grid; place-items: center; font-weight: 700; font-size: 10.5px; }
+.me .n { font-size: 11.5px; font-weight: 600; }
+.me .r { font-size: 10px; color: var(--t3); letter-spacing: .06em; text-transform: uppercase; }
+
+.btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: var(--r); border: 1px solid var(--border); background: var(--surface); color: var(--t1); font-size: 12px; font-weight: 500; white-space: nowrap; }
+.btn.sm { height: 26px; padding: 0 9px; font-size: 11.5px; }
+.btn.pri { background: var(--t1); color: var(--inv); border-color: var(--t1); font-weight: 600; }
+.btn.gold { background: var(--accent); color: var(--inv); border-color: var(--accent); font-weight: 600; }
+
+.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; border: 1px solid; white-space: nowrap; line-height: 1.4; }
+.pill .d { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.pill.ok { color: var(--ok); background: var(--ok-soft); border-color: rgba(98,183,138,.25); }
+.pill.warn { color: var(--warn); background: var(--warn-soft); border-color: rgba(224,161,75,.25); }
+.pill.err { color: var(--err); background: var(--err-soft); border-color: rgba(229,104,90,.25); }
+.pill.info { color: var(--info); background: var(--info-soft); border-color: rgba(109,164,220,.25); }
+.pill.gold { color: var(--accent-2); background: var(--accent-soft); border-color: rgba(214,174,91,.3); }
+.pill.neu { color: var(--t2); background: var(--surface-2); border-color: var(--border); }
+.tag { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--t2); padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface-2); white-space: nowrap; }
+.tag svg { color: var(--t3); }
+
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r2); min-width: 0; }
+.ch { padding: 10px 14px; border-bottom: 1px solid var(--border-2); display: flex; align-items: center; gap: 10px; }
+.ch h3 { font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.ch .sub { font-size: 11px; color: var(--t3); }
+.ch .sp { flex: 1; }
+.cnt { font-family: var(--mono); font-size: 10.5px; font-weight: 600; color: var(--t3); padding: 0 5px; border: 1px solid var(--border); border-radius: 3px; background: var(--surface-2); }
+.lbl { font-size: 10.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--t3); }
+.tgl { width: 28px; height: 16px; border-radius: 999px; background: var(--surface-4); border: 1px solid var(--border-3); position: relative; flex-shrink: 0; }
+.tgl::after { content: ''; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 50%; background: var(--t3); }
+.tgl.on { background: var(--accent); border-color: var(--accent); }
+.tgl.on::after { left: 14px; background: var(--inv); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="home" viewBox="0 0 24 24"><path d="M3 11.5 12 4l9 7.5V20a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1Z"/></symbol>
+<symbol id="inbox" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+<symbol id="zap" viewBox="0 0 24 24"><path d="M13 2 3 14h7l-1 8 11-13h-7Z"/></symbol>
+<symbol id="runs" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 4v4h-4"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 20v-4h4"/></symbol>
+<symbol id="users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+<symbol id="gauge" viewBox="0 0 24 24"><path d="M12 14l4-4"/><path d="M3 14a9 9 0 1 1 18 0"/><path d="M3 14h2"/><path d="M19 14h2"/></symbol>
+<symbol id="file" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Z"/><path d="M14 3v6h6"/></symbol>
+<symbol id="book" viewBox="0 0 24 24"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></symbol>
+<symbol id="bot" viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></symbol>
+<symbol id="shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="flask" viewBox="0 0 24 24"><path d="M9 3h6"/><path d="M10 3v7L4 20a2 2 0 0 0 1.7 3h12.6A2 2 0 0 0 20 20l-6-10V3"/><path d="M6 16h12"/></symbol>
+<symbol id="key" viewBox="0 0 24 24"><path d="M5 11h14v10H5z"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+<symbol id="gear" viewBox="0 0 24 24"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></symbol>
+<symbol id="sun" viewBox="0 0 24 24"><path d="M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z"/><path d="M12 1v2"/><path d="M12 21v2"/><path d="M4.2 4.2l1.4 1.4"/><path d="M18.4 18.4l1.4 1.4"/><path d="M1 12h2"/><path d="M21 12h2"/><path d="M4.2 19.8l1.4-1.4"/><path d="M18.4 5.6l1.4-1.4"/></symbol>
+<symbol id="bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M14 21a2 2 0 0 1-4 0"/></symbol>
+<symbol id="chat" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12Z"/></symbol>
+<symbol id="chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+<symbol id="chevd" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+<symbol id="out" viewBox="0 0 24 24"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></symbol>
+<symbol id="lang" viewBox="0 0 24 24"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></symbol>
+<symbol id="pause" viewBox="0 0 24 24"><rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/></symbol>
+<symbol id="hand" viewBox="0 0 24 24"><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></symbol>
+<symbol id="db" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></symbol>
+<symbol id="note" viewBox="0 0 24 24"><path d="M15.5 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3Z"/><path d="M15 3v6h6"/><path d="M7 13h6"/><path d="M7 17h10"/></symbol>
+<symbol id="target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+<symbol id="send" viewBox="0 0 24 24"><path d="M22 2 11 13"/><path d="M22 2l-7 20-4-9-9-4Z"/></symbol>
+<symbol id="spark" viewBox="0 0 24 24"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></symbol>
+<symbol id="lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+<symbol id="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="checks" viewBox="0 0 24 24"><path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/></symbol>
+<symbol id="alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+<symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+<symbol id="cal" viewBox="0 0 24 24"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></symbol>
+<symbol id="filter" viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></symbol>
+<symbol id="plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+<symbol id="building" viewBox="0 0 24 24"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></symbol>
+<symbol id="user" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+<symbol id="paper" viewBox="0 0 24 24"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></symbol>
+<symbol id="grip" viewBox="0 0 24 24"><circle cx="9" cy="12" r="1"/><circle cx="9" cy="5" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="19" r="1"/></symbol>
+<symbol id="more" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+<symbol id="mail" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol>
+<symbol id="globe" viewBox="0 0 24 24"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z"/><path d="M2 12h20"/><path d="M12 2a14 14 0 0 1 0 20"/><path d="M12 2a14 14 0 0 0 0 20"/></symbol>
+<symbol id="ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></symbol>
+<symbol id="history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></symbol>
+<symbol id="cpu" viewBox="0 0 24 24"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></symbol>
+</defs></svg>
+<style>
+.page { flex: 1; min-height: 0; padding: 16px 20px 18px; display: flex; flex-direction: column; gap: 12px; }
+.ph { display: flex; align-items: flex-start; gap: 12px; }
+.ph h1 { font-size: 24px; font-weight: 600; letter-spacing: -.02em; display: flex; align-items: center; gap: 12px; }
+.ph .s { font-size: 12px; color: var(--t3); margin-top: 4px; }
+.ph .sp { flex: 1; }
+.ph .acts { display: flex; gap: 8px; padding-top: 4px; align-items: center; }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); }
+.tabs span { font-size: 12px; font-weight: 500; color: var(--t3); padding: 8px 12px; border-bottom: 2px solid transparent; margin-bottom: -1px; display: inline-flex; gap: 6px; align-items: center; }
+.tabs span.on { color: var(--t1); border-bottom-color: var(--accent); font-weight: 600; }
+.g { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0,1fr) 408px; gap: 14px; }
+.col { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+.row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--border-2); }
+.row:last-child { border-bottom: 0; }
+.row .ic { width: 28px; height: 28px; border-radius: 6px; background: var(--surface-3); border: 1px solid var(--border); color: var(--t2); display: grid; place-items: center; flex-shrink: 0; }
+.row .ic.gold { background: var(--accent-soft); color: var(--accent-2); border-color: rgba(214,174,91,.25); }
+.row .tx { flex: 1; min-width: 0; }
+.row .t1 { font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.row .t2 { font-size: 11.5px; color: var(--t3); margin-top: 2px; }
+.row .meta { font-size: 10.5px; color: var(--t3); font-family: var(--mono); white-space: nowrap; }
+.row.off .t1, .row.off .ic { opacity: .55; }
+.chips { display: flex; gap: 5px; margin-top: 6px; }
+.chip { font-size: 10.5px; color: var(--err); border: 1px solid rgba(229,104,90,.3); background: var(--err-soft); border-radius: 3px; padding: 0 6px; line-height: 17px; }
+.sld { display: flex; align-items: center; gap: 10px; width: 170px; }
+.sld .tr { position: relative; flex: 1; height: 4px; border-radius: 999px; background: var(--surface-4); }
+.sld .tr i { position: absolute; left: 0; top: 0; bottom: 0; width: 70%; border-radius: 999px; background: var(--accent); }
+.sld .tr b { position: absolute; left: 70%; top: 50%; width: 12px; height: 12px; border-radius: 50%; background: var(--t1); transform: translate(-50%,-50%); box-shadow: 0 0 0 3px rgba(214,174,91,.25); }
+.sld .v { font-family: var(--mono); font-size: 11.5px; color: var(--t1); }
+.sim { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.q { align-self: flex-start; max-width: 92%; background: var(--surface-3); border-radius: 8px; border-top-left-radius: 2px; padding: 8px 11px; }
+.q .o { font-size: 12.5px; }
+.q .t { font-size: 11px; color: var(--t3); margin-top: 3px; }
+.trace { display: flex; flex-direction: column; }
+.ts { display: grid; grid-template-columns: 20px 1fr auto; gap: 10px; align-items: start; padding: 7px 0; position: relative; }
+.ts::before { content: ''; position: absolute; left: 9.5px; top: 25px; bottom: -7px; width: 1px; background: var(--border-3); }
+.ts:last-child::before { display: none; }
+.ts .n { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; background: var(--ok-soft); color: var(--ok); border: 1px solid rgba(98,183,138,.3); z-index: 1; }
+.ts .n.w { background: var(--warn-soft); color: var(--warn); border-color: rgba(224,161,75,.35); }
+.ts .a { font-size: 12px; font-weight: 600; }
+.ts .b { font-size: 11px; color: var(--t3); margin-top: 1px; }
+.ts .r { font-size: 10.5px; font-family: var(--mono); color: var(--t3); padding-top: 2px; }
+.ans { border: 1px dashed var(--border-3); border-radius: 6px; padding: 9px 11px; background: var(--bg); }
+.ans .k { font-size: 10.5px; color: var(--t3); display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.ans .p { font-size: 12px; line-height: 1.5; }
+.kv { display: grid; grid-template-columns: 130px 1fr; gap: 8px 10px; padding: 12px 14px; font-size: 12px; }
+.kv dt { color: var(--t3); }
+.kv dd { color: var(--t1); display: flex; align-items: center; gap: 6px; }
+</style>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><span class="mark"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12Z"/></svg></span>WhatsApp Console</div>
+    <div class="grp"><div class="gt">Operate</div>
+      <div class="it"><svg class="i"><use href="#home"/></svg><span>Dashboard</span></div>
+      <div class="it"><svg class="i"><use href="#inbox"/></svg><span>Inbox</span><span class="c">38</span></div>
+      <div class="it"><svg class="i"><use href="#zap"/></svg><span>Campaigns</span><span class="c">5/7</span></div>
+      <div class="it"><svg class="i"><use href="#runs"/></svg><span>Runs</span><span class="c">12 today</span></div>
+      <div class="it"><svg class="i"><use href="#users"/></svg><span>Contacts</span></div>
+      <div class="it"><svg class="i"><use href="#gauge"/></svg><span>Conversion</span></div>
+    </div>
+    <div class="grp"><div class="gt">Catalog</div>
+      <div class="it"><svg class="i"><use href="#file"/></svg><span>Templates</span><span class="c">22</span></div>
+      <div class="it"><svg class="i"><use href="#book"/></svg><span>Knowledge base</span></div>
+    </div>
+    <div class="grp"><div class="gt">AI agent</div>
+      <div class="it"><svg class="i"><use href="#bot"/></svg><span>Configuration</span></div>
+      <div class="it on"><svg class="i"><use href="#shield"/></svg><span>Guardrails</span></div>
+      <div class="it"><svg class="i"><use href="#flask"/></svg><span>Test chat</span></div>
+    </div>
+    <div class="grp"><div class="gt">Tools</div>
+      <div class="it"><svg class="i"><use href="#key"/></svg><span>API keys</span></div>
+      <div class="it"><svg class="i"><use href="#gear"/></svg><span>Settings</span></div>
+    </div>
+    <div class="sfoot"><span class="hdot"></span>All systems operational</div>
+  </aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="crumb"><svg class="i s12"><use href="#bot"/></svg>AI agent<svg class="i s11"><use href="#chev"/></svg><b>Guardrails</b></div>
+      <div class="sp"></div>
+      <span class="envpill">production</span>
+      <span class="tbi"><svg class="i s16"><use href="#sun"/></svg></span>
+      <span class="tbi" style="opacity:.6"><svg class="i s16"><use href="#bell"/></svg></span>
+      <div class="me"><span class="av">HP</span><div><div class="n">helena.prado@example.com</div><div class="r">Admin</div></div></div>
+    </header>
+
+    <div class="page">
+      <div class="ph">
+        <div><h1>Service agent <span class="pill ok"><span class="d"></span>Published · v14</span></h1><div class="s">Serves customers and prospects 24/7, in their own language, grounded only in the CRM and the knowledge base</div></div>
+        <div class="sp"></div>
+        <div class="acts"><span class="tag"><svg class="i s11"><use href="#history"/></svg>2 unpublished changes</span><span class="btn sm"><svg class="i s11"><use href="#flask"/></svg>Test</span><span class="btn sm gold">Publish v15</span></div>
+      </div>
+      <div class="tabs"><span>Behavior</span><span>Knowledge</span><span class="on"><svg class="i s12"><use href="#shield"/></svg>Guardrails</span><span>Languages</span><span>Operator handoff</span><span>Versions</span></div>
+
+      <div class="g">
+        <div class="col">
+          <div class="card">
+            <div class="ch"><h3>Response rules</h3><span class="sp"></span><span class="sub">apply to every conversation and campaign</span></div>
+            <div class="row"><span class="ic gold"><svg class="i s12"><use href="#db"/></svg></span><div class="tx"><div class="t1">Answer only when grounded</div><div class="t2">Every reply cites at least one CRM record or knowledge base article.</div></div><span class="tgl on"></span></div>
+            <div class="row"><span class="ic gold"><svg class="i s12"><use href="#gauge"/></svg></span><div class="tx"><div class="t1">Minimum confidence to reply</div><div class="t2">Below the threshold, the reply is withheld and the conversation goes to the operator queue.</div></div><div class="sld"><span class="tr"><i></i><b></b></span><span class="v">0.70</span></div></div>
+            <div class="row"><span class="ic gold"><svg class="i s12"><use href="#ban"/></svg></span><div class="tx"><div class="t1">Commitments the agent never makes</div><div class="chips"><span class="chip">delivery dates</span><span class="chip">discounts</span><span class="chip">pricing</span><span class="chip">contract changes</span></div></div><span class="tgl on"></span></div>
+            <div class="row"><span class="ic gold"><svg class="i s12"><use href="#lock"/></svg></span><div class="tx"><div class="t1">Verify identity before showing account data</div><div class="t2">Sends a code to the email on file in the CRM before linking the number to the contact.</div></div><span class="tgl on"></span></div>
+            <div class="row"><span class="ic gold"><svg class="i s12"><use href="#hand"/></svg></span><div class="tx"><div class="t1">Hand off to a person on request</div><div class="t2">If the customer asks for a person, the conversation goes straight to the queue, with a summary.</div></div><span class="tgl on"></span></div>
+            <div class="row"><span class="ic gold"><svg class="i s12"><use href="#clock"/></svg></span><div class="tx"><div class="t1">Outside operator hours</div><div class="t2">Shares when to expect a reply and schedules the handoff for 9 AM next business day.</div></div><span class="tgl on"></span></div>
+          </div>
+          <div class="card" style="flex:1;min-height:0">
+            <div class="ch"><h3>Knowledge sources</h3><span class="sp"></span><span class="sub">the agent only reads what is enabled here</span></div>
+            <div class="row"><span class="ic"><svg class="i s12"><use href="#building"/></svg></span><div class="tx"><div class="t1">CRM · accounts and contacts</div></div><span class="meta">syncs every 5 min</span><span class="tgl on"></span></div>
+            <div class="row"><span class="ic"><svg class="i s12"><use href="#file"/></svg></span><div class="tx"><div class="t1">CRM · contracts, plans and licenses</div></div><span class="meta">syncs every 5 min</span><span class="tgl on"></span></div>
+            <div class="row"><span class="ic"><svg class="i s12"><use href="#inbox"/></svg></span><div class="tx"><div class="t1">CRM · support tickets</div></div><span class="meta">last 12 months</span><span class="tgl on"></span></div>
+            <div class="row"><span class="ic"><svg class="i s12"><use href="#book"/></svg></span><div class="tx"><div class="t1">Knowledge base</div></div><span class="meta">214 articles · pt, es, en</span><span class="tgl on"></span></div>
+            <div class="row off"><span class="ic"><svg class="i s12"><use href="#ban"/></svg></span><div class="tx"><div class="t1">Price list <span class="pill neu">Off</span></div></div><span class="meta">pricing only via operator</span><span class="tgl"></span></div>
+          </div>
+        </div>
+
+        <div class="col">
+          <div class="card">
+            <div class="ch"><h3>Simulator</h3><span class="sp"></span><span class="sub">runs with unpublished changes</span></div>
+            <div class="sim">
+              <div class="q"><div class="o">¿Me dan 20% de descuento si renuevo hoy?</div><div class="t">Translation: Will you give me a 20% discount if I renew today?</div></div>
+              <div class="trace">
+                <div class="ts"><span class="n"><svg class="i s11"><use href="#check"/></svg></span><div><div class="a">Language detected</div><div class="b">Spanish (Mexico) · reply in the same language</div></div><span class="r">12 ms</span></div>
+                <div class="ts"><span class="n"><svg class="i s11"><use href="#check"/></svg></span><div><div class="a">Identity</div><div class="b">Verified by code 3 days ago</div></div><span class="r">4 ms</span></div>
+                <div class="ts"><span class="n"><svg class="i s11"><use href="#check"/></svg></span><div><div class="a">CRM lookup</div><div class="b">Contract CT-2291 · Business plan · renews 11/28</div></div><span class="r">2 records</span></div>
+                <div class="ts"><span class="n w"><svg class="i s11"><use href="#alert"/></svg></span><div><div class="a">Rule triggered</div><div class="b">Forbidden commitment: discounts</div></div><span class="r">conf. 0.32</span></div>
+                <div class="ts"><span class="n w"><svg class="i s11"><use href="#hand"/></svg></span><div><div class="a">Decision</div><div class="b">Withhold the reply and hand off to an operator</div></div><span class="pill warn">Withheld</span></div>
+              </div>
+              <div class="ans"><div class="k"><svg class="i s11"><use href="#send"/></svg>Handoff message sent to the customer, in Spanish</div><div class="p">I am bringing in your account manager to discuss renewal terms. They will reply here today.</div></div>
+            </div>
+          </div>
+          <div class="card" style="flex:1">
+            <div class="ch"><h3>Model and memory</h3></div>
+            <dl class="kv">
+              <dt>Model</dt><dd><svg class="i s12"><use href="#cpu"/></svg>Claude · via model router</dd>
+              <dt>Temperature</dt><dd class="mono">0.2</dd>
+              <dt>Conversation memory</dt><dd>30 days, operator can reset</dd>
+              <dt>Audio</dt><dd>Transcribes voice messages</dd>
+            </dl>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

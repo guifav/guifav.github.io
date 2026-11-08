@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f8fafb; --card: #ffffff; --line: #e4e8ec; --line-soft: #f0f3f5;
+    --ink: #101b28; --ink-2: #3f4e5f; --ink-3: #71808f;
+    --navy: #0b1d33; --navy-soft: #e3f1fa;
+    --accent: #2e9bd6; --accent-strong: #1f7fb8; --secondary: #f1f4f7;
+    --ok: #16a34a; --ok-bg: #f0fdf4; --warn: #a16207; --warn-bg: #fefce8; --crit: #dc2626; --crit-bg: #fef2f2;
+    --band-a: #ecd3d3; --band-b: #eedfc0; --band-c: #d3e8d9; --band-d: #bddcc7;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1440px; height: 900px; overflow: hidden; }
+  body { font-family: 'Inter', -apple-system, sans-serif; background: var(--paper); color: var(--ink); -webkit-font-smoothing: antialiased; font-feature-settings: "cv11", "ss01"; }
+  b { font-weight: 600; }
+  svg.i { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+
+  header { display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--line); background: var(--card); padding: 12px 20px; height: 54px; }
+  .brand { display: flex; align-items: center; gap: 9px; }
+  .brand .mark { width: 28px; height: 28px; border-radius: 7px; background: var(--navy); color: #fff; display: flex; align-items: center; justify-content: center; }
+  .brand .wm { font-size: 15px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink); }
+  .brand .wm span { color: var(--accent-strong); font-weight: 600; }
+  .crumb { border-left: 1px solid var(--line); padding-left: 14px; font-size: 13px; font-weight: 500; color: var(--ink-2); }
+  .hr { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  .saved { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--ok); font-weight: 500; }
+  .muted { font-size: 12px; color: var(--ink-3); }
+  .avatar { width: 28px; height: 28px; border-radius: 999px; background: var(--navy-soft); color: var(--accent-strong); font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+  .tenant { font-size: 13px; font-weight: 600; }
+
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 1px 2px rgba(0,0,0,.05); overflow: hidden; }
+  .ch { display: flex; min-height: 52px; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line-soft); padding: 12px 20px; }
+  .ct { font-size: 13px; font-weight: 600; letter-spacing: 0.025em; }
+  .badge { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 10px; font-size: 11px; font-weight: 500; white-space: nowrap; line-height: 16px; }
+  .b-neutral { background: var(--secondary); color: var(--ink-2); }
+  .b-info { background: var(--navy-soft); color: var(--accent-strong); }
+  .b-crit { background: var(--crit-bg); color: var(--crit); }
+  .b-ok { background: var(--ok-bg); color: var(--ok); }
+  .foot { border-top: 1px solid var(--line-soft); padding: 10px 20px; font-size: 11px; line-height: 1.6; color: var(--ink-3); }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 6px; height: 32px; padding: 0 12px; font-size: 13px; font-weight: 500; white-space: nowrap; }
+  .btn.primary { background: var(--navy); color: #fff; }
+  .btn.outline { border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+  .btn.ghost { color: var(--ink-2); padding: 0 8px; }
+  .b-warn { background: var(--warn-bg); color: var(--warn); }
+  .mono { font-family: ui-monospace, 'SF Mono', Menlo, monospace; }
+
+  .tool { height: 52px; display: flex; align-items: center; gap: 12px; padding: 0 20px; border-bottom: 1px solid var(--line); background: var(--card); }
+  .bc { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-3); }
+  .bc b { color: var(--ink); font-weight: 600; }
+  .bc svg { color: #b6c0ca; }
+  .tool .sp { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .pager { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-3); border: 1px solid var(--line); border-radius: 6px; height: 32px; padding: 0 10px; font-variant-numeric: tabular-nums; }
+
+  .stage { display: grid; grid-template-columns: 112px minmax(0,1fr) 360px; gap: 20px; padding: 16px 20px; height: 794px; }
+  .bands { position: relative; display: flex; border-radius: 999px; }
+  .bands span.s { height: 100%; }
+  .bands span.s:first-child { border-radius: 999px 0 0 999px; }
+  .bands span.s:last-of-type { border-radius: 0 999px 999px 0; }
+  .marker { position: absolute; top: 50%; width: 3px; transform: translate(-50%, -50%); border-radius: 999px; background: var(--ink); box-shadow: 0 0 0 2px #fff; }
+  .cls { font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .cls i { width: 8px; height: 8px; border-radius: 2px; background: #c9b98f; display: inline-block; }
+  .kv { display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--line-soft); font-size: 12.5px; }
+  .kv span { color: var(--ink-3); }
+  .kv b { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .thumbs { display: flex; flex-direction: column; gap: 12px; }
+  .th { display: flex; flex-direction: column; align-items: center; gap: 5px; font-size: 10.5px; color: var(--ink-3); }
+  .th .pg { width: 92px; height: 116px; background: #fff; border: 1px solid var(--line); border-radius: 3px; box-shadow: 0 1px 2px rgba(16,27,40,.06); padding: 10px 9px; display: flex; flex-direction: column; gap: 5px; }
+  .th .pg i { display: block; height: 4px; border-radius: 2px; background: #e7ebef; }
+  .th .pg i.d { background: var(--navy); height: 5px; width: 55%; }
+  .th .pg i.a { background: #cfe5f3; }
+  .th.on .pg { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .th.on { color: var(--ink); font-weight: 600; }
+
+  .desk { background: #e9edf1; border-radius: 10px; display: flex; justify-content: center; align-items: flex-start; padding: 12px 0; overflow: hidden; }
+  .page { width: 660px; height: 738px; background: #fff; box-shadow: 0 1px 3px rgba(16,27,40,.08), 0 12px 32px rgba(16,27,40,.10); padding: 28px 40px 16px; display: flex; flex-direction: column; }
+  .ptop { display: flex; align-items: center; justify-content: space-between; padding-bottom: 12px; border-bottom: 2px solid var(--navy); }
+  .firm { display: flex; align-items: center; gap: 8px; font-size: 11.5px; font-weight: 700; letter-spacing: .02em; color: var(--navy); }
+  .firm .fm { width: 20px; height: 20px; border-radius: 4px; background: var(--navy); display: flex; align-items: center; justify-content: center; color: #fff; }
+  .ptop .r { font-size: 10px; color: var(--ink-3); letter-spacing: .04em; text-transform: uppercase; }
+  .page h1 { font-size: 21px; letter-spacing: -0.02em; margin-top: 14px; }
+  .page .sub { font-size: 11px; color: var(--ink-3); margin-top: 4px; }
+  .sumrow { display: grid; grid-template-columns: 190px 1fr; gap: 26px; margin-top: 18px; }
+  .sbox { border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
+  .sbox .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); font-weight: 600; }
+  .sbox .num { font-size: 44px; line-height: 48px; font-weight: 700; letter-spacing: -0.03em; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .sbox .num small { font-size: 15px; font-weight: 500; color: var(--ink-3); letter-spacing: 0; }
+  .sbox .bands { margin-top: 10px; height: 6px; }
+  .sbox .marker { height: 13px; }
+  .sbox .cls { font-size: 12px; margin-top: 10px; }
+  .sbox .mini { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line-soft); font-size: 10.5px; color: var(--ink-3); line-height: 1.55; }
+  .sbox .mini b { color: var(--ink); }
+  .bars .bh { display: flex; justify-content: space-between; font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); font-weight: 600; margin-bottom: 6px; }
+  .bar { display: grid; grid-template-columns: 150px 1fr 26px; align-items: center; gap: 10px; height: 18px; font-size: 11px; color: var(--ink-2); }
+  .bar .tk { height: 6px; border-radius: 999px; background: #eef1f4; position: relative; overflow: hidden; }
+  .bar .tk span { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; }
+  .bar .v { text-align: right; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+  .c-ok { background: #6fb98b; } .c-at { background: #d9b46a; } .c-cr { background: #d98a8a; }
+  .cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 16px; flex: 1; }
+  .col h4 { display: flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; padding-bottom: 8px; border-bottom: 1px solid var(--line); letter-spacing: .01em; }
+  .col h4 .dt { width: 7px; height: 7px; border-radius: 2px; }
+  .it { padding: 7px 0; border-bottom: 1px solid var(--line-soft); }
+  .it:last-child { border-bottom: 0; }
+  .it p { font-size: 11px; line-height: 15.5px; color: var(--ink-2); }
+  .it p b { color: var(--ink); font-weight: 600; display: block; margin-bottom: 2px; }
+  .it .tag { display: inline-block; margin-top: 5px; font-size: 9.5px; color: var(--ink-3); font-family: ui-monospace, 'SF Mono', Menlo, monospace; }
+  .it .hz { display: inline-block; font-size: 9.5px; font-weight: 600; color: var(--accent-strong); background: var(--navy-soft); border-radius: 3px; padding: 1px 5px; margin-bottom: 4px; }
+  .pfoot { display: flex; justify-content: space-between; font-size: 9.5px; color: var(--ink-3); padding-top: 10px; border-top: 1px solid var(--line-soft); }
+
+  .side { display: flex; flex-direction: column; gap: 16px; }
+  .flow { padding: 6px 20px 10px; }
+  .fs { display: grid; grid-template-columns: 22px 1fr; gap: 10px; position: relative; padding: 8px 0; }
+  .fs::before { content: ""; position: absolute; left: 10px; top: 30px; bottom: -8px; width: 2px; background: var(--line-soft); }
+  .fs:last-child::before { display: none; }
+  .fs .dot { width: 22px; height: 22px; border-radius: 999px; display: flex; align-items: center; justify-content: center; background: #e6f4ec; color: var(--ok); z-index: 1; }
+  .fs .dot.cur { background: var(--navy); color: #fff; }
+  .fs .dot.wait { background: var(--secondary); color: var(--ink-3); }
+  .fs .t { font-size: 12.5px; font-weight: 600; line-height: 18px; }
+  .fs .d { font-size: 11.5px; color: var(--ink-3); line-height: 16px; margin-top: 1px; }
+  .cm { padding: 10px 20px; border-bottom: 1px solid var(--line-soft); display: grid; grid-template-columns: 26px 1fr; gap: 10px; }
+  .cm:last-of-type { border-bottom: 0; }
+  .cm .av { width: 26px; height: 26px; border-radius: 999px; background: var(--navy-soft); color: var(--accent-strong); font-size: 10px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+  .cm .who { font-size: 12px; font-weight: 600; }
+  .cm .who span { font-weight: 400; color: var(--ink-3); font-size: 11px; margin-left: 4px; }
+  .cm .msg { font-size: 12px; line-height: 17px; color: var(--ink-2); margin-top: 2px; }
+  .cm .ref { display: inline-block; margin-top: 5px; font-size: 10.5px; color: var(--accent-strong); background: var(--navy-soft); border-radius: 4px; padding: 1px 6px; }
+  .side .kv { padding: 8px 20px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <span class="mark"><svg class="i" width="15" height="15" viewBox="0 0 24 24" stroke-width="2.4"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m7 14 4-4 4 4 5-6"/></svg></span>
+    <span class="wm">Financial <span>Diagnostic</span></span>
+  </div>
+  <span class="crumb">Consultancy portal</span>
+  <div class="hr">
+    <span class="muted">Prumo Financial Advisory</span>
+    <span class="avatar">MT</span>
+    <span class="tenant">Marina Teles</span>
+  </div>
+</header>
+
+<div class="tool">
+  <div class="bc">Reports<svg class="i" width="13" height="13" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>Vale Norte Alimentos<svg class="i" width="13" height="13" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg><b>Pre-diagnosis · draft 2</b></div>
+  <span class="badge b-warn">awaiting partner approval</span>
+  <div class="sp">
+    <span class="pager"><svg class="i" width="13" height="13" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>page 2 of 9<svg class="i" width="13" height="13" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg></span>
+    <span class="btn outline"><svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>Download PDF</span>
+    <span class="btn primary"><svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Approve and deliver</span>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="thumbs">
+    <div class="th"><div class="pg"><i class="d"></i><i style="width:80%"></i><i style="width:60%"></i><i style="margin-top:auto;height:30px;background:#f1f4f7"></i></div>1 · Cover</div>
+    <div class="th on"><div class="pg"><i class="d"></i><i class="a" style="height:22px;width:40%"></i><i style="width:90%"></i><i style="width:75%"></i><i style="width:85%"></i><i style="width:70%"></i></div>2 · Summary</div>
+    <div class="th"><div class="pg"><i class="d"></i><i style="width:90%"></i><i class="a" style="width:70%"></i><i style="width:85%"></i><i class="a" style="width:50%"></i><i style="width:80%"></i><i style="width:65%"></i></div>3 · Sections</div>
+    <div class="th"><div class="pg"><i class="d"></i><i style="width:85%"></i><i style="width:70%"></i><i style="width:90%"></i><i style="width:60%"></i><i style="width:80%"></i></div>4 · Risks</div>
+    <div class="th"><div class="pg"><i class="d"></i><i class="a" style="width:90%"></i><i style="width:70%"></i><i class="a" style="width:85%"></i><i style="width:60%"></i></div>5 · Plan</div>
+  </div>
+
+  <div class="desk">
+    <div class="page">
+      <div class="ptop">
+        <span class="firm"><span class="fm"><svg class="i" width="11" height="11" viewBox="0 0 24 24" stroke-width="2.6"><path d="M12 2v20"/><path d="M5 9h14"/></svg></span>PRUMO</span>
+        <span class="r">Financial pre-diagnosis · confidential</span>
+      </div>
+      <h1>Diagnosis summary</h1>
+      <p class="sub">Vale Norte Alimentos · completed on Oct 28, 2026 · methodology v3.2 · 52 answers · 4 attached documents</p>
+
+      <div class="sumrow">
+        <div class="sbox">
+          <p class="lbl">Final score</p>
+          <p class="num">62<small> /100</small></p>
+          <div class="bands">
+            <span class="s" style="width:40%;background:var(--band-a)"></span>
+            <span class="s" style="width:25%;background:var(--band-b)"></span>
+            <span class="s" style="width:20%;background:var(--band-c)"></span>
+            <span class="s" style="width:15%;background:var(--band-d)"></span>
+            <span class="marker" style="left:62%"></span>
+          </div>
+          <p class="cls"><i></i>Needs attention</p>
+          <p class="mini"><b>3</b> strengths · <b>3</b> risks · <b>2</b> critical rules<br>Typical range for the sector: 58 to 71</p>
+        </div>
+        <div class="bars">
+          <p class="bh"><span>Score by section</span><span>0–10</span></p>
+          <div class="bar"><span>Revenue and margins</span><span class="tk"><span class="c-ok" style="width:78%"></span></span><span class="v">7.8</span></div>
+          <div class="bar"><span>Governance and decisions</span><span class="tk"><span class="c-ok" style="width:75%"></span></span><span class="v">7.5</span></div>
+          <div class="bar"><span>Debt and leverage</span><span class="tk"><span class="c-ok" style="width:71%"></span></span><span class="v">7.1</span></div>
+          <div class="bar"><span>Tax and compliance</span><span class="tk"><span class="c-ok" style="width:70%"></span></span><span class="v">7.0</span></div>
+          <div class="bar"><span>Results and performance</span><span class="tk"><span class="c-ok" style="width:66%"></span></span><span class="v">6.6</span></div>
+          <div class="bar"><span>Costs and pricing</span><span class="tk"><span class="c-at" style="width:64%"></span></span><span class="v">6.4</span></div>
+          <div class="bar"><span>Accounting and figures</span><span class="tk"><span class="c-at" style="width:60%"></span></span><span class="v">6.0</span></div>
+          <div class="bar"><span>Receivables and credit</span><span class="tk"><span class="c-at" style="width:59%"></span></span><span class="v">5.9</span></div>
+          <div class="bar"><span>Planning and control</span><span class="tk"><span class="c-at" style="width:54%"></span></span><span class="v">5.4</span></div>
+          <div class="bar"><span>Systems and data</span><span class="tk"><span class="c-at" style="width:52%"></span></span><span class="v">5.2</span></div>
+          <div class="bar"><span>Cash and working capital</span><span class="tk"><span class="c-cr" style="width:40%"></span></span><span class="v">4.0</span></div>
+        </div>
+      </div>
+
+      <div class="cols">
+        <div class="col">
+          <h4><span class="dt" style="background:#6fb98b"></span>Strengths</h4>
+          <div class="it"><p><b>Margin by product line</b>Gross margin tracked monthly by product line and sales channel.</p></div>
+          <div class="it"><p><b>Monthly governance routine</b>Results meeting with a fixed agenda and defined approval limits.</p></div>
+          <div class="it"><p><b>Well-structured debt</b>Long average maturity and cost below the reference range.</p></div>
+        </div>
+        <div class="col">
+          <h4><span class="dt" style="background:#d98a8a"></span>Risks</h4>
+          <div class="it"><p><b>No cash horizon</b>The forecast covers only the next 4 weeks, with no stress scenario.</p><span class="tag">R-05 · CASH_FORECAST_GAP</span></div>
+          <div class="it"><p><b>Working capital blind spot</b>Customer and supplier terms are left out of the monthly close.</p><span class="tag">R-06 · WORKING_CAPITAL_BLIND</span></div>
+          <div class="it"><p><b>Static budget</b>The annual budget is not revised during the year.</p></div>
+        </div>
+        <div class="col">
+          <h4><span class="dt" style="background:var(--accent)"></span>Priorities</h4>
+          <div class="it"><span class="hz">30 days</span><p><b>13-week cash flow</b>Weekly forecast reviewed every Monday, with a stress scenario.</p></div>
+          <div class="it"><span class="hz">60 days</span><p><b>Cash cycle in the close</b>Collection, payment and inventory days on a monthly dashboard.</p></div>
+          <div class="it"><span class="hz">90 days</span><p><b>Quarterly budget review</b>Targets by area and a reforecast every quarter.</p></div>
+        </div>
+      </div>
+
+      <div class="pfoot"><span>Prumo Financial Advisory · fictitious demo data</span><span>page 2 of 9</span></div>
+    </div>
+  </div>
+
+  <div class="side">
+    <div class="card">
+      <div class="ch"><h3 class="ct">Report workflow</h3><span class="badge b-info">step 4 of 5</span></div>
+      <div class="flow">
+        <div class="fs"><span class="dot"><svg class="i" width="11" height="11" viewBox="0 0 24 24" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg></span><div><p class="t">Questionnaire submitted</p><p class="d">Oct 28 · 52 answers and 4 documents</p></div></div>
+        <div class="fs"><span class="dot"><svg class="i" width="11" height="11" viewBox="0 0 24 24" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg></span><div><p class="t">AI draft generated</p><p class="d">strengths, risks and plan citing the evidence</p></div></div>
+        <div class="fs"><span class="dot"><svg class="i" width="11" height="11" viewBox="0 0 24 24" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg></span><div><p class="t">Consultant review</p><p class="d">Marina Teles · 3 passages edited</p></div></div>
+        <div class="fs"><span class="dot cur"><svg class="i" width="11" height="11" viewBox="0 0 24 24" stroke-width="2.6"><circle cx="12" cy="12" r="4"/></svg></span><div><p class="t">Partner approval</p><p class="d">Ricardo Antunes · requested 2 hours ago</p></div></div>
+        <div class="fs"><span class="dot wait"><svg class="i" width="11" height="11" viewBox="0 0 24 24" stroke-width="2.6"><path d="m22 2-7 20-4-9-9-4Z"/></svg></span><div><p class="t" style="color:var(--ink-3)">Delivery to the company</p><p class="d">signed PDF and link in the client portal</p></div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ch"><h3 class="ct">Comments</h3><span class="badge b-neutral">2</span></div>
+      <div class="cm"><span class="av">RA</span><div><p class="who">Ricardo Antunes<span>40 min ago</span></p><p class="msg">Make it explicit that the stress case assumes a 20% drop in sales.</p><span class="ref">Priorities · 30 days</span></div></div>
+      <div class="cm"><span class="av">MT</span><div><p class="who">Marina Teles<span>12 min ago</span></p><p class="msg">Done. I added the sector's typical range to the score box.</p><span class="ref">Summary · final score</span></div></div>
+    </div>
+
+    <div class="card">
+      <div class="ch"><h3 class="ct">Traceability</h3></div>
+      <div class="kv"><span>Methodology</span><b>v3.2 · frozen</b></div>
+      <div class="kv"><span>Evidence cited</span><b>31 answers · 4 docs</b></div>
+      <div class="kv"><span>Score verified in database</span><b style="color:var(--ok)">62 = 62</b></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

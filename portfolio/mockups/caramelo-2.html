@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>Caramelo - estúdio de treino</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #000000; --surface: #0d0d0d; --elevated: #161616; --e2: #1d1d1d; --line: #2a2a2a; --line-2: #222222;
+    --tx: #ffffff; --tx-2: #cfcfcf; --mut: #a0a0a0; --dim: #6f6f6f; --acct: #ffbe00; --acct-bg: rgba(255,190,0,.12); --ok: #4caf50; --ok-bg: rgba(76,175,80,.14); --red: #ef5350;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 900px; overflow: hidden; }
+  body { width: 1440px; font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--tx); -webkit-font-smoothing: antialiased; display: flex; }
+  svg { flex: none; display: block; }
+  svg.i { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .mono { font-family: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace; }
+
+  .sidebar { width: 280px; background: var(--surface); border-right: 1px solid var(--line); display: flex; flex-direction: column; flex-shrink: 0; height: 900px; }
+  .sidebar-brand { padding: 16px 16px 4px; display: flex; align-items: center; gap: 8px; }
+  .monog { width: 26px; height: 26px; border-radius: 7px; background: var(--acct); display: grid; place-items: center; flex-shrink: 0; }
+  .word { font-size: 15px; font-weight: 600; }
+  .sidebar-brand .tag { margin-left: auto; font-size: 11px; color: var(--mut); border: 1px solid var(--line); border-radius: 6px; padding: 2px 7px; }
+  .new-chat { padding: 12px 16px 6px; }
+  .new-chat span { padding: 9px 10px; border-radius: 8px; font-weight: 500; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  .new-chat .plus { color: var(--acct); font-weight: 700; }
+  .slabel { padding: 14px 18px 6px; font-size: 11px; color: var(--dim); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+  .snav { padding: 0 8px; }
+  .si { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; font-size: 13px; color: var(--mut); margin-bottom: 2px; }
+  .si.on { background: var(--elevated); color: var(--tx); }
+  .si .ct { margin-left: auto; font-size: 11.5px; color: var(--dim); }
+  .si.on svg { color: var(--acct); }
+  .sidebar-footer { margin-top: auto; border-top: 1px solid var(--line); padding: 8px; }
+  .user-info { display: flex; align-items: center; gap: 8px; padding: 9px 10px; font-size: 13px; }
+  .user-info .av { width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(135deg, #3b5bdb, #7048e8); display: grid; place-items: center; font-size: 10px; font-weight: 600; flex-shrink: 0; }
+  .user-info .uname { flex: 1; }
+  .user-info .out { color: var(--mut); font-size: 12px; padding: 4px 6px; }
+
+  .main { flex: 1; min-width: 0; height: 900px; display: flex; flex-direction: column; }
+  .topbar { min-height: 52px; padding: 0 24px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--line-2); flex-shrink: 0; }
+  .topbar h1 { font-size: 15px; font-weight: 600; }
+  .topbar .crumb { font-size: 13px; color: var(--mut); }
+  .topbar .rt { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); display: inline-block; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 999px; font-size: 12px; border: 1px solid var(--line); color: var(--tx-2); white-space: nowrap; }
+  .chip.acct { border-color: rgba(255,190,0,.35); color: var(--acct); background: var(--acct-bg); }
+  .chip.ok { border-color: rgba(76,175,80,.35); color: #7bd27f; background: var(--ok-bg); }
+  .btn { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 12px; border-radius: 8px; font-size: 13px; font-weight: 500; border: 1px solid var(--line); color: var(--tx); white-space: nowrap; }
+  .btn.pri { background: var(--acct); color: #171717; border-color: var(--acct); }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; }
+  .ch { display: flex; align-items: center; gap: 10px; padding: 14px 18px 0; }
+  .ch h3 { font-size: 13.5px; font-weight: 600; }
+  .ch .rt { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+  .sub { font-size: 12px; color: var(--mut); }
+
+  .body { flex: 1; min-height: 0; padding: 20px 24px; display: grid; grid-template-columns: minmax(0,1fr) 380px; gap: 14px; }
+  .lcol, .rcol { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+  .hero h2 { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+  .hero p { font-size: 13px; color: var(--mut); margin-top: 5px; line-height: 19px; }
+  .filters { display: flex; gap: 6px; }
+  .filters span { font-size: 12px; color: var(--mut); padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); }
+  .filters span.on { background: var(--elevated); color: var(--tx); border-color: #3a3a3a; }
+  .filters span i { font-style: normal; color: var(--dim); margin-left: 4px; }
+  .exb { padding: 14px 18px 16px; display: flex; flex-direction: column; gap: 12px; }
+  .ask { display: flex; gap: 10px; align-items: flex-start; }
+  .ask .lb { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; width: 64px; flex-shrink: 0; padding-top: 10px; }
+  .prompt { background: var(--elevated); border-radius: 14px; padding: 10px 14px; font-size: 13px; line-height: 1.55; color: var(--tx-2); }
+  .ba { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .ans { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .ans.after { border-color: rgba(255,190,0,.45); background: rgba(255,190,0,.04); }
+  .ans .ah { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--mut); margin-bottom: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+  .ans.after .ah { color: var(--acct); }
+  .ans p { font-size: 13px; line-height: 1.6; }
+  .ans.before p { color: var(--mut); }
+  .ans.before s { text-decoration-color: rgba(239,83,80,.7); color: #8a8a8a; }
+  .crit { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .crit .lb2 { font-size: 11.5px; color: var(--dim); margin-right: 2px; }
+  .ctag { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; border-radius: 999px; font-size: 11.5px; background: var(--ok-bg); color: #8fd492; }
+  .exf { display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--line-2); padding-top: 12px; font-size: 12px; color: var(--mut); }
+  .exf .av2 { width: 22px; height: 22px; border-radius: 999px; background: #2d3b55; color: #c7d6ff; font-size: 9.5px; font-weight: 600; display: grid; place-items: center; }
+  .exf .rt { margin-left: auto; display: flex; gap: 8px; }
+  .row { display: grid; grid-template-columns: 1fr auto auto; gap: 14px; align-items: center; padding: 0 18px; height: 46px; border-top: 1px solid var(--line-2); font-size: 13px; }
+  .row .q { color: var(--tx-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .who { font-size: 12px; color: var(--dim); white-space: nowrap; }
+  .st { font-size: 11.5px; height: 22px; display: inline-flex; align-items: center; padding: 0 9px; border-radius: 999px; white-space: nowrap; }
+  .st.ok { background: var(--ok-bg); color: #8fd492; }
+  .st.rv { background: var(--acct-bg); color: var(--acct); }
+
+  .cr { display: flex; gap: 10px; align-items: flex-start; padding: 9px 18px; border-top: 1px solid var(--line-2); }
+  .cr:first-of-type { border-top: 0; }
+  .cr .cb { width: 16px; height: 16px; border-radius: 5px; background: var(--acct); color: #171717; display: grid; place-items: center; flex-shrink: 0; margin-top: 1px; }
+  .cr p { font-size: 13px; line-height: 18px; }
+  .cr p span { display: block; font-size: 11.5px; color: var(--dim); }
+  .addc { margin: 4px 18px 14px; height: 32px; border: 1px dashed var(--line); border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12.5px; color: var(--mut); }
+  .ver { display: grid; grid-template-columns: 54px 1fr auto; gap: 10px; align-items: center; padding: 10px 18px; border-top: 1px solid var(--line-2); }
+  .ver:first-of-type { border-top: 0; }
+  .ver .vn { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12.5px; font-weight: 500; }
+  .ver p { font-size: 12.5px; color: var(--tx-2); line-height: 17px; }
+  .ver p span { display: block; font-size: 11.5px; color: var(--dim); }
+  .pub { margin: 2px 18px 16px; border: 1px solid rgba(255,190,0,.35); background: rgba(255,190,0,.05); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .pub .tg { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--tx-2); }
+  .pub .tg b { color: var(--tx); font-weight: 600; }
+  .pub .tg .mono { font-size: 11.5px; color: var(--mut); margin-left: auto; }
+  .pub .note { font-size: 11.5px; color: var(--mut); line-height: 16px; }
+  .pub .btn { justify-content: center; }
+</style>
+</head>
+<body>
+<div class="sidebar">
+  <div class="sidebar-brand">
+    <span class="monog"><svg width="26" height="26" viewBox="0 0 32 32"><path d="M20.8 10.3 A7.5 7.5 0 1 0 20.8 21.7" fill="none" stroke="#000" stroke-width="4" stroke-linecap="round"/></svg></span>
+    <span class="word">caramelo</span><span class="tag">console</span>
+  </div>
+  <div class="new-chat"><span><span class="plus">+</span> Nova conversa</span></div>
+  <p class="slabel">Modelo</p>
+  <div class="snav">
+    <div class="si"><svg class="i" width="15" height="15" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Conversas<span class="ct">128</span></div>
+    <div class="si on"><svg class="i" width="15" height="15" viewBox="0 0 24 24"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>Estúdio de treino</div>
+    <div class="si"><svg class="i" width="15" height="15" viewBox="0 0 24 24"><path d="M6 3v12"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>Versões<span class="ct">v4.4</span></div>
+  </div>
+  <p class="slabel">Operação</p>
+  <div class="snav">
+    <div class="si"><svg class="i" width="15" height="15" viewBox="0 0 24 24"><rect width="20" height="8" x="2" y="2" rx="2"/><rect width="20" height="8" x="2" y="14" rx="2"/><path d="M6 6h.01"/><path d="M6 18h.01"/></svg>Implantação e custo</div>
+    <div class="si"><svg class="i" width="15" height="15" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>Chaves de API<span class="ct">6</span></div>
+    <div class="si"><svg class="i" width="15" height="15" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>Uso</div>
+    <div class="si"><svg class="i" width="15" height="15" viewBox="0 0 24 24"><path d="m7 11 2-2-2-2"/><path d="M11 13h4"/><rect width="18" height="18" x="3" y="3" rx="2"/></svg>Caramelo Code · CLI</div>
+  </div>
+  <div class="sidebar-footer">
+    <div class="user-info"><span class="av">LR</span><span class="uname">Lívia Ramos</span><span class="out">sair</span></div>
+  </div>
+</div>
+
+
+<div class="main">
+  <div class="topbar">
+    <h1>Estúdio de treino</h1><span class="crumb">conjunto · respostas do suporte</span>
+    <div class="rt"><span class="chip ok"><span class="dot"></span>v4.4 em produção</span><span class="chip acct">v4.5 em preparo</span></div>
+  </div>
+
+  <div class="body">
+    <div class="lcol">
+      <div class="hero">
+        <h2>Ensine ao modelo o padrão da sua empresa</h2>
+        <p>O time escolhe exemplos reais e mostra como a resposta deveria ser. O Caramelo aprende o tom, o formato e as regras que vocês já usam.</p>
+      </div>
+
+      <div class="card">
+        <div class="ch"><h3>Exemplos curados pelo time</h3><div class="rt filters"><span class="on">Todos<i>240</i></span><span>Aprovados<i>212</i></span><span>Para revisar<i>28</i></span></div></div>
+        <div class="exb">
+          <div class="ask"><span class="lb">Cliente</span><div class="prompt">"Meu pedido 4471 era pra chegar ontem e não chegou. Vou precisar cancelar?"</div></div>
+          <div class="ba">
+            <div class="ans before"><div class="ah"><svg class="i" width="13" height="13" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>Antes · resposta genérica</div><p><s>Prezado cliente, agradecemos o seu contato e lamentamos o ocorrido.</s> Informamos que estamos verificando a situação junto à transportadora e retornaremos assim que possível.</p></div>
+            <div class="ans after"><div class="ah"><svg class="i" width="13" height="13" viewBox="0 0 24 24" stroke-width="2.6"><path d="M20 6 9 17l-5-5"/></svg>Depois · no nosso padrão</div><p>Oi, Marina. Não precisa cancelar: o pedido 4471 saiu ontem à tarde e chega amanhã até as 18h. Te mando o rastreio por aqui assim que a transportadora atualizar.</p></div>
+          </div>
+          <div class="crit"><span class="lb2">Atende a</span><span class="ctag">chama pelo nome</span><span class="ctag">resolve na primeira resposta</span><span class="ctag">prazo só se confirmado</span><span class="ctag">próximo passo claro</span></div>
+          <div class="exf"><span class="av2">RN</span>Curado por Rafael Nunes · Suporte · há 2 h<span class="rt"><span class="btn" style="height:28px;font-size:12px">Editar</span><span class="btn pri" style="height:28px;font-size:12px">Aprovar exemplo</span></span></div>
+        </div>
+        <div class="row"><span class="q">"Consigo trocar o tamanho depois de pagar?"</span><span class="who">Rafael Nunes</span><span class="st ok">aprovado</span></div>
+        <div class="row"><span class="q">"A nota fiscal veio com o CNPJ errado"</span><span class="who">Bianca Torres</span><span class="st ok">aprovado</span></div>
+        <div class="row"><span class="q">"Vocês entregam em condomínio com portaria?"</span><span class="who">Bianca Torres</span><span class="st rv">para revisar</span></div>
+        <div class="row"><span class="q">"Paguei duas vezes sem querer, e agora?"</span><span class="who">Rafael Nunes</span><span class="st ok">aprovado</span></div>
+        <div class="row"><span class="q">"Dá pra mandar como presente, sem o preço?"</span><span class="who">Caio Mendes</span><span class="st ok">aprovado</span></div>
+        <div class="row"><span class="q">"O cupom do e-mail não funcionou no app"</span><span class="who">Caio Mendes</span><span class="st rv">para revisar</span></div>
+        <div class="row"><span class="q">"Quero devolver, mas já joguei a caixa fora"</span><span class="who">Bianca Torres</span><span class="st ok">aprovado</span></div>
+      </div>
+    </div>
+
+    <div class="rcol">
+      <div class="card">
+        <div class="ch"><h3>Critérios de qualidade</h3><div class="rt"><span class="sub">definidos pelo time</span></div></div>
+        <div style="padding-top:6px">
+          <div class="cr"><span class="cb"><svg class="i" width="10" height="10" viewBox="0 0 24 24" stroke-width="3.4"><path d="M20 6 9 17l-5-5"/></svg></span><p>Chama o cliente pelo nome<span>Suporte</span></p></div>
+          <div class="cr"><span class="cb"><svg class="i" width="10" height="10" viewBox="0 0 24 24" stroke-width="3.4"><path d="M20 6 9 17l-5-5"/></svg></span><p>Resolve na primeira resposta<span>Suporte</span></p></div>
+          <div class="cr"><span class="cb"><svg class="i" width="10" height="10" viewBox="0 0 24 24" stroke-width="3.4"><path d="M20 6 9 17l-5-5"/></svg></span><p>Nunca promete prazo sem confirmar<span>Operações</span></p></div>
+          <div class="cr"><span class="cb"><svg class="i" width="10" height="10" viewBox="0 0 24 24" stroke-width="3.4"><path d="M20 6 9 17l-5-5"/></svg></span><p>Até 80 palavras, sem jargão interno<span>Marca</span></p></div>
+          <div class="cr"><span class="cb"><svg class="i" width="10" height="10" viewBox="0 0 24 24" stroke-width="3.4"><path d="M20 6 9 17l-5-5"/></svg></span><p>Fecha com o próximo passo<span>Suporte</span></p></div>
+        </div>
+        <div class="addc"><svg class="i" width="13" height="13" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Novo critério</div>
+      </div>
+
+      <div class="card">
+        <div class="ch"><h3>Versões do modelo</h3></div>
+        <div style="padding-top:6px">
+          <div class="ver"><span class="vn" style="color:var(--acct)">v4.5</span><p>Pronta para publicar<span>240 exemplos · 5 critérios · 28 novos</span></p><span class="chip acct" style="height:22px">nova</span></div>
+          <div class="ver"><span class="vn">v4.4</span><p>Em produção desde 21/10<span>212 exemplos · 4 critérios</span></p><span class="chip ok" style="height:22px">no ar</span></div>
+          <div class="ver"><span class="vn">v4.3</span><p>Anterior<span>pode voltar com um clique</span></p><span class="sub">restaurar</span></div>
+        </div>
+        <div class="pub">
+          <div class="tg"><svg class="i" width="15" height="15" viewBox="0 0 24 24" style="color:var(--acct)"><rect width="20" height="8" x="2" y="2" rx="2"/><rect width="20" height="8" x="2" y="14" rx="2"/><path d="M6 6h.01"/><path d="M6 18h.01"/></svg>Destino: <b>servidor próprio</b><span class="mono">srv-interno-01</span></div>
+          <p class="note">Exemplos, critérios e modelo ficam na sua infraestrutura. A v4.4 continua no ar até a v4.5 assumir.</p>
+          <span class="btn pri"><svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>Publicar v4.5</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

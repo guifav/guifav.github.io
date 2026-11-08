@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
 <meta charset="utf-8">
 <meta name="mockup-viewport" content="1440x900">
-<title>Pre-assessment</title>
+<title>Pré-diagnóstico</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -34,7 +34,6 @@
   .avatar { width: 28px; height: 28px; border-radius: 999px; background: var(--navy-soft); color: var(--accent-strong); font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
   .tenant { font-size: 13px; font-weight: 600; }
 
-  main { max-width: 1280px; margin: 0 auto; padding: 20px; display: grid; grid-template-columns: 280px minmax(0, 1fr) 340px; gap: 20px; align-items: start; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 1px 2px rgba(0,0,0,.05); overflow: hidden; }
   .ch { display: flex; min-height: 52px; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line-soft); padding: 12px 20px; }
   .ct { font-size: 13px; font-weight: 600; letter-spacing: 0.025em; }
@@ -45,6 +44,14 @@
   .b-ok { background: var(--ok-bg); color: var(--ok); }
   .foot { border-top: 1px solid var(--line-soft); padding: 10px 20px; font-size: 11px; line-height: 1.6; color: var(--ink-3); }
 
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 6px; height: 32px; padding: 0 12px; font-size: 13px; font-weight: 500; white-space: nowrap; }
+  .btn.primary { background: var(--navy); color: #fff; }
+  .btn.outline { border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+  .btn.ghost { color: var(--ink-2); padding: 0 8px; }
+  .b-warn { background: var(--warn-bg); color: var(--warn); }
+  .mono { font-family: ui-monospace, 'SF Mono', Menlo, monospace; }
+
+  main { max-width: 1280px; margin: 0 auto; padding: 20px; display: grid; grid-template-columns: 280px minmax(0, 1fr) 340px; gap: 20px; align-items: start; }
   /* blocos */
   .row { display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--line-soft); padding: 8px 16px; font-size: 12.5px; height: 37px; }
   .row:last-of-type { border-bottom: 0; }
@@ -102,120 +109,121 @@
   ol.next { list-style: none; display: flex; flex-direction: column; gap: 9px; padding: 12px 20px 14px; font-size: 12.5px; color: var(--ink-2); line-height: 18px; }
   ol.next li { display: flex; gap: 10px; align-items: flex-start; }
   ol.next .badge { padding: 1px 7px; }
+
 </style>
 </head>
 <body>
 <header>
   <div class="brand">
     <span class="mark"><svg class="i" width="15" height="15" viewBox="0 0 24 24" stroke-width="2.4"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m7 14 4-4 4 4 5-6"/></svg></span>
-    <span class="wm">Financial <span>Diagnostic</span></span>
+    <span class="wm">Diagnóstico <span>Financeiro</span></span>
   </div>
-  <span class="crumb">Pre-assessment · questionnaire</span>
+  <span class="crumb">Pré-diagnóstico · questionário</span>
   <div class="hr">
-    <span class="saved"><svg class="i" width="13" height="13" viewBox="0 0 24 24" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>saved</span>
-    <span class="muted">answers are saved automatically</span>
-    <span class="avatar">IR</span>
-    <span class="tenant">Ipê Roxo Developments</span>
+    <span class="saved"><svg class="i" width="13" height="13" viewBox="0 0 24 24" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>salvo</span>
+    <span class="muted">respostas salvas automaticamente</span>
+    <span class="avatar">VN</span>
+    <span class="tenant">Vale Norte Alimentos</span>
   </div>
 </header>
 
 <main>
-  <!-- sections -->
+  <!-- blocos -->
   <div class="card">
-    <div class="ch"><h3 class="ct">Sections</h3><span class="badge b-neutral">29 of 52 answered</span></div>
+    <div class="ch"><h3 class="ct">Blocos</h3><span class="badge b-neutral">29 de 52 respondidas</span></div>
     <div>
-      <div class="row"><span class="ic done"><svg class="i" width="10" height="10" viewBox="0 0 24 24" stroke-width="3.2"><path d="M20 6 9 17l-5-5"/></svg></span><span class="lb">Introduction</span><span class="rt"><span class="fx">not scored</span></span></div>
-      <div class="row"><span class="ic">#</span><span class="lb">Operating metrics</span><span class="rt"><span class="fx">6/6</span></span></div>
-      <div class="row"><span class="ic done"><svg class="i" width="10" height="10" viewBox="0 0 24 24" stroke-width="3.2"><path d="M20 6 9 17l-5-5"/></svg></span><span class="lb">Governance and decisions</span><span class="rt"><span class="nt">7.5</span><span class="wt">10%</span></span></div>
-      <div class="row"><span class="ic done"><svg class="i" width="10" height="10" viewBox="0 0 24 24" stroke-width="3.2"><path d="M20 6 9 17l-5-5"/></svg></span><span class="lb">Accounting and reporting</span><span class="rt"><span class="nt">6.0</span><span class="wt">10%</span></span></div>
-      <div class="row"><span class="ic done"><svg class="i" width="10" height="10" viewBox="0 0 24 24" stroke-width="3.2"><path d="M20 6 9 17l-5-5"/></svg></span><span class="lb">Planning and control</span><span class="rt"><span class="nt">5.4</span><span class="wt">10%</span></span></div>
-      <div class="row"><span class="ic done"><svg class="i" width="10" height="10" viewBox="0 0 24 24" stroke-width="3.2"><path d="M20 6 9 17l-5-5"/></svg></span><span class="lb">Project feasibility</span><span class="rt"><span class="nt">7.8</span><span class="wt">15%</span></span></div>
-      <div class="row cur"><span class="ic">5</span><span class="lb">Cash and bank handoff</span><span class="rt"><span class="wt">15%</span></span></div>
-      <div class="row"><span class="ic">6</span><span class="lb">Debt</span><span class="rt"><span class="wt">12%</span></span></div>
-      <div class="row"><span class="ic">7</span><span class="lb">Real estate financing</span><span class="rt"><span class="wt">8%</span></span></div>
-      <div class="row"><span class="ic">8</span><span class="lb">Land bank</span><span class="rt"><span class="wt">5%</span></span></div>
-      <div class="row"><span class="ic">9</span><span class="lb">Systems and data</span><span class="rt"><span class="wt">5%</span></span></div>
-      <div class="row"><span class="ic">10</span><span class="lb">Costs and pricing</span><span class="rt"><span class="wt">5%</span></span></div>
-      <div class="row"><span class="ic">11</span><span class="lb">Results and performance</span><span class="rt"><span class="wt">5%</span></span></div>
-      <p class="foot">Each question scores 0 to 10. A section takes the average and counts toward the final score by the weight shown.</p>
+      <div class="row"><span class="ic done"><svg class="i" width="10" height="10" viewBox="0 0 24 24" stroke-width="3.2"><path d="M20 6 9 17l-5-5"/></svg></span><span class="lb">Abertura</span><span class="rt"><span class="fx">fora do score</span></span></div>
+      <div class="row"><span class="ic">#</span><span class="lb">Métricas da empresa</span><span class="rt"><span class="fx">6/6</span></span></div>
+      <div class="row"><span class="ic done"><svg class="i" width="10" height="10" viewBox="0 0 24 24" stroke-width="3.2"><path d="M20 6 9 17l-5-5"/></svg></span><span class="lb">Governança e decisão</span><span class="rt"><span class="nt">7,5</span><span class="wt">10%</span></span></div>
+      <div class="row"><span class="ic done"><svg class="i" width="10" height="10" viewBox="0 0 24 24" stroke-width="3.2"><path d="M20 6 9 17l-5-5"/></svg></span><span class="lb">Contabilidade e números</span><span class="rt"><span class="nt">6,0</span><span class="wt">10%</span></span></div>
+      <div class="row"><span class="ic done"><svg class="i" width="10" height="10" viewBox="0 0 24 24" stroke-width="3.2"><path d="M20 6 9 17l-5-5"/></svg></span><span class="lb">Planejamento e controle</span><span class="rt"><span class="nt">5,4</span><span class="wt">10%</span></span></div>
+      <div class="row"><span class="ic done"><svg class="i" width="10" height="10" viewBox="0 0 24 24" stroke-width="3.2"><path d="M20 6 9 17l-5-5"/></svg></span><span class="lb">Receita e margens</span><span class="rt"><span class="nt">7,8</span><span class="wt">12%</span></span></div>
+      <div class="row cur"><span class="ic">5</span><span class="lb">Caixa e capital de giro</span><span class="rt"><span class="wt">15%</span></span></div>
+      <div class="row"><span class="ic">6</span><span class="lb">Endividamento</span><span class="rt"><span class="wt">12%</span></span></div>
+      <div class="row"><span class="ic">7</span><span class="lb">Recebíveis e crédito</span><span class="rt"><span class="wt">8%</span></span></div>
+      <div class="row"><span class="ic">8</span><span class="lb">Custos e precificação</span><span class="rt"><span class="wt">8%</span></span></div>
+      <div class="row"><span class="ic">9</span><span class="lb">Tributos e conformidade</span><span class="rt"><span class="wt">5%</span></span></div>
+      <div class="row"><span class="ic">10</span><span class="lb">Sistemas e dados</span><span class="rt"><span class="wt">5%</span></span></div>
+      <div class="row"><span class="ic">11</span><span class="lb">Resultado e performance</span><span class="rt"><span class="wt">5%</span></span></div>
+      <p class="foot">Cada pergunta vale de 0 a 10. O bloco recebe a média e entra no score final pelo peso ao lado.</p>
     </div>
   </div>
 
-  <!-- current step -->
+  <!-- passo atual -->
   <div class="center">
     <div class="card">
-      <div class="ch"><h3 class="ct">Section 5 · Cash and bank handoff</h3><span class="badge b-info">weight 15% · 6 questions</span></div>
+      <div class="ch"><h3 class="ct">Bloco 5 · Caixa e capital de giro</h3><span class="badge b-info">peso 15% · 6 perguntas</span></div>
       <div>
         <div class="q">
-          <p class="t"><span class="n">24</span>Is there a weekly cash forecast covering at least the next 90 days?</p>
-          <div class="opts"><span class="opt">Yes</span><span class="opt on">Partial</span><span class="opt">No</span><span class="opt">Don't know</span></div>
+          <p class="t"><span class="n">24</span>Existe projeção de caixa semanal cobrindo pelo menos os próximos 90 dias?</p>
+          <div class="opts"><span class="opt">Sim</span><span class="opt on">Parcial</span><span class="opt">Não</span><span class="opt">Não sabe</span></div>
         </div>
         <div class="q">
-          <p class="t"><span class="n">25</span>How often is actual cash compared with the forecast?</p>
-          <div class="opts"><span class="opt">Weekly</span><span class="opt on">Monthly</span><span class="opt">Rarely</span><span class="opt">Never</span></div>
+          <p class="t"><span class="n">25</span>Com que frequência o caixa realizado é comparado ao projetado?</p>
+          <div class="opts"><span class="opt">Semanalmente</span><span class="opt on">Mensalmente</span><span class="opt">Raramente</span><span class="opt">Nunca</span></div>
         </div>
         <div class="q">
-          <p class="t"><span class="n">26</span>What was the average delinquency rate on receivables over the last 12 months?</p>
-          <div class="opts"><span class="opt">Under 3%</span><span class="opt on">3% to 6%</span><span class="opt">Over 6%</span><span class="opt">Don't know</span></div>
+          <p class="t"><span class="n">26</span>Qual é o prazo médio de recebimento das vendas a prazo?</p>
+          <div class="opts"><span class="opt">Até 30 dias</span><span class="opt on">De 31 a 60 dias</span><span class="opt">Mais de 60 dias</span><span class="opt">Não sabe</span></div>
         </div>
         <div class="q">
-          <p class="t"><span class="n">27</span>Are units handed off to the bank within 60 days of the occupancy permit?</p>
-          <div class="opts"><span class="opt">Always</span><span class="opt on">Sometimes</span><span class="opt">No</span></div>
+          <p class="t"><span class="n">27</span>O ciclo de caixa (recebimento menos pagamento) é acompanhado todo mês?</p>
+          <div class="opts"><span class="opt">Sempre</span><span class="opt on">Às vezes</span><span class="opt">Não</span></div>
         </div>
         <div class="q">
-          <p class="t"><span class="n">28</span>Which cash protection instruments does the company have in place today?</p>
-          <div class="opts"><span class="opt on">Reserve account per project</span><span class="opt on">Pre-approved credit line</span><span class="opt">Completion bond</span><span class="opt">None</span></div>
-          <p class="hint">select all that apply; an exclusive option clears the others</p>
+          <p class="t"><span class="n">28</span>Quais instrumentos de proteção de caixa a empresa mantém hoje?</p>
+          <div class="opts"><span class="opt on">Reserva mínima de caixa</span><span class="opt on">Linha de crédito pré-aprovada</span><span class="opt">Antecipação de recebíveis</span><span class="opt">Nenhum</span></div>
+          <p class="hint">marque todas as que se aplicam; a opção que exclui as outras anula o resto</p>
         </div>
         <div class="q pending">
-          <p class="t"><span class="n">29</span>Does the company know the peak cash exposure of each active project?</p>
-          <div class="opts"><span class="opt">Yes</span><span class="opt">Partial</span><span class="opt">No</span><span class="opt">Don't know</span></div>
+          <p class="t"><span class="n">29</span>A empresa sabe quantos meses de despesa fixa o caixa atual cobre?</p>
+          <div class="opts"><span class="opt">Sim</span><span class="opt">Parcial</span><span class="opt">Não</span><span class="opt">Não sabe</span></div>
         </div>
       </div>
     </div>
     <div class="actions">
-      <span class="btn ghost">Save and go back</span>
-      <span class="note">nothing is lost: pick up on another device</span>
-      <span class="btn primary">Next: Debt <svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span>
+      <span class="btn ghost">Salvar e voltar</span>
+      <span class="note">nada se perde: continue de outro dispositivo</span>
+      <span class="btn primary">Próximo: Endividamento <svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></span>
     </div>
   </div>
 
-  <!-- panel -->
+  <!-- painel -->
   <div class="side">
     <div class="card">
-      <div class="ch"><h3 class="ct">Live score</h3><span class="badge b-info">partial</span></div>
+      <div class="ch"><h3 class="ct">Score em tempo real</h3><span class="badge b-info">parcial</span></div>
       <div class="score">
-        <p class="big">63<small> /100</small><span class="delta">+4 this section</span></p>
+        <p class="big">63<small> /100</small><span class="delta">+4 neste bloco</span></p>
         <div class="bands">
           <span class="s" style="width:40%;background:var(--band-a)"></span>
-          <span class="s" style="width:30%;background:var(--band-b)"></span>
-          <span class="s" style="width:15%;background:var(--band-c)"></span>
+          <span class="s" style="width:25%;background:var(--band-b)"></span>
+          <span class="s" style="width:20%;background:var(--band-c)"></span>
           <span class="s" style="width:15%;background:var(--band-d)"></span>
           <span class="marker" style="left:63%"></span>
         </div>
-        <p class="scale">0 to 39 critical · 40 to 64 needs attention · 65 to 84 healthy · 85 to 100 benchmark</p>
-        <p class="cls"><i></i>Needs attention</p>
+        <p class="scale">0 a 39 crítica · 40 a 64 em atenção · 65 a 84 saudável · 85 a 100 referência</p>
+        <p class="cls"><i></i>Empresa em atenção</p>
       </div>
-      <div class="kv"><span>Weight answered so far</span><b>45%</b></div>
-      <div class="kv"><span>Questions answered</span><b>29/52</b></div>
-      <p class="foot">The score is recalculated on the server after every answer and becomes official only on completion.</p>
+      <div class="kv"><span>Peso já respondido</span><b>45%</b></div>
+      <div class="kv"><span>Perguntas respondidas</span><b>29/52</b></div>
+      <p class="foot">O score é recalculado no servidor a cada resposta e só vira oficial na conclusão.</p>
     </div>
 
     <div class="card">
-      <div class="ch"><h3 class="ct">Critical rules triggered</h3><span class="badge b-crit">2</span></div>
+      <div class="ch"><h3 class="ct">Regras críticas acionadas</h3><span class="badge b-crit">2</span></div>
       <div>
-        <div class="rule"><svg class="i" width="15" height="15" viewBox="0 0 24 24" style="color:var(--crit);margin-top:2px"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><span class="tx"><b>No cash forecast horizon</b><span class="code">R-05 · CASH_FORECAST_GAP</span></span></div>
-        <div class="rule"><svg class="i" width="15" height="15" viewBox="0 0 24 24" style="color:var(--warn);margin-top:2px"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><span class="tx"><b>Late bank handoff</b><span class="code">R-06 · LATE_TRANSFER</span></span></div>
-        <p class="foot">12 rules run alongside the score. Weights and rules are proprietary methodology, versioned in Admin.</p>
+        <div class="rule"><svg class="i" width="15" height="15" viewBox="0 0 24 24" style="color:var(--crit);margin-top:2px"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><span class="tx"><b>Caixa sem horizonte de projeção</b><span class="code">R-05 · CASH_FORECAST_GAP</span></span></div>
+        <div class="rule"><svg class="i" width="15" height="15" viewBox="0 0 24 24" style="color:var(--warn);margin-top:2px"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><span class="tx"><b>Ciclo de caixa sem acompanhamento</b><span class="code">R-06 · WORKING_CAPITAL_BLIND</span></span></div>
+        <p class="foot">12 regras rodam em paralelo ao score. Pesos e regras são metodologia proprietária, versionados no Admin.</p>
       </div>
     </div>
 
     <div class="card">
-      <div class="ch"><h3 class="ct">On completion</h3></div>
+      <div class="ch"><h3 class="ct">Ao concluir</h3></div>
       <ol class="next">
-        <li><span class="badge b-info">1</span><span>Pre-assessment report with score, sections, strengths and a priority plan.</span></li>
-        <li><span class="badge b-info">2</span><span>The company snapshot in the portal is updated with the rating.</span></li>
-        <li><span class="badge b-info">3</span><span>Answers feed the full diagnostic engine as evidence.</span></li>
+        <li><span class="badge b-info">1</span><span>Relatório em PDF com score, blocos, forças, riscos e prioridades.</span></li>
+        <li><span class="badge b-info">2</span><span>O painel da consultoria recebe a classificação da empresa.</span></li>
+        <li><span class="badge b-info">3</span><span>As respostas viram evidência para o diagnóstico completo.</span></li>
       </ol>
     </div>
   </div>

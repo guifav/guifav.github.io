@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>MIR · Sources and LLM</title>
+<style>
+
+  :root {
+    --background: #0a0a0a;
+    --foreground: #fafafa;
+    --muted: #171717;
+    --muted-foreground: #a3a3a3;
+    --border: #262626;
+    --card: #0a0a0a;
+    --accent: #262626;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1440px; height: 900px; overflow: hidden; }
+  body { background: var(--background); color: var(--foreground); font-family: system-ui, -apple-system, sans-serif; -webkit-font-smoothing: antialiased; }
+  .i { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+  .i.b { stroke-width: 2; }
+  .i-12 { width: 12px; height: 12px; stroke-width: 2; }
+  .i-11 { width: 11px; height: 11px; stroke-width: 2; }
+  .i-10 { width: 10px; height: 10px; stroke-width: 2; }
+  .muted { color: var(--muted-foreground); }
+
+  .shell { display: flex; height: 900px; }
+  aside { width: 224px; border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
+  .brand { padding: 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+  .brand h2 { font-size: 14px; font-weight: 700; letter-spacing: -0.02em; line-height: 20px; }
+  .brand p { font-size: 10px; color: var(--muted-foreground); line-height: 15px; }
+  nav { flex: 1; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+  .nl { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 4px; font-size: 12px; font-weight: 500; color: var(--muted-foreground); line-height: 16px; }
+  .nl.active { background: var(--accent); color: var(--foreground); }
+  .nav-bottom { padding: 0 8px 4px; display: flex; flex-direction: column; gap: 2px; }
+  .user { padding: 12px 16px; border-top: 1px solid var(--border); }
+  .user .row { display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: var(--muted-foreground); }
+  .user .row .ic { display: flex; gap: 8px; }
+  .user .ver { font-size: 9px; color: rgba(163,163,163,.5); margin-top: 4px; }
+
+  main { flex: 1; min-width: 0; overflow: hidden; position: relative; }
+  .topbar { height: 57px; border-bottom: 1px solid var(--border); padding: 12px 24px; display: flex; justify-content: flex-end; align-items: center; }
+  .sel { height: 32px; border-radius: 4px; border: 1px solid var(--border); background: var(--muted); padding: 0 10px 0 12px; font-size: 12px; display: inline-flex; align-items: center; gap: 18px; }
+  .content { padding: 24px; }
+
+  .bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .tabgroups { display: flex; gap: 12px; }
+  .tabs { display: flex; gap: 4px; padding: 2px; border-radius: 8px; background: var(--muted); }
+  .tab { padding: 6px 12px; border-radius: 4px; font-size: 12px; font-weight: 500; color: var(--muted-foreground); display: inline-flex; align-items: center; gap: 6px; line-height: 16px; }
+  .tab.on { background: var(--background); color: var(--foreground); box-shadow: 0 1px 2px rgba(0,0,0,.5); }
+  .cnt { display: inline-flex; align-items: center; justify-content: center; height: 16px; min-width: 16px; padding: 0 4px; border-radius: 999px; color: #fff; font-size: 9px; font-weight: 700; }
+  .btn-out { height: 28px; padding: 0 12px; border-radius: 4px; border: 1px solid var(--border); background: var(--card); font-size: 11px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
+
+  .filters { margin-bottom: 24px; display: flex; flex-direction: column; gap: 8px; }
+  .search { position: relative; }
+  .search .i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted-foreground); }
+  .search div { width: 100%; padding: 8px 36px; font-size: 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--muted-foreground); line-height: 20px; }
+  .daterow { display: flex; align-items: center; gap: 8px; color: var(--muted-foreground); }
+  .daterow .l { font-size: 10px; }
+  .date { font-size: 12px; padding: 5px 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--card); color: var(--foreground); display: inline-flex; align-items: center; gap: 18px; line-height: 16px; }
+  .date.ph { color: var(--muted-foreground); }
+  .sliders { display: flex; align-items: center; gap: 16px; }
+  .rs { display: flex; align-items: center; gap: 8px; width: 260px; }
+  .rs .lbl { font-size: 10px; color: var(--muted-foreground); font-weight: 500; width: 40px; }
+  .rs .v { font-size: 10px; font-weight: 500; font-variant-numeric: tabular-nums; width: 26px; text-align: right; }
+  .rs .v.r { text-align: left; }
+  .track { position: relative; flex: 1; height: 24px; display: flex; align-items: center; }
+  .track .bg { position: absolute; left: 0; right: 0; height: 6px; border-radius: 999px; background: var(--muted); }
+  .track .fill { position: absolute; height: 6px; border-radius: 999px; }
+  .thumb { position: absolute; width: 14px; height: 14px; border-radius: 50%; background: var(--foreground); border: 2px solid var(--background); box-shadow: 0 1px 2px rgba(0,0,0,.6); transform: translateX(-50%); }
+  .reset { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; color: var(--muted-foreground); }
+  .results { font-size: 11px; color: var(--muted-foreground); }
+
+
+  .bd { font-size: 9px; padding: 2px 6px; border-radius: 4px; line-height: 12px; display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+  .bd.inv { background: var(--foreground); color: var(--background); }
+  .bd.acc { background: var(--accent); }
+  .bd.blue { background: rgba(59,130,246,.2); color: #60a5fa; }
+  .bd.purple { background: rgba(168,85,247,.2); color: #c084fc; }
+  .bd.emerald { background: rgba(16,185,129,.2); color: #34d399; font-weight: 500; }
+  .bd.amber { background: rgba(245,158,11,.2); color: #fbbf24; font-weight: 500; }
+  .bd.orange { background: rgba(249,115,22,.2); color: #fb923c; font-weight: 500; }
+  .bd.red { background: rgba(239,68,68,.18); color: #f87171; font-weight: 500; }
+  .bd.gray { background: var(--muted); color: var(--muted-foreground); }
+  .div { padding: 2px 6px; border-radius: 4px; background: rgba(37,99,235,.1); color: #3b82f6; font-size: 9px; font-weight: 500; line-height: 12px; white-space: nowrap; }
+  .card { border-radius: 8px; background: var(--card); border: 1px solid var(--border); }
+  .ch { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .ch h3 { font-size: 13px; font-weight: 600; }
+  .ch .sub { font-size: 11px; color: var(--muted-foreground); }
+  .ch .sp { flex: 1; }
+  .btn-pri { height: 28px; padding: 0 12px; border-radius: 4px; background: var(--foreground); color: var(--background); font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .btn-green { height: 30px; padding: 0 14px; border-radius: 4px; background: #16a34a; color: #fff; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 10px; font-weight: 500; color: var(--muted-foreground); padding: 8px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; text-transform: uppercase; letter-spacing: .04em; }
+  td { padding: 0 12px; height: 46px; border-bottom: 1px solid var(--border); font-size: 12px; white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  .sw { width: 28px; height: 16px; border-radius: 999px; background: #262626; position: relative; display: inline-block; }
+  .sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #737373; }
+  .sw.on { background: #16a34a; }
+  .sw.on::after { left: 14px; background: #fff; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .cb { width: 14px; height: 14px; border-radius: 3px; border: 1px solid #525252; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; }
+  .cb.on { background: #22c55e; border-color: #22c55e; color: #052e16; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-chart-column" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></symbol>
+<symbol id="i-newspaper" viewBox="0 0 24 24"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+<symbol id="i-building-2" viewBox="0 0 24 24"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></symbol>
+<symbol id="i-handshake" viewBox="0 0 24 24"><path d="m11 17 2 2a1 1 0 1 0 3-3"/><path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4"/><path d="m21 3 1 11h-2"/><path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3"/><path d="M3 4h8"/></symbol>
+<symbol id="i-triangle-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+<symbol id="i-circle-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+<symbol id="i-log-out" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></symbol>
+<symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+<symbol id="i-calendar" viewBox="0 0 24 24"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></symbol>
+<symbol id="i-rotate-ccw" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="i-linkedin" viewBox="0 0 24 24"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect width="4" height="12" x="2" y="9"/><circle cx="4" cy="4" r="2"/></symbol>
+<symbol id="i-mail" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol>
+<symbol id="i-phone" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></symbol>
+<symbol id="i-map-pin" viewBox="0 0 24 24"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></symbol>
+<symbol id="i-book-open" viewBox="0 0 24 24"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></symbol>
+<symbol id="i-external-link" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+<symbol id="i-circle-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="i-circle-x" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></symbol>
+<symbol id="i-ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></symbol>
+<symbol id="i-rss" viewBox="0 0 24 24"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></symbol>
+<symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+<symbol id="i-cpu" viewBox="0 0 24 24"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></symbol>
+<symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></symbol>
+<symbol id="i-merge" viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></symbol>
+<symbol id="i-terminal" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></symbol>
+<symbol id="i-flame" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></symbol>
+<symbol id="i-user-plus" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></symbol>
+<symbol id="i-user-check" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></symbol>
+<symbol id="i-file-down" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M12 18v-6"/><path d="m9 15 3 3 3-3"/></symbol>
+<symbol id="i-filter" viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></symbol>
+<symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+</defs></svg>
+
+<style>
+.content { padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; height: calc(900px - 57px); }
+.head { display: flex; align-items: flex-end; gap: 16px; }
+.head h1 { font-size: 18px; font-weight: 700; letter-spacing: -.02em; }
+.head p { font-size: 11px; color: var(--muted-foreground); margin-top: 3px; }
+.head .sp { flex: 1; }
+.grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0,1fr) 384px; gap: 16px; }
+.col { display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+.src { display: flex; align-items: center; gap: 10px; }
+.fav { width: 26px; height: 26px; border-radius: 6px; background: var(--muted); border: 1px solid var(--border); display: grid; place-items: center; font-size: 10px; font-weight: 700; color: var(--muted-foreground); flex-shrink: 0; }
+.src .n { font-size: 12px; font-weight: 600; }
+.src .u { font-size: 10px; color: var(--muted-foreground); margin-top: 1px; }
+.type { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; color: #d4d4d4; margin-right: 6px; }
+.src .u { display: flex; align-items: center; }
+.tags { display: inline-flex; gap: 4px; }
+.when { font-size: 11px; color: var(--muted-foreground); display: inline-flex; align-items: center; gap: 6px; }
+.err { color: #fbbf24; }
+.grid td { height: 54px; padding: 0 10px; }
+.grid th { padding: 8px 10px; }
+.grid td:first-child, .grid th:first-child { padding-left: 16px; }
+.grid td:last-child, .grid th:last-child { padding-right: 16px; }
+.num { font-variant-numeric: tabular-nums; font-weight: 500; }
+.ins { padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--muted); font-size: 12px; color: var(--muted-foreground); display: flex; align-items: center; gap: 8px; width: 240px; }
+.prov { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 14px 16px 4px; }
+.pv { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; position: relative; }
+.pv.on { border-color: #fafafa; box-shadow: 0 0 0 1px #fafafa inset; }
+.pv .n { font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.pv .v { font-size: 10px; color: var(--muted-foreground); margin-top: 2px; }
+.pv .rd { position: absolute; top: 10px; right: 10px; width: 12px; height: 12px; border-radius: 50%; border: 1px solid #525252; }
+.pv.on .rd { border: 4px solid #fafafa; }
+.mk { width: 18px; height: 18px; border-radius: 5px; display: grid; place-items: center; font-size: 9px; font-weight: 700; color: #0a0a0a; }
+.env { margin: 10px 16px 0; border: 1px solid var(--border); border-radius: 6px; background: #050505; padding: 10px 12px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; line-height: 1.75; color: #d4d4d4; }
+.env .c { color: #737373; }
+.env .k { color: #60a5fa; }
+.env .s { color: #34d399; }
+.opts { padding: 12px 16px 14px; display: flex; flex-direction: column; gap: 9px; }
+.opts .r { display: flex; align-items: center; gap: 8px; font-size: 11.5px; }
+.opts .r .l { color: var(--muted-foreground); width: 128px; flex-shrink: 0; }
+.opts .r .ents { display: flex; gap: 10px; flex-wrap: wrap; }
+.opts .r .ents span { display: inline-flex; align-items: center; gap: 5px; }
+.steps { padding: 6px 16px 12px; }
+.st { display: grid; grid-template-columns: 18px 1fr auto; gap: 10px; align-items: center; padding: 7px 0; border-bottom: 1px dashed #1f1f1f; }
+.st:last-child { border-bottom: 0; }
+.st .ok { color: #22c55e; }
+.st .t { font-size: 12px; font-weight: 500; }
+.st .d { font-size: 10.5px; color: var(--muted-foreground); margin-top: 1px; }
+.st .tm { font-size: 10.5px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.vols { padding: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px 28px; }
+.vb { display: flex; align-items: center; gap: 10px; font-size: 11.5px; }
+.vb .l { width: 76px; color: var(--muted-foreground); }
+.vb .b { flex: 1; height: 8px; border-radius: 999px; background: var(--muted); overflow: hidden; }
+.vb .b i { display: block; height: 100%; background: #3b82f6; border-radius: 999px; }
+.vb .v { width: 28px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+.foot { display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--border); font-size: 10.5px; color: var(--muted-foreground); }
+</style>
+<div class="shell">
+  <aside>
+    <div class="brand"><div><h2>MIR</h2><p>Market Intelligence Radar</p></div></div>
+    <nav>
+      <span class="nl"><svg class="i"><use href="#i-chart-column"/></svg>Overview</span>
+      <span class="nl"><svg class="i"><use href="#i-newspaper"/></svg>Articles</span>
+      <span class="nl"><svg class="i"><use href="#i-users"/></svg>People</span>
+      <span class="nl"><svg class="i"><use href="#i-building-2"/></svg>Companies</span>
+      <span class="nl"><svg class="i"><use href="#i-handshake"/></svg>Deals</span>
+      <span class="nl"><svg class="i"><use href="#i-triangle-alert"/></svg>Signals</span>
+    </nav>
+    <div class="nav-bottom">
+      <span class="nl"><svg class="i"><use href="#i-circle-help"/></svg>Help</span>
+      <span class="nl active"><svg class="i b"><use href="#i-settings"/></svg>Admin</span>
+    </div>
+    <div class="user">
+      <div class="row"><span>alex.morgan</span><span class="ic"><svg class="i i-12"><use href="#i-sun"/></svg><svg class="i i-12"><use href="#i-log-out"/></svg></span></div>
+      <div class="ver">v1.6.0 · 9b3f2d1</div>
+    </div>
+  </aside>
+
+  <main>
+    <header class="topbar"><span class="sel">All sectors<svg class="i i-12"><use href="#i-chevron-down"/></svg></span></header>
+    <div class="content">
+      <div class="head">
+        <div><h1>Collection pipeline</h1><p>News sources, LLM provider and extraction. All configurable, no code changes.</p></div>
+        <div class="sp"></div>
+        <div class="tabs"><span class="tab on">Sources and LLM</span><span class="tab">Sectors and ICP</span><span class="tab">CRM connection</span><span class="tab">Users</span></div>
+        <span class="btn-pri"><svg class="i i-11"><use href="#i-play"/></svg>Run now</span>
+      </div>
+
+      <div class="grid">
+        <div class="col">
+        <div class="card" style="overflow:hidden">
+          <div class="ch"><h3>Sources</h3><span class="bd gray">8</span><span class="sub">· 6 sectors</span><span class="sp"></span><div class="ins"><svg class="i i-12"><use href="#i-search"/></svg>Search sources</div><span class="btn-out"><svg class="i i-11"><use href="#i-plus"/></svg>Add source</span></div>
+          <table>
+            <thead><tr><th>Source</th><th>Sectors</th><th>Schedule</th><th>Last run</th><th style="text-align:right">7 days</th><th style="text-align:right">Active</th></tr></thead>
+            <tbody>
+              <tr><td><div class="src"><span class="fav">FW</span><div><div class="n">FinTech Wire</div><div class="u"><span class="type"><svg class="i i-12"><use href="#i-rss"/></svg>RSS</span><span>feeds.example.com/fintech</span></div></div></div></td><td><span class="tags"><span class="div">Finance</span><span class="div">Technology</span></span></td><td class="muted">every 2 h</td><td><span class="when"><span class="dot" style="background:#22c55e"></span>14 min ago</span></td><td class="num" style="text-align:right">48</td><td style="text-align:right"><span class="sw on"></span></td></tr>
+              <tr><td><div class="src"><span class="fav">CN</span><div><div class="n">Cloud Native Daily</div><div class="u"><span class="type"><svg class="i i-12"><use href="#i-flame"/></svg>Firecrawl</span><span>news.example.com/cloud</span></div></div></div></td><td><span class="tags"><span class="div">Technology</span></span></td><td class="muted">every 6 h</td><td><span class="when"><span class="dot" style="background:#22c55e"></span>1 h ago</span></td><td class="num" style="text-align:right">22</td><td style="text-align:right"><span class="sw on"></span></td></tr>
+              <tr><td><div class="src"><span class="fav">SI</span><div><div class="n">SaaS Insider</div><div class="u"><span class="type"><svg class="i i-12"><use href="#i-rss"/></svg>RSS</span><span>feeds.example.com/saas</span></div></div></div></td><td><span class="tags"><span class="div">Technology</span></span></td><td class="muted">every 2 h</td><td><span class="when"><span class="dot" style="background:#22c55e"></span>32 min ago</span></td><td class="num" style="text-align:right">35</td><td style="text-align:right"><span class="sw on"></span></td></tr>
+              <tr><td><div class="src"><span class="fav">EP</span><div><div class="n">Energy Pulse</div><div class="u"><span class="type"><svg class="i i-12"><use href="#i-globe"/></svg>HTML</span><span>energy.example.com/news</span></div></div></div></td><td><span class="tags"><span class="div">Energy</span></span></td><td class="muted">daily, 6:00 AM</td><td><span class="when"><span class="dot" style="background:#22c55e"></span>5 h ago</span></td><td class="num" style="text-align:right">9</td><td style="text-align:right"><span class="sw on"></span></td></tr>
+              <tr><td><div class="src"><span class="fav">RB</span><div><div class="n">Retail Brief</div><div class="u"><span class="type"><svg class="i i-12"><use href="#i-rss"/></svg>RSS</span><span>feeds.example.com/retail</span></div></div></div></td><td><span class="tags"><span class="div">Retail</span></span></td><td class="muted">every 4 h</td><td><span class="when"><span class="dot" style="background:#22c55e"></span>2 h ago</span></td><td class="num" style="text-align:right">17</td><td style="text-align:right"><span class="sw on"></span></td></tr>
+              <tr><td><div class="src"><span class="fav">HT</span><div><div class="n">Health Systems Today</div><div class="u"><span class="type"><svg class="i i-12"><use href="#i-flame"/></svg>Firecrawl</span><span>health.example.com/latest</span></div></div></div></td><td><span class="tags"><span class="div">Healthcare</span></span></td><td class="muted">daily, 7:00 AM</td><td><span class="when"><span class="dot" style="background:#22c55e"></span>4 h ago</span></td><td class="num" style="text-align:right">6</td><td style="text-align:right"><span class="sw on"></span></td></tr>
+              <tr><td><div class="src"><span class="fav">LL</span><div><div class="n">Logistics Ledger</div><div class="u"><span class="type"><svg class="i i-12"><use href="#i-rss"/></svg>RSS</span><span>feeds.example.com/logistics</span></div></div></div></td><td><span class="tags"><span class="div">Logistics</span></span></td><td class="muted">every 4 h</td><td><span class="when err"><span class="dot" style="background:#f59e0b"></span>failed · retry in 30 min</span></td><td class="num" style="text-align:right">12</td><td style="text-align:right"><span class="sw on"></span></td></tr>
+              <tr><td><div class="src"><span class="fav">IT</span><div><div class="n">Industrial Times</div><div class="u"><span class="type"><svg class="i i-12"><use href="#i-globe"/></svg>HTML</span><span>industry.example.com/news</span></div></div></div></td><td><span class="tags"><span class="div">Manufacturing</span></span></td><td class="muted">weekly</td><td><span class="when">paused</span></td><td class="num muted" style="text-align:right">0</td><td style="text-align:right"><span class="sw"></span></td></tr>
+            </tbody>
+          </table>
+          <div class="foot"><svg class="i i-12"><use href="#i-terminal"/></svg>Sources can also come from <span class="mono" style="color:#d4d4d4">config/sources.yaml</span> · versioned in the repo</div>
+        </div>
+        <div class="card" style="flex:1;min-height:0">
+          <div class="ch"><h3>Articles by sector</h3><span class="sub">· last 7 days</span><span class="sp"></span><span class="sub">197 articles · 41 signals</span></div>
+          <div class="vols"><div class="vb"><span class="l">Technology</span><span class="b"><i style="width:100%"></i></span><span class="v">105</span></div><div class="vb"><span class="l">Finance</span><span class="b"><i style="width:46%"></i></span><span class="v">48</span></div><div class="vb"><span class="l">Retail</span><span class="b"><i style="width:16%"></i></span><span class="v">17</span></div><div class="vb"><span class="l">Logistics</span><span class="b"><i style="width:11%"></i></span><span class="v">12</span></div><div class="vb"><span class="l">Energy</span><span class="b"><i style="width:9%"></i></span><span class="v">9</span></div><div class="vb"><span class="l">Healthcare</span><span class="b"><i style="width:6%"></i></span><span class="v">6</span></div></div>
+        </div>
+        </div>
+
+        <div class="col">
+          <div class="card">
+            <div class="ch"><h3>LLM provider</h3><span class="sp"></span><span class="sub">switch with one variable</span></div>
+            <div class="prov">
+              <div class="pv on"><span class="rd"></span><div class="n"><span class="mk" style="background:#d4a27f">A</span>Claude</div><div class="v">Anthropic</div></div>
+              <div class="pv"><span class="rd"></span><div class="n"><span class="mk" style="background:#e5e5e5">O</span>GPT</div><div class="v">OpenAI</div></div>
+              <div class="pv"><span class="rd"></span><div class="n"><span class="mk" style="background:#8ab4f8">G</span>Gemini</div><div class="v">Google</div></div>
+            </div>
+            <div class="env"><span class="c"># .env</span><br><span class="k">LLM_PROVIDER</span>=<span class="s">anthropic</span><br><span class="k">ANTHROPIC_API_KEY</span>=<span class="c">••••••••••••</span></div>
+            <div class="opts">
+              <div class="r"><span class="l">Extracted entities</span><div class="ents"><span><span class="cb on"><svg class="i i-10"><use href="#i-check"/></svg></span>People</span><span><span class="cb on"><svg class="i i-10"><use href="#i-check"/></svg></span>Companies</span><span><span class="cb on"><svg class="i i-10"><use href="#i-check"/></svg></span>Deals</span><span><span class="cb on"><svg class="i i-10"><use href="#i-check"/></svg></span>Signals</span></div></div>
+              <div class="r"><span class="l">Temperature</span><span class="mono">0</span><span class="muted">· validated JSON output</span></div>
+              <div class="r"><span class="l">Max per run</span><span class="mono">200</span><span class="muted">articles</span></div>
+            </div>
+          </div>
+
+          <div class="card" style="flex:1;min-height:0;display:flex;flex-direction:column">
+            <div class="ch"><h3>Last run</h3><span class="bd emerald">completed</span><span class="sp"></span><span class="sub">today, 9:00 AM · 6 min 12 s</span></div>
+            <div class="steps">
+              <div class="st"><svg class="i ok"><use href="#i-circle-check"/></svg><div><div class="t">Collection</div><div class="d">7 active sources · 156 articles</div></div><span class="tm">1m 48s</span></div>
+              <div class="st"><svg class="i ok"><use href="#i-circle-check"/></svg><div><div class="t">Deduplication</div><div class="d">131 new articles</div></div><span class="tm">4s</span></div>
+              <div class="st"><svg class="i ok"><use href="#i-circle-check"/></svg><div><div class="t">Extraction with Claude</div><div class="d">214 people · 96 companies · 18 deals · 41 signals</div></div><span class="tm">3m 51s</span></div>
+              <div class="st"><svg class="i ok"><use href="#i-circle-check"/></svg><div><div class="t">CRM matching</div><div class="d">63 people already in the CRM</div></div><span class="tm">29s</span></div>
+              <div class="st"><svg class="i ok"><use href="#i-circle-check"/></svg><div><div class="t">ICP scoring</div><div class="d">38 people with ICP above 70%</div></div><span class="tm">9s</span></div>
+              <div class="st"><svg class="i ok"><use href="#i-circle-check"/></svg><div><div class="t">Approval queue</div><div class="d">151 new prospects awaiting review</div></div><span class="tm">1s</span></div>
+            </div>
+            <div class="foot" style="margin-top:auto;flex-direction:column;align-items:stretch;gap:6px"><div style="display:flex;gap:8px;align-items:center"><svg class="i i-12"><use href="#i-clock"/></svg>Next run: tomorrow, 9:00 AM<span style="flex:1"></span><span class="mono">0 9 * * *</span></div><div style="display:flex;gap:8px;align-items:center"><svg class="i i-12"><use href="#i-terminal"/></svg>Installed with<span class="mono" style="color:#d4d4d4">docker compose up -d</span><span style="flex:1"></span>4 services</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+</body>
+</html>
