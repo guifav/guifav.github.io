@@ -146,4 +146,98 @@
     // Link direto para um projeto (#slug) sempre mostra a página inteira.
     window.addEventListener('hashchange', function () { applyFilter('all'); });
   }
+
+  // Visualizador em tela cheia: abre a tela clicada e navega entre as telas do mesmo projeto.
+  var lb = null, lbImgs = [], lbIdx = 0, lbReturn = null;
+  var lbText = function (pt, en) { return document.documentElement.lang === 'en' ? en : pt; };
+  var buildLb = function () {
+    lb = document.createElement('div');
+    lb.className = 'lb'; lb.hidden = true;
+    lb.setAttribute('role', 'dialog'); lb.setAttribute('aria-modal', 'true');
+    lb.innerHTML = '<button type="button" class="lb-btn lb-close">&#10005;</button>' +
+      '<button type="button" class="lb-btn lb-prev">&#8249;</button>' +
+      '<img alt=""><div class="lb-cap"></div><div class="lb-count"></div>' +
+      '<button type="button" class="lb-btn lb-next">&#8250;</button>';
+    document.body.appendChild(lb);
+    lb.querySelector('.lb-close').addEventListener('click', closeLb);
+    lb.querySelector('.lb-prev').addEventListener('click', function () { showLb(lbIdx - 1); });
+    lb.querySelector('.lb-next').addEventListener('click', function () { showLb(lbIdx + 1); });
+    lb.addEventListener('click', function (e) { if (e.target === lb) closeLb(); });
+    document.addEventListener('keydown', function (e) {
+      if (lb.hidden) return;
+      if (e.key === 'Escape') closeLb();
+      else if (e.key === 'ArrowLeft') showLb(lbIdx - 1);
+      else if (e.key === 'ArrowRight') showLb(lbIdx + 1);
+    });
+    var x0 = null;
+    lb.addEventListener('pointerdown', function (e) { x0 = e.clientX; });
+    lb.addEventListener('pointerup', function (e) {
+      if (x0 === null) return; var dx = e.clientX - x0; x0 = null;
+      if (Math.abs(dx) > 50) showLb(lbIdx + (dx < 0 ? 1 : -1));
+    });
+  };
+  var showLb = function (i) {
+    var n = lbImgs.length; lbIdx = (i + n) % n;
+    var src = lbImgs[lbIdx];
+    var img = lb.querySelector('img');
+    img.src = src.getAttribute('src'); img.alt = src.getAttribute('alt');
+    lb.querySelector('.lb-cap').textContent = src.getAttribute('alt');
+    lb.querySelector('.lb-count').textContent = (lbIdx + 1) + ' / ' + n;
+    var multi = n > 1;
+    lb.querySelector('.lb-prev').hidden = !multi; lb.querySelector('.lb-next').hidden = !multi;
+    lb.querySelector('.lb-close').setAttribute('aria-label', lbText('Fechar', 'Close'));
+    lb.querySelector('.lb-prev').setAttribute('aria-label', lbText('Tela anterior', 'Previous screen'));
+    lb.querySelector('.lb-next').setAttribute('aria-label', lbText('Próxima tela', 'Next screen'));
+  };
+  var openLb = function (imgs, i) {
+    if (!lb) buildLb();
+    lbImgs = imgs; lbReturn = document.activeElement;
+    showLb(i); lb.hidden = false; document.body.style.overflow = 'hidden';
+    lb.querySelector('.lb-close').focus();
+  };
+  var closeLb = function () {
+    lb.hidden = true; document.body.style.overflow = '';
+    if (lbReturn) lbReturn.focus();
+  };
+
+  // Vitrine de telas dentro de cada projeto do portfólio, no mesmo espírito da vitrine da home.
+  document.querySelectorAll('.pcf').forEach(function (root) {
+    var items = Array.prototype.slice.call(root.querySelectorAll('.pcf-item'));
+    var imgs = items.map(function (it) { return it.querySelector('img'); });
+    var count = root.querySelector('.pcf-count');
+    var active = Math.min(parseInt(root.getAttribute('data-start'), 10) || 0, items.length - 1);
+    var render = function () {
+      var w = items[0].offsetWidth;
+      items.forEach(function (el, i) {
+        var d = i - active, a = Math.abs(d), s = d < 0 ? -1 : 1;
+        el.style.transform = d === 0 ? 'none' :
+          'translateX(' + (s * w * 0.36) + 'px) translateZ(' + (-w * 0.32) + 'px) rotateY(' + (-s * 48) + 'deg)';
+        el.style.zIndex = String(10 - a);
+        el.classList.toggle('is-active', d === 0);
+        el.setAttribute('aria-pressed', d === 0 ? 'true' : 'false');
+      });
+      if (count) count.textContent = (active + 1) + ' / ' + items.length;
+    };
+    var go = function (i) { active = (i + items.length) % items.length; render(); };
+    var swiped = false, x0 = null;
+    items.forEach(function (el, i) {
+      el.addEventListener('click', function () {
+        if (swiped) { swiped = false; return; }
+        if (i === active) openLb(imgs, i); else go(i);
+      });
+    });
+    root.querySelectorAll('.pcf-arrow').forEach(function (b) {
+      b.addEventListener('click', function () { go(active + parseInt(b.getAttribute('data-dir'), 10)); });
+    });
+    var zoom = root.querySelector('.pcf-zoom');
+    if (zoom) zoom.addEventListener('click', function () { openLb(imgs, active); });
+    var stage = root.querySelector('.pcf-stage');
+    stage.addEventListener('pointerdown', function (e) { x0 = e.clientX; });
+    stage.addEventListener('pointerup', function (e) {
+      if (x0 === null) return; var dx = e.clientX - x0; x0 = null;
+      if (Math.abs(dx) > 40) { swiped = true; go(active + (dx < 0 ? 1 : -1)); }
+    });
+    window.addEventListener('resize', render);
+    render();
+  });
 })();
