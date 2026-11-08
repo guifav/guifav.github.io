@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>Customer Success · Jornada</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+  --bg: #f6f6f3; --surface: #ffffff; --surface-2: #fafaf8; --surface-3: #f2f2ee;
+  --border: #e6e4de; --border-2: #efeee9;
+  --ink: #16171a; --ink-2: #3f4147; --ink-3: #74767c; --ink-4: #a3a4a8;
+  --accent: #0d6e63; --accent-2: #12897b; --accent-soft: #e5f1ee;
+  --ok: #2b7d52; --ok-bar: #5aa77c; --ok-soft: #e7f2ea;
+  --warn: #9a6a12; --warn-bar: #d9a441; --warn-soft: #f8efdc;
+  --risk: #b0402f; --risk-bar: #d86a57; --risk-soft: #f8e7e3;
+  --info: #3a5fb8; --info-soft: #e9eefa;
+  --r: 8px; --r-sm: 5px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1440px; height: 900px; overflow: hidden; }
+body { font-family: var(--font); font-size: 13px; line-height: 1.4; color: var(--ink); background: var(--bg); -webkit-font-smoothing: antialiased; font-feature-settings: "cv11" 1, "ss01" 1; }
+svg.i { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+svg.i.s12 { width: 12px; height: 12px; stroke-width: 2; }
+svg.i.s13 { width: 13px; height: 13px; }
+.mono { font-family: var(--mono); font-feature-settings: "tnum" 1; letter-spacing: -.01em; }
+.num { font-variant-numeric: tabular-nums; }
+.mute { color: var(--ink-3); }
+.faint { color: var(--ink-4); }
+
+.app { display: grid; grid-template-columns: 224px 1fr; height: 900px; }
+
+/* Sidebar */
+.sb { background: var(--surface-2); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 14px 10px 12px; }
+.sb-brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 18px; }
+.sb-mark { width: 26px; height: 26px; border-radius: 7px; background: var(--ink); color: #fff; display: grid; place-items: center; }
+.sb-mark svg { width: 15px; height: 15px; stroke: #fff; }
+.sb-name { font-size: 13px; font-weight: 600; letter-spacing: -.01em; }
+.sb-sub { font-size: 11px; color: var(--ink-3); }
+.sb-group { font-size: 10.5px; font-weight: 500; color: var(--ink-4); padding: 14px 10px 6px; letter-spacing: .02em; }
+.sb-item { display: flex; align-items: center; gap: 10px; height: 31px; padding: 0 10px; border-radius: 6px; color: var(--ink-2); font-size: 13px; font-weight: 500; }
+.sb-item svg { color: var(--ink-3); }
+.sb-item .cnt { margin-left: auto; font-size: 11px; color: var(--ink-4); font-variant-numeric: tabular-nums; }
+.sb-item.on { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgba(20,20,20,.04); }
+.sb-item.on svg { color: var(--accent); }
+.sb-foot { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px 8px 0; border-top: 1px solid var(--border); }
+.av { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 10.5px; font-weight: 600; color: var(--ink-2); background: var(--surface-3); border: 1px solid var(--border); flex-shrink: 0; }
+.av.a1 { background: #e8efe9; color: #2f6047; border-color: #d5e3d8; }
+.av.a2 { background: #eceaf6; color: #4b4685; border-color: #dcd9ef; }
+.av.a3 { background: #f6ece4; color: #8a5530; border-color: #ecdccd; }
+.av.a4 { background: #e6eef6; color: #2f5677; border-color: #d3e0ec; }
+.av.a5 { background: #f4e9ee; color: #864563; border-color: #e9d6df; }
+.sb-foot .who { font-size: 12px; font-weight: 500; line-height: 1.2; }
+.sb-foot .role { font-size: 11px; color: var(--ink-3); }
+
+/* Main */
+.main { display: flex; flex-direction: column; min-width: 0; height: 900px; }
+.top { height: 52px; flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 0 28px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.crumb { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-3); }
+.crumb b { color: var(--ink); font-weight: 500; }
+.crumb svg { color: var(--ink-4); }
+.top .sp { flex: 1; }
+.search { width: 280px; height: 30px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-2); display: flex; align-items: center; gap: 8px; padding: 0 10px; color: var(--ink-4); font-size: 12.5px; white-space: nowrap; }
+.search kbd { margin-left: auto; font-family: var(--font); font-size: 10.5px; color: var(--ink-3); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; background: var(--surface); }
+.ibtn { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 7px; color: var(--ink-3); }
+
+.page { flex: 1; min-height: 0; padding: 22px 28px 20px; display: flex; flex-direction: column; gap: 16px; }
+.ph { display: flex; align-items: flex-end; gap: 16px; }
+.ph h1 { font-size: 21px; font-weight: 600; letter-spacing: -.02em; line-height: 1.2; }
+.ph p { font-size: 12.5px; color: var(--ink-3); margin-top: 3px; }
+.ph .sp { flex: 1; }
+.chip-f { height: 30px; display: inline-flex; align-items: center; gap: 7px; padding: 0 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); font-size: 12.5px; color: var(--ink-2); font-weight: 500; }
+.chip-f svg { color: var(--ink-4); }
+.chip-f .k { color: var(--ink-3); font-weight: 400; }
+.seg { display: inline-flex; padding: 2px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-3); }
+.seg span { height: 24px; display: inline-flex; align-items: center; padding: 0 10px; border-radius: 5px; font-size: 12px; color: var(--ink-3); font-weight: 500; }
+.seg span.on { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgba(0,0,0,.04); }
+.btn { height: 30px; display: inline-flex; align-items: center; gap: 7px; padding: 0 12px; border-radius: 7px; border: 1px solid var(--border); background: var(--surface); font-size: 12.5px; font-weight: 500; color: var(--ink); white-space: nowrap; }
+.btn.pri { background: var(--ink); border-color: var(--ink); color: #fff; }
+.btn.acc { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.sm { height: 26px; font-size: 12px; padding: 0 9px; }
+
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); box-shadow: 0 1px 2px rgba(20,20,20,.03); min-width: 0; }
+.ch { display: flex; align-items: center; gap: 10px; padding: 13px 16px 11px; }
+.ch h2 { white-space: nowrap; font-size: 13.5px; font-weight: 600; letter-spacing: -.01em; }
+.ch .sub { font-size: 12px; color: var(--ink-3); }
+.ch .sp { flex: 1; }
+.link { font-size: 12px; color: var(--accent); font-weight: 500; display: inline-flex; align-items: center; gap: 4px; }
+
+/* KPI tiles */
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.kpi { padding: 13px 16px 12px; display: flex; flex-direction: column; gap: 6px; }
+.kpi .l { font-size: 12px; color: var(--ink-3); display: flex; align-items: center; gap: 6px; }
+.kpi .row { display: flex; align-items: baseline; gap: 8px; }
+.kpi .v { font-size: 22px; font-weight: 600; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.kpi .u { font-size: 12px; color: var(--ink-3); }
+.kpi .d { font-size: 11.5px; color: var(--ink-3); }
+.kpi .d b { font-weight: 500; }
+.up { color: var(--ok); } .down { color: var(--risk); }
+
+/* Chips */
+.st { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 7px; border-radius: 999px; font-size: 11px; font-weight: 500; white-space: nowrap; }
+.st i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.st.ok { color: var(--ok); background: var(--ok-soft); }
+.st.warn { color: var(--warn); background: var(--warn-soft); }
+.st.risk { color: var(--risk); background: var(--risk-soft); }
+.st.info { color: var(--info); background: var(--info-soft); }
+.st.neu { color: var(--ink-2); background: var(--surface-3); }
+.st.acc { color: var(--accent); background: var(--accent-soft); }
+.hs { display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 22px; padding: 0 6px; border-radius: 6px; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.hs.ok { color: var(--ok); background: var(--ok-soft); }
+.hs.warn { color: var(--warn); background: var(--warn-soft); }
+.hs.risk { color: var(--risk); background: var(--risk-soft); }
+
+/* Table */
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-size: 11.5px; font-weight: 500; color: var(--ink-3); padding: 8px 16px; border-top: 1px solid var(--border-2); border-bottom: 1px solid var(--border-2); background: var(--surface-2); white-space: nowrap; }
+td { padding: 0 16px; height: 46px; border-bottom: 1px solid var(--border-2); font-size: 12.5px; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+th.r, td.r { text-align: right; }
+.person { display: flex; align-items: center; gap: 10px; }
+.person .n { font-weight: 500; }
+.person .s { font-size: 11.5px; color: var(--ink-3); }
+.dist { display: flex; height: 8px; border-radius: 999px; overflow: hidden; gap: 2px; width: 100%; }
+.dist i { display: block; height: 100%; border-radius: 2px; }
+.dist .g { background: var(--ok-bar); } .dist .y { background: var(--warn-bar); } .dist .r { background: var(--risk-bar); }
+.legend { display: flex; gap: 12px; font-size: 11.5px; color: var(--ink-3); }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+
+/* Lists */
+.list { display: flex; flex-direction: column; }
+.li { display: flex; gap: 12px; padding: 11px 16px; border-top: 1px solid var(--border-2); align-items: flex-start; }
+.li .ic { width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; flex-shrink: 0; }
+.ic.ok { background: var(--ok-soft); color: var(--ok); }
+.ic.warn { background: var(--warn-soft); color: var(--warn); }
+.ic.risk { background: var(--risk-soft); color: var(--risk); }
+.ic.info { background: var(--info-soft); color: var(--info); }
+.ic.acc { background: var(--accent-soft); color: var(--accent); }
+.ic.neu { background: var(--surface-3); color: var(--ink-2); }
+.li .tx { flex: 1; min-width: 0; }
+.li .t1 { font-size: 12.5px; font-weight: 500; line-height: 1.35; }
+.li .t2 { font-size: 11.5px; color: var(--ink-3); margin-top: 2px; line-height: 1.4; }
+.li .rt { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; flex-shrink: 0; }
+.go { width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--border); display: grid; place-items: center; color: var(--ink-3); background: var(--surface); }
+
+.bar { height: 6px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
+.bar i { display: block; height: 100%; border-radius: 999px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="dash" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></symbol>
+<symbol id="brief" viewBox="0 0 24 24"><path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/><rect width="20" height="14" x="2" y="6" rx="2"/></symbol>
+<symbol id="refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+<symbol id="route" viewBox="0 0 24 24"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></symbol>
+<symbol id="smile" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" x2="9.01" y1="9" y2="9"/><line x1="15" x2="15.01" y1="9" y2="9"/></symbol>
+<symbol id="checks" viewBox="0 0 24 24"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></symbol>
+<symbol id="chart" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/></symbol>
+<symbol id="gear" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+<symbol id="bell" viewBox="0 0 24 24"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></symbol>
+<symbol id="chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="chevr" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+<symbol id="out" viewBox="0 0 24 24"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></symbol>
+<symbol id="tdown" viewBox="0 0 24 24"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></symbol>
+<symbol id="tup" viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></symbol>
+<symbol id="alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+<symbol id="pulse" viewBox="0 0 24 24"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></symbol>
+<symbol id="cal" viewBox="0 0 24 24"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></symbol>
+<symbol id="userx" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="17" x2="22" y1="8" y2="13"/><line x1="22" x2="17" y1="8" y2="13"/></symbol>
+<symbol id="users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+<symbol id="msg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+<symbol id="spark" viewBox="0 0 24 24"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></symbol>
+<symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+<symbol id="cap" viewBox="0 0 24 24"><path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></symbol>
+<symbol id="buoy" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/><circle cx="12" cy="12" r="4"/></symbol>
+<symbol id="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="ccheck" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="more" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+<symbol id="mail" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol>
+<symbol id="video" viewBox="0 0 24 24"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></symbol>
+<symbol id="file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/></symbol>
+<symbol id="star" viewBox="0 0 24 24"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></symbol>
+<symbol id="flag" viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/></symbol>
+<symbol id="rocket" viewBox="0 0 24 24"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></symbol>
+<symbol id="plug" viewBox="0 0 24 24"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></symbol>
+<symbol id="target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+<symbol id="heart" viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/></symbol>
+<symbol id="filter" viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></symbol>
+<symbol id="plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+<symbol id="building" viewBox="0 0 24 24"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></symbol>
+<symbol id="ticket" viewBox="0 0 24 24"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/></symbol>
+</defs></svg>
+<style>
+.strip { padding: 4px 20px 16px; }
+.stages { display: grid; grid-template-columns: repeat(6, 1fr); position: relative; }
+.stages::before { content: ''; position: absolute; left: 7%; right: 7%; top: 15px; height: 2px; background: linear-gradient(90deg, var(--accent-2) 0%, var(--accent-2) 64%, var(--border) 64%); }
+.stg { display: flex; flex-direction: column; align-items: center; text-align: center; position: relative; }
+.stg .nd { width: 32px; height: 32px; border-radius: 50%; background: var(--surface); border: 2px solid var(--accent-2); color: var(--accent); display: grid; place-items: center; z-index: 1; }
+.stg .nd.off { border-color: var(--border); color: var(--ink-4); }
+.stg .nd.wn { border-color: var(--warn-bar); color: var(--warn); background: var(--warn-soft); }
+.stg .nm { font-size: 12.5px; font-weight: 600; margin-top: 8px; }
+.stg .ct { font-size: 11.5px; color: var(--ink-3); margin-top: 2px; }
+.stg .ct b { color: var(--ink); font-weight: 500; }
+.stg .tp { margin-top: 8px; display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--ink-3); border: 1px dashed var(--border); border-radius: 999px; padding: 2px 8px; background: var(--surface-2); white-space: nowrap; }
+.stg .tp svg { color: var(--accent); }
+.lg { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0,1fr) 384px; gap: 16px; }
+.prog { display: flex; gap: 3px; }
+.prog i { width: 15px; height: 6px; border-radius: 3px; background: var(--surface-3); }
+.prog i.f { background: var(--accent-2); }
+.prog i.w { background: var(--warn-bar); }
+.prog i.r { background: var(--risk-bar); }
+.acct { font-weight: 500; }
+.lg th, .lg td { padding-left: 12px; padding-right: 12px; }
+.lg th:first-child, .lg td:first-child { padding-left: 16px; }
+.lg th:last-child, .lg td:last-child { padding-right: 16px; }
+.stagename { font-size: 11.5px; color: var(--ink-3); margin-top: 3px; }
+td .av { width: 22px; height: 22px; font-size: 9.5px; }
+.m3 { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--border-2); border-bottom: 1px solid var(--border-2); }
+.m3 > div { padding: 12px 16px; border-left: 1px solid var(--border-2); }
+.m3 > div:first-child { border-left: 0; }
+.m3 .k { font-size: 11.5px; color: var(--ink-3); }
+.m3 .v { font-size: 20px; font-weight: 600; letter-spacing: -.02em; margin-top: 3px; font-variant-numeric: tabular-nums; }
+.m3 .v small { font-size: 12px; color: var(--ink-3); font-weight: 400; margin-left: 3px; letter-spacing: 0; }
+.m3 .h { font-size: 11px; color: var(--ink-3); margin-top: 1px; }
+.nps { padding: 12px 16px 14px; }
+.nps .t { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--ink-3); margin-bottom: 7px; }
+.nps .b { display: flex; height: 10px; border-radius: 999px; overflow: hidden; gap: 2px; }
+.nps .b i { display: block; height: 100%; }
+.sv { margin-top: auto; border-top: 1px solid var(--border-2); background: var(--surface-2); padding: 10px 16px 12px; }
+.svh { font-size: 11.5px; color: var(--ink-3); font-weight: 500; margin-bottom: 6px; }
+.svr { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-2); padding: 3px 0; }
+.svr svg { color: var(--accent); }
+.svr .sp { flex: 1; }
+.when { font-size: 11px; color: var(--ink-4); }
+.vb { padding: 11px 16px; border-top: 1px solid var(--border-2); }
+.vb .q { font-size: 12.5px; color: var(--ink); line-height: 1.45; }
+.vb .m { display: flex; align-items: center; gap: 6px; margin-top: 7px; font-size: 11.5px; color: var(--ink-3); }
+.vb .m .sp { flex: 1; }
+</style>
+<div class="app">
+  <aside class="sb">
+    <div class="sb-brand"><span class="sb-mark"><svg class="i"><use href="#heart"/></svg></span><div><div class="sb-name">Customer Success</div><div class="sb-sub">Portal da carteira</div></div></div>
+    <div class="sb-item"><svg class="i"><use href="#dash"/></svg>Visão geral</div>
+    <div class="sb-item"><svg class="i"><use href="#brief"/></svg>Carteira<span class="cnt">54</span></div>
+    <div class="sb-item"><svg class="i"><use href="#refresh"/></svg>Renovações<span class="cnt">18</span></div>
+    <div class="sb-item on"><svg class="i"><use href="#route"/></svg>Jornada</div>
+    <div class="sb-item"><svg class="i"><use href="#smile"/></svg>Satisfação</div>
+    <div class="sb-item"><svg class="i"><use href="#checks"/></svg>Próximas ações<span class="cnt">24</span></div>
+    <div class="sb-item"><svg class="i"><use href="#chart"/></svg>Relatórios</div>
+    <div class="sb-group">Visões salvas</div>
+    <div class="sb-item"><svg class="i"><use href="#target"/></svg>Enterprise em risco</div>
+    <div class="sb-item"><svg class="i"><use href="#cal"/></svg>Renovam no trimestre</div>
+    <div class="sb-item"><svg class="i"><use href="#rocket"/></svg>Onboarding ativo</div>
+    <div class="sb-group">Administração</div>
+    <div class="sb-item"><svg class="i"><use href="#plug"/></svg>Integrações</div>
+    <div class="sb-item"><svg class="i"><use href="#gear"/></svg>Configurações</div>
+    <div class="sb-foot"><span class="av a2">HD</span><div><div class="who">Helena Duarte</div><div class="role">Liderança de CS</div></div></div>
+  </aside>
+
+  <div class="main">
+    <header class="top">
+      <div class="crumb">Customer Success<svg class="i s12"><use href="#chevr"/></svg><b>Jornada</b></div>
+      <div class="sp"></div>
+      <div class="search"><svg class="i s13"><use href="#search"/></svg>Buscar conta, contato ou ação<kbd>⌘K</kbd></div>
+      <span class="ibtn"><svg class="i"><use href="#bell"/></svg></span>
+    </header>
+
+    <div class="page">
+      <div class="ph">
+        <div><h1>Jornada do cliente</h1><p>Do contrato assinado ao primeiro valor, com a satisfação medida em cada etapa · dados de demonstração</p></div>
+        <div class="sp"></div>
+        <span class="chip-f"><svg class="i s13"><use href="#cal"/></svg><span class="k">Coorte</span> set a nov<svg class="i s12"><use href="#chev"/></svg></span>
+        <span class="chip-f"><svg class="i s13"><use href="#users"/></svg><span class="k">Gestor</span> Todos<svg class="i s12"><use href="#chev"/></svg></span>
+      </div>
+
+      <div class="card">
+        <div class="ch"><h2>Etapas do onboarding</h2><span class="sub">· 14 contas na coorte</span><span class="sp"></span><span class="sub">Tempo até o primeiro valor: <b style="color:var(--ink);font-weight:600">24 dias</b> em média · meta 30</span></div>
+        <div class="strip">
+          <div class="stages">
+            <div class="stg"><span class="nd"><svg class="i s13"><use href="#flag"/></svg></span><div class="nm">Kickoff</div><div class="ct"><b>2</b> contas · 3 dias</div><span class="tp"><svg class="i s12"><use href="#smile"/></svg>Pesquisa pós-kickoff</span></div>
+            <div class="stg"><span class="nd"><svg class="i s13"><use href="#gear"/></svg></span><div class="nm">Configuração</div><div class="ct"><b>3</b> contas · 6 dias</div></div>
+            <div class="stg"><span class="nd wn"><svg class="i s13"><use href="#plug"/></svg></span><div class="nm">Integração</div><div class="ct"><b>3</b> contas · 11 dias</div><span class="tp"><svg class="i s12"><use href="#pulse"/></svg>Esforço do cliente</span></div>
+            <div class="stg"><span class="nd"><svg class="i s13"><use href="#cap"/></svg></span><div class="nm">Treinamento</div><div class="ct"><b>2</b> contas · 5 dias</div><span class="tp"><svg class="i s12"><use href="#star"/></svg>Satisfação do treinamento</span></div>
+            <div class="stg"><span class="nd off"><svg class="i s13"><use href="#target"/></svg></span><div class="nm">Primeiro valor</div><div class="ct"><b>1</b> conta</div></div>
+            <div class="stg"><span class="nd off"><svg class="i s13"><use href="#rocket"/></svg></span><div class="nm">Adoção plena</div><div class="ct"><b>3</b> contas</div><span class="tp"><svg class="i s12"><use href="#smile"/></svg>NPS após 90 dias</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="lg">
+        <div class="card">
+          <div class="ch"><h2>Contas em onboarding</h2><span class="sp"></span><div class="seg"><span class="on">Todas</span><span>Atrasadas</span><span>Bloqueadas</span></div></div>
+          <table>
+            <thead><tr><th>Conta</th><th>Progresso</th><th>Gestor</th><th class="r">Dias</th><th>Próximo passo</th><th>Situação</th></tr></thead>
+            <tbody>
+              <tr><td><div class="acct">Halley Biotech</div><div class="stagename">Integração</div></td><td><div class="prog"><i class="f"></i><i class="f"></i><i class="r"></i><i></i><i></i><i></i></div></td><td><span class="av a3">BL</span></td><td class="r num">19</td><td>Liberar acesso à API do ERP</td><td><span class="st risk"><i></i>Bloqueada</span></td></tr>
+              <tr><td><div class="acct">Mirante Agro</div><div class="stagename">Integração</div></td><td><div class="prog"><i class="f"></i><i class="f"></i><i class="w"></i><i></i><i></i><i></i></div></td><td><span class="av a4">RO</span></td><td class="r num">16</td><td>Validar importação de pedidos</td><td><span class="st warn"><i></i>Atrasada</span></td></tr>
+              <tr><td><div class="acct">Tocantins Têxtil</div><div class="stagename">Integração</div></td><td><div class="prog"><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i><i></i></div></td><td><span class="av a1">MT</span></td><td class="r num">12</td><td>Teste de ponta a ponta</td><td><span class="st ok"><i></i>No prazo</span></td></tr>
+              <tr><td><div class="acct">Linea Móveis</div><div class="stagename">Treinamento</div></td><td><div class="prog"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i></div></td><td><span class="av a2">CM</span></td><td class="r num">14</td><td>Trilha para administradores</td><td><span class="st ok"><i></i>No prazo</span></td></tr>
+              <tr><td><div class="acct">Pólen Educação</div><div class="stagename">Treinamento</div></td><td><div class="prog"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i></div></td><td><span class="av a5">LF</span></td><td class="r num">21</td><td>Agendar segunda turma</td><td><span class="st warn"><i></i>Atrasada</span></td></tr>
+              <tr><td><div class="acct">Arco Farma</div><div class="stagename">Configuração</div></td><td><div class="prog"><i class="f"></i><i class="f"></i><i></i><i></i><i></i><i></i></div></td><td><span class="av a1">MT</span></td><td class="r num">8</td><td>Importar cadastro de usuários</td><td><span class="st ok"><i></i>No prazo</span></td></tr>
+              <tr><td><div class="acct">Ondina Seguros</div><div class="stagename">Configuração</div></td><td><div class="prog"><i class="f"></i><i class="f"></i><i></i><i></i><i></i><i></i></div></td><td><span class="av a4">RO</span></td><td class="r num">6</td><td>Definir perfis de acesso</td><td><span class="st ok"><i></i>No prazo</span></td></tr>
+              <tr><td><div class="acct">Brasa Foods</div><div class="stagename">Primeiro valor</div></td><td><div class="prog"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i></div></td><td><span class="av a3">BL</span></td><td class="r num">23</td><td>Revisão de resultados</td><td><span class="st acc"><i></i>Concluindo</span></td></tr>
+              <tr><td><div class="acct">Vértice Pagamentos</div><div class="stagename">Kickoff</div></td><td><div class="prog"><i class="f"></i><i></i><i></i><i></i><i></i><i></i></div></td><td><span class="av a2">CM</span></td><td class="r num">2</td><td>Plano de sucesso assinado</td><td><span class="st ok"><i></i>No prazo</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card" style="display:flex;flex-direction:column;min-height:0;overflow:hidden">
+          <div class="ch"><h2>Satisfação e esforço</h2><span class="sp"></span><span class="sub">coorte · 90 dias</span></div>
+          <div class="m3">
+            <div><div class="k">NPS</div><div class="v">42</div><div class="h">38 respostas</div></div>
+            <div><div class="k">Satisfação</div><div class="v">4,4<small>/ 5</small></div><div class="h">pós-treinamento</div></div>
+            <div><div class="k">Esforço</div><div class="v">2,1<small>/ 7</small></div><div class="h">menor é melhor</div></div>
+          </div>
+          <div class="nps">
+            <div class="t"><span>Promotores 58%</span><span>Neutros 26%</span><span>Detratores 16%</span></div>
+            <div class="b"><i style="flex:58;background:var(--ok-bar)"></i><i style="flex:26;background:#d4d3cd"></i><i style="flex:16;background:var(--risk-bar)"></i></div>
+          </div>
+          <div class="vb"><div class="q">“O kickoff foi objetivo e saímos com um plano claro para as primeiras semanas.”</div><div class="m"><span class="st ok">Positivo</span><span class="st neu">Kickoff</span><span class="sp"></span>Arco Farma · 2 d</div></div>
+          <div class="vb"><div class="q">“A integração exigiu muitas idas e vindas com o nosso time de TI.”</div><div class="m"><span class="st risk">Negativo</span><span class="st neu">Integração</span><span class="sp"></span>Mirante Agro · 4 d</div></div>
+          <div class="vb"><div class="q">“O treinamento gravado ajudou quem entrou depois no projeto.”</div><div class="m"><span class="st ok">Positivo</span><span class="st neu">Treinamento</span><span class="sp"></span>Linea Móveis · 6 d</div></div>
+          <div class="sv"><div class="svh">Pesquisas programadas</div>
+            <div class="svr"><svg class="i s13"><use href="#smile"/></svg>NPS de 90 dias · 3 contas<span class="sp"></span><span class="when">12 nov</span></div>
+            <div class="svr"><svg class="i s13"><use href="#pulse"/></svg>Esforço pós-integração · 2 contas<span class="sp"></span><span class="when">14 nov</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

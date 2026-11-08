@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>Human + AI methodology - delivery board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0a0a0a;--card:#131313;--line:#262626;--line2:#1f1f1f;--fg:#fafafa;--mut:#a3a3a3;--dim:#737373;--acc:#FFBE00;--ok:#4ade80;--warn:#fbbf24;--bad:#f87171}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1440px;height:900px;overflow:hidden}
+  body{background:var(--bg);color:var(--fg);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;display:flex}
+  .mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+  svg.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+  svg.i.sm{width:13px;height:13px}
+  svg.i.xs{width:11px;height:11px;stroke-width:2.3}
+
+  .rail{width:56px;flex:none;border-right:1px solid var(--line2);display:flex;flex-direction:column;align-items:center;padding-top:14px;gap:6px;background:#0c0c0c}
+  .logo{width:30px;height:30px;border-radius:8px;background:var(--acc);color:#0a0a0a;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;margin-bottom:14px}
+  .rail span{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:#737373}
+  .rail span.on{background:#1a1a1a;color:var(--fg);border:1px solid #2a2a2a}
+  .rail .me{margin-top:auto;margin-bottom:16px;width:30px;height:30px;border-radius:999px;background:#262626;color:#d4d4d4;font-size:11px;font-weight:600}
+
+  .main{flex:1;min-width:0;display:flex;flex-direction:column;padding:0 28px}
+  .top{height:52px;flex:none;border-bottom:1px solid var(--line2);display:flex;align-items:center;gap:8px;font-size:13px;color:var(--dim);margin:0 -28px;padding:0 28px}
+  .top b{color:#d4d4d4;font-weight:500}
+  .top .sep{color:#404040}
+  .top .search{margin-left:auto;display:flex;align-items:center;gap:8px;width:260px;height:32px;border:1px solid var(--line);border-radius:8px;padding:0 10px;color:#6b6b6b;font-size:12.5px;background:#0f0f0f}
+  .top .search kbd{margin-left:auto;font-family:"JetBrains Mono",monospace;font-size:10.5px;border:1px solid #2a2a2a;border-radius:4px;padding:0 5px;color:#8a8a8a}
+
+  .hd{display:flex;align-items:flex-end;justify-content:space-between;margin-top:22px}
+  .eyebrow{font-size:10.5px;letter-spacing:.16em;color:var(--acc);text-transform:uppercase}
+  h1{font-size:26px;font-weight:600;letter-spacing:-.02em;margin-top:8px}
+  .lead{font-size:13px;color:var(--mut);margin-top:6px}
+  .kpis{display:flex;border:1px solid var(--line);border-radius:12px;background:#101010}
+  .kpi{padding:10px 18px;min-width:132px}
+  .kpi+.kpi{border-left:1px solid var(--line2)}
+  .kpi b{display:block;font-size:20px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .kpi span{font-size:11px;color:var(--dim)}
+
+  .fbar{display:flex;align-items:center;gap:8px;margin-top:18px}
+  .fc{font-size:12px;color:var(--mut);border:1px solid var(--line);border-radius:999px;padding:4px 11px;background:#0f0f0f;display:inline-flex;align-items:center;gap:6px}
+  .fc.on{color:var(--fg);border-color:#3a3a3a;background:#1a1a1a}
+  .legend{margin-left:auto;display:flex;gap:16px;font-size:11.5px;color:var(--mut)}
+  .legend span{display:flex;align-items:center;gap:6px}
+  .lg{width:9px;height:9px;border-radius:3px}
+
+  .board{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-top:14px;height:606px}
+  .col{background:rgba(17,17,17,.6);border:1px solid var(--line2);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:8px;min-width:0}
+  .col.ag{background:rgba(255,190,0,.022);border-color:rgba(255,190,0,.13)}
+  .ch{display:flex;align-items:center;gap:7px;padding:2px 2px 4px}
+  .ch .t{font-size:12.5px;font-weight:600;white-space:nowrap}
+  .ch .c{font-size:11px;color:var(--dim);margin-left:auto;font-family:"JetBrains Mono",monospace}
+  .who{font-size:10.5px;color:var(--dim);display:block;margin:-6px 2px 2px;white-space:nowrap}
+  .cd{background:var(--card);border:1px solid #272727;border-radius:11px;padding:10px 11px;display:flex;flex-direction:column;gap:7px}
+  .cd.hot{border-color:rgba(255,190,0,.45);box-shadow:0 10px 30px -18px rgba(255,190,0,.4)}
+  .cd .r1{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--dim)}
+  .cd .r1 .id{font-family:"JetBrains Mono",monospace;color:#bdbdbd}
+  .cd .r1 .sys{margin-left:auto;font-family:"JetBrains Mono",monospace;font-size:10px}
+  .cd .tt{font-size:12.5px;font-weight:500;line-height:1.35;color:#f0f0f0}
+  .tags{display:flex;flex-wrap:wrap;gap:4px}
+  .tg{font-size:10px;border-radius:999px;padding:1px 7px;border:1px solid #2f2f2f;color:#cfcfcf;background:#1a1a1a;display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+  .tg.y{border-color:rgba(255,190,0,.4);color:var(--acc);background:rgba(255,190,0,.07)}
+  .tg.g{border-color:rgba(74,222,128,.3);color:var(--ok);background:rgba(74,222,128,.06)}
+  .tg.w{border-color:rgba(251,191,36,.35);color:var(--warn);background:rgba(251,191,36,.06)}
+  .tg.r{border-color:rgba(248,113,113,.38);color:#fca5a5;background:rgba(248,113,113,.07)}
+  .ft{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--dim);white-space:nowrap}
+  .ft .av{width:20px;height:20px;border-radius:999px;background:#262626;color:#e5e5e5;font-size:8.5px;font-weight:600;display:flex;align-items:center;justify-content:center;flex:none}
+  .ft .av.ai{background:rgba(255,190,0,.16);color:var(--acc);border:1px solid rgba(255,190,0,.35)}
+  .ft .rt{margin-left:auto;display:inline-flex;align-items:center;gap:4px}
+  .rv{display:flex;gap:4px}
+  .rv b{width:16px;height:16px;border-radius:5px;font-size:8.5px;display:flex;align-items:center;justify-content:center;font-weight:700;color:#0a0a0a;position:relative}
+  .rv b i{position:absolute;right:-3px;bottom:-3px;width:8px;height:8px;border-radius:999px;border:1.5px solid var(--card)}
+  .bar{height:4px;border-radius:999px;background:#232323;overflow:hidden}
+  .bar i{display:block;height:100%;border-radius:999px;background:#fafafa}
+  .dod{display:flex;gap:3px}
+  .dod i{flex:1;height:3px;border-radius:2px;background:#2a2a2a}
+  .dod i.on{background:var(--ok)}
+
+  .done{display:flex;align-items:center;margin-top:14px;border:1px solid var(--line);border-radius:12px;background:rgba(18,18,18,.85);height:52px;padding:0 18px;gap:20px}
+  .done .l{font-size:10.5px;letter-spacing:.16em;color:var(--acc);text-transform:uppercase;white-space:nowrap}
+  .done .it{display:flex;align-items:center;gap:7px;font-size:12px;color:#d4d4d4;white-space:nowrap}
+  .done .it .ck{width:18px;height:18px;border-radius:6px;background:#1a1a1a;border:1px solid #2c2c2c;display:flex;align-items:center;justify-content:center;color:var(--ok)}
+  .done .sp{width:1px;height:20px;background:#262626}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="pr" viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" x2="6" y1="9" y2="21"/></symbol>
+  <symbol id="merge" viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/></symbol>
+  <symbol id="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
+  <symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="kanban" viewBox="0 0 24 24"><path d="M6 5v11"/><path d="M12 5v6"/><path d="M18 5v14"/></symbol>
+  <symbol id="code" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></symbol>
+  <symbol id="book" viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/></symbol>
+  <symbol id="rocket" viewBox="0 0 24 24"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></symbol>
+  <symbol id="refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+  <symbol id="file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></symbol>
+  <symbol id="tag" viewBox="0 0 24 24"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/></symbol>
+  <symbol id="undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/></symbol>
+  <symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+  <symbol id="filter" viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></symbol>
+</svg>
+
+<aside class="rail">
+  <div class="logo">m</div>
+  <span class="on"><svg class="i"><use href="#kanban"/></svg></span>
+  <span><svg class="i"><use href="#pr"/></svg></span>
+  <span><svg class="i"><use href="#code"/></svg></span>
+  <span><svg class="i"><use href="#rocket"/></svg></span>
+  <span><svg class="i"><use href="#book"/></svg></span>
+  <span class="me">BT</span>
+</aside>
+
+<div class="main">
+  <div class="top">
+    <span>Technology team</span><span class="sep">/</span><b>Delivery board</b>
+    <span class="search"><svg class="i sm"><use href="#search"/></svg>Search issues, MRs and docs<kbd>⌘K</kbd></span>
+  </div>
+
+  <div class="hd">
+    <div>
+      <div class="eyebrow mono">Delivery board · November</div>
+      <h1>From scope to acceptance in production</h1>
+      <p class="lead">Cards move on their own, derived from the flow: issue, branch, MR, reviews, merge, deploy and acceptance.</p>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><b>3.5 days</b><span>scope to acceptance</span></div>
+      <div class="kpi"><b>1.8</b><span>review rounds per MR</span></div>
+      <div class="kpi"><b>0</b><span>deploys outside the pipeline</span></div>
+      <div class="kpi"><b>100%</b><span>with docs in done</span></div>
+    </div>
+  </div>
+
+  <div class="fbar">
+    <span class="fc on">All systems</span>
+    <span class="fc mono">customer-portal</span>
+    <span class="fc mono">billing-api</span>
+    <span class="fc mono">inventory-app</span>
+    <span class="fc"><svg class="i xs"><use href="#shield"/></svg>Critical path</span>
+    <span class="fc"><svg class="i xs"><use href="#filter"/></svg>Owner</span>
+    <div class="legend">
+      <span><i class="lg" style="background:#fafafa"></i>human step</span>
+      <span><i class="lg" style="background:#FFBE00"></i>agent step</span>
+    </div>
+  </div>
+
+  <div class="board">
+    <!-- 1 -->
+    <div class="col ag">
+      <div class="ch"><span class="t">Scoped issue</span><span class="c">3</span></div>
+      <span class="who">agent drafts · dev approves</span>
+      <div class="cd">
+        <div class="r1"><span class="id">#244</span><span class="sys">billing-api</span></div>
+        <div class="tt">Date-range filter on the customer statement</div>
+        <div class="tags"><span class="tg g"><svg class="i xs"><use href="#check"/></svg>scope approved</span><span class="tg">done: 3 criteria</span></div>
+        <div class="ft"><span class="av">AR</span>Ana Ribeiro asked<span class="rt">today</span></div>
+      </div>
+      <div class="cd">
+        <div class="r1"><span class="id">#246</span><span class="sys">inventory-app</span></div>
+        <div class="tt">Email alert when stock hits the minimum</div>
+        <div class="tags"><span class="tg w">awaiting dev approval</span></div>
+        <div class="ft"><span class="av">FL</span>Fábio Lins asked<span class="rt">today</span></div>
+      </div>
+      <div class="cd">
+        <div class="r1"><span class="id">#245</span><span class="sys">customer-portal</span></div>
+        <div class="tt">Rounding on discounted order totals</div>
+        <div class="tags"><span class="tg r"><svg class="i xs"><use href="#undo"/></svg>rejected in production · #222</span></div>
+        <div class="ft"><span class="av">CM</span>Carla Mendes<span class="rt">yesterday</span></div>
+      </div>
+    </div>
+
+    <!-- 2 -->
+    <div class="col ag">
+      <div class="ch"><span class="t">In progress</span><span class="c">3</span></div>
+      <span class="who">executor agent · isolated branch</span>
+      <div class="cd">
+        <div class="r1"><span class="id">#239</span><span class="sys">customer-portal</span></div>
+        <div class="tt">Resend invoices from the portal</div>
+        <div class="tags"><span class="tg mono">feat/resend-invoice</span><span class="tg">4 commits</span></div>
+        <div class="dod"><i class="on"></i><i class="on"></i><i></i><i></i></div>
+        <div class="ft"><span class="av ai">IA</span>executor<span class="rt"><span class="tg w">docs pending</span></span></div>
+      </div>
+      <div class="cd">
+        <div class="r1"><span class="id">#241</span><span class="sys">inventory-app</span></div>
+        <div class="tt">Role-based permissions in the inventory module</div>
+        <div class="tags"><span class="tg y"><svg class="i xs"><use href="#shield"/></svg>critical path</span><span class="tg g"><svg class="i xs"><use href="#file"/></svg>docs</span></div>
+        <div class="dod"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></div>
+        <div class="ft"><span class="av ai">IA</span>executor<span class="rt">MR in 1h</span></div>
+      </div>
+      <div class="cd">
+        <div class="r1"><span class="id">#242</span><span class="sys">billing-api</span></div>
+        <div class="tt">Retry limit when sending billing notices</div>
+        <div class="tags"><span class="tg mono">fix/billing-retry</span><span class="tg g"><svg class="i xs"><use href="#file"/></svg>docs</span></div>
+        <div class="dod"><i class="on"></i><i></i><i></i><i></i></div>
+        <div class="ft"><span class="av ai">IA</span>executor<span class="rt">started 20 min ago</span></div>
+      </div>
+    </div>
+
+    <!-- 3 -->
+    <div class="col ag">
+      <div class="ch"><span class="t">In review</span><span class="c">3</span></div>
+      <span class="who">different models · fresh sessions</span>
+      <div class="cd hot">
+        <div class="r1"><span class="id">!251 · #238</span><span class="sys">billing-api</span></div>
+        <div class="tt">Price spreadsheet import with validation</div>
+        <div class="rv">
+          <b style="background:#FFBE00">A<i style="background:#4ade80"></i></b>
+          <b style="background:#fafafa">B<i style="background:#fbbf24"></i></b>
+          <b style="background:#8b8b8b">C<i style="background:#4ade80"></i></b>
+        </div>
+        <div class="tags"><span class="tg w">2 open findings · P2</span></div>
+        <div class="ft"><svg class="i xs"><use href="#refresh"/></svg>round 1<span class="rt">back to executor</span></div>
+      </div>
+      <div class="cd">
+        <div class="r1"><span class="id">!250 · #240</span><span class="sys">inventory-app</span></div>
+        <div class="tt">Typo-tolerant SKU search</div>
+        <div class="rv">
+          <b style="background:#FFBE00">A<i style="background:#4ade80"></i></b>
+          <b style="background:#fafafa">B<i style="background:#4ade80"></i></b>
+          <b style="background:#8b8b8b">C<i style="background:#525252"></i></b>
+        </div>
+        <div class="tags"><span class="tg">mutation: 0 survivors</span></div>
+        <div class="ft"><svg class="i xs"><use href="#refresh"/></svg>round 2<span class="rt">C reviewing</span></div>
+      </div>
+      <div class="cd">
+        <div class="r1"><span class="id">!252 · #243</span><span class="sys">customer-portal</span></div>
+        <div class="tt">Shipping quote cache in the cart</div>
+        <div class="rv">
+          <b style="background:#FFBE00">A<i style="background:#525252"></i></b>
+          <b style="background:#fafafa">B<i style="background:#525252"></i></b>
+          <b style="background:#8b8b8b">C<i style="background:#525252"></i></b>
+        </div>
+        <div class="ft"><svg class="i xs"><use href="#refresh"/></svg>round 1<span class="rt">3 reviewers running</span></div>
+      </div>
+    </div>
+
+    <!-- 4 -->
+    <div class="col">
+      <div class="ch"><span class="t">Owner merge</span><span class="c">2</span></div>
+      <span class="who">human · all green on the same head</span>
+      <div class="cd">
+        <div class="r1"><span class="id">!248 · #231</span><span class="sys">customer-portal</span></div>
+        <div class="tt">Batch report export</div>
+        <div class="rv">
+          <b style="background:#FFBE00">A<i style="background:#4ade80"></i></b>
+          <b style="background:#fafafa">B<i style="background:#4ade80"></i></b>
+          <b style="background:#8b8b8b">C<i style="background:#4ade80"></i></b>
+        </div>
+        <div class="tags"><span class="tg g"><svg class="i xs"><use href="#check"/></svg>CI green</span><span class="tg g"><svg class="i xs"><use href="#file"/></svg>docs</span><span class="tg y"><svg class="i xs"><use href="#shield"/></svg>human review done</span></div>
+        <div class="ft"><span class="av">BT</span>Bruno Teixeira<span class="rt"><svg class="i xs"><use href="#merge"/></svg>merge</span></div>
+      </div>
+      <div class="cd">
+        <div class="r1"><span class="id">!249 · #235</span><span class="sys">inventory-app</span></div>
+        <div class="tt">Returns screen with a required reason</div>
+        <div class="rv">
+          <b style="background:#FFBE00">A<i style="background:#4ade80"></i></b>
+          <b style="background:#fafafa">B<i style="background:#4ade80"></i></b>
+          <b style="background:#8b8b8b">C<i style="background:#4ade80"></i></b>
+        </div>
+        <div class="tags"><span class="tg w"><svg class="i xs"><use href="#clock"/></svg>CI running on new head</span></div>
+        <div class="ft"><span class="av">DA</span>Diego Alves<span class="rt">awaiting CI</span></div>
+      </div>
+    </div>
+
+    <!-- 5 -->
+    <div class="col">
+      <div class="ch"><span class="t">Awaiting acceptance</span><span class="c">3</span></div>
+      <span class="who">in production · up to 5 business days</span>
+      <div class="cd">
+        <div class="r1"><span class="id">#226</span><span class="sys mono">v2.13.0</span></div>
+        <div class="tt">Order change history</div>
+        <div class="bar"><i style="width:40%"></i></div>
+        <div class="ft"><span class="av">CM</span>Carla Mendes<span class="rt">day 2 of 5</span></div>
+      </div>
+      <div class="cd">
+        <div class="r1"><span class="id">#229</span><span class="sys mono">v1.9.2</span></div>
+        <div class="tt">Export statement as CSV</div>
+        <div class="bar"><i style="width:80%"></i></div>
+        <div class="tags"><span class="tg"><svg class="i xs"><use href="#clock"/></svg>auto-accepts tomorrow</span></div>
+        <div class="ft"><span class="av">AR</span>Ana Ribeiro<span class="rt">day 4 of 5</span></div>
+      </div>
+      <div class="cd">
+        <div class="r1"><span class="id">#230</span><span class="sys mono">v2.13.1</span></div>
+        <div class="tt">Alert for orders stuck in picking</div>
+        <div class="bar"><i style="width:20%"></i></div>
+        <div class="ft"><span class="av">EP</span>Elisa Prado<span class="rt">day 1 of 5</span></div>
+      </div>
+    </div>
+
+    <!-- 6 -->
+    <div class="col">
+      <div class="ch"><span class="t">Accepted</span><span class="c">3</span></div>
+      <span class="who">closed by the requester</span>
+      <div class="cd">
+        <div class="r1"><span class="id">#224</span><span class="sys mono">v2.12.1</span></div>
+        <div class="tt">Payment confirmed webhook</div>
+        <div class="tags"><span class="tg g"><svg class="i xs"><use href="#check"/></svg>accepted</span><span class="tg y"><svg class="i xs"><use href="#shield"/></svg>critical</span></div>
+        <div class="ft"><span class="av">DA</span>Diego Alves<span class="rt">2.5 days</span></div>
+      </div>
+      <div class="cd">
+        <div class="r1"><span class="id">#221</span><span class="sys mono">v1.9.0</span></div>
+        <div class="tt">Inventory turnover report</div>
+        <div class="tags"><span class="tg g"><svg class="i xs"><use href="#check"/></svg>accepted by silence</span></div>
+        <div class="ft"><span class="av">FL</span>Fábio Lins<span class="rt">5 business days</span></div>
+      </div>
+      <div class="cd">
+        <div class="r1"><span class="id">#219</span><span class="sys mono">v2.12.0</span></div>
+        <div class="tt">Sign-in with an email link</div>
+        <div class="tags"><span class="tg g"><svg class="i xs"><use href="#check"/></svg>accepted</span></div>
+        <div class="ft"><span class="av">EP</span>Elisa Prado<span class="rt">3 days</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="done">
+    <span class="l mono">Done means</span>
+    <span class="it"><span class="ck"><svg class="i xs"><use href="#check"/></svg></span>issue criteria met</span><span class="sp"></span>
+    <span class="it"><span class="ck"><svg class="i xs"><use href="#check"/></svg></span>APPROVED by all on the same head</span><span class="sp"></span>
+    <span class="it"><span class="ck"><svg class="i xs"><use href="#check"/></svg></span>docs in the same MR</span><span class="sp"></span>
+    <span class="it"><span class="ck"><svg class="i xs"><use href="#check"/></svg></span>tagged deploy</span><span class="sp"></span>
+    <span class="it"><span class="ck"><svg class="i xs"><use href="#check"/></svg></span>accepted in production</span>
+  </div>
+</div>
+</body>
+</html>

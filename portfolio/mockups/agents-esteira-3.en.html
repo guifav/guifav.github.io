@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>Agent pipeline - lead time</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1440px;height:900px;overflow:hidden}
+  body{font-family:'Inter',-apple-system,sans-serif;-webkit-font-smoothing:antialiased;display:flex;background:#fafafa;color:#18181b}
+  svg.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+  svg.i.sm{width:14px;height:14px} svg.i.xs{width:12px;height:12px}
+  .mono{font-family:'JetBrains Mono',ui-monospace,monospace}
+
+  .side{width:232px;flex:none;background:#fff;border-right:1px solid #e4e4e7;display:flex;flex-direction:column;padding:18px 14px}
+  .brand{display:flex;align-items:center;gap:10px;padding:0 6px 20px}
+  .brand .mk{width:30px;height:30px;border-radius:8px;background:#18181b;color:#fafafa;display:flex;align-items:center;justify-content:center}
+  .brand b{font-size:14.5px;font-weight:600;letter-spacing:-.01em}
+  .brand span{display:block;font-size:11.5px;color:#71717a;font-weight:400}
+  .nav{display:flex;flex-direction:column;gap:2px}
+  .nav a{display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;border-radius:8px;font-size:13.5px;color:#52525b}
+  .nav a.on{background:#f4f4f5;color:#18181b;font-weight:600}
+  .nav a em{margin-left:auto;font-style:normal;font-size:11px;font-weight:600;background:#18181b;color:#fff;border-radius:999px;padding:0 7px;line-height:18px}
+  .sl{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#a1a1aa;padding:22px 10px 8px}
+  .app{display:flex;align-items:center;gap:9px;padding:6px 10px;font-size:13px;color:#3f3f46}
+  .app i{width:8px;height:8px;border-radius:3px;display:block}
+  .app span{margin-left:auto;font-size:11.5px;color:#a1a1aa;font-variant-numeric:tabular-nums}
+  .today{margin-top:22px;border:1px solid #e4e4e7;border-radius:12px;padding:12px;background:#fafafa}
+  .today .k{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#a1a1aa}
+  .today .g{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+  .today b{display:block;font-size:18px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .today span{font-size:11px;color:#71717a}
+  .who{margin-top:auto;display:flex;align-items:center;gap:10px;padding:10px;border:1px solid #e4e4e7;border-radius:12px}
+  .who .av{width:30px;height:30px;border-radius:999px;background:#e8e3d8;color:#57534e;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600}
+  .who b{font-size:13px;font-weight:600;display:block}
+  .who span{font-size:11.5px;color:#71717a}
+
+  .main{flex:1;min-width:0;padding:24px 28px;display:flex;flex-direction:column;gap:18px}
+  .hd{display:flex;align-items:flex-end;justify-content:space-between}
+  .eyebrow{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#71717a}
+  h1{font-size:24px;font-weight:600;letter-spacing:-.02em;margin-top:6px}
+  .sub{font-size:13px;color:#71717a;margin-top:3px}
+  .acts{display:flex;align-items:center;gap:8px}
+  .live{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:500;color:#15803d;background:#f0fdf4;border:1px solid #bbf7d0;padding:4px 11px;border-radius:999px}
+  .live i{width:7px;height:7px;border-radius:999px;background:#16a34a;display:block;box-shadow:0 0 0 3px rgba(22,163,74,.15)}
+  .btn{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:500;border:1px solid #e4e4e7;background:#fff;border-radius:8px;padding:7px 12px;color:#3f3f46}
+
+  .agents{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .ag{background:#fff;border:1px solid #e4e4e7;border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+  .ag.busy{border-color:#18181b;box-shadow:0 10px 30px -18px rgba(0,0,0,.35)}
+  .ah{display:flex;align-items:center;gap:10px}
+  .ah .ic{width:34px;height:34px;border-radius:10px;background:#18181b;color:#fafafa;display:flex;align-items:center;justify-content:center}
+  .ah b{font-size:15px;font-weight:600;display:block}
+  .ah>div{min-width:0}
+  .ah .md{font-size:11.5px;color:#71717a;white-space:nowrap}
+  .stt{margin-left:auto;display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:500;border-radius:999px;padding:2px 9px;border:1px solid}
+  .stt i{width:6px;height:6px;border-radius:999px;display:block}
+  .stt.run{color:#1d4ed8;background:#eff6ff;border-color:#bfdbfe}.stt.run i{background:#2563eb}
+  .stt.idle{color:#52525b;background:#f4f4f5;border-color:#e4e4e7}.stt.idle i{background:#a1a1aa}
+  .stt.watch{color:#15803d;background:#f0fdf4;border-color:#bbf7d0}.stt.watch i{background:#16a34a}
+  .role{font-size:12.5px;color:#52525b;line-height:1.45;min-height:54px}
+  .now{background:#fafafa;border:1px solid #f0f0f1;border-radius:10px;padding:8px 10px;font-size:12px;color:#3f3f46;line-height:1.4;height:62px;overflow:hidden}
+  .now .k{font-size:10.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:#a1a1aa;display:block;margin-bottom:2px}
+  .now code{font-family:'JetBrains Mono',monospace;font-size:11px;background:#fff;border:1px solid #ececee;border-radius:5px;padding:0 5px;color:#18181b}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid #f0f0f1;padding-top:10px}
+  .stats div+div{border-left:1px solid #f0f0f1;padding-left:10px}
+  .stats b{display:block;font-size:17px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .stats span{font-size:10.5px;color:#71717a;line-height:1.3;display:block;white-space:nowrap}
+  .spark{display:flex;align-items:flex-end;gap:2px;height:24px}
+  .spark i{flex:1;background:#d4d4d8;border-radius:2px 2px 0 0;display:block}
+  .spark i:last-child{background:#18181b}
+  .spl{display:none}
+
+  .lower{display:grid;grid-template-columns:1fr 330px;gap:14px;flex:1;min-height:0}
+  .panel{background:#fff;border:1px solid #e4e4e7;border-radius:14px;overflow:hidden;display:flex;flex-direction:column}
+  .ph{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #f0f0f1;flex:none}
+  .ph b{font-size:14px;font-weight:600}
+  .ph span{font-size:12px;color:#71717a}
+  table{width:100%;border-collapse:collapse;font-size:12.5px;table-layout:fixed}
+  th{text-align:left;font-size:11px;font-weight:600;color:#a1a1aa;text-transform:uppercase;letter-spacing:.05em;padding:0 14px;height:34px;border-bottom:1px solid #f0f0f1;background:#fcfcfc}
+  td{padding:0 14px;height:51px;overflow:hidden;border-bottom:1px solid #f4f4f5;color:#3f3f46;white-space:nowrap}
+  tr:last-child td{border-bottom:none}
+  td .tt{color:#18181b;font-weight:500;overflow:hidden;text-overflow:ellipsis;display:block}
+  td .id{font-family:'JetBrains Mono',monospace;font-size:11px;color:#71717a}
+  .pp{font-size:11px;font-weight:600;border-radius:999px;padding:1px 8px;border:1px solid}
+  .pp.p0{background:#fef2f2;border-color:#fecaca;color:#b91c1c}
+  .pp.p1{background:#fff7ed;border-color:#fed7aa;color:#c2410c}
+  .pp.p2{background:#fefce8;border-color:#fde68a;color:#a16207}
+  .pp.p3{background:#f4f4f5;border-color:#e4e4e7;color:#52525b}
+  .pp.p4{background:#fff;border-color:#e4e4e7;color:#a1a1aa}
+  .stp{display:flex;align-items:center}
+  .steps{display:flex;align-items:center;gap:3px}
+  .steps i{width:11px;height:5px;border-radius:999px;background:#e4e4e7;display:block}
+  .steps i.d{background:#18181b}
+  .steps i.c{background:#2563eb}
+  .steps i.h{background:#fff;border:1.5px solid #18181b;height:7px}
+  .stg{font-size:12px;color:#52525b;margin-left:8px}
+  .agt{display:inline-flex;align-items:center;gap:6px;font-size:12px}
+  .agt i{width:18px;height:18px;border-radius:6px;background:#18181b;color:#fff;display:flex;align-items:center;justify-content:center}
+  .agt i.hu{background:#fff;border:1.5px solid #18181b;color:#18181b}
+  .tm{color:#a1a1aa;font-variant-numeric:tabular-nums;text-align:right}
+
+  .rcol{display:flex;flex-direction:column;gap:14px;min-height:0}
+  .prio{padding:10px 16px 12px;display:flex;flex-direction:column;gap:7px}
+  .pr{display:grid;grid-template-columns:30px 1fr 26px;align-items:center;gap:10px;font-size:12px}
+  .pr .tr{height:8px;border-radius:999px;background:#f4f4f5;overflow:hidden}
+  .pr .tr i{display:block;height:100%;border-radius:999px;background:#18181b}
+  .pr b{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+  .rule{font-size:11.5px;color:#71717a;border-top:1px solid #f0f0f1;padding-top:8px;line-height:1.4}
+  .wait{background:#18181b;color:#fafafa;border-radius:14px;padding:14px 16px;display:flex;flex-direction:column;gap:8px}
+  .wait .k{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#a1a1aa}
+  .wait b.big{font-size:15px;font-weight:600}
+  .wi{display:flex;align-items:center;gap:8px;font-size:12.5px;color:#e4e4e7;background:#27272a;border-radius:9px;padding:8px 10px}
+  .wi code{font-family:'JetBrains Mono',monospace;font-size:11px;color:#a1a1aa}
+  .wi span{margin-left:auto;font-size:11px;color:#86efac}
+  .wbtn{display:flex;align-items:center;justify-content:center;gap:8px;background:#fafafa;color:#18181b;border-radius:999px;height:38px;font-size:13px;font-weight:600}
+
+  .main{gap:16px}
+  .seg2{display:inline-flex;border:1px solid #e4e4e7;border-radius:8px;background:#fff;padding:2px}
+  .seg2 span{font-size:12.5px;padding:5px 11px;border-radius:6px;color:#52525b}
+  .seg2 span.on{background:#18181b;color:#fff;font-weight:500}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .kp{background:#fff;border:1px solid #e4e4e7;border-radius:14px;padding:14px 16px}
+  .kp .l{font-size:12px;color:#71717a}
+  .kp b{display:block;font-size:26px;font-weight:700;letter-spacing:-.03em;margin-top:4px;font-variant-numeric:tabular-nums}
+  .kp .d{font-size:11.5px;color:#71717a;margin-top:2px}
+  .kp .d.up{color:#15803d;font-weight:500}
+  .mid{display:grid;grid-template-columns:646px 1fr;gap:14px}
+  .cp{background:#fff;border:1px solid #e4e4e7;border-radius:14px;padding:14px 16px}
+  .ct{display:flex;justify-content:space-between;align-items:baseline}
+  .ct b{font-size:14px;font-weight:600}
+  .ct span{font-size:12px;color:#71717a}
+  .ax{font-size:10.5px;fill:#a1a1aa;font-family:Inter,sans-serif}
+  .lb{font-size:11px;fill:#52525b;font-family:Inter,sans-serif;font-weight:500}
+  .lb.halo{paint-order:stroke;stroke:#fff;stroke-width:4px;stroke-linejoin:round}
+  .lb.strong{font-size:13px;fill:#18181b;font-weight:700}
+  .stack{display:flex;gap:2px;height:14px;margin-top:16px}
+  .stack i{display:block;border-radius:3px}
+  .sl2{margin-top:12px;display:flex;flex-direction:column}
+  .sr{display:grid;grid-template-columns:12px 1fr 70px 62px 38px;align-items:center;gap:10px;height:30px;border-bottom:1px solid #f4f4f5;font-size:12.5px}
+  .sr i{width:10px;height:10px;border-radius:3px;display:block}
+  .sr .sn{color:#18181b;font-weight:500}
+  .sr .sw{font-size:11px;color:#71717a;justify-self:start;border:1px solid #e4e4e7;border-radius:999px;padding:0 7px}
+  .sr .sw.hu{border-color:#18181b;color:#18181b;font-weight:600}
+  .sr b{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+  .sr .sp{text-align:right;color:#71717a;font-variant-numeric:tabular-nums}
+  .ins{margin-top:10px;font-size:12px;color:#3f3f46;background:#fafafa;border:1px solid #f0f0f1;border-radius:10px;padding:8px 10px;line-height:1.45}
+  .tbl{background:#fff;border:1px solid #e4e4e7;border-radius:14px;overflow:hidden;flex:1;min-height:0}
+  .tbl .ph .lg{display:flex;gap:14px;font-size:11.5px;color:#52525b}
+  .tbl .ph .lg span{display:inline-flex;align-items:center;gap:6px}
+  .tbl .ph .lg i{width:9px;height:9px;border-radius:3px;display:block}
+  .tbl td{height:38px}
+  .tl{display:flex;gap:2px;align-items:center;height:12px}
+  .tl i{display:block;height:12px;border-radius:3px;position:relative}
+  .tl i em{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-style:normal;font-size:10px;font-weight:600;color:#422006}
+  .ticks{position:relative;height:12px;width:520px}
+  .ticks span{position:absolute;top:0;transform:translateX(-50%);font-size:10px;color:#a1a1aa;font-weight:500;letter-spacing:0;text-transform:none}
+  .ticks span:first-child{transform:none}
+  .tm b{color:#18181b;font-weight:600}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="flow" viewBox="0 0 24 24"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></symbol>
+  <symbol id="home" viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="inbox" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+  <symbol id="bot" viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></symbol>
+  <symbol id="pr" viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" x2="6" y1="9" y2="21"/></symbol>
+  <symbol id="chart" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></symbol>
+  <symbol id="plug" viewBox="0 0 24 24"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></symbol>
+  <symbol id="filter" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M7 12h10"/><path d="M10 18h4"/></symbol>
+  <symbol id="code" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></symbol>
+  <symbol id="shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="eye" viewBox="0 0 24 24"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="merge" viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/></symbol>
+  <symbol id="pause" viewBox="0 0 24 24"><rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/></symbol>
+  <symbol id="user" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+  <symbol id="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+</svg>
+
+<aside class="side">
+  <div class="brand"><span class="mk"><svg class="i sm"><use href="#flow"/></svg></span><div><b>Agent pipeline</b><span>4 connected apps</span></div></div>
+  <nav class="nav">
+    <a><svg class="i"><use href="#home"/></svg>Overview</a>
+    <a><svg class="i"><use href="#inbox"/></svg>Tickets<em>7</em></a>
+    <a><svg class="i"><use href="#bot"/></svg>Agents</a>
+    <a><svg class="i"><use href="#pr"/></svg>Pull requests</a>
+    <a class="on"><svg class="i"><use href="#chart"/></svg>Lead time</a>
+    <a><svg class="i"><use href="#plug"/></svg>Widget and apps</a>
+  </nav>
+  <div class="sl">Apps</div>
+  <div class="app"><i style="background:#1f4d3f"></i>lumen-rooms<span>3</span></div>
+  <div class="app"><i style="background:#2b467d"></i>atlas-stock<span>2</span></div>
+  <div class="app"><i style="background:#9a3412"></i>timeclock<span>1</span></div>
+  <div class="app"><i style="background:#6b21a8"></i>route-delivery<span>1</span></div>
+  <div class="today"><span class="k">Today</span><div class="g"><div><b>9</b><span>widget reports</span></div><div><b>6</b><span>already live</span></div><div><b>1h48</b><span>median report to live</span></div><div><b>0</b><span>merges without you</span></div></div></div>
+  <div class="who"><span class="av">TB</span><div><b>Tiago Barros</b><span>owner · merges</span></div></div>
+</aside>
+
+<main class="main">
+  <div class="hd">
+    <div>
+      <div class="eyebrow">Lead time</div>
+      <h1>From user report to production</h1>
+      <p class="sub">Every step is logged: report, triage, issue, PR, validation, merge and deploy.</p>
+    </div>
+    <div class="acts">
+      <span class="btn">All apps<svg class="i xs" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span>
+      <span class="seg2"><span>7 days</span><span class="on">30 days</span><span>90 days</span></span>
+    </div>
+  </div>
+
+  <section class="kpis">
+    <div class="kp"><span class="l">median report to live</span><b>3h36</b><div class="d up">−38% vs. prior 30 days</div></div>
+    <div class="kp"><span class="l">merge to production</span><b>45 min</b><div class="d">median · 52 deploys</div></div>
+    <div class="kp"><span class="l">fastest case this month</span><b>1h31</b><div class="d">P1 on lumen-rooms</div></div>
+    <div class="kp"><span class="l">no intervention beyond the merge</span><b>86%</b><div class="d">14% asked for a human call first</div></div>
+  </section>
+
+  <section class="mid">
+    <div class="cp">
+      <div class="ct"><b>Weekly median, report to live</b><span>last 12 weeks · hours</span></div>
+      <div style="margin-top:8px"><svg width="612" height="252" viewBox="0 0 612 252">
+      <defs><linearGradient id="ga" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#2a78d6" stop-opacity=".16"/><stop offset="1" stop-color="#2a78d6" stop-opacity="0"/></linearGradient></defs>
+      <line x1="34" x2="596" y1="222.0" y2="222.0" stroke="#d4d4d8" stroke-width="1"/><text x="26" y="226.0" text-anchor="end" class="ax">0h</text><line x1="34" x2="596" y1="154.0" y2="154.0" stroke="#f0f0f1" stroke-width="1"/><text x="26" y="158.0" text-anchor="end" class="ax">4h</text><line x1="34" x2="596" y1="86.0" y2="86.0" stroke="#f0f0f1" stroke-width="1"/><text x="26" y="90.0" text-anchor="end" class="ax">8h</text><line x1="34" x2="596" y1="18.0" y2="18.0" stroke="#f0f0f1" stroke-width="1"/><text x="26" y="22.0" text-anchor="end" class="ax">12h</text><line x1="34" x2="596" y1="154.0" y2="154.0" stroke="#71717a" stroke-width="1" stroke-dasharray="4 4"/><text x="40" y="148.0" class="ax" style="fill:#52525b">target 4h</text>
+      <path d="M34.0,222 L34.0,18.0 L85.1,41.8 L136.2,62.2 L187.3,80.9 L238.4,92.8 L289.5,116.6 L340.5,128.5 L391.6,138.7 L442.7,145.5 L493.8,152.3 L544.9,157.4 L596.0,160.8 L596.0,222 Z" fill="url(#ga)"/>
+      <polyline points="34.0,18.0 85.1,41.8 136.2,62.2 187.3,80.9 238.4,92.8 289.5,116.6 340.5,128.5 391.6,138.7 442.7,145.5 493.8,152.3 544.9,157.4 596.0,160.8" fill="none" stroke="#2a78d6" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+      <circle cx="85.1" cy="41.8" r="3.5" fill="#fff" stroke="#2a78d6" stroke-width="2"/><circle cx="136.2" cy="62.2" r="3.5" fill="#fff" stroke="#2a78d6" stroke-width="2"/><circle cx="187.3" cy="80.9" r="3.5" fill="#fff" stroke="#2a78d6" stroke-width="2"/><circle cx="238.4" cy="92.8" r="3.5" fill="#fff" stroke="#2a78d6" stroke-width="2"/><circle cx="289.5" cy="116.6" r="3.5" fill="#fff" stroke="#2a78d6" stroke-width="2"/><circle cx="340.5" cy="128.5" r="3.5" fill="#fff" stroke="#2a78d6" stroke-width="2"/><circle cx="391.6" cy="138.7" r="3.5" fill="#fff" stroke="#2a78d6" stroke-width="2"/><circle cx="442.7" cy="145.5" r="3.5" fill="#fff" stroke="#2a78d6" stroke-width="2"/><circle cx="493.8" cy="152.3" r="3.5" fill="#fff" stroke="#2a78d6" stroke-width="2"/><circle cx="544.9" cy="157.4" r="3.5" fill="#fff" stroke="#2a78d6" stroke-width="2"/>
+      <circle cx="34.0" cy="18.0" r="4.5" fill="#2a78d6" stroke="#fff" stroke-width="2"/>
+      <text x="46.0" y="22.0" class="lb halo">1st measure · 12h</text>
+      <circle cx="596.0" cy="160.8" r="5" fill="#2a78d6" stroke="#fff" stroke-width="2"/>
+      <text x="596.0" y="182.8" text-anchor="end" class="lb strong">3h36</text>
+      <text x="34.0" y="242" text-anchor="start" class="ax">Aug 17</text><text x="187.3" y="242" text-anchor="middle" class="ax">Sep 7</text><text x="340.5" y="242" text-anchor="middle" class="ax">Sep 28</text><text x="493.8" y="242" text-anchor="middle" class="ax">Oct 19</text><text x="596.0" y="242" text-anchor="end" class="ax">Nov 2</text>
+    </svg></div>
+    </div>
+    <div class="cp">
+      <div class="ct"><b>Where the time goes</b><span>median per stage · 30 days</span></div>
+      <div class="stack"><i style="flex:1.20 0 0;background:#2a78d6"></i><i style="flex:18.98 0 0;background:#eb6834"></i><i style="flex:8.33 0 0;background:#1baf7a"></i><i style="flex:50.93 0 0;background:#eda100"></i><i style="flex:20.83 0 0;background:#e87ba4"></i></div>
+      <div class="sl2"><div class="sr"><i style="background:#2a78d6"></i><span class="sn">Triage</span><span class="sw">agent</span><b>2 min</b><span class="sp">1%</span></div><div class="sr"><i style="background:#eb6834"></i><span class="sn">Implementation</span><span class="sw">agent</span><b>41 min</b><span class="sp">19%</span></div><div class="sr"><i style="background:#1baf7a"></i><span class="sn">Validation</span><span class="sw">agent</span><b>18 min</b><span class="sp">8%</span></div><div class="sr"><i style="background:#eda100"></i><span class="sn">Waiting for merge</span><span class="sw hu">human</span><b>1h50</b><span class="sp">51%</span></div><div class="sr"><i style="background:#e87ba4"></i><span class="sn">Deploy</span><span class="sw">pipeline</span><b>45 min</b><span class="sp">21%</span></div></div>
+      <p class="ins">Half of the time is waiting for the human merge. It is the one decision the pipeline always leaves to a person.</p>
+    </div>
+  </section>
+
+  <section class="tbl">
+    <div class="ph"><b>Latest tickets shipped</b><div class="lg"><span><i style="background:#2a78d6"></i>Triage</span><span><i style="background:#eb6834"></i>Implementation</span><span><i style="background:#1baf7a"></i>Validation</span><span><i style="background:#eda100"></i>Waiting for merge</span><span><i style="background:#e87ba4"></i>Deploy</span></div></div>
+    <table>
+      <colgroup><col style="width:auto"><col style="width:130px"><col style="width:70px"><col style="width:556px"><col style="width:84px"></colgroup>
+      <thead><tr><th>Ticket</th><th>App</th><th>Prio.</th><th><div class="ticks"><span style="left:0.0px">0h</span><span style="left:115.6px">2h</span><span style="left:231.1px">4h</span><span style="left:346.7px">6h</span><span style="left:462.2px">8h</span></div></th><th style="text-align:right">Total</th></tr></thead>
+      <tbody><tr><td><span class="tt">Booking vanishes on month change</span><span class="id">FB-8KQ2</span></td><td>lumen-rooms</td><td><span class="pp p1">P1</span></td><td><div class="tl"><i style="width:3.0px;background:#2a78d6"></i><i style="width:35.6px;background:#eb6834"></i><i style="width:14.4px;background:#1baf7a"></i><i style="width:27.0px;background:#eda100"></i><i style="width:8.7px;background:#e87ba4"></i></div></td><td class="tm"><b>1h31</b></td></tr><tr><td><span class="tt">Save button duplicated the order</span><span class="id">FB-1VD9</span></td><td>route-delivery</td><td><span class="pp p1">P1</span></td><td><div class="tl"><i style="width:3.0px;background:#2a78d6"></i><i style="width:31.8px;background:#eb6834"></i><i style="width:11.6px;background:#1baf7a"></i><i style="width:21.2px;background:#eda100"></i><i style="width:36.6px;background:#e87ba4"></i></div></td><td class="tm"><b>1h46</b></td></tr><tr><td><span class="tt">Export froze at 10,000 rows</span><span class="id">FB-3QA6</span></td><td>atlas-stock</td><td><span class="pp p2">P2</span></td><td><div class="tl"><i style="width:3.0px;background:#2a78d6"></i><i style="width:46.2px;background:#eb6834"></i><i style="width:25.0px;background:#1baf7a"></i><i style="width:61.6px;background:#eda100"></i><i style="width:39.5px;background:#e87ba4"></i></div></td><td class="tm"><b>3h01</b></td></tr><tr><td><span class="tt">Negative balance after holiday</span><span class="id">FB-2MK8</span></td><td>timeclock</td><td><span class="pp p1">P1</span></td><td><div class="tl"><i style="width:3.0px;background:#2a78d6"></i><i style="width:50.1px;background:#eb6834"></i><i style="width:20.2px;background:#1baf7a"></i><i style="width:91.5px;background:#eda100"></i><i style="width:38.5px;background:#e87ba4"></i></div></td><td class="tm"><b>3h31</b></td></tr><tr><td><span class="tt">Date filter ignores time zone</span><span class="id">FB-5LC4</span></td><td>atlas-stock</td><td><span class="pp p2">P2</span></td><td><div class="tl"><i style="width:3.0px;background:#2a78d6"></i><i style="width:61.6px;background:#eb6834"></i><i style="width:28.9px;background:#1baf7a"></i><i style="width:173.3px;background:#eda100"></i><i style="width:42.4px;background:#e87ba4"></i></div></td><td class="tm"><b>5h20</b></td></tr><tr><td><span class="tt">Cut-off text on the receipt</span><span class="id">FB-6PE3</span></td><td>timeclock</td><td><span class="pp p3">P3</span></td><td><div class="tl"><i style="width:3.0px;background:#2a78d6"></i><i style="width:24.1px;background:#eb6834"></i><i style="width:8.7px;background:#1baf7a"></i><i style="width:394.8px;background:#eda100"><em>night</em></i><i style="width:44.3px;background:#e87ba4"></i></div></td><td class="tm"><b>8h12</b></td></tr></tbody>
+    </table>
+  </section>
+</main>
+</body>
+</html>

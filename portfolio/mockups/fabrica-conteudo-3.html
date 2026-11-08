@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>Asset Studio · DNA de marca</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #061723;
+    --gray-700: #4a4845;
+    --muted: #6b6966;
+    --gray-500: #767370;
+    --border: #e2e0dc;
+    --gray-50: #f5f4f2;
+    --page: #faf9f5;
+    --blue: #2563eb;
+    --blue-50: #eff4ff;
+    --blue-200: #d6e2fb;
+    --gold: #948459;
+    --success: #1a6b3a;
+    --error: #b33223;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1440px; height: 900px; overflow: hidden; }
+  body {
+    font-family: "Montserrat", -apple-system, "Helvetica Neue", Arial, sans-serif;
+    color: var(--navy);
+    background: #fff;
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "tnum" 0;
+  }
+  .i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+  .i-3 { width: 12px; height: 12px; }
+  .i-35 { width: 14px; height: 14px; }
+  .i-5 { width: 20px; height: 20px; }
+  .tnum { font-variant-numeric: tabular-nums; }
+  kbd { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+
+  /* ---------- Shell ---------- */
+  .shell { display: flex; flex-direction: column; height: 900px; }
+  header.top {
+    height: 48px; display: flex; align-items: center; padding: 0 16px;
+    border-bottom: 1px solid var(--border); background: #fff; flex-shrink: 0;
+  }
+  .brand { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+  .crumbs { display: flex; align-items: center; gap: 6px; margin-left: 8px; font-size: 14px; color: var(--muted); }
+  .crumbs .i { width: 14px; height: 14px; opacity: .6; }
+  .crumbs .cur { color: var(--navy); }
+  .spacer { flex: 1; }
+  .search-hint { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); margin-right: 12px; }
+  .search-hint kbd { border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; font-size: 10px; line-height: 15px; background: #fff; }
+  .back { font-size: 12px; color: var(--muted); margin-right: 10px; }
+  .avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, #0e3d5a, #061723); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; letter-spacing: .02em; }
+
+  .body { display: flex; flex: 1; min-height: 0; }
+
+  /* ---------- Sidebar ---------- */
+  aside {
+    width: 256px; flex-shrink: 0; border-right: 1px solid var(--border);
+    background: #fcfbf9; display: flex; flex-direction: column;
+  }
+  .side-top { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .row { display: flex; align-items: center; gap: 6px; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 6px; font-size: 14px; font-weight: 500; white-space: nowrap; }
+  .btn-primary { background: var(--blue); color: #fff; height: 32px; padding: 0 10px; flex: 1; box-shadow: 0 1px 2px rgba(37,99,235,.25); }
+  .btn-icon { width: 32px; height: 32px; color: var(--muted); }
+  .btn-ghost { height: 32px; padding: 0 10px; justify-content: flex-start; color: var(--muted); width: 100%; }
+  .side-label { padding: 4px 4px 0; font-size: 12px; font-weight: 500; color: var(--muted); }
+  .sessions { padding: 0 8px 12px; display: flex; flex-direction: column; gap: 12px; }
+  .grp h3 { padding: 0 8px 4px; font-size: 10px; font-weight: 500; color: rgba(107,105,102,.8); }
+  .grp ul { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+  .sess { display: flex; align-items: flex-start; gap: 8px; padding: 8px; border-radius: 6px; border: 1px solid transparent; font-size: 12px; color: rgba(6,23,35,.8); }
+  .sess.active { border-color: var(--border); background: rgba(239,244,255,.55); color: var(--navy); }
+  .sess .ic { margin-top: 2px; width: 20px; height: 20px; border-radius: 4px; border: 1px solid rgba(226,224,220,.8); background: rgba(255,255,255,.7); display: flex; align-items: center; justify-content: center; color: var(--muted); flex-shrink: 0; }
+  .sess .t { display: block; font-weight: 500; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sess .m { display: flex; gap: 4px; margin-top: 2px; font-size: 10px; color: var(--muted); white-space: nowrap; overflow: hidden; }
+  .sess .txt { min-width: 0; flex: 1; }
+
+
+  .nav { padding: 4px 8px; display: flex; flex-direction: column; gap: 2px; }
+  .nav a { display: flex; align-items: center; gap: 9px; height: 34px; padding: 0 10px; border-radius: 6px; font-size: 13px; color: var(--gray-700); font-weight: 500; }
+  .nav a .i { width: 15px; height: 15px; color: var(--muted); }
+  .nav a.on { background: rgba(239,244,255,.8); color: var(--blue); border: 1px solid var(--blue-200); }
+  .nav a.on .i { color: var(--blue); }
+  .nav a .c { margin-left: auto; font-size: 11px; color: var(--muted); }
+  .brandcard { margin: 6px 12px 12px; border: 1px solid var(--border); border-radius: 10px; background: #fff; padding: 12px; display: flex; gap: 10px; align-items: center; }
+  .brandcard .lg { width: 34px; height: 34px; border-radius: 8px; background: linear-gradient(135deg, #0e3d5a, #061723); color: #fff; font-weight: 700; font-size: 15px; display: flex; align-items: center; justify-content: center; }
+  .brandcard .n { font-size: 13px; font-weight: 600; }
+  .brandcard .s { font-size: 11px; color: var(--muted); }
+  main { flex: 1; min-width: 0; overflow: hidden; background: #fff; display: grid; grid-template-columns: minmax(0,1fr) 340px; }
+  .ed { padding: 24px 28px 0; overflow: hidden; }
+  .ph { display: flex; align-items: flex-start; justify-content: space-between; }
+  h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.015em; display: flex; align-items: center; gap: 10px; }
+  .vb { font-size: 11px; font-weight: 600; border-radius: 999px; padding: 2px 9px; border: 1px solid; }
+  .vb.pub { color: var(--success); border-color: #bfe0c8; background: #eef7f1; }
+  .vb.dr { color: #8a5a00; border-color: #f0dcae; background: #fdf7e8; }
+  .sub { font-size: 13px; color: var(--muted); margin-top: 4px; }
+  .acts { display: flex; gap: 8px; }
+  .b { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 14px; border-radius: 6px; font-size: 13px; font-weight: 500; white-space: nowrap; }
+  .b.out { border: 1px solid var(--border); background: #fff; box-shadow: 0 1px 2px rgba(6,23,35,.05); }
+  .b.pri { background: var(--blue); color: #fff; box-shadow: 0 1px 2px rgba(6,23,35,.12), 0 4px 12px -4px rgba(37,99,235,.45); }
+  .sec { margin-top: 16px; border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; background: #fff; box-shadow: 0 1px 2px rgba(6,23,35,.04); }
+  .sh { display: flex; align-items: center; justify-content: space-between; }
+  .sh h2 { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 7px; }
+  .sh h2 .i { width: 14px; height: 14px; color: var(--gold); }
+  .sh .m { font-size: 11px; color: var(--muted); }
+  .chg { font-size: 10.5px; font-weight: 600; color: #8a5a00; background: #fdf7e8; border: 1px solid #f0dcae; border-radius: 999px; padding: 1px 8px; }
+  .pos { margin-top: 10px; font-size: 14px; line-height: 1.6; color: var(--navy); }
+  .pos del { color: var(--error); background: #fbeceb; text-decoration: line-through; border-radius: 3px; padding: 0 2px; }
+  .pos ins { color: var(--success); background: #e9f4ec; text-decoration: none; border-radius: 3px; padding: 0 2px; }
+  .sliders { margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px 28px; }
+  .sl .lb { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--muted); }
+  .sl .lb b { color: var(--navy); font-weight: 600; }
+  .sl .tr { position: relative; margin-top: 8px; height: 4px; border-radius: 999px; background: var(--gray-50); border: 1px solid var(--border); }
+  .sl .tr .f { position: absolute; left: 0; top: -1px; bottom: -1px; border-radius: 999px; background: var(--blue); }
+  .sl .tr .k { position: absolute; top: 50%; width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 2px solid var(--blue); transform: translate(-50%,-50%); box-shadow: 0 1px 3px rgba(6,23,35,.2); }
+  .sl .tr .g { position: absolute; top: 50%; width: 10px; height: 10px; border-radius: 50%; background: #fff; border: 1.5px dashed var(--gray-500); transform: translate(-50%,-50%); }
+  .sl .was { font-size: 10.5px; color: #8a5a00; margin-top: 6px; }
+  .vocab { margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .vocab h3 { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .vocab h3 .i { width: 12px; height: 12px; }
+  .chips { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .cp { font-size: 12px; border-radius: 6px; padding: 3px 9px; border: 1px solid; }
+  .cp.y { color: var(--success); background: #f1f8f3; border-color: #cfe6d6; }
+  .cp.n { color: var(--error); background: #fdf3f2; border-color: #f2d2ce; }
+  .cp.new { box-shadow: 0 0 0 2px #f0dcae; }
+  .rules { margin-top: 8px; display: flex; flex-direction: column; }
+  .rl { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid rgba(226,224,220,.6); font-size: 13px; color: var(--gray-700); }
+  .rl:last-child { border-bottom: 0; }
+  .rl .i { width: 14px; height: 14px; color: var(--success); }
+  .rl .chg { margin-left: auto; }
+  .rail { border-left: 1px solid var(--border); background: #fcfbf9; padding: 24px 20px 0; display: flex; flex-direction: column; gap: 16px; overflow: hidden; }
+  .rail h2 { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 7px; }
+  .rail h2 .i { width: 14px; height: 14px; color: var(--muted); }
+  .vers { margin-top: 10px; }
+  .vr { position: relative; padding: 0 0 14px 22px; }
+  .vr::before { content: ""; position: absolute; left: 5px; top: 12px; bottom: 0; width: 1.5px; background: var(--border); }
+  .vr:last-child::before { display: none; }
+  .vr .d { position: absolute; left: 0; top: 3px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid #c9c6c0; background: #fff; }
+  .vr.cur .d { border-color: #e0a92e; background: #fdf7e8; }
+  .vr.pub .d { border-color: var(--success); background: var(--success); }
+  .vr .t { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; }
+  .vr .t span.w { margin-left: auto; font-size: 11px; font-weight: 400; color: var(--muted); }
+  .vr .x { font-size: 11.5px; color: var(--muted); margin-top: 2px; line-height: 1.45; }
+  .test { border: 1px solid var(--border); border-radius: 12px; background: #fff; padding: 14px; box-shadow: 0 1px 2px rgba(6,23,35,.04); }
+  .io { margin-top: 10px; font-size: 12.5px; line-height: 1.5; border-radius: 8px; padding: 9px 11px; }
+  .io.in { background: var(--gray-50); color: var(--gray-700); }
+  .io.out { background: var(--blue-50); color: var(--navy); border: 1px solid var(--blue-200); }
+  .io small { display: block; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 3px; }
+  .io mark { background: #fbeceb; color: var(--error); border-radius: 3px; padding: 0 2px; }
+  .exs { margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .ex { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: #fcfbf9; }
+  .ex .k { font-size: 10.5px; font-weight: 600; color: var(--muted); display: flex; justify-content: space-between; }
+  .ex .k b { color: var(--success); }
+  .ex p.q { font-size: 12.5px; line-height: 1.5; color: var(--gray-700); margin-top: 4px; }
+  .pubc { border: 1px solid var(--border); border-radius: 12px; background: #fff; padding: 14px; }
+  .pubc .ln { display: flex; gap: 8px; align-items: flex-start; font-size: 12px; color: var(--gray-700); margin-top: 9px; line-height: 1.45; }
+  .pubc .ln .i { width: 13px; height: 13px; color: var(--success); margin-top: 2px; }
+  .sc { margin-top: 10px; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+  .sc b { font-size: 13px; color: var(--navy); }
+  .sc .bad { color: var(--error); } .sc .good { color: var(--success); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-layout-grid" viewBox="0 0 24 24"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></symbol>
+<symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+<symbol id="i-panel-left-close" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/></symbol>
+<symbol id="i-library" viewBox="0 0 24 24"><path d="m16 6 4 14"/><path d="M12 6v14"/><path d="M8 8v12"/><path d="M4 4v16"/></symbol>
+<symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/></symbol>
+<symbol id="i-file-text" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></symbol>
+<symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+<symbol id="i-wand-2" viewBox="0 0 24 24"><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72"/><path d="m14 7 3 3"/><path d="M5 6v4"/><path d="M19 14v4"/><path d="M10 2v2"/><path d="M7 8H3"/><path d="M21 16h-4"/><path d="M11 3H9"/></symbol>
+<symbol id="i-book-open" viewBox="0 0 24 24"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></symbol>
+<symbol id="i-languages" viewBox="0 0 24 24"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></symbol>
+<symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></symbol>
+<symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+<symbol id="i-clipboard-list" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></symbol>
+<symbol id="i-calendar-check" viewBox="0 0 24 24"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/></symbol>
+<symbol id="i-megaphone" viewBox="0 0 24 24"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></symbol>
+<symbol id="i-zap" viewBox="0 0 24 24"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+<symbol id="i-circle-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
+<symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+
+<symbol id="i-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="i-loader" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></symbol>
+<symbol id="i-layout" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></symbol>
+<symbol id="i-linkedin" viewBox="0 0 24 24"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect width="4" height="12" x="2" y="9"/><circle cx="4" cy="4" r="2"/></symbol>
+<symbol id="i-video" viewBox="0 0 24 24"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></symbol>
+<symbol id="i-scissors" viewBox="0 0 24 24"><circle cx="6" cy="6" r="3"/><path d="M8.12 8.12 12 12"/><path d="M20 4 8.12 15.88"/><circle cx="6" cy="18" r="3"/><path d="M14.8 14.8 20 20"/></symbol>
+<symbol id="i-mail" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol>
+<symbol id="i-mails" viewBox="0 0 24 24"><rect width="16" height="13" x="6" y="4" rx="2"/><path d="m22 7-7.1 3.78c-.57.3-1.23.3-1.8 0L6 7"/><path d="M2 8v11c0 1.1.9 2 2 2h14"/></symbol>
+<symbol id="i-image" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+<symbol id="i-fingerprint" viewBox="0 0 24 24"><path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M2 12a10 10 0 0 1 18-6"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .131-5.354 0-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M9 6.8a6 6 0 0 1 9 5.2v2"/></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+<symbol id="i-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></symbol>
+<symbol id="i-plug" viewBox="0 0 24 24"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></symbol>
+<symbol id="i-badge-check" viewBox="0 0 24 24"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+<symbol id="i-quote" viewBox="0 0 24 24"><path d="M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/><path d="M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/></symbol>
+<symbol id="i-git-branch" viewBox="0 0 24 24"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></symbol>
+</defs></svg>
+<div class="shell">
+  <header class="top">
+    <div class="brand"><svg class="i"><use href="#i-layout-grid"/></svg>Asset Studio</div>
+    <div class="crumbs"><svg class="i"><use href="#i-chevron-right"/></svg><span class="">Marca</span><svg class="i"><use href="#i-chevron-right"/></svg><span class="cur">DNA de marca</span></div>
+    <div class="spacer"></div>
+    <span class="search-hint">Buscar <kbd>⌘K</kbd></span>
+    <div class="avatar">LM</div>
+  </header>
+  <div class="body">
+    <aside>
+      <div class="side-top">
+        <div class="row">
+          <span class="btn btn-primary"><svg class="i i-35"><use href="#i-plus"/></svg>Nova sessão</span>
+          <span class="btn btn-icon"><svg class="i i-35"><use href="#i-panel-left-close"/></svg></span>
+        </div>
+        <div class="side-label">Marca</div>
+      </div>
+      <div class="brandcard"><span class="lg">V</span><div><p class="n">Vettra</p><p class="s">Software industrial · B2B</p></div></div>
+      <div class="nav"><a class="on"><svg class="i"><use href="#i-fingerprint"/></svg>DNA de marca<span class="c">v3.3</span></a><a class=""><svg class="i"><use href="#i-book-open"/></svg>Glossário<span class="c">86</span></a><a class=""><svg class="i"><use href="#i-users"/></svg>Personas<span class="c">4</span></a><a class=""><svg class="i"><use href="#i-badge-check"/></svg>Exemplos aprovados<span class="c">38</span></a><a class=""><svg class="i"><use href="#i-target"/></svg>Clusters de audiência<span class="c">12</span></a><a class=""><svg class="i"><use href="#i-plug"/></svg>Integrações<span class="c">5</span></a></div>
+    </aside>
+    <main>
+      <div class="ed">
+        <div class="ph">
+          <div>
+            <h1>DNA de marca <span class="vb dr">rascunho v3.3</span></h1>
+            <p class="sub">Aplicado a todas as 20 ferramentas de geração. A versão publicada é a v3.2.</p>
+          </div>
+          <div class="acts"><span class="b out">Descartar</span><span class="b pri"><svg class="i i-35"><use href="#i-check"/></svg>Publicar v3.3</span></div>
+        </div>
+
+        <div class="sec">
+          <div class="sh"><h2><svg class="i"><use href="#i-target"/></svg>Posicionamento</h2><span class="chg">alterado</span></div>
+          <p class="pos">Ajudamos indústrias de médio porte a parar de apagar incêndio: manutenção guiada por dados, <del>com tecnologia de ponta</del> <ins>sem projeto de dois anos e com retorno medido em meses</ins>.</p>
+        </div>
+
+        <div class="sec">
+          <div class="sh"><h2><svg class="i"><use href="#i-sparkles"/></svg>Tom de voz</h2><span class="m">0 = esquerda · 100 = direita</span></div>
+          <div class="sliders">
+            <div class="sl"><p class="lb"><span>Formal</span><b>62</b><span>Próximo</span></p><div class="tr"><span class="f" style="width:62%"></span><span class="k" style="left:62%"></span></div></div>
+            <div class="sl"><p class="lb"><span>Técnico</span><b>48</b><span>Acessível</span></p><div class="tr"><span class="f" style="width:48%"></span><span class="g" style="left:64%"></span><span class="k" style="left:48%"></span></div><p class="was">antes 64 → 48</p></div>
+            <div class="sl"><p class="lb"><span>Sério</span><b>28</b><span>Leve</span></p><div class="tr"><span class="f" style="width:28%"></span><span class="k" style="left:28%"></span></div></div>
+            <div class="sl"><p class="lb"><span>Contido</span><b>34</b><span>Entusiasmado</span></p><div class="tr"><span class="f" style="width:34%"></span><span class="k" style="left:34%"></span></div></div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sh"><h2><svg class="i"><use href="#i-book-open"/></svg>Vocabulário</h2><span class="m">86 termos no glossário</span></div>
+          <div class="vocab">
+            <div><h3><svg class="i"><use href="#i-check"/></svg>Usamos</h3><div class="chips"><span class="cp y">parada não planejada</span><span class="cp y">chão de fábrica</span><span class="cp y">disponibilidade</span><span class="cp y">dado de sensor</span><span class="cp y">manutenção preditiva</span></div></div>
+            <div><h3><svg class="i"><use href="#i-x"/></svg>Evitamos</h3><div class="chips"><span class="cp n">revolucionário</span><span class="cp n">disruptivo</span><span class="cp n">solução completa</span><span class="cp n new">Indústria 4.0</span><span class="cp n new">sinergia</span></div></div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sh"><h2><svg class="i"><use href="#i-badge-check"/></svg>Regras de escrita</h2><span class="m">verificadas em cada peça</span></div>
+          <div class="rules">
+            <div class="rl"><svg class="i"><use href="#i-check"/></svg>Todo número traz a fonte</div>
+            <div class="rl"><svg class="i"><use href="#i-check"/></svg>Nunca prometer retorno garantido</div>
+            <div class="rl"><svg class="i"><use href="#i-check"/></svg>Frases com até 22 palavras<span class="chg">era 28</span></div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="sh"><h2><svg class="i"><use href="#i-quote"/></svg>Exemplos aprovados</h2><span class="m">38 peças de referência</span></div>
+          <div class="exs">
+            <div class="ex"><p class="k">Post LinkedIn<b>voz 98</b></p><p class="q">Toda parada avisa antes. O problema é que o aviso chega num sensor que ninguém está olhando.</p></div>
+            <div class="ex"><p class="k">Assunto de e-mail<b>voz 97</b></p><p class="q">Quanto custou a última vez que a linha 3 parou?</p></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rail">
+        <div>
+          <h2><svg class="i"><use href="#i-history"/></svg>Versões</h2>
+          <div class="vers">
+            <div class="vr cur"><span class="d"></span><p class="t">v3.3 <span class="vb dr">rascunho</span><span class="w">agora</span></p><p class="x">Você · 4 alterações: posicionamento, tom técnico, 2 termos evitados, tamanho de frase</p></div>
+            <div class="vr pub"><span class="d"></span><p class="t">v3.2 <span class="vb pub">publicada</span><span class="w">12 out</span></p><p class="x">Lia Martins · usada em 312 peças</p></div>
+            <div class="vr"><span class="d"></span><p class="t">v3.1<span class="w">2 set</span></p><p class="x">Novos exemplos aprovados de e-mail</p></div>
+            <div class="vr"><span class="d"></span><p class="t">v3.0<span class="w">10 jul</span></p><p class="x">Reposicionamento para indústria de médio porte</p></div>
+            <div class="vr"><span class="d"></span><p class="t">v2.4<span class="w">18 abr</span></p><p class="x">Glossário revisado com o time de produto</p></div>
+          </div>
+        </div>
+        <div class="test">
+          <h2><svg class="i"><use href="#i-sparkles"/></svg>Teste ao vivo</h2>
+          <div class="io in"><small>Texto de entrada</small>Nossa solução <mark>revolucionária</mark> leva sua fábrica para a <mark>Indústria 4.0</mark>.</div>
+          <div class="io out"><small>Com o DNA v3.3</small>Antecipamos a falha antes que a linha pare, com sensores instalados em uma semana.</div>
+          <p class="sc">Aderência à marca <b class="bad">41</b> → <b class="good">96</b></p>
+        </div>
+        <div class="pubc">
+          <h2><svg class="i"><use href="#i-git-branch"/></svg>Ao publicar a v3.3</h2>
+          <p class="ln"><svg class="i"><use href="#i-check"/></svg>Novas peças passam a usar a v3.3 nas 20 ferramentas</p>
+          <p class="ln"><svg class="i"><use href="#i-check"/></svg>As 312 peças da v3.2 guardam a versão com que foram geradas</p>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+</body>
+</html>

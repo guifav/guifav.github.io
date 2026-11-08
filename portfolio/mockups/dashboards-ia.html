@@ -1,9 +1,10 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
 <meta charset="utf-8">
 <meta name="mockup-viewport" content="1440x900">
 <title>Dashboards IA</title>
+<!-- Tela principal recriada com contexto B2B genérico (distribuidora fictícia). Dados 100% fictícios. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -100,6 +101,7 @@
   .pill{display:inline-block;padding:1px 7px;border-radius:999px;font-size:10px;font-weight:600}
   .p-re{background:#ececf4;color:var(--brand-ink)}
   .p-in{background:#fde8ec;color:#c22d4b}
+  .hbr{grid-template-columns:90px 1fr 32px}
 </style>
 </head>
 <body>
@@ -139,49 +141,49 @@
     <div class="l">
       <div class="iconbtn"><svg class="i"><use href="#i-left"/></svg></div>
       <div>
-        <h1><svg class="i s5"><use href="#i-spark"/></svg>AI Dashboard Builder</h1>
-        <p>Describe the dashboard you want and AI will build it with real data</p>
+        <h1><svg class="i s5"><use href="#i-spark"/></svg>Criar dashboard com IA</h1>
+        <p>Descreva o dashboard que você quer e a IA monta com dados vivos</p>
       </div>
     </div>
-    <div class="btn-primary"><svg class="i"><use href="#i-save"/></svg>Save Dashboard</div>
+    <div class="btn-primary"><svg class="i"><use href="#i-save"/></svg>Salvar dashboard</div>
   </div>
 
   <div class="grid">
     <!-- Chat panel -->
     <div class="card">
       <div class="msgs">
-        <div class="row u"><div class="bubble">Monte um dashboard de participação em eventos de 2026 por divisão: total de participantes, taxa de check-in, perfil do público e os eventos com maior público.</div></div>
+        <div class="row u"><div class="bubble">Monte um dashboard de vendas de 2026 por filial: faturamento, pedidos, ticket médio, entregas no prazo, mix por linha de produto e os produtos mais vendidos.</div></div>
         <div class="row a"><div class="bubble">
           <div class="tools">
-            <span class="tbadge"><svg class="i s3"><use href="#i-wrench"/></svg>events list</span>
-            <span class="tbadge"><svg class="i s3"><use href="#i-wrench"/></svg>event funnel</span>
-            <span class="tbadge"><svg class="i s3"><use href="#i-wrench"/></svg>event report</span>
-            <span class="tbadge"><svg class="i s3"><use href="#i-wrench"/></svg>base explorer composition</span>
+            <span class="tbadge"><svg class="i s3"><use href="#i-wrench"/></svg>sales_by_branch</span>
+            <span class="tbadge"><svg class="i s3"><use href="#i-wrench"/></svg>orders_report</span>
+            <span class="tbadge"><svg class="i s3"><use href="#i-wrench"/></svg>delivery_sla</span>
+            <span class="tbadge"><svg class="i s3"><use href="#i-wrench"/></svg>product_mix</span>
           </div>
-          Pronto. Cruzei a lista de eventos do ano com o funil de inscrição e a composição do público. O dashboard tem:
+          Pronto. Cruzei as vendas do ERP com os pedidos e as entregas, todos ao vivo via MCP. O dashboard tem:
           <ul>
             <li>4 indicadores no topo, com a variação contra 2025;</li>
-            <li>participantes por divisão e perfil do público;</li>
-            <li>a tabela dos eventos com maior público e o check-in de cada um.</li>
+            <li>faturamento por filial e mix por linha de produto;</li>
+            <li>a tabela dos produtos mais vendidos e a entrega no prazo de cada um.</li>
           </ul>
         </div></div>
-        <div class="row u"><div class="bubble">Destaque as divisões de infraestrutura na cor de acento e coloque a planilha de metas do comitê ao lado do realizado.</div></div>
+        <div class="row u"><div class="bubble">Destaque as filiais abaixo da meta na cor de acento e coloque a planilha de metas ao lado do realizado.</div></div>
         <div class="row a"><div class="bubble">
           <div class="tools">
-            <span class="tbadge"><svg class="i s3"><use href="#i-wrench"/></svg>event funnel</span>
+            <span class="tbadge"><svg class="i s3"><use href="#i-wrench"/></svg>sales_by_branch</span>
           </div>
-          Feito. <b>Infra Brazil</b> e <b>Infra Latam</b> aparecem em vermelho no ranking e na tabela, e o KPI de participantes agora mostra o percentual da meta anual lida de <b>metas-eventos-2026.xlsx</b>. A taxa de check-in ficou em 78,6%, acima da meta de 75%.
+          Feito. <b>Minas Gerais</b> e <b>Bahia</b> aparecem em vermelho no ranking e na tabela, e o KPI de faturamento agora mostra o percentual da meta anual lida de <b>metas-vendas-2026.xlsx</b>. A entrega no prazo ficou em 78,6%, acima da meta de 75%.
         </div></div>
       </div>
       <div class="inputarea">
         <div class="ctrls">
-          <span class="outline-sm"><svg class="i s35"><use href="#i-db"/></svg>Data Sources (3/3)<svg class="i s3"><use href="#i-down"/></svg></span>
-          <span class="dbtoggle"><svg class="i s3"><use href="#i-db"/></svg>Database</span>
+          <span class="outline-sm"><svg class="i s35"><use href="#i-db"/></svg>Fontes de dados (3/3)<svg class="i s3"><use href="#i-down"/></svg></span>
+          <span class="dbtoggle"><svg class="i s3"><use href="#i-db"/></svg>Banco de dados</span>
         </div>
-        <div class="files"><span class="fchip"><svg class="i s3"><use href="#i-sheet"/></svg>metas-eventos-2026.xlsx<svg class="i s3" style="margin-left:2px;color:#737373"><use href="#i-x"/></svg></span></div>
+        <div class="files"><span class="fchip"><svg class="i s3"><use href="#i-sheet"/></svg>metas-vendas-2026.xlsx<svg class="i s3" style="margin-left:2px;color:#737373"><use href="#i-x"/></svg></span></div>
         <div class="form">
           <div class="ghost"><svg class="i"><use href="#i-clip"/></svg></div>
-          <div class="inp">Describe the dashboard you want...</div>
+          <div class="inp">Descreva o dashboard que você quer...</div>
           <div class="send"><svg class="i"><use href="#i-send"/></svg></div>
         </div>
       </div>
@@ -192,34 +194,34 @@
       <div class="dash">
         <div class="dh">
           <div>
-            <h2>Participação em Eventos · 2026</h2>
-            <div class="s">Real Estate e Infraestrutura · todas as divisões</div>
+            <h2>Vendas por filial · 2026</h2>
+            <div class="s">Distribuidora · todas as filiais · jan–out</div>
           </div>
-          <div class="ts"><i></i>Atualizado em 06/11/2026, 09:30</div>
+          <div class="ts"><i></i>Ao vivo via MCP · 06/11/2026, 09:30</div>
         </div>
         <div class="db">
           <div class="kpis">
-            <div class="kpi hl"><div class="k">Participantes</div><div class="v">12.480</div><div class="d">83% da meta anual</div></div>
-            <div class="kpi"><div class="k">Check-in</div><div class="v">78,6%</div><div class="d">+3,1 p.p. vs 2025</div></div>
-            <div class="kpi"><div class="k">Eventos realizados</div><div class="v">42</div><div class="d n">8 até dezembro</div></div>
+            <div class="kpi hl"><div class="k">Faturamento</div><div class="v">R$ 31,2 mi</div><div class="d">83% da meta anual</div></div>
+            <div class="kpi"><div class="k">Pedidos</div><div class="v">70,4 mil</div><div class="d">+6,2% vs 2025</div></div>
+            <div class="kpi"><div class="k">Ticket médio</div><div class="v">R$ 443</div><div class="d">+3,1% vs 2025</div></div>
             <div class="kpi"><div class="k">NPS médio</div><div class="v">72</div><div class="d">+5 vs 2025</div></div>
           </div>
 
           <div class="r2">
             <div class="panel">
-              <h3>Participantes por divisão <span>jan–out</span></h3>
+              <h3>Faturamento por filial <span>R$ mi · jan–out</span></h3>
               <div class="hb">
-                <div class="hbr"><span class="n">RE Brazil</span><span class="t"><i style="width:100%"></i></span><span class="val">3.120</span></div>
-                <div class="hbr"><span class="n">Infra Brazil</span><span class="t"><i class="ac" style="width:82%"></i></span><span class="val">2.560</span></div>
-                <div class="hbr"><span class="n">RE Europe</span><span class="t"><i style="width:61%"></i></span><span class="val">1.904</span></div>
-                <div class="hbr"><span class="n">RE Latam</span><span class="t"><i style="width:52%"></i></span><span class="val">1.622</span></div>
-                <div class="hbr"><span class="n">Infra Latam</span><span class="t"><i class="ac" style="width:45%"></i></span><span class="val">1.398</span></div>
-                <div class="hbr"><span class="n">RE India</span><span class="t"><i style="width:33%"></i></span><span class="val">1.031</span></div>
-                <div class="hbr"><span class="n">GCC</span><span class="t"><i style="width:27%"></i></span><span class="val">845</span></div>
+                <div class="hbr"><span class="n">São Paulo</span><span class="t"><i style="width:100%"></i></span><span class="val">8,4</span></div>
+                <div class="hbr"><span class="n">Rio de Janeiro</span><span class="t"><i style="width:67%"></i></span><span class="val">5,6</span></div>
+                <div class="hbr"><span class="n">Minas Gerais</span><span class="t"><i class="ac" style="width:56%"></i></span><span class="val">4,7</span></div>
+                <div class="hbr"><span class="n">Paraná</span><span class="t"><i style="width:49%"></i></span><span class="val">4,1</span></div>
+                <div class="hbr"><span class="n">Bahia</span><span class="t"><i class="ac" style="width:42%"></i></span><span class="val">3,5</span></div>
+                <div class="hbr"><span class="n">Pernambuco</span><span class="t"><i style="width:33%"></i></span><span class="val">2,8</span></div>
+                <div class="hbr"><span class="n">Goiás</span><span class="t"><i style="width:25%"></i></span><span class="val">2,1</span></div>
               </div>
             </div>
             <div class="panel">
-              <h3>Perfil do público <span>% dos participantes</span></h3>
+              <h3>Mix por linha de produto <span>% do faturamento</span></h3>
               <div class="donut">
                 <svg width="100" height="100" viewBox="0 0 42 42">
                   <circle cx="21" cy="21" r="15.915" fill="none" stroke="#f0f0f5" stroke-width="6"/>
@@ -229,13 +231,13 @@
                   <circle cx="21" cy="21" r="15.915" fill="none" stroke="#8f93b8" stroke-width="6" stroke-dasharray="14 86" stroke-dashoffset="-49"/>
                   <circle cx="21" cy="21" r="15.915" fill="none" stroke="#cfd1e3" stroke-width="6" stroke-dasharray="12 88" stroke-dashoffset="-63"/>
                   <text x="21" y="21" text-anchor="middle" font-size="6.2" font-weight="700" fill="#1a1a2e" font-family="Inter">5</text>
-                  <text x="21" y="26" text-anchor="middle" font-size="2.6" fill="#8b8da3" font-family="Inter">perfis</text>
+                  <text x="21" y="26" text-anchor="middle" font-size="2.6" fill="#8b8da3" font-family="Inter">linhas</text>
                 </svg>
                 <div class="leg">
-                  <div><i style="background:#1a1a2e"></i>Investidores<b>34%</b></div>
-                  <div><i style="background:#e94560"></i>Incorporadores<b>22%</b></div>
-                  <div><i style="background:#4b5bd6"></i>Consultorias<b>18%</b></div>
-                  <div><i style="background:#8f93b8"></i>Setor público<b>14%</b></div>
+                  <div><i style="background:#1a1a2e"></i>Linha Pro<b>34%</b></div>
+                  <div><i style="background:#e94560"></i>Linha Casa<b>22%</b></div>
+                  <div><i style="background:#4b5bd6"></i>Acessórios<b>18%</b></div>
+                  <div><i style="background:#8f93b8"></i>Peças<b>14%</b></div>
                   <div><i style="background:#cfd1e3"></i>Outros<b>12%</b></div>
                 </div>
               </div>
@@ -243,7 +245,7 @@
           </div>
 
           <div class="panel">
-            <h3>Check-in mensal <span>% dos inscritos · meta 75%</span></h3>
+            <h3>Entregas no prazo por mês <span>% dos pedidos · meta 75%</span></h3>
             <svg width="100%" height="96" viewBox="0 0 640 96" style="display:block">
               <g font-family="Inter" font-size="9" fill="#8b8da3">
                 <line x1="28" x2="636" y1="8.0" y2="8.0" stroke="#f0f0f5"/><text x="22" y="11" text-anchor="end">90</text>
@@ -260,19 +262,19 @@
               </g>
             </svg>
             <div style="display:flex;gap:14px;font-size:10.5px;color:#4a4c63;margin-top:4px">
-              <span style="display:flex;align-items:center;gap:5px"><i style="width:10px;height:2px;background:#1a1a2e;display:block"></i>Real Estate</span>
-              <span style="display:flex;align-items:center;gap:5px"><i style="width:10px;height:2px;background:#e94560;display:block"></i>Infraestrutura</span>
+              <span style="display:flex;align-items:center;gap:5px"><i style="width:10px;height:2px;background:#1a1a2e;display:block"></i>Varejo</span>
+              <span style="display:flex;align-items:center;gap:5px"><i style="width:10px;height:2px;background:#e94560;display:block"></i>Atacado</span>
             </div>
           </div>
 
           <div class="panel">
-            <h3>Eventos com maior público <span>top 3</span></h3>
+            <h3>Produtos mais vendidos <span>top 3</span></h3>
             <table>
-              <thead><tr><th>Evento</th><th>Divisão</th><th>Data</th><th class="num">Participantes</th><th class="num">Check-in</th></tr></thead>
+              <thead><tr><th>Produto</th><th>Filial líder</th><th class="num">Pedidos</th><th class="num">Faturamento</th><th class="num">No prazo</th></tr></thead>
               <tbody>
-                <tr><td>Fórum de Concessões e Logística</td><td><span class="pill p-in">Infra Brazil</span></td><td>12/05</td><td class="num">684</td><td class="num">82%</td></tr>
-                <tr><td>Encontro de Incorporação Residencial</td><td><span class="pill p-re">RE Brazil</span></td><td>24/03</td><td class="num">612</td><td class="num">79%</td></tr>
-                <tr><td>Comitê de Data Centers e Energia</td><td><span class="pill p-in">Infra Latam</span></td><td>18/08</td><td class="num">455</td><td class="num">84%</td></tr>
+                <tr><td>Furadeira Pro 750 W</td><td><span class="pill p-re">São Paulo</span></td><td class="num">6.840</td><td class="num">R$ 2,9 mi</td><td class="num">82%</td></tr>
+                <tr><td>Kit Organizador Casa</td><td><span class="pill p-in">Minas Gerais</span></td><td class="num">5.120</td><td class="num">R$ 1,4 mi</td><td class="num">79%</td></tr>
+                <tr><td>Jogo de chaves 40 peças</td><td><span class="pill p-in">Bahia</span></td><td class="num">4.550</td><td class="num">R$ 0,9 mi</td><td class="num">84%</td></tr>
               </tbody>
             </table>
           </div>

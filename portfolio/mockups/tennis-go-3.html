@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>Tennis Go - clube</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+
+  :root {
+    --bg: oklch(1 0 0);
+    --fg: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --primary: oklch(0.448 0.119 151.328);
+    --primary-fg: oklch(0.985 0 0);
+    --muted: oklch(0.97 0 0);
+    --muted-fg: oklch(0.556 0 0);
+    --border: oklch(0.922 0 0);
+    --line: oklch(0.86 0 0);
+    --sidebar: oklch(0.985 0 0);
+    --unread: oklch(0.505 0.213 27.518);
+    --p10: color-mix(in oklch, var(--primary) 10%, transparent);
+    --p40: color-mix(in oklch, var(--primary) 40%, transparent);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 900px; overflow: hidden; }
+  body { width: 1440px; background: var(--bg); color: var(--fg); font: 15px/1.45 Geist, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  svg { flex: none; display: block; }
+  .muted { color: var(--muted-fg); }
+  .app { display: flex; height: 900px; }
+
+  /* Navegação lateral: as abas do app em coluna */
+  .sidenav { width: 248px; flex: none; background: var(--sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 20px 14px 16px; }
+  .brand { display: flex; align-items: center; gap: 11px; padding: 0 8px 22px; }
+  .brand b { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+  .nav { display: flex; flex-direction: column; gap: 2px; }
+  .nav a { display: flex; align-items: center; gap: 12px; height: 42px; padding: 0 12px; border-radius: 10px; font-size: 15px; font-weight: 500; color: oklch(0.42 0 0); text-decoration: none; }
+  .nav a.on { background: var(--p10); color: var(--primary); font-weight: 700; }
+  .nav .badge { margin-left: auto; min-width: 20px; height: 20px; border-radius: 999px; background: var(--unread); color: #fff; font-size: 11px; font-weight: 600; display: grid; place-items: center; padding: 0 6px; }
+  .nav-sep { height: 1px; background: var(--border); margin: 14px 8px; }
+  .profile { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); }
+  .profile .name { font-size: 14px; font-weight: 600; line-height: 1.2; }
+  .profile .sub { font-size: 12px; color: var(--muted-fg); }
+
+  .ini { width: 30px; height: 30px; border-radius: 999px; display: grid; place-items: center; font-size: 11.5px; font-weight: 600; flex: none; letter-spacing: 0.01em; }
+  .c1 { background: oklch(0.93 0.05 150); color: oklch(0.38 0.1 150); }
+  .c2 { background: oklch(0.93 0.04 250); color: oklch(0.42 0.12 255); }
+  .c3 { background: oklch(0.94 0.05 70); color: oklch(0.45 0.1 60); }
+  .c4 { background: oklch(0.93 0.04 330); color: oklch(0.45 0.12 340); }
+  .c5 { background: oklch(0.93 0.04 200); color: oklch(0.42 0.09 210); }
+  .c6 { background: oklch(0.93 0.05 30); color: oklch(0.48 0.13 30); }
+  .c7 { background: oklch(0.93 0.03 290); color: oklch(0.43 0.11 290); }
+  .c8 { background: oklch(0.94 0.04 110); color: oklch(0.43 0.09 115); }
+
+  /* Conteúdo */
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .topbar { height: 64px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 40px; border-bottom: 1px solid var(--border); }
+  .back { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 500; color: var(--muted-fg); }
+  .search { display: flex; align-items: center; gap: 10px; width: 340px; height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--muted); color: var(--muted-fg); font-size: 14px; }
+  .search kbd { margin-left: auto; font: 500 11px Geist, sans-serif; color: var(--muted-fg); border: 1px solid var(--border); background: var(--bg); border-radius: 5px; padding: 1px 6px; }
+
+
+  .page { flex: 1; padding: 22px 40px 0; display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+  .heading { display: flex; align-items: center; justify-content: space-between; }
+  .club { display: flex; align-items: center; gap: 14px; }
+  .club .lg { width: 52px; height: 52px; border-radius: 14px; background: #0f5132; color: #d9f99d; display: grid; place-items: center; font-weight: 700; font-size: 18px; letter-spacing: -0.02em; }
+  h1 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.025em; line-height: 1.15; }
+  .detail { font-size: 14px; color: var(--muted-fg); margin-top: 3px; }
+  .hr { display: flex; align-items: center; gap: 10px; }
+  .dsel { display: flex; align-items: center; gap: 4px; height: 40px; border: 1px solid var(--border); border-radius: 10px; padding: 0 6px; font-size: 14px; font-weight: 600; }
+  .dsel span.a { width: 28px; height: 28px; display: grid; place-items: center; color: var(--muted-fg); }
+  .dsel b { padding: 0 6px; font-weight: 600; }
+  .bk { height: 40px; padding: 0 16px; border-radius: 10px; background: var(--primary); color: var(--primary-fg); display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+  .tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--border); }
+  .tabs span { font-size: 14.5px; font-weight: 500; color: var(--muted-fg); padding-bottom: 10px; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+  .tabs span.on { color: var(--fg); font-weight: 700; border-color: var(--primary); }
+  .grid3 { display: grid; grid-template-columns: minmax(0,1fr) 336px; gap: 24px; align-items: start; }
+  .sched { border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .sh { display: grid; grid-template-columns: 54px repeat(4, 1fr); height: 38px; align-items: center; background: var(--sidebar); border-bottom: 1px solid var(--border); font-size: 12.5px; font-weight: 600; color: oklch(0.42 0 0); }
+  .sh span { padding-left: 10px; border-left: 1px solid var(--border); height: 100%; display: flex; align-items: center; }
+  .sh span:first-child { border-left: none; }
+  .sb { position: relative; display: grid; grid-template-columns: 54px repeat(4, 1fr); }
+  .hcol .h { height: 44px; font-size: 11.5px; color: var(--muted-fg); text-align: right; padding: 3px 8px 0 0; font-variant-numeric: tabular-nums; }
+  .ccol { position: relative; border-left: 1px solid var(--border); background-image: linear-gradient(var(--border) 1px, transparent 1px); background-size: 100% 44px; }
+  .blk { position: absolute; left: 4px; right: 4px; border-radius: 8px; padding: 5px 8px; overflow: hidden; display: flex; flex-direction: column; gap: 1px; border-left: 3px solid; }
+  .blk b { font-size: 12.5px; font-weight: 600; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 5px; }
+  .blk span { font-size: 11.5px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: .85; display: flex; align-items: center; gap: 4px; }
+  .blk { z-index: 2; }
+  .blk.res { background: oklch(0.97 0 0); border-color: oklch(0.7 0 0); color: oklch(0.3 0 0); }
+  .blk.chk { background: oklch(0.97 0 0); border-color: oklch(0.7 0 0); color: oklch(0.3 0 0); }
+  .blk.chk span { color: var(--primary); opacity: 1; font-weight: 500; }
+  .blk.fix { background: oklch(0.95 0.03 250); border-color: oklch(0.55 0.12 255); color: oklch(0.35 0.1 255); }
+  .blk.les { background: oklch(0.96 0.045 75); border-color: oklch(0.7 0.13 70); color: oklch(0.42 0.09 60); }
+  .blk.tour { background: var(--primary); border-color: oklch(0.3 0.09 151); color: var(--primary-fg); box-shadow: 0 6px 16px -8px color-mix(in oklch, var(--primary) 70%, transparent); }
+  .blk.me { background: var(--p10); border: 1.5px solid var(--primary); border-left-width: 3px; color: var(--primary); }
+  .blk.rel { background: repeating-linear-gradient(135deg, #fff 0 6px, oklch(0.97 0.012 27) 6px 12px); border-color: var(--unread); color: var(--unread); border-style: solid; }
+  .blk.rel span { color: oklch(0.45 0.05 27); }
+  .blk.mnt { background: repeating-linear-gradient(135deg, oklch(0.97 0 0) 0 6px, oklch(0.94 0 0) 6px 12px); border-color: oklch(0.6 0 0); color: oklch(0.4 0 0); }
+  .nowl { position: absolute; left: 50px; right: 0; height: 0; border-top: 1.5px solid var(--unread); z-index: 1; }
+  .nowl::before { content: ""; position: absolute; left: -4px; top: -5px; width: 8px; height: 8px; border-radius: 999px; background: var(--unread); }
+  .nowt { position: absolute; left: 4px; transform: translateY(-50%); font-size: 10.5px; font-weight: 700; color: #fff; background: var(--unread); border-radius: 5px; padding: 1px 4px; z-index: 4; }
+  .legend { display: flex; gap: 16px; font-size: 12.5px; color: var(--muted-fg); margin-top: 10px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 16px; height: 11px; border-radius: 3px; display: block; border-left: 3px solid; }
+  .rail { display: flex; flex-direction: column; gap: 14px; }
+  .ck { border: 1px solid var(--p40); background: var(--p10); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .ck .k { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--primary); display: flex; align-items: center; gap: 7px; }
+  .ck .k i { width: 7px; height: 7px; border-radius: 999px; background: var(--primary); display: block; box-shadow: 0 0 0 3px var(--p40); }
+  .ck .t { font-size: 17px; font-weight: 700; letter-spacing: -.01em; }
+  .ck .s { font-size: 13.5px; color: oklch(0.4 0 0); margin-top: -6px; }
+  .vs { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+  .vs .ini { width: 30px; height: 30px; }
+  .vs .ok { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--primary); display: inline-flex; align-items: center; gap: 4px; }
+  .ck .dl { font-size: 13px; color: oklch(0.4 0 0); }
+  .ckb { height: 44px; border-radius: 12px; background: var(--primary); color: var(--primary-fg); display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 15px; font-weight: 600; }
+  .ck .rule { font-size: 12px; color: oklch(0.45 0 0); line-height: 1.4; border-top: 1px solid var(--p40); padding-top: 9px; }
+  .cardx { border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; }
+  .cardx .hh { display: flex; justify-content: space-between; align-items: baseline; }
+  .cardx .hh b { font-size: 16px; font-weight: 700; }
+  .cardx .hh span { font-size: 13px; color: var(--primary); font-weight: 600; }
+  .ls { display: flex; flex-direction: column; margin-top: 6px; }
+  .li { display: flex; align-items: center; gap: 12px; padding: 9px 0; }
+  .li + .li { border-top: 1px solid var(--border); }
+  .dt { width: 42px; height: 44px; border-radius: 10px; border: 1px solid var(--border); display: flex; flex-direction: column; align-items: center; justify-content: center; flex: none; }
+  .dt small { font-size: 10px; font-weight: 600; letter-spacing: .06em; color: var(--muted-fg); }
+  .dt b { font-size: 16px; font-weight: 700; line-height: 1.1; }
+  .li .tx { min-width: 0; flex: 1; }
+  .li .tx b { font-size: 14px; font-weight: 600; display: block; }
+  .li .tx span { font-size: 12px; color: var(--muted-fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .li .st { font-size: 11.5px; font-weight: 600; border-radius: 999px; padding: 2px 8px; white-space: nowrap; }
+  .li .st.in { color: var(--primary); background: var(--p10); }
+  .li .st.op { color: oklch(0.42 0.09 60); background: oklch(0.96 0.045 75); }
+  .pay { display: flex; align-items: center; gap: 12px; }
+  .pay .ic { width: 38px; height: 38px; border-radius: 10px; background: var(--muted); display: grid; place-items: center; color: oklch(0.4 0 0); flex: none; }
+  .pay .tx b { font-size: 14.5px; font-weight: 700; display: block; }
+  .pay .tx span { font-size: 12.5px; color: var(--muted-fg); }
+  .pay .v { margin-left: auto; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .paid { margin-top: 10px; display: flex; justify-content: space-between; font-size: 12.5px; color: var(--muted-fg); }
+  .paid .ok { color: var(--primary); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidenav">
+    <div class="brand">
+      <svg width="38" height="38" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="felt" cx="0.36" cy="0.3" r="0.8"><stop offset="0" stop-color="#f0ff7a"/><stop offset="0.65" stop-color="#cfe83a"/><stop offset="1" stop-color="#a9c41f"/></radialGradient>
+          <clipPath id="ball"><circle cx="380" cy="146" r="44"/></clipPath>
+          <clipPath id="frame"><ellipse cx="256" cy="150" rx="82" ry="108"/></clipPath>
+          <clipPath id="head"><rect x="136" y="176" width="240" height="220" rx="70"/></clipPath>
+        </defs>
+        <rect width="512" height="512" rx="112" fill="#0f5132"/>
+        <g transform="rotate(-40 256 256)">
+          <path d="M232 250 L 256 300 L 280 250" fill="none" stroke="#e5e7eb" stroke-width="14" stroke-linejoin="round"/>
+          <rect x="245" y="290" width="22" height="180" rx="8" fill="#e5e7eb"/>
+          <rect x="243" y="392" width="26" height="78" rx="6" fill="#111"/>
+          <path d="M243 404 L269 396 M243 420 L269 412 M243 436 L269 428 M243 452 L269 444" stroke="#16a34a" stroke-width="5"/>
+          <rect x="239" y="466" width="34" height="14" rx="5" fill="#111"/>
+          <g clip-path="url(#frame)" stroke="#9ca3af" stroke-width="6"><path d="M200 40 V260 M228 40 V260 M256 40 V260 M284 40 V260 M312 40 V260"/><path d="M160 80 H352 M160 110 H352 M160 140 H352 M160 170 H352 M160 200 H352 M160 230 H352"/></g>
+          <ellipse cx="256" cy="150" rx="88" ry="114" fill="none" stroke="#e5e7eb" stroke-width="18"/>
+        </g>
+        <rect x="136" y="176" width="240" height="220" rx="70" fill="#16a34a"/>
+        <g clip-path="url(#head)"><rect x="136" y="246" width="240" height="62" fill="#f6d7b0"/><rect x="136" y="216" width="240" height="24" fill="#0b3d26"/></g>
+        <path d="M172 258 L 234 272 Q 218 296 190 290 Q 172 282 172 258 Z" fill="#111"/>
+        <path d="M340 258 L 278 272 Q 294 296 322 290 Q 340 282 340 258 Z" fill="#111"/>
+        <circle cx="208" cy="278" r="4.5" fill="#fff"/><circle cx="304" cy="278" r="4.5" fill="#fff"/>
+        <circle cx="380" cy="146" r="44" fill="url(#felt)"/>
+        <g clip-path="url(#ball)"><path d="M355 98 C 374 124, 374 168, 355 194" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round"/><path d="M405 98 C 386 124, 386 168, 405 194" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round"/></g>
+      </svg>
+      <b>Tennis Go</b>
+    </div>
+
+    <nav class="nav">
+      <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Início</a>
+      <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 20V14M12 20V4M18 20V10"/></svg>Rankings</a>
+      <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>Campeonatos</a>
+      <a class="on"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 12h18"/><path d="M9 3v18"/><path d="M15 3v18"/></svg>Locais</a>
+      <div class="nav-sep"></div>
+      <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>Conversas<span class="badge">3</span></a>
+      <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>Agenda</a>
+    </nav>
+
+    <div class="profile">
+      <span class="ini c1" style="width:34px;height:34px;font-size:12.5px">AM</span>
+      <div style="flex:1;min-width:0"><div class="name">André Moura</div><div class="sub">Adulto · Intermediário</div></div>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="muted"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <span class="back"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>Locais</span>
+      <span class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>Buscar jogadores, rankings e locais<kbd>⌘K</kbd></span>
+    </header>
+
+    <div class="page">
+      <section class="heading">
+        <div class="club"><span class="lg">CA</span><div><h1>Clube Alvorada</h1><div class="detail">4 quadras · saibro e piso rápido · aberto das 7h às 22h</div></div></div>
+        <div class="hr">
+          <span class="dsel"><span class="a"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></span><b>Sáb, 17 de outubro</b><span class="a"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></span></span>
+          <span class="bk"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Reservar quadra</span>
+        </div>
+      </section>
+      <nav class="tabs"><span class="on">Reservas</span><span>Aulas</span><span>Mensalidades</span><span>Jogadores</span></nav>
+
+      <div class="grid3">
+        <section>
+          <div class="sched">
+            <div class="sh"><span></span><span>Quadra 1 · saibro</span><span>Quadra 2 · saibro</span><span>Quadra 3 · rápida</span><span>Quadra 4 · rápida</span></div>
+            <div class="sb">
+              <div class="hcol"><div class="h">7h</div><div class="h" style="visibility:hidden">8h</div><div class="h">9h</div><div class="h">10h</div><div class="h">11h</div><div class="h">12h</div><div class="h">13h</div><div class="h">14h</div><div class="h">15h</div><div class="h">16h</div><div class="h">17h</div><div class="h">18h</div><div class="h">19h</div><div class="h">20h</div></div>
+              <div class="ccol" style="height:616px"><div class="blk les" style="top:2px;height:40px"><b><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></svg>Aula particular</b><span>Prof. Marina Costa</span></div><div class="blk fix" style="top:46px;height:40px"><b><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>Thiago M. x Rafael L.</b><span>toda sábado</span></div><div class="blk res" style="top:134px;height:62px"><b>Bruno T. x Lucas A.</b><span>10h às 11h30</span></div><div class="blk les" style="top:310px;height:84px"><b><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></svg>Turma intermediária</b><span>Prof. Marina Costa · 5 de 6</span></div><div class="blk res" style="top:486px;height:40px"><b>Diego F. x Marcelo D.</b></div></div><div class="ccol" style="height:616px"><div class="blk chk" style="top:2px;height:40px"><b>Felipe N. x Paulo Q.</b><span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg> check-in às 6h52</span></div><div class="blk tour" style="top:90px;height:62px"><b>Jogo 5 · Semifinal</b><span>André Moura x Caio Prado</span></div><div class="blk res" style="top:178px;height:40px"><b>Rafael L. x Diego F.</b></div><div class="blk les" style="top:398px;height:84px"><b><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></svg>Clínica de saque</b><span>Prof. Renato Alves · 3 vagas</span></div></div><div class="ccol" style="height:616px"><div class="blk rel" style="top:46px;height:40px"><b>Liberada às 8h10</b><span>sem check-in a tempo</span></div><div class="blk les" style="top:134px;height:84px"><b><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></svg>Aula particular</b><span>Prof. Renato Alves</span></div><div class="blk fix" style="top:442px;height:40px"><b><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>Lucas A. x Bruno T.</b><span>toda sábado</span></div><div class="blk me" style="top:486px;height:40px"><b>Sua reserva</b><span>Você x Paulo Queiroz</span></div></div><div class="ccol" style="height:616px"><div class="blk res" style="top:90px;height:40px"><b>Marcelo D. x Thiago M.</b></div><div class="blk mnt" style="top:222px;height:40px"><b><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>Manutenção</b><span>nivelamento do piso</span></div><div class="blk les" style="top:354px;height:84px"><b><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></svg>Turma iniciante</b><span>Prof. Marina Costa · 6 de 6</span></div><div class="blk fix" style="top:530px;height:40px"><b><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>Caio P. x Felipe N.</b><span>toda sábado</span></div></div>
+              <div class="nowl" style="top:61.6px"></div>
+              <span class="nowt" style="top:61.6px">8h24</span>
+            </div>
+          </div>
+          <div class="legend"><span><i style="background:oklch(0.97 0 0);border-color:oklch(0.7 0 0)"></i>Reserva</span><span><i style="background:oklch(0.95 0.03 250);border-color:oklch(0.55 0.12 255)"></i>Reserva fixa</span><span><i style="background:oklch(0.96 0.045 75);border-color:oklch(0.7 0.13 70)"></i>Aula</span><span><i style="background:var(--primary);border-color:oklch(0.3 0.09 151)"></i>Campeonato</span><span><i style="background:oklch(0.97 0.012 27);border-color:var(--unread)"></i>Liberada sem check-in</span></div>
+        </section>
+
+        <aside class="rail">
+          <section class="ck">
+            <span class="k"><i></i>Check-in aberto</span>
+            <div><div class="t">Jogo 5 · Semifinal</div></div>
+            <div class="s">Quadra 2 · 9h · Aberto de Primavera</div>
+            <div class="vs"><span class="ini c1">AM</span>André Moura <span style="color:var(--muted-fg);font-weight:400">x</span> Caio Prado<span class="ini c2" style="width:30px;height:30px">CP</span></div>
+            <div class="dl">Faça o check-in até 8h30. Seu adversário já fez.</div>
+            <div class="ckb"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg>Fazer check-in</div>
+            <div class="rule">Reservas sem check-in até 10 minutos depois do início voltam para a agenda.</div>
+          </section>
+          <section class="cardx">
+            <div class="hh"><b>Suas aulas</b><span>Ver agenda</span></div>
+            <div class="ls"><div class="li"><span class="dt"><small>TER</small><b>20</b></span><div class="tx"><b>Turma intermediária</b><span>19h · Quadra 1 · Marina Costa</span></div><span class="st in">na turma</span></div><div class="li"><span class="dt"><small>QUI</small><b>22</b></span><div class="tx"><b>Saque e devolução</b><span>7h · Quadra 3 · Renato Alves</span></div><span class="st op">2 vagas</span></div><div class="li"><span class="dt"><small>SÁB</small><b>24</b></span><div class="tx"><b>Treino de duplas</b><span>14h · Quadra 1 · Marina Costa</span></div><span class="st in">na turma</span></div></div>
+          </section>
+          <section class="cardx">
+            <div class="pay"><span class="ic"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg></span><div class="tx"><b>Mensalidade</b><span>Plano treino 2x por semana</span></div><span class="v">R$ 280,00</span></div>
+            <div class="paid"><span class="ok"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Outubro paga</span><span>Próxima em 05/11</span></div>
+          </section>
+        </aside>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

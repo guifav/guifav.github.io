@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="mockup-viewport" content="1440x900">
-<title>People · CRM (Twenty)</title>
+<title>People · CRM</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <!--
-  Recriação da UI do Twenty v2.32 (twentyhq/twenty, tag twenty/v2.32.0) para o CRM pessoal do Gui.
+  Recriação da UI do Twenty v2.32 (twentyhq/twenty, tag twenty/v2.32.0) como tela conceitual de CRM.
   Layout: DefaultLayout + MainNavigationDrawer + PageCardLayout + RecordIndexViewBar + RecordTable
   + SidePanelForDesktop (SidePanelRecordPage com SidePanelFooter). Tokens do tema claro
   (twenty-ui/src/theme/constants), raiz 13px, Inter, ícones Tabler.
@@ -219,6 +219,7 @@
   .rel-card .meta { color: var(--font-tertiary); font-size: 0.92rem; }
   .sp-footer { flex-shrink: 0; background: var(--bg-secondary); border-top: 1px solid var(--border-light); padding: 8px 12px; display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
   .kbd { display: inline-flex; align-items: center; gap: 1px; margin-left: 4px; padding-left: 6px; border-left: 1px solid color(display-p3 1 1 1 / 0.3); color: color(display-p3 1 1 1 / 0.8); font-size: 0.92rem; font-weight: 500; }
+
 </style>
 </head>
 <body>
@@ -257,16 +258,25 @@
     <symbol id="i-users" viewBox="0 0 24 24"><path d="M9 7m-4 0a4 4 0 1 0 8 0a4 4 0 1 0 -8 0"/><path d="M3 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/><path d="M21 21v-2a4 4 0 0 0 -3 -3.85"/></symbol>
     <symbol id="i-heart" viewBox="0 0 24 24"><path d="M19.5 12.572l-7.5 7.428l-7.5 -7.428a5 5 0 1 1 7.5 -6.566a5 5 0 1 1 7.5 6.572"/></symbol>
     <symbol id="i-arrow-down" viewBox="0 0 24 24"><path d="M12 5l0 14"/><path d="M18 13l-6 6"/><path d="M6 13l6 6"/></symbol>
+    <symbol id="i-photo" viewBox="0 0 24 24"><path d="M15 8h.01"/><path d="M3 6a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v12a3 3 0 0 1 -3 3h-12a3 3 0 0 1 -3 -3v-12z"/><path d="M3 16l5 -5c.928 -.893 2.072 -.893 3 0l5 5"/><path d="M14 14l1 -1c.928 -.893 2.072 -.893 3 0l3 3"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2"/><path d="M7 9l5 -5l5 5"/><path d="M12 4l0 12"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5l10 -10"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 9v4"/><path d="M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.871h16.214a1.914 1.914 0 0 0 1.636 -2.87l-8.106 -13.536a1.914 1.914 0 0 0 -3.274 0z"/><path d="M12 16h.01"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><path d="M7 7m0 2.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667z"/><path d="M4.012 16.737a2.005 2.005 0 0 1 -1.012 -1.737v-10c0 -1.1 .9 -2 2 -2h10c.75 0 1.158 .385 1.5 1"/></symbol>
+    <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12l14 0"/><path d="M13 18l6 -6"/><path d="M13 6l6 6"/></symbol>
+    <symbol id="i-filter" viewBox="0 0 24 24"><path d="M4 4h16v2.172a2 2 0 0 1 -.586 1.414l-4.414 4.414v7l-6 2v-8.5l-4.48 -4.928a2 2 0 0 1 -.52 -1.345v-2.227z"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3a12 12 0 0 0 8.5 3a12 12 0 0 1 -8.5 15a12 12 0 0 1 -8.5 -15a12 12 0 0 0 8.5 -3"/><path d="M9 12l2 2l4 -4"/></symbol>
+    <symbol id="i-coins" viewBox="0 0 24 24"><path d="M9 14c0 1.657 2.686 3 6 3s6 -1.343 6 -3s-2.686 -3 -6 -3s-6 1.343 -6 3z"/><path d="M9 14v4c0 1.656 2.686 3 6 3s6 -1.344 6 -3v-4"/><path d="M3 6c0 1.072 1.144 2.062 3 2.598s4.144 .536 6 0c1.856 -.536 3 -1.526 3 -2.598c0 -1.072 -1.144 -2.062 -3 -2.598s-4.144 -.536 -6 0c-1.856 .536 -3 1.526 -3 2.598z"/><path d="M3 6v10c0 .888 .772 1.45 2 2"/><path d="M3 11c0 .888 .772 1.45 2 2"/></symbol>
   </defs>
 </svg>
 
+
 <div class="app">
-  <!-- ===== Navigation drawer ===== -->
   <nav class="drawer">
     <div class="dr-header">
       <div class="ws">
-        <div class="ws-logo">g</div>
-        <span class="ws-name">guifav</span>
+        <div class="ws-logo">N</div>
+        <span class="ws-name">Nimbus</span>
         <svg class="i thin"><use href="#i-chevron-down"/></svg>
       </div>
       <div class="dr-actions">
@@ -287,23 +297,25 @@
       <div>
         <div class="section-title"><span class="label">Favorites</span></div>
         <div class="nav-item"><span class="ic"><span class="tile t-blue"><svg class="i"><use href="#i-user"/></svg></span></span>New prospects</div>
-        <div class="nav-item"><span class="ic"><span class="tile t-purple"><svg class="i"><use href="#i-listdetails"/></svg></span></span>SP Fintechs · AI</div>
+        <div class="nav-item"><span class="ic"><span class="tile t-purple"><svg class="i"><use href="#i-listdetails"/></svg></span></span>Fintechs SP · IA</div>
       </div>
       <div>
         <div class="section-title"><span class="label">Workspace</span></div>
-        <div class="nav-item active"><span class="ic"><span class="tile t-blue"><svg class="i"><use href="#i-user"/></svg></span></span>People</div>
+        <div class="nav-item on"><span class="ic"><span class="tile t-blue"><svg class="i"><use href="#i-user"/></svg></span></span>People</div>
         <div class="nav-item"><span class="ic"><span class="tile t-blue"><svg class="i"><use href="#i-building"/></svg></span></span>Companies</div>
         <div class="nav-item"><span class="ic"><span class="tile t-red"><svg class="i"><use href="#i-target"/></svg></span></span>Opportunities</div>
         <div class="nav-item"><span class="ic"><span class="tile t-turquoise"><svg class="i"><use href="#i-checkbox"/></svg></span></span>Tasks</div>
         <div class="nav-item"><span class="ic"><span class="tile t-turquoise"><svg class="i"><use href="#i-notes"/></svg></span></span>Notes</div>
         <div class="nav-item"><span class="ic"><span class="tile t-purple"><svg class="i"><use href="#i-listdetails"/></svg></span></span>Lists</div>
-        <div class="nav-item"><span class="ic"><span class="tile t-orange"><svg class="i"><use href="#i-user-search"/></svg></span></span>ICPs</div>
+        <div class="nav-item "><span class="ic"><span class="tile t-orange"><svg class="i"><use href="#i-user-search"/></svg></span></span>ICPs</div>
+        <div class="nav-item "><span class="ic"><span class="tile t-red"><svg class="i"><use href="#i-photo"/></svg></span></span>Captures</div>
         <div class="nav-item"><span class="ic"><span class="tile t-sky"><svg class="i"><use href="#i-mail"/></svg></span></span>Campaigns</div>
         <div class="nav-item"><span class="ic"><span class="tile t-gray"><svg class="i"><use href="#i-automation"/></svg></span></span>Workflows</div>
         <div class="nav-item"><span class="ic"><span class="tile t-gray"><svg class="i"><use href="#i-dashboard"/></svg></span></span>Dashboards</div>
       </div>
     </div>
   </nav>
+
 
   <!-- ===== Main card ===== -->
   <div class="main">
@@ -345,7 +357,7 @@
           <div class="cbx"><span class="box"></span></div>
           <div class="th w-name"><svg class="i"><use href="#i-user"/></svg>Name</div>
           <div class="th w-company"><svg class="i"><use href="#i-building"/></svg>Company</div>
-          <div class="th w-job"><svg class="i"><use href="#i-briefcase"/></svg>Job Title</div>
+          <div class="th w-job"><svg class="i"><use href="#i-briefcase"/></svg>Job title</div>
           <div class="th w-src"><svg class="i"><use href="#i-tag"/></svg>Source</div>
           <div class="th w-enr"><svg class="i"><use href="#i-rocket"/></svg>Enrichment</div>
         </div>
@@ -393,14 +405,14 @@
     <div class="sp-body">
       <div class="field"><div class="fl"><svg class="i"><use href="#i-mail"/></svg>Emails</div><div class="fv"><span class="rlink">marina.coutinho@example.com</span></div></div>
       <div class="field"><div class="fl"><svg class="i"><use href="#i-phone"/></svg>Phones</div><div class="fv"><span class="rlink">+55 11 90000-0000</span></div></div>
-      <div class="field"><div class="fl"><svg class="i"><use href="#i-linkedin"/></svg>LinkedIn</div><div class="fv"><span class="rlink">marina-coutinho-example</span></div></div>
-      <div class="field"><div class="fl"><svg class="i"><use href="#i-briefcase"/></svg>Job Title</div><div class="fv">Head of Operations</div></div>
+      <div class="field"><div class="fl"><svg class="i"><use href="#i-linkedin"/></svg>LinkedIn</div><div class="fv"><span class="rlink">marina-coutinho-exemplo</span></div></div>
+      <div class="field"><div class="fl"><svg class="i"><use href="#i-briefcase"/></svg>Job title</div><div class="fv">Head of Operations</div></div>
       <div class="field"><div class="fl"><svg class="i"><use href="#i-building"/></svg>Company</div><div class="fv"><span class="chip hl"><span class="av sm square c-sky">L</span>Lumio Logística</span></div></div>
       <div class="field"><div class="fl"><svg class="i"><use href="#i-map"/></svg>City</div><div class="fv">São Paulo</div></div>
       <div class="field"><div class="fl"><svg class="i"><use href="#i-tag"/></svg>Source</div><div class="fv"><span class="tag g-blue">Website capture</span></div></div>
       <div class="field"><div class="fl"><svg class="i"><use href="#i-rocket"/></svg>Enrichment</div><div class="fv"><span class="tag g-green">Enriched via Apollo</span></div></div>
       <div class="field"><div class="fl"><svg class="i"><use href="#i-user-search"/></svg>Apollo lookup</div><div class="fv"><span class="tag g-gray">Email</span></div></div>
-      <div class="field"><div class="fl"><svg class="i"><use href="#i-calendar-event"/></svg>Enriched at</div><div class="fv">11/06/2026 9:42 AM</div></div>
+      <div class="field"><div class="fl"><svg class="i"><use href="#i-calendar-event"/></svg>Enriched on</div><div class="fv">11/06/2026 9:42 AM</div></div>
       <div class="field"><div class="fl"><svg class="i"><use href="#i-users"/></svg>Created by</div><div class="fv"><span class="chip hl"><svg class="i sm" style="color:var(--font-tertiary)"><use href="#i-automation"/></svg>Lead capture</span></div></div>
 
       <div class="rel">
@@ -419,7 +431,7 @@
           <span class="plus"><svg class="i"><use href="#i-plus"/></svg></span>
         </div>
         <div class="rel-list">
-          <div class="rel-card"><span class="chip bare"><span class="av sm square c-sky">L</span>Lumio · Route planning pilot</span><span class="tag g-orange" style="height:20px">Proposal</span></div>
+          <div class="rel-card"><span class="chip bare"><span class="av sm square c-sky">L</span>Lumio · Routing pilot</span><span class="tag g-orange" style="height:20px">Proposal</span></div>
         </div>
       </div>
     </div>
@@ -432,8 +444,8 @@
 </div>
 
 <script>
-  // Fictitious prospects (made-up names, companies and job titles).
-  const SRC = { site: ['g-blue', 'Website capture'], ia: ['g-purple', 'AI list'], exec: ['g-orange', 'Executive search'], imp: ['g-gray', 'Import'] };
+  // Prospects fictícios (nomes, empresas e cargos inventados).
+  const SRC = { site: ['g-blue', 'Website capture'], ia: ['g-purple', 'AI list'], shot: ['g-orange', 'Screenshot'], imp: ['g-gray', 'Import'] };
   const ENR = { ok: ['g-green', 'Enriched via Apollo'], same: ['g-gray', 'No new data'], miss: ['g-red', 'No match'], queue: ['g-amber', 'Queued'] };
   const rows = [
     ['Rafael Antunes', 'c-orange', 'Vértice Agro', 'c-grass', 'CFO', 'ia', 'ok'],
@@ -441,18 +453,18 @@
     ['Marina Coutinho', 'c-pink', 'Lumio Logística', 'c-sky', 'Head of Operations', 'site', 'ok', true],
     ['Thiago Valadares', 'c-blue', 'Clínica Aurora', 'c-turquoise', 'IT Manager', 'site', 'same'],
     ['Carolina Brandão', 'c-crimson', 'Ateliê Nuvem', 'c-iris', 'Co-founder', 'site', 'ok'],
-    ['Eduardo Siqueira', 'c-jade', 'Ferro Norte', 'c-brown', 'COO', 'exec', 'ok'],
-    ['Otávio Ribas', 'c-amber', 'Ferro Norte', 'c-brown', 'CEO', 'exec', 'ok'],
-    ['Patrícia Lemos', 'c-purple', 'Ferro Norte', 'c-brown', 'General Counsel', 'exec', 'ok'],
+    ['Eduardo Siqueira', 'c-jade', 'Ferro Norte', 'c-brown', 'COO', 'shot', 'ok'],
+    ['Otávio Ribas', 'c-amber', 'Ferro Norte', 'c-brown', 'CEO', 'shot', 'ok'],
+    ['Patrícia Lemos', 'c-purple', 'Ferro Norte', 'c-brown', 'General Counsel', 'shot', 'ok'],
     ['Juliana Paiva', 'c-tomato', 'Ciranda Educação', 'c-amber', 'Head of Marketing', 'ia', 'ok'],
     ['Gustavo Tavares', 'c-sky', 'Bússola Contábil', 'c-violet', 'CEO', 'imp', 'miss'],
-    ['Larissa Menezes', 'c-green', 'Grão Fino', 'c-orange', 'Purchasing Manager', 'ia', 'ok'],
-    ['André Falcão', 'c-iris', 'Pulsar Seguros', 'c-red', 'Head of Data', 'exec', 'ok'],
+    ['Larissa Menezes', 'c-green', 'Grão Fino', 'c-orange', 'Procurement Manager', 'ia', 'ok'],
+    ['André Falcão', 'c-iris', 'Pulsar Seguros', 'c-red', 'Head of Data', 'shot', 'ok'],
     ['Fernanda Rocha', 'c-cyan', 'Trilha Turismo', 'c-jade', 'HR Manager', 'site', 'queue'],
     ['Paulo Duarte', 'c-gold', 'Quilha Pay', 'c-blue', 'CTO', 'ia', 'ok'],
     ['Isabela Moraes', 'c-red', 'Vitral Varejo', 'c-pink', 'Controller', 'imp', 'same'],
     ['Vinícius Prado', 'c-turquoise', 'Sol Poente', 'c-amber', 'Sales Manager', 'site', 'ok'],
-    ['Renata Albuquerque', 'c-brown', 'Cedro Imóveis', 'c-green', 'Finance Director', 'ia', 'ok'],
+    ['Renata Albuquerque', 'c-brown', 'Solaris Energia', 'c-green', 'Finance Director', 'ia', 'ok'],
     ['Lucas Bittencourt', 'c-violet', 'Fio Digital', 'c-crimson', 'Founder', 'site', 'miss'],
     ['Camila Nogueira', 'c-orange', 'Órbita Software', 'c-purple', 'Head of CS', 'ia', 'ok'],
     ['Henrique Sato', 'c-grass', 'Maré Alta', 'c-cyan', 'Head of Exports', 'site', 'ok'],

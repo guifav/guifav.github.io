@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>MIR · CRM matching</title>
+<style>
+
+  :root {
+    --background: #0a0a0a;
+    --foreground: #fafafa;
+    --muted: #171717;
+    --muted-foreground: #a3a3a3;
+    --border: #262626;
+    --card: #0a0a0a;
+    --accent: #262626;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1440px; height: 900px; overflow: hidden; }
+  body { background: var(--background); color: var(--foreground); font-family: system-ui, -apple-system, sans-serif; -webkit-font-smoothing: antialiased; }
+  .i { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+  .i.b { stroke-width: 2; }
+  .i-12 { width: 12px; height: 12px; stroke-width: 2; }
+  .i-11 { width: 11px; height: 11px; stroke-width: 2; }
+  .i-10 { width: 10px; height: 10px; stroke-width: 2; }
+  .muted { color: var(--muted-foreground); }
+
+  .shell { display: flex; height: 900px; }
+  aside { width: 224px; border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; }
+  .brand { padding: 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+  .brand h2 { font-size: 14px; font-weight: 700; letter-spacing: -0.02em; line-height: 20px; }
+  .brand p { font-size: 10px; color: var(--muted-foreground); line-height: 15px; }
+  nav { flex: 1; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+  .nl { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 4px; font-size: 12px; font-weight: 500; color: var(--muted-foreground); line-height: 16px; }
+  .nl.active { background: var(--accent); color: var(--foreground); }
+  .nav-bottom { padding: 0 8px 4px; display: flex; flex-direction: column; gap: 2px; }
+  .user { padding: 12px 16px; border-top: 1px solid var(--border); }
+  .user .row { display: flex; justify-content: space-between; align-items: center; font-size: 10px; color: var(--muted-foreground); }
+  .user .row .ic { display: flex; gap: 8px; }
+  .user .ver { font-size: 9px; color: rgba(163,163,163,.5); margin-top: 4px; }
+
+  main { flex: 1; min-width: 0; overflow: hidden; position: relative; }
+  .topbar { height: 57px; border-bottom: 1px solid var(--border); padding: 12px 24px; display: flex; justify-content: flex-end; align-items: center; }
+  .sel { height: 32px; border-radius: 4px; border: 1px solid var(--border); background: var(--muted); padding: 0 10px 0 12px; font-size: 12px; display: inline-flex; align-items: center; gap: 18px; }
+  .content { padding: 24px; }
+
+  .bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .tabgroups { display: flex; gap: 12px; }
+  .tabs { display: flex; gap: 4px; padding: 2px; border-radius: 8px; background: var(--muted); }
+  .tab { padding: 6px 12px; border-radius: 4px; font-size: 12px; font-weight: 500; color: var(--muted-foreground); display: inline-flex; align-items: center; gap: 6px; line-height: 16px; }
+  .tab.on { background: var(--background); color: var(--foreground); box-shadow: 0 1px 2px rgba(0,0,0,.5); }
+  .cnt { display: inline-flex; align-items: center; justify-content: center; height: 16px; min-width: 16px; padding: 0 4px; border-radius: 999px; color: #fff; font-size: 9px; font-weight: 700; }
+  .btn-out { height: 28px; padding: 0 12px; border-radius: 4px; border: 1px solid var(--border); background: var(--card); font-size: 11px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
+
+  .filters { margin-bottom: 24px; display: flex; flex-direction: column; gap: 8px; }
+  .search { position: relative; }
+  .search .i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--muted-foreground); }
+  .search div { width: 100%; padding: 8px 36px; font-size: 14px; border-radius: 8px; border: 1px solid var(--border); background: var(--card); color: var(--muted-foreground); line-height: 20px; }
+  .daterow { display: flex; align-items: center; gap: 8px; color: var(--muted-foreground); }
+  .daterow .l { font-size: 10px; }
+  .date { font-size: 12px; padding: 5px 8px; border-radius: 4px; border: 1px solid var(--border); background: var(--card); color: var(--foreground); display: inline-flex; align-items: center; gap: 18px; line-height: 16px; }
+  .date.ph { color: var(--muted-foreground); }
+  .sliders { display: flex; align-items: center; gap: 16px; }
+  .rs { display: flex; align-items: center; gap: 8px; width: 260px; }
+  .rs .lbl { font-size: 10px; color: var(--muted-foreground); font-weight: 500; width: 40px; }
+  .rs .v { font-size: 10px; font-weight: 500; font-variant-numeric: tabular-nums; width: 26px; text-align: right; }
+  .rs .v.r { text-align: left; }
+  .track { position: relative; flex: 1; height: 24px; display: flex; align-items: center; }
+  .track .bg { position: absolute; left: 0; right: 0; height: 6px; border-radius: 999px; background: var(--muted); }
+  .track .fill { position: absolute; height: 6px; border-radius: 999px; }
+  .thumb { position: absolute; width: 14px; height: 14px; border-radius: 50%; background: var(--foreground); border: 2px solid var(--background); box-shadow: 0 1px 2px rgba(0,0,0,.6); transform: translateX(-50%); }
+  .reset { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; color: var(--muted-foreground); }
+  .results { font-size: 11px; color: var(--muted-foreground); }
+
+
+  .bd { font-size: 9px; padding: 2px 6px; border-radius: 4px; line-height: 12px; display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
+  .bd.inv { background: var(--foreground); color: var(--background); }
+  .bd.acc { background: var(--accent); }
+  .bd.blue { background: rgba(59,130,246,.2); color: #60a5fa; }
+  .bd.purple { background: rgba(168,85,247,.2); color: #c084fc; }
+  .bd.emerald { background: rgba(16,185,129,.2); color: #34d399; font-weight: 500; }
+  .bd.amber { background: rgba(245,158,11,.2); color: #fbbf24; font-weight: 500; }
+  .bd.orange { background: rgba(249,115,22,.2); color: #fb923c; font-weight: 500; }
+  .bd.red { background: rgba(239,68,68,.18); color: #f87171; font-weight: 500; }
+  .bd.gray { background: var(--muted); color: var(--muted-foreground); }
+  .div { padding: 2px 6px; border-radius: 4px; background: rgba(37,99,235,.1); color: #3b82f6; font-size: 9px; font-weight: 500; line-height: 12px; white-space: nowrap; }
+  .card { border-radius: 8px; background: var(--card); border: 1px solid var(--border); }
+  .ch { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .ch h3 { font-size: 13px; font-weight: 600; }
+  .ch .sub { font-size: 11px; color: var(--muted-foreground); }
+  .ch .sp { flex: 1; }
+  .btn-pri { height: 28px; padding: 0 12px; border-radius: 4px; background: var(--foreground); color: var(--background); font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .btn-green { height: 30px; padding: 0 14px; border-radius: 4px; background: #16a34a; color: #fff; font-size: 12px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 10px; font-weight: 500; color: var(--muted-foreground); padding: 8px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; text-transform: uppercase; letter-spacing: .04em; }
+  td { padding: 0 12px; height: 46px; border-bottom: 1px solid var(--border); font-size: 12px; white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  .sw { width: 28px; height: 16px; border-radius: 999px; background: #262626; position: relative; display: inline-block; }
+  .sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: #737373; }
+  .sw.on { background: #16a34a; }
+  .sw.on::after { left: 14px; background: #fff; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .cb { width: 14px; height: 14px; border-radius: 3px; border: 1px solid #525252; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; }
+  .cb.on { background: #22c55e; border-color: #22c55e; color: #052e16; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-chart-column" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></symbol>
+<symbol id="i-newspaper" viewBox="0 0 24 24"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+<symbol id="i-building-2" viewBox="0 0 24 24"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></symbol>
+<symbol id="i-handshake" viewBox="0 0 24 24"><path d="m11 17 2 2a1 1 0 1 0 3-3"/><path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4"/><path d="m21 3 1 11h-2"/><path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3"/><path d="M3 4h8"/></symbol>
+<symbol id="i-triangle-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+<symbol id="i-circle-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+<symbol id="i-log-out" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></symbol>
+<symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+<symbol id="i-calendar" viewBox="0 0 24 24"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></symbol>
+<symbol id="i-rotate-ccw" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="i-linkedin" viewBox="0 0 24 24"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect width="4" height="12" x="2" y="9"/><circle cx="4" cy="4" r="2"/></symbol>
+<symbol id="i-mail" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol>
+<symbol id="i-phone" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></symbol>
+<symbol id="i-map-pin" viewBox="0 0 24 24"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></symbol>
+<symbol id="i-book-open" viewBox="0 0 24 24"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></symbol>
+<symbol id="i-external-link" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+<symbol id="i-circle-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="i-circle-x" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></symbol>
+<symbol id="i-ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></symbol>
+<symbol id="i-rss" viewBox="0 0 24 24"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></symbol>
+<symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+<symbol id="i-cpu" viewBox="0 0 24 24"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></symbol>
+<symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></symbol>
+<symbol id="i-merge" viewBox="0 0 24 24"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></symbol>
+<symbol id="i-terminal" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></symbol>
+<symbol id="i-flame" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></symbol>
+<symbol id="i-user-plus" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></symbol>
+<symbol id="i-user-check" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></symbol>
+<symbol id="i-file-down" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M12 18v-6"/><path d="m9 15 3 3 3-3"/></symbol>
+<symbol id="i-filter" viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></symbol>
+<symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+</defs></svg>
+
+<style>
+.content { padding: 20px 24px; display: flex; flex-direction: column; gap: 14px; height: calc(900px - 57px); }
+.bar { margin-bottom: 0; }
+.btn-out.on { background: var(--foreground); color: var(--background); border-color: var(--foreground); font-weight: 600; }
+.lv { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+.lvt { border: 1px solid var(--border); border-radius: 8px; padding: 11px 14px; display: flex; flex-direction: column; gap: 6px; }
+.lvt.on { border-color: #404040; background: #111; }
+.lvt .k { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--muted-foreground); }
+.lvt .v { display: flex; align-items: baseline; gap: 6px; }
+.lvt .v b { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.lvt .v span { font-size: 11px; color: var(--muted-foreground); }
+.lvt .ln { height: 3px; border-radius: 999px; background: var(--muted); overflow: hidden; }
+.lvt .ln i { display: block; height: 100%; }
+.grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0,1fr) 352px; gap: 16px; }
+.pp { display: flex; align-items: center; gap: 10px; }
+.pp .av { width: 28px; height: 28px; border-radius: 50%; background: var(--muted); display: grid; place-items: center; font-size: 11px; font-weight: 700; color: var(--muted-foreground); flex-shrink: 0; }
+.pp .n { font-size: 12px; font-weight: 600; }
+.pp .t { font-size: 10.5px; color: var(--muted-foreground); margin-top: 1px; max-width: 230px; overflow: hidden; text-overflow: ellipsis; }
+.mt .r { font-size: 10px; color: var(--muted-foreground); margin-top: 3px; max-width: 170px; overflow: hidden; text-overflow: ellipsis; }
+.act { font-size: 11px; display: inline-flex; align-items: center; gap: 5px; color: #d4d4d4; }
+.grid td { height: 52px; padding: 0 10px; }
+.grid th { padding: 8px 10px; }
+.grid td:first-child, .grid th:first-child { padding-left: 16px; }
+.grid td:last-child, .grid th:last-child { padding-right: 16px; }
+tr.pick td { background: #0f0f0f; }
+.ex { display: flex; flex-direction: column; min-height: 0; }
+.ex .sec { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.ex .lbl { font-size: 10px; font-weight: 500; color: var(--muted-foreground); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px; }
+.seg { display: flex; gap: 4px; padding: 2px; border-radius: 8px; background: var(--muted); }
+.seg span { flex: 1; text-align: center; padding: 5px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; color: var(--muted-foreground); white-space: nowrap; }
+.seg span.on { background: var(--background); color: var(--foreground); box-shadow: 0 1px 2px rgba(0,0,0,.5); }
+.selbox { height: 32px; border-radius: 6px; border: 1px solid var(--border); background: var(--muted); padding: 0 10px; font-size: 12px; display: flex; align-items: center; justify-content: space-between; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 7px 10px; }
+.cols span { display: flex; align-items: center; gap: 7px; font-size: 11.5px; }
+.cols span.off { color: var(--muted-foreground); }
+.prev { margin: 0; border: 1px solid var(--border); border-radius: 6px; background: #050505; padding: 9px 10px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 10px; line-height: 1.7; color: #a3a3a3; white-space: nowrap; overflow: hidden; }
+.prev .h { color: #60a5fa; }
+.ex .acts { padding: 12px 16px 14px; display: flex; flex-direction: column; gap: 8px; margin-top: auto; }
+.ex .acts .btn-green { justify-content: center; }
+.ex .acts .btn-out { justify-content: center; height: 30px; font-size: 12px; }
+.ex .note { font-size: 10.5px; color: var(--muted-foreground); line-height: 1.5; display: flex; gap: 6px; }
+</style>
+<div class="shell">
+  <aside>
+    <div class="brand"><div><h2>MIR</h2><p>Market Intelligence Radar</p></div></div>
+    <nav>
+      <span class="nl"><svg class="i"><use href="#i-chart-column"/></svg>Overview</span>
+      <span class="nl"><svg class="i"><use href="#i-newspaper"/></svg>Articles</span>
+      <span class="nl active"><svg class="i b"><use href="#i-users"/></svg>People</span>
+      <span class="nl"><svg class="i"><use href="#i-building-2"/></svg>Companies</span>
+      <span class="nl"><svg class="i"><use href="#i-handshake"/></svg>Deals</span>
+      <span class="nl"><svg class="i"><use href="#i-triangle-alert"/></svg>Signals</span>
+    </nav>
+    <div class="nav-bottom">
+      <span class="nl"><svg class="i"><use href="#i-circle-help"/></svg>Help</span>
+      <span class="nl"><svg class="i"><use href="#i-settings"/></svg>Admin</span>
+    </div>
+    <div class="user">
+      <div class="row"><span>alex.morgan</span><span class="ic"><svg class="i i-12"><use href="#i-sun"/></svg><svg class="i i-12"><use href="#i-log-out"/></svg></span></div>
+      <div class="ver">v1.6.0 · 9b3f2d1</div>
+    </div>
+  </aside>
+
+  <main>
+    <header class="topbar"><span class="sel">All sectors<svg class="i i-12"><use href="#i-chevron-down"/></svg></span></header>
+    <div class="content">
+      <div class="bar">
+        <div class="tabgroups">
+          <div class="tabs">
+            <span class="tab">New Prospect</span>
+            <span class="tab">Enriched</span>
+            <span class="tab">All Identified</span>
+            <span class="tab">Not Found in Enrichment</span>
+            <span class="tab">Not Relevant</span>
+          </div>
+          <div class="tabs">
+            <span class="tab on">Approved<span class="cnt" style="background:#16a34a">62</span></span>
+            <span class="tab">Reproved</span>
+          </div>
+        </div>
+        <span class="btn-out on"><svg class="i i-11"><use href="#i-download"/></svg>Export CSV</span>
+      </div>
+
+      <div class="lv">
+        <div class="lvt"><div class="k"><span class="bd emerald">Level 1</span>Exact email</div><div class="v"><b>18</b><span>contacts</span></div><div class="ln"><i style="width:29%;background:#10b981"></i></div></div>
+        <div class="lvt"><div class="k"><span class="bd blue">Level 2</span>Full name</div><div class="v"><b>9</b><span>contacts</span></div><div class="ln"><i style="width:15%;background:#3b82f6"></i></div></div>
+        <div class="lvt"><div class="k"><span class="bd amber">Level 3</span>Name prefix</div><div class="v"><b>5</b><span>to review</span></div><div class="ln"><i style="width:8%;background:#f59e0b"></i></div></div>
+        <div class="lvt"><div class="k"><span class="bd purple">Level 4</span>Name and company</div><div class="v"><b>7</b><span>contacts</span></div><div class="ln"><i style="width:11%;background:#a855f7"></i></div></div>
+        <div class="lvt on"><div class="k"><span class="bd gray">No match</span></div><div class="v"><b>23</b><span>become new leads</span></div><div class="ln"><i style="width:37%;background:#737373"></i></div></div>
+      </div>
+
+      <div class="grid">
+        <div class="card" style="overflow:hidden">
+          <table>
+            <thead><tr><th style="width:30px"><span class="cb"></span></th><th>Person</th><th>Score</th><th>ICP</th><th>CRM match</th><th>Export action</th></tr></thead>
+            <tbody>
+              <tr class="pick"><td><span class="cb on"><svg class="i i-10"><use href="#i-check"/></svg></span></td><td><div class="pp"><span class="av">P</span><div><div class="n">Priya Raman</div><div class="t">Chief Financial Officer · Ledgerline</div></div></div></td><td><span class="bd emerald">9</span></td><td><span class="bd orange">86%</span></td><td class="mt"><span class="bd emerald">Level 1 · email</span><div class="r">priya.raman@example.com</div></td><td><span class="act"><svg class="i i-12"><use href="#i-user-check"/></svg>Update contact</span></td></tr>
+              <tr class="pick"><td><span class="cb on"><svg class="i i-10"><use href="#i-check"/></svg></span></td><td><div class="pp"><span class="av">L</span><div><div class="n">Lukas Novak</div><div class="t">CTO · Voltgrid Energy</div></div></div></td><td><span class="bd emerald">9</span></td><td><span class="bd orange">88%</span></td><td class="mt"><span class="bd gray">No match</span><div class="r">no contact with this name</div></td><td><span class="act"><svg class="i i-12"><use href="#i-user-plus"/></svg>Create lead</span></td></tr>
+              <tr class="pick"><td><span class="cb on"><svg class="i i-10"><use href="#i-check"/></svg></span></td><td><div class="pp"><span class="av">M</span><div><div class="n">Marcus Oyelaran</div><div class="t">VP of Platform Engineering · Northwind Cloud</div></div></div></td><td><span class="bd emerald">8</span></td><td><span class="bd orange">78%</span></td><td class="mt"><span class="bd purple">Level 4 · name and company</span><div class="r">Marcus O. · Northwind Cloud</div></td><td><span class="act"><svg class="i i-12"><use href="#i-user-check"/></svg>Update contact</span></td></tr>
+              <tr class="pick"><td><span class="cb on"><svg class="i i-10"><use href="#i-check"/></svg></span></td><td><div class="pp"><span class="av">D</span><div><div class="n">Diego Salgado</div><div class="t">Chief Operating Officer · Andes Freight</div></div></div></td><td><span class="bd emerald">8</span></td><td><span class="bd orange">81%</span></td><td class="mt"><span class="bd blue">Level 2 · full name</span><div class="r">Diego Salgado · Andes Freight</div></td><td><span class="act"><svg class="i i-12"><use href="#i-user-check"/></svg>Update contact</span></td></tr>
+              <tr><td><span class="cb"></span></td><td><div class="pp"><span class="av">A</span><div><div class="n">Amara Okafor</div><div class="t">Director of Data · Brightwell Health</div></div></div></td><td><span class="bd emerald">7</span></td><td><span class="bd amber">69%</span></td><td class="mt"><span class="bd amber">Level 3 · prefix</span><div class="r">2 candidates in CRM</div></td><td><span class="act" style="color:#fbbf24"><svg class="i i-12"><use href="#i-merge"/></svg>Review first</span></td></tr>
+              <tr class="pick"><td><span class="cb on"><svg class="i i-10"><use href="#i-check"/></svg></span></td><td><div class="pp"><span class="av">H</span><div><div class="n">Hannah Becker</div><div class="t">Head of Procurement · Corvel Retail</div></div></div></td><td><span class="bd emerald">7</span></td><td><span class="bd amber">72%</span></td><td class="mt"><span class="bd gray">No match</span><div class="r">company is already a CRM account</div></td><td><span class="act"><svg class="i i-12"><use href="#i-user-plus"/></svg>Create lead</span></td></tr>
+              <tr><td><span class="cb"></span></td><td><div class="pp"><span class="av">K</span><div><div class="n">Kenji Watanabe</div><div class="t">Head of Supply Chain · Hoshi Components</div></div></div></td><td><span class="bd emerald">7</span></td><td><span class="bd amber">74%</span></td><td class="mt"><span class="bd blue">Level 2 · full name</span><div class="r">Kenji Watanabe · Hoshi Components</div></td><td><span class="act"><svg class="i i-12"><use href="#i-user-check"/></svg>Update contact</span></td></tr>
+              <tr><td><span class="cb"></span></td><td><div class="pp"><span class="av">S</span><div><div class="n">Sofia Marchetti</div><div class="t">VP of Sales · Tessera Pay</div></div></div></td><td><span class="bd amber">6</span></td><td><span class="bd amber">61%</span></td><td class="mt"><span class="bd emerald">Level 1 · email</span><div class="r">s.marchetti@example.com</div></td><td><span class="act"><svg class="i i-12"><use href="#i-user-check"/></svg>Update contact</span></td></tr>
+              <tr><td><span class="cb"></span></td><td><div class="pp"><span class="av">R</span><div><div class="n">Rui Carvalho</div><div class="t">Head of Analytics · Mareva Foods</div></div></div></td><td><span class="bd amber">6</span></td><td><span class="bd amber">58%</span></td><td class="mt"><span class="bd gray">No match</span><div class="r">no contact with this name</div></td><td><span class="act"><svg class="i i-12"><use href="#i-user-plus"/></svg>Create lead</span></td></tr>
+              <tr><td><span class="cb"></span></td><td><div class="pp"><span class="av">E</span><div><div class="n">Elena Varga</div><div class="t">Director of Data Partnerships · Quillstack</div></div></div></td><td><span class="bd amber">6</span></td><td><span class="bd amber">55%</span></td><td class="mt"><span class="bd emerald">Level 1 · email</span><div class="r">elena.varga@example.com</div></td><td><span class="act"><svg class="i i-12"><use href="#i-user-check"/></svg>Update contact</span></td></tr>
+              <tr><td><span class="cb"></span></td><td><div class="pp"><span class="av">T</span><div><div class="n">Tomas Ribeiro</div><div class="t">Head of Logistics · Cargoline</div></div></div></td><td><span class="bd amber">6</span></td><td><span class="bd amber">57%</span></td><td class="mt"><span class="bd gray">No match</span><div class="r">no contact with this name</div></td><td><span class="act"><svg class="i i-12"><use href="#i-user-plus"/></svg>Create lead</span></td></tr>
+              <tr><td><span class="cb"></span></td><td><div class="pp"><span class="av">N</span><div><div class="n">Nadia Haddad</div><div class="t">VP of Finance · Orbit Freight</div></div></div></td><td><span class="bd amber">6</span></td><td><span class="bd amber">52%</span></td><td class="mt"><span class="bd purple">Level 4 · name and company</span><div class="r">Nadia H. · Orbit Freight</div></td><td><span class="act"><svg class="i i-12"><use href="#i-user-check"/></svg>Update contact</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="card ex">
+          <div class="ch"><h3>Export CSV</h3><span class="sp"></span><svg class="i i-12 muted"><use href="#i-x"/></svg></div>
+          <div class="sec"><div class="lbl">Scope</div><div class="seg"><span>Approved (62)</span><span class="on">Selected (5)</span><span>Current filter</span></div></div>
+          <div class="sec"><div class="lbl">Format</div><div class="selbox">CRM import template<svg class="i i-12"><use href="#i-chevron-down"/></svg></div></div>
+          <div class="sec"><div class="lbl">Columns</div>
+            <div class="cols">
+              <span><span class="cb on"><svg class="i i-10"><use href="#i-check"/></svg></span>Name</span>
+              <span><span class="cb on"><svg class="i i-10"><use href="#i-check"/></svg></span>Title</span>
+              <span><span class="cb on"><svg class="i i-10"><use href="#i-check"/></svg></span>Company</span>
+              <span><span class="cb on"><svg class="i i-10"><use href="#i-check"/></svg></span>Email</span>
+              <span><span class="cb on"><svg class="i i-10"><use href="#i-check"/></svg></span>LinkedIn</span>
+              <span><span class="cb on"><svg class="i i-10"><use href="#i-check"/></svg></span>Sector</span>
+              <span><span class="cb on"><svg class="i i-10"><use href="#i-check"/></svg></span>Score and ICP</span>
+              <span><span class="cb on"><svg class="i i-10"><use href="#i-check"/></svg></span>Match level</span>
+              <span><span class="cb on"><svg class="i i-10"><use href="#i-check"/></svg></span>CRM ID</span>
+              <span><span class="cb on"><svg class="i i-10"><use href="#i-check"/></svg></span>Signal summary</span>
+              <span class="off"><span class="cb"></span>Phone</span>
+              <span class="off"><span class="cb"></span>Source URL</span>
+            </div>
+          </div>
+          <div class="sec" style="border-bottom:0"><div class="lbl">Preview</div>
+            <div class="prev"><span class="h">name,company,match_level,crm_id,action</span><br>Priya Raman,Ledgerline,1,003X00A1b2C,update<br>Lukas Novak,Voltgrid Energy,,,create_lead<br>Marcus Oyelaran,Northwind,4,003X00D4e5F,update</div>
+          </div>
+          <div class="acts">
+            <div class="note"><svg class="i i-12"><use href="#i-circle-help"/></svg>2 become new leads and 3 update contacts already in the CRM.</div>
+            <span class="btn-green"><svg class="i i-12"><use href="#i-file-down"/></svg>Download CSV (5)</span>
+            <span class="btn-out">Mark as exported</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+</body>
+</html>

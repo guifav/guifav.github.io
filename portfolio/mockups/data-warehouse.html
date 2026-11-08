@@ -111,7 +111,7 @@
   <div>
     <div class="eyebrow mono">Arquitetura · Data warehouse</div>
     <h1>Um contrato de dados para cada aplicação</h1>
-    <p class="lead">ETL versionado carrega o Redshift a partir do CRM e do banco da plataforma e publica contratos de dados com dono, teste e portão de qualidade. A ligação de cada aplicação ao seu contrato está em implantação.</p>
+    <p class="lead">ETL versionado carrega o data warehouse a partir do CRM e do banco da plataforma e publica contratos de dados com dono, teste e portão de qualidade, prontos para cada aplicação e agente de IA consumir.</p>
   </div>
   <div class="legend">
     <span><i class="lg-line"></i>fluxo de dados</span>
@@ -129,10 +129,10 @@
 <div class="col" style="left:56px;width:224px;top:216px" id="sources">
   <div class="src"><div class="ib"><svg class="i"><use href="#cloud"/></svg></div><div><div class="t">CRM (Salesforce)</div><div class="s">contas, contatos, vendas</div></div></div>
   <div class="src"><div class="ib"><svg class="i"><use href="#db"/></svg></div><div><div class="t">Banco da plataforma</div><div class="s">logins, reuniões, intros</div></div></div>
-  <div class="src"><div class="ib"><svg class="i"><use href="#cal"/></svg></div><div><div class="t">Eventos e check-in</div><div class="s">inscrições, presença</div></div></div>
-  <div class="src"><div class="ib"><svg class="i"><use href="#mail"/></svg></div><div><div class="t">Marketing Cloud</div><div class="s">envios, aberturas, cliques</div></div></div>
+  <div class="src"><div class="ib"><svg class="i"><use href="#cal"/></svg></div><div><div class="t">Pedidos e assinaturas</div><div class="s">compras, renovações</div></div></div>
+  <div class="src"><div class="ib"><svg class="i"><use href="#mail"/></svg></div><div><div class="t">Disparo de e-mail</div><div class="s">envios, aberturas, cliques</div></div></div>
   <div class="src"><div class="ib"><svg class="i"><use href="#activity"/></svg></div><div><div class="t">Analytics web</div><div class="s">páginas, sessões, origem</div></div></div>
-  <div class="src"><div class="ib"><svg class="i"><use href="#clip"/></svg></div><div><div class="t">Pesquisas e NPS</div><div class="s">respostas pós-evento</div></div></div>
+  <div class="src"><div class="ib"><svg class="i"><use href="#clip"/></svg></div><div><div class="t">Pesquisas e NPS</div><div class="s">respostas pós-compra</div></div></div>
   <div class="src" style="margin-bottom:0"><div class="ib"><svg class="i"><use href="#share"/></svg></div><div><div class="t">Notícias e redes</div><div class="s">menções e conteúdo</div></div></div>
 </div>
 
@@ -152,10 +152,10 @@
 <!-- 03 Warehouse -->
 <div class="col" style="left:604px;width:262px" id="wh">
   <div class="big wh">
-    <div class="bh"><div class="ib"><svg class="i"><use href="#layers"/></svg></div><div><div class="t">Amazon Redshift</div><div class="s">fonte oficial para métricas</div></div></div>
+    <div class="bh"><div class="ib"><svg class="i"><use href="#layers"/></svg></div><div><div class="t">Data warehouse</div><div class="s">fonte oficial para métricas</div></div></div>
     <div class="layer"><div class="k mono">Camada 1</div><div class="t">Réplicas das fontes</div><div class="s">espelho fiel, sem regra de negócio</div></div>
-    <div class="layer"><div class="k mono">Camada 2</div><div class="t">Dimensões e fatos</div><div class="tags"><span class="tag">pessoas</span><span class="tag">contas</span><span class="tag">eventos</span><span class="tag">participações</span><span class="tag">vendas</span></div></div>
-    <div class="layer" style="margin-bottom:0"><div class="k mono">Camada 3</div><div class="t">Modelos analíticos</div><div class="tags"><span class="tag">calor</span><span class="tag">clusters</span><span class="tag">matchmaking</span><span class="tag">funil</span></div></div>
+    <div class="layer"><div class="k mono">Camada 2</div><div class="t">Dimensões e fatos</div><div class="tags"><span class="tag">pessoas</span><span class="tag">contas</span><span class="tag">pedidos</span><span class="tag">interações</span><span class="tag">vendas</span></div></div>
+    <div class="layer" style="margin-bottom:0"><div class="k mono">Camada 3</div><div class="t">Modelos analíticos</div><div class="tags"><span class="tag">propensão</span><span class="tag">clusters</span><span class="tag">recomendações</span><span class="tag">funil</span></div></div>
     <div class="gate" style="margin-top:12px"><svg class="i"><use href="#shield"/></svg><div><div class="t">Contrato de qualidade</div><div class="s">checagem diária; falha conhecida tem dono e prazo</div></div></div>
   </div>
 </div>
@@ -164,16 +164,16 @@
 <div class="col" style="left:920px;width:196px;top:258px" id="contracts">
   <div class="ctr"><span class="bar"></span><div class="ib"><svg class="i"><use href="#file"/></svg></div><div><div class="t">Engajamento</div><div class="s">estado por pessoa</div></div></div>
   <div class="ctr"><span class="bar"></span><div class="ib"><svg class="i"><use href="#file"/></svg></div><div><div class="t">Segmentos</div><div class="s">clusters de audiência</div></div></div>
-  <div class="ctr"><span class="bar"></span><div class="ib"><svg class="i"><use href="#file"/></svg></div><div><div class="t">Matchmaking</div><div class="s">pares e histórico</div></div></div>
+  <div class="ctr"><span class="bar"></span><div class="ib"><svg class="i"><use href="#file"/></svg></div><div><div class="t">Recomendações</div><div class="s">próximas melhores ações</div></div></div>
   <div class="ctr"><span class="bar"></span><div class="ib"><svg class="i"><use href="#file"/></svg></div><div><div class="t">Funil</div><div class="s">comercial e marketing</div></div></div>
-  <div class="ctr" style="margin-bottom:0"><span class="bar"></span><div class="ib"><svg class="i"><use href="#file"/></svg></div><div><div class="t">Calor</div><div class="s">nível de relação</div></div></div>
+  <div class="ctr" style="margin-bottom:0"><span class="bar"></span><div class="ib"><svg class="i"><use href="#file"/></svg></div><div><div class="t">Propensão</div><div class="s">probabilidade de compra</div></div></div>
 </div>
 
 <!-- 05 Aplicações -->
 <div class="col" style="left:1188px;width:196px;top:258px" id="apps">
   <div class="app"><div class="ib"><svg class="i"><use href="#bot"/></svg></div><div><div class="t">Agentes de IA</div><div class="s">contexto via MCP</div></div></div>
   <div class="app"><div class="ib"><svg class="i"><use href="#target"/></svg></div><div><div class="t">App comercial</div><div class="s">carteira e fila do SDR</div></div></div>
-  <div class="app"><div class="ib"><svg class="i"><use href="#spark"/></svg></div><div><div class="t">Relacionamento</div><div class="s">eventos e conexões</div></div></div>
+  <div class="app"><div class="ib"><svg class="i"><use href="#spark"/></svg></div><div><div class="t">Relacionamento</div><div class="s">jornadas e contatos</div></div></div>
   <div class="app"><div class="ib"><svg class="i"><use href="#route"/></svg></div><div><div class="t">Orquestrador</div><div class="s">jornadas de e-mail</div></div></div>
   <div class="app" style="margin-bottom:0"><div class="ib"><svg class="i"><use href="#dash"/></svg></div><div><div class="t">Dashboards</div><div class="s">analytics e relatórios</div></div></div>
 </div>

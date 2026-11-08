@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- Tela conceitual. Pessoas, empresas e notas são fictícias. -->
 <style>
   :root {
     --bg: #ffffff; --bg-subtle: #fafaf9; --bg-muted: #f5f5f4; --bg-hover: #ebeae8;
@@ -41,7 +42,7 @@
   .sb-nav { padding: 8px; display: flex; flex-direction: column; gap: 1px; flex: 1; overflow: hidden; }
   .sb-group-label { padding: 10px 10px 4px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-4); font-weight: 600; }
   .sb-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: var(--r-md); font-size: 12.5px; color: var(--text-2); }
-  .sb-item.active { background: var(--bg-hover); color: var(--text-1); font-weight: 500; }
+  .sb-item.active, .sb-item.on { background: var(--bg-hover); color: var(--text-1); font-weight: 500; }
   .sb-item .ml { margin-left: auto; }
   .sb-footer { padding: 10px; border-top: 1px solid var(--border-subtle); display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-2); }
   .sb-avatar { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 10px; font-weight: 600; color: #fff; background: linear-gradient(135deg, #a8a29e, #78716c); flex-shrink: 0; }
@@ -114,6 +115,7 @@
 
   .chat-fab { position: absolute; bottom: 24px; right: 24px; height: 44px; padding: 0 18px 0 14px; border-radius: 9999px; display: inline-flex; align-items: center; gap: 8px; background: var(--coach); color: #fff; font-size: 13px; font-weight: 600; box-shadow: 0 8px 24px rgba(124,58,237,0.28), 0 2px 6px rgba(0,0,0,0.08); }
   .chat-fab svg.i { width: 18px; height: 18px; }
+
 </style>
 </head>
 <body>
@@ -153,8 +155,8 @@
   </defs>
 </svg>
 
+
 <div class="app">
-  <!-- Sidebar -->
   <aside class="app-sidebar">
     <div class="sb-brand">
       <svg class="sb-brand-dot" viewBox="0 0 1024 1024"><rect width="1024" height="1024" rx="230" fill="#0e0e0e"/><path d="M308 235h408c59 0 108 49 108 108v214c0 59-49 108-108 108H485L330 820V665h-22c-59 0-108-49-108-108V343c0-59 49-108 108-108z" fill="#fff"/><path d="M300 558l130-130 108 68 180-170M600 329h118v118" fill="none" stroke="#0e0e0e" stroke-width="56" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -162,17 +164,17 @@
     </div>
     <nav class="sb-nav">
       <div class="sb-group-label">Início</div>
-      <div class="sb-item"><svg class="i"><use href="#i-home"/></svg>Início</div>
-      <div class="sb-item"><svg class="i"><use href="#i-trending"/></svg>Minha Performance</div>
+      <div class="sb-item "><svg class="i"><use href="#i-home"/></svg>Início</div>
+      <div class="sb-item "><svg class="i"><use href="#i-trending"/></svg>Minha Performance</div>
 
       <div class="sb-group-label">Operação</div>
-      <div class="sb-item active"><svg class="i"><use href="#i-phone"/></svg>Chamadas</div>
+      <div class="sb-item on"><svg class="i"><use href="#i-phone"/></svg>Chamadas</div>
       <div class="sb-item"><svg class="i"><use href="#i-mic"/></svg>Gravador de Áudio<span class="chip accent ml" style="font-size:10px;padding:1px 6px">BETA</span></div>
-      <div class="sb-item"><svg class="i"><use href="#i-users"/></svg>Time</div>
+      <div class="sb-item "><svg class="i"><use href="#i-users"/></svg>Time</div>
       <div class="sb-item"><svg class="i"><use href="#i-trophy"/></svg>Ranking</div>
 
       <div class="sb-group-label">Vendas</div>
-      <div class="sb-item"><svg class="i"><use href="#i-calendar"/></svg>Preparação de Reunião</div>
+      <div class="sb-item "><svg class="i"><use href="#i-calendar"/></svg>Preparação de Reunião</div>
       <div class="sb-item"><svg class="i"><use href="#i-book-user"/></svg>Contatos/Leads</div>
       <div class="sb-item"><svg class="i"><use href="#i-building"/></svg>Contas</div>
 
@@ -180,7 +182,7 @@
       <div class="sb-item"><svg class="i"><use href="#i-sparkles"/></svg>Insights</div>
 
       <div class="sb-group-label">T&amp;D</div>
-      <div class="sb-item"><svg class="i"><use href="#i-dumbbell"/></svg>Sparring<span class="chip accent ml" style="font-size:10px;padding:1px 6px">BETA</span></div>
+      <div class="sb-item "><svg class="i"><use href="#i-dumbbell"/></svg>Sparring<span class="chip accent ml" style="font-size:10px;padding:1px 6px">BETA</span></div>
 
       <div class="sb-group-label">Conhecimento</div>
       <div class="sb-item"><svg class="i"><use href="#i-layers"/></svg>Frameworks</div>
@@ -202,11 +204,9 @@
     </div>
   </aside>
 
-  <!-- Topbar -->
+
   <header class="app-topbar">
-    <div class="tb-crumbs">
-      <span>Dashboard</span><span>›</span><span>Chamadas</span><span>›</span><span class="current">Henrique Saldanha</span>
-    </div>
+    <div class="tb-crumbs"><span>Dashboard</span><span>›</span><span>Chamadas</span><span>›</span><span class="current">Marcos Lacerda</span></div>
     <div class="tb-spacer"></div>
     <div style="display:inline-flex;align-items:center;gap:6px">
       <span class="tb-btn tb-search-trigger"><svg class="i"><use href="#i-search"/></svg><span class="lbl">Buscar calls e Representantes…</span><span class="tb-search-kbd">⌘K</span></span>
@@ -217,27 +217,26 @@
     </div>
   </header>
 
-  <!-- Main -->
   <main class="app-main">
     <div class="page">
       <div style="margin-bottom:10px"><span class="back"><svg class="i" style="width:13px;height:13px"><use href="#i-chev-left"/></svg>Voltar</span></div>
 
-      <!-- Call header -->
       <div class="card" style="padding:20px">
         <div style="display:flex;align-items:center;gap:24px">
           <div style="flex:1;min-width:0">
             <div class="meta">
               <div class="meta-row">
-                <span class="pfx">Call</span><span class="val">22/10/2026 15:30</span>
-                <span class="dot">·</span><span class="mono" style="color:var(--text-3)">31m 48s</span>
-                <span class="dot">·</span><span class="mono ic-link" style="font-size:11.5px">00T8c00000QxRr2EAF</span>
+                <span class="pfx">Call</span><span class="val">28/10/2026 10:00</span>
+                <span class="dot">·</span><span class="mono" style="color:var(--text-3)">38m 12s</span>
+                <span class="dot">·</span><span style="color:var(--text-3)">Google Meet</span>
+                <span class="dot">·</span><span class="mono ic-link" style="font-size:11.5px">00T8c00000QyTs4EAF</span>
               </div>
               <div class="meta-row" style="color:var(--text-3)">
-                <span class="pfx">Avaliação</span><span class="mono">#40218</span><span class="pfx">em</span><span>22/10/2026 15:54</span>
+                <span class="pfx">Avaliação</span><span class="mono">#41307</span><span class="pfx">em</span><span>28/10/2026 10:52</span>
               </div>
             </div>
-            <h1 class="page-title"><span class="ic-link">Henrique Saldanha</span></h1>
-            <div style="color:var(--text-3);font-size:12.5px;margin-bottom:10px">Aurora Logística Investimentos</div>
+            <h1 class="page-title"><span class="ic-link">Marcos Lacerda</span></h1>
+            <div style="color:var(--text-3);font-size:12.5px;margin-bottom:10px">Diretor Industrial · Vértice Alimentos</div>
             <div style="display:flex;align-items:center;gap:10px">
               <span class="av" style="background:linear-gradient(135deg,#60a5fa,#2563eb)">LV</span>
               <span style="font-size:13px;font-weight:500"><span class="ic-link">Larissa Vidal</span></span>
@@ -248,11 +247,11 @@
 
           <div style="text-align:right;flex-shrink:0">
             <div style="color:var(--text-3);font-size:11px">Score final</div>
-            <div style="font-size:32px;font-weight:500;color:var(--text-1);line-height:1;letter-spacing:-0.02em;margin-top:2px">4,2<span style="font-size:16px;color:var(--text-4);font-weight:400">/5,0</span></div>
+            <div style="font-size:32px;font-weight:500;color:var(--text-1);line-height:1;letter-spacing:-0.02em;margin-top:2px">4,3<span style="font-size:16px;color:var(--text-4);font-weight:400">/5,0</span></div>
             <div style="margin-top:10px;display:flex;gap:6px;justify-content:flex-end">
               <span class="chip flat">Categoria A</span>
-              <span class="chip flat accent">Qualificação com handoff</span>
-              <span class="chip flat">Pensando</span>
+              <span class="chip flat accent">Diagnóstico com proposta</span>
+              <span class="chip flat positive">Avançou</span>
             </div>
           </div>
 
@@ -265,7 +264,6 @@
         </div>
       </div>
 
-      <!-- Tabs -->
       <div class="tabs" style="margin-top:20px">
         <span class="tab active">Avaliação</span>
         <span class="tab">Transcrição</span>
@@ -276,43 +274,41 @@
       </div>
 
       <div class="grid2">
-        <!-- Scorecard -->
         <div class="card" style="overflow:hidden">
           <div class="sec-head">
             <div>
-              <span class="sec-label">Avaliação por stage</span>
+              <span class="sec-label">Avaliação por etapa</span>
               <div class="mono" style="font-size:11px;color:var(--text-4);margin-top:2px">hunters · evaluate_category_a · v18</div>
             </div>
-            <span class="mono" style="font-size:12px;font-weight:500">25/30 pts</span>
+            <span class="mono" style="font-size:12px;font-weight:500">26/30 pts</span>
           </div>
 
           <div class="stage">
             <div class="stage-top"><div class="stage-n">1</div><div class="stage-name">Continuidade e rapport</div><div class="bar"><div style="width:100%;background:var(--positive)"></div></div><div class="stage-score mono">5/5</div></div>
-            <div class="stage-just">Retomou a conversa de setembro pelo nome do fundo e pelo galpão em Extrema, sem repetir a apresentação.</div>
+            <div class="stage-just">Retomou a conversa de outubro pelas 40 horas de parada por trimestre, sem repetir a apresentação.</div>
           </div>
           <div class="stage">
             <div class="stage-top"><div class="stage-n">2</div><div class="stage-name">Aprofundamento da qualificação</div><div class="bar"><div style="width:80%;background:var(--positive)"></div></div><div class="stage-score mono">4/5</div></div>
-            <div class="stage-just">Mapeou tese, ticket e horizonte de investimento; faltou confirmar quem mais participa da decisão.</div>
+            <div class="stage-just">Mapeou dor, impacto e prazo antes do verão; faltou confirmar quem mais participa da decisão.</div>
           </div>
           <div class="stage">
-            <div class="stage-top"><div class="stage-n">3</div><div class="stage-name">Pitch de valor avançado</div><div class="bar"><div style="width:80%;background:var(--positive)"></div></div><div class="stage-score mono">4/5</div></div>
-            <div class="stage-just">Ligou o Comitê de Logística à busca por coinvestidores. Citou dois pares do setor sem expor nomes.</div>
+            <div class="stage-top"><div class="stage-n">3</div><div class="stage-name">Pitch de valor avançado</div><div class="bar"><div style="width:100%;background:var(--positive)"></div></div><div class="stage-score mono">5/5</div></div>
+            <div class="stage-just">Ligou o custo da hora parada ao retorno do piloto e citou um cliente do setor sem expor o nome.</div>
           </div>
           <div class="stage">
-            <div class="stage-top"><div class="stage-n">4</div><div class="stage-name">Solução e preço</div><div class="bar"><div style="width:60%;background:var(--text-2)"></div></div><div class="stage-score mono">3/5</div></div>
-            <div class="stage-just">Apresentou o valor antes de ancorar o benefício; a objeção de orçamento ficou sem resposta estruturada.</div>
+            <div class="stage-top"><div class="stage-n">4</div><div class="stage-name">Solução e preço</div><div class="bar"><div style="width:80%;background:var(--positive)"></div></div><div class="stage-score mono">4/5</div></div>
+            <div class="stage-just">Mostrou a implantação por fases antes do preço; a forma de pagamento ficou para a proposta.</div>
           </div>
           <div class="stage">
             <div class="stage-top"><div class="stage-n">5</div><div class="stage-name">Fechamento e compromisso</div><div class="bar"><div style="width:80%;background:var(--positive)"></div></div><div class="stage-score mono">4/5</div></div>
-            <div class="stage-just">Saiu com reunião marcada com o sócio e envio da proposta até sexta, ambos confirmados pelo cliente.</div>
+            <div class="stage-just">Saiu com a reunião de proposta marcada para 10/11 e o pedido de incluir a gerente de manutenção.</div>
           </div>
           <div class="stage">
-            <div class="stage-top"><div class="stage-n">6</div><div class="stage-name">Integridade de preço e política</div><div class="bar"><div style="width:100%;background:var(--positive)"></div></div><div class="stage-score mono">5/5</div></div>
-            <div class="stage-just">Manteve a tabela e explicou o comitê de aprovação sem prometer aprovação ou condição fora da política.</div>
+            <div class="stage-top"><div class="stage-n">6</div><div class="stage-name">Integridade de preço e política</div><div class="bar"><div style="width:80%;background:var(--positive)"></div></div><div class="stage-score mono">4/5</div></div>
+            <div class="stage-just">Manteve a tabela, mas sinalizou desconto por volume antes de o cliente pedir qualquer condição.</div>
           </div>
         </div>
 
-        <!-- Right column -->
         <div style="display:flex;flex-direction:column;gap:16px">
           <div class="card" style="overflow:hidden">
             <div class="sec-head" style="justify-content:flex-start;gap:8px;padding:12px 18px">
@@ -323,15 +319,15 @@
             </div>
             <div class="co">
               <div class="co-h"><svg class="i" style="color:var(--positive)"><use href="#i-trending"/></svg>Pontos fortes</div>
-              <div class="co-t">Continuidade impecável e escuta ativa: cada pergunta partiu de algo que o cliente tinha dito na call anterior.</div>
+              <div class="co-t">Diagnóstico quantificado: o próprio cliente fez a conta das horas paradas.</div>
             </div>
             <div class="co">
               <div class="co-h"><svg class="i" style="color:var(--attention)"><use href="#i-alert"/></svg>Pontos fracos</div>
-              <div class="co-t">O preço entrou antes do valor. Quando o cliente citou orçamento, a resposta ficou no desconto.</div>
+              <div class="co-t">Ninguém do financeiro na call: o retorno ficou sem dono no cliente.</div>
             </div>
             <div class="co">
               <div class="co-h"><svg class="i" style="color:var(--accent)"><use href="#i-target"/></svg>Prioridade</div>
-              <div class="co-t">Na reunião com o sócio, abrir pelo pipeline de coinvestimento e só então apresentar a proposta.</div>
+              <div class="co-t">Na proposta, trazer o controller e abrir pelo retorno em 12 meses.</div>
             </div>
           </div>
 
@@ -339,13 +335,13 @@
             <div class="sec-head" style="padding:10px 16px">
               <div style="display:flex;align-items:center;gap:10px">
                 <span class="sec-label">Transcrição</span>
-                <span style="font-size:11px;padding:1px 8px;border-radius:999px;background:var(--bg-muted);color:var(--text-3);border:1px solid var(--border-subtle)">Original • EN</span>
+                <span style="font-size:11px;padding:1px 8px;border-radius:999px;background:var(--bg-muted);color:var(--text-3);border:1px solid var(--border-subtle)">Original • PT</span>
               </div>
-              <span class="tb-btn" style="height:26px;font-size:12px"><svg class="i"><use href="#i-languages"/></svg>Traduzir para PT</span>
+              <span class="tb-btn" style="height:26px;font-size:12px"><svg class="i"><use href="#i-languages"/></svg>Traduzir para EN</span>
             </div>
-            <div class="tr-row"><span class="mono tr-time">18:42</span><span class="tr-spk" style="color:var(--accent)">Henrique S.</span><span class="tr-txt">This year's budget is already committed.</span></div>
-            <div class="tr-row"><span class="mono tr-time">18:51</span><span class="tr-spk" style="color:var(--text-2)">Larissa Vidal</span><span class="tr-txt">What is that co-investor pipeline worth?</span></div>
-            <div class="tr-row"><span class="mono tr-time">19:07</span><span class="tr-spk" style="color:var(--accent)">Henrique S.</span><span class="tr-txt">Fair. Let's bring my partner in on that.</span></div>
+            <div class="tr-row"><span class="mono tr-time">18:42</span><span class="tr-spk" style="color:var(--accent)">Marcos L.</span><span class="tr-txt">São quarenta horas paradas por trimestre.</span></div>
+            <div class="tr-row"><span class="mono tr-time">18:55</span><span class="tr-spk" style="color:var(--text-2)">Larissa Vidal</span><span class="tr-txt">E se o piloto cortar metade disso?</span></div>
+            <div class="tr-row"><span class="mono tr-time">19:10</span><span class="tr-spk" style="color:var(--accent)">Marcos L.</span><span class="tr-txt">Então manda a proposta por fases.</span></div>
           </div>
         </div>
       </div>

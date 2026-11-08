@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>Domínios e marcas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #111111; --e50: #171717; --e100: #1e1e1e; --e150: #252525; --e200: #2c2c2c; --line: #2a2a2a; --line-2: #333333;
+    --tx: #ededed; --tx-2: #b4b4b4; --mut: #8a8a8a; --dim: #5f5f5f;
+    --ok: #4ade80; --ok-bg: rgba(74,222,128,.12); --warn: #fbbf24; --warn-bg: rgba(251,191,36,.12); --err: #f87171; --err-bg: rgba(248,113,113,.12);
+    --blue: #7cb4ff; --blue-bg: rgba(124,180,255,.12);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1440px; height: 900px; overflow: hidden; }
+  body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--tx); -webkit-font-smoothing: antialiased; display: flex; font-size: 13px; }
+  svg.i { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+  .mono { font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace; }
+
+  aside.nav { width: 224px; flex-shrink: 0; height: 900px; background: var(--e50); border-right: 1px solid var(--line); display: flex; flex-direction: column; }
+  .nlogo { height: 56px; display: flex; align-items: center; gap: 10px; padding: 0 18px; border-bottom: 1px solid var(--line); }
+  .nlogo .lm { width: 26px; height: 26px; border-radius: 6px; background: #0f4c5c; display: flex; align-items: center; justify-content: center; }
+  .nlogo b { font-size: 14px; font-weight: 700; letter-spacing: -0.01em; }
+  .nlogo span { font-size: 11px; color: var(--mut); margin-left: auto; border: 1px solid var(--line-2); border-radius: 4px; padding: 1px 6px; }
+  .ngrp { padding: 14px 10px 4px; }
+  .ngrp p { font-size: 10.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--dim); padding: 0 8px 6px; }
+  .nit { display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: 5px; font-size: 13px; color: var(--tx-2); }
+  .nit svg { color: var(--mut); }
+  .nit.on { background: var(--e150); color: var(--tx); font-weight: 500; }
+  .nit.on svg { color: var(--tx); }
+  .nit .ct { margin-left: auto; font-size: 11px; color: var(--dim); }
+  .nfoot { margin-top: auto; border-top: 1px solid var(--line); padding: 12px 18px; display: flex; align-items: center; gap: 10px; }
+  .nfoot .av { width: 26px; height: 26px; border-radius: 999px; background: #3b4a5a; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; }
+  .nfoot .nm { font-size: 12.5px; font-weight: 500; line-height: 16px; }
+  .nfoot .rl { font-size: 11px; color: var(--mut); line-height: 14px; }
+
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 900px; }
+  .appbar { height: 56px; flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 0 20px; border-bottom: 1px solid var(--line); }
+  .crumbs { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--mut); }
+  .crumbs b { color: var(--tx); font-weight: 500; }
+  .crumbs svg { color: var(--dim); }
+  .appbar .rt { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .sel { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 5px; background: var(--e100); font-size: 12.5px; color: var(--tx); white-space: nowrap; }
+  .sel .lb { color: var(--mut); }
+  .sel svg { color: var(--mut); }
+  .seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: 5px; overflow: hidden; height: 30px; }
+  .seg span { display: flex; align-items: center; padding: 0 10px; font-size: 12px; font-weight: 600; color: var(--mut); border-right: 1px solid var(--line-2); letter-spacing: .03em; }
+  .seg span:last-child { border-right: 0; }
+  .seg span.on { background: var(--tx); color: #111; }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 32px; padding: 0 14px; border-radius: 5px; font-size: 13px; font-weight: 500; white-space: nowrap; }
+  .btn.pri { background: var(--tx); color: #111; }
+  .btn.sec { background: var(--e150); color: var(--tx); border: 1px solid var(--line-2); }
+  .btn.gh { color: var(--tx-2); }
+  .btn.sm { height: 28px; padding: 0 10px; font-size: 12px; }
+
+  .pill { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 8px; border-radius: 999px; font-size: 11px; font-weight: 500; white-space: nowrap; }
+  .p-ok { background: var(--ok-bg); color: var(--ok); }
+  .p-warn { background: var(--warn-bg); color: var(--warn); }
+  .p-err { background: var(--err-bg); color: var(--err); }
+  .p-blue { background: var(--blue-bg); color: var(--blue); }
+  .p-mut { background: var(--e150); color: var(--tx-2); }
+  .dot { width: 6px; height: 6px; border-radius: 999px; background: currentColor; display: inline-block; }
+
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 12px; color: var(--tx-2); font-weight: 500; display: flex; align-items: center; gap: 6px; }
+  .field label .loc { font-size: 10px; color: var(--mut); border: 1px solid var(--line-2); border-radius: 3px; padding: 0 4px; font-weight: 600; letter-spacing: .04em; }
+  .field label .cnt { margin-left: auto; font-size: 11px; color: var(--mut); font-weight: 400; font-variant-numeric: tabular-nums; }
+  .inp { min-height: 34px; display: flex; align-items: center; padding: 7px 11px; background: var(--e100); border: 1px solid var(--line-2); border-radius: 5px; font-size: 13px; color: var(--tx); line-height: 19px; }
+  .inp.focus { border-color: #8a8a8a; box-shadow: 0 0 0 3px rgba(255,255,255,.06); }
+  .tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--line); padding: 0 24px; }
+  .tabs span { font-size: 13px; color: var(--mut); padding: 10px 0 11px; border-bottom: 2px solid transparent; margin-bottom: -1px; display: flex; align-items: center; gap: 6px; }
+  .tabs span.on { color: var(--tx); border-color: var(--tx); font-weight: 500; }
+  .tabs span i { font-style: normal; font-size: 11px; color: var(--mut); background: var(--e150); border-radius: 999px; padding: 0 6px; }
+  .box { background: var(--e50); border: 1px solid var(--line); border-radius: 8px; }
+  .bh { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  .bh h3 { font-size: 13px; font-weight: 600; }
+  .bh .rt { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .sub { font-size: 11.5px; color: var(--mut); }
+
+  .wrap { flex: 1; min-height: 0; padding: 18px 24px 20px; display: flex; flex-direction: column; gap: 16px; }
+  .ph { display: flex; align-items: flex-end; gap: 12px; }
+  .ph h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
+  .ph p { font-size: 12.5px; color: var(--mut); margin-top: 4px; }
+  .ph .rt { margin-left: auto; display: flex; gap: 8px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 11px; font-weight: 500; color: var(--mut); padding: 9px 14px; border-bottom: 1px solid var(--line); letter-spacing: .02em; }
+  td { padding: 0 14px; height: 50px; border-bottom: 1px solid var(--line); font-size: 12.5px; vertical-align: middle; white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  tr.cur td { background: rgba(124,180,255,.06); }
+  tr.cur td:first-child { box-shadow: inset 2px 0 0 var(--blue); }
+  .dm { display: flex; align-items: center; gap: 10px; }
+  .dm .fv { width: 26px; height: 26px; border-radius: 6px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .dm b { font-weight: 500; font-size: 13px; display: block; line-height: 16px; }
+  .dm span { font-size: 11.5px; color: var(--mut); line-height: 15px; }
+  .lc { display: inline-flex; gap: 4px; }
+  .lc span { font-size: 10.5px; font-weight: 600; letter-spacing: .04em; padding: 2px 6px; border-radius: 4px; border: 1px solid var(--line-2); color: var(--tx-2); }
+  .lc span.df { background: var(--tx); color: #111; border-color: var(--tx); }
+  .sw { display: inline-flex; align-items: center; gap: 4px; }
+  .sw i { width: 16px; height: 16px; border-radius: 4px; display: inline-block; box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
+  .sw em { font-style: normal; font-size: 11.5px; color: var(--mut); margin-left: 4px; }
+  .chk { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--tx-2); margin-right: 10px; }
+  .chk svg { color: var(--ok); }
+  .chk.w svg { color: var(--warn); }
+  .num { font-variant-numeric: tabular-nums; color: var(--tx-2); }
+
+  .bot { display: grid; grid-template-columns: minmax(0,1fr) 380px; gap: 16px; flex: 1; min-height: 0; }
+  .brand { display: grid; grid-template-columns: 1fr 330px; gap: 0; }
+  .bf { padding: 14px 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; align-content: start; border-right: 1px solid var(--line); }
+  .bf .full { grid-column: 1 / -1; }
+  .logo-up { display: flex; align-items: center; gap: 12px; padding: 8px 10px; background: var(--e100); border: 1px solid var(--line-2); border-radius: 5px; }
+  .logo-up .lgx { height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 10px; background: #fff; border-radius: 4px; color: #7a2e06; font-weight: 700; font-size: 13px; }
+  .logo-up .lgx i { width: 18px; height: 18px; border-radius: 4px; background: #c2570c; display: inline-block; }
+  .logo-up span { font-size: 11.5px; color: var(--mut); }
+  .clr { display: flex; align-items: center; gap: 9px; }
+  .clr i { width: 18px; height: 18px; border-radius: 4px; flex-shrink: 0; }
+  .prev { padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+  .prev .pl { font-size: 11px; color: var(--mut); display: flex; justify-content: space-between; }
+  .mini { border-radius: 6px; overflow: hidden; background: #fff; box-shadow: 0 0 0 1px rgba(255,255,255,.06); }
+  .mini .mn { white-space: nowrap; height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid #f0e6dd; font-size: 11px; font-weight: 700; color: #7a2e06; }
+  .mini .mn i { width: 16px; height: 16px; border-radius: 4px; background: #c2570c; display: inline-block; }
+  .mini .mn em { font-style: normal; font-weight: 500; color: #8a6f5f; font-size: 9.5px; margin-left: auto; display: flex; gap: 10px; }
+  .mini .mh { background: linear-gradient(135deg, #7a2e06, #c2570c 55%, #f59e0b); padding: 18px 14px 20px; color: #fff; }
+  .mini .mh p.e { font-size: 8.5px; letter-spacing: .14em; text-transform: uppercase; color: #fde3b5; font-weight: 600; }
+  .mini .mh h4 { font-family: 'Fraunces', Georgia, serif; font-weight: 500; font-size: 21px; line-height: 25px; margin-top: 6px; letter-spacing: -0.01em; }
+  .mini .mh span { display: inline-block; margin-top: 12px; background: #fff; color: #7a2e06; font-size: 9.5px; font-weight: 600; padding: 6px 10px; border-radius: 4px; }
+  .mini .mb { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 10px 12px 12px; }
+  .mini .mb div { height: 34px; border-radius: 4px; background: #f6efe9; }
+
+  .cov { padding: 6px 16px 10px; }
+  .cr { padding: 9px 0; border-bottom: 1px solid var(--line); }
+  .cr:last-child { border-bottom: 0; }
+  .cr .t { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+  .cr .t .lg { font-size: 10.5px; font-weight: 600; letter-spacing: .04em; border: 1px solid var(--line-2); border-radius: 4px; padding: 1px 6px; color: var(--tx-2); }
+  .cr .t .v { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--tx-2); font-size: 12px; }
+  .cr .bar { height: 5px; border-radius: 999px; background: var(--e200); margin-top: 7px; overflow: hidden; }
+  .cr .bar span { display: block; height: 100%; border-radius: 999px; }
+  .miss { padding: 0 16px 14px; }
+  .miss p.h { font-size: 11.5px; color: var(--mut); margin-bottom: 6px; }
+  .mi { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 12.5px; color: var(--tx-2); }
+  .mi svg { color: var(--mut); }
+  .mi .pill { margin-left: auto; }
+</style>
+</head>
+<body>
+<aside class="nav">
+  <div class="nlogo"><span class="lm"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#e9c46a" stroke-width="2.4" stroke-linecap="round"><path d="M3 8c3-3 6 3 9 0s6 3 9 0"/><path d="M3 16c3-3 6 3 9 0s6 3 9 0" stroke="#fff"/></svg></span><b>Correnteza</b><span>Admin</span></div>
+  <div class="ngrp">
+    <p>Coleções</p>
+    <div class="nit"><svg class="i" width="15" height="15" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>Páginas<span class="ct">48</span></div>
+    <div class="nit"><svg class="i" width="15" height="15" viewBox="0 0 24 24"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></svg>Notícias<span class="ct">126</span></div>
+    <div class="nit"><svg class="i" width="15" height="15" viewBox="0 0 24 24"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/></svg>Unidades de negócio<span class="ct">3</span></div>
+    <div class="nit"><svg class="i" width="15" height="15" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>Mídia<span class="ct">612</span></div>
+    <div class="nit"><svg class="i" width="15" height="15" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg>Formulários<span class="ct">5</span></div>
+    <div class="nit"><svg class="i" width="15" height="15" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>Envios<span class="ct">1.284</span></div>
+    <div class="nit"><svg class="i" width="15" height="15" viewBox="0 0 24 24"><path d="m16 3 4 4-4 4"/><path d="M20 7H4"/><path d="m8 21-4-4 4-4"/><path d="M4 17h16"/></svg>SEO e redirecionamentos</div>
+  </div>
+  <div class="ngrp">
+    <p>Globais</p>
+    <div class="nit"><svg class="i" width="15" height="15" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/></svg>Cabeçalho</div>
+    <div class="nit"><svg class="i" width="15" height="15" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 15h18"/></svg>Rodapé</div>
+    <div class="nit on"><svg class="i" width="15" height="15" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>Domínios e marcas</div>
+  </div>
+  <div class="ngrp">
+    <p>Administração</p>
+    <div class="nit"><svg class="i" width="15" height="15" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Usuários<span class="ct">14</span></div>
+  </div>
+  <div class="nfoot"><span class="av">HD</span><div><p class="nm">Helena Duarte</p><p class="rl">Editora · comunicação</p></div></div>
+</aside>
+
+
+<div class="main">
+  <div class="appbar">
+    <div class="crumbs">Painel<svg class="i" width="13" height="13" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>Globais<svg class="i" width="13" height="13" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg><b>Domínios e marcas</b></div>
+    <div class="rt"><span class="sub">Última alteração há 3 dias por Helena Duarte</span></div>
+  </div>
+
+  <div class="wrap">
+    <div class="ph">
+      <div><h1>Domínios e marcas</h1><p>Um único CMS para quatro sites: cada domínio tem idiomas, identidade visual e navegação próprios.</p></div>
+      <div class="rt"><span class="btn sec"><svg class="i" width="14" height="14" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></svg>Adicionar domínio</span><span class="btn pri">Salvar</span></div>
+    </div>
+
+    <div class="box">
+      <table>
+        <thead><tr><th>Domínio</th><th>Idiomas</th><th>Marca</th><th>Páginas</th><th>Verificações</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td><div class="dm"><span class="fv" style="background:#0f4c5c"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#e9c46a" stroke-width="2.6" stroke-linecap="round"><path d="M3 8c3-3 6 3 9 0s6 3 9 0"/><path d="M3 16c3-3 6 3 9 0s6 3 9 0" stroke="#fff"/></svg></span><div><b>grupocorrenteza.com</b><span>Site institucional do grupo</span></div></div></td><td><span class="lc"><span class="df">PT</span><span>ES</span><span>EN</span></span></td><td><span class="sw"><i style="background:#0f4c5c"></i><i style="background:#e9c46a"></i><em>Fraunces</em></span></td><td class="num">48</td><td><span class="chk"><svg class="i" width="13" height="13" viewBox="0 0 24 24" stroke-width="2.6"><path d="M20 6 9 17l-5-5"/></svg>SSL</span><span class="chk"><svg class="i" width="13" height="13" viewBox="0 0 24 24" stroke-width="2.6"><path d="M20 6 9 17l-5-5"/></svg>DNS</span><span class="chk"><svg class="i" width="13" height="13" viewBox="0 0 24 24" stroke-width="2.6"><path d="M20 6 9 17l-5-5"/></svg>hreflang</span></td><td><span class="pill p-ok"><span class="dot"></span>No ar</span></td></tr>
+          <tr><td><div class="dm"><span class="fv" style="background:#1d6f5f;color:#fff;font-size:11px;font-weight:700">L</span><div><b>correntezalog.com.br</b><span>Correnteza Logística · Brasil</span></div></div></td><td><span class="lc"><span class="df">PT</span></span></td><td><span class="sw"><i style="background:#1d6f5f"></i><i style="background:#3aa58a"></i><em>Inter</em></span></td><td class="num">22</td><td><span class="chk"><svg class="i" width="13" height="13" viewBox="0 0 24 24" stroke-width="2.6"><path d="M20 6 9 17l-5-5"/></svg>SSL</span><span class="chk"><svg class="i" width="13" height="13" viewBox="0 0 24 24" stroke-width="2.6"><path d="M20 6 9 17l-5-5"/></svg>DNS</span><span class="chk"><svg class="i" width="13" height="13" viewBox="0 0 24 24" stroke-width="2.6"><path d="M20 6 9 17l-5-5"/></svg>hreflang</span></td><td><span class="pill p-ok"><span class="dot"></span>No ar</span></td></tr>
+          <tr class="cur"><td><div class="dm"><span class="fv" style="background:#c2570c;color:#fff;font-size:11px;font-weight:700">E</span><div><b>correnteza-energia.cl</b><span>Correnteza Energia · Chile</span></div></div></td><td><span class="lc"><span class="df">ES</span><span>EN</span></span></td><td><span class="sw"><i style="background:#c2570c"></i><i style="background:#f59e0b"></i><em>Fraunces</em></span></td><td class="num">18</td><td><span class="chk"><svg class="i" width="13" height="13" viewBox="0 0 24 24" stroke-width="2.6"><path d="M20 6 9 17l-5-5"/></svg>SSL</span><span class="chk"><svg class="i" width="13" height="13" viewBox="0 0 24 24" stroke-width="2.6"><path d="M20 6 9 17l-5-5"/></svg>DNS</span><span class="chk"><svg class="i" width="13" height="13" viewBox="0 0 24 24" stroke-width="2.6"><path d="M20 6 9 17l-5-5"/></svg>hreflang</span></td><td><span class="pill p-ok"><span class="dot"></span>No ar</span></td></tr>
+          <tr><td><div class="dm"><span class="fv" style="background:#7c2d5a;color:#fff;font-size:11px;font-weight:700">A</span><div><b>correntezaalimentos.mx</b><span>Correnteza Alimentos · México</span></div></div></td><td><span class="lc"><span class="df">ES</span><span>EN</span></span></td><td><span class="sw"><i style="background:#7c2d5a"></i><i style="background:#c0567f"></i><em>Inter</em></span></td><td class="num">15</td><td><span class="chk"><svg class="i" width="13" height="13" viewBox="0 0 24 24" stroke-width="2.6"><path d="M20 6 9 17l-5-5"/></svg>SSL</span><span class="chk w"><svg class="i" width="13" height="13" viewBox="0 0 24 24" stroke-width="2.4"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>DNS pendente</span></td><td><span class="pill p-warn"><span class="dot"></span>Pré-lançamento</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="bot">
+      <div class="box" style="display:flex;flex-direction:column">
+        <div class="bh"><h3>Identidade de <span class="mono" style="font-weight:500;color:var(--tx-2)">correnteza-energia.cl</span></h3><div class="rt"><span class="pill p-ok"><span class="dot"></span>publicado</span></div></div>
+        <div class="brand" style="flex:1">
+          <div class="bf">
+            <div class="field full"><label>Logo</label><div class="logo-up"><span class="lgx"><i></i>Correnteza Energía</span><span>SVG · versões clara e escura</span></div></div>
+            <div class="field"><label>Cor primária</label><div class="inp clr"><i style="background:#c2570c"></i><span class="mono" style="font-size:12px">#C2570C</span></div></div>
+            <div class="field"><label>Cor de destaque</label><div class="inp clr"><i style="background:#f59e0b"></i><span class="mono" style="font-size:12px">#F59E0B</span></div></div>
+            <div class="field"><label>Fonte dos títulos</label><div class="inp">Fraunces</div></div>
+            <div class="field"><label>Fonte do texto</label><div class="inp">Inter</div></div>
+            <div class="field"><label>Idioma padrão</label><div class="inp">Español</div></div>
+            <div class="field"><label>Idioma de reserva</label><div class="inp">English</div></div>
+            <div class="field"><label>Favicon</label><div class="inp clr"><i style="background:#c2570c;border-radius:5px"></i><span>favicon-energia.svg</span></div></div>
+            <div class="field"><label>Menu de navegação</label><div class="inp" style="justify-content:space-between"><span>Próprio · 4 itens</span><span class="sub">editar</span></div></div>
+            <div class="field full"><label>Rodapé, formulários e políticas</label><div class="inp" style="gap:8px"><span class="pill p-blue">herdados do grupo</span><span class="sub">alterações no grupo chegam a este domínio automaticamente</span></div></div>
+          </div>
+          <div class="prev">
+            <p class="pl"><span>Pré-visualização</span><span class="mono">/es</span></p>
+            <div class="mini">
+              <div class="mn"><i></i>Correnteza Energía<em><span>Proyectos</span><span>Noticias</span><span>Contacto</span></em></div>
+              <div class="mh"><p class="e">Correnteza Energía</p><h4>Energía solar para la industria chilena</h4><span>Conozca los proyectos →</span></div>
+              <div class="mb"><div></div><div></div><div></div></div>
+            </div>
+            <p class="sub" style="line-height:16px">Cada domínio publica com a própria marca a partir do mesmo conteúdo e dos mesmos blocos.</p>
+            <div style="margin-top:6px;border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:7px;font-size:12px">
+              <div style="display:flex;justify-content:space-between"><span class="sub">hreflang</span><span class="mono" style="font-size:11.5px;color:var(--tx-2)">es-CL · en</span></div>
+              <div style="display:flex;justify-content:space-between"><span class="sub">Sitemap</span><span class="mono" style="font-size:11.5px;color:var(--tx-2)">/sitemap.xml · 36 URLs</span></div>
+              <div style="display:flex;justify-content:space-between"><span class="sub">Cache do site</span><span style="color:var(--tx-2)">revalidado ao publicar</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="box">
+        <div class="bh"><h3>Cobertura de tradução</h3><div class="rt"><span class="sub">todas as páginas</span></div></div>
+        <div class="cov">
+          <div class="cr"><div class="t"><span class="lg">PT</span>Português<span class="v">70 / 70</span></div><div class="bar"><span style="width:100%;background:var(--ok)"></span></div></div>
+          <div class="cr"><div class="t"><span class="lg">ES</span>Espanhol<span class="v">77 / 81</span></div><div class="bar"><span style="width:95%;background:var(--ok)"></span></div></div>
+          <div class="cr"><div class="t"><span class="lg">EN</span>Inglês<span class="v">68 / 81</span></div><div class="bar"><span style="width:84%;background:var(--warn)"></span></div></div>
+        </div>
+        <div class="miss">
+          <p class="h">Faltando em inglês (13)</p>
+          <div class="mi"><svg class="i" width="13" height="13" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>Relatório de sustentabilidade<span class="pill p-mut">grupo</span></div>
+          <div class="mi"><svg class="i" width="13" height="13" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>Trabalhe conosco<span class="pill p-mut">grupo</span></div>
+          <div class="mi"><svg class="i" width="13" height="13" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>Proyecto Atacama Norte<span class="pill p-mut">energia</span></div>
+          <div class="mi"><svg class="i" width="13" height="13" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>Línea de productos 2027<span class="pill p-mut">alimentos</span></div>
+          <div class="mi"><svg class="i" width="13" height="13" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>Código de conduta<span class="pill p-mut">grupo</span></div>
+          <p class="sub" style="margin-top:6px;line-height:16px">Enquanto não há tradução, a página aparece no idioma de reserva do domínio.</p>
+          <div style="display:flex;gap:8px;margin-top:10px"><span class="btn sec sm"><svg class="i" width="13" height="13" viewBox="0 0 24 24"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></svg>Gerar rascunhos de tradução</span><span class="btn gh sm">Ver todas</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

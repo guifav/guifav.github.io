@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>AI Newsroom · Search gaps</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --z50: #fafafa; --z100: #f4f4f5; --z150: #ececee; --z200: #e4e4e7; --z300: #d4d4d8; --z400: #a1a1aa; --z500: #71717a; --z600: #52525b; --z700: #3f3f46; --z800: #27272a; --z900: #18181b;
+    --green: #15803d; --green-bg: #ecfdf3; --green-line: #bbf7d0;
+    --amber: #b45309; --amber-bg: #fffbeb; --amber-line: #fde68a;
+    --blue: #2563eb; --blue-bg: #eff6ff; --blue-line: #bfdbfe;
+    --violet: #6d28d9; --violet-bg: #f5f3ff;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1440px; height: 900px; overflow: hidden; }
+  body { font-family: 'Inter', -apple-system, sans-serif; color: var(--z900); background: #fff; -webkit-font-smoothing: antialiased; font-feature-settings: "cv11", "ss01"; display: flex; }
+  .i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+  .i-12 { width: 12px; height: 12px; } .i-14 { width: 14px; height: 14px; } .i-18 { width: 18px; height: 18px; }
+  .tnum { font-variant-numeric: tabular-nums; }
+  .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+
+  /* sidebar */
+  aside { width: 232px; height: 900px; flex-shrink: 0; background: var(--z50); border-right: 1px solid var(--z200); display: flex; flex-direction: column; padding: 14px 10px; }
+  .brand { display: flex; align-items: center; gap: 9px; padding: 4px 8px 14px; }
+  .logo { width: 26px; height: 26px; border-radius: 7px; background: var(--z900); color: #fff; display: flex; align-items: center; justify-content: center; }
+  .brand b { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+  .pub { margin: 0 2px 16px; border: 1px solid var(--z200); background: #fff; border-radius: 8px; padding: 8px 10px; display: flex; align-items: center; gap: 10px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+  .pub .av { width: 28px; height: 28px; border-radius: 6px; background: linear-gradient(135deg, #0f766e, #134e4a); color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .pub .n { font-size: 13px; font-weight: 600; line-height: 16px; }
+  .pub .s { font-size: 11px; color: var(--z500); line-height: 14px; }
+  .pub .i { margin-left: auto; color: var(--z400); }
+  .nl { font-size: 11px; font-weight: 500; color: var(--z400); padding: 10px 10px 6px; }
+  nav a { display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 10px; border-radius: 6px; font-size: 13px; color: var(--z600); font-weight: 500; }
+  nav a .i { color: var(--z400); }
+  nav a.on { background: #fff; color: var(--z900); box-shadow: 0 0 0 1px var(--z200), 0 1px 2px rgba(0,0,0,.04); }
+  nav a.on .i { color: var(--z900); }
+  nav a .ct { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--z500); }
+  nav a .ct.warn { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-line); border-radius: 999px; padding: 0 6px; line-height: 16px; }
+  .me { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px; border-top: 1px solid var(--z200); }
+  .me .av { width: 28px; height: 28px; border-radius: 50%; background: var(--z800); color: #fff; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+  .me .n { font-size: 12.5px; font-weight: 600; line-height: 16px; }
+  .me .s { font-size: 11px; color: var(--z500); line-height: 14px; }
+
+  /* main */
+  main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .top { height: 52px; border-bottom: 1px solid var(--z200); display: flex; align-items: center; padding: 0 32px; gap: 10px; font-size: 13px; color: var(--z500); }
+  .top .cur { color: var(--z900); font-weight: 500; }
+  .top .sp { flex: 1; }
+  .run { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--z500); }
+  .run .dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,.18); }
+  .btn { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 12px; border-radius: 7px; font-size: 13px; font-weight: 500; white-space: nowrap; }
+  .btn.pri { background: var(--z900); color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+  .btn.out { border: 1px solid var(--z200); background: #fff; color: var(--z800); box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+  .content { padding: 28px 32px 0; display: flex; flex-direction: column; gap: 18px; }
+  .ph { display: flex; align-items: flex-end; justify-content: space-between; }
+  h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; line-height: 28px; }
+  .lead { margin-top: 4px; font-size: 13.5px; color: var(--z500); line-height: 20px; }
+  .card { border: 1px solid var(--z200); border-radius: 12px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.03); }
+  .chd { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px 0; }
+  .chd h2 { font-size: 13px; font-weight: 600; letter-spacing: -0.005em; }
+  .chd .meta { font-size: 12px; color: var(--z500); display: flex; align-items: center; gap: 14px; }
+  .chd .meta span { display: inline-flex; align-items: center; gap: 5px; }
+
+
+  .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+  .kpi { padding: 14px 16px; }
+  .kpi .k { font-size: 12px; color: var(--z500); display: flex; align-items: center; gap: 6px; }
+  .kpi .v { font-size: 24px; font-weight: 600; letter-spacing: -0.03em; margin-top: 4px; line-height: 28px; }
+  .kpi .d { font-size: 11.5px; color: var(--z500); margin-top: 2px; }
+  .kpi .d b { color: var(--green); font-weight: 600; }
+  .kpi.hl { border-color: var(--amber-line); background: linear-gradient(180deg, #fffcf2, #fff); }
+  .kpi.hl .v { color: var(--amber); }
+  .grid { display: grid; grid-template-columns: 452px minmax(0, 1fr); gap: 18px; }
+  .chart { padding: 6px 14px 14px; }
+  .chart svg text { font-family: 'Inter', sans-serif; }
+  .leg { display: flex; gap: 14px; padding: 0 18px 14px; font-size: 11.5px; color: var(--z500); }
+  .leg span { display: inline-flex; align-items: center; gap: 6px; }
+  .leg i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: fixed; }
+  col.c1 { width: 44px; } col.c3 { width: 108px; } col.c4 { width: 150px; } col.c5 { width: 104px; }
+  th { text-align: left; font-size: 11px; font-weight: 500; color: var(--z500); padding: 8px 12px; border-bottom: 1px solid var(--z200); background: var(--z50); white-space: nowrap; }
+  th:first-child, td:first-child { padding-left: 18px; padding-right: 0; }
+  td { padding: 12px 12px; border-bottom: 1px solid var(--z100); vertical-align: middle; font-size: 13px; }
+  tr:last-child td { border-bottom: 0; }
+  tr.sel td { background: #fffdf5; }
+  tr.sel td:first-child { box-shadow: inset 3px 0 0 #f59e0b; }
+  .cb { width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--z300); background: #fff; display: flex; align-items: center; justify-content: center; }
+  .cb.on { background: var(--z900); border-color: var(--z900); color: #fff; }
+  .cb.dis { background: var(--z100); border-color: var(--z200); }
+  .cn { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cm { margin-top: 3px; font-size: 11.5px; color: var(--z500); display: flex; gap: 8px; align-items: center; white-space: nowrap; }
+  .chip { display: inline-flex; align-items: center; gap: 3px; color: var(--violet); }
+  .chip.inlote { color: var(--blue); }
+  .imp { font-weight: 600; }
+  .imp small { display: block; font-size: 11px; font-weight: 500; color: var(--green); }
+  .cov { font-size: 12px; color: var(--z600); line-height: 16px; }
+  .cov .no { color: var(--red, #b91c1c); font-weight: 500; }
+  .pr { display: flex; align-items: center; gap: 8px; }
+  .pr .tr { flex: 1; height: 5px; border-radius: 999px; background: var(--z100); overflow: hidden; }
+  .pr .tr span { display: block; height: 100%; border-radius: 999px; background: #f59e0b; }
+  .pr b { font-size: 12.5px; font-weight: 600; width: 20px; text-align: right; }
+  .tfoot { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; border-top: 1px solid var(--z200); background: var(--z50); border-radius: 0 0 12px 12px; font-size: 12px; color: var(--z500); }
+  .seg { display: inline-flex; border: 1px solid var(--z200); border-radius: 7px; overflow: hidden; height: 32px; }
+  .seg span { font-size: 12.5px; padding: 0 10px; display: inline-flex; align-items: center; color: var(--z600); }
+  .seg span + span { border-left: 1px solid var(--z200); }
+  .seg span.on { background: var(--z100); color: var(--z900); font-weight: 500; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-feather" viewBox="0 0 24 24"><path d="M12.67 19a2 2 0 0 0 1.416-.588l6.154-6.172a6 6 0 0 0-8.49-8.49L5.586 9.914A2 2 0 0 0 5 11.328V18a1 1 0 0 0 1 1z"/><path d="M16 8 2 22"/><path d="M17.5 15H9"/></symbol>
+<symbol id="i-chevrons" viewBox="0 0 24 24"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></symbol>
+<symbol id="i-layers" viewBox="0 0 24 24"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+<symbol id="i-trending" viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></symbol>
+<symbol id="i-book" viewBox="0 0 24 24"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></symbol>
+<symbol id="i-pen" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.376 3.622a1 1 0 0 1 3.002 3.002L7.368 18.635a2 2 0 0 1-.855.506l-2.872.838a.5.5 0 0 1-.62-.62l.838-2.872a2 2 0 0 1 .506-.854z"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="i-lang" viewBox="0 0 24 24"><path d="m5 8 6 6"/><path d="m4 14 6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="m22 22-5-10-5 10"/><path d="M14 18h6"/></symbol>
+<symbol id="i-user-check" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></symbol>
+<symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="i-circle-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="i-rotate" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+<symbol id="i-inbox" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+<symbol id="i-news" viewBox="0 0 24 24"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2Zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6Z"/></symbol>
+<symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></symbol>
+<symbol id="i-file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></symbol>
+</defs></svg>
+
+<aside>
+  <div class="brand"><span class="logo"><svg class="i i-14"><use href="#i-feather"/></svg></span><b>AI Newsroom</b></div>
+  <div class="pub"><span class="av">HE</span><div><p class="n">Horizonte Energia</p><p class="s">Portal · PT · EN · ES</p></div><svg class="i i-14"><use href="#i-chevrons"/></svg></div>
+  <nav>
+    <a><svg class="i"><use href="#i-layers"/></svg>Today's batch</a>
+    <a class="on"><svg class="i"><use href="#i-search"/></svg>Search gaps<span class="ct">14</span></a>
+    <a><svg class="i"><use href="#i-activity"/></svg>Market signals</a>
+    <a><svg class="i"><use href="#i-inbox"/></svg>Review<span class="ct warn">3</span></a>
+    <a><svg class="i"><use href="#i-news"/></svg>Published</a>
+  </nav>
+  <p class="nl">Editorial base</p>
+  <nav>
+    <a><svg class="i"><use href="#i-book"/></svg>Primary sources</a>
+    <a><svg class="i"><use href="#i-pen"/></svg>Style guide</a>
+    <a><svg class="i"><use href="#i-settings"/></svg>Settings</a>
+  </nav>
+  <div class="me"><span class="av">HD</span><div><p class="n">Helena Duarte</p><p class="s">Editor in chief</p></div></div>
+</aside>
+
+<main>
+  <div class="top">
+    <span>Horizonte Energia</span><span>/</span><span class="cur">Search gaps</span>
+    <span class="sp"></span>
+    <span class="seg"><span>7 days</span><span class="on">30 days</span><span>90 days</span></span>
+    <span class="btn pri"><svg class="i i-14"><use href="#i-pen"/></svg>Create 3 stories</span>
+  </div>
+
+  <div class="content">
+    <div class="ph">
+      <div>
+        <h1>Search gaps</h1>
+        <p class="lead">Queries with real demand in Search Console that the portal does not answer well, cross-checked with market signals.</p>
+      </div>
+    </div>
+
+    <div class="kpis">
+      <div class="card kpi"><p class="k"><svg class="i i-12"><use href="#i-search"/></svg>Queries analyzed</p><p class="v tnum">3,180</p><p class="d">grouped into 212 topics</p></div>
+      <div class="card kpi hl"><p class="k"><svg class="i i-12"><use href="#i-search"/></svg>Open gaps</p><p class="v tnum">14</p><p class="d">high demand, weak answer</p></div>
+      <div class="card kpi"><p class="k"><svg class="i i-12"><use href="#i-trending"/></svg>Unanswered impressions</p><p class="v tnum">11.6K</p><p class="d">in the last 30 days</p></div>
+      <div class="card kpi"><p class="k"><svg class="i i-12"><use href="#i-circle-check"/></svg>Gaps closed this month</p><p class="v tnum">22</p><p class="d"><b>+9</b> vs. last month</p></div>
+    </div>
+
+    <div class="grid">
+      <section class="card">
+        <div class="chd"><h2>Demand × coverage</h2><div class="meta"><span>each dot is a topic</span></div></div>
+        <div class="chart"><svg width="100%" viewBox="-30 -8 440 446">
+  <rect x="200" y="205.0" width="200" height="205.0" fill="#fffbeb"/>
+  <line x1="200" y1="0" x2="200" y2="410" stroke="#e4e4e7" stroke-dasharray="3 3"/>
+  <line x1="0" y1="205.0" x2="400" y2="205.0" stroke="#e4e4e7" stroke-dasharray="3 3"/>
+  <line x1="0" y1="410" x2="400" y2="410" stroke="#d4d4d8"/>
+  <line x1="0" y1="0" x2="0" y2="410" stroke="#d4d4d8"/>
+  <text x="392" y="223.0" text-anchor="end" font-size="11" font-weight="600" fill="#b45309">GAP</text>
+  <text x="392" y="237.0" text-anchor="end" font-size="10.5" fill="#b45309" opacity=".8">high demand, weak answer</text>
+  <text x="392" y="18" text-anchor="end" font-size="11" font-weight="600" fill="#15803d">COVERED</text>
+  <text x="10" y="18" font-size="11" font-weight="600" fill="#a1a1aa">NICHE, COVERED</text>
+  <text x="10" y="223.0" font-size="11" font-weight="600" fill="#a1a1aa">LOW PRIORITY</text>
+  <circle cx="332" cy="342" r="21" fill="#f59e0b" opacity=".18"/><circle cx="332" cy="342" r="15" fill="#f59e0b" stroke="#fff" stroke-width="2"/><circle cx="296" cy="298" r="10" fill="#f59e0b" fill-opacity=".85" stroke="#fff" stroke-width="1.5"/><circle cx="262" cy="330" r="9" fill="#f59e0b" fill-opacity=".85" stroke="#fff" stroke-width="1.5"/><circle cx="362" cy="278" r="8" fill="#f59e0b" fill-opacity=".85" stroke="#fff" stroke-width="1.5"/><circle cx="236" cy="292" r="8" fill="#f59e0b" fill-opacity=".85" stroke="#fff" stroke-width="1.5"/><circle cx="318" cy="269" r="7" fill="#f59e0b" fill-opacity=".85" stroke="#fff" stroke-width="1.5"/><circle cx="80" cy="314" r="6" fill="#d4d4d8" fill-opacity=".85" stroke="#fff" stroke-width="1.5"/><circle cx="120" cy="342" r="5" fill="#d4d4d8" fill-opacity=".85" stroke="#fff" stroke-width="1.5"/><circle cx="52" cy="273" r="5" fill="#d4d4d8" fill-opacity=".85" stroke="#fff" stroke-width="1.5"/><circle cx="150" cy="262" r="6" fill="#d4d4d8" fill-opacity=".85" stroke="#fff" stroke-width="1.5"/><circle cx="290" cy="91" r="9" fill="#22c55e" fill-opacity=".85" stroke="#fff" stroke-width="1.5"/><circle cx="340" cy="68" r="11" fill="#22c55e" fill-opacity=".85" stroke="#fff" stroke-width="1.5"/><circle cx="240" cy="125" r="7" fill="#22c55e" fill-opacity=".85" stroke="#fff" stroke-width="1.5"/><circle cx="360" cy="137" r="8" fill="#22c55e" fill-opacity=".85" stroke="#fff" stroke-width="1.5"/><circle cx="200" cy="73" r="6" fill="#22c55e" fill-opacity=".85" stroke="#fff" stroke-width="1.5"/><circle cx="70" cy="102" r="5" fill="#a1a1aa" fill-opacity=".85" stroke="#fff" stroke-width="1.5"/><circle cx="110" cy="148" r="6" fill="#a1a1aa" fill-opacity=".85" stroke="#fff" stroke-width="1.5"/><circle cx="150" cy="80" r="5" fill="#a1a1aa" fill-opacity=".85" stroke="#fff" stroke-width="1.5"/>
+  <line x1="320" y1="352" x2="272" y2="380" stroke="#b45309" stroke-width="1"/>
+  <rect x="148" y="372" width="126" height="22" rx="6" fill="#18181b"/>
+  <text x="211" y="387" text-anchor="middle" font-size="11" font-weight="500" fill="#fff">batteries · 2,400 impr.</text>
+  <text x="0" y="432" font-size="10.5" fill="#71717a">fewer searches</text>
+  <text x="400" y="432" text-anchor="end" font-size="10.5" fill="#71717a">more searches (impressions, 30 days) →</text>
+  <text transform="translate(-14 410) rotate(-90)" font-size="10.5" fill="#71717a">site coverage →</text>
+</svg></div>
+        <div class="leg"><span><i style="background:#f59e0b"></i>Gap</span><span><i style="background:#22c55e"></i>Covered</span><span><i style="background:#d4d4d8"></i>Low demand</span></div>
+      </section>
+
+      <section class="card">
+        <div class="chd"><h2>Prioritized gaps</h2><div class="meta"><span>Priority = demand × trend × market signal</span></div></div>
+        <table>
+          <colgroup><col class="c1"><col><col class="c3"><col class="c4"><col class="c5"></colgroup>
+          <thead><tr><th></th><th>Topic</th><th>Impr. 30d</th><th>What the site has</th><th>Priority</th></tr></thead>
+          <tbody>
+            <tr class="sel">
+              <td><span class="cb on"><svg class="i i-12"><use href="#i-check"/></svg></span></td>
+              <td><p class="cn">Battery storage</p><p class="cm"><span>14 queries · position 18.4</span><span class="chip inlote">in today's batch</span></p></td>
+              <td><p class="imp tnum">2,400<small>+64%</small></p></td>
+              <td><p class="cov"><span class="no">Only a short note from 2024</span></p></td>
+              <td><div class="pr"><span class="tr"><span style="width:92%"></span></span><b class="tnum">92</b></div></td>
+            </tr>
+            <tr class="">
+              <td><span class="cb on"><svg class="i i-12"><use href="#i-check"/></svg></span></td>
+              <td><p class="cn">Time-of-use electricity rates</p><p class="cm"><span>9 queries · position 22.1</span><span class="chip">rate hike announced</span></p></td>
+              <td><p class="imp tnum">1,960<small>+31%</small></p></td>
+              <td><p class="cov"><span class="no">No article</span></p></td>
+              <td><div class="pr"><span class="tr"><span style="width:88%"></span></span><b class="tnum">88</b></div></td>
+            </tr>
+            <tr class="">
+              <td><span class="cb on"><svg class="i i-12"><use href="#i-check"/></svg></span></td>
+              <td><p class="cn">Retail energy choice for SMBs</p><p class="cm"><span>11 queries · position 15.7</span><span class="chip">new rule in 2027</span></p></td>
+              <td><p class="imp tnum">1,720<small>+22%</small></p></td>
+              <td><p class="cov">2023 guide, out of date</p></td>
+              <td><div class="pr"><span class="tr"><span style="width:84%"></span></span><b class="tnum">84</b></div></td>
+            </tr>
+            <tr class="">
+              <td><span class="cb"></span></td>
+              <td><p class="cn">Offshore wind permitting</p><p class="cm"><span>6 queries · position 27.3</span><span class="chip">public hearing</span></p></td>
+              <td><p class="imp tnum">1,180<small>+18%</small></p></td>
+              <td><p class="cov"><span class="no">No article</span></p></td>
+              <td><div class="pr"><span class="tr"><span style="width:76%"></span></span><b class="tnum">76</b></div></td>
+            </tr>
+            <tr class="">
+              <td><span class="cb"></span></td>
+              <td><p class="cn">Charging for electric fleets</p><p class="cm"><span>8 queries · position 12.9</span><span class="chip">3 competitors</span></p></td>
+              <td><p class="imp tnum">1,040<small>+12%</small></p></td>
+              <td><p class="cov">News item with no cost data</p></td>
+              <td><div class="pr"><span class="tr"><span style="width:71%"></span></span><b class="tnum">71</b></div></td>
+            </tr>
+            <tr class="">
+              <td><span class="cb"></span></td>
+              <td><p class="cn">Carbon credits for biomethane</p><p class="cm"><span>5 queries · position 31.0</span><span class="chip">weak signal</span></p></td>
+              <td><p class="imp tnum">620<small>+6%</small></p></td>
+              <td><p class="cov"><span class="no">No article</span></p></td>
+              <td><div class="pr"><span class="tr"><span style="width:58%"></span></span><b class="tnum">58</b></div></td>
+            </tr>
+            <tr class="">
+              <td><span class="cb"></span></td>
+              <td><p class="cn">Green hydrogen: cost per kg</p><p class="cm"><span>4 queries · position 24.8</span><span class="chip">1 announcement</span></p></td>
+              <td><p class="imp tnum">540<small>+4%</small></p></td>
+              <td><p class="cov">2025 news item, no pricing</p></td>
+              <td><div class="pr"><span class="tr"><span style="width:52%"></span></span><b class="tnum">52</b></div></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="tfoot"><span>3 selected topics become stories in the next batch</span><span>Showing 7 of 14</span></div>
+      </section>
+    </div>
+  </div>
+</main>
+</body>
+</html>

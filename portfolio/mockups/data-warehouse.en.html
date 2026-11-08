@@ -111,7 +111,7 @@
   <div>
     <div class="eyebrow mono">Architecture · Data warehouse</div>
     <h1>A data contract for every application</h1>
-    <p class="lead">Versioned ETL loads Redshift from the CRM and the platform database and publishes data contracts with an owner, tests and a quality gate. Applications are now being connected to their contracts.</p>
+    <p class="lead">Versioned ETL loads the data warehouse from the CRM and the platform database and publishes data contracts with an owner, tests and a quality gate, ready for every application and AI agent to consume.</p>
   </div>
   <div class="legend">
     <span><i class="lg-line"></i>data flow</span>
@@ -129,10 +129,10 @@
 <div class="col" style="left:56px;width:224px;top:216px" id="sources">
   <div class="src"><div class="ib"><svg class="i"><use href="#cloud"/></svg></div><div><div class="t">CRM (Salesforce)</div><div class="s">accounts, contacts, sales</div></div></div>
   <div class="src"><div class="ib"><svg class="i"><use href="#db"/></svg></div><div><div class="t">Platform database</div><div class="s">logins, meetings, intros</div></div></div>
-  <div class="src"><div class="ib"><svg class="i"><use href="#cal"/></svg></div><div><div class="t">Events and check-in</div><div class="s">registrations, attendance</div></div></div>
-  <div class="src"><div class="ib"><svg class="i"><use href="#mail"/></svg></div><div><div class="t">Marketing Cloud</div><div class="s">sends, opens, clicks</div></div></div>
+  <div class="src"><div class="ib"><svg class="i"><use href="#cal"/></svg></div><div><div class="t">Orders and subscriptions</div><div class="s">purchases, renewals</div></div></div>
+  <div class="src"><div class="ib"><svg class="i"><use href="#mail"/></svg></div><div><div class="t">Email platform</div><div class="s">sends, opens, clicks</div></div></div>
   <div class="src"><div class="ib"><svg class="i"><use href="#activity"/></svg></div><div><div class="t">Web analytics</div><div class="s">pages, sessions, source</div></div></div>
-  <div class="src"><div class="ib"><svg class="i"><use href="#clip"/></svg></div><div><div class="t">Surveys and NPS</div><div class="s">post-event responses</div></div></div>
+  <div class="src"><div class="ib"><svg class="i"><use href="#clip"/></svg></div><div><div class="t">Surveys and NPS</div><div class="s">post-purchase responses</div></div></div>
   <div class="src" style="margin-bottom:0"><div class="ib"><svg class="i"><use href="#share"/></svg></div><div><div class="t">News and social</div><div class="s">mentions and content</div></div></div>
 </div>
 
@@ -152,10 +152,10 @@
 <!-- 03 Warehouse -->
 <div class="col" style="left:604px;width:262px" id="wh">
   <div class="big wh">
-    <div class="bh"><div class="ib"><svg class="i"><use href="#layers"/></svg></div><div><div class="t">Amazon Redshift</div><div class="s">official source for metrics</div></div></div>
+    <div class="bh"><div class="ib"><svg class="i"><use href="#layers"/></svg></div><div><div class="t">Data warehouse</div><div class="s">official source for metrics</div></div></div>
     <div class="layer"><div class="k mono">Layer 1</div><div class="t">Source replicas</div><div class="s">faithful mirror, no business logic</div></div>
-    <div class="layer"><div class="k mono">Layer 2</div><div class="t">Dimensions and facts</div><div class="tags"><span class="tag">people</span><span class="tag">accounts</span><span class="tag">events</span><span class="tag">attendance</span><span class="tag">sales</span></div></div>
-    <div class="layer" style="margin-bottom:0"><div class="k mono">Layer 3</div><div class="t">Analytical models</div><div class="tags"><span class="tag">warmth</span><span class="tag">clusters</span><span class="tag">matchmaking</span><span class="tag">funnel</span></div></div>
+    <div class="layer"><div class="k mono">Layer 2</div><div class="t">Dimensions and facts</div><div class="tags"><span class="tag">people</span><span class="tag">accounts</span><span class="tag">orders</span><span class="tag">interactions</span><span class="tag">sales</span></div></div>
+    <div class="layer" style="margin-bottom:0"><div class="k mono">Layer 3</div><div class="t">Analytical models</div><div class="tags"><span class="tag">propensity</span><span class="tag">clusters</span><span class="tag">recommendations</span><span class="tag">funnel</span></div></div>
     <div class="gate" style="margin-top:12px"><svg class="i"><use href="#shield"/></svg><div><div class="t">Quality contract</div><div class="s">daily checks; every known failure has an owner and a deadline</div></div></div>
   </div>
 </div>
@@ -164,16 +164,16 @@
 <div class="col" style="left:920px;width:196px;top:258px" id="contracts">
   <div class="ctr"><span class="bar"></span><div class="ib"><svg class="i"><use href="#file"/></svg></div><div><div class="t">Engagement</div><div class="s">status per person</div></div></div>
   <div class="ctr"><span class="bar"></span><div class="ib"><svg class="i"><use href="#file"/></svg></div><div><div class="t">Segments</div><div class="s">audience clusters</div></div></div>
-  <div class="ctr"><span class="bar"></span><div class="ib"><svg class="i"><use href="#file"/></svg></div><div><div class="t">Matchmaking</div><div class="s">pairs and history</div></div></div>
+  <div class="ctr"><span class="bar"></span><div class="ib"><svg class="i"><use href="#file"/></svg></div><div><div class="t">Recommendations</div><div class="s">next best actions</div></div></div>
   <div class="ctr"><span class="bar"></span><div class="ib"><svg class="i"><use href="#file"/></svg></div><div><div class="t">Funnel</div><div class="s">sales and marketing</div></div></div>
-  <div class="ctr" style="margin-bottom:0"><span class="bar"></span><div class="ib"><svg class="i"><use href="#file"/></svg></div><div><div class="t">Warmth</div><div class="s">relationship level</div></div></div>
+  <div class="ctr" style="margin-bottom:0"><span class="bar"></span><div class="ib"><svg class="i"><use href="#file"/></svg></div><div><div class="t">Propensity</div><div class="s">likelihood to buy</div></div></div>
 </div>
 
 <!-- 05 Aplicações -->
 <div class="col" style="left:1188px;width:196px;top:258px" id="apps">
   <div class="app"><div class="ib"><svg class="i"><use href="#bot"/></svg></div><div><div class="t">AI agents</div><div class="s">context via MCP</div></div></div>
   <div class="app"><div class="ib"><svg class="i"><use href="#target"/></svg></div><div><div class="t">Sales app</div><div class="s">portfolio and SDR queue</div></div></div>
-  <div class="app"><div class="ib"><svg class="i"><use href="#spark"/></svg></div><div><div class="t">Relationships</div><div class="s">events and connections</div></div></div>
+  <div class="app"><div class="ib"><svg class="i"><use href="#spark"/></svg></div><div><div class="t">Relationships</div><div class="s">journeys and contacts</div></div></div>
   <div class="app"><div class="ib"><svg class="i"><use href="#route"/></svg></div><div><div class="t">Orchestrator</div><div class="s">email journeys</div></div></div>
   <div class="app" style="margin-bottom:0"><div class="ib"><svg class="i"><use href="#dash"/></svg></div><div><div class="t">Dashboards</div><div class="s">analytics and reports</div></div></div>
 </div>

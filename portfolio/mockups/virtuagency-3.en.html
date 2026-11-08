@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>VirtuAgency - campaign</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+<style>
+
+  :root {
+    --background: #ffffff; --foreground: #0a0a0a; --primary: #171717; --primary-fg: #fafafa;
+    --secondary: #f5f5f5; --muted: #f5f5f5; --muted-fg: #737373; --border: #e5e5e5;
+    --sidebar: #fafafa; --accent: #f5f5f5;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1440px; height: 900px; overflow: hidden; }
+  body { font-family: 'Inter', sans-serif; background: var(--background); color: var(--foreground); -webkit-font-smoothing: antialiased; display: flex; }
+  svg.i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+
+  /* sidebar */
+  aside { width: 256px; flex-shrink: 0; height: 900px; display: flex; flex-direction: column; border-right: 1px solid var(--border); background: var(--sidebar); }
+  .logo { height: 64px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); padding: 0 12px; }
+  .logo a { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+  .logo .tog { padding: 6px; border-radius: 6px; color: rgba(10,10,10,.5); display: flex; }
+  nav.side { flex: 1; padding: 8px; }
+  .blabel { padding: 16px 12px 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: rgba(10,10,10,.3); }
+  .blabel.first { padding-top: 8px; }
+  .item { display: flex; align-items: center; gap: 12px; border-radius: 6px; padding: 8px 12px; font-size: 14px; font-weight: 500; color: rgba(10,10,10,.7); margin-top: 2px; }
+  .item.active { background: #ececec; color: #171717; }
+  .sep { margin: 8px 0; border-top: 1px solid rgba(229,229,229,.8); }
+  .psec { display: flex; align-items: center; gap: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: rgba(10,10,10,.5); margin-top: 8px; }
+  .psec .ct { margin-left: auto; font-size: 10px; font-weight: 400; background: #ececec; border-radius: 999px; padding: 2px 6px; letter-spacing: 0; color: #404040; }
+  .psec svg.i { width: 12px; height: 12px; }
+  .sfoot { padding: 16px; border-top: 1px solid var(--border); }
+  .sfoot p { font-size: 12px; color: var(--muted-fg); }
+  .sfoot .mono { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 10px; color: rgba(115,115,115,.6); margin-top: 2px; }
+
+  /* coluna */
+  .col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  header { height: 64px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; }
+  .switch { min-width: 144px; height: 32px; display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid var(--border); border-radius: 6px; padding: 0 10px 0 8px; font-size: 14px; font-weight: 500; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+  .switch .bm { width: 20px; height: 20px; border-radius: 5px; background: #7c4a2d; color: #fbe9d7; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .hright { display: flex; align-items: center; gap: 8px; }
+  .iconbtn { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 6px; color: #262626; }
+  .avatar { width: 32px; height: 32px; border-radius: 999px; background: var(--muted); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 500; color: #262626; }
+
+  .rail { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); padding: 8px 24px; }
+  .step { display: flex; align-items: center; gap: 8px; }
+  .step .ln { height: 1px; width: 16px; background: var(--border); }
+  .step .ln.on { background: #171717; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; border-radius: 999px; border: 1px solid; padding: 4px 12px; font-size: 12px; font-weight: 500; line-height: 16px; }
+  .pill svg.i { width: 12px; height: 12px; }
+  .pill.done { border-color: #171717; background: #171717; color: #fafafa; }
+  .pill.current { border-color: #171717; background: rgba(23,23,23,.08); color: #171717; box-shadow: 0 0 0 3px rgba(23,23,23,.05); }
+  .pill.locked { border-color: var(--border); background: rgba(245,245,245,.6); color: var(--muted-fg); }
+  .rail .meta { margin-left: auto; font-size: 12px; color: var(--muted-fg); display: flex; align-items: center; gap: 6px; }
+
+  main { flex: 1; padding: 24px; overflow: hidden; }
+  .wrap { max-width: 1152px; margin: 0 auto; }
+  .stack > * + * { margin-top: 20px; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; border-radius: 6px; font-size: 14px; font-weight: 500; }
+  .btn.sm { height: 32px; padding: 0 12px; font-size: 13.5px; }
+  .btn.xs { height: 24px; padding: 0 8px; font-size: 12px; gap: 4px; }
+  .btn.default { background: #171717; color: #fafafa; }
+  .btn.outline { border: 1px solid var(--border); background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+  .btn.ghost { color: #171717; }
+  .btn.back { margin-left: -12px; }
+  .btn svg.i { width: 15px; height: 15px; }
+  .btn.xs svg.i { width: 12px; height: 12px; }
+  .titlebar { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+  h1 { font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: -0.02em; }
+  .lead { font-size: 14px; color: var(--muted-fg); line-height: 20px; }
+  .actions { display: flex; gap: 8px; }
+  .count { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted-fg); }
+  .sel { width: 80px; height: 32px; display: inline-flex; align-items: center; justify-content: space-between; border: 1px solid var(--border); border-radius: 6px; padding: 0 10px; color: var(--foreground); font-size: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+  .count .hint { margin-left: 8px; display: inline-flex; align-items: center; gap: 6px; font-size: 12px; }
+  .count .dot { width: 6px; height: 6px; border-radius: 999px; background: #16a34a; box-shadow: 0 0 0 3px rgba(22,163,74,.15); }
+
+  section .sh { display: flex; align-items: center; gap: 8px; }
+  section h2 { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: .025em; color: var(--muted-fg); }
+  section .sd { font-size: 12px; color: var(--muted-fg); margin-top: 4px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
+  .badge { display: inline-flex; align-items: center; justify-content: center; gap: 4px; border-radius: 999px; border: 1px solid transparent; padding: 2px 8px; font-size: 12px; font-weight: 500; white-space: nowrap; line-height: 16px; }
+  .badge svg.i { width: 11px; height: 11px; }
+  .b-default { background: #171717; color: #fafafa; }
+  .b-secondary { background: var(--secondary); color: #171717; }
+  .b-outline { border-color: var(--border); color: var(--foreground); }
+  .b-ghost { color: #404040; }
+  .b-ok { background: #ecfdf3; color: #15803d; border-color: #bbf7d0; }
+
+  .card { border: 1px solid var(--border); border-radius: 14px; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.05); padding: 18px 20px 16px; display: flex; flex-direction: column; }
+  .card.pri { border-color: #d4d4d4; }
+  .card h3 { font-size: 16px; line-height: 22px; font-weight: 600; letter-spacing: -0.01em; }
+  .card .badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .card .body { margin-top: 14px; font-size: 14px; line-height: 20px; color: var(--muted-fg); }
+  .card .body p + p { margin-top: 6px; }
+  .card .body b { font-weight: 500; color: var(--foreground); }
+  .chan { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 8px; }
+  .chan span.l { font-size: 12px; font-weight: 500; color: var(--muted-fg); margin-right: 2px; }
+  .card .acts { display: flex; gap: 8px; padding-top: 12px; margin-top: auto; }
+
+  main { padding: 20px 24px; }
+  .wrap { max-width: none; }
+  .titlebar h1 { display: flex; align-items: center; gap: 10px; }
+  .cgrid { display: grid; grid-template-columns: minmax(0,1fr) 312px; gap: 20px; margin-top: 16px; }
+  .langs { display: flex; align-items: center; gap: 6px; }
+  .lt { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px; border-radius: 6px; border: 1px solid var(--border); font-size: 12.5px; font-weight: 500; color: #404040; }
+  .lt.on { background: #171717; color: #fafafa; border-color: #171717; }
+  .lt i { font-style: normal; font-size: 11px; color: var(--muted-fg); }
+  .lt.on i { color: #a3a3a3; }
+  .langs .cons { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted-fg); }
+  .assets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 12px; }
+  .as { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,.04); background: #fff; }
+  .pv { height: 222px; background: #f6f1ec; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
+  .pv > * { transform: scale(1.18); }
+  .am { padding: 9px 12px 11px; border-top: 1px solid var(--border); }
+  .am .f { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; }
+  .am .f .badge { margin-left: auto; font-size: 11px; padding: 1px 7px; }
+  .am .d { font-size: 11.5px; color: var(--muted-fg); margin-top: 3px; display: flex; gap: 6px; align-items: center; }
+  .b-rev { background: #fffbeb; color: #b45309; border-color: #fde68a; }
+
+  /* previews */
+  .ig { width: 128px; height: 128px; border-radius: 6px; background: #7c4a2d; color: #fbe9d7; padding: 12px; display: flex; flex-direction: column; justify-content: space-between; box-shadow: 0 6px 16px rgba(60,30,10,.18); }
+  .ig .k { font-size: 8px; letter-spacing: .14em; text-transform: uppercase; color: #e0a040; font-weight: 600; }
+  .ig .h { font-family: 'Fraunces', Georgia, serif; font-size: 17px; line-height: 19px; font-weight: 500; }
+  .ig .bean { position: absolute; }
+  .st9 { width: 84px; height: 150px; border-radius: 10px; background: linear-gradient(180deg, #2f3b2f, #7c4a2d); color: #fbe9d7; padding: 12px 9px; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; box-shadow: 0 6px 16px rgba(60,30,10,.2); }
+  .st9 .bar { position: absolute; top: 18px; width: 66px; height: 2px; background: rgba(255,255,255,.35); border-radius: 2px; }
+  .st9 .h { font-family: 'Fraunces', Georgia, serif; font-size: 12px; line-height: 14px; }
+  .st9 .c { background: #e0a040; color: #2b1a0e; font-size: 8px; font-weight: 700; text-align: center; border-radius: 999px; padding: 4px 0; }
+  .car { position: relative; width: 150px; height: 112px; }
+  .car div { position: absolute; width: 104px; height: 104px; border-radius: 6px; box-shadow: 0 4px 12px rgba(60,30,10,.15); padding: 9px; font-size: 9px; }
+  .rl { width: 84px; height: 150px; border-radius: 10px; background: #1c1410; position: relative; box-shadow: 0 6px 16px rgba(0,0,0,.2); display: flex; align-items: center; justify-content: center; }
+  .rl .play { width: 30px; height: 30px; border-radius: 999px; background: rgba(255,255,255,.18); display: flex; align-items: center; justify-content: center; color: #fff; }
+  .rl .sc { position: absolute; left: 8px; right: 8px; bottom: 10px; display: flex; flex-direction: column; gap: 3px; }
+  .rl .sc i { height: 3px; border-radius: 2px; background: rgba(255,255,255,.4); display: block; }
+  .rl .tm { position: absolute; top: 8px; right: 8px; font-size: 8px; color: #fff; background: rgba(0,0,0,.4); border-radius: 3px; padding: 1px 4px; }
+  .em { width: 150px; height: 132px; background: #fff; border-radius: 6px; box-shadow: 0 4px 12px rgba(60,30,10,.12); overflow: hidden; }
+  .em .eh { height: 36px; background: #7c4a2d; color: #fbe9d7; font-family: 'Fraunces', Georgia, serif; font-size: 11px; display: flex; align-items: center; padding: 0 10px; }
+  .em .eb { padding: 9px 10px; display: flex; flex-direction: column; gap: 5px; }
+  .em .eb i { height: 4px; border-radius: 2px; background: #e8ddd3; display: block; }
+  .em .eb span { margin-top: 4px; align-self: flex-start; background: #e0a040; color: #2b1a0e; font-size: 8px; font-weight: 700; border-radius: 4px; padding: 4px 8px; }
+  .wa { width: 156px; background: #efe7dc; border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .wa .bub { background: #fff; border-radius: 8px 8px 8px 2px; padding: 7px 8px; font-size: 9.5px; line-height: 13px; color: #262626; box-shadow: 0 1px 1px rgba(0,0,0,.06); }
+  .wa .bub b { color: #7c4a2d; }
+  .wa .bt { background: #fff; border-radius: 6px; text-align: center; font-size: 9px; color: #128c7e; font-weight: 600; padding: 5px 0; }
+  .ad { width: 154px; background: #fff; border-radius: 6px; box-shadow: 0 4px 12px rgba(60,30,10,.1); padding: 10px 11px; font-family: Arial, sans-serif; }
+  .ad .sp { font-size: 8.5px; color: #202124; font-weight: 700; }
+  .ad .u { font-size: 8.5px; color: #4d5156; }
+  .ad .t { font-size: 12px; color: #1a0dab; line-height: 15px; margin-top: 4px; }
+  .ad .ds { font-size: 9px; color: #4d5156; line-height: 12px; margin-top: 3px; }
+  .bl { width: 150px; height: 132px; background: #fff; border-radius: 6px; box-shadow: 0 4px 12px rgba(60,30,10,.1); overflow: hidden; }
+  .bl .bi { height: 50px; background: linear-gradient(135deg, #2f3b2f, #7c4a2d 60%, #e0a040); }
+  .bl .bt2 { padding: 8px 10px; font-family: 'Fraunces', Georgia, serif; font-size: 11px; line-height: 13px; color: #2b1a0e; }
+  .bl .bb { padding: 0 10px; display: flex; flex-direction: column; gap: 4px; }
+  .bl .bb i { height: 3px; border-radius: 2px; background: #e8ddd3; display: block; }
+
+  .side2 { display: flex; flex-direction: column; gap: 14px; }
+  .pc { border: 1px solid var(--border); border-radius: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+  .pch { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 13.5px; font-weight: 600; }
+  .pch .rt { margin-left: auto; font-size: 12px; color: var(--muted-fg); font-weight: 400; }
+  .tot { padding: 12px 16px 14px; border-bottom: 1px solid var(--border); }
+  .tot .v { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .tot .v small { font-size: 12px; font-weight: 500; color: var(--muted-fg); letter-spacing: 0; margin-left: 6px; }
+  .tot .q { margin-top: 10px; font-size: 11.5px; color: var(--muted-fg); display: flex; justify-content: space-between; }
+  .tot .qb { height: 6px; border-radius: 999px; background: #eee; margin-top: 6px; overflow: hidden; }
+  .tot .qb span { display: block; height: 100%; width: 26%; background: #171717; border-radius: 999px; }
+  .calls { padding: 4px 16px 8px; }
+  .cl { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding: 7px 0; border-bottom: 1px solid #f2f2f2; font-size: 12.5px; }
+  .cl:last-child { border-bottom: 0; }
+  .cl b { font-weight: 500; }
+  .cl .c { text-align: right; font-variant-numeric: tabular-nums; font-weight: 500; }
+  .cl .m { font-size: 11px; color: var(--muted-fg); font-family: ui-monospace, 'SF Mono', Menlo, monospace; }
+  .cl .tk { font-size: 11px; color: var(--muted-fg); text-align: right; font-variant-numeric: tabular-nums; }
+  .route { padding: 4px 16px 10px; }
+  .rr { display: flex; align-items: center; gap: 8px; padding: 7px 0; font-size: 12.5px; border-bottom: 1px solid #f2f2f2; }
+  .rr:last-child { border-bottom: 0; }
+  .rr .ar { color: #a3a3a3; }
+  .rr .mdl { margin-left: auto; font-size: 11.5px; font-family: ui-monospace, 'SF Mono', Menlo, monospace; background: var(--secondary); border-radius: 5px; padding: 2px 7px; color: #262626; }
+</style>
+</head>
+<body>
+<aside>
+  <div class="logo">
+    <a>
+      <svg viewBox="0 0 32 32" width="24" height="24" aria-hidden="true">
+        <polygon points="16,3 3,27 29,27" fill="#111" stroke="#000" stroke-width="0.5" stroke-linejoin="round"/>
+        <line x1="0" y1="17" x2="9.5" y2="17" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="22.5" y1="13" x2="32" y2="7" stroke="#fff" stroke-width="0.8" stroke-linecap="round"/>
+        <line x1="22.5" y1="14.5" x2="32" y2="11" stroke="#ccc" stroke-width="0.8" stroke-linecap="round"/>
+        <line x1="22.5" y1="16" x2="32" y2="15" stroke="#aaa" stroke-width="0.8" stroke-linecap="round"/>
+        <line x1="22.5" y1="17.5" x2="32" y2="19" stroke="#888" stroke-width="0.8" stroke-linecap="round"/>
+        <line x1="22.5" y1="19" x2="32" y2="23" stroke="#666" stroke-width="0.8" stroke-linecap="round"/>
+      </svg>
+      VirtuAgency
+    </a>
+    <span class="tog"><svg class="i" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/></svg></span>
+  </div>
+  <nav class="side">
+    <p class="blabel first">Workflow</p>
+    <a class="item"><svg class="i" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>Dashboard</a>
+    <div class="sep"></div>
+    <p class="blabel">Sources</p>
+    <a class="item"><svg class="i" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Chat</a>
+    <div class="sep"></div>
+    <p class="blabel">Tools</p>
+    <a class="item active"><svg class="i" viewBox="0 0 24 24"><path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></svg>Brands</a>
+    <a class="item"><svg class="i" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>My Media</a>
+    <a class="item"><svg class="i" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>Settings</a>
+    <a class="item"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>Help</a>
+    <div class="sep"></div>
+    <div class="psec"><svg class="i" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>My Projects<span class="ct">3</span></div>
+    <div class="psec" style="margin-top:2px"><svg class="i" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg><svg class="i" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Team Projects<span class="ct">5</span></div>
+  </nav>
+  <div class="sfoot">
+    <p>VirtuAgency.ai</p>
+    <p class="mono">v2.18.0 · 4f9c2ab</p>
+  </div>
+</aside>
+
+<div class="col">
+  <header>
+    <span class="switch"><span style="display:flex;align-items:center;gap:8px"><span class="bm">MC</span>Moinho Café &amp; Torrefação</span><svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px;opacity:.6"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg></span>
+    <div class="hright">
+      <span class="iconbtn"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg></span>
+      <span class="avatar">LM</span>
+    </div>
+  </header>
+
+  <nav class="rail">
+    <div class="step"><span class="pill done"><svg class="i" viewBox="0 0 24 24" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>Brand</span></div>
+    <div class="step"><span class="ln on"></span><span class="pill done"><svg class="i" viewBox="0 0 24 24" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>Positioning</span></div>
+    <div class="step"><span class="ln on"></span><span class="pill done"><svg class="i" viewBox="0 0 24 24" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>Ideas</span></div>
+    <div class="step"><span class="ln on"></span><span class="pill done"><svg class="i" viewBox="0 0 24 24" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>Campaigns</span></div>
+    <div class="step"><span class="ln on"></span><span class="pill current">Assets</span></div>
+    <div class="step"><span class="ln"></span><span class="pill locked"><svg class="i" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Distribution</span></div>
+  </nav>
+
+  <main>
+    <div class="wrap">
+      <div class="titlebar">
+        <div>
+          <h1>Moinho Club · launch <span class="badge b-outline">Campaign</span></h1>
+          <p class="lead">8 coordinated formats in 6 languages, generated from brand document v14.</p>
+        </div>
+        <div class="actions">
+          <span class="btn sm outline"><svg class="i" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>Download pack</span>
+          <span class="btn sm default"><svg class="i" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>Send to distribution</span>
+        </div>
+      </div>
+
+      <div class="cgrid">
+        <div>
+          <div class="langs">
+            <span class="lt ">PT-BR <i>8/8</i></span>
+            <span class="lt on">EN <i>8/8</i></span>
+            <span class="lt">ES <i>8/8</i></span>
+            <span class="lt">FR <i>8/8</i></span>
+            <span class="lt">IT <i>6/8</i></span>
+            <span class="lt">DE <i>6/8</i></span>
+            <span class="cons"><svg class="i" viewBox="0 0 24 24" style="color:#16a34a;width:14px;height:14px"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>44 of 48 assets ready, all on brand voice</span>
+          </div>
+
+          <div class="assets">
+            <div class="as"><div class="pv"><div class="ig"><span class="k">Moinho Club</span><span class="h">This month's microlots, at your door.</span></div></div><div class="am"><p class="f">Instagram <span class="badge b-ok">Approved</span></p><p class="d">1:1 post · caption + hashtags</p></div></div>
+            <div class="as"><div class="pv"><div class="st9"><span class="bar"></span><span class="h">Taste before you subscribe</span><span class="c">I want a taste</span></div></div><div class="am"><p class="f">Stories <span class="badge b-ok">Approved</span></p><p class="d">9:16 · 3 frames</p></div></div>
+            <div class="as"><div class="pv"><div class="car"><div style="left:0;top:8px;background:#fbe9d7;color:#7c4a2d"></div><div style="left:22px;top:4px;background:#e0a040"></div><div style="left:44px;top:0;background:#7c4a2d;color:#fbe9d7;font-family:'Fraunces',Georgia,serif;font-size:12px;line-height:14px">How the club works, in 5 steps</div></div></div><div class="am"><p class="f">Carousel <span class="badge b-ok">Approved</span></p><p class="d">5 slides · 4:5</p></div></div>
+            <div class="as"><div class="pv"><div class="rl"><span class="tm">0:28</span><span class="play"><svg class="i" viewBox="0 0 24 24" style="width:13px;height:13px;fill:#fff;stroke:none"><path d="M6 3v18l15-9z"/></svg></span><div class="sc"><i style="width:90%"></i><i style="width:70%"></i><i style="width:80%"></i></div></div></div><div class="am"><p class="f">Reels <span class="badge b-rev">In review</span></p><p class="d">script + captions · 28 s</p></div></div>
+            <div class="as"><div class="pv"><div class="em"><div class="eh">Welcome to the Moinho Club</div><div class="eb"><i style="width:92%"></i><i style="width:80%"></i><i style="width:86%"></i><i style="width:60%"></i><span>Subscribe</span></div></div></div><div class="am"><p class="f">E-mail <span class="badge b-ok">Approved</span></p><p class="d">A/B-tested subject line</p></div></div>
+            <div class="as"><div class="pv"><div class="wa"><div class="bub"><b>Moinho Café</b><br>October's lot is in: Carmo de Minas, honey notes. Want to save yours?</div><div class="bt">Save my bag</div></div></div><div class="am"><p class="f">WhatsApp <span class="badge b-ok">Approved</span></p><p class="d">message + button</p></div></div>
+            <div class="as"><div class="pv"><div class="ad"><p class="sp">Sponsored</p><p class="u">moinhocafe.com.br</p><p class="t">Specialty Coffee Club | New Microlots Monthly</p><p class="ds">Roasted this week, delivered in the neighborhood. First bag comes with a tasting.</p></div></div><div class="am"><p class="f">Google Ads <span class="badge b-ok">Approved</span></p><p class="d">3 headlines · 2 descriptions</p></div></div>
+            <div class="as"><div class="pv"><div class="bl"><div class="bi"></div><p class="bt2">What a microlot is and why it changes the cup</p><div class="bb"><i style="width:94%"></i><i style="width:82%"></i><i style="width:88%"></i></div></div></div><div class="am"><p class="f">Blog <span class="badge b-rev">In review</span></p><p class="d">article · 900 words · SEO</p></div></div>
+          </div>
+        </div>
+
+        <div class="side2">
+          <div class="pc">
+            <div class="pch">Campaign AI cost<span class="rt">214 calls</span></div>
+            <div class="tot"><p class="v">US$ 3.90<small>≈ US$ 0.08 per asset</small></p><p class="q"><span>Brand monthly quota</span><span>US$ 7 of US$ 27</span></p><div class="qb"><span></span></div></div>
+            <div class="calls">
+              <div class="cl"><b>Image · 1:1 post</b><span class="c">US$ 0.04</span><span class="m">image-model</span><span class="tk">1 img</span></div>
+              <div class="cl"><b>Reels script</b><span class="c">US$ 0.016</span><span class="m">claude</span><span class="tk">3.1k tokens</span></div>
+              <div class="cl"><b>Translation · 8 assets · FR</b><span class="c">US$ 0.005</span><span class="m">gemini-flash</span><span class="tk">9.8k tokens</span></div>
+              <div class="cl"><b>Email · A/B subject · EN</b><span class="c">US$ 0.007</span><span class="m">claude</span><span class="tk">1.2k tokens</span></div>
+              <div class="cl"><b>Voice check</b><span class="c">US$ 0.002</span><span class="m">gemini-flash</span><span class="tk">2.4k tokens</span></div>
+            </div>
+          </div>
+          <div class="pc">
+            <div class="pch">Model routing<span class="rt">by configuration</span></div>
+            <div class="route">
+              <div class="rr">Campaign copy<span class="ar">→</span><span class="mdl">claude</span></div>
+              <div class="rr">Translation and checks<span class="ar">→</span><span class="mdl">gemini-flash</span></div>
+              <div class="rr">Images<span class="ar">→</span><span class="mdl">image-model</span></div>
+              <div class="rr">Competitor research<span class="ar">→</span><span class="mdl">firecrawl</span></div>
+              <div class="rr">Fallback on failure<span class="ar">→</span><span class="mdl">openrouter</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

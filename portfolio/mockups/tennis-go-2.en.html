@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>Tennis Go - rankings</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+
+  :root {
+    --bg: oklch(1 0 0);
+    --fg: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --primary: oklch(0.448 0.119 151.328);
+    --primary-fg: oklch(0.985 0 0);
+    --muted: oklch(0.97 0 0);
+    --muted-fg: oklch(0.556 0 0);
+    --border: oklch(0.922 0 0);
+    --line: oklch(0.86 0 0);
+    --sidebar: oklch(0.985 0 0);
+    --unread: oklch(0.505 0.213 27.518);
+    --p10: color-mix(in oklch, var(--primary) 10%, transparent);
+    --p40: color-mix(in oklch, var(--primary) 40%, transparent);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 900px; overflow: hidden; }
+  body { width: 1440px; background: var(--bg); color: var(--fg); font: 15px/1.45 Geist, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  svg { flex: none; display: block; }
+  .muted { color: var(--muted-fg); }
+  .app { display: flex; height: 900px; }
+
+  /* Navegação lateral: as abas do app em coluna */
+  .sidenav { width: 248px; flex: none; background: var(--sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 20px 14px 16px; }
+  .brand { display: flex; align-items: center; gap: 11px; padding: 0 8px 22px; }
+  .brand b { font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+  .nav { display: flex; flex-direction: column; gap: 2px; }
+  .nav a { display: flex; align-items: center; gap: 12px; height: 42px; padding: 0 12px; border-radius: 10px; font-size: 15px; font-weight: 500; color: oklch(0.42 0 0); text-decoration: none; }
+  .nav a.on { background: var(--p10); color: var(--primary); font-weight: 700; }
+  .nav .badge { margin-left: auto; min-width: 20px; height: 20px; border-radius: 999px; background: var(--unread); color: #fff; font-size: 11px; font-weight: 600; display: grid; place-items: center; padding: 0 6px; }
+  .nav-sep { height: 1px; background: var(--border); margin: 14px 8px; }
+  .profile { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg); }
+  .profile .name { font-size: 14px; font-weight: 600; line-height: 1.2; }
+  .profile .sub { font-size: 12px; color: var(--muted-fg); }
+
+  .ini { width: 30px; height: 30px; border-radius: 999px; display: grid; place-items: center; font-size: 11.5px; font-weight: 600; flex: none; letter-spacing: 0.01em; }
+  .c1 { background: oklch(0.93 0.05 150); color: oklch(0.38 0.1 150); }
+  .c2 { background: oklch(0.93 0.04 250); color: oklch(0.42 0.12 255); }
+  .c3 { background: oklch(0.94 0.05 70); color: oklch(0.45 0.1 60); }
+  .c4 { background: oklch(0.93 0.04 330); color: oklch(0.45 0.12 340); }
+  .c5 { background: oklch(0.93 0.04 200); color: oklch(0.42 0.09 210); }
+  .c6 { background: oklch(0.93 0.05 30); color: oklch(0.48 0.13 30); }
+  .c7 { background: oklch(0.93 0.03 290); color: oklch(0.43 0.11 290); }
+  .c8 { background: oklch(0.94 0.04 110); color: oklch(0.43 0.09 115); }
+
+  /* Conteúdo */
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .topbar { height: 64px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 40px; border-bottom: 1px solid var(--border); }
+  .back { display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 500; color: var(--muted-fg); }
+  .search { display: flex; align-items: center; gap: 10px; width: 340px; height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--border); background: var(--muted); color: var(--muted-fg); font-size: 14px; }
+  .search kbd { margin-left: auto; font: 500 11px Geist, sans-serif; color: var(--muted-fg); border: 1px solid var(--border); background: var(--bg); border-radius: 5px; padding: 1px 6px; }
+
+
+  .page { flex: 1; padding: 26px 40px 0; display: flex; flex-direction: column; gap: 18px; }
+  .heading { display: flex; align-items: flex-end; justify-content: space-between; }
+  h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.025em; line-height: 1.15; }
+  .detail { display: flex; align-items: center; gap: 7px; font-size: 14px; color: var(--muted-fg); margin-top: 6px; }
+  .venue { display: inline-flex; align-items: center; gap: 6px; margin-left: 4px; font-weight: 600; color: var(--primary); }
+  .seg { display: inline-flex; padding: 3px; border-radius: 12px; background: var(--muted); border: 1px solid var(--border); }
+  .seg span { font-size: 14px; font-weight: 600; padding: 7px 18px; border-radius: 9px; color: var(--muted-fg); }
+  .seg span.on { background: #fff; color: var(--fg); box-shadow: 0 1px 2px rgb(0 0 0 / .08); }
+  .cats { display: flex; gap: 8px; }
+  .cat { font-size: 13.5px; font-weight: 500; padding: 6px 13px; border-radius: 999px; border: 1px solid var(--border); color: oklch(0.42 0 0); }
+  .cat.on { background: var(--primary); border-color: var(--primary); color: var(--primary-fg); font-weight: 600; }
+  .cat.dim { color: var(--muted-fg); border-style: dashed; }
+  .grid2 { display: grid; grid-template-columns: minmax(0,1fr) 372px; gap: 28px; align-items: start; }
+  .tbl { border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .row { display: grid; grid-template-columns: 64px minmax(0,1fr) 92px 70px 70px 132px; align-items: center; height: 50px; padding: 0 18px; border-top: 1px solid var(--border); font-size: 14.5px; }
+  .row.h { height: 40px; border-top: none; background: var(--sidebar); font-size: 12px; font-weight: 600; color: var(--muted-fg); text-transform: uppercase; letter-spacing: .05em; }
+  .row.me { background: color-mix(in oklch, var(--primary) 6%, white); box-shadow: inset 3px 0 0 var(--primary); }
+  .pos { display: flex; align-items: center; gap: 6px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .mv { display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; gap: 1px; }
+  .mv.u { color: var(--primary); } .mv.d { color: var(--unread); } .mv.z { color: var(--line); }
+  .pl { display: flex; align-items: center; gap: 10px; min-width: 0; font-weight: 600; }
+  .pl .ini { width: 30px; height: 30px; }
+  .you { font-size: 11px; font-weight: 600; color: var(--primary); background: var(--p10); border-radius: 999px; padding: 1px 7px; }
+  .num { font-variant-numeric: tabular-nums; text-align: right; }
+  .num.b { font-weight: 700; }
+  .l5 { display: flex; gap: 4px; justify-content: flex-end; }
+  .l5 i { width: 20px; height: 20px; border-radius: 6px; font-style: normal; font-size: 10.5px; font-weight: 700; display: grid; place-items: center; }
+  .l5 i.v { background: var(--p10); color: var(--primary); }
+  .l5 i.d { background: var(--muted); color: var(--muted-fg); }
+  .foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; font-size: 13px; color: var(--muted-fg); margin-top: 12px; }
+  .foot span { display: inline-flex; align-items: center; gap: 7px; }
+  .rail { display: flex; flex-direction: column; gap: 16px; }
+  .chal { border: 1px solid var(--p40); background: var(--p10); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+  .chal .k { font-size: 12px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--primary); display: flex; align-items: center; gap: 6px; }
+  .chal .t { font-size: 16.5px; font-weight: 700; letter-spacing: -.01em; display: flex; align-items: center; gap: 10px; }
+  .chal .t .ini { width: 34px; height: 34px; font-size: 12.5px; }
+  .chal .s { font-size: 13.5px; color: oklch(0.4 0 0); line-height: 1.45; }
+  .btns { display: flex; gap: 8px; }
+  .b1 { flex: 1; height: 42px; border-radius: 11px; background: var(--primary); color: var(--primary-fg); display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 14.5px; font-weight: 600; }
+  .b2 { height: 42px; padding: 0 16px; border-radius: 11px; border: 1px solid var(--p40); background: #fff; display: flex; align-items: center; font-size: 14px; font-weight: 500; color: oklch(0.4 0 0); }
+  .lad { border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; }
+  .lad .hh { display: flex; justify-content: space-between; align-items: baseline; }
+  .lad .hh b { font-size: 16px; font-weight: 700; }
+  .lad .hh span { font-size: 12.5px; color: var(--muted-fg); }
+  .rungs { margin-top: 10px; display: flex; flex-direction: column; gap: 5px; }
+  .rung { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--border); font-size: 14px; font-weight: 500; }
+  .rung .n { width: 22px; font-weight: 700; color: var(--muted-fg); font-variant-numeric: tabular-nums; }
+  .rung .ini { width: 26px; height: 26px; font-size: 10.5px; }
+  .rung .tag { margin-left: auto; font-size: 11.5px; font-weight: 600; border-radius: 999px; padding: 1px 8px; }
+  .rung.can { border-style: dashed; border-color: var(--p40); }
+  .rung.can .tag { color: var(--primary); background: var(--p10); }
+  .rung.pend { border-color: var(--primary); background: color-mix(in oklch, var(--primary) 5%, white); }
+  .rung.pend .tag { color: #fff; background: var(--primary); }
+  .rung.me { background: var(--fg); color: #fff; border-color: var(--fg); }
+  .rung.me .n { color: oklch(0.75 0 0); }
+  .rule { margin-top: 10px; font-size: 12.5px; color: var(--muted-fg); display: flex; gap: 6px; align-items: center; }
+  .sea { border: 1px solid var(--border); border-radius: 14px; display: grid; grid-template-columns: repeat(3,1fr); }
+  .sea div { padding: 12px 14px; }
+  .sea div + div { border-left: 1px solid var(--border); }
+  .sea b { display: block; font-size: 20px; font-weight: 700; letter-spacing: -.02em; }
+  .sea span { font-size: 12px; color: var(--muted-fg); }
+
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidenav">
+    <div class="brand">
+      <svg width="38" height="38" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="felt" cx="0.36" cy="0.3" r="0.8"><stop offset="0" stop-color="#f0ff7a"/><stop offset="0.65" stop-color="#cfe83a"/><stop offset="1" stop-color="#a9c41f"/></radialGradient>
+          <clipPath id="ball"><circle cx="380" cy="146" r="44"/></clipPath>
+          <clipPath id="frame"><ellipse cx="256" cy="150" rx="82" ry="108"/></clipPath>
+          <clipPath id="head"><rect x="136" y="176" width="240" height="220" rx="70"/></clipPath>
+        </defs>
+        <rect width="512" height="512" rx="112" fill="#0f5132"/>
+        <g transform="rotate(-40 256 256)">
+          <path d="M232 250 L 256 300 L 280 250" fill="none" stroke="#e5e7eb" stroke-width="14" stroke-linejoin="round"/>
+          <rect x="245" y="290" width="22" height="180" rx="8" fill="#e5e7eb"/>
+          <rect x="243" y="392" width="26" height="78" rx="6" fill="#111"/>
+          <path d="M243 404 L269 396 M243 420 L269 412 M243 436 L269 428 M243 452 L269 444" stroke="#16a34a" stroke-width="5"/>
+          <rect x="239" y="466" width="34" height="14" rx="5" fill="#111"/>
+          <g clip-path="url(#frame)" stroke="#9ca3af" stroke-width="6"><path d="M200 40 V260 M228 40 V260 M256 40 V260 M284 40 V260 M312 40 V260"/><path d="M160 80 H352 M160 110 H352 M160 140 H352 M160 170 H352 M160 200 H352 M160 230 H352"/></g>
+          <ellipse cx="256" cy="150" rx="88" ry="114" fill="none" stroke="#e5e7eb" stroke-width="18"/>
+        </g>
+        <rect x="136" y="176" width="240" height="220" rx="70" fill="#16a34a"/>
+        <g clip-path="url(#head)"><rect x="136" y="246" width="240" height="62" fill="#f6d7b0"/><rect x="136" y="216" width="240" height="24" fill="#0b3d26"/></g>
+        <path d="M172 258 L 234 272 Q 218 296 190 290 Q 172 282 172 258 Z" fill="#111"/>
+        <path d="M340 258 L 278 272 Q 294 296 322 290 Q 340 282 340 258 Z" fill="#111"/>
+        <circle cx="208" cy="278" r="4.5" fill="#fff"/><circle cx="304" cy="278" r="4.5" fill="#fff"/>
+        <circle cx="380" cy="146" r="44" fill="url(#felt)"/>
+        <g clip-path="url(#ball)"><path d="M355 98 C 374 124, 374 168, 355 194" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round"/><path d="M405 98 C 386 124, 386 168, 405 194" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round"/></g>
+      </svg>
+      <b>Tennis Go</b>
+    </div>
+
+    <nav class="nav">
+      <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Home</a>
+      <a class="on"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 20V14M12 20V4M18 20V10"/></svg>Rankings</a>
+      <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>Tournaments</a>
+      <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 12h18"/><path d="M9 3v18"/><path d="M15 3v18"/></svg>Venues</a>
+      <div class="nav-sep"></div>
+      <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></svg>Messages<span class="badge">3</span></a>
+      <a><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>Schedule</a>
+    </nav>
+
+    <div class="profile">
+      <span class="ini c1" style="width:34px;height:34px;font-size:12.5px">AM</span>
+      <div style="flex:1;min-width:0"><div class="name">André Moura</div><div class="sub">Adult · Intermediate</div></div>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="muted"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></svg>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <span class="back"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>Rankings</span>
+      <span class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>Search players, rankings and venues<kbd>⌘K</kbd></span>
+    </header>
+
+    <div class="page">
+      <section class="heading">
+        <div>
+          <h1>Adult Intermediate Ranking</h1>
+          <div class="detail"><span style="width:10px;height:10px;border-radius:999px;background:var(--primary)"></span><span>2026 season · points · 24 players</span><span class="venue"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>Alvorada Club and Bela Vista Arena</span></div>
+        </div>
+        <span class="seg"><span class="on">Points</span><span>Ladder</span></span>
+      </section>
+
+      <div class="cats"><span class="cat on">Adult Intermediate</span><span class="cat">Adult Advanced</span><span class="cat">Mixed doubles</span><span class="cat">Women</span><span class="cat">Club ladder</span></div>
+
+      <div class="grid2">
+        <section>
+          <div class="tbl">
+            <div class="row h"><span>#</span><span>Player</span><span class="num">Points</span><span class="num">Played</span><span class="num">W-L</span><span class="num">Last 5</span></div>
+            <div class="row"><span class="pos">1<span class="mv z">&ndash;</span></span><span class="pl"><span class="ini c4">TM</span>Thiago Moretti</span><span class="num b">1,240</span><span class="num">14</span><span class="num">12-2</span><span class="l5"><i class="v">W</i><i class="v">W</i><i class="v">W</i><i class="d">L</i><i class="v">W</i></span></div><div class="row"><span class="pos">2<span class="mv u"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>1</span></span><span class="pl"><span class="ini c3">RL</span>Rafael Lima</span><span class="num b">1,180</span><span class="num">15</span><span class="num">11-4</span><span class="l5"><i class="v">W</i><i class="d">L</i><i class="v">W</i><i class="v">W</i><i class="v">W</i></span></div><div class="row"><span class="pos">3<span class="mv d"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>1</span></span><span class="pl"><span class="ini c2">CP</span>Caio Prado</span><span class="num b">1,095</span><span class="num">13</span><span class="num">10-3</span><span class="l5"><i class="v">W</i><i class="v">W</i><i class="d">L</i><i class="v">W</i><i class="d">L</i></span></div><div class="row me"><span class="pos">4<span class="mv u"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>2</span></span><span class="pl"><span class="ini c1">AM</span>André Moura<span class="you">you</span></span><span class="num b">1,020</span><span class="num">14</span><span class="num">9-5</span><span class="l5"><i class="v">W</i><i class="v">W</i><i class="v">W</i><i class="v">W</i><i class="d">L</i></span></div><div class="row"><span class="pos">5<span class="mv d"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>1</span></span><span class="pl"><span class="ini c6">BT</span>Bruno Teles</span><span class="num b">980</span><span class="num">12</span><span class="num">8-4</span><span class="l5"><i class="d">L</i><i class="v">W</i><i class="v">W</i><i class="d">L</i><i class="v">W</i></span></div><div class="row"><span class="pos">6<span class="mv d"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>1</span></span><span class="pl"><span class="ini c7">LA</span>Lucas Antunes</span><span class="num b">935</span><span class="num">13</span><span class="num">7-6</span><span class="l5"><i class="d">L</i><i class="d">L</i><i class="v">W</i><i class="v">W</i><i class="d">L</i></span></div><div class="row"><span class="pos">7<span class="mv u"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>1</span></span><span class="pl"><span class="ini c5">DF</span>Diego Farias</span><span class="num b">870</span><span class="num">11</span><span class="num">6-5</span><span class="l5"><i class="v">W</i><i class="d">L</i><i class="v">W</i><i class="d">L</i><i class="v">W</i></span></div><div class="row"><span class="pos">8<span class="mv d"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>1</span></span><span class="pl"><span class="ini c8">FN</span>Felipe Nakamura</span><span class="num b">820</span><span class="num">12</span><span class="num">5-7</span><span class="l5"><i class="d">L</i><i class="v">W</i><i class="d">L</i><i class="d">L</i><i class="v">W</i></span></div><div class="row"><span class="pos">9<span class="mv z">&ndash;</span></span><span class="pl"><span class="ini c2">MD</span>Marcelo Dutra</span><span class="num b">790</span><span class="num">10</span><span class="num">5-5</span><span class="l5"><i class="v">W</i><i class="d">L</i><i class="d">L</i><i class="v">W</i><i class="d">L</i></span></div><div class="row"><span class="pos">10<span class="mv u"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>3</span></span><span class="pl"><span class="ini c6">PQ</span>Paulo Queiroz</span><span class="num b">760</span><span class="num">9</span><span class="num">5-4</span><span class="l5"><i class="v">W</i><i class="v">W</i><i class="v">W</i><i class="d">L</i><i class="d">L</i></span></div>
+          </div>
+          <div class="foot"><span><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>A win is worth 10 points, a three-set loss is worth 3. Scores only count once the opponent confirms them.</span></div>
+        </section>
+
+        <aside class="rail">
+          <section class="chal">
+            <span class="k"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5"/><line x1="13" x2="19" y1="19" y2="13"/><line x1="16" x2="20" y1="16" y2="20"/><line x1="19" x2="21" y1="21" y2="19"/><polyline points="14.5 6.5 18 3 21 3 21 6 17.5 9.5"/><line x1="5" x2="9" y1="14" y2="18"/><line x1="7" x2="4" y1="17" y2="20"/><line x1="3" x2="5" y1="19" y2="21"/></svg>Your challenge</span>
+            <div class="t"><span class="ini c2">CP</span>You challenged Caio Prado</div>
+            <p class="s" style="margin:0">3rd on the ladder · he has until Wed 10/21 to reply. No reply and you move up.</p>
+            <div class="btns"><span class="b1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>Suggest a time</span><span class="b2">Cancel</span></div>
+          </section>
+          <section class="lad">
+            <div class="hh"><b>Club ladder</b><span>Singles · Alvorada Club</span></div>
+            <div class="rungs"><div class="rung"><span class="n">1</span><span class="ini c3">RL</span>Rafael Lima</div><div class="rung"><span class="n">2</span><span class="ini c4">TM</span>Thiago Moretti</div><div class="rung pend"><span class="n">3</span><span class="ini c2">CP</span>Caio Prado<span class="tag">challenge sent</span></div><div class="rung can"><span class="n">4</span><span class="ini c6">BT</span>Bruno Teles<span class="tag">can challenge</span></div><div class="rung me"><span class="n">5</span><span class="ini c1">AM</span>André Moura<span class="tag" style="color:#fff;background:rgb(255 255 255 / .16)">you</span></div><div class="rung"><span class="n">6</span><span class="ini c5">DF</span>Diego Farias</div><div class="rung"><span class="n">7</span><span class="ini c7">LA</span>Lucas Antunes</div></div>
+            <div class="rule"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>You can challenge up to 2 rungs above you.</div>
+          </section>
+        </aside>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

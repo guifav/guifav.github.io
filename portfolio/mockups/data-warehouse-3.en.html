@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>Data warehouse — metric catalog</title>
+<!-- Tela conceitual: catálogo de métricas com uma definição oficial por indicador. Dados 100% fictícios. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#0a0a0a;--side:#0e0e0e;--card:#121212;--card2:#171717;--line:#242424;--line2:#1c1c1c;--fg:#fafafa;--mut:#a3a3a3;--dim:#737373;--acc:#FFBE00;--ok:#34d399;--warn:#fbbf24;--err:#f87171}
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{width:1440px;height:900px;overflow:hidden}
+  body{background:var(--bg);color:var(--fg);font-family:Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;font-size:13px;line-height:1.4;display:flex}
+  .mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+  svg.i{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+  svg.i.sm{width:14px;height:14px}
+  svg.i.xs{width:12px;height:12px}
+
+  .side{width:232px;flex:none;height:900px;background:var(--side);border-right:1px solid var(--line2);display:flex;flex-direction:column;padding:16px 12px}
+  .brand{display:flex;align-items:center;gap:10px;padding:4px 6px 18px}
+  .logo{width:30px;height:30px;border-radius:8px;background:var(--acc);color:#0a0a0a;display:flex;align-items:center;justify-content:center}
+  .brand .t{font-size:14px;font-weight:600;letter-spacing:-.01em}
+  .brand .s{font-size:11px;color:var(--dim);white-space:nowrap}
+  .env{margin-left:auto;font-size:10px;color:var(--ok);border:1px solid rgba(52,211,153,.35);background:rgba(52,211,153,.08);border-radius:999px;padding:2px 7px}
+  .search{display:flex;align-items:center;gap:8px;height:34px;border:1px solid var(--line);border-radius:8px;padding:0 10px;color:var(--dim);font-size:12px;margin-bottom:16px;background:#111}
+  .search .k{margin-left:auto;font-size:10px;border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+  .grp{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:#5c5c5c;padding:10px 8px 6px}
+  .nav{display:flex;align-items:center;gap:10px;height:34px;padding:0 10px;border-radius:8px;color:var(--mut);font-size:13px;font-weight:500}
+  .nav .c{margin-left:auto;font-size:11px;color:var(--dim)}
+  .nav.on{background:#1a1a1a;color:var(--fg);box-shadow:inset 0 0 0 1px #262626}
+  .nav.on svg{color:var(--acc)}
+  .mcp{margin-top:auto;border:1px solid var(--line);border-radius:12px;background:var(--card);padding:12px}
+  .mcp .h{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600}
+  .mcp .h i{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok)}
+  .mcp .s{font-size:11px;color:var(--dim);margin-top:4px;line-height:1.45}
+  .me{display:flex;align-items:center;gap:10px;padding:14px 6px 0}
+  .av{width:28px;height:28px;border-radius:50%;background:#262626;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:#d4d4d4;flex:none}
+  .me .t{font-size:12.5px;font-weight:500}
+  .me .s{font-size:11px;color:var(--dim)}
+
+  .main{flex:1;min-width:0;height:900px;padding:0 28px;position:relative}
+  .top{height:56px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line2);font-size:12.5px;color:var(--dim)}
+  .top b{color:var(--fg);font-weight:500}
+  .top .r{margin-left:auto;display:flex;align-items:center;gap:8px}
+  .btn{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 12px;border-radius:8px;border:1px solid var(--line);background:#141414;color:#e5e5e5;font-size:12.5px;font-weight:500}
+  .btn.p{background:var(--acc);border-color:var(--acc);color:#0a0a0a}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px}
+  .ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line2)}
+  .ch .t{font-size:13.5px;font-weight:600}
+  .ch .s{font-size:11.5px;color:var(--dim)}
+  .ch .r{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--dim)}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:11px;border-radius:999px;padding:2px 9px;border:1px solid var(--line);color:var(--mut);background:#161616;white-space:nowrap}
+  .pill.ok{color:var(--ok);border-color:rgba(52,211,153,.3);background:rgba(52,211,153,.07)}
+  .pill.acc{color:var(--acc);border-color:rgba(255,190,0,.35);background:rgba(255,190,0,.08)}
+  .pill.warn{color:var(--warn);border-color:rgba(251,191,36,.3);background:rgba(251,191,36,.07)}
+  .pill i{width:6px;height:6px;border-radius:50%;background:currentColor}
+
+  .nav[data-k="metrics"]{background:#1a1a1a;color:var(--fg);box-shadow:inset 0 0 0 1px #262626}
+  .nav[data-k="metrics"] svg{color:var(--acc)}
+
+  .wrap{display:grid;grid-template-columns:420px 1fr;gap:16px;margin-top:18px;height:808px}
+  .list{display:flex;flex-direction:column;overflow:hidden}
+  .lh{padding:16px 16px 12px}
+  .lh .t{font-size:16px;font-weight:600;letter-spacing:-.01em}
+  .lh .s{font-size:12px;color:var(--dim);margin-top:2px}
+  .chips{display:flex;gap:6px;margin-top:12px}
+  .chip{font-size:11.5px;color:var(--mut);border:1px solid var(--line);border-radius:999px;padding:3px 10px}
+  .chip.on{color:#0a0a0a;background:var(--acc);border-color:var(--acc);font-weight:500}
+  .row{display:flex;align-items:center;gap:12px;padding:0 16px;height:62px;border-top:1px solid var(--line2);position:relative}
+  .row .ic{width:30px;height:30px;border-radius:8px;background:#1a1a1a;border:1px solid #2a2a2a;color:#cfcfcf;display:flex;align-items:center;justify-content:center;flex:none}
+  .row .t{font-size:13px;font-weight:500;color:#ededed}
+  .row .s{font-size:11px;color:var(--dim);margin-top:2px}
+  .row .r{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+  .row .c{font-size:10.5px;color:var(--dim)}
+  .row.on{background:linear-gradient(90deg,rgba(255,190,0,.08),rgba(255,190,0,0) 70%)}
+  .row.on::before{content:"";position:absolute;left:0;top:10px;bottom:10px;width:2px;border-radius:2px;background:var(--acc)}
+  .row.on .ic{color:var(--acc);border-color:rgba(255,190,0,.4);background:rgba(255,190,0,.08)}
+  .cert{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;color:var(--ok)}
+  .cert.w{color:var(--warn)}
+
+  .det{padding:22px 24px;display:flex;flex-direction:column}
+  .dt{display:flex;align-items:center;gap:12px}
+  .dt .ic{width:40px;height:40px;border-radius:10px;background:rgba(255,190,0,.1);border:1px solid rgba(255,190,0,.35);color:var(--acc);display:flex;align-items:center;justify-content:center}
+  .dt .ic svg.i{width:20px;height:20px}
+  .dt h1{font-size:21px;font-weight:600;letter-spacing:-.02em}
+  .dt .api{font-size:11.5px;color:var(--dim);margin-top:2px}
+  .dt .r{margin-left:auto;display:flex;gap:6px}
+  .desc{font-size:13px;color:#c9c9c9;line-height:1.55;margin-top:14px;max-width:640px}
+  .who{display:flex;gap:22px;margin-top:10px;font-size:11.5px;color:var(--dim)}
+  .who b{color:#d4d4d4;font-weight:500}
+  .sec{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:#6b6b6b;margin:20px 0 10px;display:flex;align-items:center;gap:8px}
+  .sec::after{content:"";flex:1;height:1px;background:var(--line2)}
+
+  .ba{display:grid;grid-template-columns:1fr 36px 280px;align-items:stretch}
+  .before{border:1px solid var(--line);border-radius:12px;background:#0f0f0f;padding:12px 14px}
+  .before .h{font-size:11.5px;color:var(--dim)}
+  .old{display:grid;grid-template-columns:44px 1fr auto;align-items:center;gap:8px;margin-top:8px;font-size:12px;color:#bdbdbd;white-space:nowrap}
+  .old .n{font-size:15px;font-weight:600;color:#8a8a8a;text-decoration:line-through;text-decoration-color:rgba(248,113,113,.7);width:44px}
+  .old .s{color:var(--dim);font-size:11px}
+  .arrow{display:flex;align-items:center;justify-content:center;color:var(--acc)}
+  .now{border:1.5px solid var(--acc);border-radius:12px;background:linear-gradient(180deg,rgba(255,190,0,.10),rgba(255,190,0,.02));padding:14px 16px;display:flex;flex-direction:column;justify-content:center;box-shadow:0 18px 40px -20px rgba(255,190,0,.4)}
+  .now .k{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--acc)}
+  .now .v{font-size:40px;font-weight:600;letter-spacing:-.03em;margin-top:4px;line-height:1}
+  .now .s{font-size:11.5px;color:#cfc7ad;margin-top:8px;line-height:1.45}
+
+  .sql{border:1px solid var(--line);border-radius:12px;background:#0d0d0d;padding:12px 16px;font-size:12px;line-height:1.75;color:#d4d4d4;position:relative}
+  .sql .kw{color:#f0b400}
+  .sql .fn{color:#7dd3fc}
+  .sql .cm{color:#5c5c5c}
+  .sql .st{color:#86efac}
+  .sql .tag{position:absolute;right:12px;top:10px;display:flex;gap:6px}
+
+  .dims{display:flex;align-items:center;gap:6px;margin-top:14px}
+  .dims .dl{font-size:11.5px;color:var(--dim);margin-right:4px}
+  .bot{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:auto}
+  .box{border:1px solid var(--line);border-radius:12px;background:#0f0f0f;padding:12px 14px}
+  .box .h{font-size:12px;font-weight:600;display:flex;align-items:center;gap:8px}
+  .box .h span{margin-left:auto;font-size:11px;color:var(--dim);font-weight:400}
+  .cons{display:flex;align-items:center;gap:10px;margin-top:9px;font-size:12px;color:#d4d4d4}
+  .cons svg{color:#8a8a8a}
+  .cons .pill{margin-left:auto;font-size:10px;padding:1px 7px}
+  .ver{display:flex;gap:10px;margin-top:9px}
+  .ver .d{width:9px;height:9px;border-radius:50%;border:2px solid #3a3a3a;margin-top:4px;flex:none}
+  .ver .d.on{border-color:var(--acc);background:var(--acc)}
+  .ver .t{font-size:12px;color:#e5e5e5}
+  .ver .t b{font-weight:500}
+  .ver .s{font-size:11px;color:var(--dim)}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="layers" viewBox="0 0 24 24"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/></symbol>
+  <symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="home" viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m9 15 2 2 4-4"/></symbol>
+  <symbol id="sigma" viewBox="0 0 24 24"><path d="M18 7V5a1 1 0 0 0-1-1H6.5a.5.5 0 0 0-.4.8l4.5 6a2 2 0 0 1 0 2.4l-4.5 6a.5.5 0 0 0 .4.8H17a1 1 0 0 0 1-1v-2"/></symbol>
+  <symbol id="lineage" viewBox="0 0 24 24"><circle cx="5" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="12" r="2"/><path d="M7 6h3a4 4 0 0 1 4 4v0a2 2 0 0 0 2 2h1"/><path d="M7 18h3a4 4 0 0 0 4-4"/></symbol>
+  <symbol id="shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="workflow" viewBox="0 0 24 24"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></symbol>
+  <symbol id="book" viewBox="0 0 24 24"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/></symbol>
+  <symbol id="key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></symbol>
+  <symbol id="bot" viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></symbol>
+  <symbol id="check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+  <symbol id="octx" viewBox="0 0 24 24"><path d="M2.586 16.726A2 2 0 0 1 2 15.312V8.688a2 2 0 0 1 .586-1.414l4.688-4.688A2 2 0 0 1 8.688 2h6.624a2 2 0 0 1 1.414.586l4.688 4.688A2 2 0 0 1 22 8.688v6.624a2 2 0 0 1-.586 1.414l-4.688 4.688a2 2 0 0 1-1.414.586H8.688a2 2 0 0 1-1.414-.586z"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></symbol>
+  <symbol id="db" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></symbol>
+  <symbol id="code" viewBox="0 0 24 24"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></symbol>
+  <symbol id="bell" viewBox="0 0 24 24"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></symbol>
+  <symbol id="chev" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="user" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+  <symbol id="dash" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></symbol>
+  <symbol id="target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+  <symbol id="mail" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol>
+  <symbol id="filter" viewBox="0 0 24 24"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></symbol>
+  <symbol id="badge" viewBox="0 0 24 24"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="git" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><line x1="3" x2="9" y1="12" y2="12"/><line x1="15" x2="21" y1="12" y2="12"/></symbol>
+  <symbol id="plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+</svg>
+<aside class="side">
+  <div class="brand"><div class="logo"><svg class="i"><use href="#layers"/></svg></div><div><div class="t">Warehouse</div><div class="s">official data</div></div><span class="env mono">production</span></div>
+  <div class="search"><svg class="i sm"><use href="#search"/></svg>Search the catalog<span class="k mono">⌘K</span></div>
+  <div class="nav" data-k="home"><svg class="i"><use href="#home"/></svg>Overview</div>
+  <div class="grp mono">Catalog</div>
+  <div class="nav" data-k="contracts"><svg class="i"><use href="#file"/></svg>Data contracts<span class="c mono">14</span></div>
+  <div class="nav" data-k="metrics"><svg class="i"><use href="#sigma"/></svg>Metrics<span class="c mono">38</span></div>
+  <div class="nav" data-k="lineage"><svg class="i"><use href="#lineage"/></svg>Lineage</div>
+  <div class="nav" data-k="dict"><svg class="i"><use href="#book"/></svg>Dictionary</div>
+  <div class="grp mono">Operations</div>
+  <div class="nav" data-k="quality"><svg class="i"><use href="#shield"/></svg>Quality<span class="c mono" style="color:var(--warn)">1</span></div>
+  <div class="nav" data-k="loads"><svg class="i"><use href="#workflow"/></svg>Loads</div>
+  <div class="nav" data-k="access"><svg class="i"><use href="#key"/></svg>Access</div>
+  <div class="mcp">
+    <div class="h"><i></i>MCP server live</div>
+    <div class="s">AI agents read published contracts, never the raw tables.</div>
+  </div>
+  <div class="me"><div class="av">AR</div><div><div class="t">Ana Ribeiro</div><div class="s">Data engineering</div></div></div>
+</aside>
+
+
+<main class="main">
+  <div class="top">
+    <span>Metrics</span><svg class="i xs"><use href="#chev"/></svg>
+    <span>Sales</span><svg class="i xs"><use href="#chev"/></svg>
+    <b>12-month retention rate</b>
+    <div class="r">
+      <span class="btn"><svg class="i sm"><use href="#plus"/></svg>Propose a metric</span>
+      <span class="btn p"><svg class="i sm"><use href="#git"/></svg>Open new version</span>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <section class="card list">
+      <div class="lh">
+        <div class="t">Metric catalog</div>
+        <div class="s">One official definition per metric, used by every app</div>
+        <div class="chips"><span class="chip on">All</span><span class="chip">Sales</span><span class="chip">Marketing</span><span class="chip">Product</span><span class="chip">Finance</span></div>
+      </div>
+      <div class="row"><div class="ic"><svg class="i sm"><use href="#sigma"/></svg></div><div><div class="t">Paying customers</div><div class="s">Finance · Bruno Lessa</div></div><div class="r"><span class="cert"><svg class="i xs"><use href="#badge"/></svg>certified</span><span class="c mono">9 consumers</span></div></div>
+      <div class="row on"><div class="ic"><svg class="i sm"><use href="#sigma"/></svg></div><div><div class="t">12-month retention rate</div><div class="s">Sales · Júlia Prado</div></div><div class="r"><span class="cert"><svg class="i xs"><use href="#badge"/></svg>certified</span><span class="c mono">7 consumers</span></div></div>
+      <div class="row"><div class="ic"><svg class="i sm"><use href="#sigma"/></svg></div><div><div class="t">Active contracts</div><div class="s">Finance · Bruno Lessa</div></div><div class="r"><span class="cert"><svg class="i xs"><use href="#badge"/></svg>certified</span><span class="c mono">6 consumers</span></div></div>
+      <div class="row"><div class="ic"><svg class="i sm"><use href="#sigma"/></svg></div><div><div class="t">Propensity score</div><div class="s">Sales · Caio Mendes</div></div><div class="r"><span class="cert"><svg class="i xs"><use href="#badge"/></svg>certified</span><span class="c mono">5 consumers</span></div></div>
+      <div class="row"><div class="ic"><svg class="i sm"><use href="#sigma"/></svg></div><div><div class="t">Engagement per person</div><div class="s">Marketing · Lívia Rocha</div></div><div class="r"><span class="cert"><svg class="i xs"><use href="#badge"/></svg>certified</span><span class="c mono">8 consumers</span></div></div>
+      <div class="row"><div class="ic"><svg class="i sm"><use href="#sigma"/></svg></div><div><div class="t">Sales cycle length</div><div class="s">Sales · Caio Mendes</div></div><div class="r"><span class="cert"><svg class="i xs"><use href="#badge"/></svg>certified</span><span class="c mono">4 consumers</span></div></div>
+      <div class="row"><div class="ic"><svg class="i sm"><use href="#sigma"/></svg></div><div><div class="t">Average order value</div><div class="s">Finance · Bruno Lessa</div></div><div class="r"><span class="cert"><svg class="i xs"><use href="#badge"/></svg>certified</span><span class="c mono">6 consumers</span></div></div>
+      <div class="row"><div class="ic"><svg class="i sm"><use href="#sigma"/></svg></div><div><div class="t">Funnel conversion</div><div class="s">Sales · Júlia Prado</div></div><div class="r"><span class="cert"><svg class="i xs"><use href="#badge"/></svg>certified</span><span class="c mono">5 consumers</span></div></div>
+      <div class="row"><div class="ic"><svg class="i sm"><use href="#sigma"/></svg></div><div><div class="t">Qualified site visits</div><div class="s">Marketing · Lívia Rocha</div></div><div class="r"><span class="cert w"><svg class="i xs"><use href="#clock"/></svg>in review</span><span class="c mono">2 consumers</span></div></div>
+      <div class="row"><div class="ic"><svg class="i sm"><use href="#sigma"/></svg></div><div><div class="t">Gross margin by line</div><div class="s">Finance · Bruno Lessa</div></div><div class="r"><span class="cert"><svg class="i xs"><use href="#badge"/></svg>certified</span><span class="c mono">4 consumers</span></div></div>
+      <div class="row"><div class="ic"><svg class="i sm"><use href="#sigma"/></svg></div><div><div class="t">Active platform usage</div><div class="s">Product · Renato Alves</div></div><div class="r"><span class="cert"><svg class="i xs"><use href="#badge"/></svg>certified</span><span class="c mono">3 consumers</span></div></div>
+    </section>
+
+    <section class="card det">
+      <div class="dt">
+        <div class="ic"><svg class="i"><use href="#sigma"/></svg></div>
+        <div><h1>12-month retention rate</h1><div class="api mono">metrics.retention_12m</div></div>
+        <div class="r"><span class="pill ok"><svg class="i xs"><use href="#badge"/></svg>Certified</span><span class="pill acc mono">v2.1</span></div>
+      </div>
+      <p class="desc">Share of accounts that were paying customers 12 months ago and are still paying today. Counted per account, not per contract, excluding test accounts.</p>
+      <div class="who"><span>Owner <b>Júlia Prado</b></span><span>Approved by <b>Finance and Sales</b></span><span>Reviewed on <b>Nov 2</b></span><span>Grain <b>account × month</b></span></div>
+
+      <div class="sec mono">One number per metric</div>
+      <div class="ba">
+        <div class="before">
+          <div class="h">Before: three answers to the same question</div>
+          <div class="old"><span class="n mono">71%</span>Sales app<span class="s">contract status</span></div>
+          <div class="old"><span class="n mono">68%</span>Marketing dashboard<span class="s">bought in 365 days</span></div>
+          <div class="old"><span class="n mono">74%</span>Finance spreadsheet<span class="s">renewals</span></div>
+        </div>
+        <div class="arrow"><svg class="i"><use href="#chev"/></svg></div>
+        <div class="now">
+          <div class="k mono">Now, for everyone</div>
+          <div class="v">72%</div>
+          <div class="s">Computed once in the warehouse and checked on every load. Demo data.</div>
+        </div>
+      </div>
+
+      <div class="sec mono">Official definition</div>
+      <div class="sql mono">
+        <div class="tag"><span class="pill mono">SQL</span><span class="pill ok mono">tested</span></div>
+        <div class="cm">-- retention_12m · v2.1 · reads the paying_customers contract</div>
+        <div><span class="kw">select</span> <span class="fn">count</span>(<span class="kw">distinct</span> c.account_id) <span class="kw">filter</span> (<span class="kw">where</span> c.paying_today)</div>
+        <div>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/ <span class="fn">nullif</span>(<span class="fn">count</span>(<span class="kw">distinct</span> c.account_id), 0) <span class="kw">as</span> retention_12m</div>
+        <div><span class="kw">from</span> contracts.paying_customers c</div>
+        <div><span class="kw">where</span> c.paying_on = <span class="fn">current_date</span> - <span class="kw">interval</span> <span class="st">'12 months'</span></div>
+        <div>&nbsp;&nbsp;<span class="kw">and not</span> c.is_test_account</div>
+      </div>
+
+      <div class="dims"><span class="dl">Can be sliced by</span><span class="pill mono">region</span><span class="pill mono">segment</span><span class="pill mono">company size</span><span class="pill mono">month</span><span class="dl" style="margin-left:auto">Exposed via</span><span class="pill acc mono">SQL</span><span class="pill acc mono">API</span><span class="pill acc mono">MCP</span></div>
+      <div class="sec mono" style="margin-top:auto">Consumers and versions</div>
+      <div class="bot" style="margin-top:0">
+        <div class="box">
+          <div class="h"><svg class="i sm" style="color:var(--acc)"><use href="#bot"/></svg>Who uses this number<span>7 consumers</span></div>
+          <div class="cons"><svg class="i sm"><use href="#target"/></svg>Sales app<span class="pill ok mono">v2.1</span></div>
+          <div class="cons"><svg class="i sm"><use href="#bot"/></svg>AI agent, via MCP<span class="pill ok mono">v2.1</span></div>
+          <div class="cons"><svg class="i sm"><use href="#dash"/></svg>Executive dashboard<span class="pill ok mono">v2.1</span></div>
+          <div class="cons"><svg class="i sm"><use href="#mail"/></svg>Email orchestrator<span class="pill ok mono">v2.1</span></div>
+        </div>
+        <div class="box">
+          <div class="h"><svg class="i sm" style="color:var(--acc)"><use href="#git"/></svg>Version history<span>3 versions</span></div>
+          <div class="ver"><i class="d on"></i><div><div class="t"><b class="mono">v2.1</b> · excludes test accounts</div><div class="s">Nov 2 · 100% parity with v2.0 outside test accounts</div></div></div>
+          <div class="ver"><i class="d"></i><div><div class="t"><b class="mono">v2.0</b> · per account, rolling 12-month window</div><div class="s">Sep 18 · replaced the three old rules</div></div></div>
+          <div class="ver"><i class="d"></i><div><div class="t"><b class="mono">v1.0</b> · first official definition</div><div class="s">Jul 4 · proposed by the sales team</div></div></div>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+</body>
+</html>

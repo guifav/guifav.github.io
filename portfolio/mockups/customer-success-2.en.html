@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="mockup-viewport" content="1440x900">
+<title>Customer Success · Account 360</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+  --bg: #f6f6f3; --surface: #ffffff; --surface-2: #fafaf8; --surface-3: #f2f2ee;
+  --border: #e6e4de; --border-2: #efeee9;
+  --ink: #16171a; --ink-2: #3f4147; --ink-3: #74767c; --ink-4: #a3a4a8;
+  --accent: #0d6e63; --accent-2: #12897b; --accent-soft: #e5f1ee;
+  --ok: #2b7d52; --ok-bar: #5aa77c; --ok-soft: #e7f2ea;
+  --warn: #9a6a12; --warn-bar: #d9a441; --warn-soft: #f8efdc;
+  --risk: #b0402f; --risk-bar: #d86a57; --risk-soft: #f8e7e3;
+  --info: #3a5fb8; --info-soft: #e9eefa;
+  --r: 8px; --r-sm: 5px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1440px; height: 900px; overflow: hidden; }
+body { font-family: var(--font); font-size: 13px; line-height: 1.4; color: var(--ink); background: var(--bg); -webkit-font-smoothing: antialiased; font-feature-settings: "cv11" 1, "ss01" 1; }
+svg.i { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+svg.i.s12 { width: 12px; height: 12px; stroke-width: 2; }
+svg.i.s13 { width: 13px; height: 13px; }
+.mono { font-family: var(--mono); font-feature-settings: "tnum" 1; letter-spacing: -.01em; }
+.num { font-variant-numeric: tabular-nums; }
+.mute { color: var(--ink-3); }
+.faint { color: var(--ink-4); }
+
+.app { display: grid; grid-template-columns: 224px 1fr; height: 900px; }
+
+/* Sidebar */
+.sb { background: var(--surface-2); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 14px 10px 12px; }
+.sb-brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px 18px; }
+.sb-mark { width: 26px; height: 26px; border-radius: 7px; background: var(--ink); color: #fff; display: grid; place-items: center; }
+.sb-mark svg { width: 15px; height: 15px; stroke: #fff; }
+.sb-name { font-size: 13px; font-weight: 600; letter-spacing: -.01em; }
+.sb-sub { font-size: 11px; color: var(--ink-3); }
+.sb-group { font-size: 10.5px; font-weight: 500; color: var(--ink-4); padding: 14px 10px 6px; letter-spacing: .02em; }
+.sb-item { display: flex; align-items: center; gap: 10px; height: 31px; padding: 0 10px; border-radius: 6px; color: var(--ink-2); font-size: 13px; font-weight: 500; }
+.sb-item svg { color: var(--ink-3); }
+.sb-item .cnt { margin-left: auto; font-size: 11px; color: var(--ink-4); font-variant-numeric: tabular-nums; }
+.sb-item.on { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgba(20,20,20,.04); }
+.sb-item.on svg { color: var(--accent); }
+.sb-foot { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px 8px 0; border-top: 1px solid var(--border); }
+.av { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 10.5px; font-weight: 600; color: var(--ink-2); background: var(--surface-3); border: 1px solid var(--border); flex-shrink: 0; }
+.av.a1 { background: #e8efe9; color: #2f6047; border-color: #d5e3d8; }
+.av.a2 { background: #eceaf6; color: #4b4685; border-color: #dcd9ef; }
+.av.a3 { background: #f6ece4; color: #8a5530; border-color: #ecdccd; }
+.av.a4 { background: #e6eef6; color: #2f5677; border-color: #d3e0ec; }
+.av.a5 { background: #f4e9ee; color: #864563; border-color: #e9d6df; }
+.sb-foot .who { font-size: 12px; font-weight: 500; line-height: 1.2; }
+.sb-foot .role { font-size: 11px; color: var(--ink-3); }
+
+/* Main */
+.main { display: flex; flex-direction: column; min-width: 0; height: 900px; }
+.top { height: 52px; flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 0 28px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.crumb { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--ink-3); }
+.crumb b { color: var(--ink); font-weight: 500; }
+.crumb svg { color: var(--ink-4); }
+.top .sp { flex: 1; }
+.search { width: 280px; height: 30px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-2); display: flex; align-items: center; gap: 8px; padding: 0 10px; color: var(--ink-4); font-size: 12.5px; white-space: nowrap; }
+.search kbd { margin-left: auto; font-family: var(--font); font-size: 10.5px; color: var(--ink-3); border: 1px solid var(--border); border-radius: 4px; padding: 0 5px; background: var(--surface); }
+.ibtn { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 7px; color: var(--ink-3); }
+
+.page { flex: 1; min-height: 0; padding: 22px 28px 20px; display: flex; flex-direction: column; gap: 16px; }
+.ph { display: flex; align-items: flex-end; gap: 16px; }
+.ph h1 { font-size: 21px; font-weight: 600; letter-spacing: -.02em; line-height: 1.2; }
+.ph p { font-size: 12.5px; color: var(--ink-3); margin-top: 3px; }
+.ph .sp { flex: 1; }
+.chip-f { height: 30px; display: inline-flex; align-items: center; gap: 7px; padding: 0 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); font-size: 12.5px; color: var(--ink-2); font-weight: 500; }
+.chip-f svg { color: var(--ink-4); }
+.chip-f .k { color: var(--ink-3); font-weight: 400; }
+.seg { display: inline-flex; padding: 2px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-3); }
+.seg span { height: 24px; display: inline-flex; align-items: center; padding: 0 10px; border-radius: 5px; font-size: 12px; color: var(--ink-3); font-weight: 500; }
+.seg span.on { background: var(--surface); color: var(--ink); box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgba(0,0,0,.04); }
+.btn { height: 30px; display: inline-flex; align-items: center; gap: 7px; padding: 0 12px; border-radius: 7px; border: 1px solid var(--border); background: var(--surface); font-size: 12.5px; font-weight: 500; color: var(--ink); white-space: nowrap; }
+.btn.pri { background: var(--ink); border-color: var(--ink); color: #fff; }
+.btn.acc { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.sm { height: 26px; font-size: 12px; padding: 0 9px; }
+
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); box-shadow: 0 1px 2px rgba(20,20,20,.03); min-width: 0; }
+.ch { display: flex; align-items: center; gap: 10px; padding: 13px 16px 11px; }
+.ch h2 { white-space: nowrap; font-size: 13.5px; font-weight: 600; letter-spacing: -.01em; }
+.ch .sub { font-size: 12px; color: var(--ink-3); }
+.ch .sp { flex: 1; }
+.link { font-size: 12px; color: var(--accent); font-weight: 500; display: inline-flex; align-items: center; gap: 4px; }
+
+/* KPI tiles */
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.kpi { padding: 13px 16px 12px; display: flex; flex-direction: column; gap: 6px; }
+.kpi .l { font-size: 12px; color: var(--ink-3); display: flex; align-items: center; gap: 6px; }
+.kpi .row { display: flex; align-items: baseline; gap: 8px; }
+.kpi .v { font-size: 22px; font-weight: 600; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.kpi .u { font-size: 12px; color: var(--ink-3); }
+.kpi .d { font-size: 11.5px; color: var(--ink-3); }
+.kpi .d b { font-weight: 500; }
+.up { color: var(--ok); } .down { color: var(--risk); }
+
+/* Chips */
+.st { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 7px; border-radius: 999px; font-size: 11px; font-weight: 500; white-space: nowrap; }
+.st i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.st.ok { color: var(--ok); background: var(--ok-soft); }
+.st.warn { color: var(--warn); background: var(--warn-soft); }
+.st.risk { color: var(--risk); background: var(--risk-soft); }
+.st.info { color: var(--info); background: var(--info-soft); }
+.st.neu { color: var(--ink-2); background: var(--surface-3); }
+.st.acc { color: var(--accent); background: var(--accent-soft); }
+.hs { display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 22px; padding: 0 6px; border-radius: 6px; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.hs.ok { color: var(--ok); background: var(--ok-soft); }
+.hs.warn { color: var(--warn); background: var(--warn-soft); }
+.hs.risk { color: var(--risk); background: var(--risk-soft); }
+
+/* Table */
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-size: 11.5px; font-weight: 500; color: var(--ink-3); padding: 8px 16px; border-top: 1px solid var(--border-2); border-bottom: 1px solid var(--border-2); background: var(--surface-2); white-space: nowrap; }
+td { padding: 0 16px; height: 46px; border-bottom: 1px solid var(--border-2); font-size: 12.5px; white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+th.r, td.r { text-align: right; }
+.person { display: flex; align-items: center; gap: 10px; }
+.person .n { font-weight: 500; }
+.person .s { font-size: 11.5px; color: var(--ink-3); }
+.dist { display: flex; height: 8px; border-radius: 999px; overflow: hidden; gap: 2px; width: 100%; }
+.dist i { display: block; height: 100%; border-radius: 2px; }
+.dist .g { background: var(--ok-bar); } .dist .y { background: var(--warn-bar); } .dist .r { background: var(--risk-bar); }
+.legend { display: flex; gap: 12px; font-size: 11.5px; color: var(--ink-3); }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.legend i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+
+/* Lists */
+.list { display: flex; flex-direction: column; }
+.li { display: flex; gap: 12px; padding: 11px 16px; border-top: 1px solid var(--border-2); align-items: flex-start; }
+.li .ic { width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; flex-shrink: 0; }
+.ic.ok { background: var(--ok-soft); color: var(--ok); }
+.ic.warn { background: var(--warn-soft); color: var(--warn); }
+.ic.risk { background: var(--risk-soft); color: var(--risk); }
+.ic.info { background: var(--info-soft); color: var(--info); }
+.ic.acc { background: var(--accent-soft); color: var(--accent); }
+.ic.neu { background: var(--surface-3); color: var(--ink-2); }
+.li .tx { flex: 1; min-width: 0; }
+.li .t1 { font-size: 12.5px; font-weight: 500; line-height: 1.35; }
+.li .t2 { font-size: 11.5px; color: var(--ink-3); margin-top: 2px; line-height: 1.4; }
+.li .rt { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; flex-shrink: 0; }
+.go { width: 26px; height: 26px; border-radius: 6px; border: 1px solid var(--border); display: grid; place-items: center; color: var(--ink-3); background: var(--surface); }
+
+.bar { height: 6px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
+.bar i { display: block; height: 100%; border-radius: 999px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="dash" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></symbol>
+<symbol id="brief" viewBox="0 0 24 24"><path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/><rect width="20" height="14" x="2" y="6" rx="2"/></symbol>
+<symbol id="refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+<symbol id="route" viewBox="0 0 24 24"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></symbol>
+<symbol id="smile" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" x2="9.01" y1="9" y2="9"/><line x1="15" x2="15.01" y1="9" y2="9"/></symbol>
+<symbol id="checks" viewBox="0 0 24 24"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></symbol>
+<symbol id="chart" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="m19 9-5 5-4-4-3 3"/></symbol>
+<symbol id="gear" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+<symbol id="bell" viewBox="0 0 24 24"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></symbol>
+<symbol id="chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="chevr" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+<symbol id="out" viewBox="0 0 24 24"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></symbol>
+<symbol id="tdown" viewBox="0 0 24 24"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"/><polyline points="16 17 22 17 22 11"/></symbol>
+<symbol id="tup" viewBox="0 0 24 24"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></symbol>
+<symbol id="alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+<symbol id="pulse" viewBox="0 0 24 24"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></symbol>
+<symbol id="cal" viewBox="0 0 24 24"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></symbol>
+<symbol id="userx" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="17" x2="22" y1="8" y2="13"/><line x1="22" x2="17" y1="8" y2="13"/></symbol>
+<symbol id="users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+<symbol id="msg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+<symbol id="spark" viewBox="0 0 24 24"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></symbol>
+<symbol id="clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+<symbol id="cap" viewBox="0 0 24 24"><path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></symbol>
+<symbol id="buoy" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m4.93 4.93 4.24 4.24"/><path d="m14.83 9.17 4.24-4.24"/><path d="m14.83 14.83 4.24 4.24"/><path d="m9.17 14.83-4.24 4.24"/><circle cx="12" cy="12" r="4"/></symbol>
+<symbol id="check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="ccheck" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="more" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+<symbol id="mail" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol>
+<symbol id="video" viewBox="0 0 24 24"><path d="m16 13 5.223 3.482a.5.5 0 0 0 .777-.416V7.87a.5.5 0 0 0-.752-.432L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></symbol>
+<symbol id="file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/></symbol>
+<symbol id="star" viewBox="0 0 24 24"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></symbol>
+<symbol id="flag" viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/></symbol>
+<symbol id="rocket" viewBox="0 0 24 24"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></symbol>
+<symbol id="plug" viewBox="0 0 24 24"><path d="M12 22v-5"/><path d="M9 8V2"/><path d="M15 8V2"/><path d="M18 8v5a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4V8Z"/></symbol>
+<symbol id="target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+<symbol id="heart" viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/></symbol>
+<symbol id="filter" viewBox="0 0 24 24"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></symbol>
+<symbol id="plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+<symbol id="building" viewBox="0 0 24 24"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/></symbol>
+<symbol id="ticket" viewBox="0 0 24 24"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/></symbol>
+</defs></svg>
+<style>
+.hero { display: flex; align-items: center; gap: 16px; padding: 16px 20px 14px; }
+.logo { width: 46px; height: 46px; border-radius: 11px; background: linear-gradient(135deg,#1f4d47,#0d6e63); color: #fff; display: grid; place-items: center; font-weight: 600; font-size: 16px; letter-spacing: -.02em; flex-shrink: 0; }
+.hero h1 { font-size: 20px; font-weight: 600; letter-spacing: -.02em; display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+.hero .meta { font-size: 12.5px; color: var(--ink-3); margin-top: 3px; }
+.hero .sp { flex: 1; }
+.facts { display: grid; grid-template-columns: repeat(6, auto); justify-content: start; border-top: 1px solid var(--border-2); padding: 12px 0 13px; }
+.fact { padding: 0 22px; border-left: 1px solid var(--border-2); }
+.fact:first-child { border-left: 0; padding-left: 20px; }
+.fact .k { font-size: 11.5px; color: var(--ink-3); }
+.fact .v { font-size: 13px; font-weight: 500; margin-top: 4px; display: flex; align-items: center; gap: 7px; white-space: nowrap; height: 22px; }
+.fact .v .av { width: 20px; height: 20px; font-size: 9px; }
+.ring { display: inline-flex; }
+.delta { font-size: 11.5px; font-weight: 400; }
+.g3 { flex: 1; min-height: 0; display: grid; grid-template-columns: 316px minmax(0,1fr) 352px; gap: 16px; }
+.col { display: flex; flex-direction: column; gap: 16px; min-height: 0; min-width: 0; }
+.comp { padding: 4px 16px 14px; display: flex; flex-direction: column; gap: 12px; }
+.comp .r1 { display: flex; align-items: center; font-size: 12.5px; margin-bottom: 6px; }
+.comp .r1 .sp { flex: 1; }
+.comp .r1 .w { font-size: 11px; color: var(--ink-4); margin-right: 8px; }
+.comp .r1 b { font-weight: 600; font-variant-numeric: tabular-nums; width: 22px; text-align: right; }
+.ppl .li { align-items: center; padding: 10px 16px; }
+.ppl .t2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ppl .av { width: 30px; height: 30px; font-size: 11px; }
+.tl { position: relative; padding: 4px 18px 6px 18px; }
+.tl::before { content: ''; position: absolute; left: 32px; top: 14px; bottom: 30px; width: 1px; background: var(--border); }
+.ev { position: relative; display: flex; gap: 14px; padding: 9px 0 11px; }
+.ev .dot { width: 29px; height: 29px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0; border: 1px solid var(--border); background: var(--surface); color: var(--ink-3); z-index: 1; }
+.ev .dot.risk { color: var(--risk); background: var(--risk-soft); border-color: #f0d3cc; }
+.ev .dot.warn { color: var(--warn); background: var(--warn-soft); border-color: #eedfc0; }
+.ev .dot.ok { color: var(--ok); background: var(--ok-soft); border-color: #cfe5d6; }
+.ev .dot.acc { color: var(--accent); background: var(--accent-soft); border-color: #c9e2dc; }
+.ev .bd { flex: 1; min-width: 0; padding-top: 2px; }
+.ev .h { display: flex; align-items: center; gap: 8px; }
+.ev .h .t { font-size: 12.5px; font-weight: 500; }
+.ev .h .sp { flex: 1; }
+.ev .h .d { font-size: 11.5px; color: var(--ink-4); white-space: nowrap; }
+.ev .p { font-size: 12px; color: var(--ink-3); margin-top: 3px; line-height: 1.45; }
+.ev .q { margin-top: 6px; font-size: 12px; color: var(--ink-2); border-left: 2px solid var(--border); padding-left: 9px; line-height: 1.45; }
+.ev .tags { display: flex; gap: 6px; margin-top: 7px; }
+.nba { border-color: #bfdcd5; box-shadow: 0 0 0 3px rgba(13,110,99,.06), 0 1px 2px rgba(20,20,20,.03); }
+.nba .top2 { padding: 14px 16px 0; display: flex; align-items: center; gap: 8px; font-size: 11.5px; font-weight: 500; color: var(--accent); }
+.nba h3 { font-size: 15px; font-weight: 600; letter-spacing: -.01em; padding: 8px 16px 0; line-height: 1.35; }
+.why { padding: 12px 16px 0; display: flex; flex-direction: column; gap: 8px; }
+.why div { display: flex; gap: 8px; font-size: 12px; color: var(--ink-2); align-items: flex-start; line-height: 1.4; }
+.why svg { margin-top: 1px; color: var(--ink-4); }
+.nba .btns { display: flex; gap: 8px; padding: 14px 16px 12px; }
+.nba .foot { border-top: 1px solid var(--border-2); padding: 9px 16px; font-size: 11.5px; color: var(--ink-3); display: flex; align-items: center; gap: 6px; }
+.ck { padding: 2px 16px 14px; display: flex; flex-direction: column; gap: 10px; }
+.ck div { display: flex; align-items: center; gap: 10px; font-size: 12.5px; }
+.ck .bx { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--border); display: grid; place-items: center; flex-shrink: 0; }
+.ck .bx.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.ck .done { color: var(--ink-3); text-decoration: line-through; text-decoration-color: var(--ink-4); }
+.ck .sp { flex: 1; }
+.ck .d { font-size: 11.5px; color: var(--ink-4); }
+</style>
+<div class="app">
+  <aside class="sb">
+    <div class="sb-brand"><span class="sb-mark"><svg class="i"><use href="#heart"/></svg></span><div><div class="sb-name">Customer Success</div><div class="sb-sub">Portfolio portal</div></div></div>
+    <div class="sb-item"><svg class="i"><use href="#dash"/></svg>Overview</div>
+    <div class="sb-item on"><svg class="i"><use href="#brief"/></svg>Portfolio<span class="cnt">54</span></div>
+    <div class="sb-item"><svg class="i"><use href="#refresh"/></svg>Renewals<span class="cnt">18</span></div>
+    <div class="sb-item"><svg class="i"><use href="#route"/></svg>Journey</div>
+    <div class="sb-item"><svg class="i"><use href="#smile"/></svg>Satisfaction</div>
+    <div class="sb-item"><svg class="i"><use href="#checks"/></svg>Next actions<span class="cnt">24</span></div>
+    <div class="sb-item"><svg class="i"><use href="#chart"/></svg>Reports</div>
+    <div class="sb-group">Saved views</div>
+    <div class="sb-item"><svg class="i"><use href="#target"/></svg>Enterprise at risk</div>
+    <div class="sb-item"><svg class="i"><use href="#cal"/></svg>Renewing this quarter</div>
+    <div class="sb-item"><svg class="i"><use href="#rocket"/></svg>Active onboarding</div>
+    <div class="sb-group">Admin</div>
+    <div class="sb-item"><svg class="i"><use href="#plug"/></svg>Integrations</div>
+    <div class="sb-item"><svg class="i"><use href="#gear"/></svg>Settings</div>
+    <div class="sb-foot"><span class="av a1">MT</span><div><div class="who">Marina Tavares</div><div class="role">Account manager</div></div></div>
+  </aside>
+
+  <div class="main">
+    <header class="top">
+      <div class="crumb">Customer Success<svg class="i s12"><use href="#chevr"/></svg>Portfolio<svg class="i s12"><use href="#chevr"/></svg><b>Lumiar Logistics</b></div>
+      <div class="sp"></div>
+      <div class="search"><svg class="i s13"><use href="#search"/></svg>Search accounts or actions<kbd>⌘K</kbd></div>
+      <span class="ibtn"><svg class="i"><use href="#bell"/></svg></span>
+    </header>
+
+    <div class="page">
+      <div class="card">
+        <div class="hero">
+          <div class="logo">LL</div>
+          <div>
+            <h1>Lumiar Logistics <span class="st neu">Enterprise</span><span class="st warn"><i></i>Watch</span></h1>
+            <div class="meta">Logistics and transportation · Austin, TX · customer since Mar 2023</div>
+          </div>
+          <div class="sp"></div>
+          <span class="btn"><svg class="i s13"><use href="#out"/></svg>Open in CRM</span>
+          <span class="btn pri"><svg class="i s13"><use href="#plus"/></svg>Log activity</span>
+        </div>
+        <div class="facts">
+          <div class="fact"><div class="k">Health</div><div class="v"><span class="ring"><svg width="22" height="22" viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="#efeee9" stroke-width="10"/><circle cx="32" cy="32" r="26" fill="none" stroke="#d9a441" stroke-width="10" stroke-linecap="round" stroke-dasharray="104.5 163.4" transform="rotate(-90 32 32)"/></svg></span>64 <span class="delta down">−6 in 30 days</span></div></div>
+          <div class="fact"><div class="k">Account manager</div><div class="v"><span class="av a1">MT</span>Marina Tavares</div></div>
+          <div class="fact"><div class="k">Renewal</div><div class="v">Nov 28, 2026 <span class="st warn">21 days</span></div></div>
+          <div class="fact"><div class="k">Active users</div><div class="v">86 of 120</div></div>
+          <div class="fact"><div class="k">Plan</div><div class="v">Professional · annual</div></div>
+          <div class="fact"><div class="k">Last contact</div><div class="v">3 days ago</div></div>
+        </div>
+      </div>
+
+      <div class="g3">
+        <div class="col">
+          <div class="card">
+            <div class="ch"><h2>Health breakdown</h2><span class="sp"></span><span class="sub">weight</span></div>
+            <div class="comp">
+              <div><div class="r1">Product adoption<span class="sp"></span><span class="w">30%</span><b>58</b></div><div class="bar"><i style="width:58%;background:var(--warn-bar)"></i></div></div>
+              <div><div class="r1">Support<span class="sp"></span><span class="w">20%</span><b>72</b></div><div class="bar"><i style="width:72%;background:var(--ok-bar)"></i></div></div>
+              <div><div class="r1">Engagement<span class="sp"></span><span class="w">20%</span><b>66</b></div><div class="bar"><i style="width:66%;background:var(--warn-bar)"></i></div></div>
+              <div><div class="r1">Satisfaction<span class="sp"></span><span class="w">15%</span><b>81</b></div><div class="bar"><i style="width:81%;background:var(--ok-bar)"></i></div></div>
+              <div><div class="r1">Executive relationship<span class="sp"></span><span class="w">15%</span><b>45</b></div><div class="bar"><i style="width:45%;background:var(--risk-bar)"></i></div></div>
+            </div>
+          </div>
+          <div class="card" style="flex:1">
+            <div class="ch"><h2>Key contacts</h2><span class="sp"></span><span class="sub">5 of 11</span></div>
+            <div class="list ppl">
+              <div class="li"><span class="av a5">RS</span><div class="tx"><div class="t1">Renata Siqueira</div><div class="t2">Sponsor · Operations</div></div><span class="st ok">Promoter</span></div>
+              <div class="li"><span class="av a4">DA</span><div class="tx"><div class="t1">Diego Amaral</div><div class="t2">Admin · IT</div></div><span class="st neu">Neutral</span></div>
+              <div class="li"><span class="av a3">PN</span><div class="tx"><div class="t1">Paula Nogueira</div><div class="t2">Power user · Fleet</div></div><span class="st ok">Promoter</span></div>
+              <div class="li"><span class="av a4">TR</span><div class="tx"><div class="t1">Tiago Rezende</div><div class="t2">Active user · Planning</div></div><span class="st info">New</span></div>
+              <div class="li"><span class="av a2">SL</span><div class="tx"><div class="t1">Sergio Lemos</div><div class="t2">Decision maker · Finance</div></div><span class="st warn">No contact</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="display:flex;flex-direction:column;min-height:0">
+          <div class="ch"><h2>Timeline</h2><span class="sp"></span><div class="seg"><span class="on">All</span><span>Meetings</span><span>Support</span><span>Usage</span></div></div>
+          <div class="tl">
+            <div class="ev"><span class="dot risk"><svg class="i s13"><use href="#pulse"/></svg></span><div class="bd"><div class="h"><span class="t">Weekly usage down 18%</span><span class="st risk">Signal</span><span class="sp"></span><span class="d">today, 9:12 AM</span></div><div class="p">Detected in usage data: the routing module lost 14 active users since the last release.</div></div></div>
+            <div class="ev"><span class="dot warn"><svg class="i s13"><use href="#ticket"/></svg></span><div class="bd"><div class="h"><span class="t">Ticket resolved · ERP integration</span><span class="sp"></span><span class="d">Nov 4</span></div><div class="p">Order import failed on large batches. Resolved in 2 days.</div><div class="tags"><span class="st warn">Satisfaction 3 of 5</span><span class="st neu">High effort</span></div></div></div>
+            <div class="ev"><span class="dot"><svg class="i s13"><use href="#mail"/></svg></span><div class="bd"><div class="h"><span class="t">Review summary sent to 5 contacts</span><span class="sp"></span><span class="d">Nov 1</span></div><div class="p">Opened by 4 of 5. The finance decision maker did not open it.</div></div></div>
+            <div class="ev"><span class="dot acc"><svg class="i s13"><use href="#video"/></svg></span><div class="bd"><div class="h"><span class="t">Quarterly review with Renata and Diego</span><span class="sp"></span><span class="d">Oct 31</span></div><div class="p">They asked for multi-warehouse routing and regional reports. Agreed on an adoption plan for the new module.</div><div class="tags"><span class="st acc"><svg class="i s12"><use href="#file"/></svg>Note logged in CRM</span></div></div></div>
+            <div class="ev"><span class="dot ok"><svg class="i s13"><use href="#star"/></svg></span><div class="bd"><div class="h"><span class="t">Satisfaction survey · Paula Nogueira</span><span class="sp"></span><span class="d">Oct 24</span></div><div class="q">“The routes dashboard changed our daily work. We just need exports by region.”</div><div class="tags"><span class="st ok">Score 9 of 10</span></div></div></div>
+            <div class="ev"><span class="dot"><svg class="i s13"><use href="#cap"/></svg></span><div class="bd"><div class="h"><span class="t">Training · advanced reporting</span><span class="sp"></span><span class="d">Oct 15</span></div><div class="p">7 of 12 invitees attended. Recording sent to those who missed it.</div></div></div>
+          </div>
+        </div>
+
+        <div class="col">
+          <div class="card nba">
+            <div class="top2"><svg class="i s13"><use href="#spark"/></svg>Next best action</div>
+            <h3>Send the renewal proposal together with an adoption plan for the routing module</h3>
+            <div class="why">
+              <div><svg class="i s13"><use href="#cal"/></svg>Renews in 21 days, proposal still unanswered</div>
+              <div><svg class="i s13"><use href="#tdown"/></svg>Routing module usage down 18% this month</div>
+              <div><svg class="i s13"><use href="#star"/></svg>Power user is a promoter and asked for regional exports</div>
+              <div><svg class="i s13"><use href="#userx"/></svg>Finance decision maker not contacted in 90 days</div>
+            </div>
+            <div class="btns"><span class="btn sm acc"><svg class="i s12"><use href="#out"/></svg>Open opportunity in CRM</span><span class="btn sm">Snooze</span></div>
+            <div class="foot"><svg class="i s12"><use href="#pulse"/></svg>Suggested from 6 account signals</div>
+          </div>
+          <div class="card" style="flex:1">
+            <div class="ch"><h2>Renewal plan</h2><span class="sp"></span><span class="sub">2 of 5</span></div>
+            <div class="ck">
+              <div><span class="bx on"><svg class="i s12"><use href="#check"/></svg></span><span class="done">Review usage and contract</span><span class="sp"></span><span class="d">Oct 29</span></div>
+              <div><span class="bx on"><svg class="i s12"><use href="#check"/></svg></span><span class="done">Send proposal</span><span class="sp"></span><span class="d">Nov 4</span></div>
+              <div><span class="bx"></span><span>Meeting with the sponsor</span><span class="sp"></span><span class="d">Nov 12</span></div>
+              <div><span class="bx"></span><span>Re-engage the finance decision maker</span><span class="sp"></span><span class="d">Nov 14</span></div>
+              <div><span class="bx"></span><span>Signature</span><span class="sp"></span><span class="d">Nov 28</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
