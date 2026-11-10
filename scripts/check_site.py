@@ -84,12 +84,22 @@ class _Page(HTMLParser):
         self.refs: list[str] = []
         self.robots: list[str] = []
         self.active: list[str] = []
+        self.main_depth = 0
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self.handle_starttag(tag, attrs)
 
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "main":
+            self.main_depth = max(0, self.main_depth - 1)
+
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        a = {k: (v or "") for k, v in attrs}
+        if tag == "main":
+            self.main_depth += 1
+        # Atributo repetido: o navegador usa a primeira ocorrência.
+        a: dict[str, str] = {}
+        for k, v in attrs:
+            a.setdefault(k, v or "")
         if tag == "meta" and a.get("name", "").lower() == "robots":
             self.robots.append(a.get("content", "").lower())
         for k in URL_ATTRS:
@@ -102,7 +112,11 @@ class _Page(HTMLParser):
             self.active.append(f"<{tag}>")
         if tag == "script" and SITE_SCRIPT_ATTR not in a:
             self.active.append("<script> fora do template")
-        for k, v in a.items():
+        elif tag == "script" and self.main_depth > 0:
+            # O template não tem script dentro de <main>; ali só há conteúdo.
+            self.active.append("<script> dentro de <main>")
+        # Todas as ocorrências, inclusive repetidas: qualquer uma ativa é problema.
+        for k, v in ((k, v or "") for k, v in attrs):
             if k.startswith("on"):
                 self.active.append(f"<{tag} {k}>")
             elif k == "srcdoc":
@@ -152,6 +166,14 @@ def _robots_noindex(content: str) -> bool:
     return bool(directives & {"noindex", "none"})
 
 
+# O Pages serve estas extensões como HTML (com script), em qualquer caixa.
+HTML_SUFFIXES = {".html", ".htm", ".xhtml"}
+
+
+def html_files(site: Path) -> list[Path]:
+    return sorted(p for p in site.rglob("*") if p.is_file() and p.suffix.lower() in HTML_SUFFIXES)
+
+
 def _page_url(site: Path, f: Path) -> str:
     rel = f.relative_to(site).as_posix()
     if rel == "index.html":
@@ -178,12 +200,33 @@ def _normalize(path: str) -> str:
 
 
 def _host(parts) -> str:
-    """Host como o navegador compara: sem percent-encoding, minúsculo, sem ponto final."""
-    return unquote(parts.netloc.rsplit("@", 1)[-1].split(":", 1)[0]).lower().rstrip(".")
+    """Host como o navegador compara (WHATWG/UTS 46): sem percent-encoding, com pontos Unicode
+    (。．｡) e caracteres de largura total normalizados pelo IDNA, minúsculo e sem ponto final."""
+    raw = unquote(parts.netloc.rsplit("@", 1)[-1])
+    if not raw.startswith("["):
+        raw = raw.split(":", 1)[0]
+    try:
+        host = raw.encode("idna").decode("ascii")
+    except UnicodeError:
+        host = raw
+    return host.lower().rstrip(".")
+
+
+def _whatwg_prep(ref: str) -> str:
+    """Em http(s) e links relativos, o navegador trata barra invertida como barra.
+
+    Tab e quebra de linha em qualquer posição, e C0 ou espaço no começo, o próprio urlsplit do
+    Python já remove (como o WHATWG manda); o teste com "gui<tab>fav.dev" cobre isso.
+    """
+    m = re.match(r"^([A-Za-z][A-Za-z0-9+.-]*):", ref)
+    if m is None or m.group(1).lower() in ("http", "https"):
+        ref = ref.replace("\\", "/")
+    return ref
 
 
 def _internal_path(page_url: str, ref: str) -> str | None:
     """Caminho interno normalizado do link, ou None se for externo, âncora, mailto etc."""
+    ref = _whatwg_prep(ref)
     if ref.startswith("#"):
         return None
     # Resolve como o navegador: relativo, absoluto, relativo ao protocolo (//host/...).
@@ -221,7 +264,12 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
         if fm.get("index") == "false":
             noindex_slugs.add(slug)
 
-    for f in sorted(site.rglob("*.html")):
+    # SVG aberto direto executa script; no blog, imagens são WebP ou PNG.
+    for f in sorted((site / "blog").rglob("*")):
+        if f.is_file() and f.suffix.lower() == ".svg":
+            problems.append(f"{f.relative_to(site).as_posix()}: SVG não é publicado no blog (pode executar script); converta para WebP ou PNG")
+
+    for f in html_files(site):
         rel = f.relative_to(site).as_posix()
         url = _page_url(site, f)
         in_blog = url.startswith(BLOG_PREFIX)
@@ -293,7 +341,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERRO: {p}", file=sys.stderr)
     if problems:
         return 1
-    n = sum(1 for _ in Path(args.site).rglob("*.html"))
+    n = len(html_files(Path(args.site)))
     print(f"check_site: {n} páginas HTML conferidas, sem problemas (antes do cutover: {pre})")
     return 0
 

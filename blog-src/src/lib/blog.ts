@@ -47,7 +47,7 @@ export function formatDate(d: Date): string {
 
 /**
  * URL do player embutido do Spotify a partir do link do episódio.
- * Aceita open.spotify.com/episode/<id> e o link do Spotify for Creators
+ * Aceita open.spotify.com/episode/<id> (também localizado, /intl-pt/episode/<id>) e o link do Spotify for Creators
  * (podcasters.spotify.com ou creators.spotify.com /pod/show|profile/<show>/episodes/<ep>).
  * Retorna null se o link não for de episódio do Spotify.
  */
@@ -60,7 +60,8 @@ export function spotifyEmbedUrl(url: string): string | null {
   }
   if (u.protocol !== 'https:') return null;
   if (u.hostname === 'open.spotify.com') {
-    const m = u.pathname.match(/^\/(?:embed\/)?episode\/([A-Za-z0-9]+)\/?$/);
+    // O Spotify também gera links localizados: /intl-pt/episode/<id>.
+    const m = u.pathname.match(/^\/(?:intl-[a-z]{2,3}(?:-[a-z0-9]{2,4})?\/)?(?:embed\/)?episode\/([A-Za-z0-9]+)\/?$/);
     return m ? `https://open.spotify.com/embed/episode/${m[1]}` : null;
   }
   if (u.hostname === 'podcasters.spotify.com' || u.hostname === 'creators.spotify.com') {

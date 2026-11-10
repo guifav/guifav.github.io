@@ -5,8 +5,20 @@ import { markdownToHtml } from 'satteri';
 import { sanitizeElement, safeUrl, parseSrcset, sanitizePlugin, MARKDOWN_FEATURES } from '../src/lib/sanitize.ts';
 
 async function render(md: string): Promise<string> {
-  const r = await markdownToHtml(md, { features: MARKDOWN_FEATURES, hastPlugins: [sanitizePlugin()] });
+  const r = await markdownToHtml(md, {
+    features: MARKDOWN_FEATURES,
+    hastPlugins: [sanitizePlugin()],
+    fileURL: new URL('file:///posts/um-post.md'),
+  } as Parameters<typeof markdownToHtml>[1]);
   return r.html;
+}
+
+async function rejects(md: string, ...expected: string[]): Promise<void> {
+  await assert.rejects(render(md), (e: Error) => {
+    assert.ok(e.message.includes('um-post.md'), e.message);
+    for (const x of expected) assert.ok(e.message.includes(x), `${x} ausente em: ${e.message}`);
+    return true;
+  }, md);
 }
 
 test('safeUrl: relativos, http(s) e mailto passam; esquemas ativos não', () => {
@@ -32,12 +44,15 @@ test('parseSrcset segue a sintaxe do HTML: vírgula dentro da URL e qualquer esp
   assert.deepEqual(parseSrcset('/a.webp 1x,/b.webp 2x'), ['/a.webp', '/b.webp']);
 });
 
-test('sanitizeElement: tags perigosas saem com o conteúdo; desconhecidas viram só o conteúdo', () => {
-  for (const t of ['script', 'style', 'object', 'embed', 'form', 'input', 'base', 'meta', 'link', 'svg', 'math', 'template', 'noscript', 'frame']) {
-    assert.equal(sanitizeElement(t, {}).action, 'drop', t);
+test('sanitizeElement: elemento fora da lista é rejeitado (o build falha), nunca removido ou desembrulhado', () => {
+  for (const t of ['script', 'style', 'object', 'embed', 'form', 'input', 'base', 'meta', 'link', 'svg', 'math', 'template',
+    'noscript', 'frame', 'xmp', 'plaintext', 'listing', 'noembed', 'noframes', 'textarea', 'title', 'article', 'marquee', 'center',
+    'font', 'my-widget', 'audio']) {
+    assert.equal(sanitizeElement(t, {}).action, 'reject', t);
   }
-  assert.equal(sanitizeElement('marquee', {}).action, 'unwrap');
-  assert.equal(sanitizeElement('figure', {}).action, 'keep');
+  for (const t of ['figure', 'picture', 'video', 'source', 'iframe', 'div', 'span']) {
+    assert.notEqual(sanitizeElement(t, t === 'iframe' ? { src: 'https://www.youtube.com/embed/x' } : {}).action, 'reject', t);
+  }
 });
 
 test('sanitizeElement: remove on*, srcdoc, style fora do realce e atributos fora da lista', () => {
@@ -76,10 +91,12 @@ test('sanitizeElement: iframe só de host permitido e em https; URL ativa derrub
     assert.equal(sanitizeElement('iframe', { src }).action, 'keep', src);
   }
   for (const src of ['http://www.youtube.com/embed/x', 'https://evil.example/x', 'https://youtube.com.evil.example/x', '']) {
-    assert.equal(sanitizeElement('iframe', { src }).action, 'drop', src);
+    assert.equal(sanitizeElement('iframe', { src }).action, 'reject', src);
   }
-  assert.equal(sanitizeElement('iframe', {}).action, 'drop');
-  assert.equal(sanitizeElement('img', { src: 'javascript:x' }).action, 'drop');
+  assert.equal(sanitizeElement('iframe', {}).action, 'reject');
+  assert.equal(sanitizeElement('img', { src: 'javascript:x' }).action, 'reject');
+  assert.equal(sanitizeElement('source', { src: 'javascript:x' }).action, 'reject');
+  assert.equal(sanitizeElement('video', { poster: 'javascript:x' }).remove.includes('poster'), true);
   assert.equal(sanitizeElement('img', { src: '/a.webp', srcSet: '/a.webp 1x, javascript:x 2x' }).remove.includes('srcSet'), true);
   // URL de CDN com vírgula e parâmetro "chave:valor" é uma URL https só (regra do HTML): o srcset fica.
   assert.deepEqual(sanitizeElement('img', { src: '/a.webp', srcSet: 'https://cdn.example/fetch/w_728,dpr:2/x.png 728w, /a.webp 1456w' }).remove, []);
@@ -91,21 +108,53 @@ test('sanitizeElement: link com target ganha rel noopener', () => {
   assert.equal(r.set.rel, 'noopener');
 });
 
-test('render: barra script, handlers, srcdoc, </article> solto e iframe de fora', async () => {
+test('render: elemento fora da lista falha com o arquivo e a tag, inclusive aninhado ou desconhecido', async () => {
+  await rejects('<script>window.a=1</script>\n', '<script>');
+  await rejects('<article><script>window.a=1</script></article>\n', '<article>', '<script>');
+  await rejects('<center><iframe src="https://evil.example/"></iframe></center>\n', '<center>', '<iframe>');
+  await rejects('<marquee><img src="x" onerror="b()"><p>t</p></marquee>\n', '<marquee>');
+  await rejects('<xmp>&lt;/xmp&gt;&lt;script&gt;c()&lt;/script&gt;</xmp>\n', '<xmp>');
+  await rejects('<p>a</p>\n\n<svg><script>window.d=1</script></svg>\n', '<svg>');
+  await rejects('<form action="/x"><input></form>\n', '<form>');
+  await rejects('<style>body{display:none}</style>\n', '<style>');
+  await rejects('<img src="javascript:alert(1)">\n', '<img>');
+  await rejects('<iframe src="https://evil.example/x"></iframe>\n', '<iframe>');
+});
+
+test('render: atributos ativos saem sem perder conteúdo (on*, srcdoc, javascript:, </article> solto)', async () => {
   const html = await render(
-    'Texto\n\n</article>\n\n<script>window.a=1</script>\n\n' +
+    'Texto\n\n</article>\n\n' +
       '<img src="/blog/img/x/a.webp" onerror="window.b=1">\n\n' +
       '<iframe src="https://www.youtube.com/embed/x" srcdoc="&lt;script&gt;window.c=1&lt;/script&gt;"></iframe>\n\n' +
-      '<iframe src="https://evil.example/x"></iframe>\n\n' +
-      '<a href="javascript:alert(1)">x</a> <a href="JaVaScRiPt:alert(1)">y</a>\n\n' +
-      '<svg><script>window.d=1</script></svg><object data="x.swf"></object><form action="/x"><input></form>\n\n' +
-      '<style>body{display:none}</style>\n',
+      '<a href="javascript:alert(1)">x</a> <a href="JaVaScRiPt:alert(1)">y</a> <div data-x="1" style="color:red">z</div>\n',
   );
-  for (const bad of ['<script', 'onerror', 'srcdoc', '</article>', 'evil.example', 'javascript:', 'JaVaScRiPt', '<svg', '<object', '<form', '<input', '<style', 'window.']) {
+  for (const bad of ['onerror', 'srcdoc', '</article>', 'javascript:', 'JaVaScRiPt', 'window.', 'data-x', 'style=']) {
     assert.equal(html.toLowerCase().includes(bad.toLowerCase()), false, `${bad} em: ${html}`);
   }
   assert.ok(html.includes('<img src="/blog/img/x/a.webp">'), html);
   assert.ok(html.includes('<iframe src="https://www.youtube.com/embed/x"></iframe>'), html);
+  assert.ok(html.includes('<a>x</a>') && html.includes('<div>z</div>'), html);
+});
+
+test('plugin: nó raw (HTML não interpretado) também falha o build', () => {
+  const plugin = sanitizePlugin();
+  const ctx = { data: {} as Record<string, unknown>, fileURL: new URL('file:///posts/um-post.md'), removeNode() {}, setProperty() {} };
+  plugin.before({}, ctx);
+  plugin.raw({ type: 'raw', value: '<script>x()</script>' }, ctx);
+  assert.throws(() => plugin.after({}, ctx), /um-post\.md.*HTML cru não interpretado/);
+  plugin.before({}, ctx);
+  assert.doesNotThrow(() => plugin.after({}, ctx));
+});
+
+test('render: vídeo local da #19 passa com os atributos permitidos', async () => {
+  const html = await render(
+    '<p>antes</p>\n<video controls preload="none" width="1502" height="1080" poster="/blog/img/x/p.webp" onplay="x()">\n' +
+      '  <source src="/blog/video/review.mp4" type="video/mp4">\n</video>\n<p>depois</p>\n',
+  );
+  for (const ok of ['<video', 'controls', 'preload="none"', 'width="1502"', 'poster="/blog/img/x/p.webp"', '<source src="/blog/video/review.mp4" type="video/mp4">', 'depois']) {
+    assert.ok(html.includes(ok), `${ok} sumiu de: ${html}`);
+  }
+  assert.equal(html.includes('onplay'), false, html);
 });
 
 test('render: mantém o HTML legítimo dos posts do Substack', async () => {

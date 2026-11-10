@@ -2,18 +2,17 @@
 //
 // O markdown dos posts vem do importador do Substack (#19) e pode trazer HTML cru. Com
 // rawHtml: true, o Satteri reinterpreta esse HTML como o navegador faria (um "</article>" solto
-// some, tags abertas em um bloco e fechadas em outro viram elementos), e este plugin percorre os
-// elementos: tag fora da lista sai, atributo fora da lista sai, URL com esquema ativo sai e iframe
-// só fica se for https de um host permitido. Roda depois do realce de código e antes do resto.
+// some, tags abertas em um bloco e fechadas em outro viram elementos). Este plugin então:
+//
+// - REJEITA (o build falha, com o arquivo e as tags) todo elemento fora da lista, iframe fora dos
+//   hosts permitidos e img/source com URL ativa. Nada some em silêncio e nada passa: o importador
+//   tem de gerar só HTML da lista. O plugin não remove nem desembrulha elementos, porque o Satteri
+//   descarta as alterações pendentes dos filhos de um nó substituído (um <script> dentro de um
+//   <article> desembrulhado voltava intacto);
+// - REMOVE atributos fora da lista por tag (on*, srcdoc, style que não seja do realce, data-*),
+//   URLs com esquema ativo e comentários. Isso não perde conteúdo.
 
 export const MARKDOWN_FEATURES = { rawHtml: true } as const;
-
-/** Saem com todo o conteúdo. */
-const DROP = new Set([
-  'script', 'style', 'noscript', 'template', 'object', 'embed', 'applet', 'param', 'form', 'input', 'button',
-  'textarea', 'select', 'option', 'optgroup', 'datalist', 'fieldset', 'label', 'output', 'base', 'meta', 'link',
-  'title', 'head', 'frame', 'frameset', 'svg', 'math', 'canvas', 'dialog', 'portal', 'slot', 'audio', 'video', 'track',
-]);
 
 // Nomes comparados em minúsculas e sem hífen: className, class, data-language e dataLanguage
 // aparecem conforme o nó veio do markdown ou do realce de código.
@@ -21,7 +20,7 @@ const GLOBAL_ATTRS = ['id', 'classname', 'class', 'title', 'lang', 'dir'];
 const TAG_ATTRS: Record<string, string[]> = {
   a: ['href', 'rel', 'target', 'hreflang'],
   img: ['src', 'srcset', 'sizes', 'alt', 'width', 'height', 'loading', 'decoding'],
-  source: ['srcset', 'sizes', 'type', 'media'],
+  source: ['src', 'srcset', 'sizes', 'type', 'media'],
   iframe: ['src', 'width', 'height', 'allow', 'allowfullscreen', 'loading', 'referrerpolicy'],
   td: ['colspan', 'rowspan', 'align'],
   th: ['colspan', 'rowspan', 'align', 'scope'],
@@ -34,6 +33,7 @@ const TAG_ATTRS: Record<string, string[]> = {
   q: ['cite'],
   details: ['open'],
   // Saída do realce de código (Shiki com duas paletas).
+  video: ['controls', 'preload', 'width', 'height', 'poster', 'playsinline', 'muted', 'loop'],
   pre: ['style', 'tabindex', 'datalanguage'],
   code: ['style', 'datalanguage'],
   span: ['style'],
@@ -43,9 +43,9 @@ const KEEP = new Set([
   'mark', 'sub', 'sup', 'small', 'code', 'pre', 'kbd', 'samp', 'var', 'blockquote', 'q', 'cite', 'abbr', 'ul', 'ol',
   'li', 'dl', 'dt', 'dd', 'figure', 'figcaption', 'img', 'picture', 'source', 'table', 'thead', 'tbody', 'tfoot',
   'tr', 'th', 'td', 'caption', 'colgroup', 'col', 'div', 'span', 'section', 'aside', 'iframe', 'details', 'summary',
-  'time', 'wbr',
+  'time', 'wbr', 'video',
 ]);
-const URL_ATTRS = new Set(['href', 'src', 'cite']);
+const URL_ATTRS = new Set(['href', 'src', 'cite', 'poster']);
 
 export const IFRAME_HOSTS = new Set([
   'open.spotify.com', 'creators.spotify.com', 'podcasters.spotify.com',
@@ -110,18 +110,21 @@ function iframeAllowed(src: unknown): boolean {
 }
 
 export interface Decision {
-  action: 'keep' | 'drop' | 'unwrap';
+  action: 'keep' | 'reject';
+  /** Motivo da rejeição. */
+  reason?: string;
   /** Propriedades a remover (nomes como estão no nó). */
   remove: string[];
   /** Propriedades a definir. */
   set: Record<string, string>;
 }
 
+const reject = (reason: string): Decision => ({ action: 'reject', reason, remove: [], set: {} });
+
 export function sanitizeElement(tag: string, props: Record<string, unknown>): Decision {
   const t = tag.toLowerCase();
-  if (DROP.has(t)) return { action: 'drop', remove: [], set: {} };
-  if (!KEEP.has(t)) return { action: 'unwrap', remove: [], set: {} };
-  if (t === 'iframe' && !iframeAllowed(props.src)) return { action: 'drop', remove: [], set: {} };
+  if (!KEEP.has(t)) return reject('elemento fora da lista');
+  if (t === 'iframe' && !iframeAllowed(props.src)) return reject('iframe fora dos hosts permitidos (https de Spotify, YouTube ou Vimeo)');
   const allowed = new Set([...GLOBAL_ATTRS, ...(TAG_ATTRS[t] ?? [])]);
   const remove: string[] = [];
   for (const [key, value] of Object.entries(props)) {
@@ -132,7 +135,7 @@ export function sanitizeElement(tag: string, props: Record<string, unknown>): De
     }
     const v = Array.isArray(value) ? value.join(' ') : String(value ?? '');
     if (URL_ATTRS.has(k) && !safeUrl(v)) {
-      if (t === 'img' && k === 'src') return { action: 'drop', remove: [], set: {} };
+      if ((t === 'img' || t === 'source') && k === 'src') return reject('URL de imagem ou vídeo com esquema ativo');
       remove.push(key);
     } else if (k === 'srcset' && !parseSrcset(v).every(safeUrl)) {
       remove.push(key);
@@ -152,31 +155,50 @@ interface HastLike {
 }
 
 interface Ctx {
+  readonly data: Record<string, unknown>;
+  readonly fileURL: URL | undefined;
   removeNode(node: unknown): void;
-  replaceNode(node: unknown, newNode: unknown): void;
   setProperty(node: unknown, key: string, value: unknown): void;
+}
+
+const REJECTED = '__guifavSanitizeRejected';
+
+function rejected(ctx: Ctx): string[] {
+  return ((ctx.data[REJECTED] as string[] | undefined) ??= []);
 }
 
 /** Plugin hast do Satteri (markdown.processor no astro.config.mjs). */
 export function sanitizePlugin() {
   return {
     name: 'guifav-sanitize',
+    before(_root: unknown, ctx: Ctx) {
+      ctx.data[REJECTED] = [];
+    },
     element: {
       filter: [] as string[],
       visit(node: HastLike, ctx: Ctx) {
         const d = sanitizeElement(node.tagName, node.properties ?? {});
-        if (d.action === 'drop') return ctx.removeNode(node);
-        if (d.action === 'unwrap') return ctx.replaceNode(node, (node.children ?? []) as unknown[]);
+        if (d.action === 'reject') {
+          rejected(ctx).push(`<${node.tagName}> (${d.reason})`);
+          return;
+        }
         for (const k of d.remove) ctx.setProperty(node, k, null);
         for (const [k, v] of Object.entries(d.set)) ctx.setProperty(node, k, v);
       },
     },
-    // Com rawHtml: true não sobram nós raw nem comentários úteis; os dois saem.
-    raw(node: unknown, ctx: Ctx) {
-      ctx.removeNode(node);
+    // Com rawHtml: true não sobram nós raw; se aparecer um, o build falha.
+    raw(_node: unknown, ctx: Ctx) {
+      rejected(ctx).push('HTML cru não interpretado');
     },
     comment(node: unknown, ctx: Ctx) {
       ctx.removeNode(node);
+    },
+    after(_root: unknown, ctx: Ctx) {
+      const bad = [...new Set(rejected(ctx))];
+      if (bad.length) {
+        const file = ctx.fileURL ? decodeURIComponent(ctx.fileURL.pathname) : 'post';
+        throw new Error(`${file}: HTML fora da lista permitida do blog (src/lib/sanitize.ts): ${bad.join('; ')}`);
+      }
     },
   };
 }

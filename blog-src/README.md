@@ -49,10 +49,12 @@ Imagens ficam em `public/img/<slug>/`, publicadas em `/blog/img/<slug>/`.
 
 ## HTML no corpo dos posts
 
-O markdown pode trazer HTML cru (o importador do Substack gera `figure`, `picture`, tabelas e iframes). Ele passa por uma limpeza no render, por lista do que é permitido (`src/lib/sanitize.ts`, ligada em `astro.config.mjs`):
+O markdown pode trazer HTML cru (o importador do Substack gera `figure`, `picture`, `video`, tabelas e iframes). Ele passa por uma lista do que é permitido no render (`src/lib/sanitize.ts`, ligada em `astro.config.mjs`):
 
-- saem: `script`, `style`, `svg`, `form`, `object` e afins, atributos `on*`, `srcdoc`, URLs `javascript:` e `data:`, e estilo que não seja o do realce de código;
-- iframe só fica se for https de Spotify, YouTube ou Vimeo.
+- elemento fora da lista (`script`, `style`, `svg`, `form`, `article`, `center`, qualquer tag desconhecida), iframe que não seja https de Spotify, YouTube ou Vimeo e imagem ou vídeo com URL ativa fazem o build falhar, com o arquivo e as tags. Nada some em silêncio: o importador tem de gerar só HTML da lista;
+- atributos fora da lista (`on*`, `srcdoc`, `data-*`, estilo que não seja o do realce de código) e URLs `javascript:` e `data:` em links são removidos, sem perda de conteúdo.
+
+SVG não é publicado no blog, porque um SVG aberto direto executa script. Imagens vão em WebP ou PNG.
 
 Os scripts do layout levam o atributo `data-site-script`. Script novo no layout precisa dele, senão o `check_site.py` trava o deploy.
 

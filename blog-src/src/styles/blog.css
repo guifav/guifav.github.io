@@ -40,6 +40,8 @@
 .post-body blockquote{border-left:3px solid var(--hl);padding:2px 0 2px 18px;color:var(--text-secondary)}
 .post-body hr{border:0;border-top:1px solid var(--border);margin:2.2em 0}
 .post-body img{border-radius:8px}
+.post-body video,.post-body iframe{max-width:100%;height:auto;display:block;border-radius:8px}
+.post-body iframe{border:0}
 .post-body figure{margin:1.8em 0}
 .post-body figcaption{font-size:14px;color:var(--text-secondary);text-align:center;margin-top:10px;line-height:1.5}
 .post-body table{width:100%;border-collapse:collapse;font-size:15px;display:block;overflow-x:auto}

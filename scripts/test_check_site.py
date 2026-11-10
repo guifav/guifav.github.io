@@ -190,6 +190,44 @@ class CheckTest(Base):
             self.w("index.html", page(f'<a href="{ref}">x</a>', robots=""))
             self.assertEqual(self.problems(), [], ref)
 
+    def test_duplicate_attribute_first_one_wins_like_the_browser(self):
+        self.body('<iframe src="javascript:parent.x=1" src="https://www.youtube.com/embed/abc"></iframe>')
+        self.assertTrue(any("conteúdo ativo" in p for p in self.problems()))
+        self.w("blog/um-post/index.html", page('<a href="/blog/">b</a>',
+               robots='<meta name="robots" content="index, follow"><meta name="robots" content="noindex">'))
+        self.assertEqual(self.problems(), [])
+        self.w("blog/um-post/index.html", page('<a href="/blog/">b</a>',
+               robots='<meta name="robots" content="index" content="noindex">'))
+        self.assertTrue(any("noindex" in p for p in self.problems()))
+
+    def test_whatwg_host_and_separator_quirks_are_internal(self):
+        for ref in ("//guifav.dev\\blog/", "https://guifav\u3002dev/blog/", "https://guifav\uff0edev/blog/",
+                    "https://guifav\uff61dev/blog/", "https://gui\tfav.dev/blog/", "https:\\\\guifav.dev\\blog\\",
+                    "https://\uff47uifav.dev/blog/"):
+            self.w("index.html", page(f'<a href="{ref}">x</a>', robots=""))
+            self.assertTrue(any("aponta para o blog" in p for p in self.problems()), repr(ref))
+
+    def test_htm_and_uppercase_html_files_are_checked(self):
+        for name in ("blog/extra.HTML", "blog/extra.htm", "blog/extra.xhtml"):
+            self.w(name, "<html><body><script>x()</script></body></html>")
+            self.assertTrue(any("extra" in p and "noindex" in p for p in self.problems()), name)
+            self.assertTrue(any("extra" in p and "conteúdo ativo" in p for p in self.problems()), name)
+            (self.site / name).unlink()
+
+    def test_svg_files_are_not_published_in_blog(self):
+        self.w("blog/img/um-post/diagrama.svg", '<svg xmlns="http://www.w3.org/2000/svg"></svg>')
+        self.assertTrue(any("diagrama.svg" in p for p in self.problems()))
+
+    def test_marked_script_inside_main_is_still_content(self):
+        self.w("blog/um-post/index.html", page(
+            '<script data-site-script>tema()</script><main><article><div class="post-body">'
+            '<script data-site-script>x()</script></div></article></main><script data-site-script>fim()</script>'
+            '<a href="/blog/">b</a>'))
+        self.assertTrue(any("dentro de <main>" in p for p in self.problems()))
+        self.w("blog/um-post/index.html", page(
+            '<script data-site-script>tema()</script><main><p>ok</p></main><script data-site-script>fim()</script><a href="/blog/">b</a>'))
+        self.assertEqual(self.problems(), [])
+
     def test_post_body_allows_regular_markup_and_allowed_iframes(self):
         self.body('<figure><img src="/blog/img/um-post/a.webp" alt="x"><figcaption>c</figcaption></figure>'
                   '<pre><code>x</code></pre><table><tr><td>1</td></tr></table>'

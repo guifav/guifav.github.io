@@ -54,6 +54,15 @@ test('formatDate usa UTC e português', () => {
   assert.equal(formatDate(new Date('2026-09-02T01:00:00Z')), '2 de setembro de 2026');
 });
 
+test('spotifyEmbedUrl: link localizado (/intl-pt/) vira o embed canônico', () => {
+  const embed = 'https://open.spotify.com/embed/episode/2ETPXIcx6RwKqdEj17z0xa';
+  assert.equal(spotifyEmbedUrl('https://open.spotify.com/intl-pt/episode/2ETPXIcx6RwKqdEj17z0xa'), embed);
+  assert.equal(spotifyEmbedUrl('https://open.spotify.com/intl-pt-br/episode/2ETPXIcx6RwKqdEj17z0xa?si=abc'), embed);
+  assert.equal(spotifyEmbedUrl('https://open.spotify.com/intl-ja/embed/episode/2ETPXIcx6RwKqdEj17z0xa'), embed);
+  assert.equal(spotifyEmbedUrl('https://open.spotify.com/intl-pt/show/2ETPXIcx6RwKqdEj17z0xa'), null);
+  assert.equal(spotifyEmbedUrl('https://open.spotify.com/xx/episode/2ETPXIcx6RwKqdEj17z0xa'), null);
+});
+
 test('spotifyEmbedUrl: open.spotify.com', () => {
   assert.equal(
     spotifyEmbedUrl('https://open.spotify.com/episode/4rOoJ6Egrf8K2IrywzwOMk'),
