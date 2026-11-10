@@ -1,0 +1,63 @@
+---
+// Página de um post: /blog/<slug>/
+import { render } from 'astro:content';
+import Base from '../layouts/Base.astro';
+import { AUTHOR_ID, AUTHOR_NAME, NEWSLETTER_FORM_ENABLED } from '../consts';
+import { absoluteUrl, blogPostingLd, formatDate, spotifyEmbedUrl, withBase } from '../lib/blog';
+import { sortedPosts, type Post } from '../lib/posts';
+
+export async function getStaticPaths() {
+  const all = await sortedPosts();
+  return all.map((post) => ({ params: { slug: post.id }, props: { post } }));
+}
+
+interface Props {
+  post: Post;
+}
+
+const { post } = Astro.props;
+const { Content } = await render(post);
+const d = post.data;
+const base = import.meta.env.BASE_URL;
+const site = Astro.site!.href;
+const url = absoluteUrl(site, Astro.url.pathname);
+const coverPath = d.cover ? withBase(base, d.cover) : undefined;
+const coverUrl = coverPath ? absoluteUrl(site, coverPath) : undefined;
+const embed = d.spotify_url ? spotifyEmbedUrl(d.spotify_url) : null;
+const updatedShown = d.updated && formatDate(d.updated) !== formatDate(d.date);
+const ld = blogPostingLd({
+  title: d.title,
+  description: d.description,
+  date: d.date,
+  updated: d.updated,
+  url,
+  image: coverUrl,
+  authorId: AUTHOR_ID,
+});
+---
+<Base title={`${d.title} | ${AUTHOR_NAME}`} description={d.description} index={d.index} image={coverUrl} ogType="article" jsonLd={ld}>
+  <article class="post">
+    <header class="post-head">
+      <p class="post-crumb"><a href={base}>Blog</a></p>
+      <h1>{d.title}</h1>
+      {d.subtitle && <p class="post-sub">{d.subtitle}</p>}
+      <p class="post-meta">
+        <span>{AUTHOR_NAME}</span>{' '}&middot;{' '}
+        <time datetime={d.date.toISOString()}>{formatDate(d.date)}</time>
+        {updatedShown && d.updated && (
+          <span>{' '}&middot; atualizado em <time datetime={d.updated.toISOString()}>{formatDate(d.updated)}</time></span>
+        )}
+      </p>
+    </header>
+    {coverPath && <img class="post-cover" src={coverPath} alt="" decoding="async" />}
+    {d.type === 'podcast' && embed && (
+      <div class="podcast-embed">
+        <iframe src={embed} title={`Episódio: ${d.title}`} height="102" loading="lazy" allow="encrypted-media" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+      </div>
+    )}
+    <div class="post-body">
+      <Content />
+    </div>
+    {NEWSLETTER_FORM_ENABLED && <aside class="subscribe" id="assinar" aria-label="Newsletter"></aside>}
+  </article>
+</Base>

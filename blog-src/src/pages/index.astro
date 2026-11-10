@@ -1,0 +1,10 @@
+---
+import PostList from '../layouts/PostList.astro';
+import { POSTS_PER_PAGE } from '../consts';
+import { pageCount } from '../lib/blog';
+import { sortedPosts } from '../lib/posts';
+
+const all = await sortedPosts();
+const pages = pageCount(all.length, POSTS_PER_PAGE);
+---
+<PostList posts={all.slice(0, POSTS_PER_PAGE)} page={1} pages={pages} />

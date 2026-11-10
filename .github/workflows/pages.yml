@@ -1,0 +1,78 @@
+# Publica o guifav.dev no GitHub Pages: site atual (HTML à mão) mais o blog Astro em /blog/.
+# Épico #16, issue #17. Requer Settings > Pages > Source: GitHub Actions.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Só execuções que publicam (push ou disparo manual na main) entram no grupo de deploy, em fila e
+  # nunca canceladas no meio. PRs e disparos em outras branches têm grupo próprio e cancelam o anterior.
+  group: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && 'pages-deploy' || format('pages-{0}-{1}', github.event_name, github.ref) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref != 'refs/heads/main' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: blog-src/.nvmrc
+          cache: npm
+          cache-dependency-path: blog-src/package-lock.json
+
+      - name: Instalar dependências do blog
+        working-directory: blog-src
+        run: npm ci
+
+      - name: Testes do blog
+        working-directory: blog-src
+        run: npm test
+
+      - name: Build do blog
+        working-directory: blog-src
+        env:
+          ASTRO_TELEMETRY_DISABLED: "1"
+        run: npm run build
+
+      - name: Testes dos scripts de montagem
+        run: |
+          python3 scripts/test_assemble_site.py
+          python3 scripts/test_check_site.py
+
+      - name: Montar _site (manifesto + blog) e verificar byte a byte
+        run: python3 scripts/assemble_site.py
+
+      - name: Verificar links, noindex, RSS e sitemap
+        run: python3 scripts/check_site.py
+
+      - name: Publicar artefato do Pages
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+          include-hidden-files: true
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

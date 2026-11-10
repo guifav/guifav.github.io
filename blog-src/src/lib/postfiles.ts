@@ -1,0 +1,97 @@
+import { validIsoDate } from './schema.ts';
+
+// Checagem dos arquivos de post antes do build.
+//
+// O glob loader do Astro usa o campo slug como id da entrada. Dois arquivos com o mesmo slug
+// viram uma entrada só, sem erro no build: um post some em silêncio. Exigir arquivo <slug>.md
+// direto em src/content/posts/ torna o slug único pelo próprio sistema de arquivos, e esta
+// checagem garante a regra.
+
+export interface PostFile {
+  /** Caminho relativo a src/content/posts, com '/'. */
+  path: string;
+  text: string;
+}
+
+/** Slug do bloco de frontmatter inicial, ou null se não houver. */
+export function frontmatterSlug(text: string): string | null {
+  const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+  if (!m) return null;
+  for (const line of m[1].split(/\r?\n/)) {
+    const km = line.match(/^slug:\s*(.*?)\s*$/);
+    if (km) return km[1].replace(/^(['"])(.*)\1$/, '$2');
+  }
+  return null;
+}
+
+/**
+ * O check_site.py lê slug e index do frontmatter com um parser simples. Para os dois lerem o mesmo
+ * valor que o Astro, esses campos só aparecem uma vez e em formato simples, sem comentário.
+ */
+function simpleScalarProblems(text: string): string[] {
+  const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+  if (!m) return [];
+  const lines = m[1].split(/\r?\n/);
+  const out: string[] = [];
+  const rules: [string, RegExp][] = [
+    ['slug', /^slug: (?:[a-z0-9-]+|"[a-z0-9-]+"|'[a-z0-9-]+')$/],
+    ['index', /^index: (?:true|false)$/],
+  ];
+  for (const [key, ok] of rules) {
+    const found = lines.filter((l) => new RegExp(`^${key}\\s*:`).test(l));
+    if (found.length > 1) out.push(`campo ${key} aparece mais de uma vez`);
+    for (const l of found) if (!ok.test(l)) out.push(`campo ${key} fora do formato simples: ${JSON.stringify(l)}`);
+  }
+  // O parser YAML transforma "date: 2026-02-30" (sem aspas) em 2 de março antes do esquema ver;
+  // por isso a data é validada aqui, no texto.
+  for (const l of lines) {
+    const dm = l.match(/^(date|updated)\s*:\s*(.*)$/);
+    if (!dm) continue;
+    let v = dm[2].trim();
+    const q = v.match(/^(['"])(.*?)\1/);
+    v = q ? q[2] : v.replace(/\s+#.*$/, '').trim();
+    if (!validIsoDate(v)) out.push(`campo ${dm[1]} com data inexistente ou fora do ISO 8601: ${JSON.stringify(v)}`);
+  }
+  return out;
+}
+
+export function checkPostFiles(files: PostFile[]): string[] {
+  const problems: string[] = [];
+  const bySlug = new Map<string, string[]>();
+  for (const f of files) {
+    if (f.path.includes('/')) {
+      problems.push(`${f.path}: post em subpasta; use src/content/posts/<slug>.md`);
+      continue;
+    }
+    for (const p of simpleScalarProblems(f.text)) problems.push(`${f.path}: ${p}`);
+    const slug = frontmatterSlug(f.text);
+    if (!slug) {
+      problems.push(`${f.path}: sem slug no frontmatter`);
+      continue;
+    }
+    const stem = f.path.replace(/\.md$/, '');
+    if (stem !== slug) problems.push(`${f.path}: nome do arquivo difere do slug "${slug}"; renomeie para ${slug}.md`);
+    bySlug.set(slug, [...(bySlug.get(slug) ?? []), f.path]);
+  }
+  for (const [slug, paths] of bySlug) {
+    if (paths.length > 1) problems.push(`slug duplicado "${slug}": ${paths.join(', ')}`);
+  }
+  return problems;
+}
+
+/**
+ * Contrato de conteúdo, barreira 2: o Astro copia public/ sem transformação, então ali só entra
+ * mídia. HTML, SVG, JS, CSS e qualquer outra extensão fariam o build falhar.
+ */
+export const PUBLIC_MEDIA_EXTENSIONS = ['webp', 'png', 'jpg', 'jpeg', 'gif', 'avif', 'mp4', 'webm'];
+
+export function checkPublicFiles(paths: string[]): string[] {
+  const allowed = new Set(PUBLIC_MEDIA_EXTENSIONS);
+  return paths
+    .filter((p) => {
+      const name = p.split('/').pop() ?? p;
+      const dot = name.lastIndexOf('.');
+      return dot <= 0 || !allowed.has(name.slice(dot + 1).toLowerCase());
+    })
+    .map((p) => `public/${p}: extensão fora da lista de mídia (${PUBLIC_MEDIA_EXTENSIONS.join(', ')}); ver CONTRATO-DE-CONTEUDO.md`);
+}
