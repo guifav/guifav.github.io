@@ -12,9 +12,10 @@ permissions:
   contents: read
 
 concurrency:
-  # Deploys da main em fila (nunca cancelar um deploy em andamento); PRs cancelam o build anterior.
-  group: ${{ github.event_name == 'pull_request' && format('pages-pr-{0}', github.ref) || 'pages-deploy' }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  # Só execuções que publicam (push ou disparo manual na main) entram no grupo de deploy, em fila e
+  # nunca canceladas no meio. PRs e disparos em outras branches têm grupo próprio e cancelam o anterior.
+  group: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && 'pages-deploy' || format('pages-{0}-{1}', github.event_name, github.ref) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref != 'refs/heads/main' }}
 
 jobs:
   build:

@@ -50,14 +50,10 @@ const ld = blogPostingLd({
       </p>
     </header>
     {coverPath && <img class="post-cover" src={coverPath} alt="" decoding="async" />}
-    {d.type === 'podcast' && d.spotify_url && (
-      embed ? (
-        <div class="podcast-embed">
-          <iframe src={embed} title={`Episódio: ${d.title}`} height="102" loading="lazy" allow="encrypted-media" referrerpolicy="strict-origin-when-cross-origin"></iframe>
-        </div>
-      ) : (
-        <p class="podcast-link"><a href={d.spotify_url} rel="noopener" target="_blank">Ouvir o episódio no Spotify</a></p>
-      )
+    {d.type === 'podcast' && embed && (
+      <div class="podcast-embed">
+        <iframe src={embed} title={`Episódio: ${d.title}`} height="102" loading="lazy" allow="encrypted-media" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+      </div>
     )}
     <div class="post-body">
       <Content />

@@ -114,6 +114,21 @@ class AssembleTest(Fixture):
         with self.assertRaises(A.ManifestError):
             self.assemble()
 
+    def test_symlinked_ancestor_of_file_entry_is_rejected(self):
+        outside = Path(self.tmp.name) / "fora"
+        write(outside / "index.html", b"fora do repo")
+        os.symlink(outside, self.repo / "public")
+        self.manifest.write_text("index.html\npublic/index.html\n", encoding="utf-8")
+        with self.assertRaises(A.ManifestError):
+            self.assemble()
+
+    def test_symlinked_blog_build_root_is_rejected(self):
+        real = Path(self.tmp.name) / "dist-real"
+        self.blog.rename(real)
+        os.symlink(real, self.blog)
+        with self.assertRaises(A.ManifestError):
+            self.assemble()
+
     def test_output_dir_is_recreated_clean(self):
         write(self.out / "lixo-de-build-anterior.html", b"velho")
         self.assemble()
@@ -140,6 +155,16 @@ class VerifyTest(Fixture):
     def test_verify_detects_missing_file(self):
         self.assemble()
         (self.out / "portfolio" / "img" / "a.webp").unlink()
+        with self.assertRaises(A.VerifyError):
+            A.verify(self.repo, self.manifest, self.blog, self.out)
+
+    def test_repeated_verify_sees_same_size_same_mtime_change(self):
+        self.assemble()
+        A.verify(self.repo, self.manifest, self.blog, self.out)
+        dst = self.out / "index.html"
+        st = dst.stat()
+        dst.write_bytes(b"<html>HOME</html>")
+        os.utime(dst, ns=(st.st_atime_ns, st.st_mtime_ns))
         with self.assertRaises(A.VerifyError):
             A.verify(self.repo, self.manifest, self.blog, self.out)
 

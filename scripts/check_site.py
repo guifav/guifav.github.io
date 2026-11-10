@@ -15,6 +15,7 @@ Uso:
 from __future__ import annotations
 
 import argparse
+import posixpath
 import re
 import sys
 import xml.etree.ElementTree as ET
@@ -26,6 +27,51 @@ SITE_HOST = "guifav.dev"
 BLOG_PREFIX = "/blog/"
 SITEMAP_NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
 URL_ATTRS = {"href", "src"}
+ACTIVE_SCHEMES = ("javascript:", "vbscript:")
+# Corpo do post (HTML vindo do markdown/importador): só marcação de conteúdo.
+BODY_FORBIDDEN_TAGS = {"script", "object", "embed", "applet", "form", "base", "meta", "link", "style", "frame", "frameset"}
+BODY_IFRAME_HOSTS = {"open.spotify.com", "creators.spotify.com", "www.youtube.com", "www.youtube-nocookie.com", "player.vimeo.com"}
+BODY_START = '<div class="post-body">'
+BODY_END = "</article>"
+
+
+def _scheme(url: str) -> str:
+    return re.sub(r"[\s\x00-\x1f]", "", url).lower()
+
+
+class _Body(HTMLParser):
+    """Acha conteúdo ativo no corpo do post: script, handlers on*, iframes fora da lista, URLs ativas."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.bad: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in BODY_FORBIDDEN_TAGS:
+            self.bad.append(f"<{tag}>")
+        for k, v in attrs:
+            v = v or ""
+            if k.startswith("on"):
+                self.bad.append(f"<{tag} {k}>")
+            if k in ("href", "src", "data", "action", "formaction", "poster", "xlink:href", "srcset"):
+                s = _scheme(v)
+                if s.startswith(ACTIVE_SCHEMES) or s.startswith("data:"):
+                    self.bad.append(f"<{tag} {k}={v[:40]!r}>")
+        if tag == "iframe":
+            src = dict(attrs).get("src") or ""
+            u = urlsplit(src)
+            if u.scheme != "https" or u.hostname not in BODY_IFRAME_HOSTS:
+                self.bad.append(f"<iframe src={src[:60]!r}>")
+
+
+def body_problems(html: str) -> list[str]:
+    start = html.find(BODY_START)
+    if start < 0:
+        return []
+    end = html.find(BODY_END, start)
+    b = _Body()
+    b.feed(html[start + len(BODY_START): end if end > 0 else len(html)])
+    return b.bad
 
 
 class _Refs(HTMLParser):
@@ -57,8 +103,18 @@ def frontmatter(text: str) -> dict[str, str]:
     for line in m.group(1).splitlines():
         km = re.match(r"^([A-Za-z_][\w-]*):\s*(.*)$", line)
         if km:
-            out[km.group(1)] = km.group(2).strip().strip('"').strip("'")
+            out[km.group(1)] = _yaml_scalar(km.group(2))
     return out
+
+
+def _yaml_scalar(raw: str) -> str:
+    """Valor escalar simples: entre aspas, ou sem aspas e sem o comentário ' #...'."""
+    raw = raw.strip()
+    if raw[:1] in ("'", '"'):
+        end = raw.find(raw[0], 1)
+        if end > 0:
+            return raw[1:end]
+    return re.sub(r"\s+#.*$", "", raw).strip()
 
 
 def read_pre_cutover(consts: Path) -> bool:
@@ -66,6 +122,11 @@ def read_pre_cutover(consts: Path) -> bool:
     if not m:
         raise ValueError(f"PRE_CUTOVER_NOINDEX não encontrado em {consts}")
     return m.group(1) == "true"
+
+
+def _robots_noindex(content: str) -> bool:
+    directives = {d.strip() for d in content.lower().split(",")}
+    return bool(directives & {"noindex", "none"})
 
 
 def _page_url(site: Path, f: Path) -> str:
@@ -77,17 +138,26 @@ def _page_url(site: Path, f: Path) -> str:
     return "/" + rel
 
 
+def _normalize(path: str) -> str:
+    """Remove segmentos . e .. como o navegador faz, mantendo a barra final."""
+    path = unquote(path) or "/"
+    norm = posixpath.normpath(path)
+    if norm.startswith("//"):
+        norm = "/" + norm.lstrip("/")
+    if path.endswith("/") and norm != "/":
+        norm += "/"
+    return norm
+
+
 def _internal_path(page_url: str, ref: str) -> str | None:
-    """Caminho interno do link, ou None se for externo, âncora, mailto etc."""
-    if ref.startswith("#") or ref.startswith("//"):
+    """Caminho interno normalizado do link, ou None se for externo, âncora, mailto etc."""
+    if ref.startswith("#"):
         return None
-    parts = urlsplit(ref)
-    if parts.scheme:
-        if parts.scheme not in ("http", "https") or parts.hostname != SITE_HOST:
-            return None
-        return unquote(parts.path) or "/"
-    joined = urlsplit(urljoin("https://" + SITE_HOST + page_url, ref))
-    return unquote(joined.path) or "/"
+    # Resolve como o navegador: relativo, absoluto, relativo ao protocolo (//host/...).
+    parts = urlsplit(urljoin("https://" + SITE_HOST + page_url, ref))
+    if parts.scheme not in ("http", "https") or parts.hostname != SITE_HOST:
+        return None
+    return _normalize(parts.path)
 
 
 def _resolve(site: Path, path: str) -> tuple[bool, bool]:
@@ -105,18 +175,33 @@ def _resolve(site: Path, path: str) -> tuple[bool, bool]:
 def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
     problems: list[str] = []
     noindex_slugs: set[str] = set()
+    seen: dict[str, str] = {}
     for md in sorted(posts.glob("**/*.md")):
         fm = frontmatter(md.read_text(encoding="utf-8"))
+        slug = fm.get("slug") or md.stem
+        rel_md = md.relative_to(posts).as_posix()
+        if slug in seen:
+            problems.append(f"posts: slug duplicado {slug!r}: {seen[slug]}, {rel_md}")
+        seen[slug] = rel_md
+        if not (site / "blog" / slug / "index.html").is_file():
+            problems.append(f"posts: {rel_md} sem página publicada em /blog/{slug}/")
         if fm.get("index") == "false":
-            noindex_slugs.add(fm.get("slug") or md.stem)
+            noindex_slugs.add(slug)
 
     for f in sorted(site.rglob("*.html")):
         rel = f.relative_to(site).as_posix()
         url = _page_url(site, f)
         in_blog = url.startswith(BLOG_PREFIX)
+        html = f.read_text(encoding="utf-8")
         p = _Refs()
-        p.feed(f.read_text(encoding="utf-8"))
-        has_noindex = any("noindex" in r for r in p.robots)
+        p.feed(html)
+        if in_blog:
+            for bad in body_problems(html):
+                problems.append(f"{rel}: conteúdo ativo no corpo do post: {bad}")
+            for ref in p.refs:
+                if _scheme(ref).startswith(ACTIVE_SCHEMES):
+                    problems.append(f"{rel}: conteúdo ativo (URL {ref[:40]!r})")
+        has_noindex = any(_robots_noindex(r) for r in p.robots)
         if in_blog and pre_cutover and not has_noindex:
             problems.append(f"{rel}: página do blog sem noindex antes do cutover")
         if in_blog and not pre_cutover:
@@ -124,6 +209,8 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
             if len(parts) == 1 and parts[0] in noindex_slugs and not has_noindex:
                 problems.append(f"{rel}: post com index: false sem noindex")
         for ref in p.refs:
+            if _scheme(ref).startswith(ACTIVE_SCHEMES):
+                continue
             path = _internal_path(url, ref)
             if path is None:
                 continue
@@ -154,7 +241,7 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
             if u.scheme != "https" or u.hostname != SITE_HOST or not u.path.startswith(BLOG_PREFIX):
                 problems.append(f"sitemap: URL fora do blog: {href}")
                 continue
-            ok, _ = _resolve(site, unquote(u.path))
+            ok, _ = _resolve(site, _normalize(u.path))
             if not ok:
                 problems.append(f"sitemap: página inexistente: {href}")
             slug = u.path[len(BLOG_PREFIX):].strip("/")

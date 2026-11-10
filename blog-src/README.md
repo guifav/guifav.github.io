@@ -30,18 +30,18 @@ python3 scripts/verify_live.py http://127.0.0.1:8099 --local
 
 ## Posts
 
-Um markdown por post em `src/content/posts/<slug>.md`. O esquema está em `src/content.config.ts`:
+Um markdown por post em `src/content/posts/<slug>.md`, direto na pasta e com o nome do arquivo igual ao campo `slug`. O `npm run build` roda antes `scripts/check-posts.ts`, que falha com slug duplicado, nome diferente do slug ou post em subpasta (sem isso, o Astro juntaria dois posts com o mesmo slug em uma página só, sem erro). O esquema está em `src/lib/schema.ts`:
 
 | Campo | Obrigatório | Observação |
 | --- | --- | --- |
 | `title`, `description` | sim | |
 | `subtitle` | não | |
-| `date` | sim | data de publicação (ISO 8601) |
+| `date` | sim | data de publicação (ISO 8601); nulo, booleano e número são rejeitados |
 | `updated` | não | data real de alteração; nunca a data da importação |
 | `slug` | sim | idêntico ao do Substack; vira a URL `/blog/<slug>/` |
 | `cover` | não | caminho dentro do blog, por exemplo `img/<slug>/capa-1456.webp` |
 | `type` | não | `newsletter` (padrão) ou `podcast` |
-| `spotify_url` | só em podcast | link do episódio; vira o player embutido |
+| `spotify_url` | só em podcast | link https de episódio do Spotify (open.spotify.com ou Spotify for Creators); vira o player embutido |
 | `index` | não | padrão `true`; com `false`, a página sai com `noindex, follow` e fica fora do sitemap |
 | `newsletter` | não | padrão `false`; marca o post para o rascunho de envio (#21) |
 

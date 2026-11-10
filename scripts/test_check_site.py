@@ -110,6 +110,62 @@ class CheckTest(Base):
         self.assertTrue(any("aponta para o blog" in p for p in self.problems(pre_cutover=True)))
         self.assertEqual(self.problems(pre_cutover=False), [])
 
+    def test_protocol_relative_urls_are_internal(self):
+        self.w("index.html", page('<a href="//guifav.dev/nao-existe/">x</a>', robots=""))
+        self.assertTrue(any("nao-existe" in p for p in self.problems()))
+        self.w("index.html", page('<a href="//guifav.dev/blog/">x</a>', robots=""))
+        self.assertTrue(any("aponta para o blog" in p for p in self.problems()))
+
+    def test_dot_segments_are_normalized(self):
+        self.w("index.html", page('<a href="https://guifav.dev/portfolio/../blog/">x</a>', robots=""))
+        self.assertTrue(any("aponta para o blog" in p for p in self.problems()))
+        self.w("index.html", page('<a href="portfolio/./../blog/">x</a>', robots=""))
+        self.assertTrue(any("aponta para o blog" in p for p in self.problems()))
+        self.w("index.html", page('<a href="/assets/../portfolio/">x</a>', robots=""))
+        self.assertEqual(self.problems(), [])
+
+    def test_percent_encoded_dot_segments_cannot_escape_site(self):
+        outside = self.site.parent / "blog-src" / "package.json"
+        outside.parent.mkdir(parents=True, exist_ok=True)
+        outside.write_text("{}", encoding="utf-8")
+        for ref in ("https://guifav.dev/../blog-src/package.json", "/%2e%2e/blog-src/package.json", "/%2E%2E/blog-src/package.json"):
+            self.w("index.html", page(f'<a href="{ref}">x</a>', robots=""))
+            self.assertTrue(any("quebrado" in p for p in self.problems()), ref)
+
+    def body(self, html: str) -> None:
+        self.w("blog/um-post/index.html", page(
+            f'<article><div class="post-body">{html}</div></article><a href="/blog/">b</a>'))
+
+    def test_post_body_rejects_script_handlers_and_active_urls(self):
+        for bad in (
+            "<script>alert(1)</script>",
+            '<img src="/blog/img/um-post/a.webp" onerror="x()">',
+            '<a href="javascript:alert(1)">x</a>',
+            '<a href="JavaScript:alert(1)">x</a>',
+            '<img src="data:image/svg+xml,&lt;svg&gt;">',
+            '<iframe src="https://evil.example/x"></iframe>',
+            '<object data="/x.swf"></object>',
+        ):
+            self.body(bad)
+            self.assertTrue(any("conteúdo ativo" in p for p in self.problems()), bad)
+
+    def test_post_body_allows_regular_markup_and_allowed_iframes(self):
+        self.body('<figure><img src="/blog/img/um-post/a.webp" alt="x"><figcaption>c</figcaption></figure>'
+                  '<pre><code>x</code></pre><table><tr><td>1</td></tr></table>'
+                  '<iframe src="https://open.spotify.com/embed/episode/abc"></iframe>'
+                  '<iframe src="https://www.youtube-nocookie.com/embed/abc"></iframe>')
+        self.assertEqual(self.problems(), [])
+
+    def test_javascript_url_anywhere_in_blog_is_flagged(self):
+        self.w("blog/index.html", page('<a href="/blog/um-post/">um</a><a href=" javascript:x()">j</a>'))
+        self.assertTrue(any("conteúdo ativo" in p for p in self.problems()))
+
+    def test_noindex_must_be_a_whole_directive(self):
+        self.w("blog/um-post/index.html", page('<a href="/blog/">b</a>', robots='<meta name="robots" content="not-noindex, follow">'))
+        self.assertTrue(any("noindex" in p for p in self.problems()))
+        self.w("blog/um-post/index.html", page('<a href="/blog/">b</a>', robots='<meta name="robots" content="NONE">'))
+        self.assertEqual(self.problems(), [])
+
     def test_pre_cutover_404_cannot_link_to_blog(self):
         self.w("404.html", page('<a href="/blog/">blog</a>', robots=""))
         self.assertTrue(any("aponta para o blog" in p for p in self.problems(pre_cutover=True)))
@@ -125,6 +181,14 @@ class CheckTest(Base):
     def test_sitemap_loc_must_be_on_blog(self):
         self.w("blog/sitemap.xml", SITEMAP.format("<url><loc>https://outro.dev/blog/um-post/</loc></url>"))
         self.assertTrue(any("outro.dev" in p for p in self.problems()))
+
+    def test_every_post_needs_a_published_page(self):
+        (self.posts / "outro.md").write_text("---\ntitle: y\nslug: outro\n---\n", encoding="utf-8")
+        self.assertTrue(any("sem página publicada" in p and "outro" in p for p in self.problems()))
+
+    def test_duplicate_slug_in_posts_is_flagged(self):
+        (self.posts / "copia.md").write_text("---\ntitle: y\nslug: um-post\n---\n", encoding="utf-8")
+        self.assertTrue(any("slug duplicado" in p for p in self.problems()))
 
     def test_sitemap_excludes_index_false_posts(self):
         (self.posts / "um-post.md").write_text("---\ntitle: x\nslug: um-post\nindex: false\n---\n", encoding="utf-8")
@@ -142,6 +206,12 @@ class FrontmatterTest(unittest.TestCase):
         fm = C.frontmatter("---\ntitle: \"a: b\"\nslug: meu-post\nindex: false\n---\ncorpo\nindex: true\n")
         self.assertEqual(fm["slug"], "meu-post")
         self.assertEqual(fm["index"], "false")
+
+    def test_yaml_comments_and_quotes(self):
+        fm = C.frontmatter("---\nindex: false # fora do índice\nslug: 'meu-post'  # x\ntitle: \"a # b\"\n---\n")
+        self.assertEqual(fm["index"], "false")
+        self.assertEqual(fm["slug"], "meu-post")
+        self.assertEqual(fm["title"], "a # b")
 
     def test_no_frontmatter(self):
         self.assertEqual(C.frontmatter("sem cabeçalho"), {})

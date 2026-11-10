@@ -16,7 +16,6 @@ Uso:
 from __future__ import annotations
 
 import argparse
-import filecmp
 import shutil
 import sys
 from pathlib import Path, PurePosixPath
@@ -56,6 +55,28 @@ def parse_manifest(path: Path) -> list[str]:
     return entries
 
 
+def _no_symlink_on_path(root: Path, p: Path) -> None:
+    """Recusa p se ele ou qualquer pasta entre root e p for link simbólico."""
+    cur = root
+    for part in p.relative_to(root).parts:
+        cur = cur / part
+        if cur.is_symlink():
+            raise ManifestError(f"link simbólico não é publicado: {cur}")
+
+
+def _same_bytes(a: Path, b: Path) -> bool:
+    """Compara o conteúdo inteiro, sem o cache de filecmp (que confia em tamanho e mtime)."""
+    if a.stat().st_size != b.stat().st_size:
+        return False
+    with a.open("rb") as fa, b.open("rb") as fb:
+        while True:
+            ca, cb = fa.read(1 << 20), fb.read(1 << 20)
+            if ca != cb:
+                return False
+            if not ca:
+                return True
+
+
 def _files_under(base: Path) -> list[Path]:
     """Lista os arquivos de uma pasta, recusando links simbólicos (podem apontar para fora)."""
     out: list[Path] = []
@@ -72,8 +93,7 @@ def expected_files(repo: Path, manifest: Path, blog: Path) -> dict[str, Path]:
     files: dict[str, Path] = {}
     for entry in parse_manifest(manifest):
         src = repo / entry.rstrip("/")
-        if src.is_symlink():
-            raise ManifestError(f"link simbólico não é publicado: {entry}")
+        _no_symlink_on_path(repo, src)
         if entry.endswith("/"):
             if not src.is_dir():
                 raise ManifestError(f"entrada de pasta não existe como pasta: {entry}")
@@ -83,6 +103,8 @@ def expected_files(repo: Path, manifest: Path, blog: Path) -> dict[str, Path]:
             if not src.is_file():
                 raise ManifestError(f"entrada de arquivo não existe como arquivo: {entry}")
             files[entry] = src
+    if blog.is_symlink():
+        raise ManifestError(f"link simbólico não é publicado: {blog}")
     if not (blog / "index.html").is_file():
         raise ManifestError(f"build do blog ausente: {blog / 'index.html'}")
     for f in _files_under(blog):
@@ -109,7 +131,7 @@ def verify(repo: Path, manifest: Path, blog: Path, out: Path) -> int:
     missing = sorted(files.keys() - published)
     changed = sorted(
         rel for rel in files.keys() & published
-        if (out / rel).is_symlink() or not filecmp.cmp(files[rel], out / rel, shallow=False)
+        if (out / rel).is_symlink() or not _same_bytes(files[rel], out / rel)
     )
     problems = []
     if extra:
