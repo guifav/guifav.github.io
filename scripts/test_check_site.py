@@ -149,6 +149,47 @@ class CheckTest(Base):
             self.body(bad)
             self.assertTrue(any("conteúdo ativo" in p for p in self.problems()), bad)
 
+    def test_whole_page_is_scanned_not_a_text_slice(self):
+        # Um "</article>" escrito pelo post (ou num comentário) não encerra a verificação.
+        for trick in ("<!-- </article> -->", "</article>"):
+            self.body(f"<p>a</p>{trick}<script>window.x=1</script>")
+            self.assertTrue(any("conteúdo ativo" in p for p in self.problems()), trick)
+
+    def test_scripts_must_come_from_the_template(self):
+        self.w("blog/um-post/index.html", page('<script data-site-script>ok()</script><a href="/blog/">b</a>'))
+        self.assertEqual(self.problems(), [])
+        self.w("blog/um-post/index.html", page('<script data-site-script type="application/ld+json">{}</script><script>x()</script><a href="/blog/">b</a>'))
+        self.assertTrue(any("<script> fora do template" in p for p in self.problems()))
+
+    def test_srcdoc_is_active_even_with_allowed_src(self):
+        self.body('<iframe src="https://www.youtube.com/embed/abc" srcdoc="&lt;script&gt;x()&lt;/script&gt;"></iframe>')
+        self.assertTrue(any("srcdoc" in p for p in self.problems()))
+
+    def test_spotify_for_creators_legacy_host_is_allowed(self):
+        self.body('<iframe src="https://podcasters.spotify.com/pod/show/ia-aplicada/embed/episodes/Ep-e3184tj"></iframe>')
+        self.assertEqual(self.problems(), [])
+
+    def test_srcset_follows_html_syntax(self):
+        self.w("blog/img/um-post/b.webp", "webp")
+        self.body('<img src="/blog/img/um-post/a.webp" srcset="https://substackcdn.com/image/fetch/w_728,c_limit,f_auto/x.png 728w, '
+                  'https://substackcdn.com/image/fetch/w_1456,c_limit/y.png 1456w">')
+        self.assertEqual(self.problems(), [])
+        self.body('<img src="/blog/img/um-post/a.webp" srcset="/blog/img/um-post/a.webp\t728w,\n/blog/img/um-post/b.webp 1456w">')
+        self.assertEqual(self.problems(), [])
+        self.body('<img src="/blog/img/um-post/a.webp" srcset="/blog/img/um-post/a.webp 728w, /blog/img/um-post/c.webp 1456w">')
+        self.assertTrue(any("c.webp" in p for p in self.problems()))
+
+    def test_percent_encoded_host_is_internal(self):
+        self.w("index.html", page('<a href="//guifav%2Edev/blog/">x</a>', robots=""))
+        self.assertTrue(any("aponta para o blog" in p for p in self.problems()))
+        self.w("index.html", page('<a href="https://GUIFAV.dev./nao-existe/">x</a>', robots=""))
+        self.assertTrue(any("nao-existe" in p for p in self.problems()))
+
+    def test_trailing_dot_segment_resolves_to_directory(self):
+        for ref in ("/portfolio/%2e", "/portfolio/.", "/portfolio/x/.."):
+            self.w("index.html", page(f'<a href="{ref}">x</a>', robots=""))
+            self.assertEqual(self.problems(), [], ref)
+
     def test_post_body_allows_regular_markup_and_allowed_iframes(self):
         self.body('<figure><img src="/blog/img/um-post/a.webp" alt="x"><figcaption>c</figcaption></figure>'
                   '<pre><code>x</code></pre><table><tr><td>1</td></tr></table>'

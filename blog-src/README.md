@@ -47,6 +47,17 @@ Um markdown por post em `src/content/posts/<slug>.md`, direto na pasta e com o n
 
 Imagens ficam em `public/img/<slug>/`, publicadas em `/blog/img/<slug>/`.
 
+## HTML no corpo dos posts
+
+O markdown pode trazer HTML cru (o importador do Substack gera `figure`, `picture`, tabelas e iframes). Ele passa por uma limpeza no render, por lista do que é permitido (`src/lib/sanitize.ts`, ligada em `astro.config.mjs`):
+
+- saem: `script`, `style`, `svg`, `form`, `object` e afins, atributos `on*`, `srcdoc`, URLs `javascript:` e `data:`, e estilo que não seja o do realce de código;
+- iframe só fica se for https de Spotify, YouTube ou Vimeo.
+
+Os scripts do layout levam o atributo `data-site-script`. Script novo no layout precisa dele, senão o `check_site.py` trava o deploy.
+
+O Astro guarda em cache (`.astro/` e `node_modules/.astro/`) o HTML já renderizado dos posts e não refaz esse HTML quando só o config muda. Depois de mexer no `astro.config.mjs` ou em `src/lib/sanitize.ts`, apague essas duas pastas antes do build. No CI o build parte sempre sem cache.
+
 ## Antes do cutover
 
 `PRE_CUTOVER_NOINDEX` em `src/consts.ts` deixa o blog inteiro com `noindex`, e o `check_site.py` falha se alguma página fora do blog apontar para ele. O PR do cutover (#24) troca a constante para `false`.

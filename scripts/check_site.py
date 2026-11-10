@@ -27,58 +27,66 @@ SITE_HOST = "guifav.dev"
 BLOG_PREFIX = "/blog/"
 SITEMAP_NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
 URL_ATTRS = {"href", "src"}
-ACTIVE_SCHEMES = ("javascript:", "vbscript:")
-# Corpo do post (HTML vindo do markdown/importador): só marcação de conteúdo.
-BODY_FORBIDDEN_TAGS = {"script", "object", "embed", "applet", "form", "base", "meta", "link", "style", "frame", "frameset"}
-BODY_IFRAME_HOSTS = {"open.spotify.com", "creators.spotify.com", "www.youtube.com", "www.youtube-nocookie.com", "player.vimeo.com"}
-BODY_START = '<div class="post-body">'
-BODY_END = "</article>"
+ACTIVE_SCHEMES = ("javascript:", "vbscript:", "data:")
+ACTIVE_URL_ATTRS = {"href", "src", "srcset", "data", "action", "formaction", "poster", "xlink:href", "cite", "background"}
+# Nunca aparecem numa página do blog (nem no template).
+FORBIDDEN_TAGS = {"object", "embed", "applet", "form", "base", "frame", "frameset"}
+IFRAME_HOSTS = {
+    "open.spotify.com", "creators.spotify.com", "podcasters.spotify.com",
+    "www.youtube.com", "www.youtube-nocookie.com", "player.vimeo.com",
+}
+# Os scripts do template levam este atributo; script sem ele veio do conteúdo.
+SITE_SCRIPT_ATTR = "data-site-script"
 
 
 def _scheme(url: str) -> str:
-    return re.sub(r"[\s\x00-\x1f]", "", url).lower()
+    return re.sub(r"[\s\x00-\x1f\x7f]", "", url).lower()
 
 
-class _Body(HTMLParser):
-    """Acha conteúdo ativo no corpo do post: script, handlers on*, iframes fora da lista, URLs ativas."""
-
-    def __init__(self) -> None:
-        super().__init__(convert_charrefs=True)
-        self.bad: list[str] = []
-
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        if tag in BODY_FORBIDDEN_TAGS:
-            self.bad.append(f"<{tag}>")
-        for k, v in attrs:
-            v = v or ""
-            if k.startswith("on"):
-                self.bad.append(f"<{tag} {k}>")
-            if k in ("href", "src", "data", "action", "formaction", "poster", "xlink:href", "srcset"):
-                s = _scheme(v)
-                if s.startswith(ACTIVE_SCHEMES) or s.startswith("data:"):
-                    self.bad.append(f"<{tag} {k}={v[:40]!r}>")
-        if tag == "iframe":
-            src = dict(attrs).get("src") or ""
-            u = urlsplit(src)
-            if u.scheme != "https" or u.hostname not in BODY_IFRAME_HOSTS:
-                self.bad.append(f"<iframe src={src[:60]!r}>")
-
-
-def body_problems(html: str) -> list[str]:
-    start = html.find(BODY_START)
-    if start < 0:
-        return []
-    end = html.find(BODY_END, start)
-    b = _Body()
-    b.feed(html[start + len(BODY_START): end if end > 0 else len(html)])
-    return b.bad
+def parse_srcset(value: str) -> list[str]:
+    """URLs de um srcset, pela regra do HTML: a URL vai até um espaço; vírgula no fim da URL encerra o candidato."""
+    urls: list[str] = []
+    i, n = 0, len(value)
+    ws = " \t\n\f\r"
+    while i < n:
+        while i < n and (value[i] in ws or value[i] == ","):
+            i += 1
+        if i >= n:
+            break
+        j = i
+        while j < n and value[j] not in ws:
+            j += 1
+        url = value[i:j]
+        i = j
+        if url.endswith(","):
+            url = url.rstrip(",")
+        else:
+            depth = 0
+            while i < n:
+                c = value[i]
+                if c == "(":
+                    depth += 1
+                elif c == ")":
+                    depth = max(0, depth - 1)
+                elif c == "," and depth == 0:
+                    break
+                i += 1
+        if url:
+            urls.append(url)
+    return urls
 
 
-class _Refs(HTMLParser):
+class _Page(HTMLParser):
+    """Lê a página inteira: links, meta robots e conteúdo ativo (sem recortar por texto)."""
+
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.refs: list[str] = []
         self.robots: list[str] = []
+        self.active: list[str] = []
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         a = {k: (v or "") for k, v in attrs}
@@ -88,10 +96,25 @@ class _Refs(HTMLParser):
             if k in a and a[k].strip():
                 self.refs.append(a[k].strip())
         if "srcset" in a:
-            for part in a["srcset"].split(","):
-                url = part.strip().split(" ")[0]
-                if url:
-                    self.refs.append(url)
+            self.refs.extend(parse_srcset(a["srcset"]))
+        # Conteúdo ativo
+        if tag in FORBIDDEN_TAGS:
+            self.active.append(f"<{tag}>")
+        if tag == "script" and SITE_SCRIPT_ATTR not in a:
+            self.active.append("<script> fora do template")
+        for k, v in a.items():
+            if k.startswith("on"):
+                self.active.append(f"<{tag} {k}>")
+            elif k == "srcdoc":
+                self.active.append(f"<{tag} srcdoc>")
+            elif k in ACTIVE_URL_ATTRS:
+                urls = parse_srcset(v) if k == "srcset" else [v]
+                if any(_scheme(u).startswith(ACTIVE_SCHEMES) for u in urls):
+                    self.active.append(f"<{tag} {k}={v[:40]!r}>")
+        if tag == "iframe":
+            u = urlsplit(a.get("src", ""))
+            if u.scheme != "https" or _host(u) not in IFRAME_HOSTS:
+                self.active.append(f"<iframe src={a.get('src', '')[:60]!r}>")
 
 
 def frontmatter(text: str) -> dict[str, str]:
@@ -139,14 +162,24 @@ def _page_url(site: Path, f: Path) -> str:
 
 
 def _normalize(path: str) -> str:
-    """Remove segmentos . e .. como o navegador faz, mantendo a barra final."""
+    """Remove segmentos . e .. como o navegador faz (WHATWG), mantendo a barra final.
+
+    Um último segmento "." ou ".." (também codificado, %2e) aponta para a pasta: "/a/." é "/a/".
+    """
     path = unquote(path) or "/"
+    last = path.rsplit("/", 1)[-1]
+    dir_like = path.endswith("/") or last in (".", "..")
     norm = posixpath.normpath(path)
     if norm.startswith("//"):
         norm = "/" + norm.lstrip("/")
-    if path.endswith("/") and norm != "/":
+    if dir_like and norm != "/":
         norm += "/"
     return norm
+
+
+def _host(parts) -> str:
+    """Host como o navegador compara: sem percent-encoding, minúsculo, sem ponto final."""
+    return unquote(parts.netloc.rsplit("@", 1)[-1].split(":", 1)[0]).lower().rstrip(".")
 
 
 def _internal_path(page_url: str, ref: str) -> str | None:
@@ -155,7 +188,7 @@ def _internal_path(page_url: str, ref: str) -> str | None:
         return None
     # Resolve como o navegador: relativo, absoluto, relativo ao protocolo (//host/...).
     parts = urlsplit(urljoin("https://" + SITE_HOST + page_url, ref))
-    if parts.scheme not in ("http", "https") or parts.hostname != SITE_HOST:
+    if parts.scheme not in ("http", "https") or _host(parts) != SITE_HOST:
         return None
     return _normalize(parts.path)
 
@@ -193,14 +226,12 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
         url = _page_url(site, f)
         in_blog = url.startswith(BLOG_PREFIX)
         html = f.read_text(encoding="utf-8")
-        p = _Refs()
+        p = _Page()
         p.feed(html)
+        p.close()
         if in_blog:
-            for bad in body_problems(html):
-                problems.append(f"{rel}: conteúdo ativo no corpo do post: {bad}")
-            for ref in p.refs:
-                if _scheme(ref).startswith(ACTIVE_SCHEMES):
-                    problems.append(f"{rel}: conteúdo ativo (URL {ref[:40]!r})")
+            for bad in dict.fromkeys(p.active):
+                problems.append(f"{rel}: conteúdo ativo: {bad}")
         has_noindex = any(_robots_noindex(r) for r in p.robots)
         if in_blog and pre_cutover and not has_noindex:
             problems.append(f"{rel}: página do blog sem noindex antes do cutover")

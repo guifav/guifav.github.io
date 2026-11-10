@@ -5,11 +5,28 @@ import { spotifyEmbedUrl } from './blog.ts';
 
 export const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-// Data do YAML (o parser do Astro já entrega Date para valores sem aspas) ou string ISO 8601.
+// Data ISO 8601 existente no calendário: "2026-11-10" ou "2026-11-10T12:00:00Z" (com fuso).
+// new Date() sozinho normaliza dias inexistentes ("2026-02-30" vira 2 de março) sem erro.
+const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|[+-](\d{2}):(\d{2})))?$/;
+
+export function validIsoDate(s: string): boolean {
+  const m = s.match(ISO_DATE);
+  if (!m) return false;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  if (mo < 1 || mo > 12 || d < 1) return false;
+  const daysInMonth = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+  if (d > daysInMonth) return false;
+  const num = (v: string | undefined) => (v === undefined ? 0 : Number(v));
+  if (num(m[4]) > 23 || num(m[5]) > 59 || num(m[6]) > 59) return false;
+  if (num(m[7]) > 14 || num(m[8]) > 59) return false;
+  return true;
+}
+
+// Data do YAML (o parser do Astro já entrega Date para valores sem aspas; a checagem antes do
+// build, em postfiles.ts, valida o texto desses) ou string ISO 8601 existente no calendário.
 // Nulo, booleano e número são rejeitados: z.coerce.date() sozinho os transformaria em 1970.
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2}))?$/;
 const postDate = z
-  .union([z.date(), z.string().regex(ISO_DATE)])
+  .union([z.date(), z.string().refine(validIsoDate, { message: 'data ISO 8601 inexistente ou fora do formato' })])
   .transform((v) => (v instanceof Date ? v : new Date(v)))
   .refine((d) => !Number.isNaN(d.getTime()), { message: 'data inválida' })
   .pipe(z.date());

@@ -45,17 +45,17 @@ const base = import.meta.env.BASE_URL;
   <link rel="icon" href="/favicon.ico" sizes="any" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-  <script is:inline async src={`https://www.googletagmanager.com/gtag/js?id=${GA4_ID}`}></script>
-  <script is:inline define:vars={{ GA4_ID }}>
+  <script data-site-script is:inline async src={`https://www.googletagmanager.com/gtag/js?id=${GA4_ID}`}></script>
+  <script data-site-script is:inline define:vars={{ GA4_ID }}>
     window.dataLayer = window.dataLayer || [];
     function gtag(){ dataLayer.push(arguments); }
     gtag('js', new Date());
     gtag('config', GA4_ID);
   </script>
-  {jsonLd && <script type="application/ld+json" set:html={jsonLdScript(jsonLd)} />}
+  {jsonLd && <script data-site-script type="application/ld+json" set:html={jsonLdScript(jsonLd)} />}
 </head>
 <body>
-  <script is:inline>
+  <script data-site-script is:inline>
     // Mesmo tema do site (chave "theme" no localStorage), aplicado antes de pintar.
     (function () {
       var t = null;
@@ -80,7 +80,7 @@ const base = import.meta.env.BASE_URL;
     </main>
     <footer><p><a href="https://github.com/guifav" target="_blank" rel="noopener">GitHub</a> &middot; <a href="https://linkedin.com/in/guilhermefavaron" target="_blank" rel="noopener">LinkedIn</a> &middot; <a href="https://huggingface.co/guifav" target="_blank" rel="noopener">Hugging Face</a> &middot; <a href="https://youtube.com/@ia-aplicada-guilhermefavaron" target="_blank" rel="noopener">YouTube</a> &middot; <a href="mailto:contact@guifav.dev">Contato</a> &middot; <a href="https://guilhermefavaron.com.br" target="_blank" rel="noopener">Newsletter</a></p></footer>
   </div>
-  <script is:inline>
+  <script data-site-script is:inline>
     (function () {
       var tt = document.getElementById('theme-toggle');
       function paint(t) {

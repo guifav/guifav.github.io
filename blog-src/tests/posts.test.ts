@@ -24,6 +24,16 @@ test('esquema rejeita data nula, booleana, numérica, inválida ou fora do ISO',
   assert.equal(postSchema.safeParse({ ...base, updated: null }).success, false);
 });
 
+test('esquema rejeita data inexistente no calendário (string)', () => {
+  for (const date of ['2026-02-29', '2026-02-30', '2026-04-31', '2026-00-10', '2026-13-01', '2026-01-32', '2026-02-29T12:00:00Z', '2026-01-01T24:00:00Z', '2026-01-01T23:60:00Z']) {
+    assert.equal(postSchema.safeParse({ ...base, date }).success, false, date);
+    assert.equal(postSchema.safeParse({ ...base, updated: date }).success, false, `updated ${date}`);
+  }
+  for (const date of ['2024-02-29', '2026-04-30', '2026-12-31T23:59:59.999-03:00']) {
+    assert.ok(postSchema.safeParse({ ...base, date }).success, date);
+  }
+});
+
 test('esquema exige spotify_url de episódio do Spotify em https', () => {
   const ok = 'https://podcasters.spotify.com/pod/show/ia-aplicada/episodes/Ep-e3184tj';
   assert.ok(postSchema.safeParse({ ...base, type: 'podcast', spotify_url: ok }).success);
@@ -69,6 +79,15 @@ test('checkPostFiles: slug e index só em formato simples (o check_site.py lê e
   assert.ok(t('slug: a\nindex: no').some((p) => p.includes('index')));
   assert.ok(t('slug: a # x').length > 0);
   assert.ok(t('slug: a\nslug: b').some((p) => p.includes('mais de uma')));
+});
+
+test('checkPostFiles: data inexistente no calendário falha antes do YAML virar outra data', () => {
+  const t = (fm: string) => checkPostFiles([{ path: 'a.md', text: `---\ntitle: x\nslug: a\n${fm}\n---\n` }]);
+  assert.deepEqual(t('date: 2026-02-28'), []);
+  assert.deepEqual(t('date: "2024-02-29T12:00:00Z"\nupdated: 2026-11-10'), []);
+  for (const fm of ['date: 2026-02-30', 'date: "2026-02-29"', "date: '2026-04-31'", 'updated: 2026-02-30T10:00:00Z', 'date: 2026-02-30 # x']) {
+    assert.ok(t(fm).some((p) => p.includes('data')), fm);
+  }
 });
 
 test('checkPostFiles: subpasta, slug ausente e nomes que só diferem na caixa', () => {

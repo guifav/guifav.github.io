@@ -105,6 +105,9 @@ def expected_files(repo: Path, manifest: Path, blog: Path) -> dict[str, Path]:
             files[entry] = src
     if blog.is_symlink():
         raise ManifestError(f"link simbólico não é publicado: {blog}")
+    if blog.is_relative_to(repo):
+        # O build fica dentro do repo (blog-src/dist): nenhuma pasta no caminho pode ser link.
+        _no_symlink_on_path(repo, blog)
     if not (blog / "index.html").is_file():
         raise ManifestError(f"build do blog ausente: {blog / 'index.html'}")
     for f in _files_under(blog):

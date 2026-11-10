@@ -122,6 +122,13 @@ class AssembleTest(Fixture):
         with self.assertRaises(A.ManifestError):
             self.assemble()
 
+    def test_symlinked_ancestor_of_blog_build_is_rejected(self):
+        outside = Path(self.tmp.name) / "fora"
+        write(outside / "dist" / "index.html", b"<html>de fora</html>")
+        os.symlink(outside, self.repo / "blog-src-link")
+        with self.assertRaises(A.ManifestError):
+            A.assemble(self.repo, self.manifest, self.repo / "blog-src-link" / "dist", self.out)
+
     def test_symlinked_blog_build_root_is_rejected(self):
         real = Path(self.tmp.name) / "dist-real"
         self.blog.rename(real)

@@ -1,3 +1,5 @@
+import { validIsoDate } from './schema.ts';
+
 // Checagem dos arquivos de post antes do build.
 //
 // O glob loader do Astro usa o campo slug como id da entrada. Dois arquivos com o mesmo slug
@@ -39,6 +41,16 @@ function simpleScalarProblems(text: string): string[] {
     const found = lines.filter((l) => new RegExp(`^${key}\\s*:`).test(l));
     if (found.length > 1) out.push(`campo ${key} aparece mais de uma vez`);
     for (const l of found) if (!ok.test(l)) out.push(`campo ${key} fora do formato simples: ${JSON.stringify(l)}`);
+  }
+  // O parser YAML transforma "date: 2026-02-30" (sem aspas) em 2 de março antes do esquema ver;
+  // por isso a data é validada aqui, no texto.
+  for (const l of lines) {
+    const dm = l.match(/^(date|updated)\s*:\s*(.*)$/);
+    if (!dm) continue;
+    let v = dm[2].trim();
+    const q = v.match(/^(['"])(.*?)\1/);
+    v = q ? q[2] : v.replace(/\s+#.*$/, '').trim();
+    if (!validIsoDate(v)) out.push(`campo ${dm[1]} com data inexistente ou fora do ISO 8601: ${JSON.stringify(v)}`);
   }
   return out;
 }
