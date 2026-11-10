@@ -258,6 +258,28 @@ class CheckTest(Base):
             else:
                 os.environ["CHECK_SITE_NODE"] = old
 
+    def test_resolver_output_must_be_well_formed(self):
+        # Substituto do node: lê os pares e devolve uma lista do tamanho certo, com itens malformados
+        # (ou uma saída que nem é JSON). Todos precisam falhar fechado, com ResolverError.
+        fake = self.site.parent / "fake_node.py"
+        cases = ["'nao-e-json'"] + [f"json.dumps([{item}] * len(pairs))" for item in (
+            "{}", "False", "[]", "''", "{'protocol': 'https:', 'hostname': 1, 'pathname': '/'}",
+            "{'protocol': 'https:', 'hostname': 'guifav.dev'}")]
+        for out in cases:
+            fake.write_text("#!/usr/bin/env python3\nimport json, sys\npairs = json.load(sys.stdin)\n"
+                            f"print({out})\n", encoding="utf-8")
+            fake.chmod(0o755)
+            old = os.environ.get("CHECK_SITE_NODE")
+            os.environ["CHECK_SITE_NODE"] = str(fake)
+            try:
+                with self.assertRaises(C.ResolverError, msg=out):
+                    self.problems()
+            finally:
+                if old is None:
+                    del os.environ["CHECK_SITE_NODE"]
+                else:
+                    os.environ["CHECK_SITE_NODE"] = old
+
     def test_video_poster_must_exist(self):
         self.body('<video controls poster="/blog/img/um-post/nao-existe.webp"></video>')
         self.assertTrue(any("nao-existe.webp" in p for p in self.problems()))

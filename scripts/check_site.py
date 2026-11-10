@@ -1,6 +1,6 @@
 """Verifica o site montado em _site/ antes do deploy.
 
-- Todo link interno (href, src, srcset, inclusive URLs absolutas de guifav.dev) aponta para
+- Todo link interno (href, src, srcset, poster, inclusive URLs absolutas de guifav.dev) aponta para
   um arquivo publicado. Pega base errado no blog e links para pastas fora do site
   (docs/, _next/, tools/).
 - Antes do cutover (PRE_CUTOVER_NOINDEX em blog-src/src/consts.ts): toda página do blog
@@ -72,9 +72,18 @@ def resolve_urls(pairs: list[tuple[str, str]]) -> list[dict | None]:
         raise ResolverError(f"não foi possível rodar {node}: {e}") from e
     if r.returncode != 0:
         raise ResolverError(f"resolve_urls.mjs saiu com {r.returncode}: {r.stderr.strip()[:300]}")
-    out = json.loads(r.stdout)
+    try:
+        out = json.loads(r.stdout)
+    except json.JSONDecodeError as e:
+        raise ResolverError(f"resolve_urls.mjs devolveu algo que não é JSON: {r.stdout[:120]!r}") from e
     if not isinstance(out, list) or len(out) != len(pairs):
         raise ResolverError("resolve_urls.mjs devolveu uma lista de tamanho diferente")
+    for item in out:
+        # Cada item é null (URL inválida) ou {protocol, hostname, pathname}, todos strings.
+        if item is None:
+            continue
+        if not isinstance(item, dict) or not all(isinstance(item.get(k), str) for k in ("protocol", "hostname", "pathname")):
+            raise ResolverError(f"resolve_urls.mjs devolveu um item malformado: {item!r}"[:200])
     return out
 
 

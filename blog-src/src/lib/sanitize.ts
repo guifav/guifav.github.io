@@ -5,10 +5,10 @@
 // some, tags abertas em um bloco e fechadas em outro viram elementos). Este plugin então:
 //
 // - REJEITA (o build falha, com o arquivo e as tags) todo elemento fora da lista, iframe fora dos
-//   hosts permitidos e img/source com URL ativa. Nada some em silêncio e nada passa: o importador
-//   tem de gerar só HTML da lista. O plugin não remove nem desembrulha elementos, porque o Satteri
-//   descarta as alterações pendentes dos filhos de um nó substituído (um <script> dentro de um
-//   <article> desembrulhado voltava intacto);
+//   hosts permitidos e img, source ou video com URL ativa em src, srcset ou poster. Nada some em
+//   silêncio e nada passa: o importador tem de gerar só HTML da lista. O plugin não remove nem
+//   desembrulha elementos, porque o Satteri descarta as alterações pendentes dos filhos de um nó
+//   substituído (um <script> dentro de um <article> desembrulhado voltava intacto);
 // - REMOVE atributos fora da lista por tag (on*, srcdoc, style que não seja do realce, data-*),
 //   URLs com esquema ativo e comentários. Isso não perde conteúdo.
 

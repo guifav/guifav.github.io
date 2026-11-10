@@ -25,7 +25,8 @@ Quem tem escrita no repositório pode publicar qualquer coisa editando um templa
    desta barreira no markdown é bloqueio de gate.
 2. Lista de extensões de public/ (scripts/check-posts.ts, antes do build, e
    scripts/check_site.py na raiz do repo, depois). Só mídia: webp, png, jpg, jpeg, gif,
-   avif, mp4, webm. HTML, SVG, JS, CSS e qualquer outra extensão falham o build. Sob
+   avif, mp4, webm. HTML, SVG, JS, CSS, qualquer outra extensão e link simbólico (o Vite
+   segue o link ao copiar) falham o build. Sob
    /blog/, o site publicado só tem .html, .xml e essa mídia. Um arquivo fora disso em
    _site/blog/ é bloqueio de gate.
 3. Templates. São código revisado. O atributo data-site-script marca os scripts do
