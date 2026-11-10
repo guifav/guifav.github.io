@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { postSchema } from '../src/lib/schema.ts';
-import { checkPostFiles, frontmatterSlug } from '../src/lib/postfiles.ts';
+import { checkPostFiles, checkPublicFiles, frontmatterSlug } from '../src/lib/postfiles.ts';
 
 const base = {
   title: 't',
@@ -94,4 +94,12 @@ test('checkPostFiles: subpasta, slug ausente e nomes que só diferem na caixa', 
   assert.ok(checkPostFiles([{ path: 'sub/a.md', text: md('a') }]).some((p) => p.includes('subpasta')));
   assert.ok(checkPostFiles([{ path: 'a.md', text: '---\ntitle: x\n---\n' }]).some((p) => p.includes('sem slug')));
   assert.ok(checkPostFiles([{ path: 'A.md', text: md('a') }]).length > 0);
+});
+
+test('checkPublicFiles: public/ só aceita mídia da lista (contrato, barreira 2)', () => {
+  assert.deepEqual(checkPublicFiles(['img/a/capa.webp', 'img/a/b.PNG', 'img/a/c.jpg', 'img/a/d.jpeg', 'img/e.gif', 'img/f.avif', 'video/v.mp4', 'video/w.webm']), []);
+  for (const bad of ['marked.html', 'review.HTML', 'x.htm', 'img/a/d.svg', 'app.js', 'm.mjs', 's.css', 'favicon.ico', 'dados.json', 'semextensao', '.htaccess', 'a.webp.html']) {
+    const p = checkPublicFiles([bad]);
+    assert.ok(p.length === 1 && p[0].includes(bad), `${bad}: ${JSON.stringify(p)}`);
+  }
 });

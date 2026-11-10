@@ -7,6 +7,12 @@
   tem meta robots com noindex, e nenhuma página fora do blog aponta para ele.
 - rss.xml e sitemap.xml do blog são XML válido; o sitemap só lista páginas que existem e
   não lista posts com index: false. Depois do cutover, esses posts precisam de noindex.
+- Sob /blog/ só há .html, .xml e mídia da lista.
+- Alarme secundário de conteúdo ativo nas páginas do blog (ver blog-src/CONTRATO-DE-CONTEUDO.md:
+  a barreira de segurança é a limpeza no render e a lista de extensões, não este verificador).
+
+Toda URL é resolvida pelo parser WHATWG do Node (scripts/resolve_urls.mjs), em lote. Sem Node,
+o verificador falha fechado.
 
 Uso:
     python3 scripts/check_site.py [--site _site] [--posts blog-src/src/content/posts]
@@ -15,19 +21,25 @@ Uso:
 from __future__ import annotations
 
 import argparse
-import posixpath
+import json
+import os
 import re
+import shutil
+import subprocess
 import sys
 import xml.etree.ElementTree as ET
 from html.parser import HTMLParser
 from pathlib import Path
-from urllib.parse import unquote, urljoin, urlsplit
+from urllib.parse import unquote
 
 SITE_HOST = "guifav.dev"
 BLOG_PREFIX = "/blog/"
+SITE_ORIGIN = "https://" + SITE_HOST
 SITEMAP_NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
-URL_ATTRS = {"href", "src"}
-ACTIVE_SCHEMES = ("javascript:", "vbscript:", "data:")
+RESOLVER = Path(__file__).resolve().parent / "resolve_urls.mjs"
+# Atributos cujo alvo precisa existir quando o link é interno.
+URL_ATTRS = {"href", "src", "poster"}
+ACTIVE_PROTOCOLS = {"javascript:", "vbscript:", "data:"}
 ACTIVE_URL_ATTRS = {"href", "src", "srcset", "data", "action", "formaction", "poster", "xlink:href", "cite", "background"}
 # Nunca aparecem numa página do blog (nem no template).
 FORBIDDEN_TAGS = {"object", "embed", "applet", "form", "base", "frame", "frameset"}
@@ -37,10 +49,42 @@ IFRAME_HOSTS = {
 }
 # Os scripts do template levam este atributo; script sem ele veio do conteúdo.
 SITE_SCRIPT_ATTR = "data-site-script"
+# Sob /blog/ (contrato, barreira 2): páginas, RSS e sitemap, e mídia.
+BLOG_EXACT_SUFFIXES = {".html", ".xml"}
+BLOG_MEDIA_SUFFIXES = {".webp", ".png", ".jpg", ".jpeg", ".gif", ".avif", ".mp4", ".webm"}
 
 
-def _scheme(url: str) -> str:
-    return re.sub(r"[\s\x00-\x1f\x7f]", "", url).lower()
+class ResolverError(Exception):
+    """Node ou o resolvedor de URL não rodou: o verificador falha fechado."""
+
+
+def resolve_urls(pairs: list[tuple[str, str]]) -> list[dict | None]:
+    """Resolve [base, ref] pelo URL do Node (WHATWG). Mesma ordem; None para URL inválida."""
+    if not pairs:
+        return []
+    node = os.environ.get("CHECK_SITE_NODE") or shutil.which("node")
+    if not node:
+        raise ResolverError("node não encontrado no PATH")
+    try:
+        r = subprocess.run([node, str(RESOLVER)], input=json.dumps(pairs), capture_output=True,
+                           text=True, timeout=120, check=False)
+    except OSError as e:
+        raise ResolverError(f"não foi possível rodar {node}: {e}") from e
+    if r.returncode != 0:
+        raise ResolverError(f"resolve_urls.mjs saiu com {r.returncode}: {r.stderr.strip()[:300]}")
+    out = json.loads(r.stdout)
+    if not isinstance(out, list) or len(out) != len(pairs):
+        raise ResolverError("resolve_urls.mjs devolveu uma lista de tamanho diferente")
+    return out
+
+
+def _internal(res: dict | None) -> str | None:
+    """Caminho no disco (sem percent-encoding) se a URL resolvida for deste site; senão None."""
+    if not res or res["protocol"] not in ("http:", "https:"):
+        return None
+    if res["hostname"].rstrip(".") != SITE_HOST:
+        return None
+    return unquote(res["pathname"]) or "/"
 
 
 def parse_srcset(value: str) -> list[str]:
@@ -77,13 +121,19 @@ def parse_srcset(value: str) -> list[str]:
 
 
 class _Page(HTMLParser):
-    """Lê a página inteira: links, meta robots e conteúdo ativo (sem recortar por texto)."""
+    """Lê a página inteira: links, meta robots e conteúdo ativo (sem recortar por texto).
+
+    URLs só são coletadas aqui; a interpretação é do resolvedor WHATWG, depois.
+    """
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.refs: list[str] = []
         self.robots: list[str] = []
         self.active: list[str] = []
+        # (descrição, url) de atributos que podem carregar esquema ativo, todas as ocorrências.
+        self.url_values: list[tuple[str, str]] = []
+        self.iframes: list[str] = []
         self.main_depth = 0
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
@@ -107,6 +157,8 @@ class _Page(HTMLParser):
                 self.refs.append(a[k].strip())
         if "srcset" in a:
             self.refs.extend(parse_srcset(a["srcset"]))
+        if tag == "iframe":
+            self.iframes.append(a.get("src", "").strip())
         # Conteúdo ativo
         if tag in FORBIDDEN_TAGS:
             self.active.append(f"<{tag}>")
@@ -122,13 +174,9 @@ class _Page(HTMLParser):
             elif k == "srcdoc":
                 self.active.append(f"<{tag} srcdoc>")
             elif k in ACTIVE_URL_ATTRS:
-                urls = parse_srcset(v) if k == "srcset" else [v]
-                if any(_scheme(u).startswith(ACTIVE_SCHEMES) for u in urls):
-                    self.active.append(f"<{tag} {k}={v[:40]!r}>")
-        if tag == "iframe":
-            u = urlsplit(a.get("src", ""))
-            if u.scheme != "https" or _host(u) not in IFRAME_HOSTS:
-                self.active.append(f"<iframe src={a.get('src', '')[:60]!r}>")
+                for u in (parse_srcset(v) if k == "srcset" else [v]):
+                    if u.strip():
+                        self.url_values.append((f"<{tag} {k}={v[:40]!r}>", u.strip()))
 
 
 def frontmatter(text: str) -> dict[str, str]:
@@ -183,59 +231,6 @@ def _page_url(site: Path, f: Path) -> str:
     return "/" + rel
 
 
-def _normalize(path: str) -> str:
-    """Remove segmentos . e .. como o navegador faz (WHATWG), mantendo a barra final.
-
-    Um último segmento "." ou ".." (também codificado, %2e) aponta para a pasta: "/a/." é "/a/".
-    """
-    path = unquote(path) or "/"
-    last = path.rsplit("/", 1)[-1]
-    dir_like = path.endswith("/") or last in (".", "..")
-    norm = posixpath.normpath(path)
-    if norm.startswith("//"):
-        norm = "/" + norm.lstrip("/")
-    if dir_like and norm != "/":
-        norm += "/"
-    return norm
-
-
-def _host(parts) -> str:
-    """Host como o navegador compara (WHATWG/UTS 46): sem percent-encoding, com pontos Unicode
-    (。．｡) e caracteres de largura total normalizados pelo IDNA, minúsculo e sem ponto final."""
-    raw = unquote(parts.netloc.rsplit("@", 1)[-1])
-    if not raw.startswith("["):
-        raw = raw.split(":", 1)[0]
-    try:
-        host = raw.encode("idna").decode("ascii")
-    except UnicodeError:
-        host = raw
-    return host.lower().rstrip(".")
-
-
-def _whatwg_prep(ref: str) -> str:
-    """Em http(s) e links relativos, o navegador trata barra invertida como barra.
-
-    Tab e quebra de linha em qualquer posição, e C0 ou espaço no começo, o próprio urlsplit do
-    Python já remove (como o WHATWG manda); o teste com "gui<tab>fav.dev" cobre isso.
-    """
-    m = re.match(r"^([A-Za-z][A-Za-z0-9+.-]*):", ref)
-    if m is None or m.group(1).lower() in ("http", "https"):
-        ref = ref.replace("\\", "/")
-    return ref
-
-
-def _internal_path(page_url: str, ref: str) -> str | None:
-    """Caminho interno normalizado do link, ou None se for externo, âncora, mailto etc."""
-    ref = _whatwg_prep(ref)
-    if ref.startswith("#"):
-        return None
-    # Resolve como o navegador: relativo, absoluto, relativo ao protocolo (//host/...).
-    parts = urlsplit(urljoin("https://" + SITE_HOST + page_url, ref))
-    if parts.scheme not in ("http", "https") or _host(parts) != SITE_HOST:
-        return None
-    return _normalize(parts.path)
-
-
 def _resolve(site: Path, path: str) -> tuple[bool, bool]:
     """(existe, existe_só_como_pasta_sem_barra)."""
     target = site / path.lstrip("/")
@@ -264,21 +259,46 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
         if fm.get("index") == "false":
             noindex_slugs.add(slug)
 
-    # SVG aberto direto executa script; no blog, imagens são WebP ou PNG.
+    # Contrato, barreira 2: sob /blog/ só páginas, RSS, sitemap e mídia da lista.
     for f in sorted((site / "blog").rglob("*")):
-        if f.is_file() and f.suffix.lower() == ".svg":
-            problems.append(f"{f.relative_to(site).as_posix()}: SVG não é publicado no blog (pode executar script); converta para WebP ou PNG")
+        if f.is_file() and f.suffix not in BLOG_EXACT_SUFFIXES and f.suffix.lower() not in BLOG_MEDIA_SUFFIXES:
+            problems.append(f"{f.relative_to(site).as_posix()}: extensão fora da lista do blog "
+                            f"(só .html, .xml e mídia {', '.join(sorted(BLOG_MEDIA_SUFFIXES))})")
 
+    pages = []
     for f in html_files(site):
-        rel = f.relative_to(site).as_posix()
-        url = _page_url(site, f)
-        in_blog = url.startswith(BLOG_PREFIX)
-        html = f.read_text(encoding="utf-8")
         p = _Page()
-        p.feed(html)
+        p.feed(f.read_text(encoding="utf-8"))
         p.close()
+        url = _page_url(site, f)
+        pages.append((f.relative_to(site).as_posix(), url, url.startswith(BLOG_PREFIX), p))
+
+    sm = site / "blog" / "sitemap.xml"
+    sitemap_locs: list[str] | None = None
+    try:
+        sitemap_locs = [(loc.text or "").strip() for loc in ET.parse(sm).getroot().iter(f"{SITEMAP_NS}loc")]
+    except (ET.ParseError, FileNotFoundError) as e:
+        problems.append(f"blog/sitemap.xml inválido: {e}")
+
+    # Uma única interpretação de URL para tudo: links, valores ativos, iframes e sitemap.
+    pairs: list[tuple[str, str]] = []
+    for _, url, _, p in pages:
+        base = SITE_ORIGIN + url
+        pairs += [(base, r) for r in p.refs] + [(base, u) for _, u in p.url_values] + [(base, i) for i in p.iframes]
+    pairs += [(SITE_ORIGIN + "/", loc) for loc in sitemap_locs or []]
+    unique = list(dict.fromkeys(pairs))  # sem repetição, mantendo a ordem
+    resolved = dict(zip(unique, resolve_urls(unique)))
+
+    for rel, url, in_blog, p in pages:
+        base = SITE_ORIGIN + url
         if in_blog:
-            for bad in dict.fromkeys(p.active):
+            active = list(p.active)
+            active += [desc for desc, u in p.url_values if (resolved[(base, u)] or {}).get("protocol") in ACTIVE_PROTOCOLS]
+            for src in p.iframes:
+                res = resolved[(base, src)]
+                if not res or res["protocol"] != "https:" or res["hostname"] not in IFRAME_HOSTS:
+                    active.append(f"<iframe src={src[:60]!r}>")
+            for bad in dict.fromkeys(active):
                 problems.append(f"{rel}: conteúdo ativo: {bad}")
         has_noindex = any(_robots_noindex(r) for r in p.robots)
         if in_blog and pre_cutover and not has_noindex:
@@ -288,9 +308,7 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
             if len(parts) == 1 and parts[0] in noindex_slugs and not has_noindex:
                 problems.append(f"{rel}: post com index: false sem noindex")
         for ref in p.refs:
-            if _scheme(ref).startswith(ACTIVE_SCHEMES):
-                continue
-            path = _internal_path(url, ref)
+            path = _internal(resolved[(base, ref)])
             if path is None:
                 continue
             if pre_cutover and not in_blog and (path == "/blog" or path.startswith(BLOG_PREFIX)):
@@ -308,24 +326,17 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
     except (ET.ParseError, FileNotFoundError) as e:
         problems.append(f"blog/rss.xml inválido: {e}")
 
-    sm = site / "blog" / "sitemap.xml"
-    try:
-        root = ET.parse(sm).getroot()
-    except (ET.ParseError, FileNotFoundError) as e:
-        problems.append(f"blog/sitemap.xml inválido: {e}")
-    else:
-        for loc in root.iter(f"{SITEMAP_NS}loc"):
-            href = (loc.text or "").strip()
-            u = urlsplit(href)
-            if u.scheme != "https" or u.hostname != SITE_HOST or not u.path.startswith(BLOG_PREFIX):
-                problems.append(f"sitemap: URL fora do blog: {href}")
-                continue
-            ok, _ = _resolve(site, _normalize(u.path))
-            if not ok:
-                problems.append(f"sitemap: página inexistente: {href}")
-            slug = u.path[len(BLOG_PREFIX):].strip("/")
-            if slug in noindex_slugs:
-                problems.append(f"sitemap: lista post com index: false: {href}")
+    for href in sitemap_locs or []:
+        res = resolved[(SITE_ORIGIN + "/", href)]
+        path = _internal(res)
+        if not res or res["protocol"] != "https:" or path is None or not path.startswith(BLOG_PREFIX):
+            problems.append(f"sitemap: URL fora do blog: {href}")
+            continue
+        ok, _ = _resolve(site, path)
+        if not ok:
+            problems.append(f"sitemap: página inexistente: {href}")
+        if path[len(BLOG_PREFIX):].strip("/") in noindex_slugs:
+            problems.append(f"sitemap: lista post com index: false: {href}")
     return problems
 
 
@@ -336,7 +347,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--consts", default="blog-src/src/consts.ts")
     args = ap.parse_args(argv)
     pre = read_pre_cutover(Path(args.consts))
-    problems = check(Path(args.site), Path(args.posts), pre_cutover=pre)
+    try:
+        problems = check(Path(args.site), Path(args.posts), pre_cutover=pre)
+    except ResolverError as e:
+        print(f"ERRO: resolvedor de URL indisponível, verificação não feita: {e}", file=sys.stderr)
+        return 1
     for p in problems:
         print(f"ERRO: {p}", file=sys.stderr)
     if problems:

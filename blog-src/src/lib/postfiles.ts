@@ -78,3 +78,20 @@ export function checkPostFiles(files: PostFile[]): string[] {
   }
   return problems;
 }
+
+/**
+ * Contrato de conteúdo, barreira 2: o Astro copia public/ sem transformação, então ali só entra
+ * mídia. HTML, SVG, JS, CSS e qualquer outra extensão fariam o build falhar.
+ */
+export const PUBLIC_MEDIA_EXTENSIONS = ['webp', 'png', 'jpg', 'jpeg', 'gif', 'avif', 'mp4', 'webm'];
+
+export function checkPublicFiles(paths: string[]): string[] {
+  const allowed = new Set(PUBLIC_MEDIA_EXTENSIONS);
+  return paths
+    .filter((p) => {
+      const name = p.split('/').pop() ?? p;
+      const dot = name.lastIndexOf('.');
+      return dot <= 0 || !allowed.has(name.slice(dot + 1).toLowerCase());
+    })
+    .map((p) => `public/${p}: extensão fora da lista de mídia (${PUBLIC_MEDIA_EXTENSIONS.join(', ')}); ver CONTRATO-DE-CONTEUDO.md`);
+}

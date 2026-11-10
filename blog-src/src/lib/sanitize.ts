@@ -14,9 +14,14 @@
 
 export const MARKDOWN_FEATURES = { rawHtml: true } as const;
 
-// Nomes comparados em minúsculas e sem hífen: className, class, data-language e dataLanguage
-// aparecem conforme o nó veio do markdown ou do realce de código.
-const GLOBAL_ATTRS = ['id', 'classname', 'class', 'title', 'lang', 'dir'];
+// Nomes comparados em minúsculas, com hífen preservado (h-ref não é href). Os únicos aliases são
+// os do HAST e do realce de código, que entregam className ou class, dataLanguage ou data-language.
+const ATTR_ALIASES: Record<string, string> = { classname: 'class', datalanguage: 'data-language' };
+const attrName = (key: string): string => {
+  const k = key.toLowerCase();
+  return ATTR_ALIASES[k] ?? k;
+};
+const GLOBAL_ATTRS = ['id', 'class', 'title', 'lang', 'dir'];
 const TAG_ATTRS: Record<string, string[]> = {
   a: ['href', 'rel', 'target', 'hreflang'],
   img: ['src', 'srcset', 'sizes', 'alt', 'width', 'height', 'loading', 'decoding'],
@@ -33,9 +38,9 @@ const TAG_ATTRS: Record<string, string[]> = {
   q: ['cite'],
   details: ['open'],
   // Saída do realce de código (Shiki com duas paletas).
-  video: ['controls', 'preload', 'width', 'height', 'poster', 'playsinline', 'muted', 'loop'],
-  pre: ['style', 'tabindex', 'datalanguage'],
-  code: ['style', 'datalanguage'],
+  video: ['src', 'controls', 'preload', 'width', 'height', 'poster', 'playsinline', 'muted', 'loop'],
+  pre: ['style', 'tabindex', 'data-language'],
+  code: ['style', 'data-language'],
   span: ['style'],
 };
 const KEEP = new Set([
@@ -128,17 +133,19 @@ export function sanitizeElement(tag: string, props: Record<string, unknown>): De
   const allowed = new Set([...GLOBAL_ATTRS, ...(TAG_ATTRS[t] ?? [])]);
   const remove: string[] = [];
   for (const [key, value] of Object.entries(props)) {
-    const k = key.toLowerCase().replace(/-/g, '');
+    const k = attrName(key);
     if (!allowed.has(k)) {
       remove.push(key);
       continue;
     }
     const v = Array.isArray(value) ? value.join(' ') : String(value ?? '');
+    const media = t === 'img' || t === 'source' || t === 'video';
     if (URL_ATTRS.has(k) && !safeUrl(v)) {
-      if ((t === 'img' || t === 'source') && k === 'src') return reject('URL de imagem ou vídeo com esquema ativo');
+      if (media && (k === 'src' || k === 'poster')) return reject('URL de imagem ou vídeo com esquema ativo');
       remove.push(key);
     } else if (k === 'srcset' && !parseSrcset(v).every(safeUrl)) {
-      remove.push(key);
+      // Como em src: imagem responsiva com URL ativa falha o build, não some em silêncio.
+      return reject('srcset com URL de esquema ativo');
     } else if (k === 'style' && !shikiStyle(v)) {
       remove.push(key);
     }

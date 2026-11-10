@@ -2,6 +2,7 @@
 
 Rodar: python3 scripts/test_check_site.py
 """
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -227,6 +228,51 @@ class CheckTest(Base):
         self.w("blog/um-post/index.html", page(
             '<script data-site-script>tema()</script><main><p>ok</p></main><script data-site-script>fim()</script><a href="/blog/">b</a>'))
         self.assertEqual(self.problems(), [])
+
+    def test_whatwg_special_scheme_without_slashes_is_internal(self):
+        # http:guifav.dev/x e http:/guifav.dev/x: o navegador recupera a autoridade (esquema especial).
+        self.w("index.html", page('<a href="http:guifav.dev/blog/">x</a>', robots=""))
+        self.assertTrue(any("aponta para o blog" in p for p in self.problems()))
+        self.w("index.html", page('<a href="http:/guifav.dev/nao-existe/">x</a>', robots=""))
+        self.assertTrue(any("nao-existe" in p for p in self.problems()))
+
+    def test_whatwg_repeated_or_trailing_unicode_dots_in_host(self):
+        for ref in ("https://guifav.dev\u3002.:443/blog/", "https://guifav.dev\u3002\u3002/blog/"):
+            self.w("index.html", page(f'<a href="{ref}">x</a>', robots=""))
+            self.assertTrue(any("aponta para o blog" in p for p in self.problems()), repr(ref))
+
+    def test_iframe_host_comes_from_the_whatwg_parser(self):
+        # A barra invertida encerra a autoridade: o host efetivo é example.org.
+        self.body('<iframe src="https://example.org\\@www.youtube.com/embed/x"></iframe>')
+        self.assertTrue(any("conteúdo ativo" in p and "iframe" in p for p in self.problems()))
+
+    def test_fails_closed_without_node(self):
+        old = os.environ.get("CHECK_SITE_NODE")
+        os.environ["CHECK_SITE_NODE"] = "/nao/existe/node"
+        try:
+            with self.assertRaises(C.ResolverError):
+                self.problems()
+        finally:
+            if old is None:
+                del os.environ["CHECK_SITE_NODE"]
+            else:
+                os.environ["CHECK_SITE_NODE"] = old
+
+    def test_video_poster_must_exist(self):
+        self.body('<video controls poster="/blog/img/um-post/nao-existe.webp"></video>')
+        self.assertTrue(any("nao-existe.webp" in p for p in self.problems()))
+        self.body('<video controls poster="/blog/img/um-post/a.webp"></video>')
+        self.assertEqual(self.problems(), [])
+
+    def test_blog_only_publishes_html_xml_and_listed_media(self):
+        for name in ("blog/app.js", "blog/x.css", "blog/img/um-post/d.svg", "blog/img/um-post/f.ico", "blog/x.HTML", "blog/dados.json"):
+            self.w(name, "x")
+            self.assertTrue(any(name in p and "fora da lista" in p for p in self.problems()), name)
+            (self.site / name).unlink()
+        for name in ("blog/img/um-post/b.png", "blog/img/um-post/c.JPG", "blog/video/v.mp4", "blog/video/v.webm"):
+            self.w(name, "x")
+            self.assertFalse(any(name in p for p in self.problems()), name)
+            (self.site / name).unlink()
 
     def test_post_body_allows_regular_markup_and_allowed_iframes(self):
         self.body('<figure><img src="/blog/img/um-post/a.webp" alt="x"><figcaption>c</figcaption></figure>'

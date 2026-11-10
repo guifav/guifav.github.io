@@ -77,6 +77,10 @@ test('sanitizeElement: remove on*, srcdoc, style fora do realce e atributos fora
   );
   assert.deepEqual(sanitizeElement('pre', { style: 'overflow-x: auto; position: fixed' }).remove, ['style']);
   assert.deepEqual(sanitizeElement('p', { style: 'overflow-x: auto' }).remove, ['style']);
+  // Nomes exatos: só os aliases do HAST e do realce; hífen não é ignorado.
+  assert.deepEqual(sanitizeElement('a', { 'h-ref': '/x', 'tar-get': '_blank', 'cl-ass': 'y', href: '/blog/' }).remove.sort(), ['cl-ass', 'h-ref', 'tar-get']);
+  assert.deepEqual(sanitizeElement('code', { className: ['c'], dataLanguage: 'py' }).remove, []);
+  assert.deepEqual(sanitizeElement('code', { 'data-lang-uage': 'py' }).remove, ['data-lang-uage']);
 });
 
 test('sanitizeElement: iframe só de host permitido e em https; URL ativa derruba img e iframe', () => {
@@ -96,10 +100,15 @@ test('sanitizeElement: iframe só de host permitido e em https; URL ativa derrub
   assert.equal(sanitizeElement('iframe', {}).action, 'reject');
   assert.equal(sanitizeElement('img', { src: 'javascript:x' }).action, 'reject');
   assert.equal(sanitizeElement('source', { src: 'javascript:x' }).action, 'reject');
-  assert.equal(sanitizeElement('video', { poster: 'javascript:x' }).remove.includes('poster'), true);
-  assert.equal(sanitizeElement('img', { src: '/a.webp', srcSet: '/a.webp 1x, javascript:x 2x' }).remove.includes('srcSet'), true);
+  assert.equal(sanitizeElement('video', { poster: 'javascript:x' }).action, 'reject');
+  // srcset com URL ativa em img ou source falha o build, como src (nada some em silêncio).
+  assert.equal(sanitizeElement('img', { src: '/a.webp', srcSet: '/a.webp 1x, javascript:x 2x' }).action, 'reject');
+  assert.equal(sanitizeElement('source', { srcSet: 'data:image/svg+xml,x 1x', type: 'image/svg+xml' }).action, 'reject');
+  // video com src: o vídeo local passa; com esquema ativo, falha o build.
+  assert.deepEqual(sanitizeElement('video', { src: '/blog/video/v.mp4', controls: true }), { action: 'keep', remove: [], set: {} });
+  assert.equal(sanitizeElement('video', { src: 'javascript:x' }).action, 'reject');
   // URL de CDN com vírgula e parâmetro "chave:valor" é uma URL https só (regra do HTML): o srcset fica.
-  assert.deepEqual(sanitizeElement('img', { src: '/a.webp', srcSet: 'https://cdn.example/fetch/w_728,dpr:2/x.png 728w, /a.webp 1456w' }).remove, []);
+  assert.deepEqual(sanitizeElement('img', { src: '/a.webp', srcSet: 'https://cdn.example/fetch/w_728,dpr:2/x.png 728w, /a.webp 1456w' }), { action: 'keep', remove: [], set: {} });
   assert.deepEqual(sanitizeElement('a', { href: 'javascript:x' }).remove, ['href']);
 });
 
@@ -144,6 +153,13 @@ test('plugin: nó raw (HTML não interpretado) também falha o build', () => {
   assert.throws(() => plugin.after({}, ctx), /um-post\.md.*HTML cru não interpretado/);
   plugin.before({}, ctx);
   assert.doesNotThrow(() => plugin.after({}, ctx));
+});
+
+test('render: video com src local passa; srcset ativo falha o build', async () => {
+  const html = await render('<video src="/blog/video/review.mp4" controls preload="none"></video>\n');
+  assert.ok(html.includes('<video src="/blog/video/review.mp4" controls preload="none"></video>'), html);
+  await rejects('<img src="/blog/img/x/a.webp" srcset="javascript:alert(1) 1x, /blog/img/x/b.webp 2x" alt="x">\n', '<img>');
+  await rejects('<picture><source srcset="data:image/svg+xml,x 1x" type="image/svg+xml"><img src="/blog/img/x/a.webp" alt="x"></picture>\n', '<source>');
 });
 
 test('render: vídeo local da #19 passa com os atributos permitidos', async () => {
