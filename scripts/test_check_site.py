@@ -307,6 +307,12 @@ class CheckTest(Base):
         self.w("blog/sitemap.xml", SITEMAP.format("<url><loc>https://outro.dev/blog/um-post/</loc></url>"))
         self.assertTrue(any("outro.dev" in p for p in self.problems()))
 
+    def test_sitemap_loc_must_be_https_and_under_blog(self):
+        # Página que existe no site, mas fora do blog, e URL do blog em http: as duas são erro.
+        for loc in ("https://guifav.dev/portfolio/", "http://guifav.dev/blog/um-post/"):
+            self.w("blog/sitemap.xml", SITEMAP.format(f"<url><loc>{loc}</loc></url>"))
+            self.assertTrue(any("fora do blog" in p and loc in p for p in self.problems()), loc)
+
     def test_every_post_needs_a_published_page(self):
         (self.posts / "outro.md").write_text("---\ntitle: y\nslug: outro\n---\n", encoding="utf-8")
         self.assertTrue(any("sem página publicada" in p and "outro" in p for p in self.problems()))
