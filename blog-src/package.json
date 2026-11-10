@@ -1,0 +1,19 @@
+{
+  "name": "guifav-blog",
+  "private": true,
+  "type": "module",
+  "description": "Blog em guifav.dev/blog (épico #16). Gerado pelo Astro e publicado pelo workflow do Pages.",
+  "engines": {
+    "node": ">=22.23.4"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "test": "node --test 'tests/*.test.ts'"
+  },
+  "dependencies": {
+    "@astrojs/rss": "4.0.19",
+    "astro": "7.4.8"
+  }
+}

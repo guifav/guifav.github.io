@@ -1,0 +1,68 @@
+/* Leitura do blog. O resto (cores, nav, rodapé, tema) vem de /assets/site.css. */
+
+.blog-head{padding:56px 0 32px}
+.blog-head h1{font-size:40px;font-weight:800;letter-spacing:-1.4px;line-height:1.15;margin-bottom:12px}
+.blog-head .subtitle{font-size:17px;color:var(--text-secondary);max-width:680px}
+
+.post-list{list-style:none;border-top:1px solid var(--border)}
+.post-item{border-bottom:1px solid var(--border)}
+.post-item a{display:block;padding:22px 0;text-decoration:none;color:inherit}
+.post-item h2{font-size:20px;font-weight:700;letter-spacing:-.4px;line-height:1.3;margin-bottom:6px}
+.post-item a:hover h2{color:var(--hl-text)}
+.post-item-sub{font-size:15px;color:var(--text-secondary);line-height:1.6;margin-bottom:8px;max-width:720px}
+.post-item-meta{font-size:13px;color:var(--text-secondary);display:flex;gap:10px;align-items:center}
+.post-item-meta .pill{margin:0}
+
+.pager{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:28px 0 48px;font-size:14px}
+.pager a{color:var(--text);font-weight:600;text-decoration:none}
+.pager a:hover{color:var(--hl)}
+.pager-count{color:var(--text-secondary);font-size:13px}
+
+.post{max-width:720px;margin:0 auto;padding:48px 0 56px}
+.post-crumb{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:14px}
+.post-crumb a{color:var(--hl-text);text-decoration:none}
+.post-head h1{font-size:38px;font-weight:800;letter-spacing:-1.2px;line-height:1.15;margin-bottom:14px}
+.post-sub{font-size:19px;color:var(--text-secondary);line-height:1.55;margin-bottom:16px}
+.post-meta{font-size:13.5px;color:var(--text-secondary);margin-bottom:28px}
+.post-cover{width:100%;border-radius:10px;border:1px solid var(--border);margin-bottom:32px}
+.podcast-embed{margin:0 0 28px}
+.podcast-embed iframe{width:100%;border:0;border-radius:12px;display:block}
+.podcast-link{margin:0 0 28px;font-weight:600}
+.podcast-link a{color:var(--hl-text)}
+
+.post-body{font-size:17px;line-height:1.75;color:var(--text);overflow-wrap:break-word}
+.post-body>*+*{margin-top:1.15em}
+.post-body h2{font-size:26px;font-weight:750;letter-spacing:-.6px;line-height:1.25;margin-top:1.8em}
+.post-body h3{font-size:21px;font-weight:700;letter-spacing:-.3px;line-height:1.3;margin-top:1.6em}
+.post-body h4{font-size:18px;font-weight:700;margin-top:1.4em}
+.post-body a{color:var(--hl-text);text-decoration:underline;text-underline-offset:2px}
+.post-body a:hover{color:var(--hl)}
+.post-body ul,.post-body ol{padding-left:1.4em}
+.post-body li+li{margin-top:.35em}
+.post-body blockquote{border-left:3px solid var(--hl);padding:2px 0 2px 18px;color:var(--text-secondary)}
+.post-body hr{border:0;border-top:1px solid var(--border);margin:2.2em 0}
+.post-body img{border-radius:8px}
+.post-body figure{margin:1.8em 0}
+.post-body figcaption{font-size:14px;color:var(--text-secondary);text-align:center;margin-top:10px;line-height:1.5}
+.post-body table{width:100%;border-collapse:collapse;font-size:15px;display:block;overflow-x:auto}
+.post-body th,.post-body td{border:1px solid var(--border);padding:8px 12px;text-align:left;vertical-align:top}
+.post-body th{background:var(--tag-bg);font-weight:650}
+.post-body :not(pre)>code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.88em;background:var(--tag-bg);padding:.12em .38em;border-radius:5px}
+.post-body pre{font-size:14px;line-height:1.6;padding:16px 18px;border-radius:10px;border:1px solid var(--border);overflow-x:auto}
+.post-body pre code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.post-body .video{position:relative;aspect-ratio:16/9}
+.post-body .video iframe{position:absolute;inset:0;width:100%;height:100%;border:0;border-radius:10px}
+
+/* Realce de código com duas paletas (shiki com defaultColor:false). */
+.astro-code,.astro-code span{color:var(--shiki-light);background-color:var(--shiki-light-bg)}
+[data-theme="dark"] .astro-code,[data-theme="dark"] .astro-code span{color:var(--shiki-dark);background-color:var(--shiki-dark-bg)}
+
+@media(max-width:700px){
+  .blog-head{padding:40px 0 24px}
+  .blog-head h1{font-size:30px}
+  .post{padding:32px 0 40px}
+  .post-head h1{font-size:29px}
+  .post-sub{font-size:17px}
+  .post-body{font-size:16.5px}
+  .post-body h2{font-size:22px}
+}

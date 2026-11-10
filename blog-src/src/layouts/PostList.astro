@@ -1,0 +1,45 @@
+---
+// Lista paginada de posts, usada pela raiz do blog e por /blog/pagina/N/.
+import Base from './Base.astro';
+import { BLOG_DESCRIPTION, BLOG_NAME, AUTHOR_NAME } from '../consts';
+import { formatDate, pagePath, postPath } from '../lib/blog';
+import type { Post } from '../lib/posts';
+
+interface Props {
+  posts: Post[];
+  page: number;
+  pages: number;
+}
+
+const { posts, page, pages } = Astro.props;
+const base = import.meta.env.BASE_URL;
+const title = page === 1 ? `${BLOG_NAME} | ${AUTHOR_NAME}` : `${BLOG_NAME}, página ${page} | ${AUTHOR_NAME}`;
+---
+<Base title={title} description={BLOG_DESCRIPTION}>
+  <header class="blog-head">
+    <div class="eyebrow">{BLOG_NAME}</div>
+    <h1>Artigos</h1>
+    <p class="subtitle">{BLOG_DESCRIPTION}</p>
+  </header>
+  <ol class="post-list">
+    {posts.map((p) => (
+      <li class="post-item">
+        <a href={postPath(base, p.id)}>
+          <h2>{p.data.title}</h2>
+          {p.data.subtitle && <p class="post-item-sub">{p.data.subtitle}</p>}
+          <p class="post-item-meta">
+            <time datetime={p.data.date.toISOString()}>{formatDate(p.data.date)}</time>
+            {p.data.type === 'podcast' && <span class="pill">Podcast</span>}
+          </p>
+        </a>
+      </li>
+    ))}
+  </ol>
+  {pages > 1 && (
+    <nav class="pager" aria-label="Paginação">
+      {page > 1 ? <a href={pagePath(base, page - 1)} rel="prev">&larr; Mais recentes</a> : <span />}
+      <span class="pager-count">Página {page} de {pages}</span>
+      {page < pages ? <a href={pagePath(base, page + 1)} rel="next">Mais antigos &rarr;</a> : <span />}
+    </nav>
+  )}
+</Base>

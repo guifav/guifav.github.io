@@ -1,0 +1,100 @@
+---
+// Leiaute de todas as páginas do blog: cabeçalho e rodapé iguais aos do site.
+import '../styles/blog.css';
+import { AUTHOR_NAME, GA4_ID, PRE_CUTOVER_NOINDEX } from '../consts';
+import { robotsContent, absoluteUrl, jsonLdScript, withBase } from '../lib/blog';
+
+interface Props {
+  title: string;
+  description: string;
+  index?: boolean;
+  image?: string;
+  ogType?: 'website' | 'article';
+  jsonLd?: Record<string, unknown>;
+}
+
+const { title, description, index = true, image, ogType = 'website', jsonLd } = Astro.props;
+const site = Astro.site!.href;
+const canonical = absoluteUrl(site, Astro.url.pathname);
+const ogImage = image ?? absoluteUrl(site, '/og-image.png');
+const robots = robotsContent(index, PRE_CUTOVER_NOINDEX);
+const base = import.meta.env.BASE_URL;
+---
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{title}</title>
+  <meta name="description" content={description} />
+  <meta name="author" content={AUTHOR_NAME} />
+  <meta name="robots" content={robots} />
+  <link rel="canonical" href={canonical} />
+  <meta property="og:type" content={ogType} />
+  <meta property="og:title" content={title} />
+  <meta property="og:description" content={description} />
+  <meta property="og:url" content={canonical} />
+  <meta property="og:image" content={ogImage} />
+  <meta property="og:locale" content="pt_BR" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content={title} />
+  <meta name="twitter:description" content={description} />
+  <meta name="twitter:image" content={ogImage} />
+  <link rel="alternate" type="application/rss+xml" title="Blog de Guilherme Favaron" href={withBase(base, 'rss.xml')} />
+  <link rel="stylesheet" href="/assets/site.css" />
+  <link rel="icon" href="/favicon.ico" sizes="any" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <script is:inline async src={`https://www.googletagmanager.com/gtag/js?id=${GA4_ID}`}></script>
+  <script is:inline define:vars={{ GA4_ID }}>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){ dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', GA4_ID);
+  </script>
+  {jsonLd && <script type="application/ld+json" set:html={jsonLdScript(jsonLd)} />}
+</head>
+<body>
+  <script is:inline>
+    // Mesmo tema do site (chave "theme" no localStorage), aplicado antes de pintar.
+    (function () {
+      var t = null;
+      try { t = localStorage.getItem('theme'); } catch (e) {}
+      var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+      document.body.setAttribute('data-theme', t || (dark ? 'dark' : 'light'));
+    })();
+  </script>
+  <div class="container">
+    <nav>
+      <a href="/" class="nav-name">Guilherme Favaron</a>
+      <div class="nav-links">
+        <a href="/portfolio/">Portfólio</a>
+        <a href={base} aria-current="page">Blog</a>
+        <a href="mailto:contact@guifav.dev" class="nav-hide-sm">Contato</a>
+        <a href="https://calendar.app.google/VyG67Nq5p6zsstAt8" target="_blank" rel="noopener" class="nav-cta">Agende um horário</a>
+        <button id="theme-toggle" class="nav-btn" type="button" aria-label="Alternar tema">&#9790;</button>
+      </div>
+    </nav>
+    <main>
+      <slot />
+    </main>
+    <footer><p><a href="https://github.com/guifav" target="_blank" rel="noopener">GitHub</a> &middot; <a href="https://linkedin.com/in/guilhermefavaron" target="_blank" rel="noopener">LinkedIn</a> &middot; <a href="https://huggingface.co/guifav" target="_blank" rel="noopener">Hugging Face</a> &middot; <a href="https://youtube.com/@ia-aplicada-guilhermefavaron" target="_blank" rel="noopener">YouTube</a> &middot; <a href="mailto:contact@guifav.dev">Contato</a> &middot; <a href="https://guilhermefavaron.com.br" target="_blank" rel="noopener">Newsletter</a></p></footer>
+  </div>
+  <script is:inline>
+    (function () {
+      var tt = document.getElementById('theme-toggle');
+      function paint(t) {
+        tt.textContent = t === 'dark' ? '\u2600' : '\u263E';
+        tt.setAttribute('aria-label', t === 'dark' ? 'Usar tema claro' : 'Usar tema escuro');
+      }
+      paint(document.body.getAttribute('data-theme'));
+      tt.addEventListener('click', function () {
+        var next = document.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+        document.body.setAttribute('data-theme', next);
+        paint(next);
+        try { localStorage.setItem('theme', next); } catch (e) {}
+      });
+    })();
+  </script>
+</body>
+</html>

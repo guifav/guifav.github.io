@@ -1,0 +1,19 @@
+# O que o GitHub Pages publica da raiz do repo (épico #16, issue #17).
+# Uma entrada por linha; pasta termina com "/". O que não está aqui não vai ao ar.
+# O blog é gerado em blog-src/ e publicado em /blog/ pelo scripts/assemble_site.py.
+# Fora do site por decisão do Gui (2026-11-10): docs/, _next/ e tools/.
+index.html
+404.html
+CNAME
+.nojekyll
+robots.txt
+sitemap.xml
+favicon.ico
+favicon.svg
+apple-touch-icon.png
+og-image.png
+og-image.svg
+assets/
+portfolio/
+llm-ranking/
+seo-geo-aeo-framework/

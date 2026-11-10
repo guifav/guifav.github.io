@@ -1,0 +1,22 @@
+---
+// Páginas 2 em diante da lista. A página 1 é a raiz do blog (index.astro).
+import PostList from '../../layouts/PostList.astro';
+import { POSTS_PER_PAGE } from '../../consts';
+import { pageCount } from '../../lib/blog';
+import { sortedPosts } from '../../lib/posts';
+
+export async function getStaticPaths() {
+  const all = await sortedPosts();
+  const pages = pageCount(all.length, POSTS_PER_PAGE);
+  return Array.from({ length: pages - 1 }, (_, i) => {
+    const page = i + 2;
+    return {
+      params: { page: String(page) },
+      props: { posts: all.slice((page - 1) * POSTS_PER_PAGE, page * POSTS_PER_PAGE), page, pages },
+    };
+  });
+}
+
+const { posts, page, pages } = Astro.props;
+---
+<PostList posts={posts} page={page} pages={pages} />
