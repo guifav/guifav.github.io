@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -71,9 +72,13 @@ def run(base: str, local: bool) -> list[str]:
         print(f"{'ok ' if ok else 'ERRO'} {path}: HTTP {code}{'' if local else ', corpo = 404.html novo' if body == not_found else ', corpo diferente do 404.html'}")
         if not ok:
             fails.append(path)
+    # Robots do blog conforme PRE_CUTOVER_NOINDEX: noindex antes do cutover, indexável depois.
+    pre = re.search(r"export const PRE_CUTOVER_NOINDEX\s*=\s*(true|false)\s*;",
+                    (REPO / "blog-src/src/consts.ts").read_text(encoding="utf-8")).group(1) == "true"
+    want_robots = b'name="robots" content="noindex' if pre else b'name="robots" content="index, follow"'
     code, body, _ = fetch(base + "/blog/")
-    ok = code == 200 and b'name="robots" content="noindex' in body
-    print(f"{'ok ' if ok else 'ERRO'} /blog/: HTTP {code}, noindex {'presente' if ok else 'ausente'}")
+    ok = code == 200 and want_robots in body
+    print(f"{'ok ' if ok else 'ERRO'} /blog/: HTTP {code}, robots {'noindex' if pre else 'index, follow'} {'presente' if ok else 'ausente'}")
     if not ok:
         fails.append("/blog/")
     if not local:
