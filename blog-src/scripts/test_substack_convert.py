@@ -37,8 +37,10 @@ class TextTest(unittest.TestCase):
 
     def test_bare_domains_do_not_autolink(self):
         # O texto corrido com "www." ou "https://" não pode virar link (G3).
+        # O Satteri detecta o autolink depois de resolver escapes e entidades; só um comentário HTML
+        # vazio quebra a sequência sem mudar o texto visível.
         md, _ = conv("<p>acesse: www.guilhermefavaron.com.br ou https://exemplo.com/x e fim</p>")
-        self.assertEqual(md, "acesse: www\\.guilhermefavaron.com.br ou https\\://exemplo.com/x e fim\n")
+        self.assertEqual(md, "acesse: www<!---->.guilhermefavaron.com.br ou https<!---->://exemplo.com/x e fim\n")
 
     def test_whitespace_is_collapsed_and_nbsp_kept(self):
         md, _ = conv("<p>  um\n   dois\u00a0três  </p>")
@@ -154,7 +156,7 @@ class BlockTest(unittest.TestCase):
 
     def test_email_in_text_does_not_autolink(self):
         md, _ = conv("<p>escreva para a@b.org</p>")
-        self.assertEqual(md, "escreva para a\\@b.org\n")
+        self.assertEqual(md, "escreva para a<!---->\\@b.org\n")
 
     def test_list_item_with_two_paragraphs(self):
         md, _ = conv("<ol><li><p>a</p><p>b</p></li></ol>")

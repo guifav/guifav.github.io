@@ -150,11 +150,17 @@ WS = re.compile(r"[ \t\n\r\f]+")  # espaço do HTML; o nbsp fica
 MD_ESCAPE = set("\\`*_[]<>&~|@")
 
 
+# Autolink do GFM: "www.", "http(s)://" e email em texto corrido virariam link (G3). O Satteri
+# detecta o autolink depois de resolver escapes e entidades; só um comentário HTML vazio quebra a
+# sequência, sem mudar o texto visível.
+BREAK = "<!---->"
+
+
 def esc(text: str) -> str:
     out = "".join("\\" + ch if ch in MD_ESCAPE else ch for ch in text)
-    # Autolink do GFM: "www." e "http(s)://" em texto corrido virariam link.
-    out = re.sub(r"(?i)\b(www)\.", r"\1\\.", out)
-    out = re.sub(r"(?i)\b(https?):", r"\1\\:", out)
+    out = re.sub(r"(?i)\b(www)\.", r"\1" + BREAK + ".", out)
+    out = re.sub(r"(?i)\b(https?):", r"\1" + BREAK + ":", out)
+    out = re.sub(r"(?<=[\w.+-])\\@(?=[\w-])", BREAK + r"\\@", out)
     return out
 
 

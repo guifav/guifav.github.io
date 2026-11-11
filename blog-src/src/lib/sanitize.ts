@@ -12,7 +12,9 @@
 // - REMOVE atributos fora da lista por tag (on*, srcdoc, style que não seja do realce, data-*),
 //   URLs com esquema ativo e comentários. Isso não perde conteúdo.
 
-export const MARKDOWN_FEATURES = { rawHtml: true } as const;
+// smartPunctuation desligado: o Satteri troca "..." por … e aspas retas por curvas, o que altera o
+// texto dos posts importados (#19, garantia G2).
+export const MARKDOWN_FEATURES = { rawHtml: true, smartPunctuation: false } as const;
 
 // Nomes comparados em minúsculas, com hífen preservado (h-ref não é href). Os únicos aliases são
 // os do HAST e do realce de código, que entregam className ou class, dataLanguage ou data-language.

@@ -49,7 +49,6 @@ const ld = blogPostingLd({
         )}
       </p>
     </header>
-    {coverPath && <img class="post-cover" src={coverPath} alt="" decoding="async" />}
     {d.type === 'podcast' && embed && (
       <div class="podcast-embed">
         <iframe src={embed} title={`Episódio: ${d.title}`} height="102" loading="lazy" allow="encrypted-media" referrerpolicy="strict-origin-when-cross-origin"></iframe>
