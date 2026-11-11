@@ -106,6 +106,36 @@ async function subscribe(req: Request, env: Env, deps: Deps): Promise<Response> 
 async function confirm(url: URL, env: Env, deps: Deps): Promise<Response> {
   const email = await verifyLink(url.searchParams, env.CONFIRM_SECRET, deps.now());
   if (!email) return redirect(`${env.BLOG_URL}/inscricao-invalida/`);
+  // Falha de rede ou resposta que não é JSON também é falha temporária (A5): 502, nunca exceção.
+  try {
+    return await enroll(email, env, deps);
+  } catch {
+    return plain(502, 'falha temporária; tente o link de novo em alguns minutos');
+  }
+}
+
+// Páginas de 100 (o máximo do Resend); o teto evita laço sem fim se a API repetir o cursor.
+const SEGMENT_PAGE = 100;
+const SEGMENT_MAX_PAGES = 20;
+
+async function inSegment(id: string, env: Env, deps: Deps, headers: Record<string, string>): Promise<boolean | null> {
+  let after = '';
+  for (let i = 0; i < SEGMENT_MAX_PAGES; i++) {
+    const q = new URLSearchParams({ limit: String(SEGMENT_PAGE) });
+    if (after) q.set('after', after);
+    const res = await deps.fetch(`${RESEND}/contacts/${encodeURIComponent(id)}/segments?${q}`, { headers });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { data?: Array<{ id?: unknown }>; has_more?: unknown };
+    if (!Array.isArray(body.data)) return null;
+    if (body.data.some((x) => x?.id === env.SEGMENT_ID)) return true;
+    const last = body.data.at(-1)?.id;
+    if (body.has_more !== true || typeof last !== 'string' || !last || last === after) return false;
+    after = last;
+  }
+  return null;
+}
+
+async function enroll(email: string, env: Env, deps: Deps): Promise<Response> {
   const headers = { authorization: `Bearer ${env.RESEND_API_KEY}`, 'content-type': 'application/json' };
   const done = redirect(`${env.BLOG_URL}/inscricao-confirmada/`);
 
@@ -129,10 +159,7 @@ async function confirm(url: URL, env: Env, deps: Deps): Promise<Response> {
   if (!upd.ok) return retry;
   const seg = await deps.fetch(`${RESEND}/contacts/${encodeURIComponent(id)}/segments/${env.SEGMENT_ID}`, { method: 'POST', headers });
   if (seg.ok) return done;
-  const list = await deps.fetch(`${RESEND}/contacts/${encodeURIComponent(id)}/segments`, { headers });
-  if (!list.ok) return retry;
-  const data = ((await list.json()) as { data?: Array<{ id?: unknown }> }).data;
-  return Array.isArray(data) && data.some((x) => x?.id === env.SEGMENT_ID) ? done : retry;
+  return (await inSegment(id, env, deps, headers)) === true ? done : retry;
 }
 
 export async function handle(req: Request, env: Env, deps: Deps): Promise<Response> {

@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import newsletter_draft as N  # noqa: E402
 
 SEG = "seg-blog"
-CFG = N.Config(api_key="re_teste", segment_id=SEG, sender="IA Aplicada <newsletter@expert.guifav.dev>",
+CFG = N.Config(api_key="re_teste", segment_id=SEG, sender="IA Aplicada <insights@expert.guifav.dev>",
                reply_to="contact@guifav.dev")
 
 
@@ -118,6 +118,7 @@ class ConvertTest(unittest.TestCase):
         self.assertIn('href="https://www.youtube.com/watch?v=abcDEF12345"', html)
         self.assertIn('href="https://open.spotify.com/episode/XYZ123"', html)
         self.assertIn("https://www.youtube.com/watch?v=abcDEF12345", text)
+        self.assertIn("https://open.spotify.com/episode/XYZ123", text)
 
     def test_unknown_iframe_host_fails(self):
         with self.assertRaises(N.DraftError):
@@ -176,7 +177,7 @@ class EnvelopeTest(unittest.TestCase):
         html, text = conv("<p>Corpo.</p>")
         for s in ("Um post", "Subtítulo do post", "https://guifav.dev/blog/img/um-post/capa.jpg",
                   "Ler no site", 'href="https://guifav.dev/blog/um-post/"', "{{{RESEND_UNSUBSCRIBE_URL}}}",
-                  'href="https://guifav.dev/blog/privacidade/"'):
+                  'href="https://guifav.dev/blog/privacidade/"', "Você recebe este email porque assinou"):
             self.assertIn(s, html)
         for s in ("Um post", "Corpo.", "https://guifav.dev/blog/um-post/", "{{{RESEND_UNSUBSCRIBE_URL}}}"):
             self.assertIn(s, text)
@@ -243,7 +244,7 @@ class DraftTest(unittest.TestCase):
         body = f.calls[1][2]
         self.assertEqual(set(body), {"segment_id", "from", "reply_to", "subject", "html", "text", "name"})
         self.assertEqual(body["segment_id"], SEG)
-        self.assertEqual(body["from"], "IA Aplicada <newsletter@expert.guifav.dev>")
+        self.assertEqual(body["from"], "IA Aplicada <insights@expert.guifav.dev>")
         self.assertEqual(body["reply_to"], "contact@guifav.dev")
         self.assertEqual(body["subject"], "Um post")
         self.assertEqual(body["name"], "blog/um-post")
@@ -284,6 +285,7 @@ class DraftTest(unittest.TestCase):
         for method, path, body in (("POST", "/broadcasts/b1/send", None), ("POST", "/emails", {"to": "x"}),
                                    ("POST", "/broadcasts", {"send": True}), ("POST", "/broadcasts", {"send": False}),
                                    ("PATCH", "/broadcasts/b1", {"scheduled_at": "in 1 hour"}),
+                                   ("POST", "/broadcasts", {"scheduled_at": "in 1 hour"}),
                                    ("DELETE", "/broadcasts/b1", None), ("GET", "/broadcasts/b1/send", None)):
             with self.assertRaises(N.DraftError, msg=(method, path)):
                 api.request(method, path, body)
@@ -302,13 +304,13 @@ class ConfigTest(unittest.TestCase):
         with self.assertRaises(N.DraftError):
             N.Config.from_env({"RESEND_API_KEY": "k"})
         c = N.Config.from_env({"RESEND_API_KEY": "k", "NEWSLETTER_SEGMENT_ID": "s"})
-        self.assertEqual(c.sender, "IA Aplicada <newsletter@expert.guifav.dev>")
+        self.assertEqual(c.sender, "IA Aplicada <insights@expert.guifav.dev>")
         self.assertEqual(c.reply_to, "contact@guifav.dev")
 
     def test_sender_must_be_on_expert_subdomain(self):
         with self.assertRaises(N.DraftError):
             N.Config.from_env({"RESEND_API_KEY": "k", "NEWSLETTER_SEGMENT_ID": "s",
-                               "NEWSLETTER_FROM": "IA Aplicada <newsletter@guifav.dev>"})
+                               "NEWSLETTER_FROM": "IA Aplicada <insights@guifav.dev>"})
 
 
 
@@ -502,12 +504,12 @@ class Round2Test(unittest.TestCase):
 
     def test_sender_must_be_a_single_address_on_the_exact_domain(self):
         base = {"RESEND_API_KEY": "k", "NEWSLETTER_SEGMENT_ID": "s"}
-        for ok in ("IA Aplicada <newsletter@expert.guifav.dev>", "newsletter@expert.guifav.dev",
+        for ok in ("IA Aplicada <insights@expert.guifav.dev>", "insights@expert.guifav.dev",
                    "Guilherme Favaron <gui.f+blog@expert.guifav.dev>"):
             self.assertEqual(N.Config.from_env({**base, "NEWSLETTER_FROM": ok}).sender, ok)
-        for bad in ("IA <newsletter@expert.guifav.dev>\n", "newsletter@guifav.dev\nBcc: destino@expert.guifav.dev",
-                    "a@guifav.dev, b@expert.guifav.dev", "IA <newsletter@expert.guifav.dev.evil>",
-                    "IA <newsletter@guifav.dev> expert.guifav.dev", "newsletter@sub.expert.guifav.dev",
+        for bad in ("IA <insights@expert.guifav.dev>\n", "insights@guifav.dev\nBcc: destino@expert.guifav.dev",
+                    "a@guifav.dev, b@expert.guifav.dev", "IA <insights@expert.guifav.dev.evil>",
+                    "IA <insights@guifav.dev> expert.guifav.dev", "insights@sub.expert.guifav.dev",
                     "IA <a@expert.guifav.dev", "x <a@b> <c@expert.guifav.dev>", "IA\r\n <a@expert.guifav.dev>"):
             with self.assertRaises(N.DraftError, msg=repr(bad)):
                 N.Config.from_env({**base, "NEWSLETTER_FROM": bad})

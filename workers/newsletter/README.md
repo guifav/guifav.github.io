@@ -31,10 +31,10 @@ O deploy é manual, depois do merge, e não está no CI. O DNS de `guifav.dev` s
    npx wrangler@4 secret put TURNSTILE_SECRET
    npx wrangler@4 secret put CONFIRM_SECRET     # openssl rand -base64 48
    ```
-4. **Publicação:** `npx wrangler@4 deploy`. A rota `newsletter.guifav.dev` é um domínio próprio do Worker, e o Cloudflare cria o registro DNS do subdomínio.
-5. **Teste real** com um email do Gui: inscrição, email recebido de `newsletter@guifav.dev`, clique no link, contato no segmento. Confirmação repetida não duplica.
+4. **Publicação:** `npx wrangler@4 deploy`. A rota `insights.guifav.dev` é um domínio próprio do Worker, e o Cloudflare cria o registro DNS do subdomínio.
+5. **Teste real** com um email do Gui: inscrição, email recebido de `insights@guifav.dev`, clique no link, contato no segmento. Confirmação repetida não duplica.
 6. **Ligar o formulário** em um PR pequeno: `NEWSLETTER_FORM_ENABLED = true` e a chave pública do Turnstile em `blog-src/src/consts.ts`.
 
 ## Remetente
 
-A confirmação sai de `newsletter@guifav.dev`. Esse domínio está verificado no Resend e com rastreamento de abertura e clique desligado, então o link chega sem redirecionamento. A newsletter (parte B) usa `expert.guifav.dev`, com rastreamento ligado.
+A confirmação sai de `insights@guifav.dev`. Esse domínio está verificado no Resend e com rastreamento de abertura e clique desligado, então o link chega sem redirecionamento. A newsletter (parte B) usa `expert.guifav.dev`, com rastreamento ligado.

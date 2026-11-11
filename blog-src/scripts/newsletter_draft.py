@@ -37,7 +37,7 @@ from html.parser import HTMLParser
 SITE = "https://guifav.dev"
 BLOG = SITE + "/blog"
 RESEND = "https://api.resend.com"
-DEFAULT_FROM = "IA Aplicada <newsletter@expert.guifav.dev>"
+DEFAULT_FROM = "IA Aplicada <insights@expert.guifav.dev>"
 DEFAULT_REPLY_TO = "contact@guifav.dev"
 SENDER_DOMAIN = "expert.guifav.dev"
 _ADDR = r"[A-Za-z0-9._%+-]+@" + re.escape(SENDER_DOMAIN)

@@ -47,7 +47,7 @@ FORBIDDEN_TAGS = {"object", "embed", "applet", "base", "frame", "frameset"}
 # O único formulário do blog é o de inscrição da newsletter (#21), que vem do template: marcado com
 # data-site-form, POST e com destino no Worker. Fora disso, e dentro do conteúdo do post, é alarme.
 SITE_FORM_ATTR = "data-site-form"
-SITE_FORM_ACTIONS = {"https://newsletter.guifav.dev/subscribe"}
+SITE_FORM_ACTIONS = {"https://insights.guifav.dev/subscribe"}
 # Páginas da newsletter (#21): noindex e fora do sitemap sempre, também depois do cutover (A10).
 BLOG_PRIVATE_PAGES = frozenset({"assinar", "inscricao-enviada", "inscricao-confirmada", "inscricao-invalida", "privacidade"})
 IFRAME_HOSTS = {
