@@ -27,3 +27,8 @@ test('astro.config: sem pontuação tipográfica, o texto dos posts sai como foi
   const { html } = await markdownToHtml('ele disse "sim"... e -- depois', { features: processor.options.features });
   assert.equal(html.trim(), '<p>ele disse "sim"... e -- depois</p>');
 });
+
+test('astro.config: CSS sempre embutido no HTML (contrato: sob /blog/ só .html, .xml e mídia)', () => {
+  // Sem isto, o Astro passa a gerar /blog/_astro/*.css quando a folha cresce além do limite de inline.
+  assert.equal(config.build?.inlineStylesheets, 'always');
+});
