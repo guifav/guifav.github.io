@@ -18,12 +18,12 @@ A pornografia gerada por inteligência artificial está transformando drasticame
 
 ## Índice
 
-1. [O que é Pornografia Gerada por IA?](/blog/pornografia-ia-riscos-perigos-saude-mental-2024/)
-2. [Por que é Mais Perigosa que a Pornografia Tradicional?](/blog/pornografia-ia-riscos-perigos-saude-mental-2024/)
-3. [Impactos na Saúde Mental](/blog/pornografia-ia-riscos-perigos-saude-mental-2024/)
-4. [Riscos para Relacionamentos](/blog/pornografia-ia-riscos-perigos-saude-mental-2024/)
-5. [Perigos da Exploração e Abuso](/blog/pornografia-ia-riscos-perigos-saude-mental-2024/)
-6. [Como se Proteger](/blog/pornografia-ia-riscos-perigos-saude-mental-2024/)
+1. O que é Pornografia Gerada por IA?
+2. Por que é Mais Perigosa que a Pornografia Tradicional?
+3. Impactos na Saúde Mental
+4. Riscos para Relacionamentos
+5. Perigos da Exploração e Abuso
+6. Como se Proteger
 
 ## O que é Pornografia Gerada por IA e Como Funciona?
 

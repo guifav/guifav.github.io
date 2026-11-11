@@ -94,6 +94,17 @@ class LinkRulesTest(unittest.TestCase):
         if rule:
             self.assertEqual(ctx.stats[rule], 1, href)
 
+    def test_fragment_to_own_post_without_target_is_r5(self):
+        # Sumário da era do Wix: URL absoluta do próprio post com fragmento sem alvo (#19, rodada 5).
+        md, ctx = conv('<p><a href="https://www.guilhermefavaron.com.br/post/um-post#viewer-abc">Seção</a></p>')
+        self.assertEqual(md, "Seção\n")
+        self.assertEqual(ctx.stats["R5"], 1)
+        self.assertEqual(ctx.stats["R2"], 0)
+
+    def test_fragment_to_own_post_with_target_fails(self):
+        with self.assertRaises(C.ConvertError):
+            conv('<h2 id="viewer-abc">S</h2><p><a href="https://www.guilhermefavaron.com.br/post/um-post#viewer-abc">Seção</a></p>')
+
     def test_r1_p_slug(self):
         self.t("https://www.guilhermefavaron.com.br/p/post-existente", "/blog/post-existente/", "R1")
         self.t("https://guilhermefavaron.com.br/p/outro-post?utm_source=x#sec", "/blog/outro-post/", "R1")

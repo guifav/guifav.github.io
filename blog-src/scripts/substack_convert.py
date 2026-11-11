@@ -210,6 +210,13 @@ def rewrite(href: str, ctx: Context) -> str | None:
             ctx.unresolved.append(h)  # outro autor ou outra publicação: fica, e vai para o relatório
         return h
     m = re.fullmatch(r"/(p|post)/([^/]+)/?", u.path)
+    if m and u.fragment and unquote(m.group(2)).lower() == ctx.slug:
+        # Fragmento em URL do próprio post vale como "#fragmento": R5 se não houver alvo. Para outro post,
+        # o fragmento sai e o link vai para o topo daquele post (o Markdown não preserva os ids).
+        if u.fragment in ctx.ids:
+            raise ConvertError(f"{ctx.slug}: âncora viva {h} (o Markdown não preserva o id do alvo)")
+        ctx.stats["R5"] += 1
+        return None
     if m:
         s = unquote(m.group(2)).lower()
         if s in ctx.slugs:

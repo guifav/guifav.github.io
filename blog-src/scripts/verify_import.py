@@ -17,6 +17,7 @@ import html as H
 import hashlib
 import json
 import os
+import posixpath
 import re
 import subprocess
 import sys
@@ -24,7 +25,7 @@ import tempfile
 from collections import Counter
 from html.parser import HTMLParser
 from datetime import datetime, timedelta
-from urllib.parse import unquote, urlsplit
+from urllib.parse import unquote, urljoin, urlsplit
 
 import numpy as np
 from PIL import Image
@@ -91,6 +92,8 @@ class Extract(HTMLParser):
         self.head_texts: list[tuple[int, str]] = []
         self.captions: list[tuple[int, str]] = []  # (imagens até a legenda, texto)
         self.cap_mark: int | None = None
+        self.pre_mark: int | None = None
+        self.pre_texts: list[str] = []  # texto bruto de cada <pre>, com espaços e indentação
         self.sources = 0  # <picture>/<source>: trocariam a imagem exibida sem passar pela conferência
         self.iframe_tags: list[dict] = []
         self.pres: list = []
@@ -135,14 +138,17 @@ class Extract(HTMLParser):
                 self.ids.add(a["name"])
             if tag in ("ol", "ul"):
                 self.list_stack.append(len(self.lists))
-                self.lists.append([tag, int(a.get("start") or 1) if tag == "ol" else 1, 0])
+                self.lists.append([tag, int(a.get("start") or 1) if tag == "ol" else 1, 0, "reversed" in a, []])
             elif tag == "li" and self.list_stack:
                 self.lists[self.list_stack[-1]][2] += 1
+                if "value" in a:
+                    self.lists[self.list_stack[-1]][4].append((self.lists[self.list_stack[-1]][2], a["value"]))
             elif tag in ("h1", "h2", "h3", "h4", "h5", "h6"):
                 self.heads.append(int(tag[1]))
                 self.head_mark = len(self.text)
             elif tag == "pre":
                 self.pres.append(a.get("data-language") if self.root_class else None)
+                self.pre_mark = len(self.text)
             elif tag == "code" and self.root_class is None and self.stack and self.stack[-1][0] == "pre":
                 lang = next((c[len("language-"):] for c in cls if c.startswith("language-")), None)
                 self.pres[-1] = lang
@@ -177,6 +183,10 @@ class Extract(HTMLParser):
                         self.heads.pop()  # título vazio no original não tem conteúdo a preservar
                     else:
                         self.head_texts.append((self.heads[-1], ht))
+                if (was_active or self.active) and tag == "pre" and self.pre_mark is not None:
+                    raw = "".join(self.text[self.pre_mark:])
+                    self.pre_texts.append(raw.strip("\n").replace("\r\n", "\n"))
+                    self.pre_mark = None
                 if (was_active or self.active) and tag == "figcaption" and self.cap_mark is not None:
                     self.captions.append((len(self.imgs), " ".join("".join(self.text[self.cap_mark:]).split())))
                     self.cap_mark = None
@@ -221,8 +231,13 @@ def old_slugs(html: str) -> set:
     return out
 
 
+def url_host(h: str) -> str:
+    """Host como o navegador o resolve: percent-encoding decodificado, minúsculas, sem ponto final."""
+    return unquote(urlsplit(h.strip()).hostname or "").lower().rstrip(".")
+
+
 def is_old(h: str) -> bool:
-    host = (urlsplit(h.strip()).hostname or "").lower()
+    host = url_host(h)
     return host in SITE_HOSTS or host == "substack.com" or host.endswith(".substack.com")
 
 
@@ -366,7 +381,8 @@ def check_cover(s: str, p: dict, page: str, dist: str, cache: str, corpus: "Corp
     og = re.search(r'<meta property="og:image" content="([^"]*)"', page)
     url = f"https://guifav.dev/blog/img/{s}/capa.jpg"
     if not p.get("cover_image"):
-        bad = [x for x in ([og.group(1)] if og else []) + ld_post_images(page) if x and f"/blog/img/{s}/" in x]
+        tw = re.findall(r'<meta name="twitter:image" content="([^"]*)"', page)
+        bad = [x for x in ([og.group(1)] if og else []) + ld_post_images(page) + tw if x and f"/blog/img/{s}/" in x]
         return [f"G4 {s}: imagem da pasta do post sem capa no original: {bad}"] if bad else []
     if not og or og.group(1) != url:
         return [f"G4 {s}: og:image {og.group(1) if og else None} diferente de {url}"]
@@ -375,14 +391,19 @@ def check_cover(s: str, p: dict, page: str, dist: str, cache: str, corpus: "Corp
     if not os.path.exists(path) or not os.path.exists(orig):
         return [f"G4 {s}: capa ou original da capa ausente"]
     with Image.open(path) as im, Image.open(orig) as om:
-        if im.format != "JPEG" or im.size[0] != min(om.size[0], COVER_WIDTH):
-            return [f"G4 {s}: capa {im.format} {im.size}, esperado JPEG com largura {min(om.size[0], COVER_WIDTH)}"]
+        cw = min(om.size[0], COVER_WIDTH)
+        ch = round(om.size[1] * cw / om.size[0])
+        if im.format != "JPEG" or im.size[0] != cw or abs(im.size[1] - ch) > 1:
+            return [f"G4 {s}: capa {im.format} {im.size}, esperado JPEG {cw}x{ch} (proporção do original)"]
     why = corpus.check(path, orig)
     if why:
         return [f"G4 {s}: a capa não é a imagem do original ({why})"]
     imgs = ld_post_images(page)
     if imgs != [url]:
         return [f"G4 {s}: BlogPosting.image {imgs} diferente de [{url}]"]
+    tw = re.findall(r'<meta name="twitter:image" content="([^"]*)"', page)
+    if tw != [url]:
+        return [f"G4 {s}: twitter:image {tw} diferente de [{url}]"]
     return []
 
 
@@ -461,7 +482,7 @@ def ts(v: str) -> datetime:
     return datetime.fromisoformat(v.replace("Z", "+00:00"))
 
 
-def expected_href(h: str, slugs: set, aliases: dict, ids: frozenset = frozenset()) -> str | None:
+def expected_href(h: str, slugs: set, aliases: dict, ids: frozenset = frozenset(), own: str = "") -> str | None:
     h = h.strip()
     for prefix, new in MANUAL.items():
         if h.startswith(prefix):
@@ -470,9 +491,12 @@ def expected_href(h: str, slugs: set, aliases: dict, ids: frozenset = frozenset(
         # R5: âncora sem alvo no original sai; âncora com alvo precisa ser preservada.
         return h if unquote(h[1:]) in ids else None
     u = urlsplit(h)
-    if (u.hostname or "").lower() not in SITE_HOSTS:
+    if url_host(h) not in SITE_HOSTS:
         return h
     m = re.fullmatch(r"/(p|post)/([^/]+)/?", u.path)
+    if m and u.fragment and unquote(m.group(2)).lower() == own:
+        # Fragmento em URL do próprio post vale como "#fragmento" (R5 se não houver alvo).
+        return "#" + u.fragment if unquote(u.fragment) in ids else None
     if m:
         s = unquote(m.group(2)).lower()
         if s in slugs:
@@ -485,7 +509,27 @@ def expected_href(h: str, slugs: set, aliases: dict, ids: frozenset = frozenset(
     return h
 
 
-def original_links(ex: Extract, slugs, aliases) -> Counter:
+def link_text(t: str) -> str:
+    return " ".join(t.split())
+
+
+def original_link_pairs(ex: Extract, slugs, aliases, own: str) -> Counter:
+    """Cada link do original como (texto visível, destino esperado): trocar destinos entre dois links falha."""
+    out = Counter()
+    for href, text, is_img in ex.links:
+        if not href:
+            continue
+        if is_img and (url_host(href) in CDN_HOSTS or href == "undefined"):
+            continue
+        if subscribe_href(href) or (not is_img and text == ""):
+            continue
+        e = expected_href(href, slugs, aliases, frozenset(ex.ids), own)
+        if e is not None:
+            out[(link_text(text), e)] += 1
+    return out
+
+
+def original_links(ex: Extract, slugs, aliases, own: str = "") -> Counter:
     out = Counter()
     for href, text, is_img in ex.links:
         if not href:
@@ -496,7 +540,7 @@ def original_links(ex: Extract, slugs, aliases) -> Counter:
             continue  # botão de assinar removido
         if not is_img and text == "":
             continue
-        e = expected_href(href, slugs, aliases, frozenset(ex.ids))
+        e = expected_href(href, slugs, aliases, frozenset(ex.ids), own)
         if e is not None:
             out[e] += 1
     for s in ex.embeds:
@@ -571,10 +615,19 @@ def main(argv=None) -> int:
             i = next((k for k in range(min(len(t1), len(t2))) if t1[k] != t2[k]), min(len(t1), len(t2)))
             problems.append(f"G2 {s}: texto diverge no caractere {i}: original {t1[max(0, i - 40):i + 40]!r} | publicado {t2[max(0, i - 40):i + 40]!r}")
         # G3: links
-        o_links = original_links(orig, set(expected), aliases)
+        o_links = original_links(orig, set(expected), aliases, s)
         p_links = Counter(h for h, _, _ in pub.links)
         if o_links != p_links:
             problems.append(f"G3 {s}: links divergem: só no original {dict(o_links - p_links)}, só no publicado {dict(p_links - o_links)}")
+        else:
+            # Cada texto aponta para o mesmo destino (os cards de post embutido têm texto próprio e ficam de fora).
+            emb_targets = {f"/blog/{e}/" for e in orig.embeds}
+            o_pairs = original_link_pairs(orig, set(expected), aliases, s)
+            p_pairs = Counter((link_text(t), h) for h, t, _ in pub.links if h not in emb_targets)
+            o_pairs = Counter({k: v for k, v in o_pairs.items() if k[1] not in emb_targets})
+            if o_pairs != p_pairs:
+                problems.append(f"G3 {s}: texto e destino dos links divergem: só no original {dict(o_pairs - p_pairs)}, "
+                                f"só no publicado {dict(p_pairs - o_pairs)}")
         for h, n in o_links.items():
             if is_old(h):
                 unresolved[(s, h)] += n
@@ -606,6 +659,11 @@ def main(argv=None) -> int:
                                     "-of", "csv=p=0", video], capture_output=True, text=True, check=True).stdout.strip()
             if f"{vt.get('width')},{vt.get('height')}" != vdims:
                 problems.append(f"G4 {s}: vídeo com width/height {vt.get('width')}x{vt.get('height')}, o MP4 tem {vdims}")
+            vw, vh = (int(x) for x in vdims.split(","))
+            with Image.open(ppath) as pim:
+                pw, ph = pim.size
+            if pw != min(vw, WIDTHS[-1]) or abs(ph - round(vh * pw / vw)) > 1:
+                problems.append(f"G4 {s}: pôster {pw}x{ph} fora da proporção do vídeo {vw}x{vh}")
             # Quadro extraído aqui mesmo do MP4 fornecido (1 s), sem usar o que o importador gravou no cache.
             with tempfile.TemporaryDirectory() as td:
                 ref = os.path.join(td, "quadro.png")
@@ -615,7 +673,14 @@ def main(argv=None) -> int:
         # G2: estrutura (listas, títulos, linguagem do código). O h1 do corpo vira h2 (documentado).
         o_heads = [2 if h == 1 else h for h in orig.heads]
         if orig.lists != pub.lists:
-            problems.append(f"G2 {s}: listas (tipo, início, itens) divergem: original {orig.lists}, publicado {pub.lists}")
+            problems.append(f"G2 {s}: listas (tipo, início, itens, reversed, value) divergem: original {orig.lists}, publicado {pub.lists}")
+        if len(orig.pre_texts) == len(pub.pre_texts):
+            for k, (po, pp) in enumerate(zip(orig.pre_texts, pub.pre_texts)):
+                if po != pp:
+                    i = next((j for j in range(min(len(po), len(pp))) if po[j] != pp[j]), min(len(po), len(pp)))
+                    problems.append(f"G2 {s}: bloco de código {k + 1} diverge no caractere {i} (espaços e indentação contam): "
+                                    f"original {po[max(0, i - 30):i + 30]!r} | publicado {pp[max(0, i - 30):i + 30]!r}")
+                    break
         if o_heads != pub.heads:
             problems.append(f"G2 {s}: níveis de título divergem: original {o_heads}, publicado {pub.heads}")
         else:
@@ -635,9 +700,14 @@ def main(argv=None) -> int:
             host = (urlsplit(it.get("src", "")).hostname or "").lower()
             if it.get("loading") != "lazy" or (host.endswith("youtube.com") or "youtube" in host) and host != "www.youtube-nocookie.com":
                 problems.append(f"G4 {s}: iframe {it.get('src')} com loading {it.get('loading')!r}; esperado lazy e YouTube em www.youtube-nocookie.com")
-        for m in re.finditer(r"<img\b[^>]*>", page):
-            if f"/blog/img/{s}/capa." in m.group(0):
-                problems.append(f"G4 {s}: a capa aparece como imagem visível na página (só vale em og:image e JSON-LD)")
+        cover_path = f"/blog/img/{s}/capa.jpg"
+        page_url = f"https://guifav.dev/blog/{s}/"
+        for m in re.finditer(r"<(?:img|source|video|image|input)\b[^>]*>", page):
+            urls = re.findall(r'\s(?:src|poster|href|xlink:href)="([^"]*)"', m.group(0))
+            urls += [c.strip().split()[0] for x in re.findall(r'\ssrcset="([^"]*)"', m.group(0)) for c in x.split(",") if c.strip()]
+            # Resolvido como o navegador: URL relativa, percent-encoding e segmentos "." e "..".
+            if any(posixpath.normpath(unquote(urlsplit(urljoin(page_url, H.unescape(u))).path)) == cover_path for u in urls):
+                problems.append(f"G4 {s}: a capa aparece como mídia visível na página (só vale em og:image, twitter:image e JSON-LD)")
                 break
         p_pres = [None if x in (None, "", "plaintext", "text") else x for x in pub.pres]
         if orig.pres != p_pres:
