@@ -58,6 +58,22 @@ FOOTER_NEWSLETTER = '<a href="https://guilhermefavaron.com.br" target="_blank" r
 OLD_URL_ATTR = re.compile(r'\s(?:href|src|srcset|poster|content|action|cite)="([^"]*)"')
 
 
+# O que o conversor e o build geram dentro de div.post-body, levantado no corpus. Qualquer outro elemento, classe,
+# atributo ou estilo no publicado é conteúdo que não veio do original (ex.: wrapper que esconde o texto).
+PUB_TAGS = {"a", "blockquote", "br", "code", "div", "em", "figcaption", "figure", "h2", "h3", "h4", "h5", "h6", "hr",
+            "iframe", "img", "li", "ol", "p", "pre", "span", "strong", "ul", "video"}
+PUB_CLASSES = {"div": {"callout", "podcast-embed", "pullquote", "video"},
+               "pre": {"astro-code", "astro-code-themes", "github-light", "github-dark", "code-html"},
+               "span": {"line"}}
+PUB_ATTRS = {"a": {"href"}, "div": {"class"}, "h2": {"id"}, "h3": {"id"}, "h4": {"id"}, "h5": {"id"}, "h6": {"id"},
+             "iframe": {"allow", "allowfullscreen", "height", "loading", "referrerpolicy", "src", "title"},
+             "img": {"alt", "decoding", "height", "loading", "sizes", "src", "srcset", "width"},
+             "ol": {"start"}, "pre": {"class", "data-language", "style", "tabindex"}, "span": {"class", "style"},
+             "video": {"controls", "height", "playsinline", "poster", "preload", "src", "width"}}
+# Cores do Shiki; no <pre>, também o "overflow-x: auto" que ele mesmo põe.
+SHIKI_STYLE = re.compile(r"(?:\s*--shiki-[a-z-]+:[^;]+;?)+(?:\s*overflow-x:\s*auto;)?\s*")
+
+
 def subscribe_href(h: str) -> bool:
     u = urlsplit(h)
     return (u.hostname or "").endswith("substack.com") and (
@@ -92,6 +108,8 @@ class Extract(HTMLParser):
         self.head_texts: list[tuple[int, str]] = []
         self.captions: list[tuple[int, str]] = []  # (imagens até a legenda, texto)
         self.cap_mark: int | None = None
+        self.foreign: list[str] = []  # no publicado: elemento, classe, atributo ou estilo fora do que a importação gera
+        self.img_hrefs: list[str | None] = []  # destino do link que envolve cada imagem, na ordem
         self.pre_mark: int | None = None
         self.pre_texts: list[str] = []  # texto bruto de cada <pre>, com espaços e indentação
         self.sources = 0  # <picture>/<source>: trocariam a imagem exibida sem passar pela conferência
@@ -118,10 +136,20 @@ class Extract(HTMLParser):
             (tag == "div" and (cls & {"subscription-widget-wrap-editor", "subscription-widget-wrap", "image-link-expand"})) or (
              tag == "p" and "button-wrapper" in cls and subscribe_href(json.loads(a.get("data-attrs") or "{}").get("url") or "")))))
         if self.active:
+            if self.root_class is not None:
+                bad = []
+                if tag not in PUB_TAGS:
+                    bad.append(f"<{tag}>")
+                bad += [f"<{tag} {k}>" for k in a if k not in PUB_ATTRS.get(tag, set())]
+                bad += [f"<{tag} class={c}>" for c in cls if c not in PUB_CLASSES.get(tag, set())]
+                if "style" in a and not SHIKI_STYLE.fullmatch(a["style"]):
+                    bad.append(f"<{tag} style={a['style'][:40]!r}>")
+                self.foreign += bad
             if tag in BLOCK:
                 self.text.append(" ")
             if tag == "img":
                 self.imgs.append(a)
+                self.img_hrefs.append(self.open_links[-1][0] if self.open_links else None)
             elif tag == "iframe":
                 self.iframes.append(a.get("src", ""))
                 self.iframe_tags.append(a)
@@ -137,8 +165,9 @@ class Extract(HTMLParser):
             if tag == "a" and a.get("name"):
                 self.ids.add(a["name"])
             if tag in ("ol", "ul"):
+                parent = [self.list_stack[-1], self.lists[self.list_stack[-1]][2]] if self.list_stack else None
                 self.list_stack.append(len(self.lists))
-                self.lists.append([tag, int(a.get("start") or 1) if tag == "ol" else 1, 0, "reversed" in a, []])
+                self.lists.append([tag, int(a.get("start") or 1) if tag == "ol" else 1, 0, "reversed" in a, [], parent])
             elif tag == "li" and self.list_stack:
                 self.lists[self.list_stack[-1]][2] += 1
                 if "value" in a:
@@ -185,6 +214,8 @@ class Extract(HTMLParser):
                         self.head_texts.append((self.heads[-1], ht))
                 if (was_active or self.active) and tag == "pre" and self.pre_mark is not None:
                     raw = "".join(self.text[self.pre_mark:])
+                    # O conversor tira as quebras de linha das pontas de cada bloco (39 blocos em 8 posts do corpus);
+                    # a comparação também as ignora. Espaços, indentação e quebras internas contam.
                     self.pre_texts.append(raw.strip("\n").replace("\r\n", "\n"))
                     self.pre_mark = None
                 if (was_active or self.active) and tag == "figcaption" and self.cap_mark is not None:
@@ -636,6 +667,18 @@ def main(argv=None) -> int:
         if len(o_imgs) != len(pub.imgs):
             problems.append(f"G4 {s}: {len(o_imgs)} imagens no original, {len(pub.imgs)} publicadas")
         problems += check_images(s, o_imgs, pub.imgs, dist, a.cache, corpus)
+        o_img_hrefs = []
+        for im, h in zip(orig.imgs, orig.img_hrefs):
+            if (json.loads(im.get("data-attrs") or "{}").get("src") or im.get("src")) in ("", "undefined"):
+                continue
+            if h is None or url_host(h) in CDN_HOSTS or h == "undefined":
+                o_img_hrefs.append(None)  # sem link, ou R7
+            else:
+                o_img_hrefs.append(expected_href(h, set(expected), aliases, frozenset(orig.ids), s))
+        if o_img_hrefs != pub.img_hrefs:
+            k = next((i for i, (x, y) in enumerate(zip(o_img_hrefs, pub.img_hrefs)) if x != y), None)
+            problems.append(f"G3 {s}: destino do link da imagem {k + 1 if k is not None else '?'} diverge: "
+                            f"original {o_img_hrefs[k] if k is not None else o_img_hrefs}, publicado {pub.img_hrefs[k] if k is not None else pub.img_hrefs}")
         problems += check_cover(s, p, page, dist, a.cache, corpus)
         # iframes e vídeo
         o_emb, p_emb = [embed_id(x) for x in orig.iframes], [embed_id(x) for x in pub.iframes]
@@ -673,7 +716,10 @@ def main(argv=None) -> int:
         # G2: estrutura (listas, títulos, linguagem do código). O h1 do corpo vira h2 (documentado).
         o_heads = [2 if h == 1 else h for h in orig.heads]
         if orig.lists != pub.lists:
-            problems.append(f"G2 {s}: listas (tipo, início, itens, reversed, value) divergem: original {orig.lists}, publicado {pub.lists}")
+            problems.append(f"G2 {s}: listas (tipo, início, itens, reversed, value, lista e item pai) divergem: "
+                            f"original {orig.lists}, publicado {pub.lists}")
+        if pub.foreign:
+            problems.append(f"G2 {s}: corpo publicado com o que a importação não gera: {sorted(set(pub.foreign))[:6]}")
         if len(orig.pre_texts) == len(pub.pre_texts):
             for k, (po, pp) in enumerate(zip(orig.pre_texts, pub.pre_texts)):
                 if po != pp:
@@ -700,6 +746,12 @@ def main(argv=None) -> int:
             host = (urlsplit(it.get("src", "")).hostname or "").lower()
             if it.get("loading") != "lazy" or (host.endswith("youtube.com") or "youtube" in host) and host != "www.youtube-nocookie.com":
                 problems.append(f"G4 {s}: iframe {it.get('src')} com loading {it.get('loading')!r}; esperado lazy e YouTube em www.youtube-nocookie.com")
+        decoded = unquote(H.unescape(page))
+        n_cover = len(re.findall(re.escape(s) + r"/(?:\./)*capa\.", decoded))
+        want_cover = 3 if p.get("cover_image") else 0
+        if n_cover != want_cover:
+            problems.append(f"G4 {s}: a capa aparece {n_cover} vezes na página decodificada; esperado {want_cover} "
+                            f"(og:image, twitter:image e JSON-LD; nunca em mídia, estilo ou outro lugar)")
         cover_path = f"/blog/img/{s}/capa.jpg"
         page_url = f"https://guifav.dev/blog/{s}/"
         for m in re.finditer(r"<(?:img|source|video|image|input)\b[^>]*>", page):
