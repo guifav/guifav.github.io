@@ -30,6 +30,9 @@ type Opts = {
   patchStatus?: number;
   segStatus?: number;
   segments?: string[];
+  segListStatus?: number;
+  throwOn?: string;
+  badJsonOn?: string;
 };
 
 function setup(opts: Opts = {}) {
@@ -42,6 +45,8 @@ function setup(opts: Opts = {}) {
     if (typeof body === 'string' && body.startsWith('{')) body = JSON.parse(body);
     if (body instanceof URLSearchParams) body = Object.fromEntries(body);
     calls.push({ url, method, body });
+    if (opts.throwOn && url.includes(opts.throwOn)) throw new TypeError('fetch failed');
+    if (opts.badJsonOn && url.includes(opts.badJsonOn)) return new Response('<html>', { status: 200, headers: { 'content-type': 'application/json' } });
     if (url.includes('turnstile')) {
       if (opts.turnstile instanceof Error) throw opts.turnstile;
       return Response.json(opts.turnstile ?? { success: true, hostname: 'guifav.dev' });
@@ -57,8 +62,16 @@ function setup(opts: Opts = {}) {
       const st = opts.segStatus ?? 201;
       return st < 300 ? Response.json({ id: 'seg-1' }, { status: st }) : Response.json({ name: 'resource_locked' }, { status: st });
     }
-    if (url === 'https://api.resend.com/contacts/c1/segments' && method === 'GET') {
-      return Response.json({ object: 'list', data: (opts.segments ?? []).map((id) => ({ id, name: 'x' })) });
+    if (url.startsWith('https://api.resend.com/contacts/c1/segments?') && method === 'GET') {
+      if (opts.segListStatus) return Response.json({ name: 'internal_server_error' }, { status: opts.segListStatus });
+      // Paginação do Resend: limit (sem limit, 20), after = id do último item da página anterior, excluído.
+      const q = new URL(url).searchParams;
+      const all = opts.segments ?? [];
+      const limit = Number(q.get('limit') ?? 20);
+      const after = q.get('after');
+      const start = after ? all.indexOf(after) + 1 : 0;
+      const page = all.slice(start, start + limit);
+      return Response.json({ object: 'list', has_more: start + limit < all.length, data: page.map((id) => ({ id, name: 'x' })) });
     }
     if (url.startsWith('https://api.resend.com/contacts/') && method === 'GET') {
       if (!opts.contact || opts.contact === 'none') return Response.json({ name: 'not_found' }, { status: 404 });
@@ -331,7 +344,7 @@ test('A5: erro do Resend ao incluir no segmento não vira sucesso (409 resource_
     const s = setup({ contact: 'active', segStatus });
     const r = await s.run(new Request(await confirmUrl()));
     assert.equal(r.status, 502, String(segStatus));
-    assert.ok(s.calls.some((c) => c.url === 'https://api.resend.com/contacts/c1/segments' && c.method === 'GET'), String(segStatus));
+    assert.ok(s.calls.some((c) => c.url.startsWith('https://api.resend.com/contacts/c1/segments?') && c.method === 'GET'), String(segStatus));
   }
 });
 
@@ -425,4 +438,47 @@ test('A9: remetente e reply-to vêm do wrangler.toml real; um único link, o de 
   assert.equal(hrefs[0], textUrls[0]);
   assert.ok(textUrls[0].startsWith('https://newsletter.guifav.dev/confirm?'));
   assert.equal(await verifyLink(new URL(textUrls[0]).searchParams, SECRET, NOW), 'leitor@exemplo.com');
+});
+
+// ---------------------------------------------------------------- rodada 2 do gate (#31), P3 do Astra
+
+test('A5: inclusão recusada e o contato só em outro segmento: 502, nunca sucesso', async () => {
+  const s = setup({ contact: 'active', segStatus: 409, segments: ['outro'] });
+  const r = await s.run(new Request(await confirmUrl()));
+  assert.equal(r.status, 502);
+  assert.equal(loc(r), null);
+});
+
+test('A5: o segmento na segunda página da lista conta (paginação por after, 100 por página)', async () => {
+  const many = Array.from({ length: 130 }, (_, i) => `s${i}`);
+  many.splice(110, 0, 'seg-1');
+  const s = setup({ contact: 'active', segStatus: 409, segments: many });
+  const r = await s.run(new Request(await confirmUrl()));
+  assert.equal(loc(r), 'https://guifav.dev/blog/inscricao-confirmada/');
+  const pages = s.calls.filter((c) => c.url.startsWith('https://api.resend.com/contacts/c1/segments?'));
+  assert.equal(pages.length, 2);
+  assert.equal(new URL(pages[0].url).searchParams.get('limit'), '100');
+  assert.equal(new URL(pages[1].url).searchParams.get('after'), 's99');
+});
+
+test('A5: lista sem o segmento em nenhuma página, ou página que falha: 502', async () => {
+  const many = Array.from({ length: 150 }, (_, i) => `s${i}`);
+  const s = setup({ contact: 'active', segStatus: 409, segments: many });
+  assert.equal((await s.run(new Request(await confirmUrl()))).status, 502);
+  const t = setup({ contact: 'active', segStatus: 409, segments: many, segListStatus: 500 });
+  assert.equal((await t.run(new Request(await confirmUrl()))).status, 502);
+});
+
+test('A5: falha de rede ou JSON inválido do Resend na confirmação viram 502, sem rejeitar o handler', async () => {
+  const cases: Opts[] = [
+    { contact: 'none', throwOn: 'api.resend.com/contacts' },
+    { contact: 'active', throwOn: 'api.resend.com/contacts/c1/segments' },
+    { contact: 'active', badJsonOn: 'api.resend.com/contacts/leitor' },
+    { contact: 'active', segStatus: 409, badJsonOn: 'api.resend.com/contacts/c1/segments?' },
+  ];
+  for (const o of cases) {
+    const s = setup(o);
+    const r = await s.run(new Request(await confirmUrl()));
+    assert.equal(r.status, 502, JSON.stringify(o));
+  }
 });
