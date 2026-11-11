@@ -450,5 +450,68 @@ class FetchTest(unittest.TestCase):
             N.fetch_page("../etc", "live", "")
 
 
+
+# ---------------------------------------------------------------- rodada 2 do gate (#33)
+
+class Round2Test(unittest.TestCase):
+    def test_content_cell_breaks_long_words(self):
+        # overflow-wrap não entra no cálculo de largura mínima da tabela; word-break:break-word entra (P2 do Astra).
+        html, _ = conv('<p><a href="https://example.com/x">https://example.com/' + "a" * 300 + "</a></p>")
+        cell = html.split("serif;", 1)[1].split('">', 1)[0]
+        self.assertIn("word-break:break-word", cell)
+
+    def test_code_in_list_and_leading_indent_are_literal_in_text(self):
+        _, t1 = conv("<pre><code>    a\n    b</code></pre>")
+        self.assertIn("    a\n    b", t1)
+        _, t2 = conv('<ul><li><pre><code>print("""a\n\n\nb""")</code></pre></li></ul>')
+        self.assertIn('print("""a\n\n\nb""")', t2)
+
+    def test_limits_with_literal_numbers(self):
+        body = "".join(f"<p>Parágrafo {i} " + "texto " * 60 + "</p>" for i in range(400))
+        html, _ = conv(body)
+        self.assertLess(len(html.encode("utf-8")), 100_352)        # 102 KB do Gmail menos 4 KB de folga
+        self.assertGreater(len(html.encode("utf-8")), 95_000)       # e o corte aproveita o espaço
+        html, _ = conv("<p>x</p>", desc="d" * 500)
+        pre = html.split('opacity:0;">', 1)[1].split("</div>", 1)[0]
+        self.assertEqual(len(pre), 200)
+        self.assertTrue(pre.endswith("..."))
+        html, _ = conv("<p>x</p>", desc="e" * 200)
+        self.assertEqual(html.split('opacity:0;">', 1)[1].split("</div>", 1)[0], "e" * 200)
+
+    def test_attributes_are_escaped(self):
+        html, _ = conv('<figure><img src="/blog/img/um-post/a.webp" width="10" height="10" alt="diz &quot;oi&quot; &amp; &lt;b&gt;"></figure>')
+        self.assertIn('alt="diz &quot;oi&quot; &amp; &lt;b&gt;"', html)
+
+    def test_body_image_scheme_policy(self):
+        for bad in ("javascript:alert(1)", "http://example.com/a.png", "data:image/png;base64,AAAA", "//evil.example/a.png"):
+            with self.assertRaises(N.DraftError, msg=bad):
+                conv(f'<figure><img src="{bad}" width="10" height="10" alt=""></figure>')
+
+    def test_any_status_other_than_draft_blocks(self):
+        for st in ("canceled", "failed", "desconhecido", None):
+            f = FakeResend([{"id": "b1", "name": "blog/um-post", "status": st}])
+            with self.assertRaises(N.DraftError, msg=st):
+                N.create_draft(N.Api(CFG, f), post(), CFG, update=True)
+
+    def test_live_rejects_non_200_success_codes(self):
+        url = "https://guifav.dev/blog/um-post/"
+        for st in (204, 206, 203):
+            with mock.patch.object(N.urllib.request, "urlopen", lambda req, timeout=0, st=st: FetchTest.Resp(st, url)):
+                with self.assertRaises(N.DraftError, msg=st):
+                    N.fetch_page("um-post", "live", "")
+
+    def test_sender_must_be_a_single_address_on_the_exact_domain(self):
+        base = {"RESEND_API_KEY": "k", "NEWSLETTER_SEGMENT_ID": "s"}
+        for ok in ("IA Aplicada <newsletter@expert.guifav.dev>", "newsletter@expert.guifav.dev",
+                   "Guilherme Favaron <gui.f+blog@expert.guifav.dev>"):
+            self.assertEqual(N.Config.from_env({**base, "NEWSLETTER_FROM": ok}).sender, ok)
+        for bad in ("IA <newsletter@expert.guifav.dev>\n", "newsletter@guifav.dev\nBcc: destino@expert.guifav.dev",
+                    "a@guifav.dev, b@expert.guifav.dev", "IA <newsletter@expert.guifav.dev.evil>",
+                    "IA <newsletter@guifav.dev> expert.guifav.dev", "newsletter@sub.expert.guifav.dev",
+                    "IA <a@expert.guifav.dev", "x <a@b> <c@expert.guifav.dev>", "IA\r\n <a@expert.guifav.dev>"):
+            with self.assertRaises(N.DraftError, msg=repr(bad)):
+                N.Config.from_env({**base, "NEWSLETTER_FROM": bad})
+
+
 if __name__ == "__main__":
     unittest.main()

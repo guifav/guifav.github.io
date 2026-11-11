@@ -40,6 +40,10 @@ RESEND = "https://api.resend.com"
 DEFAULT_FROM = "IA Aplicada <newsletter@expert.guifav.dev>"
 DEFAULT_REPLY_TO = "contact@guifav.dev"
 SENDER_DOMAIN = "expert.guifav.dev"
+_ADDR = r"[A-Za-z0-9._%+-]+@" + re.escape(SENDER_DOMAIN)
+# Um único remetente: "Nome <local@expert.guifav.dev>" ou "local@expert.guifav.dev"; sem quebra de linha,
+# vírgula, ponto e vírgula, aspas ou outro endereço.
+SENDER_RE = re.compile(r"(?:[^<>@,;\"\r\n]+ <" + _ADDR + r">|" + _ADDR + r")")
 GMAIL_CLIP_BYTES = 102 * 1024
 SIZE_MARGIN = 4 * 1024  # folga para a reescrita de links do rastreamento de clique
 IMG_MAX = 560
@@ -337,7 +341,8 @@ class Converter:
             for c in el.children:
                 if isinstance(c, El) and c.tag == "li":
                     mark = f"{n}." if t == "ol" else "-"
-                    items.append(f"{mark} " + re.sub(r"\n{2,}", "\n", self.text(c, ctx).strip()))
+                    item = _outside_code(self.text(c, ctx).strip(), lambda x: re.sub(r"\n{2,}", "\n", x))
+                    items.append(f"{mark} " + item)
                     n += 1
             return "\n\n" + "\n".join(items) + "\n\n"
         if t == "li":
@@ -379,16 +384,18 @@ class Converter:
         return out
 
 
+def _outside_code(s: str, fn) -> str:
+    """Aplica fn só fora do código (entre CODE_START e CODE_END), mantendo os delimitadores."""
+    parts = re.split(f"({CODE_START}.*?{CODE_END})", s, flags=re.S)
+    return "".join(p if i % 2 else fn(p) for i, p in enumerate(parts))
+
+
 def _clean_text(s: str) -> str:
-    """Normaliza espaços e linhas em branco entre blocos; o código (entre CODE_START e CODE_END) fica literal."""
-    out = []
-    for i, part in enumerate(re.split(f"{CODE_START}(.*?){CODE_END}", s, flags=re.S)):
-        if i % 2:
-            out.append(part)
-        else:
-            part = re.sub(r"[ \t]+\n", "\n", part)
-            out.append(re.sub(r"\n{3,}", "\n\n", part))
-    return "".join(out).strip()
+    """Normaliza espaços e linhas em branco entre blocos; o código fica literal, inclusive a indentação.
+
+    O strip acontece com os delimitadores ainda no texto (eles não são espaço), e só depois eles saem."""
+    s = _outside_code(s, lambda x: re.sub(r"\n{3,}", "\n\n", re.sub(r"[ \t]+\n", "\n", x)))
+    return s.strip().replace(CODE_START, "").replace(CODE_END, "")
 
 
 # ---------------------------------------------------------------- envelope
@@ -416,7 +423,7 @@ def _envelope(post: Post, body_html: str, truncated: bool) -> str:
         f'<div style="display:none;max-height:0;overflow:hidden;opacity:0;">{pre}</div>'
         '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;"><tr><td align="center" style="padding:24px 12px;">'
         '<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;">'
-        '<tr><td style="padding:28px 20px 0;font-family:Georgia,\'Times New Roman\',serif;overflow-wrap:break-word;word-wrap:break-word;">'
+        '<tr><td style="padding:28px 20px 0;font-family:Georgia,\'Times New Roman\',serif;overflow-wrap:break-word;word-wrap:break-word;word-break:break-word;">'
         f'<p style="margin:0 0 20px;font-family:Arial,sans-serif;font-size:13px;letter-spacing:1px;text-transform:uppercase;">'
         f'<a href="{BLOG}/" style="color:#666;text-decoration:none;">IA Aplicada</a></p>'
         f'<h1 style="margin:0 0 12px;font-size:30px;line-height:1.25;color:#111;">{e(post.title)}</h1>{sub}'
@@ -487,8 +494,8 @@ class Config:
         if not key or not seg:
             raise DraftError("faltam RESEND_API_KEY e NEWSLETTER_SEGMENT_ID no ambiente")
         sender = env.get("NEWSLETTER_FROM", DEFAULT_FROM)
-        if not re.search(r"@" + re.escape(SENDER_DOMAIN) + r">?$", sender):
-            raise DraftError(f"o remetente precisa ser de {SENDER_DOMAIN}: {sender}")
+        if not SENDER_RE.fullmatch(sender):
+            raise DraftError(f"o remetente precisa ser um único endereço de {SENDER_DOMAIN}: {sender!r}")
         return cls(key, seg, sender, env.get("NEWSLETTER_REPLY_TO", DEFAULT_REPLY_TO))
 
 
