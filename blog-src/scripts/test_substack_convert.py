@@ -241,6 +241,12 @@ class BlockTest(unittest.TestCase):
                              'title="Episódio no Spotify" height="102" loading="lazy" allow="encrypted-media" '
                              'referrerpolicy="strict-origin-when-cross-origin"></iframe></div>\n')
 
+    def test_iframe_from_unknown_host_fails(self):
+        with self.assertRaises(C.ConvertError):
+            conv('<iframe src="https://evil.example/embed/x"></iframe>')
+        with self.assertRaises(C.ConvertError):
+            conv('<iframe src="https://www.youtube.com/watch?v=abcDEF12345"></iframe>')
+
     def test_digest_post_embed_by_post_id(self):
         # O canonical_url do embed guarda o slug da época, que pode ter mudado; o id do post não muda.
         html = ('<div class="digest-post-embed" data-attrs="{&quot;title&quot;:&quot;Livro: Desbloqueando&quot;,&quot;id&quot;:179961940,'
@@ -364,6 +370,13 @@ class PodcastMatchTest(unittest.TestCase):
         self.assertEqual(m, {"a-276": "https://open.spotify.com/episode/BBBBBBBBBBBBBBBBBBBBBB",
                              "a-aa0": "https://open.spotify.com/episode/AAAAAAAAAAAAAAAAAAAAAA",
                              "b": "https://open.spotify.com/episode/CCCCCCCCCCCCCCCCCCCCCC"})
+
+    def test_two_posts_cannot_share_one_episode(self):
+        posts = [{"slug": "a", "title": "Mesmo título", "post_date": "2024-09-04T10:00:00.000Z"},
+                 {"slug": "b", "title": "Mesmo título", "post_date": "2024-09-04T12:00:00.000Z"}]
+        eps = [{"title": "Mesmo título", "publishOn": "2024-09-04T11:00:00.000Z", "spotifyUrl": "https://open.spotify.com/episode/AAAAAAAAAAAAAAAAAAAAAA"}]
+        with self.assertRaises(C.ConvertError):
+            C.match_podcasts(posts, eps)
 
     def test_missing_or_far_episode_fails(self):
         posts = [{"slug": "x", "title": "Sem par", "post_date": "2024-09-04T10:00:00.000Z"}]
