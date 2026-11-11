@@ -70,8 +70,13 @@ PUB_ATTRS = {"a": {"href"}, "div": {"class"}, "h2": {"id"}, "h3": {"id"}, "h4": 
              "img": {"alt", "decoding", "height", "loading", "sizes", "src", "srcset", "width"},
              "ol": {"start"}, "pre": {"class", "data-language", "style", "tabindex"}, "span": {"class", "style"},
              "video": {"controls", "height", "playsinline", "poster", "preload", "src", "width"}}
-# Cores do Shiki; no <pre>, também o "overflow-x: auto" que ele mesmo põe.
-SHIKI_STYLE = re.compile(r"(?:\s*--shiki-[a-z-]+:[^;]+;?)+(?:\s*overflow-x:\s*auto;)?\s*")
+# Estilos que o Shiki (temas github-light e github-dark) gera no corpus: o do <pre> e os seis pares de cor dos
+# <span>. Lista exata: cor arbitrária ou transparente (ex.: #0000) não passa.
+SHIKI_PRE_STYLE = "--shiki-light:#24292e;--shiki-dark:#e1e4e8;--shiki-light-bg:#fff;--shiki-dark-bg:#24292e; overflow-x: auto;"
+SHIKI_SPAN_STYLES = {f"--shiki-light:{a};--shiki-dark:{b}" for a, b in (
+    ("#24292E", "#E1E4E8"), ("#D73A49", "#F97583"), ("#005CC5", "#79B8FF"), ("#6A737D", "#6A737D"),
+    ("#6F42C1", "#B392F0"), ("#E36209", "#FFAB70"))}
+SHIKI_PRE_CLASSES = {"astro-code", "astro-code-themes", "github-light", "github-dark"}
 
 
 def subscribe_href(h: str) -> bool:
@@ -108,7 +113,12 @@ class Extract(HTMLParser):
         self.head_texts: list[tuple[int, str]] = []
         self.captions: list[tuple[int, str]] = []  # (imagens até a legenda, texto)
         self.cap_mark: int | None = None
-        self.foreign: list[str] = []  # no publicado: elemento, classe, atributo ou estilo fora do que a importação gera
+        self.foreign: list[str] = []
+        self.pub_pre_stack: list[tuple[str, bool]] = []
+        self.media_depth = 0
+        self.li_texts: list[tuple[int, int, str]] = []  # (lista, item, texto do item)
+        self.li_marks: list[tuple[int, int, int]] = []
+        self.embed_pairs: list[tuple[str, str]] = []  # cards de post embutido: (título, destino)  # no publicado: elemento, classe, atributo ou estilo fora do que a importação gera
         self.img_hrefs: list[str | None] = []  # destino do link que envolve cada imagem, na ordem
         self.pre_mark: int | None = None
         self.pre_texts: list[str] = []  # texto bruto de cada <pre>, com espaços e indentação
@@ -128,6 +138,9 @@ class Extract(HTMLParser):
         if self.depth_root < 0:
             if self.root_class in cls:
                 self.depth_root = 0
+                # A raiz é exatamente <div class="post-body">: classe ou atributo a mais pode esconder o artigo.
+                if tag != "div" or cls != {self.root_class} or set(a) != {"class"}:
+                    self.foreign.append(f"raiz <{tag} {sorted(a.items())}>")
                 if tag not in VOID:
                     self.stack.append((tag, False))
             return
@@ -142,8 +155,21 @@ class Extract(HTMLParser):
                     bad.append(f"<{tag}>")
                 bad += [f"<{tag} {k}>" for k in a if k not in PUB_ATTRS.get(tag, set())]
                 bad += [f"<{tag} class={c}>" for c in cls if c not in PUB_CLASSES.get(tag, set())]
-                if "style" in a and not SHIKI_STYLE.fullmatch(a["style"]):
-                    bad.append(f"<{tag} style={a['style'][:40]!r}>")
+                in_shiki = any(t == "pre" and k for t, k in self.pub_pre_stack)
+                if tag == "pre":
+                    shiki = cls == SHIKI_PRE_CLASSES and a.get("style") == SHIKI_PRE_STYLE and bool(a.get("data-language"))
+                    plain = cls == {"code-html"} and set(a) == {"class"}
+                    if not (shiki or plain):
+                        bad.append(f"<pre {sorted(a.items())}> fora das duas formas geradas (Shiki ou code-html)")
+                    self.pub_pre_stack.append(("pre", shiki))
+                elif "style" in a and not (tag == "span" and in_shiki and a["style"] in SHIKI_SPAN_STYLES):
+                    bad.append(f"<{tag} style={a['style'][:60]!r}>")
+                if tag == "span" and "line" in cls and not in_shiki:
+                    bad.append("<span class=line> fora do bloco do Shiki")
+                if self.media_depth:
+                    bad.append(f"<{tag}> dentro de <video>/<iframe> (vira conteúdo alternativo, não aparece)")
+                if tag in ("video", "iframe"):
+                    self.media_depth += 1
                 self.foreign += bad
             if tag in BLOCK:
                 self.text.append(" ")
@@ -170,6 +196,7 @@ class Extract(HTMLParser):
                 self.lists.append([tag, int(a.get("start") or 1) if tag == "ol" else 1, 0, "reversed" in a, [], parent])
             elif tag == "li" and self.list_stack:
                 self.lists[self.list_stack[-1]][2] += 1
+                self.li_marks.append((self.list_stack[-1], self.lists[self.list_stack[-1]][2], len(self.text)))
                 if "value" in a:
                     self.lists[self.list_stack[-1]][4].append((self.lists[self.list_stack[-1]][2], a["value"]))
             elif tag in ("h1", "h2", "h3", "h4", "h5", "h6"):
@@ -187,6 +214,7 @@ class Extract(HTMLParser):
                 d = json.loads(a.get("data-attrs") or "{}")
                 self.text.append(" " + d.get("title", "") + " ")
                 self.embeds.append(self.post_ids.get(str(d.get("id")), "?"))
+                self.embed_pairs.append((" ".join((d.get("title") or "").split()), f"/blog/{self.embeds[-1]}/"))
         if tag not in VOID:
             self.stack.append((tag, skip))
 
@@ -212,6 +240,13 @@ class Extract(HTMLParser):
                         self.heads.pop()  # título vazio no original não tem conteúdo a preservar
                     else:
                         self.head_texts.append((self.heads[-1], ht))
+                if (was_active or self.active) and tag == "li" and self.li_marks:
+                    li, n, mark = self.li_marks.pop()
+                    self.li_texts.append((li, n, " ".join("".join(self.text[mark:]).split())))
+                if (was_active or self.active) and tag == "pre" and self.pub_pre_stack:
+                    self.pub_pre_stack.pop()
+                if (was_active or self.active) and tag in ("video", "iframe") and self.media_depth:
+                    self.media_depth -= 1
                 if (was_active or self.active) and tag == "pre" and self.pre_mark is not None:
                     raw = "".join(self.text[self.pre_mark:])
                     # O conversor tira as quebras de linha das pontas de cada bloco (39 blocos em 8 posts do corpus);
@@ -231,6 +266,8 @@ class Extract(HTMLParser):
 
     def handle_data(self, data):
         if self.active:
+            if self.media_depth and data.strip():
+                self.foreign.append(f"texto dentro de <video>/<iframe>: {data.strip()[:40]!r}")
             self.text.append(data)
             for _, buf, _ in self.open_links:
                 buf.append(data)
@@ -327,11 +364,15 @@ class Corpus:
 
 
 def srcset(v: str) -> list:
+    """Candidatos (URL, descritor). Exatamente "URL Nw" por candidato: token a mais ou descritor de outro tipo
+    invalida o candidato no navegador, então vira ("", "") e falha na comparação das larguras."""
     out = []
     for c in v.split(","):
         parts = c.strip().split()
-        if parts:
-            out.append((parts[0], parts[1] if len(parts) > 1 else ""))
+        if not parts:
+            continue
+        ok = len(parts) == 2 and re.fullmatch(r"[1-9][0-9]*w", parts[1])
+        out.append((parts[0], parts[1]) if ok else ("", ""))
     return out
 
 
@@ -652,10 +693,9 @@ def main(argv=None) -> int:
             problems.append(f"G3 {s}: links divergem: só no original {dict(o_links - p_links)}, só no publicado {dict(p_links - o_links)}")
         else:
             # Cada texto aponta para o mesmo destino (os cards de post embutido têm texto próprio e ficam de fora).
-            emb_targets = {f"/blog/{e}/" for e in orig.embeds}
-            o_pairs = original_link_pairs(orig, set(expected), aliases, s)
-            p_pairs = Counter((link_text(t), h) for h, t, _ in pub.links if h not in emb_targets)
-            o_pairs = Counter({k: v for k, v in o_pairs.items() if k[1] not in emb_targets})
+            # Cards de post embutido entram como (título, destino): nenhum link fica fora da comparação.
+            o_pairs = original_link_pairs(orig, set(expected), aliases, s) + Counter(orig.embed_pairs)
+            p_pairs = Counter((link_text(t), h) for h, t, _ in pub.links)
             if o_pairs != p_pairs:
                 problems.append(f"G3 {s}: texto e destino dos links divergem: só no original {dict(o_pairs - p_pairs)}, "
                                 f"só no publicado {dict(p_pairs - o_pairs)}")
@@ -718,6 +758,10 @@ def main(argv=None) -> int:
         if orig.lists != pub.lists:
             problems.append(f"G2 {s}: listas (tipo, início, itens, reversed, value, lista e item pai) divergem: "
                             f"original {orig.lists}, publicado {pub.lists}")
+        if orig.li_texts and sorted(orig.li_texts) != sorted(pub.li_texts):
+            k = next((x for x, y in zip(sorted(orig.li_texts), sorted(pub.li_texts)) if x != y), None)
+            problems.append(f"G2 {s}: texto de item de lista diverge: original {k}, publicado "
+                            f"{next((y for x, y in zip(sorted(orig.li_texts), sorted(pub.li_texts)) if x != y), None)}")
         if pub.foreign:
             problems.append(f"G2 {s}: corpo publicado com o que a importação não gera: {sorted(set(pub.foreign))[:6]}")
         if len(orig.pre_texts) == len(pub.pre_texts):
