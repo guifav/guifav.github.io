@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import newsletter_draft as N  # noqa: E402
 
 SEG = "seg-blog"
-CFG = N.Config(api_key="re_teste", segment_id=SEG, sender="IA Aplicada <newsletter@expert.guifav.dev>",
+CFG = N.Config(api_key="re_teste", segment_id=SEG, sender="IA Aplicada <insights@expert.guifav.dev>",
                reply_to="contact@guifav.dev")
 
 
@@ -244,7 +244,7 @@ class DraftTest(unittest.TestCase):
         body = f.calls[1][2]
         self.assertEqual(set(body), {"segment_id", "from", "reply_to", "subject", "html", "text", "name"})
         self.assertEqual(body["segment_id"], SEG)
-        self.assertEqual(body["from"], "IA Aplicada <newsletter@expert.guifav.dev>")
+        self.assertEqual(body["from"], "IA Aplicada <insights@expert.guifav.dev>")
         self.assertEqual(body["reply_to"], "contact@guifav.dev")
         self.assertEqual(body["subject"], "Um post")
         self.assertEqual(body["name"], "blog/um-post")
@@ -304,13 +304,13 @@ class ConfigTest(unittest.TestCase):
         with self.assertRaises(N.DraftError):
             N.Config.from_env({"RESEND_API_KEY": "k"})
         c = N.Config.from_env({"RESEND_API_KEY": "k", "NEWSLETTER_SEGMENT_ID": "s"})
-        self.assertEqual(c.sender, "IA Aplicada <newsletter@expert.guifav.dev>")
+        self.assertEqual(c.sender, "IA Aplicada <insights@expert.guifav.dev>")
         self.assertEqual(c.reply_to, "contact@guifav.dev")
 
     def test_sender_must_be_on_expert_subdomain(self):
         with self.assertRaises(N.DraftError):
             N.Config.from_env({"RESEND_API_KEY": "k", "NEWSLETTER_SEGMENT_ID": "s",
-                               "NEWSLETTER_FROM": "IA Aplicada <newsletter@guifav.dev>"})
+                               "NEWSLETTER_FROM": "IA Aplicada <insights@guifav.dev>"})
 
 
 
@@ -504,12 +504,12 @@ class Round2Test(unittest.TestCase):
 
     def test_sender_must_be_a_single_address_on_the_exact_domain(self):
         base = {"RESEND_API_KEY": "k", "NEWSLETTER_SEGMENT_ID": "s"}
-        for ok in ("IA Aplicada <newsletter@expert.guifav.dev>", "newsletter@expert.guifav.dev",
+        for ok in ("IA Aplicada <insights@expert.guifav.dev>", "insights@expert.guifav.dev",
                    "Guilherme Favaron <gui.f+blog@expert.guifav.dev>"):
             self.assertEqual(N.Config.from_env({**base, "NEWSLETTER_FROM": ok}).sender, ok)
-        for bad in ("IA <newsletter@expert.guifav.dev>\n", "newsletter@guifav.dev\nBcc: destino@expert.guifav.dev",
-                    "a@guifav.dev, b@expert.guifav.dev", "IA <newsletter@expert.guifav.dev.evil>",
-                    "IA <newsletter@guifav.dev> expert.guifav.dev", "newsletter@sub.expert.guifav.dev",
+        for bad in ("IA <insights@expert.guifav.dev>\n", "insights@guifav.dev\nBcc: destino@expert.guifav.dev",
+                    "a@guifav.dev, b@expert.guifav.dev", "IA <insights@expert.guifav.dev.evil>",
+                    "IA <insights@guifav.dev> expert.guifav.dev", "insights@sub.expert.guifav.dev",
                     "IA <a@expert.guifav.dev", "x <a@b> <c@expert.guifav.dev>", "IA\r\n <a@expert.guifav.dev>"):
             with self.assertRaises(N.DraftError, msg=repr(bad)):
                 N.Config.from_env({**base, "NEWSLETTER_FROM": bad})

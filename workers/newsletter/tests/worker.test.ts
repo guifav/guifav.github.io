@@ -102,7 +102,7 @@ function setup(opts: Opts = {}) {
 }
 
 function subscribe(fields: Record<string, string>, headers: Record<string, string> = {}) {
-  return new Request('https://newsletter.guifav.dev/subscribe', {
+  return new Request('https://insights.guifav.dev/subscribe', {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded', origin: 'https://guifav.dev', 'cf-connecting-ip': '203.0.113.7', ...headers },
     body: new URLSearchParams(fields).toString(),
@@ -206,14 +206,14 @@ test('A4: o email de confirmação leva o link assinado do Worker', async () => 
   const s = setup();
   await s.run(subscribe(ok));
   const mail = s.calls.find((c) => c.url.endsWith('/emails'))!.body as { html: string; text: string };
-  const m = mail.text.match(/https:\/\/newsletter\.guifav\.dev\/confirm\?\S+/);
+  const m = mail.text.match(/https:\/\/insights\.guifav\.dev\/confirm\?\S+/);
   assert.ok(m, mail.text);
   assert.equal(await verifyLink(new URL(m[0]).searchParams, SECRET, NOW), 'leitor@exemplo.com');
 });
 
 test('A4: /confirm com link inválido ou expirado não chama o Resend', async () => {
   const q = await signLink('leitor@exemplo.com', NOW - 49 * 3600e3, SECRET);
-  for (const url of [`https://newsletter.guifav.dev/confirm?${q}`, 'https://newsletter.guifav.dev/confirm?e=abc&x=1&s=zz', 'https://newsletter.guifav.dev/confirm']) {
+  for (const url of [`https://insights.guifav.dev/confirm?${q}`, 'https://insights.guifav.dev/confirm?e=abc&x=1&s=zz', 'https://insights.guifav.dev/confirm']) {
     const s = setup();
     const r = await s.run(new Request(url));
     assert.equal(r.status, 303, url);
@@ -226,7 +226,7 @@ test('A4: /confirm com link inválido ou expirado não chama o Resend', async ()
 
 test('A1: /confirm válido cria o contato no segmento e redireciona para inscricao-confirmada', async () => {
   const s = setup({ contact: 'none' });
-  const r = await s.run(new Request(`https://newsletter.guifav.dev/confirm?${await signLink('leitor@exemplo.com', NOW, SECRET)}`));
+  const r = await s.run(new Request(`https://insights.guifav.dev/confirm?${await signLink('leitor@exemplo.com', NOW, SECRET)}`));
   assert.equal(r.status, 303);
   assert.equal(loc(r), 'https://guifav.dev/blog/inscricao-confirmada/');
   const create = s.calls.find((c) => c.url === 'https://api.resend.com/contacts' && c.method === 'POST');
@@ -236,7 +236,7 @@ test('A1: /confirm válido cria o contato no segmento e redireciona para inscric
 test('A5: confirmação repetida e contato descadastrado reativado, sem duplicar', async () => {
   for (const contact of ['active', 'unsubscribed'] as const) {
     const s = setup({ contact });
-    const r = await s.run(new Request(`https://newsletter.guifav.dev/confirm?${await signLink('leitor@exemplo.com', NOW, SECRET)}`));
+    const r = await s.run(new Request(`https://insights.guifav.dev/confirm?${await signLink('leitor@exemplo.com', NOW, SECRET)}`));
     assert.equal(loc(r), 'https://guifav.dev/blog/inscricao-confirmada/', contact);
     const writes = s.calls.filter((c) => c.method !== 'GET' && c.url.includes('/contacts'));
     assert.deepEqual(writes.map((c) => `${c.method} ${c.url}`), [
@@ -250,7 +250,7 @@ test('A5: confirmação repetida e contato descadastrado reativado, sem duplicar
 
 test('A5: erro do Resend na confirmação devolve 502 e não finge sucesso', async () => {
   const s = setup({ createStatus: 500 });
-  const r = await s.run(new Request(`https://newsletter.guifav.dev/confirm?${await signLink('leitor@exemplo.com', NOW, SECRET)}`));
+  const r = await s.run(new Request(`https://insights.guifav.dev/confirm?${await signLink('leitor@exemplo.com', NOW, SECRET)}`));
   assert.equal(r.status, 502);
 });
 
@@ -274,12 +274,12 @@ test('A6: limite por email e por IP: mesma resposta, sem envio', async () => {
 test('A7: origem, método e rota', async () => {
   const s = setup();
   assert.equal((await s.run(subscribe(ok, { origin: 'https://evil.example' }))).status, 403);
-  const noOrigin = new Request('https://newsletter.guifav.dev/subscribe', { method: 'POST', body: 'email=a@b.com' });
+  const noOrigin = new Request('https://insights.guifav.dev/subscribe', { method: 'POST', body: 'email=a@b.com' });
   assert.equal((await s.run(noOrigin)).status, 403);
-  assert.equal((await s.run(new Request('https://newsletter.guifav.dev/subscribe'))).status, 405);
-  assert.equal((await s.run(new Request('https://newsletter.guifav.dev/confirm', { method: 'POST', headers: { origin: 'https://guifav.dev' } }))).status, 405);
-  assert.equal((await s.run(new Request('https://newsletter.guifav.dev/'))).status, 404);
-  assert.equal((await s.run(new Request('https://newsletter.guifav.dev/admin'))).status, 404);
+  assert.equal((await s.run(new Request('https://insights.guifav.dev/subscribe'))).status, 405);
+  assert.equal((await s.run(new Request('https://insights.guifav.dev/confirm', { method: 'POST', headers: { origin: 'https://guifav.dev' } }))).status, 405);
+  assert.equal((await s.run(new Request('https://insights.guifav.dev/'))).status, 404);
+  assert.equal((await s.run(new Request('https://insights.guifav.dev/admin'))).status, 404);
   assert.equal(s.calls.length, 0);
 });
 
@@ -312,19 +312,19 @@ test('A9: email de confirmação com remetente, reply-to, HTML e texto, e um ún
   const s = setup();
   await s.run(subscribe(ok));
   const mail = s.calls.find((c) => c.url.endsWith('/emails'))!.body as Record<string, unknown>;
-  assert.equal(mail.from, 'IA Aplicada <newsletter@guifav.dev>');
+  assert.equal(mail.from, 'IA Aplicada <insights@guifav.dev>');
   assert.equal(mail.reply_to, 'contact@guifav.dev');
   assert.match(String(mail.subject), /Confirme/);
   const links = String(mail.html).match(/href="[^"]+"/g) ?? [];
   assert.equal(links.length, 1, String(mail.html));
-  assert.match(links[0], /^href="https:\/\/newsletter\.guifav\.dev\/confirm\?/);
+  assert.match(links[0], /^href="https:\/\/insights\.guifav\.dev\/confirm\?/);
 });
 
 test('A9: endereço com caracteres de HTML é escapado no corpo', () => {
-  const { html } = confirmationEmail('a"<b>@exemplo.com', 'https://newsletter.guifav.dev/confirm?e=1&x=2&s=3');
+  const { html } = confirmationEmail('a"<b>@exemplo.com', 'https://insights.guifav.dev/confirm?e=1&x=2&s=3');
   assert.ok(!html.includes('<b>@'), html);
   assert.ok(html.includes('&lt;b&gt;'), html);
-  assert.ok(html.includes('href="https://newsletter.guifav.dev/confirm?e=1&amp;x=2&amp;s=3"'), html);
+  assert.ok(html.includes('href="https://insights.guifav.dev/confirm?e=1&amp;x=2&amp;s=3"'), html);
 });
 
 test('contactPath: @ literal, o resto codificado', () => {
@@ -338,7 +338,7 @@ test('normalizeEmail: minúsculas e sem espaço nas pontas; recusa cabeçalho e 
 
 // ---------------------------------------------------------------- rodada 1 do gate (#31)
 
-const confirmUrl = async () => `https://newsletter.guifav.dev/confirm?${await signLink('leitor@exemplo.com', NOW, SECRET)}`;
+const confirmUrl = async () => `https://insights.guifav.dev/confirm?${await signLink('leitor@exemplo.com', NOW, SECRET)}`;
 
 test('A5: erro do Resend ao incluir no segmento não vira sucesso (409 resource_locked, 422, 500)', async () => {
   for (const segStatus of [409, 422, 500]) {
@@ -373,7 +373,7 @@ test('A4: validade adulterada para outro horário numérico é recusada pela ass
   p.set('x', String(Number(p.get('x')) + 365 * 86400));
   assert.equal(await verifyLink(p, SECRET, NOW), null);
   const s = setup({ contact: 'none' });
-  const r = await s.run(new Request(`https://newsletter.guifav.dev/confirm?${p}`));
+  const r = await s.run(new Request(`https://insights.guifav.dev/confirm?${p}`));
   assert.equal(loc(r), 'https://guifav.dev/blog/inscricao-invalida/');
   assert.equal(s.calls.length, 0);
 });
@@ -425,7 +425,7 @@ test('A8: nenhum arquivo do Worker atribui segredo, com chave TOML entre aspas o
 });
 
 test('A9: remetente e reply-to vêm do wrangler.toml real; um único link, o de confirmação, no HTML e no texto', async () => {
-  assert.equal(tomlVar('FROM'), 'IA Aplicada <newsletter@guifav.dev>');
+  assert.equal(tomlVar('FROM'), 'IA Aplicada <insights@guifav.dev>');
   assert.equal(tomlVar('REPLY_TO'), 'contact@guifav.dev');
   const s = setup();
   await s.run(subscribe(ok));
@@ -438,7 +438,7 @@ test('A9: remetente e reply-to vêm do wrangler.toml real; um único link, o de 
   assert.equal(hrefs.length, 1, mail.html);
   assert.equal(htmlUrls.length, 1, mail.html);
   assert.equal(hrefs[0], textUrls[0]);
-  assert.ok(textUrls[0].startsWith('https://newsletter.guifav.dev/confirm?'));
+  assert.ok(textUrls[0].startsWith('https://insights.guifav.dev/confirm?'));
   assert.equal(await verifyLink(new URL(textUrls[0]).searchParams, SECRET, NOW), 'leitor@exemplo.com');
 });
 

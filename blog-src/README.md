@@ -83,5 +83,5 @@ RESEND_API_KEY=... NEWSLETTER_SEGMENT_ID=... python3 scripts/newsletter_draft.py
 - A conversão é por lista fechada de tags, classes, atributos e esquemas de link. O que estiver fora dela interrompe o script.
 - Um broadcast por post: se já existe um rascunho, nada muda; se já existe um enviado, agendado ou em envio, o script para.
 - HTML acima de 102 KB, o limite em que o Gmail corta a mensagem, leva só o começo do post e o link "Ler no site".
-- Remetente padrão `IA Aplicada <newsletter@expert.guifav.dev>` (`NEWSLETTER_FROM` só aceita `expert.guifav.dev`), reply-to `contact@guifav.dev`.
+- Remetente padrão `IA Aplicada <insights@expert.guifav.dev>` (`NEWSLETTER_FROM` só aceita `expert.guifav.dev`), reply-to `contact@guifav.dev`.
 - Testes: `python3 scripts/test_newsletter_draft.py` (sem rede; rodam no CI).
