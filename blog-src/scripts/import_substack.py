@@ -337,6 +337,7 @@ def main(argv=None) -> int:
                                  f"{PUB}/api/v1/posts/{slug}", a.offline))
     slugs = {p["slug"] for p in posts}
     post_ids = {str(p["id"]): p["slug"] for p in posts}
+    anchors = {p["slug"]: C.anchor_ids(p["body_html"]) for p in posts}
     aliases = aliases_for(old_site_slugs(posts) - slugs, slugs)
     pods = C.match_podcasts([p for p in posts if p.get("type") == "podcast"], load_spotify(a.cache, a.offline))
 
@@ -373,7 +374,7 @@ def main(argv=None) -> int:
         replacements = {h: new for (s, prefix), new in REPLACEMENTS_BY_PREFIX.items() if s == slug
                         for h in hrefs if h.startswith(prefix)}
         ctx = C.Context(slug=slug, slugs=slugs, images=images, aliases=aliases, replacements=replacements,
-                        video=video if slug == VIDEO_POST else None, post_ids=post_ids)
+                        video=video if slug == VIDEO_POST else None, post_ids=post_ids, anchor_ids=anchors)
         body = C.convert(p["body_html"], ctx)
         meta = dict(p)
         meta["description"] = (p.get("search_engine_description") or p.get("description") or p.get("subtitle") or "").strip()

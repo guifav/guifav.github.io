@@ -42,6 +42,7 @@ class Context:
     stats: Counter = field(default_factory=Counter)
     unresolved: list = field(default_factory=list)  # links do site antigo sem destino no blog
     ids: set = field(default_factory=set)
+    anchor_ids: dict = field(default_factory=dict)  # slug -> ids do original daquele post (âncora para outro post)
 
 
 SITE_HOSTS = {"guilhermefavaron.com.br", "www.guilhermefavaron.com.br", "iaaplicada.substack.com"}
@@ -191,6 +192,34 @@ def is_space(ch: str) -> bool:
 # ---------------------------------------------------------------------------- links
 
 
+_IDN_DOTS = str.maketrans({"\u3002": ".", "\uff0e": ".", "\uff61": "."})
+_C0_SPACE = "".join(chr(i) for i in range(0x21))
+
+
+def browser_host(href: str) -> str:
+    """Host como o navegador resolve uma URL absoluta ou relativa ao esquema (WHATWG, sem base): espaços e
+    controles das pontas e tab/quebra no meio saem, barra invertida vale barra, qualquer número de barras depois
+    de http:, percent-encoding e os pontos ideográficos do IDNA no host. Vazio para o resto (relativa, mailto)."""
+    h = re.sub(r"[\t\n\r]", "", href.strip(_C0_SPACE)).replace("\\", "/")
+    m = re.match(r"([A-Za-z][A-Za-z0-9+.-]*):(.*)", h, re.S)
+    if m:
+        if m.group(1).lower() not in ("http", "https", "ws", "wss", "ftp"):
+            return ""
+        rest = m.group(2).lstrip("/")
+    elif h.startswith("//"):
+        rest = h.lstrip("/")
+    else:
+        return ""
+    hostport = re.split(r"[/?#]", rest, maxsplit=1)[0].rsplit("@", 1)[-1]
+    host = hostport if hostport.startswith("[") else hostport.split(":", 1)[0]
+    host = unicodedata.normalize("NFKC", unquote(host)).translate(_IDN_DOTS).casefold()
+    return host.rstrip(".")
+
+
+def is_old_host(host: str) -> bool:
+    return host in SITE_HOSTS or host == "substack.com" or host.endswith(".substack.com")
+
+
 def rewrite(href: str, ctx: Context) -> str | None:
     """Destino do link no blog, ou None para tirar o link e manter o texto (R5)."""
     h = href.strip()
@@ -205,6 +234,10 @@ def rewrite(href: str, ctx: Context) -> str | None:
         return None
     u = urlsplit(h)
     host = (u.hostname or "").lower()
+    bh = browser_host(h)
+    if bh != host and is_old_host(bh):
+        # O navegador iria ao domínio antigo, mas a forma não é a canônica: as regras abaixo não a reconheceriam.
+        raise ConvertError(f"{ctx.slug}: link {h!r} vai a {bh} no navegador, fora da forma canônica (corrigir com R6)")
     if host not in SITE_HOSTS:
         if host == "substack.com" or host.endswith(".substack.com"):
             ctx.unresolved.append(h)  # outro autor ou outra publicação: fica, e vai para o relatório
@@ -219,6 +252,11 @@ def rewrite(href: str, ctx: Context) -> str | None:
         return None
     if m:
         s = unquote(m.group(2)).lower()
+        target = s if s in ctx.slugs else ctx.aliases.get(s)
+        if target and u.fragment and (u.fragment in ctx.anchor_ids.get(target, ()) or
+                                      unquote(u.fragment) in ctx.anchor_ids.get(target, ())):
+            # O fragmento só pode sair quando não tem alvo no original do outro post (o Markdown não preserva ids).
+            raise ConvertError(f"{ctx.slug}: âncora viva {h} para outro post (o Markdown não preserva o id do alvo)")
         if s in ctx.slugs:
             ctx.stats["R1" if m.group(1) == "p" else "R2"] += 1
             return f"{ctx.base}{s}/"
@@ -674,6 +712,11 @@ def _separate_lists(out: list) -> list:
         if b:
             last = b
     return res
+
+
+def anchor_ids(fragment: str) -> set:
+    """Ids do HTML original de um post: alvos possíveis de âncora vindos de outros posts."""
+    return {n.get("id") for n in parse(fragment).walk() if n.get("id")}
 
 
 def convert(fragment: str, ctx: Context) -> str:

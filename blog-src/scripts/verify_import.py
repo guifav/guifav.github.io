@@ -17,7 +17,6 @@ import html as H
 import hashlib
 import json
 import os
-import posixpath
 import re
 import subprocess
 import sys
@@ -29,6 +28,9 @@ from urllib.parse import unquote, urljoin, urlsplit
 
 import numpy as np
 from PIL import Image
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "scripts"))
+import check_site as CS  # noqa: E402  resolve_urls: o parser WHATWG do Node, que falha fechado sem Node
 
 SKIP = {"politica-de-privacidade", "termos-e-condicoes-de-uso"}
 SITE_HOSTS = {"guilhermefavaron.com.br", "www.guilhermefavaron.com.br", "iaaplicada.substack.com"}
@@ -53,9 +55,16 @@ EPISODE_DATE_TOLERANCE = timedelta(days=2)
 # gui-brain com o slug antigo tem o mesmo título do post atual.
 RENAMED = {"sistema-de-registros-para-agentes": "a-memoria-dos-meus-agentes-na-pratica"}
 # Único href para o domínio antigo fora do conteúdo: o link "Newsletter" do rodapé, que aponta para o
-# Substack até o formulário novo ser ligado (#21).
+# Substack só enquanto o formulário novo está desligado (#21). Ligado, o rodapé aponta para a assinatura.
 FOOTER_NEWSLETTER = '<a href="https://guilhermefavaron.com.br" target="_blank" rel="noopener">Newsletter</a>'
-OLD_URL_ATTR = re.compile(r'\s(?:href|src|srcset|poster|content|action|cite)="([^"]*)"')
+FOOTER_SUBSCRIBE = '<a href="/blog/assinar/">Newsletter</a>'
+# Atributos que o navegador lê como URL (srcset, imagesrcset e ping são listas).
+URL_ATTRS = {"href", "src", "srcset", "imagesrcset", "poster", "action", "formaction", "cite", "data", "background",
+             "xlink:href", "longdesc", "ping", "icon", "manifest", "itemid", "codebase", "archive", "usemap",
+             "profile", "lowsrc", "dynsrc"}
+# Base dos originais: relativas não viram o domínio antigo por acaso (o corpus só tem "undefined" relativo).
+ORIG_BASE = "https://original.invalid/"
+ASCII_WS = " \t\n\r\f"
 
 
 # O que o conversor e o build geram dentro de div.post-body, levantado no corpus. Qualquer outro elemento, classe,
@@ -125,6 +134,9 @@ class Extract(HTMLParser):
         self.sources = 0  # <picture>/<source>: trocariam a imagem exibida sem passar pela conferência
         self.iframe_tags: list[dict] = []
         self.pres: list = []
+        self.link_seq: list[tuple] = []  # ("a", href, texto, é imagem) ao fechar; ("card", slug, título) ao abrir
+        self.nonws = 0  # caracteres de texto não brancos até aqui (posição estrutural de <hr> e <br>)
+        self.marks: list[tuple[str, int]] = []
 
     @property
     def active(self) -> bool:
@@ -173,6 +185,8 @@ class Extract(HTMLParser):
                 self.foreign += bad
             if tag in BLOCK:
                 self.text.append(" ")
+            if tag in ("hr", "br"):
+                self.marks.append((tag, self.nonws))
             if tag == "img":
                 self.imgs.append(a)
                 self.img_hrefs.append(self.open_links[-1][0] if self.open_links else None)
@@ -213,8 +227,10 @@ class Extract(HTMLParser):
             if tag == "div" and "digest-post-embed" in cls:
                 d = json.loads(a.get("data-attrs") or "{}")
                 self.text.append(" " + d.get("title", "") + " ")
+                self.nonws += len(re.sub(r"[ \t\n\r\f]", "", d.get("title", "")))
                 self.embeds.append(self.post_ids.get(str(d.get("id")), "?"))
                 self.embed_pairs.append((" ".join((d.get("title") or "").split()), f"/blog/{self.embeds[-1]}/"))
+                self.link_seq.append(("card", self.embeds[-1], self.embed_pairs[-1][0]))
         if tag not in VOID:
             self.stack.append((tag, skip))
 
@@ -262,6 +278,7 @@ class Extract(HTMLParser):
                     if tag == "a" and self.open_links:
                         href, buf, is_img = self.open_links.pop()
                         self.links.append((href, "".join(buf), is_img))
+                        self.link_seq.append(("a", href, "".join(buf), is_img))
                 return
 
     def handle_data(self, data):
@@ -269,11 +286,127 @@ class Extract(HTMLParser):
             if self.media_depth and data.strip():
                 self.foreign.append(f"texto dentro de <video>/<iframe>: {data.strip()[:40]!r}")
             self.text.append(data)
+            self.nonws += len(re.sub(r"[ \t\n\r\f]", "", data))
             for _, buf, _ in self.open_links:
                 buf.append(data)
 
     def norm_text(self) -> str:
         return re.sub(r"[ \t\n\r\f]+", " ", "".join(self.text)).strip()
+
+
+# Estrutura dos componentes no corpo publicado, levantada no corpus: filhos e pai permitidos, e onde não pode haver
+# texto solto. Um wrapper que engole parágrafos (ex.: div.video aberto antes do texto, com o iframe absoluto por
+# cima) falha mesmo com elementos e classes da lista fechada.
+COMP_CLASSES = ("video", "podcast-embed", "callout", "pullquote")
+CHILDREN = {"div.video": {"iframe"}, "div.podcast-embed": {"iframe"}, "div.callout": {"p"}, "div.pullquote": {"p"},
+            "figure": {"img", "figure>a", "figcaption"}, "figure>a": {"img"}}
+EXACT_CHILDREN = {"div.video": [("iframe", 1)], "div.podcast-embed": [("iframe", 1)], "figure>a": [("img", 1)]}
+FIGURE_FORMS = ([("img", 1)], [("figcaption", 1), ("img", 1)], [("figure>a", 1)])
+PARENTS = {"div.video": {"ROOT", "li"}, "div.podcast-embed": {"ROOT"}, "div.callout": {"ROOT"},
+           "div.pullquote": {"ROOT"}, "figure": {"ROOT"}, "figcaption": {"figure"}, "figure>a": {"figure"},
+           "iframe": {"div.video", "div.podcast-embed"}, "img": {"figure", "figure>a"}, "video": {"p"}}
+NO_TEXT = {"ROOT", "div.video", "div.podcast-embed", "div.callout", "div.pullquote", "figure", "figure>a", "ul", "ol"}
+STRUCT_VOID = {"img", "br", "hr", "source", "wbr"}
+
+
+class Structure(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.stack: list[list] = []  # [chave, Counter de filhos]
+        self.on = False
+        self.done = False
+        self.bad: list[str] = []
+
+    def key(self, tag: str, a: dict) -> str:
+        cls = (a.get("class") or "").split()
+        if tag == "div":
+            c = [x for x in cls if x in COMP_CLASSES]
+            return "div." + c[0] if c else "div"
+        if tag == "a" and self.stack and self.stack[-1][0] == "figure":
+            return "figure>a"
+        return tag
+
+    def handle_starttag(self, tag, attrs):
+        a = dict((k, v or "") for k, v in attrs)
+        if not self.on:
+            if not self.done and (a.get("class") or "").split() == ["post-body"]:
+                self.on = True
+                self.stack = [["ROOT", Counter()]]
+            return
+        k = self.key(tag, a)
+        parent = self.stack[-1][0]
+        self.stack[-1][1][k] += 1
+        if parent in CHILDREN and k not in CHILDREN[parent]:
+            self.bad.append(f"<{k}> dentro de <{parent}>")
+        if k in PARENTS and parent not in PARENTS[k]:
+            self.bad.append(f"<{k}> com pai <{parent}>")
+        if tag not in STRUCT_VOID:
+            self.stack.append([k, Counter()])
+
+    def handle_startendtag(self, tag, attrs):
+        self.handle_starttag(tag, attrs)
+        if self.on and tag not in STRUCT_VOID:
+            self.handle_endtag(tag)
+
+    def handle_endtag(self, tag):
+        if not self.on or tag in STRUCT_VOID:
+            return
+        k, kids = self.stack.pop()
+        got = sorted(kids.items())
+        if k in EXACT_CHILDREN and got != EXACT_CHILDREN[k]:
+            self.bad.append(f"<{k}> com filhos {dict(kids)}")
+        if k == "figure" and got not in FIGURE_FORMS:
+            self.bad.append(f"<figure> com filhos {dict(kids)}")
+        if len(self.stack) == 0:
+            self.on, self.done = False, True
+
+    def handle_data(self, data):
+        if self.on and self.stack[-1][0] in NO_TEXT and data.strip(" \t\n\r\f"):
+            self.bad.append(f"texto solto dentro de <{self.stack[-1][0]}>: {data.strip()[:30]!r}")
+
+
+def structure_problems(page: str) -> list:
+    st = Structure()
+    st.feed(page)
+    return sorted(set(st.bad))
+
+
+# Atributos exatos dos iframes que a importação e o leiaute geram (Kimi r8 #4: altura zero escondia o player).
+BODY_IFRAME_ATTRS = {
+    "youtube": {"allow": "fullscreen; picture-in-picture", "allowfullscreen": "", "loading": "lazy",
+                "referrerpolicy": "strict-origin-when-cross-origin", "title": "Vídeo do YouTube"},
+    "spotify": {"allow": "encrypted-media", "height": "102", "loading": "lazy",
+                "referrerpolicy": "strict-origin-when-cross-origin", "title": "Episódio no Spotify"},
+}
+BODY_IFRAME_HOSTS = {"youtube": "www.youtube-nocookie.com", "spotify": "open.spotify.com"}
+
+
+class TopPlayer(HTMLParser):
+    """Iframes fora do corpo, com a cadeia de pais (tag e atributos)."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.stack: list[tuple[str, dict]] = []
+        self.found: list[tuple[dict, list]] = []
+        self.body = False
+
+    def handle_starttag(self, tag, attrs):
+        a = dict((k, v or "") for k, v in attrs)
+        if self.body or "post-body" in (a.get("class") or "").split():
+            self.body = True
+            return
+        if tag == "iframe":
+            self.found.append((a, list(self.stack)))
+        if tag not in VOID:
+            self.stack.append((tag, a))
+
+    def handle_endtag(self, tag):
+        if self.body:
+            return
+        for i in range(len(self.stack) - 1, -1, -1):
+            if self.stack[i][0] == tag:
+                del self.stack[i:]
+                return
 
 
 def aliases_for(old: set, slugs: set) -> dict:
@@ -299,14 +432,111 @@ def old_slugs(html: str) -> set:
     return out
 
 
-def url_host(h: str) -> str:
-    """Host como o navegador o resolve: percent-encoding decodificado, minúsculas, sem ponto final."""
-    return unquote(urlsplit(h.strip()).hostname or "").lower().rstrip(".")
+class Resolver:
+    """URLs resolvidas como o navegador (WHATWG, via check_site.resolve_urls), em lote e com memória."""
+
+    def __init__(self):
+        self.memo: dict = {}
+
+    def prefetch(self, pairs) -> None:
+        todo = sorted({(b, r) for b, r in pairs if (b, r) not in self.memo})
+        for k, v in zip(todo, CS.resolve_urls([list(x) for x in todo])):
+            self.memo[k] = v
+
+    def get(self, ref: str, base: str = ORIG_BASE) -> dict | None:
+        if (base, ref) not in self.memo:
+            self.prefetch([(base, ref)])
+        return self.memo[(base, ref)]
 
 
-def is_old(h: str) -> bool:
-    host = url_host(h)
+RES = Resolver()
+
+
+def url_host(h: str, base: str = ORIG_BASE) -> str:
+    """Host como o navegador o resolve (WHATWG): três barras, pontos ideográficos, barra invertida, maiúsculas."""
+    r = RES.get(h, base)
+    return unquote(r["hostname"]).lower().rstrip(".") if r else ""
+
+
+def url_path(h: str, base: str = ORIG_BASE) -> str:
+    r = RES.get(h, base)
+    return r["pathname"] if r else ""
+
+
+def is_old(h: str, base: str = ORIG_BASE) -> bool:
+    host = url_host(h, base)
     return host in SITE_HOSTS or host == "substack.com" or host.endswith(".substack.com")
+
+
+def css_unescape(t: str) -> str:
+    t = re.sub(r"/\*.*?\*/", "", t, flags=re.S)
+    t = re.sub(r"\\([0-9a-fA-F]{1,6})[ \t\n\r\f]?", lambda m: chr(int(m.group(1), 16)) if 0 < int(m.group(1), 16) <= 0x10FFFF else "\ufffd", t)
+    return re.sub(r"\\(.)", r"\1", t, flags=re.S)
+
+
+def css_refs(t: str) -> list:
+    """Tudo o que o CSS pode carregar: url(...) e strings (image-set, @import), depois dos escapes do CSS."""
+    t = css_unescape(t)
+    out = [next(g for g in m.groups() if g is not None).strip(ASCII_WS)
+           for m in re.finditer(r'url\(\s*(?:"([^"]*)"|\'([^\']*)\'|([^)]*?))\s*\)', t, re.I)]
+    out += [a if a is not None else b for a, b in re.findall(r'"([^"]*)"|\'([^\']*)\'', t)]
+    return out
+
+
+class Refs(HTMLParser):
+    """Cada referência a URL de uma página: atributos, CSS (style e <style>) e meta refresh. O tipo separa as
+    três referências em que a capa pode estar (og:image, twitter:image) do resto."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.refs: list[tuple[str, str]] = []
+        self.in_style = False
+
+    def handle_starttag(self, tag, attrs):
+        a = {}
+        for k, v in attrs:
+            a.setdefault(k, v or "")
+        kind = "outro"
+        if tag == "meta" and a.get("property") == "og:image":
+            kind = "og:image"
+        elif tag == "meta" and a.get("name") == "twitter:image":
+            kind = "twitter:image"
+        for k, v in a.items():
+            if k in ("srcset", "imagesrcset"):
+                self.refs += [(kind, u) for u in raw_srcset_urls(v)]
+            elif k == "ping":
+                self.refs += [(kind, u) for u in re.split(f"[{ASCII_WS}]+", v) if u]
+            elif k in URL_ATTRS:
+                self.refs.append((kind, v))
+            elif k == "style":
+                self.refs += [("css", u) for u in css_refs(v)]
+            elif k == "content" and tag == "meta":
+                if a.get("http-equiv", "").lower() == "refresh":
+                    m = re.search(r"url\s*=\s*['\"]?([^'\"]*)", v, re.I)
+                    if m:
+                        self.refs.append((kind, m.group(1)))
+                else:
+                    self.refs.append((kind, v))
+        self.in_style = tag == "style"
+
+    def handle_endtag(self, tag):
+        if tag == "style":
+            self.in_style = False
+
+    def handle_data(self, data):
+        if self.in_style:
+            self.refs += [("css", u) for u in css_refs(data)]
+
+
+def page_refs(page: str) -> list:
+    r = Refs()
+    r.feed(page)
+    return r.refs + [("JSON-LD", x) for x in ld_strings(page)]
+
+
+def raw_srcset_urls(v: str) -> list:
+    """O primeiro token de cada candidato, mesmo inválido: um endereço antigo num candidato ruim também conta."""
+    return [re.split(f"[{ASCII_WS}]+", c.strip(ASCII_WS))[0] for c in v.split(",") if c.strip(ASCII_WS)]
 
 
 def original_url(url: str) -> str:
@@ -368,7 +598,8 @@ def srcset(v: str) -> list:
     invalida o candidato no navegador, então vira ("", "") e falha na comparação das larguras."""
     out = []
     for c in v.split(","):
-        parts = c.strip().split()
+        # Só os espaços ASCII separam (HTML); NBSP e outros espaços Unicode invalidam o candidato no navegador.
+        parts = [x for x in re.split(f"[{ASCII_WS}]+", c) if x]
         if not parts:
             continue
         ok = len(parts) == 2 and re.fullmatch(r"[1-9][0-9]*w", parts[1])
@@ -565,7 +796,8 @@ def expected_href(h: str, slugs: set, aliases: dict, ids: frozenset = frozenset(
     u = urlsplit(h)
     if url_host(h) not in SITE_HOSTS:
         return h
-    m = re.fullmatch(r"/(p|post)/([^/]+)/?", u.path)
+    path = url_path(h)
+    m = re.fullmatch(r"/(p|post)/([^/]+)/?", path)
     if m and u.fragment and unquote(m.group(2)).lower() == own:
         # Fragmento em URL do próprio post vale como "#fragmento" (R5 se não houver alvo).
         return "#" + u.fragment if unquote(u.fragment) in ids else None
@@ -576,7 +808,7 @@ def expected_href(h: str, slugs: set, aliases: dict, ids: frozenset = frozenset(
         if s in aliases:
             return f"/blog/{aliases[s]}/"
         return h
-    if u.path in ("", "/"):
+    if path in ("", "/"):
         return "/blog/"
     return h
 
@@ -585,10 +817,15 @@ def link_text(t: str) -> str:
     return " ".join(t.split())
 
 
-def original_link_pairs(ex: Extract, slugs, aliases, own: str) -> Counter:
-    """Cada link do original como (texto visível, destino esperado): trocar destinos entre dois links falha."""
-    out = Counter()
-    for href, text, is_img in ex.links:
+def original_link_seq(ex: Extract, slugs, aliases, own: str) -> list:
+    """Cada link do original como (texto visível, destino esperado), na ordem do documento, com os cards de post
+    embutido no lugar deles: trocar destinos entre dois links de mesmo texto também falha."""
+    out = []
+    for item in ex.link_seq:
+        if item[0] == "card":
+            out.append((item[2], f"/blog/{item[1]}/"))
+            continue
+        _, href, text, is_img = item
         if not href:
             continue
         if is_img and (url_host(href) in CDN_HOSTS or href == "undefined"):
@@ -597,7 +834,7 @@ def original_link_pairs(ex: Extract, slugs, aliases, own: str) -> Counter:
             continue
         e = expected_href(href, slugs, aliases, frozenset(ex.ids), own)
         if e is not None:
-            out[(link_text(text), e)] += 1
+            out.append((link_text(text), e))
     return out
 
 
@@ -660,6 +897,27 @@ def main(argv=None) -> int:
             posts[s] = json.load(f)
     post_ids = {str(p["id"]): s for s, p in posts.items()}
     corpus = Corpus(a.cache, posts)
+    # Originais lidos uma vez: ids de cada post (âncora para outro post) e todos os hrefs, resolvidos em lote.
+    orig_ex = {}
+    for s in expected:
+        orig_ex[s] = Extract(post_ids=post_ids)
+        orig_ex[s].feed(posts[s]["body_html"])
+    RES.prefetch((ORIG_BASE, h) for ex in orig_ex.values() for h in [x[0] for x in ex.links] + [x for x in ex.img_hrefs if x])
+    # Toda referência a URL de cada página do build (atributos, CSS, meta refresh, JSON-LD), resolvida em lote.
+    page_text, refs_by = {}, {}
+    for dirpath, _, files in os.walk(dist):
+        for fn in files:
+            if fn.endswith(".html"):
+                rel = os.path.relpath(os.path.join(dirpath, fn), dist)
+                page_text[rel] = open(os.path.join(dist, rel), encoding="utf-8").read()
+                refs_by[rel] = page_refs(page_text[rel])
+    page_base = {rel: urljoin("https://guifav.dev/blog/", rel.replace(os.sep, "/").removesuffix("index.html")) for rel in refs_by}
+    RES.prefetch((page_base[rel], v) for rel, refs in refs_by.items() for _, v in refs)
+    with open(os.path.join(a.root, "src", "consts.ts"), encoding="utf-8") as f:
+        form = re.search(r"^export const NEWSLETTER_FORM_ENABLED = (true|false);", f.read(), re.M)
+    if form is None:
+        problems.append("G3 consts.ts: NEWSLETTER_FORM_ENABLED não encontrado (o rodapé depende dele)")
+    form_on = bool(form) and form.group(1) == "true"
     video = a.video or next((os.path.join(a.export, f) for f in sorted(os.listdir(a.export)) if f.endswith(".mp4")), None)
     aliases = aliases_for(set().union(*(old_slugs(p["body_html"]) for p in posts.values())), set(expected))
     # O relatório do importador é conferido contra o cálculo daqui, nunca usado como referência.
@@ -675,8 +933,7 @@ def main(argv=None) -> int:
     spotify = Counter()
     for s in sorted(expected & built):
         p = posts[s]
-        orig = Extract(post_ids=post_ids)
-        orig.feed(p["body_html"])
+        orig = orig_ex[s]
         pub = Extract(root_class="post-body")
         with open(os.path.join(dist, s, "index.html"), encoding="utf-8") as f:
             page = f.read()
@@ -692,13 +949,24 @@ def main(argv=None) -> int:
         if o_links != p_links:
             problems.append(f"G3 {s}: links divergem: só no original {dict(o_links - p_links)}, só no publicado {dict(p_links - o_links)}")
         else:
-            # Cada texto aponta para o mesmo destino (os cards de post embutido têm texto próprio e ficam de fora).
-            # Cards de post embutido entram como (título, destino): nenhum link fica fora da comparação.
-            o_pairs = original_link_pairs(orig, set(expected), aliases, s) + Counter(orig.embed_pairs)
-            p_pairs = Counter((link_text(t), h) for h, t, _ in pub.links)
-            if o_pairs != p_pairs:
-                problems.append(f"G3 {s}: texto e destino dos links divergem: só no original {dict(o_pairs - p_pairs)}, "
-                                f"só no publicado {dict(p_pairs - o_pairs)}")
+            # Cada link, na ordem do documento e com os cards de post embutido no lugar deles, tem o mesmo texto e o
+            # mesmo destino do original: trocar destinos entre links de mesmo texto também falha.
+            o_seq = original_link_seq(orig, set(expected), aliases, s)
+            p_seq = [(link_text(t), h) for h, t, _ in pub.links]
+            if o_seq != p_seq:
+                k = next((i for i, (x, y) in enumerate(zip(o_seq, p_seq)) if x != y), min(len(o_seq), len(p_seq)))
+                problems.append(f"G3 {s}: link {k + 1} diverge (texto, destino, na ordem): original "
+                                f"{o_seq[k] if k < len(o_seq) else None}, publicado {p_seq[k] if k < len(p_seq) else None}")
+        # Âncora para outro post: o fragmento só pode sair quando não tem alvo no original daquele post.
+        for href, _, _ in orig.links:
+            if url_host(href) not in SITE_HOSTS or not urlsplit(href).fragment:
+                continue
+            m = re.fullmatch(r"/(p|post)/([^/]+)/?", url_path(href))
+            t = unquote(m.group(2)).lower() if m else None
+            t = t if t in expected else aliases.get(t)
+            frag = urlsplit(href).fragment
+            if t and t != s and (frag in orig_ex[t].ids or unquote(frag) in orig_ex[t].ids):
+                problems.append(f"G3 {s}: âncora viva {href} para outro post perdida (o alvo existe no original de {t})")
         for h, n in o_links.items():
             if is_old(h):
                 unresolved[(s, h)] += n
@@ -787,27 +1055,40 @@ def main(argv=None) -> int:
             if h.startswith("#") and unquote(h[1:]) not in pub.ids:
                 problems.append(f"G3 {s}: âncora {h} sem alvo no HTML publicado")
         for it in pub.iframe_tags:
-            host = (urlsplit(it.get("src", "")).hostname or "").lower()
-            if it.get("loading") != "lazy" or (host.endswith("youtube.com") or "youtube" in host) and host != "www.youtube-nocookie.com":
-                problems.append(f"G4 {s}: iframe {it.get('src')} com loading {it.get('loading')!r}; esperado lazy e YouTube em www.youtube-nocookie.com")
+            kind = (embed_id(it.get("src", "")) or ("?",))[0]
+            want = BODY_IFRAME_ATTRS.get(kind)
+            got = {k: v for k, v in it.items() if k != "src"}
+            if want is None or got != want or url_host(it.get("src", ""), f"https://guifav.dev/blog/{s}/") != BODY_IFRAME_HOSTS[kind]:
+                problems.append(f"G4 {s}: iframe {it.get('src')} com atributos {got}; esperado {want} em {BODY_IFRAME_HOSTS.get(kind)}")
+        # Estrutura dos componentes (filhos, pai, texto solto) e posição de cada <hr> e <br>.
+        st = structure_problems(page)
+        if st:
+            problems.append(f"G2 {s}: estrutura dos componentes fora do que a importação gera: {st[:6]}")
+        if orig.marks != pub.marks:
+            k = next((i for i, (x, y) in enumerate(zip(orig.marks, pub.marks)) if x != y), min(len(orig.marks), len(pub.marks)))
+            problems.append(f"G2 {s}: quebras e divisórias divergem (tipo, caracteres antes): original {orig.marks[k:k + 2]}, "
+                            f"publicado {pub.marks[k:k + 2]} ({len(orig.marks)} e {len(pub.marks)})")
         decoded = unquote(H.unescape(page))
         n_cover = len(re.findall(re.escape(s) + r"/(?:\./)*capa\.", decoded))
         want_cover = 3 if p.get("cover_image") else 0
         if n_cover != want_cover:
             problems.append(f"G4 {s}: a capa aparece {n_cover} vezes na página decodificada; esperado {want_cover} "
                             f"(og:image, twitter:image e JSON-LD; nunca em mídia, estilo ou outro lugar)")
+        # Toda referência da página (atributos, CSS de style e <style> com escapes, meta refresh), resolvida como o
+        # navegador (WHATWG: "x/../", "./", barra invertida, percent-encoding): a capa só pode estar em og:image,
+        # twitter:image e no JSON-LD.
         cover_path = f"/blog/img/{s}/capa.jpg"
-        page_url = f"https://guifav.dev/blog/{s}/"
-        for m in re.finditer(r"<(?:img|source|video|image|input)\b[^>]*>", page):
-            urls = re.findall(r'\s(?:src|poster|href|xlink:href)="([^"]*)"', m.group(0))
-            urls += [c.strip().split()[0] for x in re.findall(r'\ssrcset="([^"]*)"', m.group(0)) for c in x.split(",") if c.strip()]
-            # Resolvido como o navegador: URL relativa, percent-encoding e segmentos "." e "..".
-            if any(posixpath.normpath(unquote(urlsplit(urljoin(page_url, H.unescape(u))).path)) == cover_path for u in urls):
-                problems.append(f"G4 {s}: a capa aparece como mídia visível na página (só vale em og:image, twitter:image e JSON-LD)")
+        rel = os.path.join(s, "index.html")
+        for kind, v in refs_by.get(rel, []):
+            r = RES.get(v, page_base[rel])
+            if kind not in ("og:image", "twitter:image", "JSON-LD") and r and r["hostname"] == "guifav.dev" \
+                    and unquote(r["pathname"]) == cover_path:
+                problems.append(f"G4 {s}: a capa aparece fora de og:image, twitter:image e JSON-LD ({kind}: {v[:80]!r})")
                 break
         p_pres = [None if x in (None, "", "plaintext", "text") else x for x in pub.pres]
         if orig.pres != p_pres:
             problems.append(f"G2 {s}: linguagem dos blocos de código diverge: original {orig.pres}, publicado {p_pres}")
+        fm = read_fm(os.path.join(md_dir, s + ".md"))
         # G2: título e subtítulo, no frontmatter e no cabeçalho publicado
         title = re.sub(r"\s+", " ", p["title"]).strip()
         sub = re.sub(r"\s+", " ", p.get("subtitle") or "").strip()
@@ -816,14 +1097,22 @@ def main(argv=None) -> int:
         if h1 != title or ps != sub:
             problems.append(f"G2 {s}: cabeçalho publicado {h1!r} / {ps!r} diferente da API {title!r} / {sub!r}")
         # G7 e G8
-        fm = read_fm(os.path.join(md_dir, s + ".md"))
         if re.sub(r"\s+", " ", fm.get("title", "")).strip() != title or re.sub(r"\s+", " ", fm.get("subtitle", "")).strip() != sub:
             problems.append(f"G2 {s}: frontmatter {fm.get('title')!r} / {fm.get('subtitle')!r} diferente da API")
         want_type = "podcast" if p.get("type") == "podcast" else "newsletter"
         if fm.get("type") != want_type:
             problems.append(f"G7 {s}: type {fm.get('type')!r} no frontmatter, esperado {want_type!r} pela API")
-        # Player do topo: antes do corpo (o Spotify dentro do corpo de uma newsletter usa a mesma classe).
-        players = re.findall(r'<div class="podcast-embed"><iframe src="([^"]+)"', page.split('<div class="post-body">', 1)[0])
+        # Player do topo: antes do corpo (o Spotify dentro do corpo de uma newsletter usa a mesma classe). Atributos
+        # exatos do iframe e do div que o envolve, dentro do artigo: altura zero ou wrapper a mais falham.
+        tp = TopPlayer()
+        tp.feed(page)
+        players = [f["src"] for f, _ in tp.found]
+        for f, chain in tp.found:
+            want = {"src": f.get("src", ""), "title": f"Episódio: {fm.get('title', '')}", "height": "102", "loading": "lazy",
+                    "allow": "encrypted-media", "referrerpolicy": "strict-origin-when-cross-origin"}
+            if f != want or [(t, x) for t, x in chain[-2:]] != [("article", {"class": "post"}), ("div", {"class": "podcast-embed"})]:
+                problems.append(f"G7 {s}: player do topo com atributos {f} dentro de {[t for t, _ in chain[-3:]]}; esperado {want} "
+                                f"em article.post > div.podcast-embed")
         if want_type != "podcast" and players:
             problems.append(f"G7 {s}: player de podcast num post que não é podcast: {players}")
         if fm.get("date") != p["post_date"] or fm.get("updated") != p["updated_at"]:
@@ -853,28 +1142,23 @@ def main(argv=None) -> int:
         problems.append(f"G3 relatório: links sem destino divergem: só no calculado {dict(unresolved - report_unresolved)}, "
                         f"só no relatório {dict(report_unresolved - unresolved)}")
 
-    # G3 em todo HTML do build, fora e dentro do conteúdo: cada URL do domínio antigo ou do Substack em
-    # atributo (href, src, srcset, poster, content, action) ou no JSON-LD precisa ser um link sem destino
-    # daquele post, na mesma quantidade, ou o link "Newsletter" do rodapé (um por página).
-    for dirpath, _, files in os.walk(dist):
-        for fn in files:
-            if not fn.endswith(".html"):
-                continue
-            path = os.path.join(dirpath, fn)
-            t = open(path, encoding="utf-8").read()
-            rel = os.path.relpath(path, dist)
-            urls = []
-            for v in OLD_URL_ATTR.findall(t):
-                urls += [u for u, _ in srcset(v)] if " " in v.strip() and "," in v else [v]
-            urls += [x for x in ld_strings(t) if re.match(r"(?:https?:)?//", x)]
-            got = Counter(H.unescape(u) for u in urls if is_old(H.unescape(u)))
-            if FOOTER_NEWSLETTER in t:
-                got["https://guilhermefavaron.com.br"] -= 1
-            slug = rel.split(os.sep)[0] if rel.endswith(os.sep + "index.html") else None
-            allowed_here = Counter({h: n for (ps, h), n in unresolved.items() if ps == slug})
-            extra = +(got - allowed_here)
-            if extra:
-                problems.append(f"G3 {rel}: endereço antigo fora do relatório: {dict(extra)}")
+    # G3 em todo HTML do build, fora e dentro do conteúdo: cada referência a URL (qualquer atributo de URL, CSS,
+    # meta refresh, JSON-LD) que o navegador resolve para o domínio antigo ou o Substack precisa ser um link sem
+    # destino daquele post, na mesma quantidade. O link "Newsletter" do rodapé só pode ir ao Substack com o formulário
+    # desligado; ligado, toda página com rodapé aponta para /blog/assinar/.
+    for rel, refs in sorted(refs_by.items()):
+        t = page_text[rel]
+        got = Counter(v for _, v in refs if is_old(v, page_base[rel]))
+        if not form_on and FOOTER_NEWSLETTER in t:
+            got["https://guilhermefavaron.com.br"] -= 1
+        if form_on and "<footer>" in t and t.count(FOOTER_SUBSCRIBE) != 1:
+            problems.append(f"G3 {rel}: com o formulário ligado, o rodapé precisa apontar para /blog/assinar/ "
+                            f"({t.count(FOOTER_SUBSCRIBE)} links)")
+        slug = rel.split(os.sep)[0] if rel.endswith(os.sep + "index.html") else None
+        allowed_here = Counter({h: n for (ps, h), n in unresolved.items() if ps == slug})
+        extra = +(got - allowed_here)
+        if extra:
+            problems.append(f"G3 {rel}: endereço antigo fora do relatório: {dict(extra)}")
 
     # G4 no build inteiro: nada do CDN do Substack. G3 no RSS e no sitemap.
     for dirpath, _, files in os.walk(os.path.join(dist)):
@@ -886,9 +1170,8 @@ def main(argv=None) -> int:
                 problems.append(f"G4 {fn}: referência ao CDN do Substack")
             if fn.endswith(".xml"):
                 for h in re.findall(r'(?:href|src)="([^"]+)"|<link>([^<]+)</link>|<loc>([^<]+)</loc>', t):
-                    hh = next(x for x in h if x).replace("&amp;", "&")
-                    host = (urlsplit(hh).hostname or "").lower()
-                    if host in SITE_HOSTS or host.endswith("substack.com"):
+                    hh = H.unescape(next(x for x in h if x))
+                    if is_old(hh, "https://guifav.dev/blog/"):
                         problems.append(f"G3 {fn}: endereço antigo: {hh}")
     img_bytes = sum(os.path.getsize(os.path.join(dp, fn)) for dp, _, fs in os.walk(os.path.join(a.root, "public", "img")) for fn in fs)
     if img_bytes > IMG_BUDGET:

@@ -142,6 +142,35 @@ class LinkRulesTest(unittest.TestCase):
         with self.assertRaises(C.ConvertError):
             conv('<h2 id="sec">S</h2><p><a href="#sec">ir</a></p>')
 
+    def test_live_fragment_to_other_post_fails(self):
+        # Rodada 8 (Kimi): o fragmento para outro post só pode sair se não tiver alvo no original daquele post.
+        ids = {"outro-post": {"sec"}, "o-que-e-ia": {"alvo"}}
+        for href in ("https://www.guilhermefavaron.com.br/p/outro-post#sec",
+                     "https://www.guilhermefavaron.com.br/post/o-que-e-ia-2#alvo"):
+            with self.assertRaises(C.ConvertError, msg=href):
+                conv(f'<p><a href="{href}">x</a></p>', anchor_ids=ids, aliases={"o-que-e-ia-2": "o-que-e-ia"})
+
+    def test_dead_fragment_to_other_post_goes_to_top(self):
+        md, ctx = conv('<p><a href="https://www.guilhermefavaron.com.br/p/outro-post#sumido">x</a></p>',
+                       anchor_ids={"outro-post": {"sec"}})
+        self.assertEqual(md, "[x](/blog/outro-post/)\n")
+        self.assertEqual(ctx.stats["R1"], 1)
+
+    def test_old_host_in_browser_only_form_fails(self):
+        # Rodada 8 (Kimi): formas que o navegador resolve para o domínio antigo e o urlsplit não reconhece.
+        for href in ("https:///guilhermefavaron.com.br/p/outro-post", "https://guilhermefavaron\u3002com\u3002br/p/x",
+                     "http:/www.guilhermefavaron.com.br/p/x", "https:\\\\guilhermefavaron.com.br\\p\\x",
+                     "https://www.guilhermefavaron.com.br./p/x", "https://iaaplicada\uff0esubstack.com/p/x"):
+            with self.assertRaises(C.ConvertError, msg=href):
+                conv(f'<p><a href="{href}">x</a></p>')
+
+    def test_browser_host(self):
+        self.assertEqual(C.browser_host("https://Exemplo.com:8080/a"), "exemplo.com")
+        self.assertEqual(C.browser_host("https:///guilhermefavaron.com.br/p/x"), "guilhermefavaron.com.br")
+        self.assertEqual(C.browser_host("//guilhermefavaron%2Ecom.br/x"), "guilhermefavaron.com.br")
+        self.assertEqual(C.browser_host("mailto:a@b.c"), "")
+        self.assertEqual(C.browser_host("/blog/x/"), "")
+
     def test_r6_manual_replacement(self):
         md, ctx = conv('<p><a href="https://download-files.wixmp.com/raw/x.pdf?token=1">pdf</a></p>',
                        replacements={"https://download-files.wixmp.com/raw/x.pdf?token=1": "https://arxiv.org/abs/1706.03762"})
