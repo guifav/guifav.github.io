@@ -17,5 +17,8 @@ export const PRE_CUTOVER_NOINDEX = true;
 // Formulário de inscrição (issue #21). Fica desligado até o Worker estar no ar e testado; o PR que
 // liga também preenche a chave pública do Turnstile.
 export const NEWSLETTER_FORM_ENABLED = true;
+// Link "Newsletter" do rodapé: o Substack enquanto o formulário novo está desligado (é o único jeito de
+// assinar até lá); com o formulário ligado, a página de assinatura do blog. Sem passo manual no cutover.
+export const NEWSLETTER_SUBSTACK_URL = 'https://guilhermefavaron.com.br';
 export const NEWSLETTER_ENDPOINT = 'https://insights.guifav.dev/subscribe';
 export const TURNSTILE_SITE_KEY = '0x4AAAAAAF8raRhCn4ciudgW';

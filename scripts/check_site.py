@@ -103,6 +103,59 @@ def _internal(res: dict | None) -> str | None:
     return unquote(res["pathname"]) or "/"
 
 
+def refresh_url(content: str) -> str | None:
+    """URL de um <meta http-equiv="refresh">, pelos passos do HTML (shared declarative refresh steps): o tempo,
+    depois ";", "," ou espaço, e a URL com ou sem "url=" e aspas. None se não há URL ou o conteúdo é inválido."""
+    ws, i, n = " \t\n\f\r", 0, len(content)
+    while i < n and content[i] in ws:
+        i += 1
+    j = i
+    while i < n and content[i].isascii() and content[i].isdigit():
+        i += 1
+    if i == j and not (i < n and content[i] == "."):
+        return None
+    while i < n and (content[i] == "." or (content[i].isascii() and content[i].isdigit())):
+        i += 1
+    if i >= n:
+        return None
+    if content[i] not in ";," + ws:
+        return None
+    while i < n and content[i] in ws:
+        i += 1
+    if i < n and content[i] in ";,":
+        i += 1
+    while i < n and content[i] in ws:
+        i += 1
+    if i >= n:
+        return None
+    url = content[i:]
+    k = i
+    if content[k:k + 1].lower() == "u":
+        k += 1
+        if content[k:k + 1].lower() == "r":
+            k += 1
+            if content[k:k + 1].lower() == "l":
+                k += 1
+                while k < n and content[k] in ws:
+                    k += 1
+                if content[k:k + 1] == "=":
+                    k += 1
+                    while k < n and content[k] in ws:
+                        k += 1
+                    i = k
+                    quote = content[i] if i < n and content[i] in "'\"" else ""
+                    url = content[i + len(quote):]
+                    if quote and quote in url:
+                        url = url[:url.index(quote)]
+    elif content[k:k + 1] in ("'", '"'):
+        quote = content[k]
+        url = content[k + 1:]
+        if quote in url:
+            url = url[:url.index(quote)]
+    url = url.strip(ws)
+    return url or None
+
+
 def parse_srcset(value: str) -> list[str]:
     """URLs de um srcset, pela regra do HTML: a URL vai até um espaço; vírgula no fim da URL encerra o candidato."""
     urls: list[str] = []
@@ -171,6 +224,11 @@ class _Page(HTMLParser):
             a.setdefault(k, v or "")
         if tag == "meta" and a.get("name", "").lower() == "robots":
             self.robots.append(a.get("content", "").lower())
+        if tag == "meta" and a.get("http-equiv", "").lower() == "refresh":
+            # O navegador navega para essa URL: conta como link (destino, blog antes do cutover).
+            u = refresh_url(a.get("content", ""))
+            if u:
+                self.refs.append(u)
         for k in URL_ATTRS:
             if k in a and a[k].strip():
                 self.refs.append(a[k].strip())

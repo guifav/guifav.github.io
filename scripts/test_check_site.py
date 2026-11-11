@@ -111,6 +111,23 @@ class CheckTest(Base):
         self.assertTrue(any("aponta para o blog" in p for p in self.problems(pre_cutover=True)))
         self.assertEqual(self.problems(pre_cutover=False), [])
 
+    def test_refresh_url_follows_the_html_rule(self):
+        # Rodada 9 do #32 (Kimi): o navegador aceita a URL do refresh com ou sem "url=".
+        cases = {"0;url=/a": "/a", "0; URL = '/a'": "/a", "0;https://x.com/y": "https://x.com/y", "0,/b": "/b",
+                 "0 /c": "/c", "0; url=\"/d\" resto": "/d", "1.5; url=/e": "/e", "5": None, "0;": None,
+                 "x;url=/a": None, "0;url": "url"}
+        for content, want in cases.items():
+            self.assertEqual(C.refresh_url(content), want, content)
+
+    def test_meta_refresh_to_blog_counts_as_link_pre_cutover(self):
+        self.w("index.html", page('<meta http-equiv="refresh" content="0;/blog/"><img src="/assets/a.png">', robots=""))
+        self.assertTrue(any("aponta para o blog" in p for p in self.problems(pre_cutover=True)))
+
+    def test_meta_refresh_to_missing_page_is_broken(self):
+        self.w("blog/um-post/index.html", page('<meta http-equiv="Refresh" content="0; url=/blog/nao-existe/">'
+                                               '<img src="/blog/img/um-post/a.webp">'))
+        self.assertTrue(any("nao-existe" in p for p in self.problems()))
+
     def test_protocol_relative_urls_are_internal(self):
         self.w("index.html", page('<a href="//guifav.dev/nao-existe/">x</a>', robots=""))
         self.assertTrue(any("nao-existe" in p for p in self.problems()))
