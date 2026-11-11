@@ -13,8 +13,8 @@ routes = [{ pattern = "newsletter.guifav.dev", custom_domain = true }]
 [vars]
 FROM = "IA Aplicada <newsletter@guifav.dev>"
 REPLY_TO = "contact@guifav.dev"
-# Segmento "IA Aplicada" do Resend, criado no deploy. Vazio: o Worker responde 500 e não cadastra nada.
-SEGMENT_ID = ""
+# Segmento "IA Aplicada" do Resend (criado em 2026-11-11). Vazio: o Worker responde 500 e não cadastra nada.
+SEGMENT_ID = "34c37605-670a-4c09-9dff-5e5a05c9e0fa"
 SITE_ORIGIN = "https://guifav.dev"
 BLOG_URL = "https://guifav.dev/blog"
 WORKER_URL = "https://newsletter.guifav.dev"
