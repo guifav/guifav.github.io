@@ -1,0 +1,32 @@
+# Worker de inscrição da newsletter do blog (issue #21). O deploy é manual, depois do merge: ver README.md.
+#
+# Segredos: só via `wrangler secret put`, nunca neste arquivo.
+#   RESEND_API_KEY    chave do Resend com full_access (cria contatos)
+#   TURNSTILE_SECRET  chave secreta do widget do Turnstile de guifav.dev
+#   CONFIRM_SECRET    32 caracteres ou mais; assina o link de confirmação (openssl rand -base64 48)
+name = "blog-newsletter"
+main = "src/index.ts"
+compatibility_date = "2026-11-01"
+workers_dev = false
+routes = [{ pattern = "newsletter.guifav.dev", custom_domain = true }]
+
+[vars]
+FROM = "IA Aplicada <newsletter@guifav.dev>"
+REPLY_TO = "contact@guifav.dev"
+# Segmento "IA Aplicada" do Resend, criado no deploy. Vazio: o Worker responde 500 e não cadastra nada.
+SEGMENT_ID = ""
+SITE_ORIGIN = "https://guifav.dev"
+BLOG_URL = "https://guifav.dev/blog"
+WORKER_URL = "https://newsletter.guifav.dev"
+TURNSTILE_HOSTNAME = "guifav.dev"
+
+# Garantia A6: 5 pedidos por IP e 1 email de confirmação por endereço, a cada 60 s.
+[[ratelimits]]
+name = "RL_IP"
+namespace_id = "2101"
+simple = { limit = 5, period = 60 }
+
+[[ratelimits]]
+name = "RL_EMAIL"
+namespace_id = "2102"
+simple = { limit = 1, period = 60 }

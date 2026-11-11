@@ -1,0 +1,12 @@
+{
+  "name": "blog-newsletter",
+  "private": true,
+  "type": "module",
+  "description": "Worker de inscrição da newsletter do blog guifav.dev (issue #21). Deploy manual: ver README.md.",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "test": "node --test 'tests/*.test.ts'"
+  }
+}
