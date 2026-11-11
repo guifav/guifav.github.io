@@ -21,7 +21,7 @@ Esta evolução ilustra uma verdade frequentemente subestimada: a arquitetura do
 ## As Métricas que Definem Excelência: O Framework DORA
 
 <figure>
-<img src="/blog/img/devops-e-deployment-pipeline-design/a95b3f8268-564.webp" width="564" height="714" alt="Dora: State of AI-assisted Software Development - Google Cloud" loading="lazy" decoding="async">
+<img src="/blog/img/devops-e-deployment-pipeline-design/a95b3f8268-564.webp" width="328" height="415" alt="Dora: State of AI-assisted Software Development - Google Cloud" loading="lazy" decoding="async">
 <figcaption>Dora: State of AI-assisted Software Development - Google Cloud</figcaption>
 </figure>
 
@@ -88,7 +88,7 @@ A integração de segurança no pipeline (DevSecOps) eliminou o processo manual 
 ## GitOps: Git como Fonte de Verdade Universal
 
 <figure>
-<img src="/blog/img/devops-e-deployment-pipeline-design/22126f1f18-792.webp" srcset="/blog/img/devops-e-deployment-pipeline-design/22126f1f18-728.webp 728w, /blog/img/devops-e-deployment-pipeline-design/22126f1f18-792.webp 792w" sizes="(max-width: 760px) 100vw, 720px" width="792" height="792" alt="GitOps para Deployments Rápidos e Auditáveis" loading="lazy" decoding="async">
+<img src="/blog/img/devops-e-deployment-pipeline-design/22126f1f18-792.webp" srcset="/blog/img/devops-e-deployment-pipeline-design/22126f1f18-728.webp 728w, /blog/img/devops-e-deployment-pipeline-design/22126f1f18-792.webp 792w" sizes="(max-width: 760px) 100vw, 608px" width="608" height="608" alt="GitOps para Deployments Rápidos e Auditáveis" loading="lazy" decoding="async">
 <figcaption>GitOps para Deployments Rápidos e Auditáveis</figcaption>
 </figure>
 
@@ -148,7 +148,7 @@ Pipelines sofisticados são inúteis sem observabilidade adequada. A tríade cl�
 ## Conclusão: Velocidade como Capacidade Organizacional
 
 <figure>
-<img src="/blog/img/devops-e-deployment-pipeline-design/ecba732cfa-1080.webp" srcset="/blog/img/devops-e-deployment-pipeline-design/ecba732cfa-728.webp 728w, /blog/img/devops-e-deployment-pipeline-design/ecba732cfa-1080.webp 1080w" sizes="(max-width: 760px) 100vw, 720px" width="1080" height="804" alt="Desafios no Design de Pipeline DevOps" loading="lazy" decoding="async">
+<img src="/blog/img/devops-e-deployment-pipeline-design/ecba732cfa-1080.webp" srcset="/blog/img/devops-e-deployment-pipeline-design/ecba732cfa-728.webp 728w, /blog/img/devops-e-deployment-pipeline-design/ecba732cfa-1080.webp 1080w" sizes="(max-width: 760px) 100vw, 684px" width="684" height="509" alt="Desafios no Design de Pipeline DevOps" loading="lazy" decoding="async">
 <figcaption>Desafios no Design de Pipeline DevOps</figcaption>
 </figure>
 

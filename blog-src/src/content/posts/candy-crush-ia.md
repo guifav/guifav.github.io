@@ -46,7 +46,7 @@ Esse resultado teórico tem uma implicação prática importante. Como força br
 [A tese de Erik Poromaa (KTH, 2017)](https://www.semanticscholar.org/paper/Crushing-Candy-Crush-%3A-Predicting-Human-Success-in-Poromaa/36b634a2e23e3734ec591d58849cb102612a3029) reporta uma estimativa empírica que reforça essa intuição. Para o nível 13 do jogo, o espaço de estados (o conjunto de todas as configurações possíveis do tabuleiro considerando o fluxo de doces caindo) foi estimado em aproximadamente 10 elevado a 182. Para comparação, o universo observável contém na ordem de 10 elevado a 80 átomos, e existem aproximadamente 10 elevado a 50 configurações legais em um tabuleiro de xadrez. Um único nível de Candy Crush tem um espaço de estados muitas ordens de magnitude maior que o jogo completo de xadrez.
 
 <figure>
-<img src="/blog/img/candy-crush-ia/a164f956f9-1084.webp" srcset="/blog/img/candy-crush-ia/a164f956f9-728.webp 728w, /blog/img/candy-crush-ia/a164f956f9-1084.webp 1084w" sizes="(max-width: 760px) 100vw, 720px" width="1084" height="1034" alt="" loading="lazy" decoding="async">
+<img src="/blog/img/candy-crush-ia/a164f956f9-1084.webp" srcset="/blog/img/candy-crush-ia/a164f956f9-728.webp 728w, /blog/img/candy-crush-ia/a164f956f9-1084.webp 1084w" sizes="(max-width: 760px) 100vw, 465px" width="465" height="444" alt="" loading="lazy" decoding="async">
 <figcaption>Crushing Candy Crush : Predicting Human Success Rate in a Mobile Game using Monte-Carlo Tree Search</figcaption>
 </figure>
 
@@ -121,7 +121,7 @@ Um trabalho relacionado que vale mencionar é “[Winning Isn’t Everything: Tr
 A [Universidade Roma Tre também publicou em 2020 um sistema chamado JellyGym](https://arxiv.org/pdf/2007.01137), aplicando deep reinforcement learning à classe geral de jogos match-3. A arquitetura usa uma rede com camada oculta de 100 neurônios totalmente conectada, seguida por outra de 200 neurônios, e uma camada de saída com 324 neurônios, um para cada swap possível (incluindo swaps proibidos). O treinamento foi feito em GPU Tesla V100. Os autores compararam quatro jogadores: Random Player (ações com probabilidade fixa), JellyGym (melhor ação segundo o modelo), Smart Player (melhor tipo de Jolly) e Real Users. A comparação explícita com usuários reais, novamente, reforça o ponto de que o benchmark relevante é comportamento humano.
 
 <figure>
-<img src="/blog/img/candy-crush-ia/575ac5f104-796.webp" srcset="/blog/img/candy-crush-ia/575ac5f104-728.webp 728w, /blog/img/candy-crush-ia/575ac5f104-796.webp 796w" sizes="(max-width: 760px) 100vw, 720px" width="796" height="904" alt="" loading="lazy" decoding="async">
+<img src="/blog/img/candy-crush-ia/575ac5f104-796.webp" srcset="/blog/img/candy-crush-ia/575ac5f104-728.webp 728w, /blog/img/candy-crush-ia/575ac5f104-796.webp 796w" sizes="(max-width: 760px) 100vw, 381px" width="381" height="433" alt="" loading="lazy" decoding="async">
 </figure>
 
 Esse framing é transferível para outros contextos. Em qualquer problema de simulação ou estimativa baseada em comportamento, a pergunta inicial precisa ser: estou tentando modelar o ótimo ou o real. São objetivos diferentes, exigem datasets diferentes, funções de perda diferentes, e produzem modelos com propriedades completamente distintas.
@@ -131,7 +131,7 @@ Esse framing é transferível para outros contextos. Em qualquer problema de sim
 Além do sistema de estimativa de dificuldade, a King construiu uma ferramenta complementar chamada BAIT (Bot for AI Testing), documentada em um artigo do InfoQ por Alexander Andelkovic em 2019.
 
 <figure>
-<img src="/blog/img/candy-crush-ia/7c8d112ccb-1124.webp" srcset="/blog/img/candy-crush-ia/7c8d112ccb-728.webp 728w, /blog/img/candy-crush-ia/7c8d112ccb-1124.webp 1124w" sizes="(max-width: 760px) 100vw, 720px" width="1124" height="1152" alt="" loading="lazy" decoding="async">
+<img src="/blog/img/candy-crush-ia/7c8d112ccb-1124.webp" srcset="/blog/img/candy-crush-ia/7c8d112ccb-728.webp 728w, /blog/img/candy-crush-ia/7c8d112ccb-1124.webp 1124w" sizes="(max-width: 760px) 100vw, 399px" width="399" height="409" alt="" loading="lazy" decoding="async">
 </figure>
 
 O BAIT já percorreu mais de 4.500 níveis automaticamente, detectando problemas que são tediosos para QA humano: texturas ausentes, strings de texto faltando (onde o ID da string aparece no lugar do texto traduzido), elementos gráficos sobrepostos, e artefatos de renderização em diferentes resoluções e orientações de celular. Para a detecção visual automatizada, usa uma combinação de algoritmos de similaridade de contorno e a Google Vision API.

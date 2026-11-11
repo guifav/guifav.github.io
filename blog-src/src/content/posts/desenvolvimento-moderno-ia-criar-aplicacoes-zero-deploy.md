@@ -103,6 +103,8 @@ O processo de deploy pode ser simplificado usando plataformas modernas:
    - Suporte nativo para Gradio e Streamlit
    - Integração com Git
 
+<!---->
+
 1. **Configuração do Deploy**:
 
 ```

@@ -16,7 +16,7 @@ Enquanto isso, o Basecamp - também uma empresa de tecnologia bem-sucedida e res
 Essas duas histórias ilustram uma realidade inconveniente para quem defende que API-first é sempre a resposta: *arquitetura de software não é uma questão de “certo ou errado”, mas de alinhamento entre decisões técnicas e estratégia de negócio.* API-first architecture se tornou quase um dogma nos últimos anos, frequentemente apresentada como evolução natural de qualquer sistema. A realidade tem nuances: essa abordagem resolve problemas específicos de negócio, mas introduz complexidade operacional e custos que nem sempre se justificam.
 
 <figure>
-<img src="/blog/img/api-first-architecture-quando-faz-sentido/7271ed5780-636.webp" width="636" height="468" alt="Vantagens e Desvantagens de Arquitetura API-First" loading="lazy" decoding="async">
+<img src="/blog/img/api-first-architecture-quando-faz-sentido/7271ed5780-636.webp" width="476" height="350" alt="Vantagens e Desvantagens de Arquitetura API-First" loading="lazy" decoding="async">
 <figcaption>Vantagens e Desvantagens de Arquitetura API-First</figcaption>
 </figure>
 
@@ -27,7 +27,7 @@ API-first architecture vai além de simplesmente expor APIs para um sistema exis
 Em uma abordagem tradicional, equipes constroem aplicações e, posteriormente, adicionam APIs para permitir integrações. API-first inverte essa lógica: o contrato da API é definido primeiro, documentado, versionado e tratado como especificação fundamental. As aplicações - sejam web, mobile ou de terceiros - são todas consumidoras dessa mesma API, sem privilégios especiais ou atalhos.
 
 <figure>
-<img src="/blog/img/api-first-architecture-quando-faz-sentido/f3930a640c-732.webp" srcset="/blog/img/api-first-architecture-quando-faz-sentido/f3930a640c-728.webp 728w, /blog/img/api-first-architecture-quando-faz-sentido/f3930a640c-732.webp 732w" sizes="(max-width: 760px) 100vw, 720px" width="732" height="744" alt="Ciclo de Arquitetura API-First" loading="lazy" decoding="async">
+<img src="/blog/img/api-first-architecture-quando-faz-sentido/f3930a640c-732.webp" srcset="/blog/img/api-first-architecture-quando-faz-sentido/f3930a640c-728.webp 728w, /blog/img/api-first-architecture-quando-faz-sentido/f3930a640c-732.webp 732w" sizes="(max-width: 760px) 100vw, 379px" width="379" height="385" alt="Ciclo de Arquitetura API-First" loading="lazy" decoding="async">
 <figcaption>Ciclo de Arquitetura API-First</figcaption>
 </figure>
 
@@ -38,7 +38,7 @@ A arquitetura API-first naturalmente conduz a certos padrões de design: contrat
 ## Quando API-First Architecture Gera Valor de Negócio
 
 <figure>
-<img src="/blog/img/api-first-architecture-quando-faz-sentido/e15b1852ac-864.webp" srcset="/blog/img/api-first-architecture-quando-faz-sentido/e15b1852ac-728.webp 728w, /blog/img/api-first-architecture-quando-faz-sentido/e15b1852ac-864.webp 864w" sizes="(max-width: 760px) 100vw, 720px" width="864" height="708" alt="Cenários de Valor de Negócio da Aquitetura API-First" loading="lazy" decoding="async">
+<img src="/blog/img/api-first-architecture-quando-faz-sentido/e15b1852ac-864.webp" srcset="/blog/img/api-first-architecture-quando-faz-sentido/e15b1852ac-728.webp 728w, /blog/img/api-first-architecture-quando-faz-sentido/e15b1852ac-864.webp 864w" sizes="(max-width: 760px) 100vw, 533px" width="533" height="437" alt="Cenários de Valor de Negócio da Aquitetura API-First" loading="lazy" decoding="async">
 <figcaption>Cenários de Valor de Negócio da Aquitetura API-First</figcaption>
 </figure>
 
@@ -71,7 +71,7 @@ A Basecamp exemplifica essa escolha deliberada. Com aproximadamente 60 funcioná
 ## Arquiteturas Híbridas: O Pragmatismo Vence
 
 <figure>
-<img src="/blog/img/api-first-architecture-quando-faz-sentido/45824dcfaa-840.webp" srcset="/blog/img/api-first-architecture-quando-faz-sentido/45824dcfaa-728.webp 728w, /blog/img/api-first-architecture-quando-faz-sentido/45824dcfaa-840.webp 840w" sizes="(max-width: 760px) 100vw, 720px" width="840" height="528" alt="Arquiteturas Hibridas: O Pragmatismo Vence" loading="lazy" decoding="async">
+<img src="/blog/img/api-first-architecture-quando-faz-sentido/45824dcfaa-840.webp" srcset="/blog/img/api-first-architecture-quando-faz-sentido/45824dcfaa-728.webp 728w, /blog/img/api-first-architecture-quando-faz-sentido/45824dcfaa-840.webp 840w" sizes="(max-width: 760px) 100vw, 553px" width="553" height="348" alt="Arquiteturas Hibridas: O Pragmatismo Vence" loading="lazy" decoding="async">
 <figcaption>Arquiteturas Hibridas: O Pragmatismo Vence</figcaption>
 </figure>
 
@@ -92,7 +92,7 @@ Essa estratégia evita over-engineering e permite que a arquitetura evolua em re
 ## Racional de Decisão: Como Decidir Sua Abordagem Arquitetural
 
 <figure>
-<img src="/blog/img/api-first-architecture-quando-faz-sentido/526f36034e-792.webp" srcset="/blog/img/api-first-architecture-quando-faz-sentido/526f36034e-728.webp 728w, /blog/img/api-first-architecture-quando-faz-sentido/526f36034e-792.webp 792w" sizes="(max-width: 760px) 100vw, 720px" width="792" height="624" alt="Qual abordagem Arquitetural deve ser adotada?" loading="lazy" decoding="async">
+<img src="/blog/img/api-first-architecture-quando-faz-sentido/526f36034e-792.webp" srcset="/blog/img/api-first-architecture-quando-faz-sentido/526f36034e-728.webp 728w, /blog/img/api-first-architecture-quando-faz-sentido/526f36034e-792.webp 792w" sizes="(max-width: 760px) 100vw, 538px" width="538" height="424" alt="Qual abordagem Arquitetural deve ser adotada?" loading="lazy" decoding="async">
 <figcaption>Qual abordagem Arquitetural deve ser adotada?</figcaption>
 </figure>
 
@@ -123,7 +123,7 @@ Esses sinais sugerem momento de migração gradual. A arquitetura deve ser vista
 ## Trade-offs e Realidades Operacionais
 
 <figure>
-<img src="/blog/img/api-first-architecture-quando-faz-sentido/b5e20a7015-624.webp" width="624" height="576" alt="Avaliação de Trade-offs em Arquitetura de Software" loading="lazy" decoding="async">
+<img src="/blog/img/api-first-architecture-quando-faz-sentido/b5e20a7015-624.webp" width="444" height="410" alt="Avaliação de Trade-offs em Arquitetura de Software" loading="lazy" decoding="async">
 <figcaption>Avaliação de Trade-offs em Arquitetura de Software</figcaption>
 </figure>
 

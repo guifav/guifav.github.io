@@ -92,7 +92,7 @@ Configure jobs agendados para receber resumos matinais com clima, eventos do cal
 Várias opções disponíveis:
 
 <figure>
-<img src="/blog/img/agente-ia-clawdbot-moltbot-configuracao-erros-acertos/4440a441e7-916.webp" srcset="/blog/img/agente-ia-clawdbot-moltbot-configuracao-erros-acertos/4440a441e7-728.webp 728w, /blog/img/agente-ia-clawdbot-moltbot-configuracao-erros-acertos/4440a441e7-916.webp 916w" sizes="(max-width: 760px) 100vw, 720px" width="916" height="482" alt="Métodos de instalação do clawdbot" loading="lazy" decoding="async">
+<img src="/blog/img/agente-ia-clawdbot-moltbot-configuracao-erros-acertos/4440a441e7-916.webp" srcset="/blog/img/agente-ia-clawdbot-moltbot-configuracao-erros-acertos/4440a441e7-728.webp 728w, /blog/img/agente-ia-clawdbot-moltbot-configuracao-erros-acertos/4440a441e7-916.webp 916w" sizes="(max-width: 760px) 100vw, 529px" width="529" height="278" alt="Métodos de instalação do clawdbot" loading="lazy" decoding="async">
 <figcaption>Métodos de instalação do clawdbot</figcaption>
 </figure>
 
@@ -240,7 +240,7 @@ Tarefas que eu faria de qualquer jeito, mas que consomem tempo e atenção. O ag
 E quando ele age em meu nome publicamente, usa o prefixo \[molty\] ou \[clawdbot\]. Acredito na necessidade de transparência sobre o que é gerado por IA neste momento.
 
 <figure>
-<img src="/blog/img/agente-ia-clawdbot-moltbot-configuracao-erros-acertos/6e2c231e53-954.webp" srcset="/blog/img/agente-ia-clawdbot-moltbot-configuracao-erros-acertos/6e2c231e53-728.webp 728w, /blog/img/agente-ia-clawdbot-moltbot-configuracao-erros-acertos/6e2c231e53-954.webp 954w" sizes="(max-width: 760px) 100vw, 720px" width="954" height="1478" alt="Postagem do clawdbot em meu nome no x.com" loading="lazy" decoding="async">
+<img src="/blog/img/agente-ia-clawdbot-moltbot-configuracao-erros-acertos/6e2c231e53-954.webp" srcset="/blog/img/agente-ia-clawdbot-moltbot-configuracao-erros-acertos/6e2c231e53-728.webp 728w, /blog/img/agente-ia-clawdbot-moltbot-configuracao-erros-acertos/6e2c231e53-954.webp 954w" sizes="(max-width: 760px) 100vw, 479px" width="479" height="742" alt="Postagem do clawdbot em meu nome no x.com" loading="lazy" decoding="async">
 <figcaption>Postagem do clawdbot em meu nome no x.com</figcaption>
 </figure>
 

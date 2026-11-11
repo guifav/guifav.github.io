@@ -7,7 +7,7 @@ Rodar em blog-src/ depois de `npm run build` (lê dist/):
 Compara o HTML original da API (no cache) com o HTML publicado de cada post, usando um
 parser próprio, e não o substack_convert.py. Garantias verificadas: G1 (lista de posts),
 G2 (texto), G3 (links), G4 (imagens e bytes), G7 (podcasts) e G8 (datas).
-Não roda no CI: o cache das respostas da API fica fora do repo.
+Não roda no CI: o cache das respostas da API fica fora do repo. Requer Python 3.11+, Pillow com WebP, NumPy e ffmpeg.
 """
 from __future__ import annotations
 
@@ -18,7 +18,9 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 import sys
+import tempfile
 from collections import Counter
 from html.parser import HTMLParser
 from datetime import datetime, timedelta
@@ -79,7 +81,14 @@ class Extract(HTMLParser):
         self.imgs: list[dict] = []
         self.iframes: list[str] = []
         self.videos = 0
+        self.video_tags: list[dict] = []
         self.embeds: list[str] = []
+        self.ids: set = set()
+        # Estrutura: listas (tipo, início, itens), níveis de título e linguagem de cada bloco de código.
+        self.lists: list[list] = []
+        self.list_stack: list[int] = []
+        self.heads: list[int] = []
+        self.pres: list = []
 
     @property
     def active(self) -> bool:
@@ -96,9 +105,10 @@ class Extract(HTMLParser):
                 if tag not in VOID:
                     self.stack.append((tag, False))
             return
-        skip = bool(tag in SKIP_TAGS or (
-            tag == "div" and (cls & {"subscription-widget-wrap-editor", "subscription-widget-wrap", "image-link-expand"})) or (
-            tag == "p" and "button-wrapper" in cls and subscribe_href(json.loads(a.get("data-attrs") or "{}").get("url") or "")))
+        # Os componentes que a importação remove só são descontados no original; no publicado, tudo conta.
+        skip = bool(tag in SKIP_TAGS or (self.root_class is None and (
+            (tag == "div" and (cls & {"subscription-widget-wrap-editor", "subscription-widget-wrap", "image-link-expand"})) or (
+             tag == "p" and "button-wrapper" in cls and subscribe_href(json.loads(a.get("data-attrs") or "{}").get("url") or "")))))
         if self.active:
             if tag in BLOCK:
                 self.text.append(" ")
@@ -108,6 +118,24 @@ class Extract(HTMLParser):
                 self.iframes.append(a.get("src", ""))
             elif tag == "video":
                 self.videos += 1
+                self.video_tags.append(a)
+            if a.get("id"):
+                self.ids.add(a["id"])
+            if tag == "a" and a.get("name"):
+                self.ids.add(a["name"])
+            if tag in ("ol", "ul"):
+                self.list_stack.append(len(self.lists))
+                self.lists.append([tag, int(a.get("start") or 1) if tag == "ol" else 1, 0])
+            elif tag == "li" and self.list_stack:
+                self.lists[self.list_stack[-1]][2] += 1
+            elif tag in ("h1", "h2", "h3", "h4", "h5", "h6"):
+                self.heads.append(int(tag[1]))
+                self.head_mark = len(self.text)
+            elif tag == "pre":
+                self.pres.append(a.get("data-language") if self.root_class else None)
+            elif tag == "code" and self.root_class is None and self.stack and self.stack[-1][0] == "pre":
+                lang = next((c[len("language-"):] for c in cls if c.startswith("language-")), None)
+                self.pres[-1] = lang
             elif tag == "a":
                 self.open_links.append((a.get("href", ""), [], "image-link" in cls))
             if tag == "div" and "digest-post-embed" in cls:
@@ -131,6 +159,11 @@ class Extract(HTMLParser):
                 del self.stack[i:]
                 if self.root_class is not None and not self.stack:
                     self.depth_root = -2  # saiu do elemento raiz
+                if (was_active or self.active) and tag in ("ol", "ul") and self.list_stack:
+                    self.list_stack.pop()
+                if (was_active or self.active) and tag in ("h1", "h2", "h3", "h4", "h5", "h6") and self.heads:
+                    if not "".join(self.text[self.head_mark:]).strip():
+                        self.heads.pop()  # título vazio no original não tem conteúdo a preservar
                 if was_active or self.active:
                     if tag in BLOCK:
                         self.text.append(" ")
@@ -268,17 +301,19 @@ def check_images(s: str, o_imgs: list, p_imgs: list, dist: str, cache: str, corp
                 paths[u] = os.path.join(dist, u[len("/blog/"):])
         if len(paths) != len({u for u, _ in cands} | {src}):
             continue
+        rw = data.get("resizeWidth")
         if fmt == "GIF":
+            pw, ph = (rw, round(H * rw / W)) if isinstance(rw, int) and not isinstance(rw, bool) and 0 < rw < W else (W, H)
             if not src.endswith(".gif") or pi.get("srcset"):
                 probs.append(f"{tag}: GIF publicado como {src} com srcset {pi.get('srcset')!r}")
             elif open(paths[src], "rb").read() != open(orig, "rb").read():
                 probs.append(f"{tag}: GIF diferente do original")
-            if (pi.get("width"), pi.get("height")) != (str(W), str(H)):
-                probs.append(f"{tag}: width/height {pi.get('width')}x{pi.get('height')} diferentes de {W}x{H}")
+            if (pi.get("width"), pi.get("height")) != (str(pw), str(ph)):
+                probs.append(f"{tag}: width/height {pi.get('width')}x{pi.get('height')} diferentes de {pw}x{ph}")
             continue
         widths = sorted({x for x in WIDTHS if x < W} | {min(W, WIDTHS[-1])})
         got = sorted(int(d[:-1]) for _, d in cands if d.endswith("w") and d[:-1].isdigit())
-        if len(widths) > 1 and got != widths:
+        if (len(widths) > 1 or pi.get("srcset")) and got != widths:
             probs.append(f"{tag}: srcset com larguras {got}, esperado {widths}")
         dims = {}
         for u, path in paths.items():
@@ -295,11 +330,19 @@ def check_images(s: str, o_imgs: list, p_imgs: list, dist: str, cache: str, corp
         for u, d in cands:
             if d.endswith("w") and u in dims and dims[u][0] != int(d[:-1]):
                 probs.append(f"{tag}: {u} declarado {d} com largura real {dims[u][0]}")
+        if sorted({d[0] for d in dims.values()}) != widths:
+            probs.append(f"{tag}: arquivos com larguras {sorted({d[0] for d in dims.values()})}, esperado {widths}")
         big = max(dims.values()) if dims else (0, 0)
         if src in dims and dims[src] != big:
             probs.append(f"{tag}: src {src} não é a maior variante")
-        if (pi.get("width"), pi.get("height")) != (str(big[0]), str(big[1])):
-            probs.append(f"{tag}: width/height {pi.get('width')}x{pi.get('height')} diferentes do arquivo {big[0]}x{big[1]}")
+        # Tamanho de exibição: o resizeWidth do editor do Substack, se menor que o arquivo; senão o arquivo.
+        pw, ph = big
+        if isinstance(rw, int) and not isinstance(rw, bool) and 0 < rw < big[0]:
+            pw, ph = rw, round(big[1] * rw / big[0])
+        if (pi.get("width"), pi.get("height")) != (str(pw), str(ph)):
+            probs.append(f"{tag}: width/height {pi.get('width')}x{pi.get('height')} diferentes de {pw}x{ph}")
+        if pi.get("srcset") and pi.get("sizes") != f"(max-width: 760px) 100vw, {pw if pw < big[0] else 720}px":
+            probs.append(f"{tag}: sizes {pi.get('sizes')!r} incoerente com a largura de exibição {pw}")
     return probs
 
 
@@ -307,7 +350,8 @@ def check_cover(s: str, p: dict, page: str, dist: str, cache: str, corpus: "Corp
     og = re.search(r'<meta property="og:image" content="([^"]*)"', page)
     url = f"https://guifav.dev/blog/img/{s}/capa.jpg"
     if not p.get("cover_image"):
-        return [f"G4 {s}: og:image da pasta do post sem capa no original"] if og and f"/blog/img/{s}/" in og.group(1) else []
+        bad = [x for x in ([og.group(1)] if og else []) + ld_post_images(page) if x and f"/blog/img/{s}/" in x]
+        return [f"G4 {s}: imagem da pasta do post sem capa no original: {bad}"] if bad else []
     if not og or og.group(1) != url:
         return [f"G4 {s}: og:image {og.group(1) if og else None} diferente de {url}"]
     path = os.path.join(dist, "img", s, "capa.jpg")
@@ -320,7 +364,36 @@ def check_cover(s: str, p: dict, page: str, dist: str, cache: str, corpus: "Corp
     why = corpus.check(path, orig)
     if why:
         return [f"G4 {s}: a capa não é a imagem do original ({why})"]
+    imgs = ld_post_images(page)
+    if imgs != [url]:
+        return [f"G4 {s}: BlogPosting.image {imgs} diferente de [{url}]"]
     return []
+
+
+def ld_objects(page: str) -> list:
+    out = []
+    for m in re.finditer(r'<script\b([^>]*)>(.*?)</script>', page, re.S):
+        if re.search(r'\btype="application/ld\+json"', m.group(1)):
+            try:
+                v = json.loads(m.group(2))
+            except ValueError:
+                continue
+            for o in (v if isinstance(v, list) else v.get("@graph", [v]) if isinstance(v, dict) else []):
+                if isinstance(o, dict):
+                    out.append(o)
+    return out
+
+
+def ld_post_images(page: str) -> list:
+    """URLs de image dos BlogPosting do JSON-LD (string, lista ou ImageObject)."""
+    out = []
+    for o in ld_objects(page):
+        if o.get("@type") != "BlogPosting":
+            continue
+        v = o.get("image")
+        for x in (v if isinstance(v, list) else [v] if v is not None else []):
+            out.append(x.get("url") if isinstance(x, dict) else x)
+    return out
 
 
 def embed_id(src: str) -> tuple | None:
@@ -372,13 +445,14 @@ def ts(v: str) -> datetime:
     return datetime.fromisoformat(v.replace("Z", "+00:00"))
 
 
-def expected_href(h: str, slugs: set, aliases: dict) -> str | None:
+def expected_href(h: str, slugs: set, aliases: dict, ids: frozenset = frozenset()) -> str | None:
     h = h.strip()
     for prefix, new in MANUAL.items():
         if h.startswith(prefix):
             return new
     if h.startswith("#"):
-        return None
+        # R5: âncora sem alvo no original sai; âncora com alvo precisa ser preservada.
+        return h if unquote(h[1:]) in ids else None
     u = urlsplit(h)
     if (u.hostname or "").lower() not in SITE_HOSTS:
         return h
@@ -406,7 +480,7 @@ def original_links(ex: Extract, slugs, aliases) -> Counter:
             continue  # botão de assinar removido
         if not is_img and text == "":
             continue
-        e = expected_href(href, slugs, aliases)
+        e = expected_href(href, slugs, aliases, frozenset(ex.ids))
         if e is not None:
             out[e] += 1
     for s in ex.embeds:
@@ -498,16 +572,39 @@ def main(argv=None) -> int:
         o_emb, p_emb = [embed_id(x) for x in orig.iframes], [embed_id(x) for x in pub.iframes]
         if o_emb != p_emb or None in p_emb:
             problems.append(f"G3 {s}: iframes do corpo: original {o_emb}, publicado {p_emb}")
-        if ('native-video-embed' in p["body_html"]) != (pub.videos == 1):
-            problems.append(f"G4 {s}: vídeo nativo não publicado")
-        elif pub.videos:
-            vm = re.search(r'<video\b[^>]*\bsrc="([^"]+)"[^>]*\bposter="([^"]+)"', page)
-            vpath = os.path.join(dist, vm.group(1)[len("/blog/"):]) if vm and vm.group(1).startswith("/blog/") else ""
-            ppath = os.path.join(dist, vm.group(2)[len("/blog/"):]) if vm and vm.group(2).startswith("/blog/") else ""
+        n_vid = p["body_html"].count("native-video-embed")
+        if n_vid != pub.videos:
+            problems.append(f"G4 {s}: {n_vid} vídeos nativos no original, {pub.videos} publicados")
+        for vt in pub.video_tags:
+            vsrc, vpos = vt.get("src", ""), vt.get("poster", "")
+            vpath = os.path.join(dist, vsrc[len("/blog/"):]) if vsrc.startswith("/blog/") else ""
+            ppath = os.path.join(dist, vpos[len("/blog/"):]) if vpos.startswith("/blog/") else ""
+            if "controls" not in vt or vt.get("preload") != "none" or "autoplay" in vt:
+                problems.append(f"G4 {s}: vídeo sem controls, com preload {vt.get('preload')!r} ou com autoplay")
             if not video or not os.path.exists(vpath) or not os.path.exists(ppath):
-                problems.append(f"G4 {s}: vídeo ou pôster ausente ({vm.group(0)[:120] if vm else None})")
-            elif hashlib.sha256(open(vpath, "rb").read()).digest() != hashlib.sha256(open(video, "rb").read()).digest():
+                problems.append(f"G4 {s}: vídeo ou pôster ausente ({vsrc}, {vpos})")
+                continue
+            if hashlib.sha256(open(vpath, "rb").read()).digest() != hashlib.sha256(open(video, "rb").read()).digest():
                 problems.append(f"G4 {s}: vídeo publicado diferente do MP4 fornecido")
+            vdims = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height",
+                                    "-of", "csv=p=0", video], capture_output=True, text=True, check=True).stdout.strip()
+            if f"{vt.get('width')},{vt.get('height')}" != vdims:
+                problems.append(f"G4 {s}: vídeo com width/height {vt.get('width')}x{vt.get('height')}, o MP4 tem {vdims}")
+            # Quadro extraído aqui mesmo do MP4 fornecido (1 s), sem usar o que o importador gravou no cache.
+            with tempfile.TemporaryDirectory() as td:
+                ref = os.path.join(td, "quadro.png")
+                subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", "1", "-i", video, "-frames:v", "1", ref], check=True)
+                if img_diff(thumb(ppath), thumb(ref)) > SAME_IMAGE_MAX_DIFF:
+                    problems.append(f"G4 {s}: o pôster não é o quadro do vídeo fornecido")
+        # G2: estrutura (listas, títulos, linguagem do código). O h1 do corpo vira h2 (documentado).
+        o_heads = [2 if h == 1 else h for h in orig.heads]
+        if orig.lists != pub.lists:
+            problems.append(f"G2 {s}: listas (tipo, início, itens) divergem: original {orig.lists}, publicado {pub.lists}")
+        if o_heads != pub.heads:
+            problems.append(f"G2 {s}: níveis de título divergem: original {o_heads}, publicado {pub.heads}")
+        p_pres = [None if x in (None, "", "plaintext", "text") else x for x in pub.pres]
+        if orig.pres != p_pres:
+            problems.append(f"G2 {s}: linguagem dos blocos de código diverge: original {orig.pres}, publicado {p_pres}")
         # G2: título e subtítulo, no frontmatter e no cabeçalho publicado
         title = re.sub(r"\s+", " ", p["title"]).strip()
         sub = re.sub(r"\s+", " ", p.get("subtitle") or "").strip()
@@ -519,6 +616,13 @@ def main(argv=None) -> int:
         fm = read_fm(os.path.join(md_dir, s + ".md"))
         if re.sub(r"\s+", " ", fm.get("title", "")).strip() != title or re.sub(r"\s+", " ", fm.get("subtitle", "")).strip() != sub:
             problems.append(f"G2 {s}: frontmatter {fm.get('title')!r} / {fm.get('subtitle')!r} diferente da API")
+        want_type = "podcast" if p.get("type") == "podcast" else "newsletter"
+        if fm.get("type") != want_type:
+            problems.append(f"G7 {s}: type {fm.get('type')!r} no frontmatter, esperado {want_type!r} pela API")
+        # Player do topo: antes do corpo (o Spotify dentro do corpo de uma newsletter usa a mesma classe).
+        players = re.findall(r'<div class="podcast-embed"><iframe src="([^"]+)"', page.split('<div class="post-body">', 1)[0])
+        if want_type != "podcast" and players:
+            problems.append(f"G7 {s}: player de podcast num post que não é podcast: {players}")
         if fm.get("date") != p["post_date"] or fm.get("updated") != p["updated_at"]:
             problems.append(f"G8 {s}: datas {fm.get('date')} {fm.get('updated')} diferentes de {p['post_date']} {p['updated_at']}")
         if p.get("type") == "podcast":
@@ -530,10 +634,9 @@ def main(argv=None) -> int:
                 problems.append(f"G7 {s}: episódio fora do catálogo do Spotify: {url}")
             elif norm_title(ep["title"]) != norm_title(p["title"]) or abs(ts(ep["publishOn"]) - ts(p["post_date"])) > EPISODE_DATE_TOLERANCE:
                 problems.append(f"G7 {s}: episódio {url} é {ep['title']!r} de {ep['publishOn'][:10]}, post {p['title']!r} de {p['post_date'][:10]}")
-            m = re.search(r'<div class="podcast-embed"><iframe src="([^"]+)"', page)
             emb = "https://open.spotify.com/embed/episode/" + (url or "").rstrip("/").rsplit("/", 1)[-1]
-            if not m or m.group(1) != emb:
-                problems.append(f"G7 {s}: player publicado {m.group(1) if m else None}, esperado {emb}")
+            if players != [emb]:
+                problems.append(f"G7 {s}: player publicado {players}, esperado [{emb}]")
             spotify[url] += 1
             totals["podcasts"] += 1
         totals["posts"] += 1

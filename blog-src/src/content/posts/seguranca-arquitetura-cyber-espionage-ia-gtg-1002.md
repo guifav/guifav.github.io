@@ -104,7 +104,7 @@ Gerenciamento de identidade em arquiteturas híbridas requer federação consist
 [A Microsoft reportou em 2023 que 99.9% de ataques bem-sucedidos a contas corporativas envolveram credenciais onde MFA não estava habilitado](https://www.microsoft.com/en-us/security/blog/2019/08/20/one-simple-action-you-can-take-to-prevent-99-9-percent-of-account-attacks/) ou utilizava métodos facilmente bypassáveis como SMS. Implementação de hardware security keys resistentes a phishing reduziu taxa de comprometimento de contas em 99.1% em organizações que completaram deployment universal.
 
 <figure>
-<img src="/blog/img/seguranca-arquitetura-cyber-espionage-ia-gtg-1002/6612d016e4-816.webp" srcset="/blog/img/seguranca-arquitetura-cyber-espionage-ia-gtg-1002/6612d016e4-728.webp 728w, /blog/img/seguranca-arquitetura-cyber-espionage-ia-gtg-1002/6612d016e4-816.webp 816w" sizes="(max-width: 760px) 100vw, 720px" width="816" height="720" alt="Agregação de Telemetria Cross-Platform" loading="lazy" decoding="async">
+<img src="/blog/img/seguranca-arquitetura-cyber-espionage-ia-gtg-1002/6612d016e4-816.webp" srcset="/blog/img/seguranca-arquitetura-cyber-espionage-ia-gtg-1002/6612d016e4-728.webp 728w, /blog/img/seguranca-arquitetura-cyber-espionage-ia-gtg-1002/6612d016e4-816.webp 816w" sizes="(max-width: 760px) 100vw, 520px" width="520" height="459" alt="Agregação de Telemetria Cross-Platform" loading="lazy" decoding="async">
 <figcaption>Agregação de Telemetria Cross-Platform</figcaption>
 </figure>
 
@@ -127,7 +127,7 @@ Atacantes que ganham acesso persistente frequentemente procuram dados histórico
 Políticas rigorosas de retenção baseadas em requisitos legais e operacionais legítimos minimizam superfície de ataque. GDPR europeu requer que dados pessoais sejam mantidos apenas enquanto necessários para propósitos específicos e deletados depois. Organizações sujeitas a SOX, HIPAA ou outras regulações possuem requisitos de retenção mínima mas raramente máxima – mantendo dados além do necessário apenas expande *liability*.
 
 <figure>
-<img src="/blog/img/seguranca-arquitetura-cyber-espionage-ia-gtg-1002/6590d22e82-684.webp" width="684" height="792" alt="Governança de Dados e Minimização de Superfície de Ataque" loading="lazy" decoding="async">
+<img src="/blog/img/seguranca-arquitetura-cyber-espionage-ia-gtg-1002/6590d22e82-684.webp" width="498" height="577" alt="Governança de Dados e Minimização de Superfície de Ataque" loading="lazy" decoding="async">
 <figcaption>Governança de Dados e Minimização de Superfície de Ataque</figcaption>
 </figure>
 
@@ -152,7 +152,7 @@ Algumas organizações já vêm incorporando IA em exercícios de red team. No e
 Threat modeling sistemático identifica ativos mais críticos, mapeia possíveis vetores de ataque, avalia probabilidade e impacto potencial de diferentes cenários, e prioriza investimentos defensivos baseados em análise de risco quantitativa. Modelos devem ser atualizados regularmente refletindo o landscape de ameaças em evolução – incluindo emergência de capacidades de ataque orquestradas por IA.
 
 <figure>
-<img src="/blog/img/seguranca-arquitetura-cyber-espionage-ia-gtg-1002/546be71e3c-684.webp" width="684" height="576" alt="Resiliência e Capacidade de Resposta a Incidentes" loading="lazy" decoding="async">
+<img src="/blog/img/seguranca-arquitetura-cyber-espionage-ia-gtg-1002/546be71e3c-684.webp" width="460" height="387" alt="Resiliência e Capacidade de Resposta a Incidentes" loading="lazy" decoding="async">
 <figcaption>Resiliência e Capacidade de Resposta a Incidentes</figcaption>
 </figure>
 

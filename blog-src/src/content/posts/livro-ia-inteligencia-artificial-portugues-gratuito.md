@@ -11,7 +11,7 @@ type: newsletter
 **Um Guia Estratégico para Empresários na Era da IA**
 
 <figure>
-<img src="/blog/img/livro-ia-inteligencia-artificial-portugues-gratuito/9da2f93a06-1026.webp" srcset="/blog/img/livro-ia-inteligencia-artificial-portugues-gratuito/9da2f93a06-728.webp 728w, /blog/img/livro-ia-inteligencia-artificial-portugues-gratuito/9da2f93a06-1026.webp 1026w" sizes="(max-width: 760px) 100vw, 720px" width="1026" height="1276" alt="" loading="lazy" decoding="async">
+<img src="/blog/img/livro-ia-inteligencia-artificial-portugues-gratuito/9da2f93a06-1026.webp" srcset="/blog/img/livro-ia-inteligencia-artificial-portugues-gratuito/9da2f93a06-728.webp 728w, /blog/img/livro-ia-inteligencia-artificial-portugues-gratuito/9da2f93a06-1026.webp 1026w" sizes="(max-width: 760px) 100vw, 217px" width="217" height="270" alt="" loading="lazy" decoding="async">
 </figure>
 
 Bem-vindo ao hub de recursos do livro “Desbloqueando a Inteligência Artificial: Um Guia Estratégico para Empresários na Era da IA”. Este livro foi concebido não apenas como uma fonte de conhecimento, mas como um catalisador para a ação.

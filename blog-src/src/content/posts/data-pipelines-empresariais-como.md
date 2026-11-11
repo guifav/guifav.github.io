@@ -54,7 +54,7 @@ A camada de **Business Intelligence** serve como a interface entre infraestrutur
 A integração destas camadas resultou em um ecossistema que não apenas consolida dados, mas também adiciona inteligência através de análise automatizada e reconhecimento de padrões. Usuários podem agora acessar dashboards em tempo real que fornecem visões abrangentes da performance do negócio, permitindo resposta rápida a mudanças de mercado e questões operacionais.
 
 <figure>
-<img src="/blog/img/data-pipelines-empresariais-como/7e47e0497b-624.webp" width="624" height="672" alt="Camadas de integração de dados corporativos" loading="lazy" decoding="async">
+<img src="/blog/img/data-pipelines-empresariais-como/7e47e0497b-624.webp" width="500" height="538" alt="Camadas de integração de dados corporativos" loading="lazy" decoding="async">
 <figcaption>Camadas de integração de dados corporativos</figcaption>
 </figure>
 

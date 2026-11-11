@@ -386,10 +386,18 @@ def figure_block(n: Node, ctx: Context) -> str | None:
                 raise ConvertError(f"{ctx.slug}: imagem sem arquivo local: {src}")
             alt = data.get("alt") if data.get("alt") is not None else img.get("alt")
             big = im.files[-1][1]
+            # resizeWidth: largura de exibição escolhida no editor do Substack. O arquivo segue inteiro; muda
+            # só o tamanho apresentado (width/height e sizes).
+            rw = data.get("resizeWidth")
+            w, h = im.width, im.height
+            sizes = IMG_SIZES
+            if isinstance(rw, int) and not isinstance(rw, bool) and 0 < rw < im.width:
+                w, h = rw, round(im.height * rw / im.width)
+                sizes = f"(max-width: 760px) 100vw, {rw}px"
             tag = f'<img src="{ctx.base}{big}"'
             if len(im.files) > 1:
-                tag += ' srcset="' + ", ".join(f"{ctx.base}{p} {w}w" for w, p in im.files) + f'" sizes="{IMG_SIZES}"'
-            tag += f' width="{im.width}" height="{im.height}" alt="{attr(alt or "")}" loading="lazy" decoding="async">'
+                tag += ' srcset="' + ", ".join(f"{ctx.base}{p} {fw}w" for fw, p in im.files) + f'" sizes="{sizes}"'
+            tag += f' width="{w}" height="{h}" alt="{attr(alt or "")}" loading="lazy" decoding="async">'
             link = data.get("href")
             if not link:
                 a = img.ancestor(lambda x: x.tag == "a")
@@ -635,7 +643,30 @@ def blocks(node: Node, ctx: Context) -> list[str]:
         else:
             raise ConvertError(f"{ctx.slug}: elemento <{t}> fora do levantamento, em bloco")
     flush()
-    return out
+    return _separate_lists(out)
+
+
+LIST_SEPARATOR = "<!---->"
+
+
+def _list_kind(block: str) -> str | None:
+    if re.match(r"\d+\. ", block):
+        return "ol"
+    if block.startswith("- "):
+        return "ul"
+    return None
+
+
+def _separate_lists(out: list) -> list:
+    """Duas listas do mesmo tipo seguidas viram uma só em Markdown; um comentário vazio entre elas as separa."""
+    res, last = [], None
+    for b in out:
+        if b and last is not None and _list_kind(b) and _list_kind(b) == _list_kind(last):
+            res.append(LIST_SEPARATOR)
+        res.append(b)
+        if b:
+            last = b
+    return res
 
 
 def convert(fragment: str, ctx: Context) -> str:

@@ -149,6 +149,18 @@ class LinkRulesTest(unittest.TestCase):
 
 
 class BlockTest(unittest.TestCase):
+    def test_consecutive_lists_stay_separate(self):
+        # Em Markdown, duas listas do mesmo tipo separadas só por linha em branco viram uma lista só.
+        md, _ = conv("<ol><li><p>a</p></li><li><p>b</p></li></ol><ol><li><p>c</p></li></ol>"
+                     "<ul><li><p>d</p></li></ul><ul><li><p>e</p></li></ul>")
+        self.assertEqual(md, "1. a\n2. b\n\n<!---->\n\n1. c\n\n- d\n\n<!---->\n\n- e\n")
+        md, _ = conv("<ul><li><p>x</p><ol><li><p>a</p></li></ol><ol><li><p>b</p></li></ol></li></ul>")
+        self.assertIn("<!---->", md)
+
+    def test_lists_of_different_kinds_need_no_separator(self):
+        md, _ = conv("<ol><li><p>a</p></li></ol><ul><li><p>b</p></li></ul>")
+        self.assertNotIn("<!---->", md)
+
     def test_lists_with_paragraphs_and_nesting(self):
         md, _ = conv("<ul><li><p>um</p></li><li><p>dois</p><ol start=\"3\"><li><p>três</p></li><li><p>quatro</p></li></ol></li></ul>")
         self.assertEqual(md, "- um\n\n- dois\n\n  3. três\n  4. quatro\n")
@@ -303,6 +315,20 @@ IMAGES = {"https://substack-post-media.s3.amazonaws.com/public/images/8b00b728-1
 
 
 class ImageTest(unittest.TestCase):
+    def test_resize_width_is_the_presentation_size(self):
+        # Substack: resizeWidth é a largura de exibição escolhida no editor; o arquivo continua inteiro (#19, G4).
+        html = figure().replace("&quot;href&quot;:null}", "&quot;href&quot;:null,&quot;resizeWidth&quot;:300}")
+        self.assertIn("&quot;resizeWidth&quot;:300", html)
+        md, _ = conv(html, images=IMAGES)
+        self.assertIn(' width="300" height="204" ', md)
+        self.assertIn('sizes="(max-width: 760px) 100vw, 300px"', md)
+        self.assertIn('8b00b728-1200.webp 1200w', md)
+
+    def test_resize_width_larger_than_file_is_ignored(self):
+        html = figure().replace("&quot;href&quot;:null}", "&quot;href&quot;:null,&quot;resizeWidth&quot;:5000}")
+        md, _ = conv(html, images=IMAGES)
+        self.assertIn(' width="1200" height="814" ', md)
+
     def test_captioned_image(self):
         md, ctx = conv(figure(), images=IMAGES)
         self.assertEqual(md, '<figure>\n<img src="/blog/img/um-post/8b00b728-1200.webp" srcset="/blog/img/um-post/8b00b728-728.webp 728w, '

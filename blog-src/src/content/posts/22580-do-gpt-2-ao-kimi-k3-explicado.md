@@ -170,7 +170,7 @@ Na época, o treinamento normalmente materializava a matriz de atenção N×N in
 O mesmo processo fica mais claro visualmente. Cada etapa de decodificação realiza duas leituras ND e duas gravações 1D na HBM, enquanto o cache de KV cresce linearmente, em O(N), com o comprimento da sequência.
 
 <figure>
-<img src="/blog/img/22580-do-gpt-2-ao-kimi-k3-explicado/771cb09123-1208.webp" srcset="/blog/img/22580-do-gpt-2-ao-kimi-k3-explicado/771cb09123-728.webp 728w, /blog/img/22580-do-gpt-2-ao-kimi-k3-explicado/771cb09123-1208.webp 1208w" sizes="(max-width: 760px) 100vw, 720px" width="1208" height="1744" alt="Imagem" loading="lazy" decoding="async">
+<img src="/blog/img/22580-do-gpt-2-ao-kimi-k3-explicado/771cb09123-1208.webp" srcset="/blog/img/22580-do-gpt-2-ao-kimi-k3-explicado/771cb09123-728.webp 728w, /blog/img/22580-do-gpt-2-ao-kimi-k3-explicado/771cb09123-1208.webp 1208w" sizes="(max-width: 760px) 100vw, 562px" width="562" height="811" alt="Imagem" loading="lazy" decoding="async">
 <figcaption><em>Leituras, gravações e crescimento do cache de KV durante a decodificação.</em></figcaption>
 </figure>
 
@@ -474,7 +474,7 @@ O termo γʳ/γⁱ representa o decaimento acumulado. Um token gravado no passo 
 A arquitetura resultante tem esta aparência:
 
 <figure>
-<img src="/blog/img/22580-do-gpt-2-ao-kimi-k3-explicado/c4286c43d9-1200.webp" srcset="/blog/img/22580-do-gpt-2-ao-kimi-k3-explicado/c4286c43d9-728.webp 728w, /blog/img/22580-do-gpt-2-ao-kimi-k3-explicado/c4286c43d9-1200.webp 1200w" sizes="(max-width: 760px) 100vw, 720px" width="1200" height="952" alt="Imagem" loading="lazy" decoding="async">
+<img src="/blog/img/22580-do-gpt-2-ao-kimi-k3-explicado/c4286c43d9-1200.webp" srcset="/blog/img/22580-do-gpt-2-ao-kimi-k3-explicado/c4286c43d9-728.webp 728w, /blog/img/22580-do-gpt-2-ao-kimi-k3-explicado/c4286c43d9-1200.webp 1200w" sizes="(max-width: 760px) 100vw, 514px" width="514" height="408" alt="Imagem" loading="lazy" decoding="async">
 <figcaption><em>Arquitetura do Transformer com Gated DeltaNet.</em></figcaption>
 </figure>
 
@@ -487,7 +487,7 @@ O Kimi Linear chamou atenção por uma afirmação central: em comparações con
 O Kimi Linear avança sobre a Gated DeltaNet ao introduzir gating de granularidade fina. Em vez de um único escalar de decaimento, aprende um valor de decaimento separado para cada canal.
 
 <figure>
-<img src="/blog/img/22580-do-gpt-2-ao-kimi-k3-explicado/3efb9ca9dc-1014.webp" srcset="/blog/img/22580-do-gpt-2-ao-kimi-k3-explicado/3efb9ca9dc-728.webp 728w, /blog/img/22580-do-gpt-2-ao-kimi-k3-explicado/3efb9ca9dc-1014.webp 1014w" sizes="(max-width: 760px) 100vw, 720px" width="1014" height="1234" alt="Imagem" loading="lazy" decoding="async">
+<img src="/blog/img/22580-do-gpt-2-ao-kimi-k3-explicado/3efb9ca9dc-1014.webp" srcset="/blog/img/22580-do-gpt-2-ao-kimi-k3-explicado/3efb9ca9dc-728.webp 728w, /blog/img/22580-do-gpt-2-ao-kimi-k3-explicado/3efb9ca9dc-1014.webp 1014w" sizes="(max-width: 760px) 100vw, 458px" width="458" height="557" alt="Imagem" loading="lazy" decoding="async">
 <figcaption><em>Controle de decaimento por canal na Kimi Delta Attention.</em></figcaption>
 </figure>
 
@@ -577,7 +577,7 @@ AttnRes e MLA atacam a mesma limitação subjacente por caminhos diferentes. As 
 Agradeço a [\@chloey3k](https://x.com/@chloey3k) pela ajuda nesta seção. Em cada passagem direta, a entrada percorre uma pilha de camadas. Aqui, cada camada contém um bloco de atenção — KDA ou MLA — e um bloco MLP ou MoE. Normalmente, a entrada de cada camada é a soma do embedding original com a saída de todas as camadas anteriores, todas com o mesmo peso.
 
 <figure>
-<img src="/blog/img/22580-do-gpt-2-ao-kimi-k3-explicado/cdf60ffa41-336.webp" width="336" height="158" alt="" loading="lazy" decoding="async">
+<img src="/blog/img/22580-do-gpt-2-ao-kimi-k3-explicado/cdf60ffa41-336.webp" width="234" height="110" alt="" loading="lazy" decoding="async">
 </figure>
 
 Aqui, h\_i é a entrada da camada i, h\_1 é o embedding do token atual — o último token da sequência até aquele momento — e f\_i(h\_i) é a saída da camada i, isto é, um bloco de atenção ou MLP.
@@ -585,7 +585,7 @@ Aqui, h\_i é a entrada da camada i, h\_1 é o embedding do token atual — o ú
 O problema é a falta de acesso seletivo. Tipos diferentes de camada recebem o mesmo estado agregado, embora possam se beneficiar de ponderações distintas. Como a recorrência é puramente aditiva, camadas posteriores também precisam aprender saídas cada vez maiores para influenciar o residual acumulado, o que pode desestabilizar o treinamento. Em vez de tratar todas as camadas por igual, a AttnRes multiplica cada termo dessa soma por um peso especializado, permitindo que o modelo valorize as camadas mais úteis em cada contexto.
 
 <figure>
-<img src="/blog/img/22580-do-gpt-2-ao-kimi-k3-explicado/bce6f27c7e-436.webp" width="436" height="170" alt="" loading="lazy" decoding="async">
+<img src="/blog/img/22580-do-gpt-2-ao-kimi-k3-explicado/bce6f27c7e-436.webp" width="294" height="115" alt="" loading="lazy" decoding="async">
 </figure>
 
 Cada peso alpha\_i é calculado por um produto escalar entre consulta e chave. A consulta é aprendida para cada camada, enquanto chaves e valores vêm de estados anteriores do fluxo residual. Os escores são normalizados para somar um e, depois, usados para formar uma combinação ponderada desses estados.

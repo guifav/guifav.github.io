@@ -72,7 +72,7 @@ Além de compliance, fatores competitivos podem determinar escolhas arquiteturai
 Esta lógica não se limita ao varejo. Qualquer organização competindo diretamente com cloud providers ou seus parent companies deve avaliar cuidadosamente implicações de longo prazo de deep vendor dependency. A questão não é paranoia e sim due diligence estratégica sobre onde dados mais valiosos residem e quem possui acesso potencial a eles.
 
 <figure>
-<img src="/blog/img/guia-migracao-cloud-modelos-public-private-hybrid-de-migracao-para-cloud/31dc956c01-888.webp" srcset="/blog/img/guia-migracao-cloud-modelos-public-private-hybrid-de-migracao-para-cloud/31dc956c01-728.webp 728w, /blog/img/guia-migracao-cloud-modelos-public-private-hybrid-de-migracao-para-cloud/31dc956c01-888.webp 888w" sizes="(max-width: 760px) 100vw, 720px" width="888" height="673" alt="Drivers Estratégicos para Decisões Cloud" loading="lazy" decoding="async">
+<img src="/blog/img/guia-migracao-cloud-modelos-public-private-hybrid-de-migracao-para-cloud/31dc956c01-888.webp" srcset="/blog/img/guia-migracao-cloud-modelos-public-private-hybrid-de-migracao-para-cloud/31dc956c01-728.webp 728w, /blog/img/guia-migracao-cloud-modelos-public-private-hybrid-de-migracao-para-cloud/31dc956c01-888.webp 888w" sizes="(max-width: 760px) 100vw, 556px" width="556" height="421" alt="Drivers Estratégicos para Decisões Cloud" loading="lazy" decoding="async">
 <figcaption>Drivers Estratégicos para Decisões Cloud</figcaption>
 </figure>
 

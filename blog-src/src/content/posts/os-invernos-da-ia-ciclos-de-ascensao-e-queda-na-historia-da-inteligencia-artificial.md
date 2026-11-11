@@ -846,6 +846,8 @@ O campo da IA está em uma posição única para enfrentar alguns dos desafios m
 
   5\. Adaptabilidade: A necessidade de ser flexível e adaptar-se a novos desenvolvimentos e desafios.
 
+<!---->
+
 - Como podemos prevenir futuros Invernos da IA?
 
   Para prevenir futuros Invernos da IA, podemos:

@@ -232,7 +232,7 @@ O OpenClaw nao é o único caminho. Algumas alternativas ja existem:
 **nanobot (HKUDS) - [https<!---->://github.com/HKUDS/nanobot](https://github.com/HKUDS/nanobot)**
 
 <figure>
-<img src="/blog/img/economia-agentes-ia-openclaw/b14f3751bb-1456.webp" srcset="/blog/img/economia-agentes-ia-openclaw/b14f3751bb-728.webp 728w, /blog/img/economia-agentes-ia-openclaw/b14f3751bb-1456.webp 1456w" sizes="(max-width: 760px) 100vw, 720px" width="1456" height="273" alt="" loading="lazy" decoding="async">
+<img src="/blog/img/economia-agentes-ia-openclaw/b14f3751bb-1456.webp" srcset="/blog/img/economia-agentes-ia-openclaw/b14f3751bb-728.webp 728w, /blog/img/economia-agentes-ia-openclaw/b14f3751bb-1456.webp 1456w" sizes="(max-width: 760px) 100vw, 315px" width="315" height="59" alt="" loading="lazy" decoding="async">
 </figure>
 
 <figure>
