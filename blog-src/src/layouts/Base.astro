@@ -11,9 +11,11 @@ interface Props {
   image?: string;
   ogType?: 'website' | 'article';
   jsonLd?: Record<string, unknown>;
+  // Carrega o widget do Turnstile: só nas páginas que mostram o formulário de inscrição.
+  turnstile?: boolean;
 }
 
-const { title, description, index = true, image, ogType = 'website', jsonLd } = Astro.props;
+const { title, description, index = true, image, ogType = 'website', jsonLd, turnstile = false } = Astro.props;
 const site = Astro.site!.href;
 const canonical = absoluteUrl(site, Astro.url.pathname);
 const ogImage = image ?? absoluteUrl(site, '/og-image.png');
@@ -53,6 +55,7 @@ const base = import.meta.env.BASE_URL;
     gtag('config', GA4_ID);
   </script>
   {jsonLd && <script data-site-script type="application/ld+json" set:html={jsonLdScript(jsonLd)} />}
+  {turnstile && <script data-site-script is:inline async defer src="https://challenges.cloudflare.com/turnstile/v0/api.js"></script>}
 </head>
 <body>
   <script data-site-script is:inline>

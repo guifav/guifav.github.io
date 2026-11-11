@@ -57,6 +57,18 @@
 .astro-code,.astro-code span{color:var(--shiki-light);background-color:var(--shiki-light-bg)}
 [data-theme="dark"] .astro-code,[data-theme="dark"] .astro-code span{color:var(--shiki-dark);background-color:var(--shiki-dark-bg)}
 
+/* Newsletter (issue #21): formulário e páginas de inscrição. */
+.subscribe{margin-top:48px;padding:24px;border:1px solid var(--border);border-radius:12px}
+.subscribe h2{margin:0 0 12px;font-size:20px}
+.subscribe-form label{display:block;font-size:14px;color:var(--text-secondary);margin-bottom:6px}
+.subscribe-row{display:flex;gap:8px;flex-wrap:wrap}
+.subscribe-row input{flex:1 1 220px;min-width:0;font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text)}
+.subscribe-row button{font:inherit;font-size:16px;padding:10px 18px;border:0;border-radius:8px;background:var(--hl);color:var(--hl-text);cursor:pointer}
+.cf-turnstile{margin-top:12px}
+.subscribe-note{font-size:14px;color:var(--text-secondary);margin:12px 0 0}
+.form-error{display:none;padding:12px 14px;border:1px solid var(--border);border-radius:8px}
+.form-error:target{display:block}
+
 @media(max-width:700px){
   .blog-head{padding:40px 0 24px}
   .blog-head h1{font-size:30px}

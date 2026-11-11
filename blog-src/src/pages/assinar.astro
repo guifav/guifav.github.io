@@ -1,0 +1,20 @@
+---
+// Página da newsletter (issue #21). Fora do sitemap e sempre com noindex.
+import Base from '../layouts/Base.astro';
+import { AUTHOR_NAME, NEWSLETTER_FORM_ENABLED } from '../consts';
+import SubscribeForm from '../components/SubscribeForm.astro';
+const base = import.meta.env.BASE_URL;
+---
+<Base title={`Assine a IA Aplicada | ${AUTHOR_NAME}`} description="Receba por email os artigos de Guilherme Favaron sobre IA aplicada, dados e engenharia de software." index={false} turnstile={NEWSLETTER_FORM_ENABLED}>
+  <article class="post page">
+    <header class="post-head">
+      <p class="post-crumb"><a href={base}>Blog</a></p>
+      <h1>Assine a IA Aplicada</h1>
+    </header>
+    <div class="post-body">
+      <p>Artigos sobre IA aplicada, dados e engenharia de software, com código, arquitetura e decisões técnicas. Um email a cada artigo novo.</p>
+      <p id="erro-verificacao" class="form-error" role="alert">Não foi possível confirmar que o pedido veio de uma pessoa. Tente de novo.</p>
+      {NEWSLETTER_FORM_ENABLED ? <SubscribeForm /> : <p>A inscrição por esta página abre em breve.</p>}
+    </div>
+  </article>
+</Base>

@@ -76,7 +76,7 @@ async function subscribe(req: Request, env: Env, deps: Deps): Promise<Response> 
   const ip = req.headers.get('cf-connecting-ip') ?? 'desconhecido';
 
   const token = form.get('cf-turnstile-response');
-  if (!token || !(await turnstileOk(token, ip, env, deps))) return redirect(`${env.BLOG_URL}/assinar/?erro=verificacao`);
+  if (!token || !(await turnstileOk(token, ip, env, deps))) return redirect(`${env.BLOG_URL}/assinar/#erro-verificacao`);
 
   // A partir daqui a resposta é sempre a mesma (A2): email inválido, repetido, acima do limite ou
   // falha no envio não se distinguem para quem pediu.

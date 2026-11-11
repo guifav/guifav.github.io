@@ -38,6 +38,10 @@ jobs:
         working-directory: blog-src
         run: npm test
 
+      - name: Testes do Worker da newsletter
+        working-directory: workers/newsletter
+        run: npm test
+
       - name: Build do blog
         working-directory: blog-src
         env:

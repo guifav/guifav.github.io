@@ -120,7 +120,7 @@ test('A3: sem token, token reprovado, hostname errado ou siteverify fora do ar: 
     const s = setup(o);
     const r = await s.run(subscribe(fields));
     assert.equal(r.status, 303, name);
-    assert.equal(loc(r), 'https://guifav.dev/blog/assinar/?erro=verificacao', name);
+    assert.equal(loc(r), 'https://guifav.dev/blog/assinar/#erro-verificacao', name);
     assert.equal(s.calls.filter((c) => c.url.includes('resend.com')).length, 0, name);
   }
 });

@@ -2,6 +2,7 @@
 // Página de um post: /blog/<slug>/
 import { render } from 'astro:content';
 import Base from '../layouts/Base.astro';
+import SubscribeForm from '../components/SubscribeForm.astro';
 import { AUTHOR_ID, AUTHOR_NAME, NEWSLETTER_FORM_ENABLED } from '../consts';
 import { absoluteUrl, blogPostingLd, formatDate, spotifyEmbedUrl, withBase } from '../lib/blog';
 import { sortedPosts, type Post } from '../lib/posts';
@@ -35,7 +36,7 @@ const ld = blogPostingLd({
   authorId: AUTHOR_ID,
 });
 ---
-<Base title={`${d.title} | ${AUTHOR_NAME}`} description={d.description} index={d.index} image={coverUrl} ogType="article" jsonLd={ld}>
+<Base title={`${d.title} | ${AUTHOR_NAME}`} description={d.description} index={d.index} image={coverUrl} ogType="article" jsonLd={ld} turnstile={NEWSLETTER_FORM_ENABLED}>
   <article class="post">
     <header class="post-head">
       <p class="post-crumb"><a href={base}>Blog</a></p>
@@ -58,6 +59,11 @@ const ld = blogPostingLd({
     <div class="post-body">
       <Content />
     </div>
-    {NEWSLETTER_FORM_ENABLED && <aside class="subscribe" id="assinar" aria-label="Newsletter"></aside>}
+    {NEWSLETTER_FORM_ENABLED && (
+      <aside class="subscribe" id="assinar" aria-label="Newsletter">
+        <h2>Receba os próximos artigos</h2>
+        <SubscribeForm />
+      </aside>
+    )}
   </article>
 </Base>

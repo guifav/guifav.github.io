@@ -11,6 +11,8 @@ export default defineConfig({
   output: 'static',
   build: {
     format: 'directory',
+    // CSS sempre dentro do HTML: o contrato só permite .html, .xml e mídia sob /blog/.
+    inlineStylesheets: 'always',
   },
   markdown: {
     // HTML cru dos posts é reinterpretado como o navegador faria e limpo por lista do que é
