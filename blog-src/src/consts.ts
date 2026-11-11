@@ -10,9 +10,10 @@ export const GA4_ID = 'G-K7Y87QNCX8';
 export const POSTS_PER_PAGE = 20;
 export const RSS_LIMIT = 50;
 
-// Até o cutover (issue #24) o blog inteiro sai com noindex e nada no site aponta para ele.
-// O PR do cutover troca para false.
-export const PRE_CUTOVER_NOINDEX = true;
+// Antes do cutover (issue #24) o blog inteiro saía com noindex e nada no site apontava para ele. Em 2026-11-11
+// o Gui antecipou essa parte: o blog entra no menu da home e do portfólio e passa a ser indexável. Podcasts
+// (index: false) e as páginas da inscrição seguem com noindex. Redirects e Search Console continuam na #24.
+export const PRE_CUTOVER_NOINDEX = false;
 
 // Formulário de inscrição (issue #21). Fica desligado até o Worker estar no ar e testado; o PR que
 // liga também preenche a chave pública do Turnstile.
