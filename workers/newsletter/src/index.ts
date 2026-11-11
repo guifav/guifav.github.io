@@ -75,6 +75,10 @@ async function subscribe(req: Request, env: Env, deps: Deps): Promise<Response> 
   const sent = redirect(`${env.BLOG_URL}/inscricao-enviada/`);
   const ip = req.headers.get('cf-connecting-ip') ?? 'desconhecido';
 
+  // Limite por IP antes do Turnstile, para conter também as tentativas reprovadas (A6). O rate limit
+  // do Workers é aproximado e conta por localidade do Cloudflare: contém abuso, não é teto global.
+  if (!(await env.RL_IP.limit({ key: ip })).success) return sent;
+
   const token = form.get('cf-turnstile-response');
   if (!token || !(await turnstileOk(token, ip, env, deps))) return redirect(`${env.BLOG_URL}/assinar/#erro-verificacao`);
 
@@ -82,7 +86,6 @@ async function subscribe(req: Request, env: Env, deps: Deps): Promise<Response> 
   // falha no envio não se distinguem para quem pediu.
   const email = normalizeEmail(form.get('email') ?? '');
   if (!email) return sent;
-  if (!(await env.RL_IP.limit({ key: ip })).success) return sent;
   if (!(await env.RL_EMAIL.limit({ key: email })).success) return sent;
 
   const link = `${env.WORKER_URL}/confirm?${await signLink(email, deps.now(), env.CONFIRM_SECRET)}`;
@@ -115,19 +118,29 @@ async function confirm(url: URL, env: Env, deps: Deps): Promise<Response> {
   if (created.status >= 500) return plain(502, 'falha temporária; tente o link de novo em alguns minutos');
 
   // Contato já existe (confirmação repetida, ou alguém que saiu e voltou): reativa e garante o segmento (A5).
+  // Sucesso só com prova: a inclusão respondeu 2xx, ou a lista de segmentos do contato contém o segmento.
+  // Qualquer outro caso (409 resource_locked, 422, 5xx) vira 502, e o leitor pode abrir o link de novo.
+  const retry = plain(502, 'falha temporária; tente o link de novo em alguns minutos');
   const existing = await deps.fetch(contactPath(email), { headers });
-  if (!existing.ok) return plain(502, 'falha temporária; tente o link de novo em alguns minutos');
+  if (!existing.ok) return retry;
+  const id = ((await existing.json()) as { id?: unknown }).id;
+  if (typeof id !== 'string' || !id) return retry;
   const upd = await deps.fetch(contactPath(email), { method: 'PATCH', headers, body: JSON.stringify({ unsubscribed: false }) });
-  const seg = await deps.fetch(`${contactPath(email)}/segments/${env.SEGMENT_ID}`, { method: 'POST', headers });
-  if (!upd.ok || !(seg.ok || seg.status === 409 || seg.status === 422)) return plain(502, 'falha temporária; tente o link de novo em alguns minutos');
-  return done;
+  if (!upd.ok) return retry;
+  const seg = await deps.fetch(`${RESEND}/contacts/${encodeURIComponent(id)}/segments/${env.SEGMENT_ID}`, { method: 'POST', headers });
+  if (seg.ok) return done;
+  const list = await deps.fetch(`${RESEND}/contacts/${encodeURIComponent(id)}/segments`, { headers });
+  if (!list.ok) return retry;
+  const data = ((await list.json()) as { data?: Array<{ id?: unknown }> }).data;
+  return Array.isArray(data) && data.some((x) => x?.id === env.SEGMENT_ID) ? done : retry;
 }
 
 export async function handle(req: Request, env: Env, deps: Deps): Promise<Response> {
   const url = new URL(req.url);
   if (url.pathname !== '/subscribe' && url.pathname !== '/confirm') return plain(404, 'não encontrado');
   if (url.pathname === '/subscribe' && req.method !== 'POST') return plain(405, 'método não permitido', { allow: 'POST' });
-  if (url.pathname === '/confirm' && req.method !== 'GET' && req.method !== 'HEAD') return plain(405, 'método não permitido', { allow: 'GET' });
+  // Só GET: um HEAD (pré-busca de link, verificador de email) não pode cadastrar ninguém (A1, A7).
+  if (url.pathname === '/confirm' && req.method !== 'GET') return plain(405, 'método não permitido', { allow: 'GET' });
   if (!configured(env)) return plain(500, 'Worker sem configuração');
   return url.pathname === '/subscribe' ? subscribe(req, env, deps) : confirm(url, env, deps);
 }

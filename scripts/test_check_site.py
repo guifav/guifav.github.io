@@ -371,6 +371,24 @@ class CheckTest(Base):
         (self.posts / "um-post.md").write_text("---\ntitle: x\nslug: um-post\nindex: false\n---\n", encoding="utf-8")
         self.assertTrue(any("index: false" in p for p in self.problems()))
 
+    def test_private_newsletter_pages_need_noindex_in_both_modes(self):
+        # Páginas da newsletter (#21): sempre noindex e fora do sitemap, também depois do cutover.
+        for name in sorted(C.BLOG_PRIVATE_PAGES):
+            self.w(f"blog/{name}/index.html", page('<a href="/blog/">b</a>', robots=ROBOTS_INDEX))
+            for pre in (True, False):
+                self.assertTrue(any(name in p and "noindex" in p for p in self.problems(pre_cutover=pre)), (name, pre))
+            self.w(f"blog/{name}/index.html", page('<a href="/blog/">b</a>'))
+            self.assertEqual(self.problems(pre_cutover=False), [], name)
+
+    def test_private_newsletter_pages_cannot_be_in_sitemap(self):
+        self.w("blog/assinar/index.html", page('<a href="/blog/">b</a>'))
+        self.w("blog/sitemap.xml", SITEMAP.format("<url><loc>https://guifav.dev/blog/assinar/</loc></url>"))
+        for pre in (True, False):
+            self.assertTrue(any("sitemap" in p and "assinar" in p for p in self.problems(pre_cutover=pre)), pre)
+
+    def test_private_pages_set_is_pinned(self):
+        self.assertEqual(C.BLOG_PRIVATE_PAGES, frozenset({"assinar", "inscricao-enviada", "inscricao-confirmada", "inscricao-invalida", "privacidade"}))
+
     def test_index_false_post_with_noindex_after_cutover_is_required(self):
         (self.posts / "um-post.md").write_text("---\ntitle: x\nslug: um-post\nindex: false\n---\n", encoding="utf-8")
         self.w("blog/sitemap.xml", SITEMAP.format("<url><loc>https://guifav.dev/blog/</loc></url>"))

@@ -2,7 +2,7 @@
 // Rodar em workers/newsletter/: npm test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { handle, contactPath, normalizeEmail, type Env } from '../src/index.ts';
 import { signLink, verifyLink } from '../src/token.ts';
 import { confirmationEmail } from '../src/email.ts';
@@ -12,7 +12,27 @@ const SECRET = 'segredo-de-teste-com-tamanho-suficiente-0123456789';
 
 type Call = { url: string; method: string; body: unknown };
 
-function setup(opts: { turnstile?: unknown; contact?: 'none' | 'active' | 'unsubscribed'; rlEmail?: boolean; rlIp?: boolean; createStatus?: number; emailStatus?: number } = {}) {
+// Valores reais do wrangler.toml: o teste usa a mesma configuração que vai para o deploy (A9).
+const TOML = readFileSync(new URL('../wrangler.toml', import.meta.url), 'utf-8');
+const tomlVar = (k: string) => {
+  const m = TOML.match(new RegExp(`^${k}\\s*=\\s*"([^"]*)"`, 'm'));
+  assert.ok(m, `variável ${k} ausente do wrangler.toml`);
+  return m[1];
+};
+
+type Opts = {
+  turnstile?: unknown;
+  contact?: 'none' | 'active' | 'unsubscribed';
+  rlEmail?: boolean;
+  rlIp?: boolean;
+  createStatus?: number;
+  emailStatus?: number;
+  patchStatus?: number;
+  segStatus?: number;
+  segments?: string[];
+};
+
+function setup(opts: Opts = {}) {
   const calls: Call[] = [];
   const rl: string[] = [];
   const fetchFn = async (input: string | URL | Request, init?: RequestInit) => {
@@ -33,24 +53,34 @@ function setup(opts: { turnstile?: unknown; contact?: 'none' | 'active' | 'unsub
       const st = opts.createStatus ?? (opts.contact && opts.contact !== 'none' ? 409 : 200);
       return st === 200 ? Response.json({ id: 'c1' }) : Response.json({ name: 'conflict' }, { status: st });
     }
+    if (url === 'https://api.resend.com/contacts/c1/segments/seg-1' && method === 'POST') {
+      const st = opts.segStatus ?? 201;
+      return st < 300 ? Response.json({ id: 'seg-1' }, { status: st }) : Response.json({ name: 'resource_locked' }, { status: st });
+    }
+    if (url === 'https://api.resend.com/contacts/c1/segments' && method === 'GET') {
+      return Response.json({ object: 'list', data: (opts.segments ?? []).map((id) => ({ id, name: 'x' })) });
+    }
     if (url.startsWith('https://api.resend.com/contacts/') && method === 'GET') {
       if (!opts.contact || opts.contact === 'none') return Response.json({ name: 'not_found' }, { status: 404 });
       return Response.json({ id: 'c1', email: 'x', unsubscribed: opts.contact === 'unsubscribed' });
     }
-    if (url.startsWith('https://api.resend.com/contacts/')) return Response.json({ id: 'c1' });
+    if (url.startsWith('https://api.resend.com/contacts/') && method === 'PATCH') {
+      const st = opts.patchStatus ?? 200;
+      return st < 300 ? Response.json({ id: 'c1' }) : Response.json({ name: 'internal_server_error' }, { status: st });
+    }
     return new Response('inesperado', { status: 500 });
   };
   const env: Env = {
     RESEND_API_KEY: 're_teste',
     TURNSTILE_SECRET: 'ts_teste',
     CONFIRM_SECRET: SECRET,
-    FROM: 'IA Aplicada <newsletter@guifav.dev>',
-    REPLY_TO: 'contact@guifav.dev',
-    SEGMENT_ID: 'seg-1',
-    SITE_ORIGIN: 'https://guifav.dev',
-    BLOG_URL: 'https://guifav.dev/blog',
-    WORKER_URL: 'https://newsletter.guifav.dev',
-    TURNSTILE_HOSTNAME: 'guifav.dev',
+    FROM: tomlVar('FROM'),
+    REPLY_TO: tomlVar('REPLY_TO'),
+    SEGMENT_ID: 'seg-1', // no wrangler.toml fica vazio até o deploy
+    SITE_ORIGIN: tomlVar('SITE_ORIGIN'),
+    BLOG_URL: tomlVar('BLOG_URL'),
+    WORKER_URL: tomlVar('WORKER_URL'),
+    TURNSTILE_HOSTNAME: tomlVar('TURNSTILE_HOSTNAME'),
     RL_EMAIL: { limit: async ({ key }) => (rl.push('email:' + key), { success: opts.rlEmail ?? true }) },
     RL_IP: { limit: async ({ key }) => (rl.push('ip:' + key), { success: opts.rlIp ?? true }) },
   };
@@ -95,6 +125,7 @@ test('A2: email inválido tem a mesma resposta, sem envio', async () => {
 test('A2: email já inscrito tem a mesma resposta (o Worker não consulta a lista no /subscribe)', async () => {
   const s = setup({ contact: 'active' });
   const r = await s.run(subscribe(ok));
+  assert.equal(r.status, 303);
   assert.equal(loc(r), 'https://guifav.dev/blog/inscricao-enviada/');
   assert.ok(!s.calls.some((c) => c.url.includes('/contacts')));
 });
@@ -198,7 +229,7 @@ test('A5: confirmação repetida e contato descadastrado reativado, sem duplicar
     assert.deepEqual(writes.map((c) => `${c.method} ${c.url}`), [
       'POST https://api.resend.com/contacts',
       'PATCH https://api.resend.com/contacts/leitor@exemplo.com',
-      'POST https://api.resend.com/contacts/leitor@exemplo.com/segments/seg-1',
+      'POST https://api.resend.com/contacts/c1/segments/seg-1',
     ], contact);
     assert.deepEqual(writes[1].body, { unsubscribed: false }, contact);
   }
@@ -289,4 +320,109 @@ test('contactPath: @ literal, o resto codificado', () => {
 test('normalizeEmail: minúsculas e sem espaço nas pontas; recusa cabeçalho e controle', () => {
   assert.equal(normalizeEmail('  A.B+tag@Exemplo.COM.br '), 'a.b+tag@exemplo.com.br');
   for (const bad of ['a@b', '@b.com', 'a@-b.com', 'a@b.com\nbcc@x.com', 'a@b..com', 'a<b>@c.com', 'a@b.com,c@d.com']) assert.equal(normalizeEmail(bad), null, bad);
+});
+
+// ---------------------------------------------------------------- rodada 1 do gate (#31)
+
+const confirmUrl = async () => `https://newsletter.guifav.dev/confirm?${await signLink('leitor@exemplo.com', NOW, SECRET)}`;
+
+test('A5: erro do Resend ao incluir no segmento não vira sucesso (409 resource_locked, 422, 500)', async () => {
+  for (const segStatus of [409, 422, 500]) {
+    const s = setup({ contact: 'active', segStatus });
+    const r = await s.run(new Request(await confirmUrl()));
+    assert.equal(r.status, 502, String(segStatus));
+    assert.ok(s.calls.some((c) => c.url === 'https://api.resend.com/contacts/c1/segments' && c.method === 'GET'), String(segStatus));
+  }
+});
+
+test('A5: inclusão que falha, mas a lista do contato mostra o segmento, é sucesso', async () => {
+  const s = setup({ contact: 'active', segStatus: 409, segments: ['outro', 'seg-1'] });
+  const r = await s.run(new Request(await confirmUrl()));
+  assert.equal(loc(r), 'https://guifav.dev/blog/inscricao-confirmada/');
+});
+
+test('A5: falha ao reativar o contato devolve 502', async () => {
+  const s = setup({ contact: 'unsubscribed', patchStatus: 500 });
+  const r = await s.run(new Request(await confirmUrl()));
+  assert.equal(r.status, 502);
+});
+
+test('A1/A7: HEAD /confirm com link válido responde 405 e não chama o Resend', async () => {
+  const s = setup({ contact: 'none' });
+  const r = await s.run(new Request(await confirmUrl(), { method: 'HEAD' }));
+  assert.equal(r.status, 405);
+  assert.equal(s.calls.length, 0);
+});
+
+test('A4: validade adulterada para outro horário numérico é recusada pela assinatura, também na rota', async () => {
+  const p = new URLSearchParams(await signLink('leitor@exemplo.com', NOW, SECRET));
+  p.set('x', String(Number(p.get('x')) + 365 * 86400));
+  assert.equal(await verifyLink(p, SECRET, NOW), null);
+  const s = setup({ contact: 'none' });
+  const r = await s.run(new Request(`https://newsletter.guifav.dev/confirm?${p}`));
+  assert.equal(loc(r), 'https://guifav.dev/blog/inscricao-invalida/');
+  assert.equal(s.calls.length, 0);
+});
+
+test('A6: limites do wrangler.toml são 5 por IP e 1 por email, a cada 60 s', () => {
+  const block = (name: string) => {
+    const m = TOML.match(new RegExp(`\\[\\[ratelimits\\]\\]\\s*\\nname = "${name}"\\s*\\nnamespace_id = "\\d+"\\s*\\nsimple = \\{ limit = (\\d+), period = (\\d+) \\}`));
+    assert.ok(m, name);
+    return [Number(m[1]), Number(m[2])];
+  };
+  assert.deepEqual(block('RL_IP'), [5, 60]);
+  assert.deepEqual(block('RL_EMAIL'), [1, 60]);
+});
+
+test('A6: o limite por IP vale antes do Turnstile; acima dele, nem o siteverify é chamado', async () => {
+  const s = setup({ rlIp: false });
+  const r = await s.run(subscribe(ok));
+  assert.equal(loc(r), 'https://guifav.dev/blog/inscricao-enviada/');
+  assert.equal(s.calls.length, 0);
+  const t = setup({ turnstile: { success: false } });
+  await t.run(subscribe(ok));
+  assert.deepEqual(t.rl, ['ip:203.0.113.7']);
+});
+
+test('A8: nenhum arquivo do Worker atribui segredo, com chave TOML entre aspas ou não', () => {
+  const root = new URL('../', import.meta.url);
+  const files: string[] = [];
+  const walk = (dir: URL) => {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      if (e.name === 'node_modules' || e.name === 'tests') continue;
+      const u = new URL(e.name + (e.isDirectory() ? '/' : ''), dir);
+      if (e.isDirectory()) walk(u);
+      else files.push(u.pathname);
+    }
+  };
+  walk(root);
+  assert.ok(files.some((f) => f.endsWith('wrangler.toml')));
+  const secret = /^\s*["']?(RESEND_API_KEY|TURNSTILE_SECRET|CONFIRM_SECRET)["']?\s*[=:]\s*["'][^"']+/m;
+  for (const f of files) {
+    const t = readFileSync(f, 'utf-8');
+    assert.doesNotMatch(t, secret, f);
+    assert.doesNotMatch(t, /\bre_[A-Za-z0-9_]{16,}/, f);
+  }
+  assert.ok(secret.test('"CONFIRM_SECRET" = "segredo-real-com-mais-de-32-caracteres"'));
+  assert.ok(secret.test("RESEND_API_KEY = 're_xxx'"));
+  const gitignore = readFileSync(new URL('../../../.gitignore', import.meta.url), 'utf-8');
+  assert.match(gitignore, /^\.dev\.vars$/m);
+});
+
+test('A9: remetente e reply-to vêm do wrangler.toml real; um único link, o de confirmação, no HTML e no texto', async () => {
+  assert.equal(tomlVar('FROM'), 'IA Aplicada <newsletter@guifav.dev>');
+  assert.equal(tomlVar('REPLY_TO'), 'contact@guifav.dev');
+  const s = setup();
+  await s.run(subscribe(ok));
+  const mail = s.calls.find((c) => c.url.endsWith('/emails'))!.body as { html: string; text: string };
+  assert.equal(typeof mail.text, 'string');
+  const textUrls = mail.text.match(/https?:\/\/\S+/g) ?? [];
+  const hrefs = [...mail.html.matchAll(/href="([^"]+)"/g)].map((m) => m[1].replace(/&amp;/g, '&'));
+  const htmlUrls = mail.html.match(/https?:\/\/[^\s"'<>]+/g) ?? [];
+  assert.equal(textUrls.length, 1, mail.text);
+  assert.equal(hrefs.length, 1, mail.html);
+  assert.equal(htmlUrls.length, 1, mail.html);
+  assert.equal(hrefs[0], textUrls[0]);
+  assert.ok(textUrls[0].startsWith('https://newsletter.guifav.dev/confirm?'));
+  assert.equal(await verifyLink(new URL(textUrls[0]).searchParams, SECRET, NOW), 'leitor@exemplo.com');
 });

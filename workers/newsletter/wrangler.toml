@@ -20,7 +20,9 @@ BLOG_URL = "https://guifav.dev/blog"
 WORKER_URL = "https://newsletter.guifav.dev"
 TURNSTILE_HOSTNAME = "guifav.dev"
 
-# Garantia A6: 5 pedidos por IP e 1 email de confirmação por endereço, a cada 60 s.
+# Garantia A6: cerca de 5 pedidos por IP e 1 email de confirmação por endereço, a cada 60 s. O rate limit
+# do Workers é aproximado e conta separado em cada localidade do Cloudflare: contém abuso junto com o
+# Turnstile, mas não é um teto global garantido.
 [[ratelimits]]
 name = "RL_IP"
 namespace_id = "2101"

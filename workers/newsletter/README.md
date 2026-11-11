@@ -4,8 +4,10 @@ Inscrição da newsletter do blog guifav.dev (issue #21, parte A). Recebe o form
 
 | Rota | O que faz |
 | --- | --- |
-| `POST /subscribe` | Confere a origem e o Turnstile, valida o email, aplica o limite e manda o email com o link assinado. Responde sempre com 303 para `/blog/inscricao-enviada/`, exceto com Turnstile reprovado (`/blog/assinar/#erro-verificacao`). |
+| `POST /subscribe` | Confere a origem, aplica o limite por IP, confere o Turnstile, valida o email, aplica o limite por endereço e manda o email com o link assinado. Responde sempre com 303 para `/blog/inscricao-enviada/`, exceto com Turnstile reprovado (`/blog/assinar/#erro-verificacao`). |
 | `GET /confirm` | Valida o link (HMAC-SHA256, 48 h), cria ou reativa o contato no segmento e redireciona para `/blog/inscricao-confirmada/`. Link inválido ou expirado: `/blog/inscricao-invalida/`. |
+
+Os limites (cerca de 5 pedidos por IP e 1 email por endereço a cada 60 s, no `wrangler.toml`) usam o rate limit nativo do Workers, que é aproximado e conta separado em cada localidade do Cloudflare. Junto com o Turnstile, eles contêm abuso, mas não são um teto global garantido.
 
 Não há banco: o link carrega o email e a validade, e a assinatura prova a origem.
 

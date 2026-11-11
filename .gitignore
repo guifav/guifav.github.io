@@ -39,3 +39,5 @@ yarn-error.log*
 _site/
 blog-src/.astro/
 __pycache__/
+# Segredos locais do wrangler (Worker da newsletter)
+.dev.vars
