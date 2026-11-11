@@ -8,16 +8,16 @@ name = "blog-newsletter"
 main = "src/index.ts"
 compatibility_date = "2026-11-01"
 workers_dev = false
-routes = [{ pattern = "newsletter.guifav.dev", custom_domain = true }]
+routes = [{ pattern = "insights.guifav.dev", custom_domain = true }]
 
 [vars]
-FROM = "IA Aplicada <newsletter@guifav.dev>"
+FROM = "IA Aplicada <insights@guifav.dev>"
 REPLY_TO = "contact@guifav.dev"
-# Segmento "IA Aplicada" do Resend, criado no deploy. Vazio: o Worker responde 500 e não cadastra nada.
-SEGMENT_ID = ""
+# Segmento "IA Aplicada" do Resend (criado em 2026-11-11). Vazio: o Worker responde 500 e não cadastra nada.
+SEGMENT_ID = "34c37605-670a-4c09-9dff-5e5a05c9e0fa"
 SITE_ORIGIN = "https://guifav.dev"
 BLOG_URL = "https://guifav.dev/blog"
-WORKER_URL = "https://newsletter.guifav.dev"
+WORKER_URL = "https://insights.guifav.dev"
 TURNSTILE_HOSTNAME = "guifav.dev"
 
 # Garantia A6: cerca de 5 pedidos por IP e 1 email de confirmação por endereço, a cada 60 s. O rate limit

@@ -67,3 +67,21 @@ O Astro guarda em cache (`.astro/` e `node_modules/.astro/`) o HTML já renderiz
 `PRE_CUTOVER_NOINDEX` em `src/consts.ts` deixa o blog inteiro com `noindex`, e o `check_site.py` falha se alguma página fora do blog apontar para ele. O PR do cutover (#24) troca a constante para `false`.
 
 Os três posts `teste-*` existem só para conferir o leiaute e saem com a importação (#19).
+
+## Newsletter: rascunho do envio (#21, parte B)
+
+`scripts/newsletter_draft.py` monta o email de um post publicado e cria o broadcast como **rascunho** no Resend. Ele nunca envia: o envio é o clique do Gui no painel do Resend. Roda na KVM, com a chave do Resend só no ambiente de lá.
+
+```
+# só gera email.html e email.txt para conferir
+python3 scripts/newsletter_draft.py <slug> --dry-run --out /tmp/email
+# cria o rascunho "blog/<slug>" (com --update, reescreve o rascunho que já existe)
+RESEND_API_KEY=... NEWSLETTER_SEGMENT_ID=... python3 scripts/newsletter_draft.py <slug>
+```
+
+- A fonte é a página publicada em `https://guifav.dev/blog/<slug>/` (`--source dist` usa o build local). O post precisa estar no ar antes do rascunho.
+- A conversão é por lista fechada de tags, classes, atributos e esquemas de link. O que estiver fora dela interrompe o script.
+- Um broadcast por post: se já existe um rascunho, nada muda; se já existe um enviado, agendado ou em envio, o script para.
+- HTML acima de 102 KB, o limite em que o Gmail corta a mensagem, leva só o começo do post e o link "Ler no site".
+- Remetente padrão `IA Aplicada <insights@expert.guifav.dev>` (`NEWSLETTER_FROM` só aceita `expert.guifav.dev`), reply-to `contact@guifav.dev`.
+- Testes: `python3 scripts/test_newsletter_draft.py` (sem rede; rodam no CI).

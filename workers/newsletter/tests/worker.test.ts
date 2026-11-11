@@ -30,6 +30,9 @@ type Opts = {
   patchStatus?: number;
   segStatus?: number;
   segments?: string[];
+  segListStatus?: number;
+  throwOn?: string;
+  badJsonOn?: string;
 };
 
 function setup(opts: Opts = {}) {
@@ -42,6 +45,8 @@ function setup(opts: Opts = {}) {
     if (typeof body === 'string' && body.startsWith('{')) body = JSON.parse(body);
     if (body instanceof URLSearchParams) body = Object.fromEntries(body);
     calls.push({ url, method, body });
+    if (opts.throwOn && url.includes(opts.throwOn)) throw new TypeError('fetch failed');
+    if (opts.badJsonOn && url.includes(opts.badJsonOn)) return new Response('<html>', { status: 200, headers: { 'content-type': 'application/json' } });
     if (url.includes('turnstile')) {
       if (opts.turnstile instanceof Error) throw opts.turnstile;
       return Response.json(opts.turnstile ?? { success: true, hostname: 'guifav.dev' });
@@ -57,8 +62,16 @@ function setup(opts: Opts = {}) {
       const st = opts.segStatus ?? 201;
       return st < 300 ? Response.json({ id: 'seg-1' }, { status: st }) : Response.json({ name: 'resource_locked' }, { status: st });
     }
-    if (url === 'https://api.resend.com/contacts/c1/segments' && method === 'GET') {
-      return Response.json({ object: 'list', data: (opts.segments ?? []).map((id) => ({ id, name: 'x' })) });
+    if (url.startsWith('https://api.resend.com/contacts/c1/segments?') && method === 'GET') {
+      if (opts.segListStatus) return Response.json({ name: 'internal_server_error' }, { status: opts.segListStatus });
+      // Paginação do Resend: limit (sem limit, 20), after = id do último item da página anterior, excluído.
+      const q = new URL(url).searchParams;
+      const all = opts.segments ?? [];
+      const limit = Number(q.get('limit') ?? 20);
+      const after = q.get('after');
+      const start = after ? all.indexOf(after) + 1 : 0;
+      const page = all.slice(start, start + limit);
+      return Response.json({ object: 'list', has_more: start + limit < all.length, data: page.map((id) => ({ id, name: 'x' })) });
     }
     if (url.startsWith('https://api.resend.com/contacts/') && method === 'GET') {
       if (!opts.contact || opts.contact === 'none') return Response.json({ name: 'not_found' }, { status: 404 });
@@ -76,7 +89,7 @@ function setup(opts: Opts = {}) {
     CONFIRM_SECRET: SECRET,
     FROM: tomlVar('FROM'),
     REPLY_TO: tomlVar('REPLY_TO'),
-    SEGMENT_ID: 'seg-1', // no wrangler.toml fica vazio até o deploy
+    SEGMENT_ID: 'seg-1', // id usado pelos mocks; o real fica no wrangler.toml
     SITE_ORIGIN: tomlVar('SITE_ORIGIN'),
     BLOG_URL: tomlVar('BLOG_URL'),
     WORKER_URL: tomlVar('WORKER_URL'),
@@ -89,7 +102,7 @@ function setup(opts: Opts = {}) {
 }
 
 function subscribe(fields: Record<string, string>, headers: Record<string, string> = {}) {
-  return new Request('https://newsletter.guifav.dev/subscribe', {
+  return new Request('https://insights.guifav.dev/subscribe', {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded', origin: 'https://guifav.dev', 'cf-connecting-ip': '203.0.113.7', ...headers },
     body: new URLSearchParams(fields).toString(),
@@ -193,14 +206,14 @@ test('A4: o email de confirmação leva o link assinado do Worker', async () => 
   const s = setup();
   await s.run(subscribe(ok));
   const mail = s.calls.find((c) => c.url.endsWith('/emails'))!.body as { html: string; text: string };
-  const m = mail.text.match(/https:\/\/newsletter\.guifav\.dev\/confirm\?\S+/);
+  const m = mail.text.match(/https:\/\/insights\.guifav\.dev\/confirm\?\S+/);
   assert.ok(m, mail.text);
   assert.equal(await verifyLink(new URL(m[0]).searchParams, SECRET, NOW), 'leitor@exemplo.com');
 });
 
 test('A4: /confirm com link inválido ou expirado não chama o Resend', async () => {
   const q = await signLink('leitor@exemplo.com', NOW - 49 * 3600e3, SECRET);
-  for (const url of [`https://newsletter.guifav.dev/confirm?${q}`, 'https://newsletter.guifav.dev/confirm?e=abc&x=1&s=zz', 'https://newsletter.guifav.dev/confirm']) {
+  for (const url of [`https://insights.guifav.dev/confirm?${q}`, 'https://insights.guifav.dev/confirm?e=abc&x=1&s=zz', 'https://insights.guifav.dev/confirm']) {
     const s = setup();
     const r = await s.run(new Request(url));
     assert.equal(r.status, 303, url);
@@ -213,7 +226,7 @@ test('A4: /confirm com link inválido ou expirado não chama o Resend', async ()
 
 test('A1: /confirm válido cria o contato no segmento e redireciona para inscricao-confirmada', async () => {
   const s = setup({ contact: 'none' });
-  const r = await s.run(new Request(`https://newsletter.guifav.dev/confirm?${await signLink('leitor@exemplo.com', NOW, SECRET)}`));
+  const r = await s.run(new Request(`https://insights.guifav.dev/confirm?${await signLink('leitor@exemplo.com', NOW, SECRET)}`));
   assert.equal(r.status, 303);
   assert.equal(loc(r), 'https://guifav.dev/blog/inscricao-confirmada/');
   const create = s.calls.find((c) => c.url === 'https://api.resend.com/contacts' && c.method === 'POST');
@@ -223,7 +236,7 @@ test('A1: /confirm válido cria o contato no segmento e redireciona para inscric
 test('A5: confirmação repetida e contato descadastrado reativado, sem duplicar', async () => {
   for (const contact of ['active', 'unsubscribed'] as const) {
     const s = setup({ contact });
-    const r = await s.run(new Request(`https://newsletter.guifav.dev/confirm?${await signLink('leitor@exemplo.com', NOW, SECRET)}`));
+    const r = await s.run(new Request(`https://insights.guifav.dev/confirm?${await signLink('leitor@exemplo.com', NOW, SECRET)}`));
     assert.equal(loc(r), 'https://guifav.dev/blog/inscricao-confirmada/', contact);
     const writes = s.calls.filter((c) => c.method !== 'GET' && c.url.includes('/contacts'));
     assert.deepEqual(writes.map((c) => `${c.method} ${c.url}`), [
@@ -237,7 +250,7 @@ test('A5: confirmação repetida e contato descadastrado reativado, sem duplicar
 
 test('A5: erro do Resend na confirmação devolve 502 e não finge sucesso', async () => {
   const s = setup({ createStatus: 500 });
-  const r = await s.run(new Request(`https://newsletter.guifav.dev/confirm?${await signLink('leitor@exemplo.com', NOW, SECRET)}`));
+  const r = await s.run(new Request(`https://insights.guifav.dev/confirm?${await signLink('leitor@exemplo.com', NOW, SECRET)}`));
   assert.equal(r.status, 502);
 });
 
@@ -247,6 +260,7 @@ test('A6: limite por email e por IP: mesma resposta, sem envio', async () => {
   for (const o of [{ rlEmail: false }, { rlIp: false }]) {
     const s = setup(o);
     const r = await s.run(subscribe(ok));
+    assert.equal(r.status, 303);
     assert.equal(loc(r), 'https://guifav.dev/blog/inscricao-enviada/');
     assert.equal(s.calls.filter((c) => c.url.includes('resend.com')).length, 0);
   }
@@ -260,12 +274,12 @@ test('A6: limite por email e por IP: mesma resposta, sem envio', async () => {
 test('A7: origem, método e rota', async () => {
   const s = setup();
   assert.equal((await s.run(subscribe(ok, { origin: 'https://evil.example' }))).status, 403);
-  const noOrigin = new Request('https://newsletter.guifav.dev/subscribe', { method: 'POST', body: 'email=a@b.com' });
+  const noOrigin = new Request('https://insights.guifav.dev/subscribe', { method: 'POST', body: 'email=a@b.com' });
   assert.equal((await s.run(noOrigin)).status, 403);
-  assert.equal((await s.run(new Request('https://newsletter.guifav.dev/subscribe'))).status, 405);
-  assert.equal((await s.run(new Request('https://newsletter.guifav.dev/confirm', { method: 'POST', headers: { origin: 'https://guifav.dev' } }))).status, 405);
-  assert.equal((await s.run(new Request('https://newsletter.guifav.dev/'))).status, 404);
-  assert.equal((await s.run(new Request('https://newsletter.guifav.dev/admin'))).status, 404);
+  assert.equal((await s.run(new Request('https://insights.guifav.dev/subscribe'))).status, 405);
+  assert.equal((await s.run(new Request('https://insights.guifav.dev/confirm', { method: 'POST', headers: { origin: 'https://guifav.dev' } }))).status, 405);
+  assert.equal((await s.run(new Request('https://insights.guifav.dev/'))).status, 404);
+  assert.equal((await s.run(new Request('https://insights.guifav.dev/admin'))).status, 404);
   assert.equal(s.calls.length, 0);
 });
 
@@ -298,19 +312,19 @@ test('A9: email de confirmação com remetente, reply-to, HTML e texto, e um ún
   const s = setup();
   await s.run(subscribe(ok));
   const mail = s.calls.find((c) => c.url.endsWith('/emails'))!.body as Record<string, unknown>;
-  assert.equal(mail.from, 'IA Aplicada <newsletter@guifav.dev>');
+  assert.equal(mail.from, 'IA Aplicada <insights@guifav.dev>');
   assert.equal(mail.reply_to, 'contact@guifav.dev');
   assert.match(String(mail.subject), /Confirme/);
   const links = String(mail.html).match(/href="[^"]+"/g) ?? [];
   assert.equal(links.length, 1, String(mail.html));
-  assert.match(links[0], /^href="https:\/\/newsletter\.guifav\.dev\/confirm\?/);
+  assert.match(links[0], /^href="https:\/\/insights\.guifav\.dev\/confirm\?/);
 });
 
 test('A9: endereço com caracteres de HTML é escapado no corpo', () => {
-  const { html } = confirmationEmail('a"<b>@exemplo.com', 'https://newsletter.guifav.dev/confirm?e=1&x=2&s=3');
+  const { html } = confirmationEmail('a"<b>@exemplo.com', 'https://insights.guifav.dev/confirm?e=1&x=2&s=3');
   assert.ok(!html.includes('<b>@'), html);
   assert.ok(html.includes('&lt;b&gt;'), html);
-  assert.ok(html.includes('href="https://newsletter.guifav.dev/confirm?e=1&amp;x=2&amp;s=3"'), html);
+  assert.ok(html.includes('href="https://insights.guifav.dev/confirm?e=1&amp;x=2&amp;s=3"'), html);
 });
 
 test('contactPath: @ literal, o resto codificado', () => {
@@ -324,14 +338,14 @@ test('normalizeEmail: minúsculas e sem espaço nas pontas; recusa cabeçalho e 
 
 // ---------------------------------------------------------------- rodada 1 do gate (#31)
 
-const confirmUrl = async () => `https://newsletter.guifav.dev/confirm?${await signLink('leitor@exemplo.com', NOW, SECRET)}`;
+const confirmUrl = async () => `https://insights.guifav.dev/confirm?${await signLink('leitor@exemplo.com', NOW, SECRET)}`;
 
 test('A5: erro do Resend ao incluir no segmento não vira sucesso (409 resource_locked, 422, 500)', async () => {
   for (const segStatus of [409, 422, 500]) {
     const s = setup({ contact: 'active', segStatus });
     const r = await s.run(new Request(await confirmUrl()));
     assert.equal(r.status, 502, String(segStatus));
-    assert.ok(s.calls.some((c) => c.url === 'https://api.resend.com/contacts/c1/segments' && c.method === 'GET'), String(segStatus));
+    assert.ok(s.calls.some((c) => c.url.startsWith('https://api.resend.com/contacts/c1/segments?') && c.method === 'GET'), String(segStatus));
   }
 });
 
@@ -359,7 +373,7 @@ test('A4: validade adulterada para outro horário numérico é recusada pela ass
   p.set('x', String(Number(p.get('x')) + 365 * 86400));
   assert.equal(await verifyLink(p, SECRET, NOW), null);
   const s = setup({ contact: 'none' });
-  const r = await s.run(new Request(`https://newsletter.guifav.dev/confirm?${p}`));
+  const r = await s.run(new Request(`https://insights.guifav.dev/confirm?${p}`));
   assert.equal(loc(r), 'https://guifav.dev/blog/inscricao-invalida/');
   assert.equal(s.calls.length, 0);
 });
@@ -377,6 +391,7 @@ test('A6: limites do wrangler.toml são 5 por IP e 1 por email, a cada 60 s', ()
 test('A6: o limite por IP vale antes do Turnstile; acima dele, nem o siteverify é chamado', async () => {
   const s = setup({ rlIp: false });
   const r = await s.run(subscribe(ok));
+  assert.equal(r.status, 303);
   assert.equal(loc(r), 'https://guifav.dev/blog/inscricao-enviada/');
   assert.equal(s.calls.length, 0);
   const t = setup({ turnstile: { success: false } });
@@ -410,7 +425,7 @@ test('A8: nenhum arquivo do Worker atribui segredo, com chave TOML entre aspas o
 });
 
 test('A9: remetente e reply-to vêm do wrangler.toml real; um único link, o de confirmação, no HTML e no texto', async () => {
-  assert.equal(tomlVar('FROM'), 'IA Aplicada <newsletter@guifav.dev>');
+  assert.equal(tomlVar('FROM'), 'IA Aplicada <insights@guifav.dev>');
   assert.equal(tomlVar('REPLY_TO'), 'contact@guifav.dev');
   const s = setup();
   await s.run(subscribe(ok));
@@ -423,6 +438,60 @@ test('A9: remetente e reply-to vêm do wrangler.toml real; um único link, o de 
   assert.equal(hrefs.length, 1, mail.html);
   assert.equal(htmlUrls.length, 1, mail.html);
   assert.equal(hrefs[0], textUrls[0]);
-  assert.ok(textUrls[0].startsWith('https://newsletter.guifav.dev/confirm?'));
+  assert.ok(textUrls[0].startsWith('https://insights.guifav.dev/confirm?'));
   assert.equal(await verifyLink(new URL(textUrls[0]).searchParams, SECRET, NOW), 'leitor@exemplo.com');
+});
+
+// ---------------------------------------------------------------- rodada 2 do gate (#31), P3 do Astra
+
+test('A5: inclusão recusada e o contato só em outro segmento: 502, nunca sucesso', async () => {
+  const s = setup({ contact: 'active', segStatus: 409, segments: ['outro'] });
+  const r = await s.run(new Request(await confirmUrl()));
+  assert.equal(r.status, 502);
+  assert.equal(loc(r), null);
+});
+
+test('A5: o segmento na segunda página da lista conta (paginação por after, 100 por página)', async () => {
+  const many = Array.from({ length: 130 }, (_, i) => `s${i}`);
+  many.splice(110, 0, 'seg-1');
+  const s = setup({ contact: 'active', segStatus: 409, segments: many });
+  const r = await s.run(new Request(await confirmUrl()));
+  assert.equal(loc(r), 'https://guifav.dev/blog/inscricao-confirmada/');
+  const pages = s.calls.filter((c) => c.url.startsWith('https://api.resend.com/contacts/c1/segments?'));
+  assert.equal(pages.length, 2);
+  assert.equal(new URL(pages[0].url).searchParams.get('limit'), '100');
+  assert.equal(new URL(pages[1].url).searchParams.get('after'), 's99');
+});
+
+test('A5: lista sem o segmento em nenhuma página, ou página que falha: 502', async () => {
+  const many = Array.from({ length: 150 }, (_, i) => `s${i}`);
+  const s = setup({ contact: 'active', segStatus: 409, segments: many });
+  assert.equal((await s.run(new Request(await confirmUrl()))).status, 502);
+  const t = setup({ contact: 'active', segStatus: 409, segments: many, segListStatus: 500 });
+  assert.equal((await t.run(new Request(await confirmUrl()))).status, 502);
+});
+
+test('A5: a leitura dos segmentos para em 20 páginas; o segmento na 21ª não conta (502)', async () => {
+  // P3 do Astra no #34: sem este teste, trocar o teto de 20 páginas passava em silêncio.
+  const many = Array.from({ length: 2100 }, (_, i) => `s${i}`);
+  many.splice(2050, 0, 'seg-1');
+  const s = setup({ contact: 'active', segStatus: 409, segments: many });
+  const r = await s.run(new Request(await confirmUrl()));
+  assert.equal(r.status, 502);
+  assert.notEqual(loc(r), 'https://guifav.dev/blog/inscricao-confirmada/');
+  assert.equal(s.calls.filter((c) => c.url.startsWith('https://api.resend.com/contacts/c1/segments?')).length, 20);
+});
+
+test('A5: falha de rede ou JSON inválido do Resend na confirmação viram 502, sem rejeitar o handler', async () => {
+  const cases: Opts[] = [
+    { contact: 'none', throwOn: 'api.resend.com/contacts' },
+    { contact: 'active', throwOn: 'api.resend.com/contacts/c1/segments' },
+    { contact: 'active', badJsonOn: 'api.resend.com/contacts/leitor' },
+    { contact: 'active', segStatus: 409, badJsonOn: 'api.resend.com/contacts/c1/segments?' },
+  ];
+  for (const o of cases) {
+    const s = setup(o);
+    const r = await s.run(new Request(await confirmUrl()));
+    assert.equal(r.status, 502, JSON.stringify(o));
+  }
 });

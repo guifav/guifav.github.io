@@ -25,16 +25,12 @@ O deploy é manual, depois do merge, e não está no CI. O DNS de `guifav.dev` s
 
 1. **Segmento** "IA Aplicada" no Resend. Copie o id para `SEGMENT_ID` no `wrangler.toml`. Com `SEGMENT_ID` vazio, o Worker responde 500 e não cadastra ninguém.
 2. **Turnstile:** crie um widget para `guifav.dev`. A chave pública vai para `TURNSTILE_SITE_KEY` em `blog-src/src/consts.ts`; a secreta, para o segredo abaixo.
-3. **Segredos**, um por vez (o valor é pedido no terminal e não fica no histórico):
-   ```
-   npx wrangler@4 secret put RESEND_API_KEY
-   npx wrangler@4 secret put TURNSTILE_SECRET
-   npx wrangler@4 secret put CONFIRM_SECRET     # openssl rand -base64 48
-   ```
-4. **Publicação:** `npx wrangler@4 deploy`. A rota `newsletter.guifav.dev` é um domínio próprio do Worker, e o Cloudflare cria o registro DNS do subdomínio.
-5. **Teste real** com um email do Gui: inscrição, email recebido de `newsletter@guifav.dev`, clique no link, contato no segmento. Confirmação repetida não duplica.
-6. **Ligar o formulário** em um PR pequeno: `NEWSLETTER_FORM_ENABLED = true` e a chave pública do Turnstile em `blog-src/src/consts.ts`.
+3. **Publicação:** `npx wrangler@4 deploy`. A rota `insights.guifav.dev` é um domínio próprio do Worker, e o Cloudflare cria o registro DNS do subdomínio.
+4. **Segredos**, os três de uma vez (`npx wrangler@4 secret bulk`, lendo um JSON pela entrada padrão, sem o valor passar pela tela nem pelo histórico): `RESEND_API_KEY`, `TURNSTILE_SECRET` e `CONFIRM_SECRET` (`openssl rand -base64 48`). Confira com `npx wrangler@4 secret list`.
+5. **Teste real** com um endereço que se consiga ler: inscrição no site publicado, email recebido de `insights@guifav.dev`, clique no link, contato no segmento. Confirmação repetida não duplica. Depois, o contato de teste sai.
+
+O formulário (`NEWSLETTER_FORM_ENABLED` e a chave pública do Turnstile em `blog-src/src/consts.ts`) foi ligado no PR #34, junto com o primeiro deploy, em 2026-11-11.
 
 ## Remetente
 
-A confirmação sai de `newsletter@guifav.dev`. Esse domínio está verificado no Resend e com rastreamento de abertura e clique desligado, então o link chega sem redirecionamento. A newsletter (parte B) usa `expert.guifav.dev`, com rastreamento ligado.
+A confirmação sai de `insights@guifav.dev`. Esse domínio está verificado no Resend e com rastreamento de abertura e clique desligado, então o link chega sem redirecionamento. A newsletter (parte B) usa `expert.guifav.dev`, com rastreamento ligado.
