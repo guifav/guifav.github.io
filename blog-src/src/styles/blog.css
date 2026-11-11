@@ -66,6 +66,7 @@
 .subscribe-row button{font:inherit;font-size:16px;padding:10px 18px;border:0;border-radius:8px;background:var(--hl);color:var(--hl-text);cursor:pointer}
 .cf-turnstile{margin-top:12px}
 .subscribe-note{font-size:14px;color:var(--text-secondary);margin:12px 0 0}
+.subscribe-note a{color:inherit;text-decoration:underline}
 .form-error{display:none;padding:12px 14px;border:1px solid var(--border);border-radius:8px}
 .form-error:target{display:block}
 
