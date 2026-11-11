@@ -431,7 +431,7 @@ def _envelope(post: Post, body_html: str, truncated: bool) -> str:
         f'{pod}{body_html}{note}{cta}'
         '</td></tr>'
         '<tr><td style="padding:24px 20px 28px;border-top:1px solid #eee;font-family:Arial,sans-serif;font-size:13px;line-height:1.5;color:#777;">'
-        'Você recebe este email porque assinou a newsletter IA Aplicada, de Guilherme Favaron. '
+        'Você recebe este email porque assinou os Insights IA Aplicada, de Guilherme Favaron. '
         'Para responder, é só responder a este email.<br>'
         '<a href="{{{RESEND_UNSUBSCRIBE_URL}}}" style="color:#777;">Sair da lista</a> &middot; '
         f'<a href="{BLOG}/privacidade/" style="color:#777;">Privacidade</a>'
@@ -449,7 +449,7 @@ def _text(post: Post, body_text: str, truncated: bool) -> str:
     if truncated:
         parts.append(TRUNCATED_NOTE)
     parts.append(f"Ler no site: {post.url}")
-    parts.append("Você recebe este email porque assinou a newsletter IA Aplicada, de Guilherme Favaron.\n"
+    parts.append("Você recebe este email porque assinou os Insights IA Aplicada, de Guilherme Favaron.\n"
                  "Sair da lista: {{{RESEND_UNSUBSCRIBE_URL}}}\n"
                  f"Privacidade: {BLOG}/privacidade/")
     return "\n\n".join(p for p in parts if p) + "\n"
