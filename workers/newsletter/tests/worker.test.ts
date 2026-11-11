@@ -260,6 +260,7 @@ test('A6: limite por email e por IP: mesma resposta, sem envio', async () => {
   for (const o of [{ rlEmail: false }, { rlIp: false }]) {
     const s = setup(o);
     const r = await s.run(subscribe(ok));
+    assert.equal(r.status, 303);
     assert.equal(loc(r), 'https://guifav.dev/blog/inscricao-enviada/');
     assert.equal(s.calls.filter((c) => c.url.includes('resend.com')).length, 0);
   }
@@ -390,6 +391,7 @@ test('A6: limites do wrangler.toml são 5 por IP e 1 por email, a cada 60 s', ()
 test('A6: o limite por IP vale antes do Turnstile; acima dele, nem o siteverify é chamado', async () => {
   const s = setup({ rlIp: false });
   const r = await s.run(subscribe(ok));
+  assert.equal(r.status, 303);
   assert.equal(loc(r), 'https://guifav.dev/blog/inscricao-enviada/');
   assert.equal(s.calls.length, 0);
   const t = setup({ turnstile: { success: false } });
