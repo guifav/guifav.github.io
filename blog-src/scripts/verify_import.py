@@ -24,6 +24,7 @@ from html.parser import HTMLParser
 from datetime import datetime, timedelta
 from urllib.parse import unquote, urlsplit
 
+import numpy as np
 from PIL import Image
 
 SKIP = {"politica-de-privacidade", "termos-e-condicoes-de-uso"}
@@ -37,13 +38,13 @@ VOID = {"img", "source", "br", "hr", "input", "wbr", "meta", "link", "col", "pat
 IMG_BUDGET = 100 * 1024 * 1024
 WIDTHS = (728, 1456)
 COVER_WIDTH = 1200
-# Identidade da imagem: diferença média de cinza (0 a 255) entre miniaturas 16x16. No corpus da #19, a mesma
-# imagem recodificada fica em no máximo 5,3 (p99 de 0,9; o pior caso é um PNG em tons de cinza com muito
-# detalhe) e imagens diferentes em no mínimo 6,1 (mediana de 79). Por isso são duas condições: um teto
-# absoluto folgado, contra imagem de outro post, e a relativa, contra troca dentro do post: o arquivo
-# publicado precisa estar mais perto do seu original do que de qualquer outro original diferente do post.
+# Identidade da imagem: diferença média por canal (0 a 255) entre miniaturas 32x32 em RGB. O arquivo publicado
+# precisa ficar abaixo de um teto absoluto e mais perto do seu original do que de QUALQUER outro original do
+# corpus (corpo e capas de todos os posts), ignorando os originais praticamente iguais ao dele. Medido na
+# #19: a mesma imagem recodificada fica em no máximo 5,5; nenhum dos 1.175 arquivos publicados fica mais perto
+# de outro original do que do próprio (menor margem de 0,7, entre capturas quase iguais do mesmo notebook).
 SAME_IMAGE_MAX_DIFF = 12.0
-DISTINCT_ORIGINALS = 2.0
+DISTINCT_ORIGINALS = 1.0
 EPISODE_DATE_TOLERANCE = timedelta(days=2)
 # R3 com referência revisada, independente do importador: post renomeado depois de publicado. O card do
 # gui-brain com o slug antigo tem o mesmo título do post atual.
@@ -173,7 +174,7 @@ def old_slugs(html: str) -> set:
 
 def is_old(h: str) -> bool:
     host = (urlsplit(h.strip()).hostname or "").lower()
-    return host in SITE_HOSTS or host.endswith(".substack.com")
+    return host in SITE_HOSTS or host == "substack.com" or host.endswith(".substack.com")
 
 
 def original_url(url: str) -> str:
@@ -185,17 +186,49 @@ def cache_path(cache: str, url: str) -> str:
     return os.path.join(cache, "orig", hashlib.sha256(original_url(url).encode()).hexdigest()[:24])
 
 
-def thumb(path: str) -> list:
+def thumb(path: str) -> np.ndarray:
     with Image.open(path) as im:
         im.seek(0)
         im = im.convert("RGBA")
         bg = Image.new("RGBA", im.size, (255, 255, 255, 255))
         bg.alpha_composite(im)
-        return list(bg.convert("L").resize((16, 16), Image.Resampling.LANCZOS).tobytes())
+        return np.frombuffer(bg.convert("RGB").resize((32, 32), Image.Resampling.BOX).tobytes(), dtype=np.uint8).astype(np.int16)
 
 
-def img_diff(a: list, b: list) -> float:
-    return sum(abs(x - y) for x, y in zip(a, b)) / len(a)
+def img_diff(a: np.ndarray, b: np.ndarray) -> float:
+    return float(np.abs(a - b).mean())
+
+
+class Corpus:
+    """Miniaturas de todos os originais (corpo e capas), para a identidade contra o corpus inteiro."""
+
+    def __init__(self, cache: str, posts: dict):
+        paths = []
+        for p in posts.values():
+            ex = Extract()
+            ex.feed(p["body_html"])
+            for i in ex.imgs:
+                src = json.loads(i.get("data-attrs") or "{}").get("src") or i.get("src")
+                if src and src != "undefined":
+                    paths.append(cache_path(cache, src))
+            if p.get("cover_image"):
+                paths.append(cache_path(cache, p["cover_image"]))
+        self.paths = sorted({x for x in paths if os.path.exists(x)})
+        self.index = {x: k for k, x in enumerate(self.paths)}
+        self.mat = np.stack([thumb(x) for x in self.paths])
+
+    def check(self, path: str, orig: str) -> str | None:
+        """None se o arquivo é a imagem do original; senão, a razão."""
+        t = thumb(path)
+        d = np.abs(self.mat - t).mean(axis=1)
+        k = self.index[orig]
+        own = float(d[k])
+        same = np.abs(self.mat - self.mat[k]).mean(axis=1) <= DISTINCT_ORIGINALS
+        others = np.where(~same, d, np.inf)
+        j = int(others.argmin())
+        if own > SAME_IMAGE_MAX_DIFF or others[j] <= own:
+            return f"diferença {own:.1f} para o original; o mais perto é {os.path.basename(self.paths[j])} ({float(others[j]):.1f})"
+        return None
 
 
 def srcset(v: str) -> list:
@@ -207,20 +240,17 @@ def srcset(v: str) -> list:
     return out
 
 
-def check_images(s: str, o_imgs: list, p_imgs: list, dist: str, cache: str) -> list:
+def check_images(s: str, o_imgs: list, p_imgs: list, dist: str, cache: str, corpus: "Corpus") -> list:
     """G4, imagem a imagem e na ordem: arquivo de origem, alt, variantes, dimensões reais e identidade."""
     probs = []
-    refs = []
-    for oi in o_imgs:
-        d = json.loads(oi.get("data-attrs") or "{}")
-        path = cache_path(cache, d.get("src") or oi.get("src"))
-        refs.append(thumb(path) if os.path.exists(path) else None)
     for k, (oi, pi) in enumerate(zip(o_imgs, p_imgs), 1):
         data = json.loads(oi.get("data-attrs") or "{}")
         osrc = data.get("src") or oi.get("src")
         oalt = data.get("alt") if data.get("alt") is not None else oi.get("alt", "")
         tag = f"G4 {s}: imagem {k}"
-        if (pi.get("alt") or "") != (oalt or ""):
+        if "alt" not in pi:
+            probs.append(f"{tag}: sem atributo alt")
+        elif pi["alt"] != (oalt or ""):
             probs.append(f"{tag}: alt {pi.get('alt')!r} diferente do original {oalt!r}")
         orig = cache_path(cache, osrc)
         if not os.path.exists(orig):
@@ -250,8 +280,6 @@ def check_images(s: str, o_imgs: list, p_imgs: list, dist: str, cache: str) -> l
         got = sorted(int(d[:-1]) for _, d in cands if d.endswith("w") and d[:-1].isdigit())
         if len(widths) > 1 and got != widths:
             probs.append(f"{tag}: srcset com larguras {got}, esperado {widths}")
-        ref = refs[k - 1]
-        others = [(j + 1, r) for j, r in enumerate(refs) if j != k - 1 and r is not None and img_diff(r, ref) > DISTINCT_ORIGINALS]
         dims = {}
         for u, path in paths.items():
             with Image.open(path) as im:
@@ -261,11 +289,9 @@ def check_images(s: str, o_imgs: list, p_imgs: list, dist: str, cache: str) -> l
             x, y = dims[u]
             if x > W or abs(y - round(H * x / W)) > 1:
                 probs.append(f"{tag}: {u} com {x}x{y}, fora da proporção do original {W}x{H} ou ampliado")
-            tp = thumb(path)
-            own = img_diff(tp, ref)
-            near = [j for j, r in others if img_diff(tp, r) < own]
-            if own > SAME_IMAGE_MAX_DIFF or near:
-                probs.append(f"{tag}: {u} não é a imagem do original (diferença {own:.1f}; mais perto das imagens {near})")
+            why = corpus.check(path, orig)
+            if why:
+                probs.append(f"{tag}: {u} não é a imagem do original ({why})")
         for u, d in cands:
             if d.endswith("w") and u in dims and dims[u][0] != int(d[:-1]):
                 probs.append(f"{tag}: {u} declarado {d} com largura real {dims[u][0]}")
@@ -277,7 +303,7 @@ def check_images(s: str, o_imgs: list, p_imgs: list, dist: str, cache: str) -> l
     return probs
 
 
-def check_cover(s: str, p: dict, page: str, dist: str, cache: str) -> list:
+def check_cover(s: str, p: dict, page: str, dist: str, cache: str, corpus: "Corpus") -> list:
     og = re.search(r'<meta property="og:image" content="([^"]*)"', page)
     url = f"https://guifav.dev/blog/img/{s}/capa.jpg"
     if not p.get("cover_image"):
@@ -291,9 +317,49 @@ def check_cover(s: str, p: dict, page: str, dist: str, cache: str) -> list:
     with Image.open(path) as im, Image.open(orig) as om:
         if im.format != "JPEG" or im.size[0] != min(om.size[0], COVER_WIDTH):
             return [f"G4 {s}: capa {im.format} {im.size}, esperado JPEG com largura {min(om.size[0], COVER_WIDTH)}"]
-    if img_diff(thumb(path), thumb(orig)) > SAME_IMAGE_MAX_DIFF:
-        return [f"G4 {s}: a capa não é a imagem do original"]
+    why = corpus.check(path, orig)
+    if why:
+        return [f"G4 {s}: a capa não é a imagem do original ({why})"]
     return []
+
+
+def embed_id(src: str) -> tuple | None:
+    """Plataforma e identificador de um iframe do corpo (os dois tipos do corpus)."""
+    u = urlsplit(H.unescape(src))
+    m = re.fullmatch(r"/embed/([A-Za-z0-9_-]{11})", u.path)
+    if (u.hostname or "") in ("www.youtube-nocookie.com", "www.youtube.com", "youtube.com") and m:
+        return ("youtube", m.group(1))
+    m = re.fullmatch(r"/embed/(episode|show|track)/([A-Za-z0-9]+)", u.path)
+    if (u.hostname or "") == "open.spotify.com" and m:
+        return ("spotify", m.group(1), m.group(2))
+    return None
+
+
+def ld_strings(page: str) -> list:
+    """Todas as strings dos blocos JSON-LD, achados pelo atributo type (o leiaute põe outros atributos antes)."""
+    out = []
+
+    def walk(v):
+        if isinstance(v, str):
+            out.append(v)
+        elif isinstance(v, dict):
+            for x in v.values():
+                walk(x)
+        elif isinstance(v, list):
+            for x in v:
+                walk(x)
+    for m in re.finditer(r'<script\b([^>]*)>(.*?)</script>', page, re.S):
+        if re.search(r'\btype="application/ld\+json"', m.group(1)):
+            try:
+                walk(json.loads(m.group(2)))
+            except ValueError:
+                out.append("JSON-LD inválido")
+    return out
+
+
+def header_text(page: str, pattern: str) -> str | None:
+    m = re.search(pattern, page, re.S)
+    return re.sub(r"\s+", " ", H.unescape(re.sub(r"<[^>]+>", "", m.group(1)))).strip() if m else None
 
 
 def norm_title(t: str) -> str:
@@ -366,6 +432,7 @@ def main(argv=None) -> int:
     ap.add_argument("--cache", default="/root/.roger/cache/blog-import")
     ap.add_argument("--export", required=True)
     ap.add_argument("--root", default=".")
+    ap.add_argument("--video", default=None, help="MP4 do vídeo nativo (padrão: o .mp4 da pasta do export)")
     a = ap.parse_args(argv)
     dist = os.path.join(a.root, "dist")
     problems: list[str] = []
@@ -386,6 +453,8 @@ def main(argv=None) -> int:
         with open(os.path.join(a.cache, "api", "posts", s + ".json"), encoding="utf-8") as f:
             posts[s] = json.load(f)
     post_ids = {str(p["id"]): s for s, p in posts.items()}
+    corpus = Corpus(a.cache, posts)
+    video = a.video or next((os.path.join(a.export, f) for f in sorted(os.listdir(a.export)) if f.endswith(".mp4")), None)
     aliases = aliases_for(set().union(*(old_slugs(p["body_html"]) for p in posts.values())), set(expected))
     # O relatório do importador é conferido contra o cálculo daqui, nunca usado como referência.
     with open(os.path.join(a.cache, "report.json"), encoding="utf-8") as f:
@@ -423,15 +492,33 @@ def main(argv=None) -> int:
         o_imgs = [i for i in orig.imgs if (json.loads(i.get("data-attrs") or "{}").get("src") or i.get("src")) not in ("", "undefined")]
         if len(o_imgs) != len(pub.imgs):
             problems.append(f"G4 {s}: {len(o_imgs)} imagens no original, {len(pub.imgs)} publicadas")
-        problems += check_images(s, o_imgs, pub.imgs, dist, a.cache)
-        problems += check_cover(s, p, page, dist, a.cache)
+        problems += check_images(s, o_imgs, pub.imgs, dist, a.cache, corpus)
+        problems += check_cover(s, p, page, dist, a.cache, corpus)
         # iframes e vídeo
-        if len(orig.iframes) != len(pub.iframes):
-            problems.append(f"G3 {s}: iframes: original {len(orig.iframes)}, publicado {len(pub.iframes)}")
+        o_emb, p_emb = [embed_id(x) for x in orig.iframes], [embed_id(x) for x in pub.iframes]
+        if o_emb != p_emb or None in p_emb:
+            problems.append(f"G3 {s}: iframes do corpo: original {o_emb}, publicado {p_emb}")
         if ('native-video-embed' in p["body_html"]) != (pub.videos == 1):
             problems.append(f"G4 {s}: vídeo nativo não publicado")
+        elif pub.videos:
+            vm = re.search(r'<video\b[^>]*\bsrc="([^"]+)"[^>]*\bposter="([^"]+)"', page)
+            vpath = os.path.join(dist, vm.group(1)[len("/blog/"):]) if vm and vm.group(1).startswith("/blog/") else ""
+            ppath = os.path.join(dist, vm.group(2)[len("/blog/"):]) if vm and vm.group(2).startswith("/blog/") else ""
+            if not video or not os.path.exists(vpath) or not os.path.exists(ppath):
+                problems.append(f"G4 {s}: vídeo ou pôster ausente ({vm.group(0)[:120] if vm else None})")
+            elif hashlib.sha256(open(vpath, "rb").read()).digest() != hashlib.sha256(open(video, "rb").read()).digest():
+                problems.append(f"G4 {s}: vídeo publicado diferente do MP4 fornecido")
+        # G2: título e subtítulo, no frontmatter e no cabeçalho publicado
+        title = re.sub(r"\s+", " ", p["title"]).strip()
+        sub = re.sub(r"\s+", " ", p.get("subtitle") or "").strip()
+        h1 = header_text(page, r'<header class="post-head">.*?<h1>(.*?)</h1>')
+        ps = header_text(page, r'<header class="post-head">.*?<p class="post-sub">(.*?)</p>') or ""
+        if h1 != title or ps != sub:
+            problems.append(f"G2 {s}: cabeçalho publicado {h1!r} / {ps!r} diferente da API {title!r} / {sub!r}")
         # G7 e G8
         fm = read_fm(os.path.join(md_dir, s + ".md"))
+        if re.sub(r"\s+", " ", fm.get("title", "")).strip() != title or re.sub(r"\s+", " ", fm.get("subtitle", "")).strip() != sub:
+            problems.append(f"G2 {s}: frontmatter {fm.get('title')!r} / {fm.get('subtitle')!r} diferente da API")
         if fm.get("date") != p["post_date"] or fm.get("updated") != p["updated_at"]:
             problems.append(f"G8 {s}: datas {fm.get('date')} {fm.get('updated')} diferentes de {p['post_date']} {p['updated_at']}")
         if p.get("type") == "podcast":
@@ -473,8 +560,7 @@ def main(argv=None) -> int:
             urls = []
             for v in OLD_URL_ATTR.findall(t):
                 urls += [u for u, _ in srcset(v)] if " " in v.strip() and "," in v else [v]
-            for js in re.findall(r'<script type="application/ld\+json">(.*?)</script>', t, re.S):
-                urls += re.findall(r'https?://[^"\s]+', js)
+            urls += [x for x in ld_strings(t) if re.match(r"(?:https?:)?//", x)]
             got = Counter(H.unescape(u) for u in urls if is_old(H.unescape(u)))
             if FOOTER_NEWSLETTER in t:
                 got["https://guilhermefavaron.com.br"] -= 1
