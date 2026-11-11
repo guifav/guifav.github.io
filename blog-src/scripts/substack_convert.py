@@ -451,7 +451,8 @@ def pre_block(pre: Node, ctx: Context) -> str:
     body = _pre_html(code.children, ctx)
     body = body[1:] if body.startswith("\n") else body
     body = body[:-1] if body.endswith("\n") else body
-    return f"<pre><code>{body}</code></pre>"
+    # Sem <code>: o realce do Shiki age em todo pre>code, inclusive no HTML cru, e achataria o link em texto.
+    return f'<pre class="code-html">{body}</pre>'
 
 
 def iframe_block(n: Node, ctx: Context) -> str:

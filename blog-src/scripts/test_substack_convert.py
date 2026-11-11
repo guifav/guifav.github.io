@@ -181,13 +181,14 @@ class BlockTest(unittest.TestCase):
         self.assertEqual(md, "```python\nx = 1\n\nprint(x)\n```\n")
 
     def test_pre_with_link_keeps_link_as_html(self):
+        # Sem <code>: o realce do Shiki age em todo pre>code, inclusive no HTML cru, e achata os filhos em texto.
         html = '<pre><code>\nO equivalente:\n\n <a href="https://bing.com/webmasters/">bing.com/webmasters/</a> &lt;x&gt;\n</code></pre>'
         md, _ = conv(html)
-        self.assertEqual(md, '<pre><code>O equivalente:\n\n <a href="https://bing.com/webmasters/">bing.com/webmasters/</a> &lt;x&gt;</code></pre>\n')
+        self.assertEqual(md, '<pre class="code-html">O equivalente:\n\n <a href="https://bing.com/webmasters/">bing.com/webmasters/</a> &lt;x&gt;</pre>\n')
 
     def test_pre_with_strong_keeps_formatting_as_html(self):
         md, _ = conv("<pre><code>GET /x\n<strong>200 OK</strong> &amp; fim</code></pre>")
-        self.assertEqual(md, "<pre><code>GET /x\n<strong>200 OK</strong> &amp; fim</code></pre>\n")
+        self.assertEqual(md, '<pre class="code-html">GET /x\n<strong>200 OK</strong> &amp; fim</pre>\n')
 
     def test_nested_code_in_pre(self):
         md, _ = conv("<pre><code><code>x = 1</code></code></pre>")
