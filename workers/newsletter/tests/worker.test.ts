@@ -89,7 +89,7 @@ function setup(opts: Opts = {}) {
     CONFIRM_SECRET: SECRET,
     FROM: tomlVar('FROM'),
     REPLY_TO: tomlVar('REPLY_TO'),
-    SEGMENT_ID: 'seg-1', // no wrangler.toml fica vazio até o deploy
+    SEGMENT_ID: 'seg-1', // id usado pelos mocks; o real fica no wrangler.toml
     SITE_ORIGIN: tomlVar('SITE_ORIGIN'),
     BLOG_URL: tomlVar('BLOG_URL'),
     WORKER_URL: tomlVar('WORKER_URL'),
@@ -469,6 +469,17 @@ test('A5: lista sem o segmento em nenhuma página, ou página que falha: 502', a
   assert.equal((await s.run(new Request(await confirmUrl()))).status, 502);
   const t = setup({ contact: 'active', segStatus: 409, segments: many, segListStatus: 500 });
   assert.equal((await t.run(new Request(await confirmUrl()))).status, 502);
+});
+
+test('A5: a leitura dos segmentos para em 20 páginas; o segmento na 21ª não conta (502)', async () => {
+  // P3 do Astra no #34: sem este teste, trocar o teto de 20 páginas passava em silêncio.
+  const many = Array.from({ length: 2100 }, (_, i) => `s${i}`);
+  many.splice(2050, 0, 'seg-1');
+  const s = setup({ contact: 'active', segStatus: 409, segments: many });
+  const r = await s.run(new Request(await confirmUrl()));
+  assert.equal(r.status, 502);
+  assert.notEqual(loc(r), 'https://guifav.dev/blog/inscricao-confirmada/');
+  assert.equal(s.calls.filter((c) => c.url.startsWith('https://api.resend.com/contacts/c1/segments?')).length, 20);
 });
 
 test('A5: falha de rede ou JSON inválido do Resend na confirmação viram 502, sem rejeitar o handler', async () => {
