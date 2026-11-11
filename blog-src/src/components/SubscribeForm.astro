@@ -5,7 +5,7 @@ import { NEWSLETTER_ENDPOINT, TURNSTILE_SITE_KEY } from '../consts';
 
 const base = import.meta.env.BASE_URL;
 ---
-<form class="subscribe-form" method="post" action={NEWSLETTER_ENDPOINT}>
+<form class="subscribe-form" data-site-form method="post" action={NEWSLETTER_ENDPOINT}>
   <label for="assinar-email">Seu email</label>
   <div class="subscribe-row">
     <input id="assinar-email" type="email" name="email" required autocomplete="email" maxlength="254" placeholder="voce@exemplo.com" />

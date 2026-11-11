@@ -162,6 +162,30 @@ class CheckTest(Base):
         self.w("blog/um-post/index.html", page('<script data-site-script type="application/ld+json">{}</script><script>x()</script><a href="/blog/">b</a>'))
         self.assertTrue(any("<script> fora do template" in p for p in self.problems()))
 
+    def test_newsletter_form_from_template_is_allowed(self):
+        # O formulário da #21 vem do template: marcado, POST e só para o Worker da newsletter.
+        form = ('<form data-site-form method="post" action="https://newsletter.guifav.dev/subscribe">'
+                '<input type="email" name="email"><button type="submit">Assinar</button></form>')
+        self.w("blog/um-post/index.html", page(f'<main><article><aside class="subscribe">{form}</aside></article></main><a href="/blog/">b</a>'))
+        self.assertEqual(self.problems(), [])
+
+    def test_form_needs_marker_post_and_the_newsletter_action(self):
+        for form in ('<form method="post" action="https://newsletter.guifav.dev/subscribe"></form>',
+                     '<form data-site-form method="post" action="https://evil.example/subscribe"></form>',
+                     '<form data-site-form method="get" action="https://newsletter.guifav.dev/subscribe"></form>',
+                     '<form data-site-form method="post" action="https://newsletter.guifav.dev/subscribe" '
+                     'formaction="https://evil.example/"></form>'):
+            self.w("blog/um-post/index.html", page(f'<main>{form}</main><a href="/blog/">b</a>'))
+            self.assertTrue(any("<form>" in p for p in self.problems()), form)
+
+    def test_marked_form_inside_post_body_is_still_content(self):
+        self.body('<div><form data-site-form method="post" action="https://newsletter.guifav.dev/subscribe"></form></div>')
+        self.assertTrue(any("<form>" in p for p in self.problems()))
+
+    def test_formaction_on_button_is_flagged(self):
+        self.body('<button formaction="https://evil.example/">x</button>')
+        self.assertTrue(any("formaction" in p for p in self.problems()))
+
     def test_srcdoc_is_active_even_with_allowed_src(self):
         self.body('<iframe src="https://www.youtube.com/embed/abc" srcdoc="&lt;script&gt;x()&lt;/script&gt;"></iframe>')
         self.assertTrue(any("srcdoc" in p for p in self.problems()))
