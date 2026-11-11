@@ -479,7 +479,8 @@ def css_refs(t: str) -> list:
     t = css_unescape(t)
     out = [next(g for g in m.groups() if g is not None).strip(ASCII_WS)
            for m in re.finditer(r'url\(\s*(?:"([^"]*)"|\'([^\']*)\'|([^)]*?))\s*\)', t, re.I)]
-    out += [a if a is not None else b for a, b in re.findall(r'"([^"]*)"|\'([^\']*)\'', t)]
+    # finditer: no findall, o grupo que não participou vem como "" e as strings entre aspas simples se perdiam.
+    out += [m.group(1) if m.group(1) is not None else m.group(2) for m in re.finditer(r'"([^"]*)"|\'([^\']*)\'', t)]
     return out
 
 
@@ -512,9 +513,10 @@ class Refs(HTMLParser):
                 self.refs += [("css", u) for u in css_refs(v)]
             elif k == "content" and tag == "meta":
                 if a.get("http-equiv", "").lower() == "refresh":
-                    m = re.search(r"url\s*=\s*['\"]?([^'\"]*)", v, re.I)
-                    if m:
-                        self.refs.append((kind, m.group(1)))
+                    # Pela regra do HTML, com ou sem "url=": a mesma função do check_site.
+                    u = CS.refresh_url(v)
+                    if u:
+                        self.refs.append((kind, u))
                 else:
                     self.refs.append((kind, v))
         self.in_style = tag == "style"
