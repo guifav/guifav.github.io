@@ -118,6 +118,7 @@ class ConvertTest(unittest.TestCase):
         self.assertIn('href="https://www.youtube.com/watch?v=abcDEF12345"', html)
         self.assertIn('href="https://open.spotify.com/episode/XYZ123"', html)
         self.assertIn("https://www.youtube.com/watch?v=abcDEF12345", text)
+        self.assertIn("https://open.spotify.com/episode/XYZ123", text)
 
     def test_unknown_iframe_host_fails(self):
         with self.assertRaises(N.DraftError):
@@ -176,7 +177,7 @@ class EnvelopeTest(unittest.TestCase):
         html, text = conv("<p>Corpo.</p>")
         for s in ("Um post", "Subtítulo do post", "https://guifav.dev/blog/img/um-post/capa.jpg",
                   "Ler no site", 'href="https://guifav.dev/blog/um-post/"', "{{{RESEND_UNSUBSCRIBE_URL}}}",
-                  'href="https://guifav.dev/blog/privacidade/"'):
+                  'href="https://guifav.dev/blog/privacidade/"', "Você recebe este email porque assinou"):
             self.assertIn(s, html)
         for s in ("Um post", "Corpo.", "https://guifav.dev/blog/um-post/", "{{{RESEND_UNSUBSCRIBE_URL}}}"):
             self.assertIn(s, text)
@@ -284,6 +285,7 @@ class DraftTest(unittest.TestCase):
         for method, path, body in (("POST", "/broadcasts/b1/send", None), ("POST", "/emails", {"to": "x"}),
                                    ("POST", "/broadcasts", {"send": True}), ("POST", "/broadcasts", {"send": False}),
                                    ("PATCH", "/broadcasts/b1", {"scheduled_at": "in 1 hour"}),
+                                   ("POST", "/broadcasts", {"scheduled_at": "in 1 hour"}),
                                    ("DELETE", "/broadcasts/b1", None), ("GET", "/broadcasts/b1/send", None)):
             with self.assertRaises(N.DraftError, msg=(method, path)):
                 api.request(method, path, body)
