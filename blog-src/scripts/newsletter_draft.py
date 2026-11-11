@@ -21,6 +21,8 @@ Garantias:
 from __future__ import annotations
 
 import argparse
+import contextlib
+import fcntl
 import html as H
 import json
 import os
@@ -42,6 +44,9 @@ GMAIL_CLIP_BYTES = 102 * 1024
 SIZE_MARGIN = 4 * 1024  # folga para a reescrita de links do rastreamento de clique
 IMG_MAX = 560
 TRUNCATED_NOTE = "Este email traz só o começo do texto. A versão completa está no site."
+PREHEADER_MAX = 200
+DEFAULT_LOCK_DIR = os.path.expanduser("~/.cache/guifav-newsletter-draft")
+CODE_START, CODE_END = "\x02", "\x03"  # delimitam código no texto puro, que não é normalizado
 
 
 class DraftError(Exception):
@@ -149,9 +154,11 @@ def parse_post(page: str, slug: str) -> Post:
     if pod:
         fr = find(pod, lambda e: e.tag == "iframe")
         spotify = _spotify_link(fr.attrs.get("src", "")) if fr else ""
-    return Post(slug, h1.text().strip(), sub.text().strip() if sub else "",
-                desc.attrs.get("content", "").strip() if desc else "", url,
-                og.attrs.get("content", "") if og else "", spotify, body)
+    post = Post(slug, h1.text().strip(), sub.text().strip() if sub else "",
+                desc.attrs.get("content", "").strip() if desc else "", url, "", spotify, body)
+    if og and og.attrs.get("content", "").strip():
+        post.cover = absolute(og.attrs["content"], post, link=False)
+    return post
 
 
 # ---------------------------------------------------------------- conversão
@@ -336,9 +343,16 @@ class Converter:
         if t == "li":
             return inner()
         if t == "a":
-            label = inner().strip()
+            raw = inner()
+            label = raw.strip()
             href = absolute(el.attrs.get("href", ""), self.post, link=True)
-            return label if label == href or not label else f"{label} ({href})"
+            if not label:
+                img = next((c for c in el.children if isinstance(c, El) and c.tag == "img"), None)
+                label = (img.attrs.get("alt", "") if img else "").strip()
+            out = href if label in ("", href) else f"{label} ({href})"
+            lead = " " if raw[:1].isspace() else ""
+            trail = " " if raw[-1:].isspace() else ""
+            return lead + out + trail
         if t == "br":
             return "\n"
         if t == "hr":
@@ -346,7 +360,8 @@ class Converter:
         if t == "img":
             return ""
         if t == "pre":
-            return "\n\n" + "".join(self.text(c, {"pre": True}) for c in el.children).strip("\n") + "\n\n"
+            code = "".join(self.text(c, {"pre": True}) for c in el.children).strip("\n")
+            return "\n\n" + CODE_START + code + CODE_END + "\n\n"
         if t == "iframe":
             return "\n\n" + _iframe(el, self.post)[1] + "\n\n"
         if t == "video":
@@ -365,15 +380,25 @@ class Converter:
 
 
 def _clean_text(s: str) -> str:
-    s = re.sub(r"[ \t]+\n", "\n", s)
-    return re.sub(r"\n{3,}", "\n\n", s).strip()
+    """Normaliza espaços e linhas em branco entre blocos; o código (entre CODE_START e CODE_END) fica literal."""
+    out = []
+    for i, part in enumerate(re.split(f"{CODE_START}(.*?){CODE_END}", s, flags=re.S)):
+        if i % 2:
+            out.append(part)
+        else:
+            part = re.sub(r"[ \t]+\n", "\n", part)
+            out.append(re.sub(r"\n{3,}", "\n\n", part))
+    return "".join(out).strip()
 
 
 # ---------------------------------------------------------------- envelope
 
 def _envelope(post: Post, body_html: str, truncated: bool) -> str:
     e = H.escape
-    pre = e(post.description or post.subtitle)
+    pre_text = post.description or post.subtitle
+    if len(pre_text) > PREHEADER_MAX:
+        pre_text = pre_text[:PREHEADER_MAX - 3].rstrip() + "..."
+    pre = e(pre_text)
     cover = (f'<tr><td style="padding:0 0 24px;"><img src="{_attr(post.cover)}" alt="" width="{IMG_MAX}" '
              f'style="{STYLE["img"]}max-width:{IMG_MAX}px;"></td></tr>') if post.cover else ""
     sub = f'<p style="margin:0 0 20px;font-size:19px;line-height:1.45;color:#555;">{e(post.subtitle)}</p>' if post.subtitle else ""
@@ -424,19 +449,26 @@ def _text(post: Post, body_text: str, truncated: bool) -> str:
 
 
 def render_email(post: Post) -> tuple[str, str]:
+    limit = GMAIL_CLIP_BYTES - SIZE_MARGIN
     blocks = Converter(post).blocks()
     full = _envelope(post, "".join(h for h, _ in blocks), False)
-    if len(full.encode("utf-8")) < GMAIL_CLIP_BYTES - SIZE_MARGIN:
+    if len(full.encode("utf-8")) < limit:
         return full, _text(post, "\n\n".join(t for _, t in blocks if t), False)
-    budget = GMAIL_CLIP_BYTES - SIZE_MARGIN - len(_envelope(post, "", True).encode("utf-8"))
+    budget = limit - len(_envelope(post, "", True).encode("utf-8"))
+    if budget <= 0:
+        raise DraftError(f"{post.slug}: título e subtítulo sozinhos passam do limite do Gmail")
     used, keep = 0, []
     for h, t in blocks:
         n = len(h.encode("utf-8"))
-        if used + n > budget:
+        if used + n >= budget:
             break
         used += n
         keep.append((h, t))
+    if not keep:
+        raise DraftError(f"{post.slug}: o primeiro bloco do post sozinho passa do limite do Gmail; o email não teria o começo do texto")
     html = _envelope(post, "".join(h for h, _ in keep), True)
+    if len(html.encode("utf-8")) >= limit:
+        raise DraftError(f"{post.slug}: email com {len(html.encode('utf-8'))} bytes, acima do limite")
     return html, _text(post, "\n\n".join(t for _, t in keep if t), True)
 
 
@@ -494,7 +526,25 @@ class Api:
         return data
 
 
-def create_draft(api: Api, post: Post, cfg: Config, *, update: bool = False) -> tuple[str, str]:
+@contextlib.contextmanager
+def slug_lock(lock_dir: str, slug: str):
+    """Exclusão mútua entre execuções na KVM, do GET ao POST/PATCH: o nome do broadcast não é único no Resend."""
+    os.makedirs(lock_dir, exist_ok=True)
+    with open(os.path.join(lock_dir, f"{slug}.lock"), "w") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+
+def create_draft(api: Api, post: Post, cfg: Config, *, update: bool = False,
+                 lock_dir: str = DEFAULT_LOCK_DIR) -> tuple[str, str]:
+    with slug_lock(lock_dir, post.slug):
+        return _create_draft(api, post, cfg, update=update)
+
+
+def _create_draft(api: Api, post: Post, cfg: Config, *, update: bool = False) -> tuple[str, str]:
     html, text = render_email(post)
     name = f"blog/{post.slug}"
     data = api.request("GET", "/broadcasts").get("data") or []

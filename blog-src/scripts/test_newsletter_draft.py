@@ -5,7 +5,11 @@
 import json
 import os
 import sys
+import tempfile
+import threading
 import unittest
+import urllib.error
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import newsletter_draft as N  # noqa: E402
@@ -17,7 +21,8 @@ CFG = N.Config(api_key="re_teste", segment_id=SEG, sender="IA Aplicada <newslett
 
 def page(body: str, *, slug="um-post", title="Um post", sub="Subtítulo do post", desc="Descrição curta.",
          cover=True, podcast="") -> str:
-    og = f'<meta property="og:image" content="https://guifav.dev/blog/img/{slug}/capa.jpg">' if cover else ""
+    url = cover if isinstance(cover, str) else f"https://guifav.dev/blog/img/{slug}/capa.jpg"
+    og = f'<meta property="og:image" content="{url}">' if cover else ""
     pod = (f'<div class="podcast-embed"><iframe src="https://open.spotify.com/embed/episode/{podcast}" '
            f'title="Episódio" height="102"></iframe></div>') if podcast else ""
     return (
@@ -272,11 +277,14 @@ class DraftTest(unittest.TestCase):
             N.create_draft(N.Api(CFG, FakeResend(fail=422)), post(), CFG)
 
     def test_api_refuses_any_send_path_or_flag(self):
-        api = N.Api(CFG, FakeResend())
+        # O transporte falha o teste se for chamado: a recusa precisa acontecer antes de qualquer rede.
+        def never(*a):
+            raise AssertionError(f"transporte chamado: {a[:2]}")
+        api = N.Api(CFG, never)
         for method, path, body in (("POST", "/broadcasts/b1/send", None), ("POST", "/emails", {"to": "x"}),
                                    ("POST", "/broadcasts", {"send": True}), ("POST", "/broadcasts", {"send": False}),
                                    ("PATCH", "/broadcasts/b1", {"scheduled_at": "in 1 hour"}),
-                                   ("DELETE", "/broadcasts/b1", None)):
+                                   ("DELETE", "/broadcasts/b1", None), ("GET", "/broadcasts/b1/send", None)):
             with self.assertRaises(N.DraftError, msg=(method, path)):
                 api.request(method, path, body)
 
@@ -301,6 +309,145 @@ class ConfigTest(unittest.TestCase):
         with self.assertRaises(N.DraftError):
             N.Config.from_env({"RESEND_API_KEY": "k", "NEWSLETTER_SEGMENT_ID": "s",
                                "NEWSLETTER_FROM": "IA Aplicada <newsletter@guifav.dev>"})
+
+
+
+# ---------------------------------------------------------------- rodada 1 do gate (#33)
+
+class StatefulResend:
+    """Resend simulado com estado; o GET espera o outro processo numa barreira, para forçar a corrida."""
+
+    def __init__(self):
+        self.broadcasts = []
+        self.lock = threading.Lock()
+        self.barrier = threading.Barrier(2, timeout=1)
+        self.posts = 0
+
+    def __call__(self, method, url, headers, body):
+        if method == "GET":
+            with self.lock:
+                snap = list(self.broadcasts)
+            try:
+                self.barrier.wait()
+            except threading.BrokenBarrierError:
+                pass
+            return 200, {"object": "list", "has_more": False, "data": snap}
+        if method == "POST":
+            with self.lock:
+                self.posts += 1
+                b = {"id": f"b{self.posts}", "name": json.loads(body)["name"], "status": "draft"}
+                self.broadcasts.append(b)
+            return 201, {"id": b["id"]}
+        return 500, {}
+
+
+class RaceTest(unittest.TestCase):
+    def test_two_concurrent_runs_create_a_single_draft(self):
+        f = StatefulResend()
+        out = []
+        with tempfile.TemporaryDirectory() as d:
+            def run():
+                out.append(N.create_draft(N.Api(CFG, f), post(), CFG, lock_dir=d))
+            ts = [threading.Thread(target=run) for _ in range(2)]
+            [t.start() for t in ts]
+            [t.join(10) for t in ts]
+        self.assertEqual(f.posts, 1)
+        self.assertEqual(sorted(w for w, _ in out), ["criado", "existe"])
+
+
+class TextFidelityTest(unittest.TestCase):
+    def test_image_link_keeps_destination_in_text(self):
+        html, text = conv('<p><a href="https://youtu.be/CCXTyC09zv0"><img src="/blog/img/um-post/v.webp" width="10" height="10" alt="Vídeo"></a></p>'
+                          '<p><a href="https://example.com/sem-alt"><img src="/blog/img/um-post/w.webp" width="10" height="10" alt=""></a></p>')
+        self.assertIn("Vídeo (https://youtu.be/CCXTyC09zv0)", text)
+        self.assertIn("https://example.com/sem-alt", text)
+
+    def test_spaces_around_link_survive_in_text(self):
+        _, text = conv('<p><a href="https://claude.ai/">Claude</a> e<a href="https://chatgpt.com/">\u00a0ChatGPT</a> fim</p>')
+        self.assertIn("Claude (https://claude.ai/) e ChatGPT (https://chatgpt.com/) fim", text)
+
+    def test_code_keeps_blank_lines_in_text(self):
+        html, text = conv('<pre><code>print("""a\n\n\nb""")</code></pre><p>x</p>\n\n\n<p>y</p>')
+        self.assertIn('print("""a\n\n\nb""")', text)
+        self.assertNotIn("x\n\n\ny", text)
+
+    def test_text_has_subtitle_reason_and_privacy(self):
+        _, text = conv("<p>Corpo.</p>")
+        for s in ("Subtítulo do post", "Você recebe este email porque assinou", "Privacidade: https://guifav.dev/blog/privacidade/"):
+            self.assertIn(s, text)
+
+
+class CoverTest(unittest.TestCase):
+    def test_cover_goes_through_url_policy(self):
+        for bad in ("javascript:alert(1)", "data:image/svg+xml,abc", "//evil.example/a.jpg", "http://example.com/a.jpg"):
+            with self.assertRaises(N.DraftError, msg=bad):
+                conv("<p>x</p>", cover=bad)
+        html, _ = conv("<p>x</p>", cover="/blog/img/um-post/capa.jpg")
+        self.assertIn('src="https://guifav.dev/blog/img/um-post/capa.jpg"', html)
+
+
+class LimitTest(unittest.TestCase):
+    def test_huge_description_does_not_blow_the_limit(self):
+        html, _ = conv("<p>Pequeno.</p>", desc="x" * 110000)
+        self.assertLess(len(html.encode("utf-8")), N.GMAIL_CLIP_BYTES - N.SIZE_MARGIN)
+        self.assertIn("Pequeno.", html)
+
+    def test_huge_title_fails_clearly(self):
+        with self.assertRaisesRegex(N.DraftError, "título e subtítulo"):
+            conv("<p>x</p>", title="T" * 120000)
+
+    def test_first_block_bigger_than_budget_fails(self):
+        with self.assertRaisesRegex(N.DraftError, "primeiro bloco"):
+            conv("<p>" + "á" * 200000 + "</p><p>depois</p>")
+
+    def test_kept_blocks_are_the_same_in_html_and_text(self):
+        body = "".join(f"<p>B{i:03d} " + "y" * 3000 + "</p>" for i in range(60))
+        html, text = conv(body)
+        last_html = max(int(x) for x in __import__("re").findall(r"B(\d{3}) ", html))
+        last_text = max(int(x) for x in __import__("re").findall(r"B(\d{3}) ", text))
+        self.assertEqual(last_html, last_text)
+
+
+class FetchTest(unittest.TestCase):
+    class Resp:
+        def __init__(self, status, url, body=b"<html></html>"):
+            self.status, self._url, self._body = status, url, body
+
+        def geturl(self):
+            return self._url
+
+        def read(self):
+            return self._body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def test_live_requires_200_at_the_post_url_without_redirect(self):
+        url = "https://guifav.dev/blog/um-post/"
+        seen = []
+
+        def ok(req, timeout=0):
+            seen.append(req.full_url)
+            return self.Resp(200, url, b"pagina")
+        with mock.patch.object(N.urllib.request, "urlopen", ok):
+            self.assertEqual(N.fetch_page("um-post", "live", ""), "pagina")
+        self.assertEqual(seen, [url])
+        with mock.patch.object(N.urllib.request, "urlopen", lambda req, timeout=0: self.Resp(200, "https://guifav.dev/blog/")):
+            with self.assertRaises(N.DraftError):
+                N.fetch_page("um-post", "live", "")
+
+        def notfound(req, timeout=0):
+            raise urllib.error.HTTPError(url, 404, "nf", {}, __import__("io").BytesIO(b""))
+        with mock.patch.object(N.urllib.request, "urlopen", notfound):
+            with self.assertRaises(N.DraftError):
+                N.fetch_page("um-post", "live", "")
+
+    def test_slug_is_validated(self):
+        with self.assertRaises(N.DraftError):
+            N.fetch_page("../etc", "live", "")
 
 
 if __name__ == "__main__":
