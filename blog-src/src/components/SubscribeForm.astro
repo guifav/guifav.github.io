@@ -1,0 +1,19 @@
+---
+// Formulário de inscrição (issue #21). Envia direto para o Worker, sem JavaScript próprio; o widget
+// do Turnstile é carregado pelo leiaute (prop turnstile). Uma vez por página: o id do campo é fixo.
+import { NEWSLETTER_ENDPOINT, TURNSTILE_SITE_KEY } from '../consts';
+
+const base = import.meta.env.BASE_URL;
+---
+<form class="subscribe-form" data-site-form method="post" action={NEWSLETTER_ENDPOINT}>
+  <label for="assinar-email">Seu email</label>
+  <div class="subscribe-row">
+    <input id="assinar-email" type="email" name="email" required autocomplete="email" maxlength="254" placeholder="voce@exemplo.com" />
+    <button type="submit">Assinar</button>
+  </div>
+  <div class="cf-turnstile" data-sitekey={TURNSTILE_SITE_KEY} data-language="pt-br"></div>
+  <p class="subscribe-note">
+    Um email a cada artigo novo. A inscrição só vale depois que você confirma pelo link enviado ao seu email, e dá
+    para sair a qualquer momento. <a href={`${base}privacidade/`}>Como seus dados são usados</a>.
+  </p>
+</form>

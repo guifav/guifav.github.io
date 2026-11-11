@@ -6,7 +6,8 @@
 - Antes do cutover (PRE_CUTOVER_NOINDEX em blog-src/src/consts.ts): toda página do blog
   tem meta robots com noindex, e nenhuma página fora do blog aponta para ele.
 - rss.xml e sitemap.xml do blog são XML válido; o sitemap só lista páginas que existem e
-  não lista posts com index: false. Depois do cutover, esses posts precisam de noindex.
+  não lista posts com index: false nem as páginas da newsletter. Depois do cutover, esses
+  posts e as páginas da newsletter continuam precisando de noindex.
 - Sob /blog/ só há .html, .xml e mídia da lista.
 - Alarme secundário de conteúdo ativo nas páginas do blog (ver blog-src/CONTRATO-DE-CONTEUDO.md:
   a barreira de segurança é a limpeza no render e a lista de extensões, não este verificador).
@@ -42,7 +43,13 @@ URL_ATTRS = {"href", "src", "poster"}
 ACTIVE_PROTOCOLS = {"javascript:", "vbscript:", "data:"}
 ACTIVE_URL_ATTRS = {"href", "src", "srcset", "data", "action", "formaction", "poster", "xlink:href", "cite", "background"}
 # Nunca aparecem numa página do blog (nem no template).
-FORBIDDEN_TAGS = {"object", "embed", "applet", "form", "base", "frame", "frameset"}
+FORBIDDEN_TAGS = {"object", "embed", "applet", "base", "frame", "frameset"}
+# O único formulário do blog é o de inscrição da newsletter (#21), que vem do template: marcado com
+# data-site-form, POST e com destino no Worker. Fora disso, e dentro do conteúdo do post, é alarme.
+SITE_FORM_ATTR = "data-site-form"
+SITE_FORM_ACTIONS = {"https://newsletter.guifav.dev/subscribe"}
+# Páginas da newsletter (#21): noindex e fora do sitemap sempre, também depois do cutover (A10).
+BLOG_PRIVATE_PAGES = frozenset({"assinar", "inscricao-enviada", "inscricao-confirmada", "inscricao-invalida", "privacidade"})
 IFRAME_HOSTS = {
     "open.spotify.com", "creators.spotify.com", "podcasters.spotify.com",
     "www.youtube.com", "www.youtube-nocookie.com", "player.vimeo.com",
@@ -144,6 +151,7 @@ class _Page(HTMLParser):
         self.url_values: list[tuple[str, str]] = []
         self.iframes: list[str] = []
         self.main_depth = 0
+        self.divs: list[bool] = []  # pilha de <div>: True para o div.post-body (conteúdo do post)
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self.handle_starttag(tag, attrs)
@@ -151,6 +159,8 @@ class _Page(HTMLParser):
     def handle_endtag(self, tag: str) -> None:
         if tag == "main":
             self.main_depth = max(0, self.main_depth - 1)
+        elif tag == "div" and self.divs:
+            self.divs.pop()
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if tag == "main":
@@ -169,8 +179,15 @@ class _Page(HTMLParser):
         if tag == "iframe":
             self.iframes.append(a.get("src", "").strip())
         # Conteúdo ativo
+        if tag == "div":
+            self.divs.append("post-body" in a.get("class", "").split())
         if tag in FORBIDDEN_TAGS:
             self.active.append(f"<{tag}>")
+        if tag == "form" and not (
+            SITE_FORM_ATTR in a and a.get("method", "").lower() == "post" and a.get("action", "") in SITE_FORM_ACTIONS
+            and "formaction" not in a and not any(self.divs)
+        ):
+            self.active.append("<form>")
         if tag == "script" and SITE_SCRIPT_ATTR not in a:
             self.active.append("<script> fora do template")
         elif tag == "script" and self.main_depth > 0:
@@ -182,6 +199,8 @@ class _Page(HTMLParser):
                 self.active.append(f"<{tag} {k}>")
             elif k == "srcdoc":
                 self.active.append(f"<{tag} srcdoc>")
+            elif k == "formaction":
+                self.active.append(f"<{tag} formaction>")
             elif k in ACTIVE_URL_ATTRS:
                 for u in (parse_srcset(v) if k == "srcset" else [v]):
                     if u.strip():
@@ -316,6 +335,8 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
             parts = url[len(BLOG_PREFIX):].strip("/").split("/")
             if len(parts) == 1 and parts[0] in noindex_slugs and not has_noindex:
                 problems.append(f"{rel}: post com index: false sem noindex")
+            if len(parts) == 1 and parts[0] in BLOG_PRIVATE_PAGES and not has_noindex:
+                problems.append(f"{rel}: página da newsletter sem noindex")
         for ref in p.refs:
             path = _internal(resolved[(base, ref)])
             if path is None:
@@ -346,6 +367,8 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
             problems.append(f"sitemap: página inexistente: {href}")
         if path[len(BLOG_PREFIX):].strip("/") in noindex_slugs:
             problems.append(f"sitemap: lista post com index: false: {href}")
+        if path[len(BLOG_PREFIX):].strip("/") in BLOG_PRIVATE_PAGES:
+            problems.append(f"sitemap: lista página da newsletter: {href}")
     return problems
 
 

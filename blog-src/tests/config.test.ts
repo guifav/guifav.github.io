@@ -18,3 +18,8 @@ test('astro.config: base /blog com barra final e saída estática', () => {
   assert.equal(config.trailingSlash, 'always');
   assert.equal(config.output, 'static');
 });
+
+test('astro.config: CSS sempre embutido no HTML (contrato: sob /blog/ só .html, .xml e mídia)', () => {
+  // Sem isto, o Astro passa a gerar /blog/_astro/*.css quando a folha cresce além do limite de inline.
+  assert.equal(config.build?.inlineStylesheets, 'always');
+});

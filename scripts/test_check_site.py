@@ -162,6 +162,30 @@ class CheckTest(Base):
         self.w("blog/um-post/index.html", page('<script data-site-script type="application/ld+json">{}</script><script>x()</script><a href="/blog/">b</a>'))
         self.assertTrue(any("<script> fora do template" in p for p in self.problems()))
 
+    def test_newsletter_form_from_template_is_allowed(self):
+        # O formulário da #21 vem do template: marcado, POST e só para o Worker da newsletter.
+        form = ('<form data-site-form method="post" action="https://newsletter.guifav.dev/subscribe">'
+                '<input type="email" name="email"><button type="submit">Assinar</button></form>')
+        self.w("blog/um-post/index.html", page(f'<main><article><aside class="subscribe">{form}</aside></article></main><a href="/blog/">b</a>'))
+        self.assertEqual(self.problems(), [])
+
+    def test_form_needs_marker_post_and_the_newsletter_action(self):
+        for form in ('<form method="post" action="https://newsletter.guifav.dev/subscribe"></form>',
+                     '<form data-site-form method="post" action="https://evil.example/subscribe"></form>',
+                     '<form data-site-form method="get" action="https://newsletter.guifav.dev/subscribe"></form>',
+                     '<form data-site-form method="post" action="https://newsletter.guifav.dev/subscribe" '
+                     'formaction="https://evil.example/"></form>'):
+            self.w("blog/um-post/index.html", page(f'<main>{form}</main><a href="/blog/">b</a>'))
+            self.assertTrue(any("<form>" in p for p in self.problems()), form)
+
+    def test_marked_form_inside_post_body_is_still_content(self):
+        self.body('<div><form data-site-form method="post" action="https://newsletter.guifav.dev/subscribe"></form></div>')
+        self.assertTrue(any("<form>" in p for p in self.problems()))
+
+    def test_formaction_on_button_is_flagged(self):
+        self.body('<button formaction="https://evil.example/">x</button>')
+        self.assertTrue(any("formaction" in p for p in self.problems()))
+
     def test_srcdoc_is_active_even_with_allowed_src(self):
         self.body('<iframe src="https://www.youtube.com/embed/abc" srcdoc="&lt;script&gt;x()&lt;/script&gt;"></iframe>')
         self.assertTrue(any("srcdoc" in p for p in self.problems()))
@@ -346,6 +370,24 @@ class CheckTest(Base):
     def test_sitemap_excludes_index_false_posts(self):
         (self.posts / "um-post.md").write_text("---\ntitle: x\nslug: um-post\nindex: false\n---\n", encoding="utf-8")
         self.assertTrue(any("index: false" in p for p in self.problems()))
+
+    def test_private_newsletter_pages_need_noindex_in_both_modes(self):
+        # Páginas da newsletter (#21): sempre noindex e fora do sitemap, também depois do cutover.
+        for name in sorted(C.BLOG_PRIVATE_PAGES):
+            self.w(f"blog/{name}/index.html", page('<a href="/blog/">b</a>', robots=ROBOTS_INDEX))
+            for pre in (True, False):
+                self.assertTrue(any(name in p and "noindex" in p for p in self.problems(pre_cutover=pre)), (name, pre))
+            self.w(f"blog/{name}/index.html", page('<a href="/blog/">b</a>'))
+            self.assertEqual(self.problems(pre_cutover=False), [], name)
+
+    def test_private_newsletter_pages_cannot_be_in_sitemap(self):
+        self.w("blog/assinar/index.html", page('<a href="/blog/">b</a>'))
+        self.w("blog/sitemap.xml", SITEMAP.format("<url><loc>https://guifav.dev/blog/assinar/</loc></url>"))
+        for pre in (True, False):
+            self.assertTrue(any("sitemap" in p and "assinar" in p for p in self.problems(pre_cutover=pre)), pre)
+
+    def test_private_pages_set_is_pinned(self):
+        self.assertEqual(C.BLOG_PRIVATE_PAGES, frozenset({"assinar", "inscricao-enviada", "inscricao-confirmada", "inscricao-invalida", "privacidade"}))
 
     def test_index_false_post_with_noindex_after_cutover_is_required(self):
         (self.posts / "um-post.md").write_text("---\ntitle: x\nslug: um-post\nindex: false\n---\n", encoding="utf-8")

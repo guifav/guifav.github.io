@@ -1,0 +1,19 @@
+---
+// Página da newsletter (issue #21). Fora do sitemap e sempre com noindex.
+import Base from '../layouts/Base.astro';
+import { AUTHOR_NAME } from '../consts';
+
+const base = import.meta.env.BASE_URL;
+---
+<Base title={`Link inválido ou expirado | ${AUTHOR_NAME}`} description="O link de confirmação não é válido ou passou do prazo." index={false}>
+  <article class="post page">
+    <header class="post-head">
+      <p class="post-crumb"><a href={base}>Blog</a></p>
+      <h1>Link inválido ou expirado</h1>
+    </header>
+    <div class="post-body">
+      <p>O link de confirmação vale por 48 horas e só funciona se for usado exatamente como chegou no email.</p>
+      <p><a href={`${base}assinar/`}>Peça um link novo</a>.</p>
+    </div>
+  </article>
+</Base>

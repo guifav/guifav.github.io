@@ -31,7 +31,9 @@ Quem tem escrita no repositório pode publicar qualquer coisa editando um templa
    _site/blog/ é bloqueio de gate.
 3. Templates. São código revisado. O atributo data-site-script marca os scripts do
    layout para o verificador reconhecer; ele não é prova de origem contra quem edita o
-   template, e não pretende ser.
+   template, e não pretende ser. Do mesmo jeito, data-site-form marca o único formulário do
+   blog, o de inscrição da newsletter (#21): POST, com destino no Worker
+   (SITE_FORM_ACTIONS em scripts/check_site.py) e fora do conteúdo do post.
 4. Verificador do site montado (scripts/check_site.py, na raiz do repo). É verificação
    de integridade: links internos existem, nenhuma página fora do blog aponta para ele
    antes do cutover, toda página do blog tem noindex antes do cutover, RSS e sitemap são
