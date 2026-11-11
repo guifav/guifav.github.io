@@ -42,6 +42,9 @@ REPLACEMENTS_BY_PREFIX = {
     ("transformers-inteligencia-artificial", "https://download-files.wixmp.com/raw/068472_873a3d1be0a44b4bb1b3f25c463cae3b.pdf"):
         "https://arxiv.org/abs/1706.03762",
 }
+# R3 explícito: post renomeado depois de publicado. Os links para o slug antigo já davam 404 no Substack;
+# o card do gui-brain com o slug antigo tem o mesmo título do post atual.
+RENAMED = {"sistema-de-registros-para-agentes": "a-memoria-dos-meus-agentes-na-pratica"}
 VIDEO_POST = "ia-google-sheets-integracao-llm-codigo-aberto"
 WIDTHS = (728, 1456)
 COVER_WIDTH = 1200
@@ -293,8 +296,8 @@ def published_from_export(export: str) -> dict:
 
 
 def aliases_for(unknown: set, slugs: set) -> dict:
-    """R3: slug antigo que é prefixo de exatamente um slug atual."""
-    out = {}
+    """R3: post renomeado (RENAMED) ou slug antigo que é prefixo de exatamente um slug atual."""
+    out = {old: new for old, new in RENAMED.items() if new in slugs}
     for u in unknown:
         cands = [s for s in slugs if s.startswith(u + "-")]
         if len(cands) == 1:
