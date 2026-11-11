@@ -51,8 +51,9 @@ class TextTest(unittest.TestCase):
         self.assertEqual(md, "linha um<br>linha dois\n")
 
     def test_hr(self):
-        md, _ = conv("<p>a</p><div><hr></div><p>b</p>")
-        self.assertEqual(md, "a\n\n---\n\nb\n")
+        # "***" e não "---": no começo do corpo, "---" logo depois do frontmatter fazia a figura seguinte sumir.
+        md, _ = conv("<div><hr></div><p>a</p><div><hr></div><p>b</p>")
+        self.assertEqual(md, "***\n\na\n\n***\n\nb\n")
 
 
 class InlineTest(unittest.TestCase):
@@ -136,6 +137,12 @@ class LinkRulesTest(unittest.TestCase):
         self.assertEqual(md, "[pdf](https://arxiv.org/abs/1706.03762)\n")
         self.assertEqual(ctx.stats["R6"], 1)
 
+    def test_other_substack_links_kept_and_reported(self):
+        # Critério da #19: nenhum href para substack.com fora do relatório.
+        md, ctx = conv('<p><a href="https://garymarcus.substack.com/p/x">g</a></p>')
+        self.assertEqual(md, "[g](https://garymarcus.substack.com/p/x)\n")
+        self.assertEqual(ctx.unresolved, ["https://garymarcus.substack.com/p/x"])
+
     def test_external_and_mailto_unchanged(self):
         self.t("https://garymarcus.substack.com/p/x", "https://garymarcus.substack.com/p/x")
         self.t("mailto:a@b.org", "mailto:a@b.org")
@@ -172,6 +179,23 @@ class BlockTest(unittest.TestCase):
                 '<span>x = 1\n</span><span>\nprint(x)</span></code></pre></div>')
         md, _ = conv(html)
         self.assertEqual(md, "```python\nx = 1\n\nprint(x)\n```\n")
+
+    def test_pre_with_link_keeps_link_as_html(self):
+        html = '<pre><code>\nO equivalente:\n\n <a href="https://bing.com/webmasters/">bing.com/webmasters/</a> &lt;x&gt;\n</code></pre>'
+        md, _ = conv(html)
+        self.assertEqual(md, '<pre><code>O equivalente:\n\n <a href="https://bing.com/webmasters/">bing.com/webmasters/</a> &lt;x&gt;</code></pre>\n')
+
+    def test_pre_with_strong_keeps_formatting_as_html(self):
+        md, _ = conv("<pre><code>GET /x\n<strong>200 OK</strong> &amp; fim</code></pre>")
+        self.assertEqual(md, "<pre><code>GET /x\n<strong>200 OK</strong> &amp; fim</code></pre>\n")
+
+    def test_nested_code_in_pre(self):
+        md, _ = conv("<pre><code><code>x = 1</code></code></pre>")
+        self.assertEqual(md, "```\nx = 1\n```\n")
+
+    def test_pre_with_unknown_element_fails(self):
+        with self.assertRaises(C.ConvertError):
+            conv("<pre><code>a <img src=x> b</code></pre>")
 
     def test_plain_pre_and_fence_longer_than_content(self):
         md, _ = conv("<pre><code>a ``` b</code></pre>")

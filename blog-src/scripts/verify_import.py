@@ -154,8 +154,8 @@ def original_links(ex: Extract, slugs, aliases) -> Counter:
     for href, text, is_img in ex.links:
         if not href:
             continue
-        if is_img and (urlsplit(href).hostname or "") in CDN_HOSTS:
-            continue  # R7
+        if is_img and ((urlsplit(href).hostname or "") in CDN_HOSTS or href == "undefined"):
+            continue  # R7, ou link da imagem que já está quebrada no original
         if subscribe_href(href):
             continue  # botão de assinar removido
         if not is_img and text == "":
@@ -209,6 +209,8 @@ def main(argv=None) -> int:
     with open(os.path.join(a.cache, "report.json"), encoding="utf-8") as f:
         aliases = json.load(f)["aliases"]
 
+    with open(os.path.join(a.cache, "report.json"), encoding="utf-8") as f:
+        allowed = {d["href"] for d in json.load(f)["sem_destino"]}
     totals = Counter()
     spotify = Counter()
     for s in sorted(expected & built):
@@ -253,6 +255,10 @@ def main(argv=None) -> int:
                 problems.append(f"G7 {s}: podcast sem spotify_url ou indexável")
             spotify[fm.get("spotify_url")] += 1
             totals["podcasts"] += 1
+        for h in [h for h, _, _ in pub.links] + [i.get("src", "") for i in pub.imgs] + pub.iframes:
+            host = (urlsplit(h).hostname or "").lower()
+            if (host in SITE_HOSTS or host.endswith("substack.com")) and h not in allowed:
+                problems.append(f"G3 {s}: href fora do relatório: {h}")
         totals["posts"] += 1
         totals["imagens"] += len(pub.imgs)
         totals["links"] += sum(p_links.values())
@@ -260,9 +266,8 @@ def main(argv=None) -> int:
     if dup:
         problems.append(f"G7: episódio do Spotify repetido: {dup}")
 
-    # G3/G4 no build inteiro: nada do CDN; domínios antigos só onde o relatório lista.
-    with open(os.path.join(a.cache, "report.json"), encoding="utf-8") as f:
-        allowed = {d["href"] for d in json.load(f)["sem_destino"]}
+    # G4 no build inteiro: nada do CDN do Substack. G3 no RSS e no sitemap; nos posts, foi conferido acima,
+    # só no conteúdo. O link "Newsletter" do rodapé do leiaute aponta para o Substack até o cutover (#24).
     for dirpath, _, files in os.walk(os.path.join(dist)):
         for fn in files:
             if not fn.endswith((".html", ".xml")):
@@ -270,11 +275,12 @@ def main(argv=None) -> int:
             t = open(os.path.join(dirpath, fn), encoding="utf-8").read()
             if re.search(r"substackcdn\.com|substack-post-media", t):
                 problems.append(f"G4 {fn}: referência ao CDN do Substack")
-            for h in re.findall(r'(?:href|src)="([^"]+)"', t):
-                hh = h.replace("&amp;", "&")
-                host = (urlsplit(hh).hostname or "").lower()
-                if (host in SITE_HOSTS or host.endswith("substack.com")) and hh not in allowed:
-                    problems.append(f"G3 {os.path.relpath(os.path.join(dirpath, fn), dist)}: href fora do relatório: {hh}")
+            if fn.endswith(".xml"):
+                for h in re.findall(r'(?:href|src)="([^"]+)"|<link>([^<]+)</link>|<loc>([^<]+)</loc>', t):
+                    hh = next(x for x in h if x).replace("&amp;", "&")
+                    host = (urlsplit(hh).hostname or "").lower()
+                    if host in SITE_HOSTS or host.endswith("substack.com"):
+                        problems.append(f"G3 {fn}: endereço antigo: {hh}")
     img_bytes = sum(os.path.getsize(os.path.join(dp, fn)) for dp, _, fs in os.walk(os.path.join(a.root, "public", "img")) for fn in fs)
     if img_bytes > IMG_BUDGET:
         problems.append(f"G4: imagens somam {img_bytes / 1e6:.1f} MB, acima de 100 MB")

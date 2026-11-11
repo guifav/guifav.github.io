@@ -206,6 +206,8 @@ def rewrite(href: str, ctx: Context) -> str | None:
     u = urlsplit(h)
     host = (u.hostname or "").lower()
     if host not in SITE_HOSTS:
+        if host == "substack.com" or host.endswith(".substack.com"):
+            ctx.unresolved.append(h)  # outro autor ou outra publicação: fica, e vai para o relatório
         return h
     m = re.fullmatch(r"/(p|post)/([^/]+)/?", u.path)
     if m:
@@ -419,6 +421,39 @@ def code_block(pre: Node, lang: str = "") -> str:
     return "`" * n + lang + "\n" + text + "\n" + "`" * n
 
 
+def _pre_html(nodes, ctx: Context) -> str:
+    out = []
+    for c in nodes:
+        if isinstance(c, str):
+            out.append(html.escape(c, quote=False))
+        elif c.tag in ("span", "code"):
+            out.append(_pre_html(c.children, ctx))
+        elif c.tag in ("strong", "b"):
+            out.append(f"<strong>{_pre_html(c.children, ctx)}</strong>")
+        elif c.tag in ("em", "i"):
+            out.append(f"<em>{_pre_html(c.children, ctx)}</em>")
+        elif c.tag == "a":
+            href = c.get("href")
+            dest = rewrite(href, ctx) if href else None
+            inner = _pre_html(c.children, ctx)
+            out.append(inner if dest is None else f'<a href="{attr(dest)}">{inner}</a>')
+        else:
+            raise ConvertError(f"{ctx.slug}: <{c.tag}> dentro de bloco de código")
+    return "".join(out)
+
+
+def pre_block(pre: Node, ctx: Context) -> str:
+    """Bloco de código. Com link ou ênfase dentro, sai como HTML para não perder o link (G3) nem a ênfase."""
+    code = pre.find("code") or pre
+    inner = [n for n in code.walk()]
+    if all(n.tag in ("span", "code") for n in inner):
+        return code_block(pre)
+    body = _pre_html(code.children, ctx)
+    body = body[1:] if body.startswith("\n") else body
+    body = body[:-1] if body.endswith("\n") else body
+    return f"<pre><code>{body}</code></pre>"
+
+
 def iframe_block(n: Node, ctx: Context) -> str:
     src = n.get("src")
     u = urlsplit(src)
@@ -546,9 +581,10 @@ def blocks(node: Node, ctx: Context) -> list[str]:
             if inner:
                 out.append(_prefix(inner, "> ", "> ").replace("\n>\n", "\n>\n"))
         elif t == "pre":
-            out.append(code_block(c))
+            out.append(pre_block(c, ctx))
         elif t == "hr":
-            out.append("---")
+            # "***" e não "---": no começo do corpo, "---" logo depois do frontmatter engolia o bloco seguinte.
+            out.append("***")
         elif t == "figure":
             b = figure_block(c, ctx)
             if b:

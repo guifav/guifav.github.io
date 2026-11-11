@@ -177,17 +177,18 @@ ENC_CACHE: str | None = None  # pasta de cache das codificações; None = codifi
 
 def _encode_webp(im: PILImage.Image, key: str | None = None) -> bytes:
     path = None
-    if ENC_CACHE and key:
+    cache_dir = ENC_CACHE
+    if cache_dir and key:
         h = hashlib.sha256(f"{key}|webp|{WEBP_QUALITY}|6|{PILImage.__version__}".encode()).hexdigest()[:32]
-        path = os.path.join(ENC_CACHE, h + ".webp")
+        path = os.path.join(cache_dir, h + ".webp")
         if os.path.exists(path):
             with open(path, "rb") as f:
                 return f.read()
     buf = io.BytesIO()
     im.save(buf, "WEBP", quality=WEBP_QUALITY, method=6)
     data = buf.getvalue()
-    if path:
-        os.makedirs(ENC_CACHE, exist_ok=True)
+    if cache_dir and path:
+        os.makedirs(cache_dir, exist_ok=True)
         with open(path + ".tmp", "wb") as f:
             f.write(data)
         os.replace(path + ".tmp", path)
