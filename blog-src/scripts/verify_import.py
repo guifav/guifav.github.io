@@ -54,7 +54,7 @@ RENAMED = {"sistema-de-registros-para-agentes": "a-memoria-dos-meus-agentes-na-p
 # Único href para o domínio antigo fora do conteúdo: o link "Newsletter" do rodapé, que aponta para o
 # Substack até o formulário novo ser ligado (#21).
 FOOTER_NEWSLETTER = '<a href="https://guilhermefavaron.com.br" target="_blank" rel="noopener">Newsletter</a>'
-OLD_URL_ATTR = re.compile(r'\s(?:href|src|srcset|poster|content|action)="([^"]*)"')
+OLD_URL_ATTR = re.compile(r'\s(?:href|src|srcset|poster|content|action|cite)="([^"]*)"')
 
 
 def subscribe_href(h: str) -> bool:
@@ -88,6 +88,11 @@ class Extract(HTMLParser):
         self.lists: list[list] = []
         self.list_stack: list[int] = []
         self.heads: list[int] = []
+        self.head_texts: list[tuple[int, str]] = []
+        self.captions: list[tuple[int, str]] = []  # (imagens até a legenda, texto)
+        self.cap_mark: int | None = None
+        self.sources = 0  # <picture>/<source>: trocariam a imagem exibida sem passar pela conferência
+        self.iframe_tags: list[dict] = []
         self.pres: list = []
 
     @property
@@ -116,6 +121,11 @@ class Extract(HTMLParser):
                 self.imgs.append(a)
             elif tag == "iframe":
                 self.iframes.append(a.get("src", ""))
+                self.iframe_tags.append(a)
+            elif tag in ("picture", "source"):
+                self.sources += 1
+            elif tag == "figcaption":
+                self.cap_mark = len(self.text)
             elif tag == "video":
                 self.videos += 1
                 self.video_tags.append(a)
@@ -162,8 +172,14 @@ class Extract(HTMLParser):
                 if (was_active or self.active) and tag in ("ol", "ul") and self.list_stack:
                     self.list_stack.pop()
                 if (was_active or self.active) and tag in ("h1", "h2", "h3", "h4", "h5", "h6") and self.heads:
-                    if not "".join(self.text[self.head_mark:]).strip():
+                    ht = " ".join("".join(self.text[self.head_mark:]).split())
+                    if not ht:
                         self.heads.pop()  # título vazio no original não tem conteúdo a preservar
+                    else:
+                        self.head_texts.append((self.heads[-1], ht))
+                if (was_active or self.active) and tag == "figcaption" and self.cap_mark is not None:
+                    self.captions.append((len(self.imgs), " ".join("".join(self.text[self.cap_mark:]).split())))
+                    self.cap_mark = None
                 if was_active or self.active:
                     if tag in BLOCK:
                         self.text.append(" ")
@@ -602,6 +618,27 @@ def main(argv=None) -> int:
             problems.append(f"G2 {s}: listas (tipo, início, itens) divergem: original {orig.lists}, publicado {pub.lists}")
         if o_heads != pub.heads:
             problems.append(f"G2 {s}: níveis de título divergem: original {o_heads}, publicado {pub.heads}")
+        else:
+            o_ht = [(2 if lv == 1 else lv, t) for lv, t in orig.head_texts]
+            for (lo, to), (lp, tp) in zip(o_ht, pub.head_texts):
+                if (lo, to) != (lp, tp):
+                    problems.append(f"G2 {s}: título h{lo} {to[:60]!r} publicado como h{lp} {tp[:60]!r}")
+                    break
+        if orig.captions != pub.captions:
+            problems.append(f"G2 {s}: legendas (imagem, texto) divergem: original {orig.captions[:3]}, publicado {pub.captions[:3]}")
+        if pub.sources:
+            problems.append(f"G4 {s}: {pub.sources} <picture>/<source> no corpo; a imagem exibida não passaria pela conferência")
+        for h, _, _ in pub.links:
+            if h.startswith("#") and unquote(h[1:]) not in pub.ids:
+                problems.append(f"G3 {s}: âncora {h} sem alvo no HTML publicado")
+        for it in pub.iframe_tags:
+            host = (urlsplit(it.get("src", "")).hostname or "").lower()
+            if it.get("loading") != "lazy" or (host.endswith("youtube.com") or "youtube" in host) and host != "www.youtube-nocookie.com":
+                problems.append(f"G4 {s}: iframe {it.get('src')} com loading {it.get('loading')!r}; esperado lazy e YouTube em www.youtube-nocookie.com")
+        for m in re.finditer(r"<img\b[^>]*>", page):
+            if f"/blog/img/{s}/capa." in m.group(0):
+                problems.append(f"G4 {s}: a capa aparece como imagem visível na página (só vale em og:image e JSON-LD)")
+                break
         p_pres = [None if x in (None, "", "plaintext", "text") else x for x in pub.pres]
         if orig.pres != p_pres:
             problems.append(f"G2 {s}: linguagem dos blocos de código diverge: original {orig.pres}, publicado {p_pres}")
