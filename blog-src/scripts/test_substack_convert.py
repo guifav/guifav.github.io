@@ -213,12 +213,22 @@ class BlockTest(unittest.TestCase):
                              'title="Episódio no Spotify" height="102" loading="lazy" allow="encrypted-media" '
                              'referrerpolicy="strict-origin-when-cross-origin"></iframe></div>\n')
 
-    def test_digest_post_embed(self):
-        html = ('<div class="digest-post-embed" data-attrs="{&quot;title&quot;:&quot;Livro: Desbloqueando&quot;,'
-                '&quot;url&quot;:&quot;https://www.guilhermefavaron.com.br/p/o-que-e-ia&quot;}"></div>')
-        md, ctx = conv(html)
+    def test_digest_post_embed_by_post_id(self):
+        # O canonical_url do embed guarda o slug da época, que pode ter mudado; o id do post não muda.
+        html = ('<div class="digest-post-embed" data-attrs="{&quot;title&quot;:&quot;Livro: Desbloqueando&quot;,&quot;id&quot;:179961940,'
+                '&quot;canonical_url&quot;:&quot;https://www.guilhermefavaron.com.br/p/slug-antigo&quot;}"></div>')
+        md, ctx = conv(html, post_ids={"179961940": "o-que-e-ia"})
         self.assertEqual(md, "[Livro: Desbloqueando](/blog/o-que-e-ia/)\n")
         self.assertEqual(ctx.stats["R1"], 1)
+
+    def test_digest_post_embed_unknown_id_fails(self):
+        html = '<div class="digest-post-embed" data-attrs="{&quot;title&quot;:&quot;T&quot;,&quot;id&quot;:1}"></div>'
+        with self.assertRaises(C.ConvertError):
+            conv(html, post_ids={})
+
+    def test_link_with_only_nbsp_is_kept(self):
+        md, _ = conv('<p>x <a href="http://rows.com/">\u00a0</a> y</p>')
+        self.assertEqual(md, "x [\u00a0](http://rows.com/) y\n")
 
     def test_native_video(self):
         html = '<div class="native-video-embed" data-component-name="VideoPlaceholder" data-attrs="{&quot;mediaUploadId&quot;:&quot;02c5&quot;}"></div>'

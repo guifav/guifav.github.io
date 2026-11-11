@@ -37,6 +37,7 @@ class Context:
     aliases: dict = field(default_factory=dict)  # slug antigo sem par exato -> slug (R3, só casamento inequívoco)
     replacements: dict = field(default_factory=dict)  # href exato -> href novo (R6, troca feita à mão)
     video: dict | None = None  # {"src", "poster", "width", "height"} do vídeo nativo do post
+    post_ids: dict = field(default_factory=dict)  # id do post no Substack (texto) -> slug
     base: str = "/blog/"
     stats: Counter = field(default_factory=Counter)
     unresolved: list = field(default_factory=list)  # links do site antigo sem destino no blog
@@ -262,7 +263,7 @@ def _inline_tokens(nodes, ctx):
             inner = _inline(c.children, ctx)
             if dest is None:
                 toks.append(inner)
-            elif not inner.strip():
+            elif not inner.strip(" "):
                 ctx.stats["links_sem_texto"] += 1
                 toks.append(inner)
             else:
@@ -575,12 +576,11 @@ def blocks(node: Node, ctx: Context) -> list[str]:
                 out.append(aside_block(c, ctx, "callout"))
             elif "digest-post-embed" in cls:
                 data = json.loads(c.get("data-attrs") or "{}")
-                title, url = data.get("title"), data.get("url")
-                if not title or not url:
-                    raise ConvertError(f"{ctx.slug}: post embutido sem título ou URL")
-                dest = rewrite(url, ctx)
-                label = esc(WS.sub(" ", title).strip())
-                out.append(f"[{label}]({md_dest(dest)})" if dest else label)
+                title, target = data.get("title"), ctx.post_ids.get(str(data.get("id")))
+                if not title or not target:
+                    raise ConvertError(f"{ctx.slug}: post embutido sem título ou com id fora do blog: {data.get('id')}")
+                ctx.stats["R1"] += 1
+                out.append(f"[{esc(WS.sub(' ', title).strip())}]({ctx.base}{target}/)")
             elif comp == "VideoPlaceholder" or "native-video-embed" in cls:
                 v = ctx.video
                 if not v:
