@@ -14,5 +14,8 @@ export const RSS_LIMIT = 50;
 // O PR do cutover troca para false.
 export const PRE_CUTOVER_NOINDEX = true;
 
-// O formulário de inscrição chega na issue #21. Até lá o espaço do post fica vazio.
+// Formulário de inscrição (issue #21). Fica desligado até o Worker estar no ar e testado; o PR que
+// liga também preenche a chave pública do Turnstile.
 export const NEWSLETTER_FORM_ENABLED = false;
+export const NEWSLETTER_ENDPOINT = 'https://newsletter.guifav.dev/subscribe';
+export const TURNSTILE_SITE_KEY = '';
