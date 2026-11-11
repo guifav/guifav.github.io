@@ -204,8 +204,9 @@ class BlockTest(unittest.TestCase):
 
     def test_pullquote_and_callout(self):
         md, _ = conv('<div class="pullquote"><p>Frase <em>forte</em>.</p></div><div class="callout-block" data-callout="true"><p>Nota.</p></div>')
-        self.assertEqual(md, '<aside class="pullquote">\n<p>Frase <em>forte</em>.</p>\n</aside>\n\n'
-                             '<aside class="callout">\n<p>Nota.</p>\n</aside>\n')
+        # div e não aside: um destaque não é região de navegação (vários asides sem nome quebram a landmark única).
+        self.assertEqual(md, '<div class="pullquote">\n<p>Frase <em>forte</em>.</p>\n</div>\n\n'
+                             '<div class="callout">\n<p>Nota.</p>\n</div>\n')
 
     def test_subscription_widget_and_subscribe_buttons_removed(self):
         html = ('<div class="subscription-widget-wrap-editor" data-component-name="SubscribeWidgetToDOM"><div class="subscription-widget show-subscribe">'

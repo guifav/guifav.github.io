@@ -53,6 +53,12 @@
 .post-body .video{position:relative;aspect-ratio:16/9}
 .post-body .video iframe{position:absolute;inset:0;width:100%;height:100%;border:0;border-radius:10px}
 
+/* Destaques importados do Substack (#19). */
+.post-body .pullquote{margin:32px 0;padding:4px 0 4px 20px;border-left:3px solid var(--hl);font-size:1.15em;font-style:italic}
+.post-body .callout{margin:24px 0;padding:14px 18px;border:1px solid var(--border);border-radius:10px;background:var(--tag-bg)}
+.post-body .pullquote p,.post-body .callout p{margin:0}
+.post-body .pullquote p+p,.post-body .callout p+p{margin-top:12px}
+
 /* Realce de código com duas paletas (shiki com defaultColor:false). */
 .astro-code,.astro-code span{color:var(--shiki-light);background-color:var(--shiki-light-bg)}
 [data-theme="dark"] .astro-code,[data-theme="dark"] .astro-code span{color:var(--shiki-dark);background-color:var(--shiki-dark-bg)}

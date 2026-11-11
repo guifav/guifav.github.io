@@ -484,7 +484,7 @@ def aside_block(n: Node, ctx: Context, cls: str) -> str:
         if c.tag != "p":
             raise ConvertError(f"{ctx.slug}: <{c.tag}> dentro de {cls}")
         inner.append(f"<p>{ser(c.children, ctx)}</p>")
-    return f'<aside class="{cls}">\n' + "\n".join(inner) + "\n</aside>"
+    return f'<div class="{cls}">\n' + "\n".join(inner) + "\n</div>"
 
 
 def _subscribe_href(href: str) -> bool:
