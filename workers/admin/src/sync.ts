@@ -1,6 +1,6 @@
 // Cópia do segmento do Resend para o D1 (cron do Worker do painel, issue #40).
-// O Resend não devolve propriedades na listagem: um GET por contato, espaçado para ficar bem abaixo do limite de
-// 10 req/s da conta, que é compartilhado com o Worker de inscrição. A troca é atômica do ponto de vista do painel:
+// O Resend não devolve propriedades nem tópicos na listagem: dois GET por contato (o contato e os tópicos dele),
+// espaçados para ficar bem abaixo do limite de 10 req/s da conta, que é compartilhado com o Worker de inscrição. A troca é atômica do ponto de vista do painel:
 // as linhas antigas só saem depois que todas as novas foram gravadas; falha no meio não apaga nada.
 
 export interface D1Stmt {
