@@ -97,23 +97,15 @@ class BuildTest(Repo):
         self.assertEqual(got["https://guifav.dev/portfolio/"], "2026-11-12T09:00:00-03:00")
         self.assertEqual(got["https://guifav.dev/"], "2026-01-10T10:00:00-03:00")
 
-    def test_index_cites_both_sitemaps_with_newest_lastmod(self):
+    def test_index_cites_both_sitemaps_without_lastmod(self):
+        # lastmod no índice seria a data do arquivo do sitemap; o maior lastmod das páginas não serve (r1).
         B.build(self.repo, self.site)
         self.assertEqual(self.entries("sitemap.xml", "sitemap"), [
-            ("https://guifav.dev/sitemap-site.xml", "2026-06-20T08:30:00-03:00"),
-            ("https://guifav.dev/blog/sitemap.xml", "2026-10-01T00:00:00.000Z"),
+            ("https://guifav.dev/sitemap-site.xml", None),
+            ("https://guifav.dev/blog/sitemap.xml", None),
         ])
         self.assertEqual(ET.parse(self.site / "sitemap.xml").getroot().tag, NS + "sitemapindex")
-
-    def test_newest_compares_instants_not_strings(self):
-        # 23:00 em -03:00 é 02:00Z do dia seguinte, depois de 01:00Z; pela ordem do texto sairia o contrário.
-        self.assertEqual(B.newest(["2026-01-01T23:00:00-03:00", "2026-01-02T01:00:00Z"]), "2026-01-01T23:00:00-03:00")
-        self.assertIsNone(B.newest([]))
-
-    def test_index_without_blog_lastmod_omits_it(self):
-        (self.site / "blog" / "sitemap.xml").write_text(BLOG.replace("<lastmod>", "<x>").replace("</lastmod>", "</x>"), encoding="utf-8")
-        B.build(self.repo, self.site)
-        self.assertEqual(self.entries("sitemap.xml", "sitemap")[1], ("https://guifav.dev/blog/sitemap.xml", None))
+        self.assertNotIn("lastmod", (self.site / "sitemap.xml").read_text(encoding="utf-8"))
 
     def test_refuses_when_files_already_exist(self):
         for name in ("sitemap.xml", "sitemap-site.xml"):

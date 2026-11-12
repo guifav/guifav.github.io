@@ -2,10 +2,12 @@
 
 Rodar: python3 scripts/test_indexnow.py
 """
+import http.server
 import io
 import json
-import os
+import socket
 import tempfile
+import threading
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
@@ -26,12 +28,14 @@ def index(children: list[str]) -> bytes:
     return f'<?xml version="1.0" encoding="UTF-8"?><sitemapindex {NSX}>{body}</sitemapindex>'.encode()
 
 
+INDEX = index(["https://guifav.dev/sitemap-site.xml", "https://guifav.dev/blog/sitemap.xml"])
 SITE_OLD = {"https://guifav.dev/": "", "https://guifav.dev/portfolio/": ""}
 BLOG_OLD = {"https://guifav.dev/blog/": "2026-09-01T00:00:00.000Z", "https://guifav.dev/blog/pagina/2/": "",
             "https://guifav.dev/blog/a/": "2026-01-01T00:00:00.000Z", "https://guifav.dev/blog/sumiu/": "2025-01-01T00:00:00.000Z"}
 SITE_NEW = {"https://guifav.dev/": "2026-11-12T10:00:00-03:00", "https://guifav.dev/portfolio/": "2026-11-12T10:00:00-03:00"}
 BLOG_NEW = {"https://guifav.dev/blog/": "2026-11-12T00:00:00.000Z", "https://guifav.dev/blog/a/": "2026-01-01T00:00:00.000Z",
             "https://guifav.dev/blog/novo/": "2026-11-12T00:00:00.000Z"}
+NOINDEX = b'<html><head><meta name="robots" content="noindex, follow"></head></html>'
 
 
 class FakeWeb:
@@ -73,7 +77,7 @@ class Site(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.site = Path(self.tmp.name)
-        self.w("sitemap.xml", index(["https://guifav.dev/sitemap-site.xml", "https://guifav.dev/blog/sitemap.xml"]))
+        self.w("sitemap.xml", INDEX)
         self.w("sitemap-site.xml", urlset(SITE_NEW))
         self.w("blog/sitemap.xml", urlset(BLOG_NEW))
         for rel in ("index.html", "portfolio/index.html", "blog/index.html", "blog/a/index.html", "blog/novo/index.html",
@@ -92,31 +96,51 @@ class Site(unittest.TestCase):
         # Layout publicado antes deste PR: /sitemap.xml do site e /blog/sitemap.xml, sem índice.
         return FakeWeb({"https://guifav.dev/sitemap.xml": urlset(SITE_OLD), "https://guifav.dev/blog/sitemap.xml": urlset(BLOG_OLD)})
 
+    def built(self) -> dict[str, bytes]:
+        """O site publicado igual ao build (o deploy já chegou)."""
+        return {f"https://guifav.dev{p}": (self.site / p.lstrip("/")).read_bytes() for p in I.SITEMAPS}
+
+    def shas(self) -> dict[str, str]:
+        return {p: I.sha256((self.site / p.lstrip("/")).read_bytes()) for p in I.SITEMAPS}
+
 
 class DiffTest(Site):
     def test_first_deploy_from_old_layout(self):
         p = I.plan(self.site, self.old_web())
+        self.assertEqual(p["mode"], "diff")
         self.assertEqual(p["urls"], sorted([
             "https://guifav.dev/", "https://guifav.dev/portfolio/",  # ganharam lastmod
             "https://guifav.dev/blog/",  # lastmod mudou
             "https://guifav.dev/blog/novo/",  # nova
             "https://guifav.dev/blog/sumiu/",  # saiu e a página não existe mais
         ]))  # /blog/a/ igual e /blog/pagina/2/ só saiu do sitemap: ficam de fora
-        self.assertEqual(p["sitemap_sha256"], I.sha256((self.site / "sitemap.xml").read_bytes()))
+        self.assertEqual(p["sitemaps"], self.shas())
 
     def test_nothing_changed(self):
-        web = FakeWeb({"https://guifav.dev/sitemap.xml": (self.site / "sitemap.xml").read_bytes(),
-                       "https://guifav.dev/sitemap-site.xml": urlset(SITE_NEW),
-                       "https://guifav.dev/blog/sitemap.xml": urlset(BLOG_NEW)})
-        self.assertEqual(I.plan(self.site, web)["urls"], [])
+        self.assertEqual(I.plan(self.site, FakeWeb(self.built()))["urls"], [])
 
     def test_one_post_updated_from_index_layout(self):
-        blog_live = dict(BLOG_NEW, **{"https://guifav.dev/blog/a/": "2025-12-01T00:00:00.000Z"})
-        web = FakeWeb({"https://guifav.dev/sitemap.xml": index(["https://guifav.dev/sitemap-site.xml", "https://guifav.dev/blog/sitemap.xml"]),
-                       "https://guifav.dev/sitemap-site.xml": urlset(SITE_NEW), "https://guifav.dev/blog/sitemap.xml": urlset(blog_live)})
+        web = FakeWeb(dict(self.built(), **{"https://guifav.dev/blog/sitemap.xml": urlset(
+            dict(BLOG_NEW, **{"https://guifav.dev/blog/a/": "2025-12-01T00:00:00.000Z"}))}))
         self.assertEqual(I.plan(self.site, web)["urls"], ["https://guifav.dev/blog/a/"])
 
-    def test_live_unreadable_gives_empty_plan_with_warning(self):
+    def test_removed_from_sitemap_because_of_noindex_is_announced(self):
+        # Post que virou index: false: continua publicado, mas com noindex; o buscador precisa recrawlear.
+        old = dict(BLOG_NEW, **{"https://guifav.dev/blog/virou-podcast/": "2026-01-01T00:00:00.000Z"})
+        self.w("blog/virou-podcast/index.html", NOINDEX)
+        web = FakeWeb(dict(self.built(), **{"https://guifav.dev/blog/sitemap.xml": urlset(old)}))
+        self.assertEqual(I.plan(self.site, web)["urls"], ["https://guifav.dev/blog/virou-podcast/"])
+
+    def test_removed_from_sitemap_but_still_indexable_is_not_announced(self):
+        old = dict(BLOG_NEW, **{"https://guifav.dev/blog/pagina/2/": ""})
+        web = FakeWeb(dict(self.built(), **{"https://guifav.dev/blog/sitemap.xml": urlset(old)}))
+        self.assertEqual(I.plan(self.site, web)["urls"], [])
+
+    def test_removed_non_html_that_still_exists_is_not_announced(self):
+        self.w("doc.pdf", b"%PDF")
+        self.assertEqual(I.changed({"https://guifav.dev/doc.pdf": ""}, {}, self.site), [])
+
+    def test_live_unreadable_falls_back_to_all_urls(self):
         cases = {
             "fora do ar": FakeWeb({}),
             "não é xml": FakeWeb({"https://guifav.dev/sitemap.xml": b"<html>"}),
@@ -134,7 +158,8 @@ class DiffTest(Site):
                 out = io.StringIO()
                 with redirect_stdout(out):
                     p = I.plan(self.site, web)
-                self.assertEqual(p["urls"], [])
+                self.assertEqual((p["mode"], p["urls"]), ("all", sorted({**SITE_NEW, **BLOG_NEW})))
+                self.assertEqual(p["sitemaps"], self.shas())
                 self.assertIn("::warning::", out.getvalue())
 
     def test_built_side_must_be_an_index_of_local_sitemaps(self):
@@ -155,31 +180,82 @@ class DiffTest(Site):
     def test_removed_url_of_another_host_is_ignored(self):
         self.assertEqual(I.changed({"https://outro.dev/x/": ""}, {}, self.site), [])
 
-    def test_cli_diff_writes_single_line_json(self):
-        out = self.site / "plan.json"
+    def test_cli_diff_writes_plan_file(self):
+        out = self.site / "plano" / "plan.json"
         with redirect_stdout(io.StringIO()):
             self.assertEqual(I.main(["diff", "--site", str(self.site), "--out", str(out)], get=self.old_web()), 0)
-        raw = out.read_text()
-        self.assertNotIn("\n", raw)
-        self.assertEqual(len(json.loads(raw)["urls"]), 5)
+        p = json.loads(out.read_text())
+        self.assertTrue(I.valid_plan(p))
+        self.assertEqual(len(p["urls"]), 5)
+
+
+class _Truncating(http.server.BaseHTTPRequestHandler):
+    """Anuncia 1000 bytes e entrega 3 (reprodução do achado da r1)."""
+
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-Length", "1000")
+        self.end_headers()
+        self.wfile.write(b"abc")
+        self.wfile.flush()
+        self.close_connection = True
+
+    def log_message(self, format, *args):
+        pass
+
+
+class TransportTest(unittest.TestCase):
+    def test_truncated_response_becomes_status_0(self):
+        srv = http.server.HTTPServer(("127.0.0.1", 0), _Truncating)
+        t = threading.Thread(target=srv.handle_request, daemon=True)
+        t.start()
+        status, body = I.http_get(f"http://127.0.0.1:{srv.server_address[1]}/sitemap.xml")
+        t.join(5)
+        srv.server_close()
+        self.assertEqual(status, 0)
+        self.assertIn(b"IncompleteRead", body)
+
+    def test_connection_refused_becomes_status_0(self):
+        s = socket.socket()
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+        s.close()
+        self.assertEqual(I.http_get(f"http://127.0.0.1:{port}/")[0], 0)
+        self.assertEqual(I.http_post(f"http://127.0.0.1:{port}/", {"a": 1})[0], 0)
+
+    def test_plan_with_truncating_live_site_falls_back(self):
+        def get(url):
+            return I._transport(lambda: (_ for _ in ()).throw(I.http.client.IncompleteRead(b"abc", 997)))
+        with tempfile.TemporaryDirectory() as d:
+            site = Path(d)
+            (site / "blog").mkdir()
+            (site / "sitemap.xml").write_bytes(INDEX)
+            (site / "sitemap-site.xml").write_bytes(urlset(SITE_NEW))
+            (site / "blog" / "sitemap.xml").write_bytes(urlset(BLOG_NEW))
+            with redirect_stdout(io.StringIO()):
+                self.assertEqual(I.plan(site, get)["mode"], "all")
 
 
 class SubmitTest(Site):
-    def live(self, sitemap: bytes | None = None, key: bytes | None = None) -> FakeWeb:
-        return FakeWeb({"https://guifav.dev/sitemap.xml": sitemap if sitemap is not None else (self.site / "sitemap.xml").read_bytes(),
-                        I.KEY_LOCATION: key if key is not None else I.KEY.encode()})
+    def live(self, **override: bytes) -> FakeWeb:
+        pages = dict(self.built(), **{I.KEY_LOCATION: I.KEY.encode()})
+        pages.update(override)
+        return FakeWeb(pages)
 
-    def run_submit(self, plan: dict | str, web, post: FakePost, timeout: str = "60"):
-        os.environ["INDEXNOW_PLAN"] = plan if isinstance(plan, str) else json.dumps(plan)
-        self.addCleanup(os.environ.pop, "INDEXNOW_PLAN", None)
+    def plan_file(self, plan) -> str:
+        f = self.site / "plan.json"
+        f.write_text(plan if isinstance(plan, str) else json.dumps(plan), encoding="utf-8")
+        return str(f)
+
+    def run_submit(self, plan, web, post: FakePost, timeout: str = "60"):
         sleeps: list[float] = []
         out, err = io.StringIO(), io.StringIO()
         with redirect_stdout(out), redirect_stderr(err):
-            rc = I.main(["submit", "--timeout", timeout], get=web, post=post, sleep=sleeps.append)
+            rc = I.main(["submit", "--plan", self.plan_file(plan), "--timeout", timeout], get=web, post=post, sleep=sleeps.append)
         return rc, sleeps, out.getvalue() + err.getvalue()
 
-    def plan(self, urls):
-        return {"urls": urls, "sitemap_sha256": I.sha256((self.site / "sitemap.xml").read_bytes())}
+    def plan(self, urls, mode="diff"):
+        return {"mode": mode, "urls": urls, "sitemaps": self.shas()}
 
     def test_submits_after_live_matches(self):
         post = FakePost([202])
@@ -188,20 +264,31 @@ class SubmitTest(Site):
         self.assertEqual(post.bodies, [{"host": "guifav.dev", "key": I.KEY, "keyLocation": I.KEY_LOCATION,
                                         "urlList": ["https://guifav.dev/blog/novo/"]}])
 
-    def test_cache_busting_query_on_sitemap(self):
+    def test_mode_all_also_submits(self):
+        post = FakePost()
+        urls = sorted({**SITE_NEW, **BLOG_NEW})
+        rc, _, _ = self.run_submit(self.plan(urls, mode="all"), self.live(), post)
+        self.assertEqual((rc, post.bodies[0]["urlList"]), (0, urls))
+
+    def test_cache_busting_query_on_every_sitemap(self):
         web = self.live()
         self.run_submit(self.plan(["https://guifav.dev/"]), web, FakePost())
-        self.assertTrue(web.calls[0].startswith("https://guifav.dev/sitemap.xml?indexnow="), web.calls)
+        for p in I.SITEMAPS:
+            self.assertTrue(any(c.startswith(f"https://guifav.dev{p}?indexnow=") for c in web.calls), (p, web.calls))
+        nonces = {c.split("=", 1)[1] for c in web.calls if "?indexnow=" in c}
+        self.assertEqual(len(nonces), 1)  # uma rodada, mesmo nonce
 
-    def test_waits_until_deploy_is_live(self):
-        web = self.live(sitemap=b"antigo")
+    def test_waits_until_every_sitemap_is_live(self):
+        # Índice igual ao antigo (sem lastmod, ele quase nunca muda), filho do blog ainda antigo (r1, Astra e Kimi).
+        web = self.live(**{"https://guifav.dev/blog/sitemap.xml": urlset(BLOG_OLD)})
         post = FakePost()
-        polls = []
+        rounds = []
 
         def get(url):
-            polls.append(url)
-            if len(polls) >= 5:  # o deploy chega na 3a rodada (2 GETs por rodada)
-                web.pages["https://guifav.dev/sitemap.xml"] = (self.site / "sitemap.xml").read_bytes()
+            if "/sitemap.xml?" in url and url.startswith("https://guifav.dev/sitemap.xml"):
+                rounds.append(url)
+                if len(rounds) == 3:  # o filho novo chega na 3a rodada
+                    web.pages["https://guifav.dev/blog/sitemap.xml"] = (self.site / "blog/sitemap.xml").read_bytes()
             return web(url)
 
         rc, sleeps, _ = self.run_submit(self.plan(["https://guifav.dev/"]), get, post)
@@ -210,15 +297,19 @@ class SubmitTest(Site):
         self.assertEqual(len(post.bodies), 1)
 
     def test_gives_up_without_posting(self):
-        for name, web in {"sitemap antigo": self.live(sitemap=b"antigo"), "chave errada": self.live(key=b"outra"),
-                          "chave fora do ar": FakeWeb({"https://guifav.dev/sitemap.xml": (self.site / "sitemap.xml").read_bytes()})}.items():
+        old_child = {"https://guifav.dev/sitemap-site.xml": urlset(SITE_OLD)}
+        for name, web in {"filho antigo com índice igual": self.live(**old_child),
+                          "índice antigo": self.live(**{"https://guifav.dev/sitemap.xml": b"antigo"}),
+                          "chave errada": self.live(**{I.KEY_LOCATION: b"outra"}),
+                          "chave fora do ar": FakeWeb(self.built()),
+                          "erro com corpo certo": ErrorWeb(dict(self.built(), **{I.KEY_LOCATION: I.KEY.encode()}))}.items():
             with self.subTest(name=name):
                 post = FakePost()
                 rc, sleeps, text = self.run_submit(self.plan(["https://guifav.dev/"]), web, post, timeout="30")
                 self.assertEqual(rc, 1)
                 self.assertEqual(post.bodies, [])
                 self.assertEqual(sleeps, [15, 15])
-                self.assertIn("não ficou igual", text)
+                self.assertIn("não ficaram iguais", text)
 
     def test_empty_plan_does_nothing(self):
         web, post = self.live(), FakePost()
@@ -227,13 +318,26 @@ class SubmitTest(Site):
         self.assertIn("nada mudou", text)
 
     def test_invalid_plan(self):
-        for raw in ("", "x", "{}", '{"urls": "a", "sitemap_sha256": "s"}', '{"urls": [1], "sitemap_sha256": "s"}',
-                    '{"urls": [], "sitemap_sha256": 3}'):
+        good = self.plan(["https://guifav.dev/"])
+        bad = [
+            "", "x", "{}", "[]",
+            dict(good, mode="tudo"), dict(good, urls="a"), dict(good, urls=[1]),
+            dict(good, sitemaps={"/sitemap.xml": good["sitemaps"]["/sitemap.xml"]}),
+            dict(good, sitemaps=dict(good["sitemaps"], **{"/sitemap.xml": "curto"})),
+            dict(good, sitemaps=dict(good["sitemaps"], **{"/outro.xml": "0" * 64})),
+        ]
+        for raw in bad:
             with self.subTest(raw=raw):
                 post = FakePost()
                 rc, _, text = self.run_submit(raw, self.live(), post)
                 self.assertEqual((rc, post.bodies), (1, []))
-                self.assertIn("plano inválido", text)
+                self.assertRegex(text, "plano (inválido|ilegível)")
+
+    def test_missing_plan_file(self):
+        out = io.StringIO()
+        with redirect_stderr(out):
+            self.assertEqual(I.main(["submit", "--plan", str(self.site / "nao-existe.json")], get=self.live(), post=FakePost()), 1)
+        self.assertIn("plano ilegível", out.getvalue())
 
     def test_rejected_status_fails(self):
         for st in (400, 403, 422, 429, 0):
@@ -255,12 +359,17 @@ class SubmitTest(Site):
             self.assertEqual(I.submit(urls, post), [])
         self.assertEqual([len(b["urlList"]) for b in post.bodies], [10_000, 1])
 
+    def test_big_plan_goes_through_file(self):
+        # O plano vai por arquivo (artefato), sem limite de variável de ambiente nem de output de job (r1, P3).
+        urls = [f"https://guifav.dev/blog/{'x' * 100}{i}/" for i in range(10_001)]
+        post = FakePost([200, 200])
+        rc, _, _ = self.run_submit(self.plan(urls), self.live(), post)
+        self.assertEqual((rc, [len(b["urlList"]) for b in post.bodies]), (0, [10_000, 1]))
+
 
 class AllTest(Site):
     def test_all_submits_every_live_url(self):
-        web = FakeWeb({"https://guifav.dev/sitemap.xml": index(["https://guifav.dev/sitemap-site.xml", "https://guifav.dev/blog/sitemap.xml"]),
-                       "https://guifav.dev/sitemap-site.xml": urlset(SITE_NEW), "https://guifav.dev/blog/sitemap.xml": urlset(BLOG_NEW),
-                       I.KEY_LOCATION: I.KEY.encode() + b"\n"})
+        web = FakeWeb(dict(self.built(), **{I.KEY_LOCATION: I.KEY.encode() + b"\n"}))
         post = FakePost()
         with redirect_stdout(io.StringIO()):
             self.assertEqual(I.main(["all"], get=web, post=post), 0)
@@ -277,8 +386,8 @@ class AllTest(Site):
                 self.assertIn("chave fora do ar", err.getvalue())
 
 
-class KeyFileTest(unittest.TestCase):
-    """A chave publicada é a do script, vai ao ar pelo manifesto e segue o formato do protocolo."""
+class RepoTest(unittest.TestCase):
+    """A chave publicada é a do script e vai ao ar pelo manifesto; o workflow passa o plano por artefato."""
 
     def test_key_file(self):
         self.assertRegex(I.KEY, r"^[a-zA-Z0-9-]{8,128}$")
@@ -286,6 +395,25 @@ class KeyFileTest(unittest.TestCase):
         manifest = (REPO / "site-manifest.txt").read_text(encoding="utf-8").splitlines()
         self.assertIn(f"{I.KEY}.txt", manifest)
         self.assertNotIn("sitemap.xml", manifest)
+
+    def test_workflow_wiring(self):
+        y = (REPO / ".github/workflows/pages.yml").read_text(encoding="utf-8")
+        if not y:
+            self.skipTest("workflow ausente")
+        jobs = y.split("\n  indexnow:\n")
+        self.assertEqual(len(jobs), 2, "job indexnow")
+        build, indexnow = jobs
+        # O plano é opcional para o deploy: passo com continue-on-error e upload só se ele deu certo.
+        self.assertRegex(build, r"id: indexnow\n\s+# [^\n]*\n\s+continue-on-error: true\n")
+        self.assertIn("if: steps.indexnow.outcome == 'success'", build)
+        self.assertIn("uses: actions/upload-artifact@", build)
+        self.assertNotIn("GITHUB_OUTPUT", build)
+        self.assertIn("fetch-depth: 0", build)
+        self.assertIn("needs: [build, deploy]", indexnow)
+        self.assertIn("uses: actions/download-artifact@", indexnow)
+        self.assertIn("scripts/build_sitemaps.py", indexnow)  # import do indexnow.py no checkout esparso
+        self.assertIn('submit --plan "$RUNNER_TEMP/indexnow/plan.json"', indexnow)
+        self.assertNotIn("indexnow", build.split("\n  deploy:\n")[1].split("needs:")[1].split("\n")[0])
 
 
 if __name__ == "__main__":

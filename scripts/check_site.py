@@ -29,6 +29,7 @@ import shutil
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
+from datetime import datetime
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import unquote
@@ -364,6 +365,7 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
     problems: list[str] = []
     noindex_slugs: set[str] = set()
     seen: dict[str, str] = {}
+    indexable_slugs: set[str] = set()
     for md in sorted(posts.glob("**/*.md")):
         fm = frontmatter(md.read_text(encoding="utf-8"))
         slug = fm.get("slug") or md.stem
@@ -375,6 +377,8 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
             problems.append(f"posts: {rel_md} sem página publicada em /blog/{slug}/")
         if fm.get("index") == "false":
             noindex_slugs.add(slug)
+        else:
+            indexable_slugs.add(slug)
 
     # Contrato, barreira 2: sob /blog/ só páginas, RSS, sitemap e mídia da lista.
     for f in sorted((site / "blog").rglob("*")):
@@ -470,8 +474,29 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
             problems.append(f"sitemap: lista página da newsletter: {href}")
         if path.startswith(BLOG_PREFIX + "pagina/"):
             problems.append(f"sitemap: lista página de paginação: {href}")
+    # Completude do blog: a capa e todo post indexável, uma vez cada.
+    if sitemap_locs is not None:
+        want_blog = {SITE_ORIGIN + BLOG_PREFIX} | {f"{SITE_ORIGIN}{BLOG_PREFIX}{s}/" for s in indexable_slugs}
+        for loc in sorted(want_blog - set(sitemap_locs)):
+            problems.append(f"sitemap: falta página indexável do blog: {loc}")
+        if len(sitemap_locs) != len(set(sitemap_locs)):
+            problems.append("sitemap: URL repetida no sitemap do blog")
     problems += check_root_sitemaps(site, [(rel, url, p) for rel, url, in_blog, p in pages if not in_blog])
     return problems
+
+
+_W3C_DATETIME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})")
+
+
+def _valid_datetime(s: str) -> bool:
+    """Data e hora completas com fuso (a forma W3C que o gerador usa), num instante que existe."""
+    if not _W3C_DATETIME.fullmatch(s):
+        return False
+    try:
+        datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return True
 
 
 ROOT_INDEX_CHILDREN = [SITE_ORIGIN + "/sitemap-site.xml", SITE_ORIGIN + "/blog/sitemap.xml"]
@@ -522,8 +547,8 @@ def check_root_sitemaps(site: Path, root_pages: list[tuple[str, str, "_Page"]]) 
         if len(got) != len(set(got)):
             problems.append("sitemap-site.xml: URL repetida")
         for loc, lm in entries:
-            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})", lm):
-                problems.append(f"sitemap-site.xml: lastmod ausente ou fora do formato W3C: {loc} {lm!r}")
+            if not _valid_datetime(lm):
+                problems.append(f"sitemap-site.xml: lastmod ausente ou inválido (data, hora e fuso, W3C): {loc} {lm!r}")
     return problems
 
 

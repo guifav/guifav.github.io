@@ -21,8 +21,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    outputs:
-      indexnow: ${{ steps.indexnow.outputs.plan }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -79,9 +77,19 @@ jobs:
 
       - name: Plano do IndexNow (URLs que mudaram em relação ao site publicado)
         id: indexnow
-        run: |
-          python3 scripts/indexnow.py diff --out "$RUNNER_TEMP/indexnow.json"
-          echo "plan=$(cat "$RUNNER_TEMP/indexnow.json")" >> "$GITHUB_OUTPUT"
+        # Opcional: se falhar, o deploy segue; o job indexnow fica vermelho por falta do plano.
+        continue-on-error: true
+        run: python3 scripts/indexnow.py diff --out "$RUNNER_TEMP/indexnow/plan.json"
+
+      - name: Guardar o plano do IndexNow para o job seguinte
+        if: steps.indexnow.outcome == 'success' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: indexnow-plan
+          path: ${{ runner.temp }}/indexnow/plan.json
+          retention-days: 7
+          if-no-files-found: error
 
       - name: Publicar artefato do Pages
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
@@ -115,10 +123,15 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          sparse-checkout: scripts/indexnow.py
+          sparse-checkout: |
+            scripts/indexnow.py
+            scripts/build_sitemaps.py
           sparse-checkout-cone-mode: false
 
+      - uses: actions/download-artifact@v8
+        with:
+          name: indexnow-plan
+          path: ${{ runner.temp }}/indexnow
+
       - name: Avisar o IndexNow
-        env:
-          INDEXNOW_PLAN: ${{ needs.build.outputs.indexnow }}
-        run: python3 scripts/indexnow.py submit
+        run: python3 scripts/indexnow.py submit --plan "$RUNNER_TEMP/indexnow/plan.json"

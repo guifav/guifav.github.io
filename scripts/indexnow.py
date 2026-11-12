@@ -3,9 +3,11 @@ ou removidas, logo depois do deploy.
 
 Fluxo no workflow do Pages:
 1. build: `diff` compara os sitemaps do _site/ com os publicados (ainda o deploy anterior) e grava o plano
-   (URLs que mudaram mais o sha256 do /sitemap.xml novo). Se não conseguir ler o site publicado, avisa e
-   segue com o plano vazio: o deploy nunca depende do IndexNow.
-2. depois do deploy: `submit` espera o /sitemap.xml publicado ficar igual ao do build e manda as URLs.
+   (modo, URLs e o sha256 de cada sitemap novo) num arquivo, que vai como artefato ao job seguinte.
+   Se não conseguir ler o site publicado, o plano vira modo "all": avisa todas as URLs do build, para nenhum
+   aviso se perder. O deploy nunca depende do IndexNow.
+2. depois do deploy: `submit` espera os três sitemaps publicados ficarem iguais aos do build (e a chave estar
+   no ar) e manda as URLs.
 
 Uma vez, à mão, para avisar tudo o que está publicado:
     python3 scripts/indexnow.py all
@@ -16,8 +18,8 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import http.client
 import json
-import os
 import sys
 import time
 import urllib.error
@@ -25,6 +27,9 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from urllib.parse import urlsplit
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from build_sitemaps import _Head, noindex  # noqa: E402
 
 KEY = "f43d1d074f05d2e83d6b8d0189bd29b3"
 HOST = "guifav.dev"
@@ -34,33 +39,45 @@ ENDPOINT = "https://api.indexnow.org/indexnow"
 NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
 BATCH = 10_000
 UA = "guifav-indexnow/1"
+# Os sitemaps publicados, pelo caminho; o plano guarda o sha256 de cada um.
+SITEMAPS = ("/sitemap.xml", "/sitemap-site.xml", "/blog/sitemap.xml")
+MODES = ("diff", "all")
 
 
 class LiveError(Exception):
     """Não foi possível ler os sitemaps publicados."""
 
 
+def _transport(fn):
+    """Qualquer falha de transporte vira status 0 (nunca exceção para quem chama)."""
+    try:
+        return fn()
+    except urllib.error.HTTPError as e:
+        try:
+            return e.code, e.read()
+        except (http.client.HTTPException, OSError):
+            return e.code, b""
+    except (urllib.error.URLError, http.client.HTTPException, OSError, ValueError) as e:
+        return 0, str(e).encode()
+
+
 def http_get(url: str) -> tuple[int, bytes]:
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Cache-Control": "no-cache"})
-    try:
+
+    def go():
         with urllib.request.urlopen(req, timeout=30) as r:
             return r.status, r.read()
-    except urllib.error.HTTPError as e:
-        return e.code, e.read()
-    except (urllib.error.URLError, OSError) as e:
-        return 0, str(e).encode()
+    return _transport(go)
 
 
 def http_post(url: str, payload: dict) -> tuple[int, bytes]:
     req = urllib.request.Request(url, data=json.dumps(payload).encode(), method="POST",
                                  headers={"Content-Type": "application/json; charset=utf-8", "User-Agent": UA})
-    try:
+
+    def go():
         with urllib.request.urlopen(req, timeout=60) as r:
             return r.status, r.read()
-    except urllib.error.HTTPError as e:
-        return e.code, e.read()
-    except (urllib.error.URLError, OSError) as e:
-        return 0, str(e).encode()
+    return _transport(go)
 
 
 def parse(xml: bytes) -> tuple[str, dict[str, str]]:
@@ -136,15 +153,28 @@ def built_entries(site: Path) -> dict[str, str]:
     return out
 
 
-def changed(old: dict[str, str], new: dict[str, str], site: Path) -> list[str]:
-    """URLs a avisar: novas, com lastmod diferente, ou que saíram do sitemap porque a página deixou de existir.
+def _left_the_index(f: Path) -> bool:
+    """A página deixou de existir ou passou a ter noindex: o buscador precisa saber."""
+    if not f.is_file():
+        return True
+    if f.suffix.lower() not in (".html", ".htm", ".xhtml"):
+        return False
+    h = _Head()
+    h.feed(f.read_text(encoding="utf-8", errors="replace"))
+    h.close()
+    return noindex(h.robots)
 
-    Página que só saiu do sitemap (continua publicada, como a paginação do blog) não é avisada.
+
+def changed(old: dict[str, str], new: dict[str, str], site: Path) -> list[str]:
+    """URLs a avisar: novas, com lastmod diferente, ou que saíram do sitemap porque a página deixou de existir
+    ou ganhou noindex.
+
+    Página que só saiu do sitemap e continua indexável (como a paginação do blog) não é avisada.
     """
     out = {loc for loc, lm in new.items() if old.get(loc) != lm}
     for loc in old.keys() - new.keys():
         f = _local(site, loc)
-        if f is not None and not f.is_file():
+        if f is not None and _left_the_index(f):
             out.add(loc)
     return sorted(out)
 
@@ -155,22 +185,34 @@ def sha256(b: bytes) -> str:
 
 def plan(site: Path, get=http_get) -> dict:
     new = built_entries(site)
-    sha = sha256((site / "sitemap.xml").read_bytes())
+    shas = {p: sha256((site / p.lstrip("/")).read_bytes()) for p in SITEMAPS}
     try:
         old = live_entries(get)
     except LiveError as e:
-        print(f"::warning::IndexNow: sitemaps publicados ilegíveis ({e}); nenhuma URL será avisada neste deploy")
-        return {"urls": [], "sitemap_sha256": sha}
-    return {"urls": changed(old, new, site), "sitemap_sha256": sha}
+        print(f"::warning::IndexNow: sitemaps publicados ilegíveis ({e}); depois do deploy vão todas as URLs do build")
+        return {"mode": "all", "urls": sorted(new), "sitemaps": shas}
+    return {"mode": "diff", "urls": changed(old, new, site), "sitemaps": shas}
 
 
-def wait_live(sha: str, get=http_get, sleep=time.sleep, timeout: float = 600, every: float = 15, nonce: str = "") -> bool:
-    """Espera o /sitemap.xml publicado ser o do build e a chave estar no ar."""
+def valid_plan(p) -> bool:
+    return (isinstance(p, dict) and p.get("mode") in MODES
+            and isinstance(p.get("urls"), list) and all(isinstance(u, str) for u in p["urls"])
+            and isinstance(p.get("sitemaps"), dict) and set(p["sitemaps"]) == set(SITEMAPS)
+            and all(isinstance(v, str) and len(v) == 64 for v in p["sitemaps"].values()))
+
+
+def _is(resp: tuple[int, bytes], sha: str) -> bool:
+    return resp[0] == 200 and sha256(resp[1]) == sha
+
+
+def wait_live(sitemaps: dict[str, str], get=http_get, sleep=time.sleep, timeout: float = 600, every: float = 15) -> bool:
+    """Espera os sitemaps publicados serem os do build (cada um com query anti-cache) e a chave estar no ar."""
     waited = 0.0
     while True:
-        s1, body = get(f"{ORIGIN}/sitemap.xml?indexnow={nonce or int(time.time())}")
-        s2, key = get(KEY_LOCATION)
-        if s1 == 200 and sha256(body) == sha and s2 == 200 and key.strip() == KEY.encode():
+        nonce = f"{time.time_ns()}"
+        ok = all([_is(get(f"{ORIGIN}{p}?indexnow={nonce}"), sha) for p, sha in sitemaps.items()])
+        status, key = get(KEY_LOCATION)
+        if ok and status == 200 and key.strip() == KEY.encode():
             return True
         if waited >= timeout:
             return False
@@ -200,35 +242,36 @@ def main(argv: list[str] | None = None, get=http_get, post=http_post, sleep=time
     d.add_argument("--site", default="_site")
     d.add_argument("--out", required=True)
     s = sub.add_parser("submit", help="espera o deploy e avisa as URLs do plano")
-    s.add_argument("--plan-env", default="INDEXNOW_PLAN", help="variável de ambiente com o plano em JSON")
+    s.add_argument("--plan", required=True, help="arquivo JSON gerado pelo diff")
     s.add_argument("--timeout", type=float, default=600)
     sub.add_parser("all", help="avisa todas as URLs publicadas (uso manual)")
     args = ap.parse_args(argv)
 
     if args.cmd == "diff":
         p = plan(Path(args.site), get)
+        Path(args.out).parent.mkdir(parents=True, exist_ok=True)
         Path(args.out).write_text(json.dumps(p, separators=(",", ":")), encoding="utf-8")
-        print(f"IndexNow: {len(p['urls'])} URLs para avisar depois do deploy")
+        print(f"IndexNow ({p['mode']}): {len(p['urls'])} URLs para avisar depois do deploy")
         for u in p["urls"][:50]:
             print("  " + u)
         return 0
 
     if args.cmd == "submit":
-        raw = os.environ.get(args.plan_env, "")
         try:
-            p = json.loads(raw)
-            urls, sha = p["urls"], p["sitemap_sha256"]
-            assert isinstance(urls, list) and all(isinstance(u, str) for u in urls) and isinstance(sha, str)
-        except (ValueError, KeyError, TypeError, AssertionError):
-            print(f"ERRO: plano inválido em {args.plan_env}: {raw[:120]!r}", file=sys.stderr)
+            p = json.loads(Path(args.plan).read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            print(f"ERRO: plano ilegível em {args.plan}: {e}", file=sys.stderr)
             return 1
-        if not urls:
+        if not valid_plan(p):
+            print(f"ERRO: plano inválido em {args.plan}: {json.dumps(p)[:160]}", file=sys.stderr)
+            return 1
+        if not p["urls"]:
             print("IndexNow: nada mudou nos sitemaps, nenhum aviso")
             return 0
-        if not wait_live(sha, get, sleep, args.timeout):
-            print("ERRO: o /sitemap.xml publicado não ficou igual ao do build, ou a chave não está no ar", file=sys.stderr)
+        if not wait_live(p["sitemaps"], get, sleep, args.timeout):
+            print("ERRO: os sitemaps publicados não ficaram iguais aos do build, ou a chave não está no ar", file=sys.stderr)
             return 1
-        errors = submit(urls, post)
+        errors = submit(p["urls"], post)
     else:
         status, key = get(KEY_LOCATION)
         if status != 200 or key.strip() != KEY.encode():

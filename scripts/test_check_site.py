@@ -639,8 +639,33 @@ class RootSitemapTest(Base):
         self.w("index.html", page('<link rel="canonical" href="https://guifav.dev"><a href="/portfolio/">p</a><img src="/assets/a.png">', robots=""))
         self.assertEqual(self.problems(pre_cutover=False), [])
 
+    def test_lastmod_accepts_fractions_and_utc(self):
+        for lm in ("2026-11-12T10:00:00.123Z", "2026-11-12T10:00:00+00:00", "2026-11-12T10:00:00.5-03:00"):
+            with self.subTest(lm=lm):
+                self.w("sitemap-site.xml", SITEMAP.format(
+                    f"<url><loc>https://guifav.dev/</loc><lastmod>{lm}</lastmod></url>"
+                    "<url><loc>https://guifav.dev/portfolio/</loc><lastmod>2026-11-12T10:00:00Z</lastmod></url>"))
+                self.assertEqual(self.problems(pre_cutover=False), [])
+
+    def test_blog_sitemap_must_list_every_indexable_post(self):
+        self.w("blog/sitemap.xml", SITEMAP.format("<url><loc>https://guifav.dev/blog/</loc></url>"))
+        self.assertTrue(self.has("falta página indexável do blog", "https://guifav.dev/blog/um-post/"))
+        self.w("blog/sitemap.xml", SITEMAP.format("<url><loc>https://guifav.dev/blog/um-post/</loc></url>"))
+        self.assertTrue(self.has("falta página indexável do blog", "https://guifav.dev/blog/"))
+
+    def test_blog_sitemap_noindex_post_not_required(self):
+        (self.posts / "um-post.md").write_text("---\ntitle: x\nslug: um-post\nindex: false\n---\n", encoding="utf-8")
+        self.w("blog/sitemap.xml", SITEMAP.format("<url><loc>https://guifav.dev/blog/</loc></url>"))
+        self.assertFalse(self.has("falta página indexável do blog"))
+
+    def test_blog_sitemap_duplicate(self):
+        self.w("blog/sitemap.xml", SITEMAP.format(
+            "<url><loc>https://guifav.dev/blog/</loc></url>" + "<url><loc>https://guifav.dev/blog/um-post/</loc></url>" * 2))
+        self.assertTrue(self.has("URL repetida no sitemap do blog"))
+
     def test_lastmod_required_and_w3c(self):
-        for lm in ("", "<lastmod>12/11/2026</lastmod>", "<lastmod>2026-11-12</lastmod>"):
+        for lm in ("", "<lastmod>12/11/2026</lastmod>", "<lastmod>2026-11-12</lastmod>",
+                   "<lastmod>2026-13-40T25:61:61+99:99</lastmod>", "<lastmod>2026-02-30T10:00:00Z</lastmod>"):
             with self.subTest(lm=lm):
                 self.w("sitemap-site.xml", SITEMAP.format(
                     f"<url><loc>https://guifav.dev/</loc>{lm}</url>"

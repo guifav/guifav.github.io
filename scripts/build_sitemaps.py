@@ -3,8 +3,9 @@
 - /sitemap-site.xml: as páginas do site fora do blog que devem ser indexadas, com o lastmod do último
   commit que mexeu no arquivo. Entra a página que não é a 404, não está bloqueada no robots.txt, não tem
   noindex e cujo canonical (quando existe) aponta para ela mesma.
-- /sitemap.xml: índice com o /sitemap-site.xml e o /blog/sitemap.xml (gerado pelo Astro), cada um com o
-  lastmod mais recente que contém. É o único endereço enviado ao Search Console e ao Bing.
+- /sitemap.xml: índice com o /sitemap-site.xml e o /blog/sitemap.xml (gerado pelo Astro). É o único endereço
+  enviado ao Search Console e ao Bing. Sem lastmod: no índice ele seria a data do arquivo do sitemap, e o maior
+  lastmod das páginas não muda quando uma página sai ou a regra de seleção muda.
 
 Rodar depois do scripts/assemble_site.py, num clone com histórico completo (fetch-depth: 0):
     python3 scripts/build_sitemaps.py [--repo .] [--site _site]
@@ -15,7 +16,6 @@ import argparse
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
-from datetime import datetime
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -135,14 +135,6 @@ def git_lastmod(repo: Path, rel: str) -> str:
     return d
 
 
-def _when(s: str) -> datetime:
-    return datetime.fromisoformat(s.replace("Z", "+00:00"))
-
-
-def newest(dates: list[str]) -> str | None:
-    return max(dates, key=_when) if dates else None
-
-
 def _esc(s: str) -> str:
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
@@ -152,9 +144,8 @@ def urlset(entries: list[tuple[str, str]]) -> str:
     return f'<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="{NS}">\n{body}\n</urlset>\n'
 
 
-def sitemapindex(entries: list[tuple[str, str | None]]) -> str:
-    body = "\n".join(f"  <sitemap><loc>{_esc(loc)}</loc>{f'<lastmod>{lm}</lastmod>' if lm else ''}</sitemap>"
-                     for loc, lm in entries)
+def sitemapindex(locs: list[str]) -> str:
+    body = "\n".join(f"  <sitemap><loc>{_esc(loc)}</loc></sitemap>" for loc in locs)
     return f'<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="{NS}">\n{body}\n</sitemapindex>\n'
 
 
@@ -173,12 +164,9 @@ def build(repo: Path, site: Path) -> tuple[int, int]:
     if blog.tag != f"{{{NS}}}urlset":
         raise SitemapError(f"{BLOG_SITEMAP} não é um urlset")
     blog_locs = list(blog.iter(f"{{{NS}}}loc"))
-    blog_dates = [(e.text or "").strip() for e in blog.iter(f"{{{NS}}}lastmod") if (e.text or "").strip()]
     (site / SITE_SITEMAP).write_text(urlset(pages), encoding="utf-8")
-    (site / INDEX).write_text(sitemapindex([
-        (f"{SITE_ORIGIN}/{SITE_SITEMAP}", newest([lm for _, lm in pages])),
-        (f"{SITE_ORIGIN}/{BLOG_SITEMAP}", newest(blog_dates)),
-    ]), encoding="utf-8")
+    (site / INDEX).write_text(sitemapindex([f"{SITE_ORIGIN}/{SITE_SITEMAP}", f"{SITE_ORIGIN}/{BLOG_SITEMAP}"]),
+                              encoding="utf-8")
     return len(pages), len(blog_locs)
 
 
