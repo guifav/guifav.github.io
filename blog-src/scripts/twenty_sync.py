@@ -127,11 +127,17 @@ def list_people(c: Clients) -> list[dict]:
     for _ in range(MAX_PAGES):
         q = f"?limit={PAGE}" + (f"&starting_after={urllib.parse.quote(cursor)}" if cursor else "")
         data = c.twenty("GET", f"/rest/people{q}", op="listar pessoas")
-        out += (data.get("data") or {}).get("people") or []
-        info = data.get("pageInfo") or {}
-        nxt = info.get("endCursor") or ""
-        if not info.get("hasNextPage") or not nxt or nxt == cursor:
+        # Só um término explícito vale: listagem incompleta tratada como fim faria criar de novo quem já está no CRM.
+        page = (data.get("data") or {}).get("people")
+        info = data.get("pageInfo")
+        if not isinstance(page, list) or not isinstance(info, dict) or not isinstance(info.get("hasNextPage"), bool):
+            raise SyncError("listagem de pessoas inválida")
+        out += page
+        if not info["hasNextPage"]:
             return out
+        nxt = info.get("endCursor") or ""
+        if not nxt or nxt == cursor:
+            raise SyncError("paginação de pessoas sem progresso")
         cursor = nxt
     raise SyncError("paginação sem fim em pessoas")
 

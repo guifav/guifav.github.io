@@ -18,7 +18,7 @@ ENV = {"CLOUDFLARE_API_TOKEN": "cf", "CLOUDFLARE_ACCOUNT_ID": "acc", "D1_DATABAS
 class Fake:
     """D1 pela API da Cloudflare e Twenty local (metadados GraphQL e REST de pessoas), em memória."""
 
-    def __init__(self, rows=None, people=None, fields=(), meta=None, fail=None):
+    def __init__(self, rows=None, people=None, fields=(), meta=None, fail=None, listing=None, rate429=0):
         self.rows = rows or []
         self.meta = meta or {"last_sync_at": "2026-11-12T11:17:00Z", "last_sync_error": ""}
         self.people = {p["id"]: p for p in (people or [])}
@@ -27,6 +27,8 @@ class Fake:
         self.urls = []
         self.fail = fail  # (method, prefixo do caminho, status)
         self.created = 0
+        self.listing = listing  # substitui a resposta da listagem de pessoas: f(query) -> (status, corpo)
+        self.rate429 = rate429
 
     def __call__(self, method, url, headers, body):
         data = json.loads(body) if body else None
@@ -40,6 +42,9 @@ class Fake:
             res = self.rows if "FROM subscribers" in data["sql"] else [{"k": k, "v": v} for k, v in self.meta.items()]
             return 200, {"success": True, "result": [{"results": res}]}
         assert headers["Authorization"] == "Bearer tw" and u.netloc == "127.0.0.1:3100"
+        if self.rate429 > 0:
+            self.rate429 -= 1
+            return 429, {"messages": ["Too Many Requests"]}
         if u.path == "/metadata":
             if "createOneField" in data["query"]:
                 f = data["variables"]["input"]["field"]
@@ -50,6 +55,8 @@ class Fake:
                                                         {"node": {"id": "obj-person", "nameSingular": "person", "fields": {"edges": fields}}}]}}}
         if u.path == "/rest/people" and method == "GET":
             q = dict(urllib.parse.parse_qsl(u.query))
+            if self.listing:
+                return self.listing(q)
             items = sorted(self.people.values(), key=lambda p: p["id"])
             if "starting_after" in q:
                 items = [p for p in items if p["id"] > q["starting_after"]]
@@ -139,6 +146,35 @@ class SyncTest(unittest.TestCase):
         lists = [x for x in f.urls if urllib.parse.urlparse(x).path == "/rest/people"]
         self.assertTrue(lists and all(dict(urllib.parse.parse_qsl(urllib.parse.urlparse(x).query))["limit"] == "200" for x in lists))
         self.assertEqual(len([1 for m, p, _ in f.calls if m == "GET" and p == "/rest/people"]), 3)
+
+    def test_incomplete_or_malformed_people_listing_is_an_error_and_creates_nobody(self):
+        # Uma listagem incompleta tratada como fim faria criar de novo quem já está no CRM (duplicatas).
+        existing = person("p1", "ana@x.com")
+        page1 = {"data": {"people": [existing]}, "pageInfo": {"hasNextPage": True, "endCursor": "p1"}}
+        cases = {
+            "sem data.people": lambda q: (200, {"data": {}, "pageInfo": {"hasNextPage": False, "endCursor": None}}),
+            "people não é lista": lambda q: (200, {"data": {"people": {}}, "pageInfo": {"hasNextPage": False, "endCursor": None}}),
+            "sem pageInfo": lambda q: (200, {"data": {"people": [existing]}}),
+            "hasNextPage não booleano": lambda q: (200, {"data": {"people": [existing]}, "pageInfo": {"hasNextPage": "false", "endCursor": "p1"}}),
+            "cursor repetido": lambda q: (200, page1),
+            "hasNextPage sem cursor": lambda q: (200, {"data": {"people": []}, "pageInfo": {"hasNextPage": True, "endCursor": None}}),
+        }
+        for why, listing in cases.items():
+            f = Fake(rows=[sub("ana@x.com"), sub("bia@x.com")], people=[existing], fields=T.FIELDS, listing=listing)
+            with self.assertRaises(T.SyncError, msg=why):
+                run(f, apply=True)
+            self.assertEqual([w for w in f.writes() if w[0] in ("POST", "PATCH")], [], why)
+
+    def test_429_has_limited_retries(self):
+        f = Fake(rows=[sub("ana@x.com")], fields=T.FIELDS, rate429=2)
+        sleeps = []
+        counts = T.run(T.Clients(ENV, f, sleep=sleeps.append), apply=True, out=io.StringIO())
+        self.assertEqual(counts["criar"], 1)
+        self.assertEqual(sleeps, [2, 2])
+        g = Fake(rows=[sub("ana@x.com")], fields=T.FIELDS, rate429=1000)
+        with self.assertRaisesRegex(T.SyncError, "429 persistente"):
+            T.run(T.Clients(ENV, g, sleep=lambda s: None), apply=True, out=io.StringIO())
+        self.assertEqual(len(g.calls), 5)
 
     def test_unsubscribed_status_updates_and_nobody_is_deleted(self):
         f = Fake(rows=[sub("a@x.com", 1)], people=[person("p1", "a@x.com", iaAplicadaStatus="INSCRITO", iaAplicadaOrigem="SUBSTACK",
