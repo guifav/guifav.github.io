@@ -228,6 +228,24 @@ class SyncTest(unittest.TestCase):
         self.assertEqual([m for m, p, _ in g.calls if m == "PATCH"], ["PATCH"])
         self.assertEqual(run(g, apply=True)[0]["sem_mudanca"], 1)
 
+    def test_conflicting_email_protects_the_whole_person(self):
+        # A repetido e divergente na cópia, B coerente: a Pessoa (A e B) continua intacta, e nada é criado para A.
+        for initial in ("INSCRITO", "DESCADASTRADO"):
+            p = person("p1", "a@x.com", extra=["b@x.com"], iaAplicadaStatus=initial)
+            f = Fake(rows=[sub("a@x.com", 0), sub("A@x.com", 1), sub("b@x.com", 0 if initial == "DESCADASTRADO" else 1)],
+                     people=[p], fields=T.FIELDS)
+            counts, _ = run(f, apply=True)
+            self.assertEqual([w for w in f.writes() if w[0] in ("PATCH", "POST")], [], initial)
+            self.assertEqual(f.people["p1"]["iaAplicadaStatus"], initial)
+            self.assertEqual((counts["conflito_email_repetido_na_copia"], counts["conflito_pessoa_com_emails_divergentes"]), (1, 1))
+
+    def test_shared_email_count_includes_conflicting_emails(self):
+        f = Fake(rows=[sub("a@x.com", 0), sub("A@x.com", 1)], people=[person("p1", "a@x.com"), person("p2", "z@x.com", extra=["a@x.com"])],
+                 fields=T.FIELDS)
+        counts, _ = run(f, apply=True)
+        self.assertEqual(counts["email_em_mais_de_uma_pessoa"], 1)
+        self.assertEqual([w for w in f.writes() if w[0] in ("PATCH", "POST")], [])
+
     def test_repeated_email_in_the_copy_creates_one_person(self):
         f = Fake(rows=[sub("a@x.com"), sub("A@x.com"), sub("a@x.com")], fields=T.FIELDS)
         counts, _ = run(f, apply=True)

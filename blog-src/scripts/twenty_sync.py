@@ -203,11 +203,13 @@ def run(c: Clients, *, apply: bool = False, out=None) -> Counter:
     matched: set[str] = set()
     updates: list[tuple[str, dict]] = []
     for p in people:
-        wants = [by_sub[e] for e in _emails(p) if e in by_sub]
-        matched.update(e for e in _emails(p) if e in by_sub)
-        if not wants:
+        source = [e for e in _emails(p) if e in by_sub or e in conflicted]
+        matched.update(source)  # inclui os emails em conflito: nunca viram Pessoa nova
+        if not source:
             continue
-        if any(w != wants[0] for w in wants):
+        wants = [by_sub[e] for e in source if e in by_sub]
+        # Qualquer email da Pessoa em conflito na cópia, ou estados diferentes entre os emails dela: fica como está.
+        if any(e in conflicted for e in source) or any(w != wants[0] for w in wants):
             counts["conflito_pessoa_com_emails_divergentes"] += 1
             continue
         if _same(p, wants[0]):
@@ -217,7 +219,8 @@ def run(c: Clients, *, apply: bool = False, out=None) -> Counter:
     counts["conflito_pessoa_com_emails_divergentes"] += 0  # sempre visível na saída
     creates = [(e, w) for e, w in by_sub.items() if e not in matched]
     counts["atualizar"], counts["criar"] = len(updates), len(creates)
-    counts["email_em_mais_de_uma_pessoa"] = sum(1 for e in matched if sum(e in _emails(p) for p in people) > 1)
+    source_emails = set(by_sub) | conflicted
+    counts["email_em_mais_de_uma_pessoa"] = sum(1 for e in source_emails if sum(e in _emails(p) for p in people) > 1)
 
     # 3) Escritas, só com --apply: campos, Pessoas existentes (só os três campos) e Pessoas novas (só email e campos).
     if apply:
