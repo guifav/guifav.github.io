@@ -703,9 +703,11 @@ test('G5: sincronizações sobrepostas: a mais antiga não grava por cima da mai
   // a nova roda inteira antes do 1º lote de gravação da antiga, ou antes da publicação dela (troca final)
   for (const at of ['primeiro lote', 'publicação']) {
     const s = setup({ contacts: [contact('a', 'ana@x.com')] });
-    const newer = setup({ contacts: [contact('b', 'bia@x.com')] }); // no meio, "a" foi apagado e "b" criado
+    // no meio, "a" foi apagado e "b" criado; latência diferente para as durações das duas execuções diferirem
+    const newer = setup({ contacts: [contact('b', 'bia@x.com')], latencyMs: 300 });
     let olderBatches = 0;
     let nested = false;
+    let newerMs = '';
     const db = d1(undefined, undefined, async () => {
       if (nested) return;
       olderBatches++;
@@ -713,6 +715,7 @@ test('G5: sincronizações sobrepostas: a mais antiga não grava por cima da mai
       nested = true;
       newer.env.DB = db;
       assert.equal(await syncSegment(newer.env, newer.deps), 1);
+      newerMs = (db.raw.prepare("SELECT v FROM meta WHERE k = 'last_sync_ms'").get() as { v: string }).v;
       nested = false;
       olderBatches = 99;
     });
@@ -723,6 +726,19 @@ test('G5: sincronizações sobrepostas: a mais antiga não grava por cima da mai
     assert.deepEqual(db.raw.prepare('SELECT id FROM subscribers ORDER BY id').all().map((r) => plain(r).id), ['b'], at);
     assert.equal((db.raw.prepare("SELECT v FROM meta WHERE k = 'last_sync_count'").get() as { v: string }).v, '1', at);
     assert.equal((db.raw.prepare("SELECT v FROM meta WHERE k = 'last_sync_error'").get() as { v: string }).v, '', at);
+    // a duração publicada é a da execução dona (a mais nova), não a da antiga
+    const olderMs = String(s.clock.t - NOW);
+    assert.notEqual(newerMs, olderMs, at);
+    assert.equal((db.raw.prepare("SELECT v FROM meta WHERE k = 'last_sync_ms'").get() as { v: string }).v, newerMs, at);
+  }
+});
+
+test('G5: espera de espaçamento que atravessa o prazo não inicia a chamada', async () => {
+  for (const left of [1, 100, 249]) {
+    const s = setup({ contacts: [contact('a', 'ana@x.com')] });
+    const budget = { start: s.clock.t - (DEADLINE_MS - left), calls: 0, lastStart: s.clock.t };
+    await assert.rejects(resend(s.env, s.deps, 'GET', '/contacts?limit=100', undefined, budget), /orçamento/, String(left));
+    assert.equal(s.calls.filter((c) => c.url.startsWith('https://api.resend.com')).length, 0, String(left));
   }
 });
 
