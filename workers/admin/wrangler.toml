@@ -16,6 +16,8 @@ crons = ["17 * * * *"]
 [vars]
 # Segmento "IA Aplicada" do Resend (o mesmo do Worker de inscrição).
 SEGMENT_ID = "34c37605-670a-4c09-9dff-5e5a05c9e0fa"
+# Tópico "IA Aplicada" (o mesmo do Worker de inscrição): o descadastro do painel vale só para ele.
+TOPIC_ID = "77f2a0b8-16aa-4ac6-9840-c352559edb51"
 ACCESS_TEAM_DOMAIN = "guifav.cloudflareaccess.com"
 # Tag de audiência da aplicação do Access "Painel de assinantes (guifav.dev/admin)", criada em 2026-11-11.
 ACCESS_AUD = "06d4b5bb6516b079eb6773cdc190fa6a7ec0946e2fa2bf08310a93b8e04923c3"

@@ -20,6 +20,7 @@ const tomlVar = (k: string) => {
 const TEAM = tomlVar('ACCESS_TEAM_DOMAIN');
 const AUD = tomlVar('ACCESS_AUD');
 const SEG = tomlVar('SEGMENT_ID');
+const TOPIC = tomlVar('TOPIC_ID');
 const GUI = 'gui@exemplo.com';
 
 // ------------------------------------------------------------------ D1 falso (SQLite real)
@@ -78,13 +79,15 @@ async function jwt(claims: Record<string, unknown> = {}, opts: { kid?: string; k
 }
 
 // ------------------------------------------------------------------ Resend falso
-type FakeContact = { id: string; email: string; unsubscribed: boolean; created_at: string; segments: string[]; properties: Record<string, string> };
+type FakeContact = { id: string; email: string; unsubscribed: boolean; created_at: string; segments: string[]; properties: Record<string, string>;
+  topic?: 'opt_in' | 'opt_out' };
 type Call = { method: string; url: string; body: unknown; t: number };
 
 function setup(opts: { contacts?: FakeContact[]; props?: string[]; patchStatus?: number; rereadKeepsSubscribed?: boolean;
   certs?: () => unknown; failGetAfter?: number; rate429?: number; retryAfter?: string; latencyMs?: number;
   reread?: (c: Record<string, unknown>) => Record<string, unknown>; list?: (u: URL) => Response | null;
-  afterContactGet?: (id: string) => Promise<void>; clock?: { t: number }; latencyFor?: (url: string) => number } = {}) {
+  afterContactGet?: (id: string) => Promise<void>; clock?: { t: number }; latencyFor?: (url: string) => number;
+  topics?: (c: FakeContact) => Response | null; topicPatchStatus?: number } = {}) {
   const calls: Call[] = [];
   const sleeps: number[] = [];
   const clock = opts.clock ?? { t: NOW }; // relógio virtual: avança com as esperas e com a latência simulada
@@ -125,6 +128,27 @@ function setup(opts: { contacts?: FakeContact[]; props?: string[]; patchStatus?:
       return Response.json({ object: 'list', has_more: items.length > n,
         data: items.slice(0, n).map((c) => ({ id: c.id, email: c.email, created_at: c.created_at, unsubscribed: c.unsubscribed })) });
     }
+    const tm = u.pathname.match(/^\/contacts\/([^/]+)\/topics$/);
+    if (tm && method === 'GET') {
+      const c = contacts.get(decodeURIComponent(tm[1]));
+      if (!c) return Response.json({ message: 'not found' }, { status: 404 });
+      const forced = opts.topics?.(c);
+      if (forced) return forced;
+      // Formato real (2026-11-12): o tópico aparece mesmo sem estado explícito, com o padrão opt_in.
+      const sub = opts.rereadKeepsSubscribed ? 'opt_in' : c.topic ?? 'opt_in';
+      const res = Response.json({ object: 'list', has_more: false, data: [
+        { id: TOPIC, name: 'IA Aplicada', description: 'x', subscription: sub, created_at: '2026-11-12 12:05:07+00' }] });
+      // Gancho depois da ÚLTIMA leitura do contato no cron (contato, depois tópicos): a corrida com o painel cai aqui.
+      if (opts.afterContactGet) await opts.afterContactGet(c.id);
+      return res;
+    }
+    if (tm && method === 'PATCH') {
+      if (!Array.isArray(body)) return Response.json({ name: 'validation_error' }, { status: 422 }); // contrato real: array puro
+      if (opts.topicPatchStatus) return Response.json({ message: 'falha com segredo@x.com' }, { status: opts.topicPatchStatus });
+      const c = contacts.get(decodeURIComponent(tm[1]))!;
+      for (const t of body) if (t.id === TOPIC) c.topic = t.subscription;
+      return Response.json({ object: 'contact_topics', id: c.id });
+    }
     const m = u.pathname.match(/^\/contacts\/([^/]+)$/);
     if (m && method === 'GET') {
       gets++;
@@ -134,9 +158,7 @@ function setup(opts: { contacts?: FakeContact[]; props?: string[]; patchStatus?:
       const out: Record<string, unknown> = { object: 'contact', id: c.id, email: c.email, created_at: c.created_at,
         unsubscribed: opts.rereadKeepsSubscribed ? false : c.unsubscribed,
         properties: Object.fromEntries(Object.entries(c.properties).map(([k, v]) => [k, { value: v, type: 'string' }])) };
-      const res = Response.json(opts.reread ? opts.reread(out) : out);
-      if (opts.afterContactGet) await opts.afterContactGet(c.id);
-      return res;
+      return Response.json(opts.reread ? opts.reread(out) : out);
     }
     if (m && method === 'PATCH') {
       if (opts.patchStatus) return Response.json({ message: 'falha com segredo@x.com' }, { status: opts.patchStatus });
@@ -148,7 +170,7 @@ function setup(opts: { contacts?: FakeContact[]; props?: string[]; patchStatus?:
     return Response.json({ message: 'rota inesperada' }, { status: 500 });
   };
   const db = d1();
-  const env: Env = { DB: db, RESEND_API_KEY: 're_test', SEGMENT_ID: SEG, ACCESS_TEAM_DOMAIN: TEAM, ACCESS_AUD: AUD,
+  const env: Env = { DB: db, RESEND_API_KEY: 're_test', SEGMENT_ID: SEG, TOPIC_ID: TOPIC, ACCESS_TEAM_DOMAIN: TEAM, ACCESS_AUD: AUD,
     ALLOWED_EMAILS: ` ${GUI.toUpperCase()} `, SITE_ORIGIN: tomlVar('SITE_ORIGIN') };
   const passed: string[] = [];
   const deps: Deps = { fetch: fetchFn as typeof fetch, now: () => clock.t, sleep: async (ms) => { sleeps.push(ms); clock.t += ms; },
@@ -323,18 +345,26 @@ test('G4: descadastro grava no Resend com auditoria, confere na releitura, atual
   const r = await post(s, { id: 'a', confirmar: 'sim' });
   assert.equal(r.status, 303);
   assert.equal(r.headers.get('location'), '/admin?msg=descadastrado');
-  const patch = s.calls.find((c) => c.method === 'PATCH');
-  assert.equal(patch?.url, 'https://api.resend.com/contacts/a');
-  assert.deepEqual(patch?.body, { unsubscribed: true, properties: { [AUDIT_PROPERTY]: new Date(NOW).toISOString() } });
-  assert.ok(s.calls.indexOf(patch!) < s.calls.findLastIndex((c) => c.method === 'GET' && c.url.endsWith('/contacts/a')));
+  const patches = s.calls.filter((c) => c.method === 'PATCH');
+  // Auditoria primeiro, depois a saída só do tópico da newsletter; o status global da conta não é tocado.
+  assert.deepEqual(patches.map((c) => c.url), ['https://api.resend.com/contacts/a', 'https://api.resend.com/contacts/a/topics']);
+  assert.deepEqual(patches[0].body, { properties: { [AUDIT_PROPERTY]: new Date(NOW).toISOString() } });
+  assert.deepEqual(patches[1].body, [{ id: TOPIC, subscription: 'opt_out' }]);
+  const lastPatch = s.calls.indexOf(patches[1]);
+  assert.ok(lastPatch < s.calls.findLastIndex((c) => c.method === 'GET' && c.url.includes('/contacts/a/topics')));
+  assert.ok(lastPatch < s.calls.findLastIndex((c) => c.method === 'GET' && c.url.endsWith('/contacts/a')));
   assert.deepEqual(plain(s.db.raw.prepare('SELECT unsubscribed, admin_unsubscribed_at FROM subscribers').get()),
     { unsubscribed: 1, admin_unsubscribed_at: new Date(NOW).toISOString() });
-  assert.equal(s.contacts.get('a')!.unsubscribed, true);
+  assert.equal(s.contacts.get('a')!.unsubscribed, false); // continua recebendo os outros envios da conta
+  assert.equal(s.contacts.get('a')!.topic, 'opt_out');
 });
 
 test('G4: falha no Resend ou releitura sem o descadastro: 502, D1 intocado e sem texto da API na página', async () => {
   const variants: Parameters<typeof setup>[0][] = [
     { patchStatus: 500 }, { patchStatus: 422 }, { patchStatus: 401 }, { patchStatus: 403 }, { rereadKeepsSubscribed: true },
+    { topicPatchStatus: 500 }, { topicPatchStatus: 422 }, // saída do tópico falha
+    { topics: () => Response.json({ object: 'list', has_more: false, data: [] }) }, // releitura sem o tópico
+    { topics: () => Response.json({ name: 'internal_server_error' }, { status: 500 }) }, // releitura do tópico falha
     { reread: (c) => ({ ...c, properties: {} }) }, // releitura sem a auditoria
     { reread: (c) => ({ ...c, properties: { [AUDIT_PROPERTY]: { value: '2020-01-01T00:00:00.000Z', type: 'string' } } }) }, // outra auditoria
     { reread: (c) => ({ ...c, id: 'outro' }) }, // outro contato
@@ -356,7 +386,7 @@ test('G4: descadastro mexe só no contato escolhido, no Resend e no D1', async (
   assert.equal((await post(s, { id: 'b', confirmar: 'sim' })).status, 303);
   assert.deepEqual(s.db.raw.prepare('SELECT id, unsubscribed FROM subscribers ORDER BY id').all().map(plain), [{ id: 'a', unsubscribed: 0 }, { id: 'b', unsubscribed: 1 }]);
   assert.equal(s.contacts.get('a')!.unsubscribed, false);
-  assert.deepEqual(s.calls.filter((c) => c.method === 'PATCH').map((c) => c.url), ['https://api.resend.com/contacts/b']);
+  assert.deepEqual(s.calls.filter((c) => c.method === 'PATCH').map((c) => c.url), ['https://api.resend.com/contacts/b', 'https://api.resend.com/contacts/b/topics']);
 });
 
 test('G4: falha do D1 vira 502 com cabeçalhos de segurança: antes do Resend, nada é gravado; depois, a página diz que o Resend já descadastrou', async () => {
@@ -377,7 +407,7 @@ test('G4: falha do D1 vira 502 com cabeçalhos de segurança: antes do Resend, n
   const body = await r2.text();
   assert.match(body, /Descadastrado no Resend, mas a cópia do painel não foi atualizada/);
   assert.ok(!body.includes('ana@x.com') && !body.includes('indisponível'));
-  assert.equal(after.contacts.get('a')!.unsubscribed, true);
+  assert.equal(after.contacts.get('a')!.topic, 'opt_out');
 });
 
 test('G2: conteúdo hostil gravado na cópia sai escapado na página e com aspas no CSV', async () => {
@@ -580,7 +610,7 @@ test('G5: descadastro feito pelo painel durante o cron não é desfeito; reinscr
   await syncSegment(s.env, s.deps);
   assert.deepEqual(row(), { unsubscribed: 1, admin_unsubscribed_at: audit });
   // Reinscrição feita direto no Resend (mesma auditoria): vale o Resend.
-  s.contacts.get('a')!.unsubscribed = false;
+  s.contacts.get('a')!.topic = 'opt_in'; // reinscrição: volta ao tópico
   await syncSegment(s.env, s.deps);
   assert.deepEqual(row(), { unsubscribed: 0, admin_unsubscribed_at: audit });
 });
@@ -639,7 +669,7 @@ test('G5: a proteção da corrida não depende de relógio: painel adiantado ou 
     // a revisão é monotônica: o cron não a reescreve
     assert.equal((s.db.raw.prepare("SELECT rev FROM subscribers WHERE id = 'a'").get() as { rev: number }).rev, 1);
     // depois: reinscrição pelo site (Resend inscrito, auditoria do painel ainda lá) -> o próximo cron segue o Resend
-    s.contacts.get('a')!.unsubscribed = false;
+    s.contacts.get('a')!.topic = 'opt_in'; // reinscrição: volta ao tópico
     clock.t += 3600e3;
     await syncSegment(racing.env, racing.deps);
     assert.equal(st(), 0, `reinscrição, skew ${skew}`);
@@ -684,6 +714,8 @@ test('G5: o prazo também vale durante as gravações no D1: nada é publicado d
     assert.ok(db.raw.prepare("SELECT id FROM subscribers WHERE id = 'velho'").get(), String(slow));
     assert.match((db.raw.prepare("SELECT v FROM meta WHERE k = 'last_sync_error'").get() as { v: string }).v, /orçamento/);
     assert.equal(db.raw.prepare("SELECT v FROM meta WHERE k = 'last_sync_count'").get(), undefined, String(slow));
+    // com o 1º lote lento, o 2º nem começa: só o velho e os 50 do 1º lote
+    if (slow === 1) assert.equal((db.raw.prepare('SELECT count(*) AS n FROM subscribers').get() as { n: number }).n, 51);
   }
 });
 
@@ -723,4 +755,45 @@ test('G5: a consulta ao dono também conta no prazo: lenta, ela impede a publica
   await assert.rejects(syncSegment(s.env, s.deps), /orçamento da execução esgotado/);
   assert.ok(db.raw.prepare("SELECT id FROM subscribers WHERE id = 'velho'").get());
   assert.equal(db.raw.prepare("SELECT v FROM meta WHERE k = 'last_sync_count'").get(), undefined);
+});
+
+test('T2: na cópia, descadastrado é quem saiu do tópico da newsletter ou da conta inteira', async () => {
+  const s = setup({ contacts: [
+    contact('a', 'ana@x.com'), // inscrita
+    contact('b', 'bia@x.com', {}, { topic: 'opt_out' }), // saiu só da newsletter
+    contact('c', 'caio@x.com', {}, { unsubscribed: true }), // saiu da conta inteira
+  ] });
+  assert.equal(await syncSegment(s.env, s.deps), 3);
+  assert.deepEqual(s.db.raw.prepare('SELECT id, unsubscribed FROM subscribers ORDER BY id').all().map(plain),
+    [{ id: 'a', unsubscribed: 0 }, { id: 'b', unsubscribed: 1 }, { id: 'c', unsubscribed: 1 }]);
+  const topicReads = s.calls.filter((c) => c.method === 'GET' && /\/contacts\/[^/]+\/topics/.test(c.url));
+  assert.equal(topicReads.length, 3);
+  assert.ok(topicReads.every((c) => new URL(c.url).searchParams.get('limit') === '100'));
+});
+
+test('T2: resposta de tópicos inválida, sem o tópico ou com erro: a cópia não é publicada', async () => {
+  const cases: [string, () => Response, RegExp][] = [
+    ['sem o tópico', () => Response.json({ object: 'list', has_more: false, data: [{ id: 'outro', subscription: 'opt_out' }] }), /tópico da newsletter ausente/],
+    ['data não é lista', () => Response.json({ object: 'list', has_more: false, data: {} }), /formato inválido/],
+    ['subscription desconhecida', () => Response.json({ object: 'list', has_more: false, data: [{ id: TOPIC, subscription: 'talvez' }] }), /tópico da newsletter ausente/],
+    ['erro 500', () => Response.json({ name: 'x' }, { status: 500 }), /Resend 500 em GET contacts/],
+  ];
+  for (const [why, topics, msg] of cases) {
+    const s = setup({ contacts: [contact('a', 'ana@x.com')], topics });
+    seed(s.db, [{ id: 'velho', email: 'velho@x.com' }]);
+    await assert.rejects(syncSegment(s.env, s.deps), undefined, why);
+    assert.deepEqual(s.db.raw.prepare('SELECT id FROM subscribers').all().map((r) => plain(r).id), ['velho'], why);
+    assert.match((s.db.raw.prepare("SELECT v FROM meta WHERE k = 'last_sync_error'").get() as { v: string }).v, msg, why);
+  }
+});
+
+test('T2: sem TOPIC_ID o painel não descadastra nem copia, e o wrangler.toml traz o tópico real', async () => {
+  const s = setup({ contacts: [contact('a', 'ana@x.com')] });
+  seed(s.db, [{ id: 'a', email: 'ana@x.com' }]);
+  s.env.TOPIC_ID = '';
+  const r = await post(s, { id: 'a', confirmar: 'sim' });
+  assert.equal(r.status, 500);
+  await assert.rejects(syncSegment(s.env, s.deps), /TOPIC_ID/);
+  assert.equal(s.calls.filter((c) => c.url.startsWith('https://api.resend.com')).length, 0);
+  assert.equal(TOPIC, '77f2a0b8-16aa-4ac6-9840-c352559edb51');
 });
