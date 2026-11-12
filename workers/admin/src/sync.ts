@@ -47,7 +47,7 @@ export function prop(c: { properties?: Record<string, unknown> }, key: string): 
   return v === null || v === undefined ? '' : String(v);
 }
 
-export function rowFrom(c: Contact, run: string, readAt = '') {
+export function rowFrom(c: Contact, run: string) {
   const source = prop(c, 'source');
   const site = prop(c, 'site_confirmed_at');
   const origin = source === 'substack' ? 'substack' : site ? 'site' : 'outra';
@@ -56,7 +56,7 @@ export function rowFrom(c: Contact, run: string, readAt = '') {
   return {
     id: c.id, email: String(c.email).toLowerCase(), unsubscribed: c.unsubscribed ? 1 : 0, origin, joined_at: joined,
     paid_until: prop(c, 'substack_paid_until'), site_confirmed_at: site, admin_unsubscribed_at: prop(c, AUDIT_PROPERTY),
-    created_at: created, run, read_at: readAt,
+    created_at: created, run,
   };
 }
 
@@ -127,47 +127,61 @@ export async function ensureAuditProperty(env: SyncEnv, deps: SyncDeps, budget: 
 
 export async function syncSegment(env: SyncEnv, deps: SyncDeps): Promise<number> {
   const run = new Date(deps.now()).toISOString();
+  // Identidade desta execução. Quem começa por último é o dono: toda escrita é condicionada a isso, e uma execução
+  // antiga que termine depois de uma nova não grava nada por cima dela.
+  const runId = `${run}#${crypto.randomUUID().slice(0, 8)}`;
   const budget: Budget = { start: deps.now(), calls: 0 };
   try {
+    await setMeta(env.DB, 'sync_owner', runId).run();
     await ensureAuditProperty(env, deps, budget);
     const listed = await paged(env, deps, budget, 'contacts', env.SEGMENT_ID);
+    // Revisões locais ANTES de qualquer GET: um descadastro gravado pelo painel depois disso muda a revisão, e esse
+    // status vence a leitura deste ciclo. Ordem por contador no D1, sem comparar relógios de isolates.
+    const revs = new Map(((await env.DB.prepare('SELECT id, rev FROM subscribers').all<{ id: string; rev: number }>()).results ?? [])
+      .map((r) => [r.id, Number(r.rev)]));
     const rows = [];
     for (const c of listed) {
       if (typeof c.id !== 'string' || !c.id) throw new SyncError('contato sem id na listagem');
-      const readAt = new Date(deps.now()).toISOString(); // antes do GET: base da proteção contra a corrida com o painel
       const full = (await resend(env, deps, 'GET', `/contacts/${encodeURIComponent(c.id)}`, undefined, budget)) as Contact;
-      rows.push(rowFrom({ ...full, id: c.id }, run, readAt));
+      rows.push({ ...rowFrom({ ...full, id: c.id }, runId), rev: revs.get(c.id) ?? 0 });
     }
-    checkDeadline(deps, budget); // a última chamada pode ter terminado depois do prazo: não grava
+    const owned = "EXISTS (SELECT 1 FROM meta WHERE k = 'sync_owner' AND v = ?)";
     const up = env.DB.prepare(
-      `INSERT INTO subscribers (id, email, unsubscribed, origin, joined_at, paid_until, site_confirmed_at, admin_unsubscribed_at, created_at, run, read_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO subscribers (id, email, unsubscribed, origin, joined_at, paid_until, site_confirmed_at, admin_unsubscribed_at, created_at, run, rev)
+       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE ${owned}
        ON CONFLICT(id) DO UPDATE SET email=excluded.email, origin=excluded.origin,
          joined_at=excluded.joined_at, paid_until=excluded.paid_until, site_confirmed_at=excluded.site_confirmed_at,
-         created_at=excluded.created_at, run=excluded.run, read_at=excluded.read_at,
-         -- Só um descadastro gravado pelo painel a partir do início da leitura deste contato vence a leitura (corrida);
-         -- fora disso vale o Resend, mesmo com a auditoria limpa ou o status mudado lá.
-         unsubscribed = CASE WHEN subscribers.local_changed_at != '' AND subscribers.local_changed_at >= excluded.read_at THEN subscribers.unsubscribed ELSE excluded.unsubscribed END,
-         admin_unsubscribed_at = CASE WHEN subscribers.local_changed_at != '' AND subscribers.local_changed_at >= excluded.read_at THEN subscribers.admin_unsubscribed_at ELSE excluded.admin_unsubscribed_at END`);
+         created_at=excluded.created_at, run=excluded.run,
+         -- Revisão mudou desde antes da leitura: o painel descadastrou no meio, e o status local (já confirmado no
+         -- Resend) vence; fora disso vale o Resend, mesmo com a auditoria limpa ou o status mudado lá.
+         unsubscribed = CASE WHEN subscribers.rev != excluded.rev THEN subscribers.unsubscribed ELSE excluded.unsubscribed END,
+         admin_unsubscribed_at = CASE WHEN subscribers.rev != excluded.rev THEN subscribers.admin_unsubscribed_at ELSE excluded.admin_unsubscribed_at END`);
     for (let i = 0; i < rows.length; i += BATCH) {
+      checkDeadline(deps, budget); // nenhum lote começa depois do prazo
       await env.DB.batch(rows.slice(i, i + BATCH).map((r) => up.bind(r.id, r.email, r.unsubscribed, r.origin, r.joined_at,
-        r.paid_until, r.site_confirmed_at, r.admin_unsubscribed_at, r.created_at, r.run, r.read_at)));
+        r.paid_until, r.site_confirmed_at, r.admin_unsubscribed_at, r.created_at, r.run, r.rev, runId)));
     }
-    // Só depois de gravar tudo: sai quem não está mais no segmento.
+    checkDeadline(deps, budget); // nem a publicação
+    const owner = await env.DB.prepare("SELECT v FROM meta WHERE k = 'sync_owner'").first<{ v: string }>();
+    if (owner?.v !== runId) throw new SyncError('execução substituída por outra mais nova');
+    // Só depois de gravar tudo, na mesma transação dos metadados e ainda condicionado ao dono: sai quem não está mais no segmento.
     await env.DB.batch([
-      env.DB.prepare('DELETE FROM subscribers WHERE run != ?').bind(run),
-      setMeta(env.DB, 'last_sync_at', run),
-      setMeta(env.DB, 'last_sync_count', String(rows.length)),
-      setMeta(env.DB, 'last_sync_error', ''),
+      env.DB.prepare(`DELETE FROM subscribers WHERE run != ? AND ${owned}`).bind(runId, runId),
+      setMeta(env.DB, 'last_sync_at', run, runId),
+      setMeta(env.DB, 'last_sync_count', String(rows.length), runId),
+      setMeta(env.DB, 'last_sync_error', '', runId),
     ]);
     return rows.length;
   } catch (e) {
     const msg = e instanceof SyncError ? e.message : `falha inesperada (${(e as Error)?.name ?? 'erro'})`;
-    await env.DB.batch([setMeta(env.DB, 'last_sync_error', `${run}: ${msg}`)]);
+    // Uma execução substituída não sobrescreve o estado publicado pela mais nova.
+    await env.DB.batch([setMeta(env.DB, 'last_sync_error', `${run}: ${msg}`, runId)]);
     throw e;
   }
 }
 
-export function setMeta(db: D1Like, k: string, v: string): D1Stmt {
-  return db.prepare('INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v=excluded.v').bind(k, v);
+export function setMeta(db: D1Like, k: string, v: string, owner?: string): D1Stmt {
+  if (owner === undefined) return db.prepare('INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v=excluded.v').bind(k, v);
+  return db.prepare(`INSERT INTO meta (k, v) SELECT ?, ? WHERE EXISTS (SELECT 1 FROM meta WHERE k = 'sync_owner' AND v = ?)
+    ON CONFLICT(k) DO UPDATE SET v=excluded.v`).bind(k, v, owner);
 }
