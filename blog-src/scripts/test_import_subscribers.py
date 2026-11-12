@@ -432,7 +432,17 @@ class ImportTest(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn("limite", text)
         self.assertNotIn("segredo", text)
-        self.assertLessEqual(len([1 for m, p, _ in f.calls if m == "POST" and p == "/contacts"]), S.MAX_RETRIES)
+        # exatamente MAX_RETRIES tentativas, cada uma precedida da conferência por email
+        self.assertEqual(len([1 for m, p, _ in f.calls if m == "POST" and p == "/contacts"]), S.MAX_RETRIES)
+        self.assertEqual(len([1 for m, p, _ in f.calls if m == "GET" and p == "/contacts/segredo@x.com"]), S.MAX_RETRIES)
+
+    def test_f2_transient_429_on_create_uses_the_whole_retry_budget(self):
+        # MAX_RETRIES - 1 respostas 429 seguidas de sucesso: a última tentativa disponível cria o contato.
+        f = FakeResend(props=S.PROPERTIES, post_429=S.MAX_RETRIES - 1, retry_after="1")
+        counts, _ = run(f, export([row("a@x.com")]), apply=True)
+        self.assertEqual(counts["criado"], 1)
+        seq = [(m, p) for m, p, _ in f.calls if p in ("/contacts", "/contacts/a@x.com") and m in ("GET", "POST")]
+        self.assertEqual(seq, [("GET", "/contacts/a@x.com"), ("POST", "/contacts")] * S.MAX_RETRIES)
 
     def test_f2_residual_window_is_the_documented_exception(self):
         # Janela residual (entre a conferência e o POST): o upsert volta o global a inscrito, como documentado em F2;
