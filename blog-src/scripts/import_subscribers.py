@@ -6,15 +6,21 @@ Simulação por padrão: lê o export e o Resend e mostra só contagens. Grava a
 - Contato novo: criado no segmento, inscrito, com as propriedades source=substack, substack_joined_at e
   substack_paid_until (vencimento da assinatura paga ativa; vazio para os demais).
 - Contato que já existe: nunca é reinscrito nem sobrescrito. Entra no segmento, se ainda não estiver, e só recebe as
-  propriedades do Substack se não tiver origem registrada nem confirmação pelo site.
+  propriedades do Substack se não tiver origem registrada nem confirmação pelo site. Quem já estava no segmento antes
+  da importação sem origem entrou pelo site (Worker anterior ao site_confirmed_at) e fica intocado: o sync o ignora.
+- --schema: só cria as propriedades. Rodar antes do deploy do Worker que grava site_confirmed_at; a importação vem
+  depois do deploy, para que nenhuma confirmação pelo site fique sem o marcador.
 - --sync (export novo, antes do primeiro envio): quem veio do Substack, está no segmento, não confirmou pelo site
   (site_confirmed_at, gravado pelo Worker) e não está mais no export é descadastrado (unsubscribed=true). Ninguém é
   apagado. Recusa antes de gravar se o export estiver vazio ou se fosse descadastrar mais de 10 pessoas e mais de 10%
-  dos vindos do Substack (export errado ou incompleto).
+  dos vindos do Substack (export errado ou incompleto). Cada descadastro relê o contato antes e depois do PATCH: se a
+  confirmação pelo site chegou no meio, o descadastro é desfeito. Assim nenhuma ordem entre Worker e sync deixa quem
+  confirmou descadastrado.
 - Nada de envio: o cliente recusa qualquer rota fora das de contatos e propriedades.
 - A saída, inclusive a de erro, tem só contagens, operações e códigos HTTP: nunca emails nem texto da API.
 
 Rodar na KVM (a chave fica só no ambiente):
+    RESEND_API_KEY=... NEWSLETTER_SEGMENT_ID=... python3 scripts/import_subscribers.py --schema
     RESEND_API_KEY=... NEWSLETTER_SEGMENT_ID=... python3 scripts/import_subscribers.py <export.csv> [--apply] [--sync]
 """
 from __future__ import annotations
@@ -194,6 +200,11 @@ def _props(s: Subscriber) -> dict:
     return {"source": "substack", "substack_joined_at": s.joined_at, "substack_paid_until": s.paid_until}
 
 
+def _protected(full: dict) -> bool:
+    """O sync só pode descadastrar quem veio do Substack e não confirmou pelo site."""
+    return prop(full, "source") != "substack" or bool(prop(full, "site_confirmed_at"))
+
+
 def _needs_props(full: dict) -> bool:
     return not prop(full, "source") and not prop(full, "site_confirmed_at")
 
@@ -215,7 +226,9 @@ def run(api: Api, export_path: str, segment_id: str, *, out=None, apply: bool = 
     create = [s for s in subs if s.email not in everyone]
     existing = [s for s in subs if s.email in everyone]
     attach = [s for s in existing if s.email not in in_seg]
-    fill = [s for s in existing if _needs_props(read(s.email, everyone[s.email]["id"]))]
+    # Sem origem e já no segmento = opt-in pelo Worker antigo: não recebe source=substack, e o sync o ignora.
+    fill = [s for s in existing if _needs_props(read(s.email, everyone[s.email]["id"])) and s.email not in in_seg]
+    counts["existente_do_site_intocado"] = sum(1 for s in existing if s.email in in_seg and _needs_props(full[s.email]))
     counts["criar"] = len(create)
     counts["adicionar_ao_segmento"] = len(attach)
     counts["completar_propriedades"] = len(fill)
@@ -230,7 +243,7 @@ def run(api: Api, export_path: str, segment_id: str, *, out=None, apply: bool = 
         substack_in_seg = 0
         for email, c in in_seg.items():
             f = read(email, c["id"])
-            if prop(f, "source") != "substack" or prop(f, "site_confirmed_at"):
+            if _protected(f):
                 continue
             substack_in_seg += 1
             if email not in wanted and not f.get("unsubscribed"):
@@ -262,13 +275,26 @@ def run(api: Api, export_path: str, segment_id: str, *, out=None, apply: bool = 
             continue
         counts["criado"] += 1
     for s in fill:
+        fresh = api.request("GET", f"/contacts/{ids[s.email]}", op="reler contato")[1]
+        if not _needs_props(fresh):  # ganhou origem ou confirmação pelo site desde a leitura
+            continue
         api.request("PATCH", f"/contacts/{ids[s.email]}", {"properties": _props(s)}, op="completar propriedades")
         counts["propriedades_completadas"] += 1
     for s in attach:
         api.request("POST", f"/contacts/{ids[s.email]}/segments/{segment_id}", op="incluir no segmento")
         counts["adicionado_ao_segmento"] += 1
     for cid in to_unsub:
+        before = api.request("GET", f"/contacts/{cid}", op="reler contato")[1]
+        if _protected(before) or before.get("unsubscribed"):
+            counts["sync_pulado_na_releitura"] += 1
+            continue
         api.request("PATCH", f"/contacts/{cid}", {"unsubscribed": True}, op="descadastrar")
+        after = api.request("GET", f"/contacts/{cid}", op="reler contato")[1]
+        if _protected(after):
+            # A confirmação pelo site chegou entre a releitura e o PATCH: o opt-in mais recente vence.
+            api.request("PATCH", f"/contacts/{cid}", {"unsubscribed": False}, op="desfazer descadastro")
+            counts["sync_desfeito_por_confirmacao"] += 1
+            continue
         counts["sincronizado_descadastrado"] += 1
     _report(counts, out, "gravado")
     return counts
@@ -282,7 +308,8 @@ def _report(counts: Counter, out, tail: str) -> None:
 
 def main(argv=None, transport=_urllib_transport, sleep=time.sleep) -> int:
     ap = argparse.ArgumentParser(description="Importa assinantes do export do Substack para o Resend (simulação por padrão).")
-    ap.add_argument("export", help="email_list.*.csv do export do Substack (fora do repo)")
+    ap.add_argument("export", nargs="?", help="email_list.*.csv do export do Substack (fora do repo)")
+    ap.add_argument("--schema", action="store_true", help="só cria as propriedades (antes do deploy do Worker)")
     ap.add_argument("--apply", action="store_true", help="grava no Resend")
     ap.add_argument("--sync", action="store_true", help="descadastra quem veio do Substack e saiu do export")
     a = ap.parse_args(argv)
@@ -290,10 +317,24 @@ def main(argv=None, transport=_urllib_transport, sleep=time.sleep) -> int:
     if not key or not seg:
         print("ERRO: faltam RESEND_API_KEY e NEWSLETTER_SEGMENT_ID no ambiente", file=sys.stderr)
         return 2
+    if not a.schema and not a.export:
+        print("ERRO: informe o export ou use --schema", file=sys.stderr)
+        return 2
+    # Mensagens fixas: nenhuma exceção original é impressa, porque caminho, URL e texto podem conter email.
     try:
-        run(Api(key, transport, sleep), a.export, seg, apply=a.apply, sync=a.sync)
+        api = Api(key, transport, sleep)
+        if a.schema:
+            print(f"propriedades_criadas: {ensure_properties(api)}")
+        else:
+            run(api, a.export, seg, apply=a.apply, sync=a.sync)
     except ImportError_ as e:
         print(f"ERRO: {e}", file=sys.stderr)
+        return 1
+    except (OSError, UnicodeError, csv.Error) as e:
+        print(f"ERRO: não foi possível ler o export ou falha de rede ({type(e).__name__})", file=sys.stderr)
+        return 1
+    except Exception as e:  # noqa: BLE001
+        print(f"ERRO: falha inesperada ({type(e).__name__}); nada mais foi gravado", file=sys.stderr)
         return 1
     return 0
 

@@ -29,7 +29,7 @@ O deploy é manual, depois do merge, e não está no CI. O DNS de `guifav.dev` s
 2. **Turnstile:** crie um widget para `guifav.dev`. A chave pública vai para `TURNSTILE_SITE_KEY` em `blog-src/src/consts.ts`; a secreta, para o segredo abaixo.
 3. **Publicação:** `npx wrangler@4 deploy`. A rota `insights.guifav.dev` é um domínio próprio do Worker, e o Cloudflare cria o registro DNS do subdomínio.
 4. **Segredos**, os três de uma vez (`npx wrangler@4 secret bulk`, lendo um JSON pela entrada padrão, sem o valor passar pela tela nem pelo histórico): `RESEND_API_KEY`, `TURNSTILE_SECRET` e `CONFIRM_SECRET` (`openssl rand -base64 48`). Confira com `npx wrangler@4 secret list`.
-5. **Propriedade `site_confirmed_at`** no Resend, antes de publicar uma versão que a grava: o Resend recusa a gravação de propriedade inexistente, e a confirmação viraria 502. O importador cria a propriedade (`import_subscribers.py --apply`).
+5. **Propriedade `site_confirmed_at`** no Resend, antes de publicar uma versão que a grava: o Resend recusa a gravação de propriedade inexistente, e a confirmação viraria 502. Crie com `blog-src/scripts/import_subscribers.py --schema`. A importação dos assinantes do Substack só roda depois deste deploy e do teste real com o marcador gravado: um Worker sem o marcador no ar durante a importação deixaria confirmações sem proteção contra o `--sync`.
 6. **Teste real** com um endereço que se consiga ler: inscrição no site publicado, email recebido de `insights@guifav.dev`, clique no link, contato no segmento. Confirmação repetida não duplica. Depois, o contato de teste sai.
 
 O formulário (`NEWSLETTER_FORM_ENABLED` e a chave pública do Turnstile em `blog-src/src/consts.ts`) foi ligado no PR #34, junto com o primeiro deploy, em 2026-11-11.

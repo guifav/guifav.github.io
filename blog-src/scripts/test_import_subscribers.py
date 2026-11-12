@@ -38,7 +38,7 @@ class FakeResend:
     {"value": ..., "type": "string"}; o email no caminho chega codificado; listas paginam por limit/after."""
 
     def __init__(self, contacts=None, props=(), extra_props=0, limit_429=0, retry_after="0", on_create=None,
-                 fail=None, rate_path=None):
+                 fail=None, rate_path=None, hook=None):
         self.contacts = {}  # email -> dict
         for c in contacts or []:
             self.contacts[c["email"]] = {"id": "c-" + c["email"], "unsubscribed": False, "segments": set(),
@@ -50,6 +50,7 @@ class FakeResend:
         self.on_create = on_create  # corrida: chamado antes de criar (simula inscrição pelo site)
         self.fail = fail  # (method, prefixo do caminho, status, mensagem)
         self.rate_path = rate_path  # prefixo do caminho que responde sempre 429
+        self.hook = hook  # hook(fake, method, path, data): simula o Worker agindo no meio da execução
 
     def _page(self, items, q):
         if "after" in q:
@@ -63,6 +64,8 @@ class FakeResend:
         q = dict(urllib.parse.parse_qsl(raw.split("?", 1)[1])) if "?" in raw else {}
         data = json.loads(body) if body else None
         self.calls.append((method, raw, data))
+        if self.hook:
+            self.hook(self, method, path, data)
         if self.limit_429:
             self.limit_429 -= 1
             return 429, {"message": "rate"}, {"Retry-After": self.retry_after}
@@ -129,7 +132,7 @@ def cli(fake, path, *flags):
     os.environ.update(env)
     try:
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            rc = S.main([path, *flags], transport=fake, sleep=lambda s: None)
+            rc = S.main([x for x in (path, *flags) if x], transport=fake, sleep=lambda s: None)
     finally:
         for k, v in old.items():
             if v is None:
@@ -159,6 +162,24 @@ class ExportTest(unittest.TestCase):
         subs, skipped = S.load_export(export([row(e) for e in bad + good]))
         self.assertEqual(sorted(s.email for s in subs), sorted(good))
         self.assertEqual(skipped, {"invalido": len(bad)})
+
+    def test_length_boundaries(self):
+        def addr(total):  # parte local de 64 e rótulos de 63, completando até o tamanho pedido
+            local, dom = "a" * 64, []
+            rest = total - 65 - 4  # "@" e ".com"
+            while rest > 0:
+                n = min(63, rest - (1 if dom else 0))
+                if dom:
+                    rest -= 1
+                dom.append("b" * n)
+                rest -= n
+            return f"{local}@{'.'.join(dom)}.com"
+        ok, long = addr(254), addr(255)
+        self.assertEqual((len(ok), len(long)), (254, 255))
+        label63, label64 = "a@" + "c" * 63 + ".com", "a@" + "c" * 64 + ".com"
+        subs, skipped = S.load_export(export([row(ok), row(long), row(label63), row(label64)]))
+        self.assertEqual(sorted(x.email for x in subs), sorted([ok, label63]))
+        self.assertEqual(skipped, {"invalido": 2})
 
     def test_duplicate_keeps_the_whole_oldest_record_in_any_order(self):
         old = row("d@x.com", created="2023-01-01T00:00:00", expiry="2026-01-01T00:00:00.000Z", active="true")
@@ -232,11 +253,30 @@ class ImportTest(unittest.TestCase):
         self.assertEqual([d for m, _, d in f.calls if m == "PATCH"], [{"properties": S._props(S.Subscriber(
             "a@x.com", "2025-01-01T00:00:00", ""))}])
 
-    def test_contact_already_in_segment_without_source_gets_properties(self):
-        f = FakeResend(contacts=[{"email": "a@x.com", "segments": {SEG}}], props=S.PROPERTIES)
+    def test_contact_in_segment_without_source_came_from_site_and_is_untouched(self):
+        # Só o Worker põe gente no segmento antes da importação; sem origem = opt-in pelo Worker antigo.
+        f = FakeResend(contacts=[{"email": "a@x.com", "segments": {SEG}}, substack("saiu@x.com")], props=S.PROPERTIES)
         counts, _ = run(f, export([row("a@x.com")]), apply=True)
+        self.assertEqual(f.contacts["a@x.com"]["properties"], {})
+        self.assertEqual((counts["existente_do_site_intocado"], counts["adicionado_ao_segmento"]), (1, 0))
+        counts, _ = run(f, export([row("fica@x.com")]), apply=True, sync=True)
+        self.assertFalse(f.contacts["a@x.com"]["unsubscribed"])
+        self.assertTrue(f.contacts["saiu@x.com"]["unsubscribed"])
+
+    def test_documented_empty_source_counts_as_no_source(self):
+        f = FakeResend(contacts=[{"email": "a@x.com", "properties": {"source": ""}}], props=S.PROPERTIES)
+        run(f, export([row("a@x.com")]), apply=True)
         self.assertEqual(f.contacts["a@x.com"]["properties"]["source"], "substack")
-        self.assertEqual(counts["adicionado_ao_segmento"], 0)
+
+    def test_fill_rereads_and_skips_a_contact_confirmed_meanwhile(self):
+        def confirm(fake, method, path, data):
+            if method == "GET" and path == "/contact-properties":  # depois do planejamento, antes das escritas
+                c = fake.contacts["a@x.com"]
+                c["properties"]["site_confirmed_at"] = "2026-11-12T00:00:00Z"
+        f = FakeResend(contacts=[{"email": "a@x.com"}], props=S.PROPERTIES, hook=confirm)
+        counts, _ = run(f, export([row("a@x.com")]), apply=True)
+        self.assertNotIn("source", f.contacts["a@x.com"]["properties"])
+        self.assertEqual(counts["propriedades_completadas"], 0)
 
     def test_site_confirmed_contact_does_not_get_substack_source(self):
         f = FakeResend(contacts=[{"email": "a@x.com", "properties": {"site_confirmed_at": "2026-11-11T00:00:00Z"}}],
@@ -276,12 +316,33 @@ class ImportTest(unittest.TestCase):
             got = [p for m, p, _ in f.calls if m == "GET" and p.startswith("/contacts/")]
             self.assertEqual(got, ["/contacts/" + urllib.parse.quote(email, safe="@")], email)
 
+    def test_race_409_with_a_contact_without_origin_gets_substack_properties(self):
+        def other(fake, e):
+            fake.contacts.setdefault(e, {"id": "c-x", "email": e, "unsubscribed": False, "segments": set(), "properties": {}})
+        f = FakeResend(props=S.PROPERTIES, on_create=other)
+        run(f, export([row("a@x.com")]), apply=True)
+        self.assertEqual(f.contacts["a@x.com"]["properties"]["source"], "substack")
+        self.assertEqual(f.contacts["a@x.com"]["segments"], {SEG})
+
+    def test_lists_ask_for_pages_of_100(self):
+        f = FakeResend()
+        run(f, export([row("a@x.com")]), apply=True)
+        lists = [p for m, p, _ in f.calls if m == "GET" and "?" in p]
+        self.assertTrue(lists)
+        self.assertTrue(all("limit=100" in p for p in lists), lists)
+
+    def test_retry_after_is_capped_at_60_seconds(self):
+        sleeps = []
+        f = FakeResend(limit_429=1, retry_after="120")
+        run(f, export([row("a@x.com")]), sleeps=sleeps, apply=True)
+        self.assertEqual([x for x in sleeps if x != S.INTERVAL], [60.0])
+
     def test_requests_are_spaced_and_rate_limit_waits_retry_after(self):
         sleeps = []
         f = FakeResend(limit_429=2, retry_after="3")
         counts, _ = run(f, export([row("a@x.com")]), sleeps=sleeps, apply=True)
         self.assertEqual(counts["criado"], 1)
-        self.assertGreaterEqual(S.INTERVAL, 0.1)
+        self.assertEqual(S.INTERVAL, 0.15)  # valor documentado: abaixo de 10 req/s com folga
         self.assertEqual(sleeps.count(S.INTERVAL), len(f.calls))
         self.assertEqual([s for s in sleeps if s != S.INTERVAL], [3.0, 3.0])
 
@@ -340,6 +401,53 @@ class SyncTest(unittest.TestCase):
             run(f, export([row("desabilitado@x.com", disabled="true")]), apply=True, sync=True)
         self.assertEqual(f.writes(), [])
 
+    def test_sync_undoes_an_unsubscribe_when_the_site_confirmation_lands_in_between(self):
+        def confirm(fake, method, path, data):
+            # O Worker confirma entre a releitura e o PATCH do sync (mesmo corpo que ele envia: reativa + marcador).
+            if method == "PATCH" and data == {"unsubscribed": True}:
+                c = fake.contacts["saiu@x.com"]
+                c["unsubscribed"] = False
+                c["properties"]["site_confirmed_at"] = "2026-11-12T00:00:00Z"
+        f = FakeResend(contacts=[substack("saiu@x.com")], props=S.PROPERTIES, hook=confirm)
+        counts, _ = run(f, export([row("outro@x.com")]), apply=True, sync=True)
+        self.assertFalse(f.contacts["saiu@x.com"]["unsubscribed"])
+        self.assertEqual((counts["sync_desfeito_por_confirmacao"], counts["sincronizado_descadastrado"]), (1, 0))
+
+    def test_sync_skips_a_contact_confirmed_after_planning(self):
+        def confirm(fake, method, path, data):
+            if method == "GET" and path == "/contact-properties":
+                fake.contacts["saiu@x.com"]["properties"]["site_confirmed_at"] = "2026-11-12T00:00:00Z"
+        f = FakeResend(contacts=[substack("saiu@x.com")], props=S.PROPERTIES, hook=confirm)
+        counts, _ = run(f, export([row("outro@x.com")]), apply=True, sync=True)
+        self.assertFalse(f.contacts["saiu@x.com"]["unsubscribed"])
+        self.assertEqual(counts["sync_pulado_na_releitura"], 1)
+        self.assertNotIn({"unsubscribed": True}, [d for m, _, d in f.calls if m == "PATCH"])
+
+    def test_sync_guard_boundaries(self):
+        # Recusa só acima de 10 E acima de 10%: 50 contatos -> 10 passa, 11 não; 200 -> 20 passa, 21 não.
+        for total, ok_n in ((50, 10), (200, 20)):
+            for n, allowed in ((ok_n, True), (ok_n + 1, False)):
+                many = [substack(f"s{i:03d}@x.com") for i in range(total)]
+                f = FakeResend(contacts=many, props=S.PROPERTIES)
+                p = export([row(c["email"]) for c in many[n:]])
+                if allowed:
+                    counts, _ = run(f, p, apply=True, sync=True)
+                    self.assertEqual(counts["sincronizado_descadastrado"], n, (total, n))
+                else:
+                    with self.assertRaises(S.ImportError_, msg=(total, n)):
+                        run(f, p, apply=True, sync=True)
+                    self.assertEqual(f.writes(), [], (total, n))
+
+    def test_second_sync_is_a_no_op(self):
+        f = FakeResend(contacts=[substack("fica@x.com"), substack("saiu@x.com")], props=S.PROPERTIES)
+        p = export([row("fica@x.com")])
+        run(f, p, apply=True, sync=True)
+        before = len(f.writes())
+        counts, _ = run(f, p, apply=True, sync=True)
+        self.assertEqual(len(f.writes()), before)
+        self.assertEqual(counts["sincronizado_descadastrado"], 0)
+        self.assertEqual(counts["sync_descadastrar"], 0)  # o plano (e a simulação) não conta quem já saiu
+
     def test_sync_guard_needs_both_limits(self):
         # 11 de 200 (5,5%) passa: acima de 10, mas abaixo de 10%.
         many = [substack(f"s{i:03d}@x.com") for i in range(200)]
@@ -354,11 +462,41 @@ class ApiTest(unittest.TestCase):
         api = S.Api("re_test", f, sleep=lambda s: None)
         for m, p in (("DELETE", "/contacts/x"), ("POST", "/emails"), ("POST", "/broadcasts"),
                      ("POST", "/broadcasts/b1/send"), ("DELETE", "/segments/seg-1"), ("POST", "/segments"),
-                     ("GET", "/contacts/a@x.com/segments"), ("PATCH", "/contacts"), ("GET", "/api-keys")):
+                     ("GET", "/contacts/a@x.com/segments"), ("PATCH", "/contacts"), ("GET", "/api-keys"),
+                     ("POST", "/api-keys"), ("DELETE", "/api-keys/k1")):
             with self.assertRaisesRegex(S.ImportError_, "chamada recusada", msg=f"{m} {p}") as cm:
                 api.request(m, p, op="teste")
             self.assertNotIn(p, str(cm.exception))
         self.assertEqual(f.calls, [])  # a recusa acontece antes de qualquer chamada ao Resend
+
+
+class CliTest(unittest.TestCase):
+    def test_schema_only_creates_properties(self):
+        f = FakeResend(contacts=[{"email": "a@x.com"}])
+        rc, text = cli(f, None, "--schema")
+        self.assertEqual(rc, 0)
+        self.assertEqual(f.props, list(S.PROPERTIES))
+        self.assertEqual([p for m, p in f.writes()], ["/contact-properties"] * 4)
+
+    def test_unexpected_transport_error_prints_a_fixed_message(self):
+        def broken(method, url, headers, body):
+            raise KeyError("resposta estranha com segredo@x.com")
+        rc, text = cli(broken, export([row("segredo@x.com")]), "--apply")
+        self.assertEqual(rc, 1)
+        self.assertIn("falha inesperada (KeyError)", text)
+        self.assertNotIn("segredo", text)
+
+    def test_unexpected_errors_print_a_fixed_message_without_traceback(self):
+        import subprocess
+        d = tempfile.mkdtemp()
+        missing = os.path.join(d, "segredo@x.com.csv")
+        r = subprocess.run([sys.executable, "-B", os.path.join(os.path.dirname(os.path.abspath(__file__)), "import_subscribers.py"),
+                            missing], capture_output=True, text=True,
+                           env={**os.environ, "RESEND_API_KEY": "re_x", "NEWSLETTER_SEGMENT_ID": SEG})
+        self.assertEqual(r.returncode, 1)
+        self.assertNotIn("segredo", r.stdout + r.stderr)
+        self.assertNotIn("Traceback", r.stderr)
+        self.assertIn("ERRO:", r.stderr)
 
 
 if __name__ == "__main__":
