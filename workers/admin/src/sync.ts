@@ -1,6 +1,6 @@
 // Cópia do segmento do Resend para o D1 (cron do Worker do painel, issue #40).
-// O Resend não devolve propriedades na listagem: um GET por contato, espaçado para ficar bem abaixo do limite de
-// 10 req/s da conta, que é compartilhado com o Worker de inscrição. A troca é atômica do ponto de vista do painel:
+// O Resend não devolve propriedades nem tópicos na listagem: dois GET por contato (o contato e os tópicos dele),
+// espaçados para ficar bem abaixo do limite de 10 req/s da conta, que é compartilhado com o Worker de inscrição. A troca é atômica do ponto de vista do painel:
 // as linhas antigas só saem depois que todas as novas foram gravadas; falha no meio não apaga nada.
 
 export interface D1Stmt {
@@ -61,7 +61,9 @@ export function rowFrom(c: Contact, run: string) {
   };
 }
 
-export type Budget = { start: number; calls: number };
+// lastStart: início da chamada anterior. O espaçamento conta de início a início, para a latência da API não se somar
+// à espera (medido em produção em 2026-11-12: espera depois da resposta dava ~2,2 req/s e 10 min para 647 contatos).
+export type Budget = { start: number; calls: number; lastStart?: number };
 
 export function checkDeadline(deps: SyncDeps, budget: Budget): void {
   if (deps.now() - budget.start > DEADLINE_MS) throw new SyncError('orçamento da execução esgotado');
@@ -71,8 +73,11 @@ export async function resend(env: SyncEnv, deps: SyncDeps, method: string, path:
   for (let i = 0; i < MAX_RETRIES; i++) {
     if (budget) {
       if (++budget.calls > MAX_CALLS) throw new SyncError('orçamento da execução esgotado');
-      checkDeadline(deps, budget);
-      await deps.sleep(GAP_MS); // espaçamento central: nenhuma chamada da sincronização sai sem os 250 ms
+      // Espaçamento central: nenhuma chamada da sincronização começa a menos de 250 ms do início da anterior.
+      const wait = budget.lastStart === undefined ? 0 : budget.lastStart + GAP_MS - deps.now();
+      if (wait > 0) await deps.sleep(wait);
+      checkDeadline(deps, budget); // depois da espera, que pode atravessar o prazo: nenhuma chamada começa depois dele
+      budget.lastStart = deps.now();
     }
     const res = await deps.fetch(`${RESEND}${path}`, {
       method,
@@ -183,6 +188,7 @@ export async function syncSegment(env: SyncEnv, deps: SyncDeps): Promise<number>
       env.DB.prepare(`DELETE FROM subscribers WHERE run != ? AND ${owned}`).bind(runId, runId),
       setMeta(env.DB, 'last_sync_at', run, runId),
       setMeta(env.DB, 'last_sync_count', String(rows.length), runId),
+      setMeta(env.DB, 'last_sync_ms', String(deps.now() - budget.start), runId),
       setMeta(env.DB, 'last_sync_error', '', runId),
     ]);
     return rows.length;

@@ -488,7 +488,7 @@ test('G5: o cron copia o segmento com as propriedades documentadas e a origem ce
   const meta = Object.fromEntries((s.db.raw.prepare('SELECT k, v FROM meta').all() as { k: string; v: string }[]).map((r) => [r.k, r.v]));
   assert.match(meta.sync_owner, new RegExp(`^${new Date(NOW).toISOString()}#[0-9a-f]{8}$`));
   delete meta.sync_owner;
-  assert.deepEqual(meta, { last_sync_at: new Date(NOW).toISOString(), last_sync_count: '4', last_sync_error: '' });
+  assert.deepEqual(meta, { last_sync_at: new Date(NOW).toISOString(), last_sync_count: '4', last_sync_error: '', last_sync_ms: '2500' });
 });
 
 test('G5: quem saiu do segmento sai da cópia; falha no meio não apaga nada e registra o erro sem email', async () => {
@@ -523,11 +523,34 @@ test('G5: paginação de 100, espaçamento de 250 ms (4 req/s) e 429 respeitado'
   assert.equal(lists.length, 3);
   assert.ok(lists.every((c) => new URL(c.url).searchParams.get('limit') === '100' && new URL(c.url).searchParams.get('segment_id') === SEG));
   assert.equal(GAP_MS, 250);
-  const resendCalls = s.calls.filter((c) => c.url.startsWith('https://api.resend.com')).length;
-  // O 429 cai na primeira chamada (propriedades) e espera o retry-after inteiro; toda chamada é precedida de 250 ms.
+  // O 429 cai na primeira chamada (propriedades) e espera o retry-after inteiro; os inícios ficam a 250 ms ou mais.
   assert.equal(s.calls.filter((c) => c.url.includes('/contact-properties')).length, 2);
-  assert.equal(s.sleeps.filter((x) => x === GAP_MS).length, resendCalls);
-  assert.deepEqual(s.sleeps.filter((x) => x !== GAP_MS), [2000]);
+  assert.ok(minGap(s.calls) >= GAP_MS, String(minGap(s.calls)));
+  assert.deepEqual(s.sleeps.filter((x) => x > GAP_MS), [2000]);
+});
+
+function minGap(calls: Call[]): number {
+  const ts = calls.filter((c) => c.url.startsWith('https://api.resend.com')).map((c) => c.t);
+  return Math.min(...ts.slice(1).map((t, i) => t - ts[i]));
+}
+
+test('G5: o ritmo conta do início de cada chamada: a latência não se soma à espera (4 req/s reais)', async () => {
+  const many = Array.from({ length: 120 }, (_, i) => contact(`c${String(i).padStart(4, '0')}`, `p${i}@x.com`, { source: 'substack' }));
+  for (const latencyMs of [0, 100, 200, 249, 400]) {
+    const s = setup({ contacts: many, latencyMs });
+    const t0 = s.clock.t;
+    await syncSegment(s.env, s.deps);
+    const n = s.calls.filter((c) => c.url.startsWith('https://api.resend.com')).length;
+    const took = s.clock.t - t0;
+    assert.ok(minGap(s.calls) >= GAP_MS, `latência ${latencyMs}: inícios a ${minGap(s.calls)} ms`);
+    assert.ok(maxPerSecond(s.calls) <= 4, `latência ${latencyMs}: ${maxPerSecond(s.calls)} por segundo`);
+    // Duração = n inícios espaçados pelo maior entre 250 ms e a latência, mais a última resposta.
+    const expected = (n - 1) * Math.max(GAP_MS, latencyMs) + latencyMs;
+    assert.ok(took <= expected + 50, `latência ${latencyMs}: ${took} ms para ${n} chamadas (esperado <= ${expected})`);
+    // A duração da execução fica registrada para conferência em produção.
+    const ms = (s.db.raw.prepare("SELECT v FROM meta WHERE k = 'last_sync_ms'").get() as { v: string } | undefined)?.v;
+    assert.ok(ms !== undefined && Math.abs(Number(ms) - took) <= 50, `last_sync_ms=${ms}, medido=${took}`);
+  }
 });
 
 function maxPerSecond(calls: Call[]): number {
@@ -680,9 +703,11 @@ test('G5: sincronizações sobrepostas: a mais antiga não grava por cima da mai
   // a nova roda inteira antes do 1º lote de gravação da antiga, ou antes da publicação dela (troca final)
   for (const at of ['primeiro lote', 'publicação']) {
     const s = setup({ contacts: [contact('a', 'ana@x.com')] });
-    const newer = setup({ contacts: [contact('b', 'bia@x.com')] }); // no meio, "a" foi apagado e "b" criado
+    // no meio, "a" foi apagado e "b" criado; latência diferente para as durações das duas execuções diferirem
+    const newer = setup({ contacts: [contact('b', 'bia@x.com')], latencyMs: 300 });
     let olderBatches = 0;
     let nested = false;
+    let newerMs = '';
     const db = d1(undefined, undefined, async () => {
       if (nested) return;
       olderBatches++;
@@ -690,6 +715,7 @@ test('G5: sincronizações sobrepostas: a mais antiga não grava por cima da mai
       nested = true;
       newer.env.DB = db;
       assert.equal(await syncSegment(newer.env, newer.deps), 1);
+      newerMs = (db.raw.prepare("SELECT v FROM meta WHERE k = 'last_sync_ms'").get() as { v: string }).v;
       nested = false;
       olderBatches = 99;
     });
@@ -700,6 +726,19 @@ test('G5: sincronizações sobrepostas: a mais antiga não grava por cima da mai
     assert.deepEqual(db.raw.prepare('SELECT id FROM subscribers ORDER BY id').all().map((r) => plain(r).id), ['b'], at);
     assert.equal((db.raw.prepare("SELECT v FROM meta WHERE k = 'last_sync_count'").get() as { v: string }).v, '1', at);
     assert.equal((db.raw.prepare("SELECT v FROM meta WHERE k = 'last_sync_error'").get() as { v: string }).v, '', at);
+    // a duração publicada é a da execução dona (a mais nova), não a da antiga
+    const olderMs = String(s.clock.t - NOW);
+    assert.notEqual(newerMs, olderMs, at);
+    assert.equal((db.raw.prepare("SELECT v FROM meta WHERE k = 'last_sync_ms'").get() as { v: string }).v, newerMs, at);
+  }
+});
+
+test('G5: espera de espaçamento que atravessa o prazo não inicia a chamada', async () => {
+  for (const left of [1, 100, 249]) {
+    const s = setup({ contacts: [contact('a', 'ana@x.com')] });
+    const budget = { start: s.clock.t - (DEADLINE_MS - left), calls: 0, lastStart: s.clock.t };
+    await assert.rejects(resend(s.env, s.deps, 'GET', '/contacts?limit=100', undefined, budget), /orçamento/, String(left));
+    assert.equal(s.calls.filter((c) => c.url.startsWith('https://api.resend.com')).length, 0, String(left));
   }
 });
 
