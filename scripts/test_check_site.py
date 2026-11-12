@@ -97,8 +97,16 @@ class OldDomainTest(Base):
                                       page("<p>antes em guilhermefavaron.com.br</p>", robots=ROBOTS_INDEX)), [])
 
     def test_any_mention_outside_the_blog_is_flagged_including_json_ld(self):
-        ld = '<script type="application/ld+json">{"sameAs":["https://guilhermefavaron.com.br"]}</script>'
-        self.assertEqual(len(self.flagged("index.html", page(ld, robots=""))), 1)
+        for host in ("guilhermefavaron.com.br", "GuilhermeFavaron.COM.br"):
+            with self.subTest(host=host):
+                self.setUp()
+                ld = f'<script type="application/ld+json">{{"sameAs":["https://{host}"]}}</script>'
+                self.assertEqual(len(self.flagged("index.html", page(ld, robots=""))), 1)
+
+    def test_meta_refresh_to_the_old_domain_is_flagged(self):
+        # O navegador navega para essa URL; só entra em p.refs (não é atributo de URL).
+        html = page('<meta http-equiv="refresh" content="0; url=https://www.guilhermefavaron.com.br/p/x">', robots=ROBOTS_INDEX)
+        self.assertEqual(len(self.flagged("blog/um-post/index.html", html)), 1)
 
     def test_known_dead_links_from_the_import_are_allowed_only_on_their_page(self):
         rel, url = C.OLD_DOMAIN_DEAD_LINKS[0]
@@ -123,6 +131,7 @@ class OldDomainTest(Base):
                  for f in sorted(posts.glob("*.md*")) for m in rx.finditer(f.read_text(encoding="utf-8"))]
         self.assertEqual(len(found), 8)
         self.assertEqual(set(found), set(C.OLD_DOMAIN_DEAD_LINKS))
+        self.assertTrue(all(rel.startswith("blog/") for rel, _ in C.OLD_DOMAIN_DEAD_LINKS))
         self.assertEqual(len(C.OLD_DOMAIN_DEAD_LINKS), len(set(C.OLD_DOMAIN_DEAD_LINKS)))
 
     def test_not_checked_before_the_cutover(self):
