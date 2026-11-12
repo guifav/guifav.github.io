@@ -1,8 +1,8 @@
-// Sitemap do blog: /blog/sitemap.xml. Fica de fora quem tem index: false.
-// Até o cutover nada aponta para este arquivo (o robots.txt da raiz só passa a citá-lo na #24).
+// Sitemap do blog: /blog/sitemap.xml, citado pelo índice /sitemap.xml (scripts/build_sitemaps.py).
+// Entram a capa do blog e os posts indexáveis. Ficam de fora quem tem index: false e as páginas de
+// paginação (/blog/pagina/N/): continuam publicadas e rastreáveis pelos links, mas não são destino de busca.
 import type { APIContext } from 'astro';
-import { POSTS_PER_PAGE } from '../consts';
-import { absoluteUrl, pageCount, pagePath, postPath } from '../lib/blog';
+import { absoluteUrl, pagePath, postPath } from '../lib/blog';
 import { sortedPosts } from '../lib/posts';
 
 function esc(s: string): string {
@@ -18,9 +18,7 @@ export async function GET(context: APIContext) {
     const d = p.data.updated ?? p.data.date;
     return !m || d > m ? d : m;
   }, null);
-  const urls: { loc: string; lastmod?: Date }[] = [];
-  const pages = pageCount(all.length, POSTS_PER_PAGE);
-  for (let i = 1; i <= pages; i++) urls.push({ loc: absoluteUrl(site, pagePath(base, i)), lastmod: i === 1 ? newest ?? undefined : undefined });
+  const urls: { loc: string; lastmod?: Date }[] = [{ loc: absoluteUrl(site, pagePath(base, 1)), lastmod: newest ?? undefined }];
   for (const p of indexed) urls.push({ loc: absoluteUrl(site, postPath(base, p.id)), lastmod: p.data.updated ?? p.data.date });
   const body = urls
     .map((u) => `  <url><loc>${esc(u.loc)}</loc>${u.lastmod ? `<lastmod>${u.lastmod.toISOString()}</lastmod>` : ''}</url>`)

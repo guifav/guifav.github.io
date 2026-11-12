@@ -3,4 +3,3 @@ Disallow: /portfolio/mockups/
 Disallow: /tools/
 
 Sitemap: https://guifav.dev/sitemap.xml
-Sitemap: https://guifav.dev/blog/sitemap.xml

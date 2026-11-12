@@ -22,6 +22,10 @@ SITEMAP = (
     '<?xml version="1.0" encoding="UTF-8"?>'
     '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{}</urlset>'
 )
+SITEMAP_INDEX = (
+    '<?xml version="1.0" encoding="UTF-8"?>'
+    '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{}</sitemapindex>'
+)
 RSS = '<?xml version="1.0"?><rss version="2.0"><channel><title>t</title></channel></rss>'
 
 
@@ -45,6 +49,15 @@ class Base(unittest.TestCase):
             "<url><loc>https://guifav.dev/blog/um-post/</loc></url>"
         ))
         (self.posts / "um-post.md").write_text("---\ntitle: x\nslug: um-post\n---\ntexto\n", encoding="utf-8")
+        self.w("robots.txt", "User-agent: *\nDisallow: /tools/\n\nSitemap: https://guifav.dev/sitemap.xml\n")
+        self.w("sitemap.xml", SITEMAP_INDEX.format(
+            "<sitemap><loc>https://guifav.dev/sitemap-site.xml</loc></sitemap>"
+            "<sitemap><loc>https://guifav.dev/blog/sitemap.xml</loc></sitemap>"
+        ))
+        self.w("sitemap-site.xml", SITEMAP.format(
+            "<url><loc>https://guifav.dev/</loc><lastmod>2026-11-12T10:00:00-03:00</lastmod></url>"
+            "<url><loc>https://guifav.dev/portfolio/</loc><lastmod>2026-11-12T10:00:00-03:00</lastmod></url>"
+        ))
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -552,6 +565,103 @@ class PreCutoverFlagTest(unittest.TestCase):
             p.write_text("export const OUTRA = true;\n", encoding="utf-8")
             with self.assertRaises(ValueError):
                 C.read_pre_cutover(p)
+
+
+class RootSitemapTest(Base):
+    """Índice /sitemap.xml, /sitemap-site.xml completo e robots.txt citando só o índice."""
+
+    def has(self, *words: str) -> bool:
+        return any(all(w in p for w in words) for p in self.problems(pre_cutover=False))
+
+    def test_base_is_clean(self):
+        self.assertEqual(self.problems(pre_cutover=False), [])
+
+    def test_blog_sitemap_cannot_list_pagination(self):
+        self.w("blog/pagina/2/index.html", page("x", robots=ROBOTS_INDEX))
+        self.w("blog/sitemap.xml", SITEMAP.format("<url><loc>https://guifav.dev/blog/pagina/2/</loc></url>"))
+        self.assertTrue(self.has("paginação", "/blog/pagina/2/"))
+
+    def test_index_must_exist_and_be_an_index(self):
+        (self.site / "sitemap.xml").unlink()
+        self.assertTrue(self.has("sitemap.xml inválido"))
+        self.w("sitemap.xml", SITEMAP.format("<url><loc>https://guifav.dev/</loc></url>"))
+        self.assertTrue(self.has("sitemap.xml", "sitemapindex"))
+
+    def test_index_must_cite_exactly_both_sitemaps(self):
+        for body in ("<sitemap><loc>https://guifav.dev/sitemap-site.xml</loc></sitemap>",
+                     "<sitemap><loc>https://guifav.dev/sitemap-site.xml</loc></sitemap>"
+                     "<sitemap><loc>https://guifav.dev/blog/sitemap.xml</loc></sitemap>"
+                     "<sitemap><loc>https://outro.dev/sitemap.xml</loc></sitemap>"):
+            with self.subTest(body=body):
+                self.w("sitemap.xml", SITEMAP_INDEX.format(body))
+                self.assertTrue(self.has("o índice precisa citar exatamente"))
+
+    def test_site_sitemap_must_be_urlset(self):
+        self.w("sitemap-site.xml", SITEMAP_INDEX.format(""))
+        self.assertTrue(self.has("sitemap-site.xml", "urlset"))
+        (self.site / "sitemap-site.xml").unlink()
+        self.assertTrue(self.has("sitemap-site.xml inválido"))
+
+    def test_new_root_page_must_enter_site_sitemap(self):
+        self.w("nova/index.html", page("x", robots=""))
+        self.assertTrue(self.has("falta página indexável", "https://guifav.dev/nova/"))
+
+    def test_excluded_pages_must_stay_out(self):
+        cases = {
+            "404.html": ("404.html", page("x", robots="")),
+            "disallow": ("tools/x.html", page("x", robots="")),
+            "noindex": ("rascunho/index.html", page("x", robots=ROBOTS_NOINDEX)),
+        }
+        url = {"404.html": "https://guifav.dev/404.html", "disallow": "https://guifav.dev/tools/x.html",
+               "noindex": "https://guifav.dev/rascunho/"}
+        for name, (rel, html) in cases.items():
+            with self.subTest(name=name):
+                base_sitemap = (self.site / "sitemap-site.xml").read_text(encoding="utf-8")
+                self.w(rel, html)
+                self.assertFalse(self.has("falta página indexável"), name)
+                self.w("sitemap-site.xml", SITEMAP.format(
+                    "<url><loc>https://guifav.dev/</loc><lastmod>2026-11-12T10:00:00-03:00</lastmod></url>"
+                    "<url><loc>https://guifav.dev/portfolio/</loc><lastmod>2026-11-12T10:00:00-03:00</lastmod></url>"
+                    f"<url><loc>{url[name]}</loc><lastmod>2026-11-12T10:00:00-03:00</lastmod></url>"))
+                self.assertTrue(self.has("não deve ser indexado", url[name]), name)
+                self.w("sitemap-site.xml", base_sitemap)
+                if rel != "404.html":
+                    (self.site / rel).unlink()
+
+    def test_canonical_pointing_elsewhere_is_flagged(self):
+        for href in ("https://guifav.github.io/portfolio/", "https://guifav.dev/outra/", "http://guifav.dev/portfolio/"):
+            with self.subTest(href=href):
+                self.w("portfolio/index.html", page(f'<link rel="canonical" href="{href}"><a href="/">h</a>', robots=""))
+                self.assertTrue(self.has("portfolio/index.html", "canonical aponta para outra URL"))
+
+    def test_self_canonical_is_fine(self):
+        self.w("portfolio/index.html", page('<link rel="canonical" href="https://guifav.dev/portfolio/"><a href="/">h</a>', robots=""))
+        self.w("index.html", page('<link rel="canonical" href="https://guifav.dev"><a href="/portfolio/">p</a><img src="/assets/a.png">', robots=""))
+        self.assertEqual(self.problems(pre_cutover=False), [])
+
+    def test_lastmod_required_and_w3c(self):
+        for lm in ("", "<lastmod>12/11/2026</lastmod>", "<lastmod>2026-11-12</lastmod>"):
+            with self.subTest(lm=lm):
+                self.w("sitemap-site.xml", SITEMAP.format(
+                    f"<url><loc>https://guifav.dev/</loc>{lm}</url>"
+                    "<url><loc>https://guifav.dev/portfolio/</loc><lastmod>2026-11-12T10:00:00Z</lastmod></url>"))
+                self.assertTrue(self.has("lastmod", "https://guifav.dev/"))
+
+    def test_duplicate_loc(self):
+        self.w("sitemap-site.xml", SITEMAP.format(
+            "<url><loc>https://guifav.dev/</loc><lastmod>2026-11-12T10:00:00Z</lastmod></url>" * 2
+            + "<url><loc>https://guifav.dev/portfolio/</loc><lastmod>2026-11-12T10:00:00Z</lastmod></url>"))
+        self.assertTrue(self.has("URL repetida"))
+
+    def test_robots_must_cite_only_the_index(self):
+        for txt in ("User-agent: *\nDisallow:\n",
+                    "User-agent: *\nSitemap: https://guifav.dev/sitemap.xml\nSitemap: https://guifav.dev/blog/sitemap.xml\n",
+                    "User-agent: *\nSitemap: https://guifav.dev/blog/sitemap.xml\n"):
+            with self.subTest(txt=txt):
+                self.w("robots.txt", txt)
+                self.assertTrue(self.has("robots.txt", "só o índice"))
+        (self.site / "robots.txt").unlink()
+        self.assertTrue(self.has("robots.txt", "só o índice"))
 
 
 if __name__ == "__main__":

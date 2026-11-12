@@ -21,8 +21,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    outputs:
+      indexnow: ${{ steps.indexnow.outputs.plan }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Histórico completo: o lastmod do /sitemap-site.xml vem do último commit de cada página.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v7
         with:
@@ -57,6 +62,8 @@ jobs:
           python3 scripts/test_assemble_site.py
           python3 scripts/test_check_site.py
           python3 scripts/test_cutover_redirects.py
+          python3 scripts/test_build_sitemaps.py
+          python3 scripts/test_indexnow.py
           python3 blog-src/scripts/test_newsletter_draft.py
           python3 blog-src/scripts/test_import_subscribers.py
           python3 blog-src/scripts/test_twenty_sync.py
@@ -64,8 +71,17 @@ jobs:
       - name: Montar _site (manifesto + blog) e verificar byte a byte
         run: python3 scripts/assemble_site.py
 
-      - name: Verificar links, noindex, RSS e sitemap
+      - name: Gerar o índice /sitemap.xml e o /sitemap-site.xml
+        run: python3 scripts/build_sitemaps.py
+
+      - name: Verificar links, noindex, RSS e sitemaps
         run: python3 scripts/check_site.py
+
+      - name: Plano do IndexNow (URLs que mudaram em relação ao site publicado)
+        id: indexnow
+        run: |
+          python3 scripts/indexnow.py diff --out "$RUNNER_TEMP/indexnow.json"
+          echo "plan=$(cat "$RUNNER_TEMP/indexnow.json")" >> "$GITHUB_OUTPUT"
 
       - name: Publicar artefato do Pages
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
@@ -88,3 +104,21 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v5
+
+  indexnow:
+    # Depois do deploy, avisa os buscadores do IndexNow (Bing e outros) sobre as URLs do plano.
+    # Falha aqui não desfaz o deploy; aparece em vermelho para olhar.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: [build, deploy]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: scripts/indexnow.py
+          sparse-checkout-cone-mode: false
+
+      - name: Avisar o IndexNow
+        env:
+          INDEXNOW_PLAN: ${{ needs.build.outputs.indexnow }}
+        run: python3 scripts/indexnow.py submit
