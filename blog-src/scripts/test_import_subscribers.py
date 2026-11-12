@@ -373,7 +373,8 @@ class ImportTest(unittest.TestCase):
             self.assertEqual(c["properties"], {"site_confirmed_at": "2026-11-11T00:00:00Z"}, email)
             self.assertEqual(counts["corrida_409"], 1, email)
             got = [p for m, p, _ in f.calls if m == "GET" and p.startswith("/contacts/")]
-            self.assertEqual(got, ["/contacts/" + urllib.parse.quote(email, safe="@")], email)
+            # conferência antes de criar (404) e a leitura depois do 409, as duas com o email codificado
+            self.assertEqual(got, ["/contacts/" + urllib.parse.quote(email, safe="@")] * 2, email)
 
     def test_race_409_with_a_contact_without_origin_gets_substack_properties(self):
         def other(fake, e):
@@ -383,18 +384,37 @@ class ImportTest(unittest.TestCase):
         self.assertEqual(f.contacts["a@x.com"]["properties"]["source"], "substack")
         self.assertEqual(f.contacts["a@x.com"]["segments"], {SEG})
 
-    def test_f2_upsert_race_keeps_site_confirmation_and_topic(self):
-        # API real: o POST de quem se inscreveu pelo site entre a listagem e a criação é upsert (201), não 409.
+    def test_f2_contact_that_appears_before_creation_is_never_posted(self):
+        # O POST do Resend é upsert e desfaria um descadastro global: quem surge entre a listagem e a criação é
+        # visto na conferência imediatamente anterior ao POST e segue como existente, sem POST.
+        for unsub in (False, True):
+            for topic in ("opt_in", "opt_out"):
+                def appear(fake, method, path, data, unsub=unsub, topic=topic):
+                    if method == "GET" and path == "/contacts/a@x.com" and "a@x.com" not in fake.contacts:
+                        fake.contacts["a@x.com"] = {"id": "c-site", "email": "a@x.com", "unsubscribed": unsub, "segments": {SEG},
+                                                    "properties": {"site_confirmed_at": "2026-11-11T00:00:00Z"}, "topic": topic}
+                f = FakeResend(props=S.PROPERTIES, hook=appear)
+                rc, text = cli(f, export([row("a@x.com")]), "--apply", "--sync")
+                why = (unsub, topic)
+                c = f.contacts["a@x.com"]
+                self.assertEqual(rc, 0, why)
+                self.assertNotIn(("POST", "/contacts"), f.writes(), why)
+                self.assertEqual((c["unsubscribed"], c["topic"], c["properties"]), (unsub, topic, {"site_confirmed_at": "2026-11-11T00:00:00Z"}), why)
+                self.assertIn("corrida_existente: 1", text, why)
+
+    def test_f2_residual_window_is_the_documented_exception(self):
+        # Janela residual (entre a conferência e o POST): o upsert volta o global a inscrito, como documentado em F2;
+        # tópico e site_confirmed_at são preservados, e nenhum PATCH é feito.
         for topic in ("opt_in", "opt_out"):
             def signup(fake, e, topic=topic):
-                fake.contacts.setdefault(e, {"id": "c-site", "email": e, "unsubscribed": False, "segments": {SEG},
+                fake.contacts.setdefault(e, {"id": "c-site", "email": e, "unsubscribed": True, "segments": {SEG},
                                              "properties": {"site_confirmed_at": "2026-11-11T00:00:00Z"}, "topic": topic})
             f = FakeResend(props=S.PROPERTIES, on_create=signup)
-            run(f, export([row("a@x.com")]), apply=True)
+            run(f, export([row("a@x.com")]), apply=True, sync=True)
             c = f.contacts["a@x.com"]
-            self.assertEqual((c["id"], c["topic"], c["properties"]["site_confirmed_at"]), ("c-site", topic, "2026-11-11T00:00:00Z"))
-            self.assertTrue(S._protected({"properties": {k: {"value": v} for k, v in c["properties"].items()}}))
-            self.assertEqual([d for m, _, d in f.calls if m == "PATCH"], [], topic)  # nenhum script escreve no tópico
+            self.assertEqual((c["id"], c["unsubscribed"], c["topic"], c["properties"]["site_confirmed_at"]),
+                             ("c-site", False, topic, "2026-11-11T00:00:00Z"), topic)
+            self.assertEqual([d for m, _, d in f.calls if m == "PATCH"], [], topic)
 
     def test_topic_is_required_before_any_call(self):
         f = FakeResend(contacts=[substack("saiu@x.com")], props=S.PROPERTIES)
@@ -569,11 +589,26 @@ class SyncTest(unittest.TestCase):
         counts, _ = run(f, export([row("outro@x.com")]), apply=True, sync=True)
         self.assertEqual((counts["sincronizado_descadastrado"], c["topic"]), (1, "opt_out"))
 
-    def test_invalid_topics_response_stops_before_any_write(self):
+    def test_invalid_topics_response_at_the_preread_stops_before_writing_to_that_contact(self):
+        for bad in ((200, {"object": "list", "data": {}}), (500, {"name": "x", "message": "x"})):
+            reads = []
+            def topics(c, bad=bad):
+                reads.append(c["id"])
+                if len(reads) == 1:  # plano: válido
+                    return 200, {"object": "list", "data": [{"id": TOPIC, "subscription": "opt_in"}]}
+                return bad  # releitura: inválida
+            f = FakeResend(contacts=[substack("saiu@x.com")], props=S.PROPERTIES, topics=topics)
+            with self.assertRaises(S.ImportError_, msg=bad):
+                run(f, export([row("novo@x.com")]), apply=True, sync=True)
+            self.assertEqual(len(reads), 2, bad)
+            self.assertEqual([p for m, p, _ in f.calls if m == "PATCH"], [], bad)  # sem auditoria nem opt_out
+            self.assertEqual(f.contacts["saiu@x.com"]["topic"], "opt_in", bad)
+
+    def test_invalid_topics_response_at_planning_stops_before_any_write(self):
         bad = [((200, {"object": "list", "data": {}}), "formato inválido"),
                ((200, {"object": "list"}), "formato inválido"),
                ((200, {"object": "list", "data": [{"id": "outro", "subscription": "opt_in"}]}), "ausente"),
-               ((200, {"object": "list", "data": [{"id": TOPIC, "subscription": "talvez"}]}), "ausente"),
+               ((200, {"object": "list", "data": [{"id": TOPIC, "subscription": "talvez"}]}), "valor desconhecido"),
                ((500, {"name": "x", "message": "x"}), "respondeu 500")]
         for resp, why in bad:
             f = FakeResend(contacts=[substack("saiu@x.com")], props=S.PROPERTIES, topics=lambda c, r=resp: r)

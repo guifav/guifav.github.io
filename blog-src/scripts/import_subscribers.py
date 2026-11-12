@@ -18,7 +18,9 @@ que só cria as propriedades).
   segmento e o contato ficam intocados. Recusa antes de gravar se o export estiver vazio ou se fosse descadastrar mais de 10
   pessoas e mais de 10% dos vindos do Substack (export errado ou incompleto).
   Contrato de falhas (adjudicado pelo consultor na rodada 3 do #39; texto completo na descrição do PR):
-  S1 nenhum script grava unsubscribed=false nem opt_in no tópico: só a confirmação do próprio leitor reinscreve.
+  S1 nenhum script reinscreve quem já existe: não há PATCH com unsubscribed=false nem opt_in no tópico, e a criação
+     só vai para um email que a conferência imediatamente anterior mostrou inexistente. Só a confirmação do próprio
+     leitor reinscreve. Exceção única e residual: F2.
   S2 as únicas escritas do sync, nesta ordem, são a auditoria substack_sync_unsubscribed_at e o opt_out no tópico,
      depois de uma releitura que mostra source=substack, sem site_confirmed_at, inscrito na conta e no tópico. Com a
      auditoria primeiro, ninguém fica fora do tópico sem registro de quem o tirou.
@@ -26,9 +28,13 @@ que só cria as propriedades).
      substack_sync_unsubscribed_at e fora da newsletter) e, se houver algum, sai com código 3.
   F1 confirmação pelo site entre a releitura e as escritas: o contato fica fora do tópico, aparece em S5 e é
      reinscrito à mão antes do primeiro envio.
-  F2 inscrição pelo site entre a listagem e a criação: na API real o POST de email existente é upsert (201), então o
-     contato recebe as propriedades do Substack e volta a inscrito na conta (o Resend faz isso mesmo sem o campo).
-     site_confirmed_at e o tópico são preservados: o contato segue protegido do sync e ninguém volta à newsletter.
+  F2 na API real, o POST de email existente é upsert (201, mesmo id): grava as propriedades do corpo e volta o status
+     global a inscrito, mesmo sem o campo. Por isso cada criação é precedida de um GET por email; quem já existe
+     (inscrição pelo site depois da listagem) segue como existente, sem POST (contagem corrida_existente). Resta a
+     janela entre esse GET e o POST, que o Resend não permite fechar (não há criação exclusiva): se alguém for criado
+     e descadastrado da conta inteira nesses milissegundos, o descadastro global é desfeito. site_confirmed_at e o
+     tópico são preservados nesse caso. Nenhum caminho do sistema usa o descadastro global (só o painel do Resend,
+     à mão), então a exceção é aceita e fica declarada aqui.
 - Nada de envio: o cliente recusa qualquer rota fora das de contatos e propriedades.
 - A saída, inclusive a de erro, tem só contagens, operações e códigos HTTP: nunca emails nem texto da API.
 
@@ -231,8 +237,10 @@ def topic_subscription(api: Api, cid: str, topic_id: str) -> str:
     if not isinstance(items, list):
         raise ImportError_("tópicos do contato em formato inválido")
     sub = next((t.get("subscription") for t in items if isinstance(t, dict) and t.get("id") == topic_id), None)
-    if sub not in ("opt_in", "opt_out"):
+    if sub is None:
         raise ImportError_("tópico da newsletter ausente no contato")
+    if sub not in ("opt_in", "opt_out"):
+        raise ImportError_("valor desconhecido no tópico da newsletter")
     return sub
 
 
@@ -308,17 +316,27 @@ def run(api: Api, export_path: str, segment_id: str, topic_id: str, *, out=None,
 
     counts["propriedades_criadas"] = ensure_properties(api)
     ids = {s.email: everyone[s.email]["id"] for s in existing}
+    def as_existing(s: Subscriber, c: dict) -> None:
+        # Criado depois da listagem (inscrição pelo site): segue como existente, sem reinscrever. A inclusão no
+        # segmento é idempotente na API real (201 para quem já está nele, sondado em 2026-11-12).
+        ids[s.email] = c["id"]
+        attach.append(s)
+        if _needs_props(c):
+            fill.append(s)
+
     for s in create:
+        # F2: o POST do Resend é upsert e desfaria um descadastro global; confere logo antes de criar.
+        st, c = api.request("GET", contact_path(s.email), op="conferir antes de criar", ok=(200, 404))
+        if st == 200:
+            as_existing(s, c)
+            counts["corrida_existente"] += 1
+            continue
         status, _ = api.request("POST", "/contacts", {"email": s.email, "unsubscribed": False,
                                                        "segments": [{"id": segment_id}], "properties": _props(s)},
                                 op="criar contato", ok=(200, 201, 409))
-        if status == 409:
-            # Criado entre a leitura e a escrita (inscrição pelo site): trata como existente, sem reinscrever.
+        if status == 409:  # reserva, se a API passar a recusar email existente
             _, c = api.request("GET", contact_path(s.email), op="ler contato por email")
-            ids[s.email] = c["id"]
-            attach.append(s)
-            if _needs_props(c):
-                fill.append(s)
+            as_existing(s, c)
             counts["corrida_409"] += 1
             continue
         counts["criado"] += 1
