@@ -2,16 +2,17 @@
 
 Simulação por padrão: lê o export e o Resend e mostra só contagens. Grava apenas com --apply.
 
-- Entram os emails habilitados, válidos e sem repetição (a entrada mais antiga vale).
+- Entram os emails habilitados, válidos e sem repetição. Na repetição, vale o registro inteiro mais antigo.
 - Contato novo: criado no segmento, inscrito, com as propriedades source=substack, substack_joined_at e
   substack_paid_until (vencimento da assinatura paga ativa; vazio para os demais).
-- Contato que já existe: nunca é reinscrito nem sobrescrito. Só entra no segmento e, se não tiver origem
-  registrada, recebe as propriedades do Substack.
-- --sync (para o export novo, antes do primeiro envio): quem veio do Substack, está no segmento e não está mais no
-  export é descadastrado (unsubscribed=true). Ninguém é apagado. Recusa rodar se fosse descadastrar mais de 10
-  pessoas e mais de 20% de quem veio do Substack (export errado ou incompleto).
+- Contato que já existe: nunca é reinscrito nem sobrescrito. Entra no segmento, se ainda não estiver, e só recebe as
+  propriedades do Substack se não tiver origem registrada nem confirmação pelo site.
+- --sync (export novo, antes do primeiro envio): quem veio do Substack, está no segmento, não confirmou pelo site
+  (site_confirmed_at, gravado pelo Worker) e não está mais no export é descadastrado (unsubscribed=true). Ninguém é
+  apagado. Recusa antes de gravar se o export estiver vazio ou se fosse descadastrar mais de 10 pessoas e mais de 10%
+  dos vindos do Substack (export errado ou incompleto).
 - Nada de envio: o cliente recusa qualquer rota fora das de contatos e propriedades.
-- A saída tem só contagens, nunca emails.
+- A saída, inclusive a de erro, tem só contagens, operações e códigos HTTP: nunca emails nem texto da API.
 
 Rodar na KVM (a chave fica só no ambiente):
     RESEND_API_KEY=... NEWSLETTER_SEGMENT_ID=... python3 scripts/import_subscribers.py <export.csv> [--apply] [--sync]
@@ -26,19 +27,26 @@ import re
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections import Counter
 from dataclasses import dataclass
 
 RESEND = "https://api.resend.com"
-PROPERTIES = ("source", "substack_joined_at", "substack_paid_until")
-EMAIL_RE = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
+# site_confirmed_at é gravada pelo Worker na confirmação; o importador só garante que a propriedade exista.
+PROPERTIES = ("source", "substack_joined_at", "substack_paid_until", "site_confirmed_at")
 REQUIRED = {"email", "email_disabled", "created_at", "expiry", "active_subscription"}
 PAGE = 100
 MAX_PAGES = 1000
-SYNC_MAX_ABS, SYNC_MAX_RATIO = 10, 0.2  # teto de descadastros num sync: acima dos dois, o export está errado
+SYNC_MAX_ABS, SYNC_MAX_RATIO = 10, 0.1  # teto de descadastros num sync: acima dos dois, o export está errado
 INTERVAL = 0.15  # abaixo do limite de 10 requisições por segundo do Resend
 MAX_RETRIES = 8
+
+# Mesma regra do Worker (workers/newsletter/src/index.ts, normalizeEmail), mais rígida na parte local:
+# sem ponto no começo, no fim ou repetido.
+_LABEL = r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+_ATOM = r"[a-z0-9!#$%&*+/=?^_`{|}~-]+"
+EMAIL_RE = re.compile(rf"{_ATOM}(?:\.{_ATOM})*@{_LABEL}(?:\.{_LABEL})+")
 
 
 class ImportError_(Exception):
@@ -50,6 +58,18 @@ class Subscriber:
     email: str
     joined_at: str
     paid_until: str
+
+
+def valid_email(email: str) -> bool:
+    if len(email) > 254 or len(email.split("@", 1)[0]) > 64:
+        return False
+    return EMAIL_RE.fullmatch(email) is not None
+
+
+def _rank(s: Subscriber) -> tuple:
+    # O registro mais antigo vence inteiro. Sem data vai para o fim. Empate: o que tem pagamento ativo, depois o
+    # vencimento mais distante. A ordem das linhas no arquivo não muda o resultado.
+    return (s.joined_at == "", s.joined_at, s.paid_until == "", tuple(-ord(c) for c in s.paid_until))
 
 
 def load_export(path: str) -> tuple[list[Subscriber], dict]:
@@ -66,19 +86,31 @@ def load_export(path: str) -> tuple[list[Subscriber], dict]:
         if (r["email_disabled"] or "").strip().lower() != "false":
             skipped["desabilitado"] += 1
             continue
-        if not EMAIL_RE.fullmatch(email):
+        if not valid_email(email):
             skipped["invalido"] += 1
             continue
-        paid = r["expiry"].strip() if (r["active_subscription"] or "").strip().lower() == "true" else ""
+        paid = (r["expiry"] or "").strip() if (r["active_subscription"] or "").strip().lower() == "true" else ""
         s = Subscriber(email, (r["created_at"] or "").strip(), paid)
         if email in best:
             skipped["repetido"] += 1
-            old = best[email]
-            if s.joined_at and (not old.joined_at or s.joined_at < old.joined_at):
-                best[email] = Subscriber(email, s.joined_at, old.paid_until or s.paid_until)
+            if _rank(s) < _rank(best[email]):
+                best[email] = s
             continue
         best[email] = s
     return [best[e] for e in sorted(best)], dict(skipped)
+
+
+def prop(contact: dict, key: str) -> str:
+    """Valor de uma propriedade do contato. O Resend devolve {"value": ..., "type": ...} por chave."""
+    v = (contact.get("properties") or {}).get(key)
+    if isinstance(v, dict):
+        v = v.get("value")
+    return "" if v is None else str(v)
+
+
+def contact_path(email: str) -> str:
+    # O email vai codificado, com o @ literal, como no Worker: "/", "?" e "#" não podem virar parte da URL.
+    return "/contacts/" + urllib.parse.quote(email, safe="@")
 
 
 def _urllib_transport(method, url, headers, body):
@@ -95,12 +127,16 @@ def _urllib_transport(method, url, headers, body):
 
 
 class Api:
-    """Só contatos e propriedades. Envio, broadcasts, exclusão e segmentos (fora a inclusão) são recusados."""
+    """Só contatos e propriedades. Envio, broadcasts, exclusão e segmentos (fora a inclusão) são recusados.
+
+    Mensagens de erro levam só o método, o nome fixo da operação e o código HTTP: nunca o caminho (pode ter email)
+    nem o texto da resposta (o Resend repete o email nas mensagens de validação).
+    """
 
     ALLOWED = (
-        ("GET", r"/contact-properties(\?[^/]*)?"), ("POST", r"/contact-properties"),
-        ("GET", r"/contacts\?[^/]*"), ("GET", r"/contacts/[^/?]+"), ("POST", r"/contacts"),
-        ("PATCH", r"/contacts/[^/?]+"), ("POST", r"/contacts/[^/?]+/segments/[^/?]+"),
+        ("GET", r"/contact-properties\?[^/#]*"), ("POST", r"/contact-properties"),
+        ("GET", r"/contacts\?[^/#]*"), ("GET", r"/contacts/[^/?#]+"), ("POST", r"/contacts"),
+        ("PATCH", r"/contacts/[^/?#]+"), ("POST", r"/contacts/[^/?#]+/segments/[^/?#]+"),
     )
 
     def __init__(self, key: str, transport=_urllib_transport, sleep=time.sleep):
@@ -108,46 +144,48 @@ class Api:
         self.transport = transport
         self.sleep = sleep
 
-    def request(self, method: str, path: str, body: dict | None = None, ok=(200, 201)) -> tuple[int, dict]:
+    def request(self, method: str, path: str, body: dict | None = None, *, op: str, ok=(200, 201)) -> tuple[int, dict]:
         if not any(m == method and re.fullmatch(p, path) for m, p in self.ALLOWED):
-            raise ImportError_(f"chamada recusada: {method} {path.split('?')[0]}")
+            raise ImportError_(f"chamada recusada: {method} ({op})")
         headers = {"Authorization": f"Bearer {self.key}", "Content-Type": "application/json",
                    "User-Agent": "guifav-blog-import-subscribers"}
         for _ in range(MAX_RETRIES):
             self.sleep(INTERVAL)
             status, data, h = self.transport(method, RESEND + path, headers, json.dumps(body) if body is not None else None)
             if status == 429:
-                retry = {k.lower(): v for k, v in h.items()}.get("retry-after", "1")
-                self.sleep(float(retry) if re.fullmatch(r"\d+(\.\d+)?", str(retry)) else 1.0)
+                retry = str({k.lower(): v for k, v in (h or {}).items()}.get("retry-after", "1")).strip()
+                self.sleep(min(float(retry), 60.0) if re.fullmatch(r"\d+(\.\d+)?", retry) else 1.0)
                 continue
             if status not in ok:
-                raise ImportError_(f"Resend respondeu {status} em {method} {path.split('/')[1].split('?')[0]}: "
-                                   f"{data.get('name') or data.get('message') or ''}")
-            return status, data
-        raise ImportError_(f"limite de requisições do Resend persistiu em {method} {path.split('?')[0]}")
+                raise ImportError_(f"Resend respondeu {status} em {method} ({op})")
+            return status, data if isinstance(data, dict) else {}
+        raise ImportError_(f"limite de requisições do Resend persistiu em {method} ({op})")
 
 
-def list_contacts(api: Api, segment_id: str | None = None) -> list[dict]:
+def _paged(api: Api, route: str, extra: str = "") -> list[dict]:
     out, after = [], ""
     for _ in range(MAX_PAGES):
-        q = f"limit={PAGE}" + (f"&segment_id={segment_id}" if segment_id else "") + (f"&after={after}" if after else "")
-        _, data = api.request("GET", f"/contacts?{q}")
+        q = f"limit={PAGE}" + (f"&{extra}" if extra else "") + (f"&after={after}" if after else "")
+        _, data = api.request("GET", f"/{route}?{q}", op=f"listar {route}")
         page = data.get("data") or []
         out += page
-        last = page[-1]["id"] if page else ""
+        last = page[-1].get("id", "") if page else ""
         if not data.get("has_more") or not last or last == after:
             return out
         after = last
-    raise ImportError_("paginação de contatos sem fim")
+    raise ImportError_(f"paginação sem fim em {route}")
+
+
+def list_contacts(api: Api, segment_id: str | None = None) -> list[dict]:
+    return _paged(api, "contacts", f"segment_id={urllib.parse.quote(segment_id)}" if segment_id else "")
 
 
 def ensure_properties(api: Api) -> int:
-    _, data = api.request("GET", f"/contact-properties?limit={PAGE}")
-    have = {p.get("key") for p in data.get("data") or []}
+    have = {p.get("key") for p in _paged(api, "contact-properties")}
     created = 0
     for k in PROPERTIES:
         if k not in have:
-            api.request("POST", "/contact-properties", {"key": k, "type": "string"})
+            api.request("POST", "/contact-properties", {"key": k, "type": "string"}, op="criar propriedade")
             created += 1
     return created
 
@@ -156,28 +194,46 @@ def _props(s: Subscriber) -> dict:
     return {"source": "substack", "substack_joined_at": s.joined_at, "substack_paid_until": s.paid_until}
 
 
-def run(api: Api, export_path: str, segment_id: str, *, out=sys.stdout, apply: bool = False, sync: bool = False) -> Counter:
+def _needs_props(full: dict) -> bool:
+    return not prop(full, "source") and not prop(full, "site_confirmed_at")
+
+
+def run(api: Api, export_path: str, segment_id: str, *, out=None, apply: bool = False, sync: bool = False) -> Counter:
+    out = out or sys.stdout  # resolvido na chamada, para o redirecionamento da saída valer
     subs, skipped = load_export(export_path)
     counts: Counter = Counter({f"ignorado_{k}": v for k, v in skipped.items()})
     counts["export_validos"] = len(subs)
     everyone = {c["email"].lower(): c for c in list_contacts(api)}
     in_seg = {c["email"].lower(): c for c in list_contacts(api, segment_id)}
+    full: dict[str, dict] = {}
+
+    def read(email: str, cid: str) -> dict:
+        if email not in full:
+            full[email] = api.request("GET", f"/contacts/{cid}", op="ler contato")[1]
+        return full[email]
+
     create = [s for s in subs if s.email not in everyone]
-    attach = [s for s in subs if s.email in everyone and s.email not in in_seg]
+    existing = [s for s in subs if s.email in everyone]
+    attach = [s for s in existing if s.email not in in_seg]
+    fill = [s for s in existing if _needs_props(read(s.email, everyone[s.email]["id"]))]
     counts["criar"] = len(create)
     counts["adicionar_ao_segmento"] = len(attach)
+    counts["completar_propriedades"] = len(fill)
     counts["no_segmento"] = sum(1 for s in subs if s.email in in_seg)
+    counts["existente_descadastrado"] = sum(1 for s in existing if full[s.email].get("unsubscribed"))
 
     to_unsub = []
     if sync:
+        if not subs:
+            raise ImportError_("export sem nenhum assinante válido; nada foi gravado")
         wanted = {s.email for s in subs}
         substack_in_seg = 0
         for email, c in in_seg.items():
-            _, full = api.request("GET", f"/contacts/{c['id']}")
-            if (full.get("properties") or {}).get("source") != "substack":
+            f = read(email, c["id"])
+            if prop(f, "source") != "substack" or prop(f, "site_confirmed_at"):
                 continue
             substack_in_seg += 1
-            if email not in wanted and not full.get("unsubscribed"):
+            if email not in wanted and not f.get("unsubscribed"):
                 to_unsub.append(c["id"])
         counts["sync_substack_no_segmento"] = substack_in_seg
         counts["sync_descadastrar"] = len(to_unsub)
@@ -190,26 +246,29 @@ def run(api: Api, export_path: str, segment_id: str, *, out=sys.stdout, apply: b
         return counts
 
     counts["propriedades_criadas"] = ensure_properties(api)
+    ids = {s.email: everyone[s.email]["id"] for s in existing}
     for s in create:
         status, _ = api.request("POST", "/contacts", {"email": s.email, "unsubscribed": False,
                                                        "segments": [{"id": segment_id}], "properties": _props(s)},
-                                ok=(200, 201, 409))
-        if status == 409:  # criado entre a leitura e a escrita (inscrição pelo site): trata como existente
+                                op="criar contato", ok=(200, 201, 409))
+        if status == 409:
+            # Criado entre a leitura e a escrita (inscrição pelo site): trata como existente, sem reinscrever.
+            _, c = api.request("GET", contact_path(s.email), op="ler contato por email")
+            ids[s.email] = c["id"]
             attach.append(s)
-            everyone[s.email] = {"id": api.request("GET", f"/contacts/{s.email}")[1]["id"]}
+            if _needs_props(c):
+                fill.append(s)
+            counts["corrida_409"] += 1
             continue
         counts["criado"] += 1
+    for s in fill:
+        api.request("PATCH", f"/contacts/{ids[s.email]}", {"properties": _props(s)}, op="completar propriedades")
+        counts["propriedades_completadas"] += 1
     for s in attach:
-        cid = everyone[s.email]["id"]
-        _, full = api.request("GET", f"/contacts/{cid}")
-        if not (full.get("properties") or {}).get("source"):
-            api.request("PATCH", f"/contacts/{cid}", {"properties": _props(s)})
-        api.request("POST", f"/contacts/{cid}/segments/{segment_id}")
+        api.request("POST", f"/contacts/{ids[s.email]}/segments/{segment_id}", op="incluir no segmento")
         counts["adicionado_ao_segmento"] += 1
-        if full.get("unsubscribed"):
-            counts["existente_descadastrado"] += 1
     for cid in to_unsub:
-        api.request("PATCH", f"/contacts/{cid}", {"unsubscribed": True})
+        api.request("PATCH", f"/contacts/{cid}", {"unsubscribed": True}, op="descadastrar")
         counts["sincronizado_descadastrado"] += 1
     _report(counts, out, "gravado")
     return counts
@@ -221,7 +280,7 @@ def _report(counts: Counter, out, tail: str) -> None:
     print(tail, file=out)
 
 
-def main(argv=None) -> int:
+def main(argv=None, transport=_urllib_transport, sleep=time.sleep) -> int:
     ap = argparse.ArgumentParser(description="Importa assinantes do export do Substack para o Resend (simulação por padrão).")
     ap.add_argument("export", help="email_list.*.csv do export do Substack (fora do repo)")
     ap.add_argument("--apply", action="store_true", help="grava no Resend")
@@ -232,7 +291,7 @@ def main(argv=None) -> int:
         print("ERRO: faltam RESEND_API_KEY e NEWSLETTER_SEGMENT_ID no ambiente", file=sys.stderr)
         return 2
     try:
-        run(Api(key), a.export, seg, apply=a.apply, sync=a.sync)
+        run(Api(key, transport, sleep), a.export, seg, apply=a.apply, sync=a.sync)
     except ImportError_ as e:
         print(f"ERRO: {e}", file=sys.stderr)
         return 1

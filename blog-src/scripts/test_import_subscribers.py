@@ -2,6 +2,7 @@
 
 Rodar em blog-src/: python3 scripts/test_import_subscribers.py
 """
+import contextlib
 import csv
 import io
 import json
@@ -9,6 +10,7 @@ import os
 import sys
 import tempfile
 import unittest
+import urllib.parse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import import_subscribers as S  # noqa: E402
@@ -32,48 +34,64 @@ def row(email, created="2025-01-02T03:04:05", disabled="false", expiry="", plan=
 
 
 class FakeResend:
-    """Resend em memória: contatos, segmentos e propriedades, com as mesmas rotas que o script usa."""
+    """Resend em memória, com o contrato documentado: GET de contato devolve cada propriedade como
+    {"value": ..., "type": "string"}; o email no caminho chega codificado; listas paginam por limit/after."""
 
-    def __init__(self, contacts=None, props=None, limit_429=0):
+    def __init__(self, contacts=None, props=(), extra_props=0, limit_429=0, retry_after="0", on_create=None,
+                 fail=None, rate_path=None):
         self.contacts = {}  # email -> dict
         for c in contacts or []:
             self.contacts[c["email"]] = {"id": "c-" + c["email"], "unsubscribed": False, "segments": set(),
                                          "properties": {}, **c}
-        self.props = set(props or [])
+        self.props = [f"outra_{i:03d}" for i in range(extra_props)] + list(props)
         self.calls = []
         self.limit_429 = limit_429
+        self.retry_after = retry_after
+        self.on_create = on_create  # corrida: chamado antes de criar (simula inscrição pelo site)
+        self.fail = fail  # (method, prefixo do caminho, status, mensagem)
+        self.rate_path = rate_path  # prefixo do caminho que responde sempre 429
+
+    def _page(self, items, q):
+        if "after" in q:
+            items = [x for x in items if x["id"] > q["after"]]
+        n = min(int(q.get("limit", 20)), 100)
+        return {"object": "list", "has_more": len(items) > n, "data": items[:n]}
 
     def __call__(self, method, url, headers, body):
-        path = url[len(S.RESEND):]
+        raw = url[len(S.RESEND):]
+        path = urllib.parse.unquote(raw.split("?", 1)[0])
+        q = dict(urllib.parse.parse_qsl(raw.split("?", 1)[1])) if "?" in raw else {}
         data = json.loads(body) if body else None
-        self.calls.append((method, path, data))
+        self.calls.append((method, raw, data))
         if self.limit_429:
             self.limit_429 -= 1
-            return 429, {"message": "rate"}, {"retry-after": "0"}
+            return 429, {"message": "rate"}, {"Retry-After": self.retry_after}
+        if self.rate_path and path.startswith(self.rate_path):
+            return 429, {"message": "rate"}, {"Retry-After": "0"}
+        if self.fail and method == self.fail[0] and path.startswith(self.fail[1]):
+            return self.fail[2], {"name": "validation_error", "message": self.fail[3]}, {}
         by_id = {c["id"]: c for c in self.contacts.values()}
-        if method == "GET" and path.startswith("/contact-properties"):
-            return 200, {"object": "list", "has_more": False, "data": [{"key": k} for k in sorted(self.props)]}, {}
+        if method == "GET" and path == "/contact-properties":
+            return 200, self._page([{"id": f"p-{k}", "key": k} for k in sorted(self.props)], q), {}
         if method == "POST" and path == "/contact-properties":
-            self.props.add(data["key"])
+            self.props.append(data["key"])
             return 201, {"id": "p-" + data["key"]}, {}
-        if method == "GET" and path.startswith("/contacts?"):
-            q = dict(x.split("=", 1) for x in path.split("?", 1)[1].split("&"))
+        if method == "GET" and path == "/contacts":
             items = sorted(self.contacts.values(), key=lambda c: c["id"])
             if "segment_id" in q:
                 items = [c for c in items if q["segment_id"] in c["segments"]]
-            if "after" in q:
-                items = [c for c in items if c["id"] > q["after"]]
-            n = int(q.get("limit", 20))
-            page = [{"id": c["id"], "email": c["email"], "unsubscribed": c["unsubscribed"]} for c in items[:n]]
-            return 200, {"object": "list", "has_more": len(items) > n, "data": page}, {}
+            items = [{"id": c["id"], "email": c["email"], "unsubscribed": c["unsubscribed"]} for c in items]
+            return 200, self._page(items, q), {}
         if method == "GET" and path.startswith("/contacts/"):
-            key = path.split("/")[2]
+            key = path[len("/contacts/"):]
             c = self.contacts.get(key) or by_id.get(key)
             if not c:
                 return 404, {"message": "not found"}, {}
-            return 200, {"id": c["id"], "email": c["email"], "unsubscribed": c["unsubscribed"],
-                         "properties": dict(c["properties"])}, {}
+            return 200, {"object": "contact", "id": c["id"], "email": c["email"], "unsubscribed": c["unsubscribed"],
+                         "properties": {k: {"value": v, "type": "string"} for k, v in c["properties"].items()}}, {}
         if method == "POST" and path == "/contacts":
+            if self.on_create:
+                self.on_create(self, data["email"])
             if data["email"] in self.contacts:
                 return 409, {"message": "exists"}, {}
             self.contacts[data["email"]] = {"id": "c-" + data["email"], "email": data["email"],
@@ -82,7 +100,7 @@ class FakeResend:
                                             "properties": dict(data.get("properties", {}))}
             return 201, {"id": "c-" + data["email"]}, {}
         if method == "PATCH" and path.startswith("/contacts/"):
-            c = self.contacts.get(path.split("/")[2]) or by_id.get(path.split("/")[2])
+            c = by_id.get(path[len("/contacts/"):])
             if "unsubscribed" in data:
                 c["unsubscribed"] = data["unsubscribed"]
             c["properties"].update(data.get("properties", {}))
@@ -97,11 +115,32 @@ class FakeResend:
         return [(m, p) for m, p, _ in self.calls if m != "GET"]
 
 
-def run(fake, path, **kw):
+def run(fake, path, sleeps=None, **kw):
     out = io.StringIO()
-    api = S.Api("re_test", fake, sleep=lambda s: None)
+    api = S.Api("re_test", fake, sleep=(sleeps.append if sleeps is not None else (lambda s: None)))
     counts = S.run(api, path, SEG, out=out, **kw)
     return counts, out.getvalue()
+
+
+def cli(fake, path, *flags):
+    out, err = io.StringIO(), io.StringIO()
+    env = {"RESEND_API_KEY": "re_test", "NEWSLETTER_SEGMENT_ID": SEG}
+    old = {k: os.environ.get(k) for k in env}
+    os.environ.update(env)
+    try:
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            rc = S.main([path, *flags], transport=fake, sleep=lambda s: None)
+    finally:
+        for k, v in old.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+    return rc, out.getvalue() + err.getvalue()
+
+
+def substack(email, **kw):
+    return {"email": email, "segments": {SEG}, "properties": {"source": "substack"}, **kw}
 
 
 class ExportTest(unittest.TestCase):
@@ -112,6 +151,21 @@ class ExportTest(unittest.TestCase):
         self.assertEqual([s.email for s in subs], ["a@x.com", "c@y.org"])
         self.assertEqual(subs[0].joined_at, "2023-01-01T00:00:00")  # a entrada mais antiga vale
         self.assertEqual(skipped, {"desabilitado": 1, "invalido": 1, "repetido": 1})
+
+    def test_rejects_malformed_addresses(self):
+        bad = ["a@x..com", "a@x.com>", "x" * 65 + "@x.com", ".a@x.com", "a.@x.com", "a..b@x.com", "a@x",
+               "a@-x.com", "a b@x.com", "a'b@x.com", "a@" + ".".join(["x" * 63] * 4) + ".com"]
+        good = ["a.b+tag@sub.x.com.br", "a_b-c@x.io", "x" * 64 + "@x.com"]
+        subs, skipped = S.load_export(export([row(e) for e in bad + good]))
+        self.assertEqual(sorted(s.email for s in subs), sorted(good))
+        self.assertEqual(skipped, {"invalido": len(bad)})
+
+    def test_duplicate_keeps_the_whole_oldest_record_in_any_order(self):
+        old = row("d@x.com", created="2023-01-01T00:00:00", expiry="2026-01-01T00:00:00.000Z", active="true")
+        new = row("d@x.com", created="2024-01-01T00:00:00", expiry="2027-01-01T00:00:00.000Z", active="true")
+        for rows in ([old, new], [new, old]):
+            (s,), _ = S.load_export(export(rows))
+            self.assertEqual((s.joined_at, s.paid_until), ("2023-01-01T00:00:00", "2026-01-01T00:00:00.000Z"))
 
     def test_paid_until_only_for_active_subscription(self):
         p = export([row("p@x.com", expiry="2026-12-16T22:53:57.000Z", plan="yearly", active="true"),
@@ -129,22 +183,34 @@ class ExportTest(unittest.TestCase):
 
 class ImportTest(unittest.TestCase):
     def test_dry_run_makes_no_writes(self):
-        f = FakeResend()
-        counts, out = run(f, export([row("a@x.com"), row("b@x.com")]))
-        self.assertEqual(f.writes(), [])
-        self.assertEqual(counts["criar"], 2)
-        self.assertIn("simulação", out)
+        for sync in (False, True):
+            f = FakeResend(contacts=[substack("saiu@x.com"), {"email": "a@x.com"}])
+            counts, out = run(f, export([row("a@x.com"), row("b@x.com")]), sync=sync)
+            self.assertEqual(f.writes(), [], sync)
+            self.assertEqual((counts["criar"], counts["adicionar_ao_segmento"], counts["completar_propriedades"]), (1, 1, 1))
+            self.assertIn("simulação", out)
 
     def test_creates_contacts_in_segment_with_properties(self):
         f = FakeResend()
-        counts, _ = run(f, export([row("a@x.com", created="2024-02-18T15:38:10")]), apply=True)
-        c = f.contacts["a@x.com"]
-        self.assertEqual(c["segments"], {SEG})
-        self.assertFalse(c["unsubscribed"])
-        self.assertEqual(c["properties"], {"source": "substack", "substack_joined_at": "2024-02-18T15:38:10",
-                                           "substack_paid_until": ""})
-        self.assertEqual(f.props, set(S.PROPERTIES))
-        self.assertEqual(counts["criado"], 1)
+        p = export([row("a@x.com", created="2024-02-18T15:38:10"),
+                    row("p@x.com", created="2023-03-01T00:00:00", expiry="2026-12-16T22:53:57.000Z", active="true")])
+        counts, _ = run(f, p, apply=True)
+        self.assertEqual(f.contacts["a@x.com"]["properties"], {"source": "substack", "substack_joined_at": "2024-02-18T15:38:10",
+                                                               "substack_paid_until": ""})
+        self.assertEqual(f.contacts["p@x.com"]["properties"]["substack_paid_until"], "2026-12-16T22:53:57.000Z")
+        for c in f.contacts.values():
+            self.assertEqual(c["segments"], {SEG})
+            self.assertFalse(c["unsubscribed"])
+        prop_bodies = [d for m, p_, d in f.calls if m == "POST" and p_ == "/contact-properties"]
+        # Lista literal: site_confirmed_at precisa existir antes do deploy do Worker que a grava.
+        self.assertEqual(prop_bodies, [{"key": k, "type": "string"} for k in
+                                       ("source", "substack_joined_at", "substack_paid_until", "site_confirmed_at")])
+        self.assertEqual(counts["criado"], 2)
+
+    def test_property_listing_is_paginated(self):
+        f = FakeResend(props=S.PROPERTIES, extra_props=150)
+        run(f, export([row("a@x.com")]), apply=True)
+        self.assertNotIn(("POST", "/contact-properties"), f.writes())
 
     def test_existing_contact_is_not_overwritten_nor_resubscribed(self):
         f = FakeResend(contacts=[{"email": "a@x.com", "unsubscribed": True, "properties": {"source": "site"}}],
@@ -155,13 +221,29 @@ class ImportTest(unittest.TestCase):
         self.assertEqual(c["properties"], {"source": "site"})
         self.assertEqual(c["segments"], {SEG})
         self.assertEqual(counts["existente_descadastrado"], 1)
-        self.assertNotIn(("PATCH", "/contacts/c-a@x.com"), f.writes())
+        self.assertEqual([m for m, p in f.writes() if m == "PATCH"], [])
 
-    def test_existing_contact_without_source_gets_substack_properties_only(self):
-        f = FakeResend(contacts=[{"email": "a@x.com"}], props=S.PROPERTIES)
+    def test_unsubscribed_contact_without_source_gets_properties_and_stays_unsubscribed(self):
+        f = FakeResend(contacts=[{"email": "a@x.com", "unsubscribed": True}], props=S.PROPERTIES)
         run(f, export([row("a@x.com", created="2025-01-01T00:00:00")]), apply=True)
+        c = f.contacts["a@x.com"]
+        self.assertEqual(c["properties"]["source"], "substack")
+        self.assertTrue(c["unsubscribed"])
+        self.assertEqual([d for m, _, d in f.calls if m == "PATCH"], [{"properties": S._props(S.Subscriber(
+            "a@x.com", "2025-01-01T00:00:00", ""))}])
+
+    def test_contact_already_in_segment_without_source_gets_properties(self):
+        f = FakeResend(contacts=[{"email": "a@x.com", "segments": {SEG}}], props=S.PROPERTIES)
+        counts, _ = run(f, export([row("a@x.com")]), apply=True)
         self.assertEqual(f.contacts["a@x.com"]["properties"]["source"], "substack")
-        self.assertFalse(f.contacts["a@x.com"]["unsubscribed"])
+        self.assertEqual(counts["adicionado_ao_segmento"], 0)
+
+    def test_site_confirmed_contact_does_not_get_substack_source(self):
+        f = FakeResend(contacts=[{"email": "a@x.com", "properties": {"site_confirmed_at": "2026-11-11T00:00:00Z"}}],
+                       props=S.PROPERTIES)
+        run(f, export([row("a@x.com")]), apply=True)
+        self.assertEqual(f.contacts["a@x.com"]["properties"], {"site_confirmed_at": "2026-11-11T00:00:00Z"})
+        self.assertEqual(f.contacts["a@x.com"]["segments"], {SEG})
 
     def test_second_run_is_a_no_op(self):
         f = FakeResend()
@@ -172,37 +254,98 @@ class ImportTest(unittest.TestCase):
         self.assertEqual(len(f.writes()), before)
         self.assertEqual(counts["no_segmento"], 2)
 
-    def test_rate_limit_is_retried(self):
-        f = FakeResend(limit_429=2)
-        counts, _ = run(f, export([row("a@x.com")]), apply=True)
-        self.assertEqual(counts["criado"], 1)
+    def test_contact_listing_is_paginated(self):
+        many = [{"email": f"s{i:03d}@x.com", "segments": {SEG}, "properties": {"source": "substack"}} for i in range(250)]
+        f = FakeResend(contacts=many, props=S.PROPERTIES)
+        counts, _ = run(f, export([row(c["email"]) for c in many]), apply=True)
+        self.assertEqual((counts["criar"], counts["no_segmento"]), (0, 250))
+        self.assertEqual(f.writes(), [])
 
-    def test_output_never_contains_emails(self):
-        f = FakeResend()
-        _, out = run(f, export([row("segredo@x.com")]), apply=True)
-        self.assertNotIn("segredo", out)
+    def test_race_with_site_signup_keeps_the_contact_and_encodes_the_email(self):
+        for email in ("a@x.com", "a/b@x.com", "a?b@x.com", "a#b@x.com"):
+            def signup(fake, e, email=email):
+                if e == email and e not in fake.contacts:
+                    fake.contacts[e] = {"id": "c-site", "email": e, "unsubscribed": True, "segments": set(),
+                                        "properties": {"site_confirmed_at": "2026-11-11T00:00:00Z"}}
+            f = FakeResend(props=S.PROPERTIES, on_create=signup)
+            counts, _ = run(f, export([row(email)]), apply=True)
+            c = f.contacts[email]
+            self.assertEqual((c["id"], c["segments"], c["unsubscribed"]), ("c-site", {SEG}, True), email)
+            self.assertEqual(c["properties"], {"site_confirmed_at": "2026-11-11T00:00:00Z"}, email)
+            self.assertEqual(counts["corrida_409"], 1, email)
+            got = [p for m, p, _ in f.calls if m == "GET" and p.startswith("/contacts/")]
+            self.assertEqual(got, ["/contacts/" + urllib.parse.quote(email, safe="@")], email)
+
+    def test_requests_are_spaced_and_rate_limit_waits_retry_after(self):
+        sleeps = []
+        f = FakeResend(limit_429=2, retry_after="3")
+        counts, _ = run(f, export([row("a@x.com")]), sleeps=sleeps, apply=True)
+        self.assertEqual(counts["criado"], 1)
+        self.assertGreaterEqual(S.INTERVAL, 0.1)
+        self.assertEqual(sleeps.count(S.INTERVAL), len(f.calls))
+        self.assertEqual([s for s in sleeps if s != S.INTERVAL], [3.0, 3.0])
+
+    def test_output_never_contains_emails_even_on_errors(self):
+        cases = [
+            (FakeResend(), ()),
+            (FakeResend(), ("--apply",)),
+            (FakeResend(fail=("POST", "/contacts", 422, "email segredo@x.com inválido")), ("--apply",)),
+            (FakeResend(on_create=lambda f, e: f.contacts.setdefault(e, {"id": "c-1", "email": e, "unsubscribed": False,
+                                                                         "segments": set(), "properties": {}}),
+                        fail=("GET", "/contacts/segredo", 500, "erro com segredo@x.com")), ("--apply",)),
+        ]
+        for fake, flags in cases:
+            rc, text = cli(fake, export([row("segredo@x.com")]), *flags)
+            self.assertIn("export_validos: 1" if rc == 0 else "ERRO", text)  # a saída foi mesmo capturada
+            self.assertNotIn("segredo", text, (flags, text))
+        self.assertEqual(rc, 1)
+
+    def test_persistent_rate_limit_error_has_no_email(self):
+        race = lambda f, e: f.contacts.setdefault(e, {"id": "c-1", "email": e, "unsubscribed": False,  # noqa: E731
+                                                      "segments": set(), "properties": {}})
+        for fake in (FakeResend(limit_429=10_000), FakeResend(on_create=race, rate_path="/contacts/segredo")):
+            rc, text = cli(fake, export([row("segredo@x.com")]), "--apply")
+            self.assertEqual(rc, 1)
+            self.assertIn("limite", text)
+            self.assertNotIn("segredo", text)
 
 
 class SyncTest(unittest.TestCase):
     def test_sync_unsubscribes_only_substack_contacts_missing_from_export(self):
         f = FakeResend(contacts=[
-            {"email": "fica@x.com", "segments": {SEG}, "properties": {"source": "substack"}},
-            {"email": "saiu@x.com", "segments": {SEG}, "properties": {"source": "substack"}},
+            substack("fica@x.com"),
+            substack("saiu@x.com"),
             {"email": "site@x.com", "segments": {SEG}, "properties": {}},
+            substack("confirmou@x.com", properties={"source": "substack", "site_confirmed_at": "2026-11-12T00:00:00Z"}),
+            {"email": "fora@x.com", "properties": {"source": "substack"}},  # fora do segmento
         ], props=S.PROPERTIES)
         counts, _ = run(f, export([row("fica@x.com")]), apply=True, sync=True)
-        self.assertFalse(f.contacts["fica@x.com"]["unsubscribed"])
-        self.assertTrue(f.contacts["saiu@x.com"]["unsubscribed"])
-        self.assertFalse(f.contacts["site@x.com"]["unsubscribed"])
+        state = {e: c["unsubscribed"] for e, c in f.contacts.items()}
+        self.assertEqual(state, {"fica@x.com": False, "saiu@x.com": True, "site@x.com": False,
+                                 "confirmou@x.com": False, "fora@x.com": False})
         self.assertEqual(counts["sincronizado_descadastrado"], 1)
         self.assertNotIn("DELETE", [m for m, _ in f.writes()])
 
-    def test_sync_refuses_an_export_much_smaller_than_the_segment(self):
-        many = [{"email": f"s{i}@x.com", "segments": {SEG}, "properties": {"source": "substack"}} for i in range(40)]
+    def test_sync_refuses_a_bad_export_before_any_write(self):
+        many = [substack(f"s{i:02d}@x.com") for i in range(40)]
+        for rows in ([row("s00@x.com")], [], [row("invalido")]):
+            f = FakeResend(contacts=list(many))
+            with self.assertRaises(S.ImportError_):
+                run(f, export(rows), apply=True, sync=True)
+            self.assertEqual(f.writes(), [], rows)
+
+    def test_sync_refuses_an_empty_export_even_for_a_small_segment(self):
+        f = FakeResend(contacts=[substack(f"s{i}@x.com") for i in range(5)], props=S.PROPERTIES)
+        with self.assertRaisesRegex(S.ImportError_, "export sem nenhum"):
+            run(f, export([row("desabilitado@x.com", disabled="true")]), apply=True, sync=True)
+        self.assertEqual(f.writes(), [])
+
+    def test_sync_guard_needs_both_limits(self):
+        # 11 de 200 (5,5%) passa: acima de 10, mas abaixo de 10%.
+        many = [substack(f"s{i:03d}@x.com") for i in range(200)]
         f = FakeResend(contacts=many, props=S.PROPERTIES)
-        with self.assertRaises(S.ImportError_):
-            run(f, export([row("s0@x.com")]), apply=True, sync=True)
-        self.assertEqual([w for w in f.writes() if w[0] == "PATCH"], [])
+        counts, _ = run(f, export([row(c["email"]) for c in many[11:]]), apply=True, sync=True)
+        self.assertEqual(counts["sincronizado_descadastrado"], 11)
 
 
 class ApiTest(unittest.TestCase):
@@ -210,9 +353,11 @@ class ApiTest(unittest.TestCase):
         f = FakeResend()
         api = S.Api("re_test", f, sleep=lambda s: None)
         for m, p in (("DELETE", "/contacts/x"), ("POST", "/emails"), ("POST", "/broadcasts"),
-                     ("POST", "/broadcasts/b1/send"), ("DELETE", "/segments/seg-1")):
-            with self.assertRaisesRegex(S.ImportError_, "chamada recusada", msg=f"{m} {p}"):
-                api.request(m, p)
+                     ("POST", "/broadcasts/b1/send"), ("DELETE", "/segments/seg-1"), ("POST", "/segments"),
+                     ("GET", "/contacts/a@x.com/segments"), ("PATCH", "/contacts"), ("GET", "/api-keys")):
+            with self.assertRaisesRegex(S.ImportError_, "chamada recusada", msg=f"{m} {p}") as cm:
+                api.request(m, p, op="teste")
+            self.assertNotIn(p, str(cm.exception))
         self.assertEqual(f.calls, [])  # a recusa acontece antes de qualquer chamada ao Resend
 
 
