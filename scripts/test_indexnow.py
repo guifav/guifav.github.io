@@ -47,6 +47,14 @@ class FakeWeb:
         return (200, self.pages[base]) if base in self.pages else (404, b"<html>404</html>")
 
 
+class ErrorWeb(FakeWeb):
+    """Responde 503 com o corpo da página (um CDN com erro que ainda manda o arquivo em cache)."""
+
+    def __call__(self, url: str):
+        status, body = super().__call__(url)
+        return (503, body) if status == 200 else (status, body)
+
+
 class FakePost:
     """Endpoint do IndexNow: 200/202 aceita; devolve o status configurado e guarda o corpo."""
 
@@ -113,7 +121,10 @@ class DiffTest(Site):
             "fora do ar": FakeWeb({}),
             "não é xml": FakeWeb({"https://guifav.dev/sitemap.xml": b"<html>"}),
             "não é sitemap": FakeWeb({"https://guifav.dev/sitemap.xml": b"<rss/>"}),
-            "filho fora do site": FakeWeb({"https://guifav.dev/sitemap.xml": index(["https://outro.dev/s.xml"])}),
+            "filho fora do site": FakeWeb({"https://guifav.dev/sitemap.xml": index(["https://outro.dev/s.xml"]),
+                                           "https://outro.dev/s.xml": urlset(BLOG_NEW)}),
+            "status de erro com corpo de sitemap": ErrorWeb({"https://guifav.dev/sitemap.xml": urlset(SITE_NEW),
+                                                            "https://guifav.dev/blog/sitemap.xml": urlset(BLOG_NEW)}),
             "índice dentro de índice": FakeWeb({"https://guifav.dev/sitemap.xml": index(["https://guifav.dev/s.xml"]),
                                                 "https://guifav.dev/s.xml": index([])}),
             "blog antigo fora do ar": FakeWeb({"https://guifav.dev/sitemap.xml": urlset(SITE_OLD)}),
@@ -256,10 +267,14 @@ class AllTest(Site):
         self.assertEqual(post.bodies[0]["urlList"], sorted({**SITE_NEW, **BLOG_NEW}))
 
     def test_all_requires_live_key(self):
-        post = FakePost()
-        with redirect_stderr(io.StringIO()):
-            self.assertEqual(I.main(["all"], get=FakeWeb({}), post=post), 1)
-        self.assertEqual(post.bodies, [])
+        sitemaps = {"https://guifav.dev/sitemap.xml": urlset(SITE_NEW), "https://guifav.dev/blog/sitemap.xml": urlset(BLOG_NEW)}
+        for name, extra in {"sem chave": {}, "chave errada": {I.KEY_LOCATION: b"outra"}}.items():
+            with self.subTest(name=name):
+                post, err = FakePost(), io.StringIO()
+                with redirect_stderr(err):
+                    self.assertEqual(I.main(["all"], get=FakeWeb({**sitemaps, **extra}), post=post), 1)
+                self.assertEqual(post.bodies, [])
+                self.assertIn("chave fora do ar", err.getvalue())
 
 
 class KeyFileTest(unittest.TestCase):

@@ -142,6 +142,37 @@ class BuildTest(Repo):
                     B.build(self.repo, self.site)
                 self.assertFalse((self.site / "sitemap.xml").exists())
 
+    def test_404_out_even_without_noindex(self):
+        (self.site / "404.html").write_text(html(), encoding="utf-8")
+        B.build(self.repo, self.site)
+        self.assertNotIn("https://guifav.dev/404.html", [l for l, _ in self.entries("sitemap-site.xml", "url")])
+
+    def test_refuses_outside_git(self):
+        plain = Path(self.tmp.name) / "sem-git"
+        plain.mkdir()
+        with self.assertRaisesRegex(B.SitemapError, "fora do git"):
+            B.build(plain, self.site)
+
+    def test_lastmod_is_commit_date_not_author_date(self):
+        # Squash merge: o autor escreveu antes, mas a página entrou na main na data do commit.
+        (self.repo / "llm-ranking/index.html").write_text(html("<b>v2</b>"), encoding="utf-8")
+        self.git("add", "-A")
+        env_date = "2026-11-12T18:00:00-03:00"
+        subprocess.run(["git", "-C", str(self.repo), "commit", "-q", "-m", "squash"], check=True, capture_output=True,
+                       env=dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t", GIT_COMMITTER_NAME="t",
+                                GIT_COMMITTER_EMAIL="t@t", GIT_AUTHOR_DATE="2026-11-01T09:00:00-03:00",
+                                GIT_COMMITTER_DATE=env_date))
+        self.copy_site()
+        B.build(self.repo, self.site)
+        self.assertEqual(dict(self.entries("sitemap-site.xml", "url"))["https://guifav.dev/llm-ranking/"], env_date)
+
+    def test_refuses_site_without_indexable_pages(self):
+        for f in list(self.site.rglob("*.html")):
+            if not f.relative_to(self.site).as_posix().startswith("blog/"):
+                f.write_text(html('<meta name="robots" content="noindex">'), encoding="utf-8")
+        with self.assertRaisesRegex(B.SitemapError, "nenhuma página"):
+            B.build(self.repo, self.site)
+
     def test_main_exit_codes(self):
         self.assertEqual(B.main(["--repo", str(self.repo), "--site", str(self.site)]), 0)
         self.assertEqual(B.main(["--repo", str(self.repo), "--site", str(self.site)]), 1)
