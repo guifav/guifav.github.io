@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { handle, csvCell, PAGE_SIZE, type Env, type Deps } from '../src/index.ts';
-import { syncSegment, GAP_MS, AUDIT_PROPERTY, type D1Like, type D1Stmt } from '../src/sync.ts';
+import { syncSegment, GAP_MS, AUDIT_PROPERTY, type D1Like, type D1Stmt, resend, MAX_CALLS, DEADLINE_MS } from '../src/sync.ts';
 import { resetCertsCache } from '../src/access.ts';
 
 const NOW = Date.UTC(2026, 10, 12, 12, 0, 0);
@@ -23,15 +23,15 @@ const SEG = tomlVar('SEGMENT_ID');
 const GUI = 'gui@exemplo.com';
 
 // ------------------------------------------------------------------ D1 falso (SQLite real)
-function d1(failBatch?: number): D1Like & { raw: DatabaseSync } {
+function d1(failBatch?: number, failSql?: RegExp): D1Like & { raw: DatabaseSync } {
   let batches = 0;
   const db = new DatabaseSync(':memory:');
   db.exec(readFileSync(new URL('../migrations/0001_init.sql', import.meta.url), 'utf-8'));
   const stmt = (sql: string, args: unknown[] = []): D1Stmt => ({
     bind: (...v: unknown[]) => stmt(sql, v),
-    run: async () => db.prepare(sql).run(...(args as never[])),
+    run: async () => { if (failSql?.test(sql)) throw new Error('D1 indisponível'); return db.prepare(sql).run(...(args as never[])); },
     all: async <T>() => ({ results: db.prepare(sql).all(...(args as never[])) as T[] }),
-    first: async <T>() => (db.prepare(sql).get(...(args as never[])) as T) ?? null,
+    first: async <T>() => { if (failSql?.test(sql)) throw new Error('D1 indisponível'); return (db.prepare(sql).get(...(args as never[])) as T) ?? null; },
   });
   return {
     raw: db,
@@ -77,12 +77,15 @@ async function jwt(claims: Record<string, unknown> = {}, opts: { kid?: string; k
 
 // ------------------------------------------------------------------ Resend falso
 type FakeContact = { id: string; email: string; unsubscribed: boolean; created_at: string; segments: string[]; properties: Record<string, string> };
-type Call = { method: string; url: string; body: unknown };
+type Call = { method: string; url: string; body: unknown; t: number };
 
 function setup(opts: { contacts?: FakeContact[]; props?: string[]; patchStatus?: number; rereadKeepsSubscribed?: boolean;
-  certs?: () => unknown; failGetAfter?: number; rate429?: number } = {}) {
+  certs?: () => unknown; failGetAfter?: number; rate429?: number; retryAfter?: string; latencyMs?: number;
+  reread?: (c: Record<string, unknown>) => Record<string, unknown>; list?: (u: URL) => Response | null;
+  afterContactGet?: (id: string) => Promise<void> } = {}) {
   const calls: Call[] = [];
   const sleeps: number[] = [];
+  let t = NOW; // relógio virtual: avança com as esperas e com a latência simulada
   const contacts = new Map((opts.contacts ?? []).map((c) => [c.id, c]));
   const props = new Set(opts.props ?? [AUDIT_PROPERTY]);
   let gets = 0;
@@ -91,11 +94,12 @@ function setup(opts: { contacts?: FakeContact[]; props?: string[]; patchStatus?:
     const url = String(input instanceof Request ? input.url : input);
     const method = init?.method ?? 'GET';
     const body = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined;
-    calls.push({ method, url, body });
+    calls.push({ method, url, body, t });
+    t += opts.latencyMs ?? 0;
     if (url === `https://${TEAM}/cdn-cgi/access/certs`) return Response.json(opts.certs ? opts.certs() : { keys: [jwk] });
     if (rate > 0 && url.startsWith('https://api.resend.com')) {
       rate--;
-      return new Response('{}', { status: 429, headers: { 'retry-after': '2' } });
+      return new Response('{}', { status: 429, headers: { 'retry-after': opts.retryAfter ?? '2' } });
     }
     const u = new URL(url);
     if (u.pathname === '/contact-properties' && method === 'GET') {
@@ -106,6 +110,8 @@ function setup(opts: { contacts?: FakeContact[]; props?: string[]; patchStatus?:
       return Response.json({ id: 'p' }, { status: 201 });
     }
     if (u.pathname === '/contacts' && method === 'GET') {
+      const forced = opts.list?.(u);
+      if (forced) return forced;
       let items = [...contacts.values()].sort((a, b) => a.id.localeCompare(b.id));
       const seg = u.searchParams.get('segment_id');
       if (seg) items = items.filter((c) => c.segments.includes(seg));
@@ -121,9 +127,12 @@ function setup(opts: { contacts?: FakeContact[]; props?: string[]; patchStatus?:
       if (opts.failGetAfter !== undefined && gets > opts.failGetAfter) return Response.json({ message: 'erro com x@y.com' }, { status: 500 });
       const c = contacts.get(decodeURIComponent(m[1]));
       if (!c) return Response.json({ message: 'not found' }, { status: 404 });
-      return Response.json({ object: 'contact', id: c.id, email: c.email, created_at: c.created_at,
+      const out: Record<string, unknown> = { object: 'contact', id: c.id, email: c.email, created_at: c.created_at,
         unsubscribed: opts.rereadKeepsSubscribed ? false : c.unsubscribed,
-        properties: Object.fromEntries(Object.entries(c.properties).map(([k, v]) => [k, { value: v, type: 'string' }])) });
+        properties: Object.fromEntries(Object.entries(c.properties).map(([k, v]) => [k, { value: v, type: 'string' }])) };
+      const res = Response.json(opts.reread ? opts.reread(out) : out);
+      if (opts.afterContactGet) await opts.afterContactGet(c.id);
+      return res;
     }
     if (m && method === 'PATCH') {
       if (opts.patchStatus) return Response.json({ message: 'falha com segredo@x.com' }, { status: opts.patchStatus });
@@ -138,7 +147,7 @@ function setup(opts: { contacts?: FakeContact[]; props?: string[]; patchStatus?:
   const env: Env = { DB: db, RESEND_API_KEY: 're_test', SEGMENT_ID: SEG, ACCESS_TEAM_DOMAIN: TEAM, ACCESS_AUD: AUD,
     ALLOWED_EMAILS: ` ${GUI.toUpperCase()} `, SITE_ORIGIN: tomlVar('SITE_ORIGIN') };
   const passed: string[] = [];
-  const deps: Deps = { fetch: fetchFn as typeof fetch, now: () => NOW, sleep: async (ms) => { sleeps.push(ms); },
+  const deps: Deps = { fetch: fetchFn as typeof fetch, now: () => t, sleep: async (ms) => { sleeps.push(ms); t += ms; },
     origin: async (req) => { passed.push(new URL(req.url).pathname); return new Response('pages', { status: 200 }); } };
   return { env, deps, db, calls, sleeps, contacts, props, passed, run: (req: Request) => handle(req, env, deps) };
 }
@@ -175,15 +184,24 @@ test('G1: sem JWT válido do Access, nenhuma rota do painel responde (403), e na
     ['ainda não válido', await jwt({ nbf: NOW / 1000 + 600 })],
     ['email de outra pessoa', await jwt({ email: 'outra@exemplo.com' })],
     ['kid desconhecido', await jwt({}, { kid: 'k9' })],
+    ['sem exp', await jwt({ exp: undefined })],
+    ['exp em texto', await jwt({ exp: String(NOW / 1000 + 3600) })],
   ];
   for (const path of ['/admin', '/admin/', '/admin/export.csv', '/admin/unsubscribe', '/admin/qualquer']) {
     for (const [why, token] of bad) {
-      const r = await get(s, path, token);
-      assert.equal(r.status, 403, `${path} ${why}`);
-      assert.equal(await r.text(), 'acesso negado', `${path} ${why}`);
+      for (const method of ['GET', 'POST']) {
+        resetCertsCache();
+        const headers: Record<string, string> = { origin: 'https://guifav.dev', 'content-type': 'application/x-www-form-urlencoded' };
+        if (token !== null) headers['cf-access-jwt-assertion'] = token;
+        const r = await s.run(new Request(`https://guifav.dev${path}`, { method, headers, body: method === 'POST' ? 'id=a&confirmar=sim' : undefined }));
+        assert.equal(r.status, 403, `${method} ${path} ${why}`);
+        assert.equal(await r.text(), 'acesso negado', `${method} ${path} ${why}`);
+        assert.equal(r.headers.get('cache-control'), 'no-store', `${method} ${path} ${why}`);
+      }
     }
   }
   assert.deepEqual(s.passed, []);
+  assert.equal(s.calls.filter((c) => c.url.startsWith('https://api.resend.com')).length, 0);
 });
 
 test('G1: JWT válido (email sem diferença de caixa) abre o painel; sem ALLOWED_EMAILS ninguém entra', async () => {
@@ -303,7 +321,13 @@ test('G4: descadastro grava no Resend com auditoria, confere na releitura, atual
 });
 
 test('G4: falha no Resend ou releitura sem o descadastro: 502, D1 intocado e sem texto da API na página', async () => {
-  for (const opts of [{ patchStatus: 500 }, { patchStatus: 422 }, { rereadKeepsSubscribed: true }]) {
+  const variants: Parameters<typeof setup>[0][] = [
+    { patchStatus: 500 }, { patchStatus: 422 }, { rereadKeepsSubscribed: true },
+    { reread: (c) => ({ ...c, properties: {} }) }, // releitura sem a auditoria
+    { reread: (c) => ({ ...c, properties: { [AUDIT_PROPERTY]: { value: '2020-01-01T00:00:00.000Z', type: 'string' } } }) }, // outra auditoria
+    { reread: (c) => ({ ...c, id: 'outro' }) }, // outro contato
+  ];
+  for (const opts of variants) {
     const s = setup({ contacts: [contact('a', 'ana@x.com')], ...opts });
     seed(s.db, [{ id: 'a', email: 'ana@x.com' }]);
     const r = await post(s, { id: 'a', confirmar: 'sim' });
@@ -312,6 +336,76 @@ test('G4: falha no Resend ou releitura sem o descadastro: 502, D1 intocado e sem
     assert.ok(!body.includes('segredo') && !body.includes('ana@x.com'), JSON.stringify(opts));
     assert.deepEqual(plain(s.db.raw.prepare('SELECT unsubscribed, admin_unsubscribed_at FROM subscribers').get()), { unsubscribed: 0, admin_unsubscribed_at: '' });
   }
+});
+
+test('G4: descadastro mexe só no contato escolhido, no Resend e no D1', async () => {
+  const s = setup({ contacts: [contact('a', 'ana@x.com'), contact('b', 'bia@x.com')] });
+  seed(s.db, [{ id: 'a', email: 'ana@x.com' }, { id: 'b', email: 'bia@x.com' }]);
+  assert.equal((await post(s, { id: 'b', confirmar: 'sim' })).status, 303);
+  assert.deepEqual(s.db.raw.prepare('SELECT id, unsubscribed FROM subscribers ORDER BY id').all().map(plain), [{ id: 'a', unsubscribed: 0 }, { id: 'b', unsubscribed: 1 }]);
+  assert.equal(s.contacts.get('a')!.unsubscribed, false);
+  assert.deepEqual(s.calls.filter((c) => c.method === 'PATCH').map((c) => c.url), ['https://api.resend.com/contacts/b']);
+});
+
+test('G4: falha do D1 vira 502 com cabeçalhos de segurança: antes do Resend, nada é gravado; depois, a página diz que o Resend já descadastrou', async () => {
+  const before = setup({ contacts: [contact('a', 'ana@x.com')] });
+  before.env.DB = d1(undefined, /^SELECT id FROM subscribers/);
+  const r1 = await post(before, { id: 'a', confirmar: 'sim' });
+  assert.equal(r1.status, 502);
+  assert.equal(r1.headers.get('cache-control'), 'no-store');
+  assert.match(await r1.text(), /Nada foi alterado/);
+  assert.equal(before.calls.filter((c) => c.method === 'PATCH').length, 0);
+  const after = setup({ contacts: [contact('a', 'ana@x.com')] });
+  const db = d1(undefined, /^UPDATE subscribers/);
+  seed(db, [{ id: 'a', email: 'ana@x.com' }]);
+  after.env.DB = db;
+  const r2 = await post(after, { id: 'a', confirmar: 'sim' });
+  assert.equal(r2.status, 502);
+  assert.match(r2.headers.get('content-security-policy') ?? '', /default-src 'none'/);
+  const body = await r2.text();
+  assert.match(body, /Descadastrado no Resend, mas a cópia do painel não foi atualizada/);
+  assert.ok(!body.includes('ana@x.com') && !body.includes('indisponível'));
+  assert.equal(after.contacts.get('a')!.unsubscribed, true);
+});
+
+test('G2: conteúdo hostil gravado na cópia sai escapado na página e com aspas no CSV', async () => {
+  const s = setup();
+  seed(s.db, [{ id: 'x"><script>alert(1)</script>', email: '<img src=x onerror=alert(1)>@x.com', origin: '<b>o</b>', joined_at: '<i>2025</i>' }]);
+  s.db.raw.prepare("INSERT INTO meta (k, v) VALUES ('last_sync_error', '<script>e</script>')").run();
+  const html = await (await get(s, '/admin')).text();
+  assert.ok(!html.includes('<script>') && !html.includes('<img') && !html.includes('<b>o</b>') && !html.includes('<i>'), 'HTML sem escape');
+  assert.ok(html.includes('&lt;img src=x onerror=alert(1)&gt;@x.com'));
+});
+
+test('G2: cabeçalhos de segurança também em 303, 403, 405 e 502', async () => {
+  const s = setup({ contacts: [contact('a', 'ana@x.com')], patchStatus: 500 });
+  seed(s.db, [{ id: 'a', email: 'ana@x.com' }]);
+  const ok = setup({ contacts: [contact('a', 'ana@x.com')] });
+  seed(ok.db, [{ id: 'a', email: 'ana@x.com' }]);
+  const responses: [string, Response][] = [
+    ['303', await post(ok, { id: 'a', confirmar: 'sim' })],
+    ['403', await get(s, '/admin', null)],
+    ['405', await get(s, '/admin/unsubscribe')],
+    ['502', await post(s, { id: 'a', confirmar: 'sim' })],
+  ];
+  for (const [code, r] of responses) {
+    assert.equal(String(r.status), code);
+    assert.equal(r.headers.get('cache-control'), 'no-store', code);
+    assert.equal(r.headers.get('x-robots-tag'), 'noindex, nofollow', code);
+    assert.equal(r.headers.get('x-frame-options'), 'DENY', code);
+    assert.match(r.headers.get('content-security-policy') ?? '', /default-src 'none'/, code);
+  }
+});
+
+test('G5: falha na troca final (último lote) não apaga as linhas antigas', async () => {
+  const many = Array.from({ length: 120 }, (_, i) => contact(`c${String(i).padStart(4, '0')}`, `p${i}@x.com`));
+  const s = setup({ contacts: many });
+  const db = d1(4); // 3 lotes de gravação passam; o 4º (troca final) falha
+  seed(db, [{ id: 'velho', email: 'velho@x.com' }]);
+  s.env.DB = db;
+  await assert.rejects(syncSegment(s.env, s.deps));
+  assert.equal((db.raw.prepare('SELECT count(*) AS n FROM subscribers').get() as { n: number }).n, 121);
+  assert.ok(db.raw.prepare("SELECT id FROM subscribers WHERE id = 'velho'").get());
 });
 
 test('G4: sem confirmação, de outra origem, formato errado, id fora do painel ou GET: nada é gravado', async () => {
@@ -386,10 +480,93 @@ test('G5: paginação de 100, espaçamento de 250 ms (4 req/s) e 429 respeitado'
   assert.ok(lists.every((c) => new URL(c.url).searchParams.get('limit') === '100' && new URL(c.url).searchParams.get('segment_id') === SEG));
   assert.equal(GAP_MS, 250);
   const resendCalls = s.calls.filter((c) => c.url.startsWith('https://api.resend.com')).length;
-  // O 429 cai na primeira chamada (propriedades) e espera o retry-after; toda outra chamada é seguida de 250 ms.
+  // O 429 cai na primeira chamada (propriedades) e espera o retry-after inteiro; toda chamada é precedida de 250 ms.
   assert.equal(s.calls.filter((c) => c.url.includes('/contact-properties')).length, 2);
-  assert.equal(s.sleeps.filter((x) => x === GAP_MS).length, resendCalls - 1);
+  assert.equal(s.sleeps.filter((x) => x === GAP_MS).length, resendCalls);
   assert.deepEqual(s.sleeps.filter((x) => x !== GAP_MS), [2000]);
+});
+
+function maxPerSecond(calls: Call[]): number {
+  const ts = calls.filter((c) => c.url.startsWith('https://api.resend.com')).map((c) => c.t);
+  return Math.max(...ts.map((a) => ts.filter((b) => b >= a && b < a + 1000).length));
+}
+
+test('G5: no relógio virtual, nenhuma janela de 1 s tem mais de 4 chamadas, inclusive criando a propriedade', async () => {
+  for (const props of [[], [AUDIT_PROPERTY]]) {
+    const s = setup({ props, contacts: [contact('a', 'ana@x.com'), contact('b', 'bia@x.com'), contact('c', 'cris@x.com')] });
+    await syncSegment(s.env, s.deps);
+    assert.ok(maxPerSecond(s.calls) <= 4, `props=${props} -> ${maxPerSecond(s.calls)} por segundo`);
+  }
+});
+
+test('G5: Retry-After é respeitado inteiro; acima de 60 s a execução desiste sem repetir antes da hora', async () => {
+  const ok = setup({ contacts: [contact('a', 'ana@x.com')], rate429: 1, retryAfter: '45' });
+  await syncSegment(ok.env, ok.deps);
+  assert.deepEqual(ok.sleeps.filter((x) => x !== GAP_MS), [45000]);
+  const s = setup({ contacts: [contact('a', 'ana@x.com')], rate429: 1, retryAfter: '120' });
+  seed(s.db, [{ id: 'velho', email: 'velho@x.com' }]);
+  await assert.rejects(syncSegment(s.env, s.deps), /429 com espera de 120 s/);
+  assert.equal(s.calls.filter((c) => c.url.startsWith('https://api.resend.com')).length, 1);
+  assert.ok(s.db.raw.prepare("SELECT id FROM subscribers WHERE id = 'velho'").get());
+  assert.match((s.db.raw.prepare("SELECT v FROM meta WHERE k = 'last_sync_error'").get() as { v: string }).v, /429/);
+});
+
+test('G5: prazo e orçamento de chamadas: estourar aborta com erro registrado e sem apagar a cópia', async () => {
+  const many = Array.from({ length: 30 }, (_, i) => contact(`c${String(i).padStart(4, '0')}`, `p${i}@x.com`));
+  const s = setup({ contacts: many, latencyMs: 60_000 }); // cada chamada leva 1 min: o prazo de 12 min estoura
+  seed(s.db, [{ id: 'velho', email: 'velho@x.com' }]);
+  await assert.rejects(syncSegment(s.env, s.deps), /orçamento da execução esgotado/);
+  assert.ok(s.calls.length <= 14, `chamadas: ${s.calls.length}`);
+  assert.ok(s.db.raw.prepare("SELECT id FROM subscribers WHERE id = 'velho'").get());
+  const b = setup();
+  await assert.rejects(resend(b.env, b.deps, 'GET', '/contacts/x', undefined, { start: b.deps.now(), calls: MAX_CALLS }), /orçamento/);
+  assert.equal(b.calls.length, 0);
+  assert.ok(MAX_CALLS < 10_000 && DEADLINE_MS < 15 * 60_000);
+});
+
+test('G5: listagem inválida ou sem progresso é erro e não apaga a cópia', async () => {
+  const cases: [string, (u: URL) => Response | null][] = [
+    ['sem data', () => Response.json({ object: 'list', has_more: true })],
+    ['sem has_more', () => Response.json({ object: 'list', data: [] })],
+    ['data não é lista', () => Response.json({ object: 'list', has_more: false, data: {} })],
+    ['has_more com página vazia', () => Response.json({ object: 'list', has_more: true, data: [] })],
+    ['cursor repetido', () => Response.json({ object: 'list', has_more: true, data: [{ id: 'a', email: 'ana@x.com' }] })],
+  ];
+  for (const [why, list] of cases) {
+    const s = setup({ contacts: [contact('a', 'ana@x.com')], list });
+    seed(s.db, [{ id: 'velho', email: 'velho@x.com' }]);
+    await assert.rejects(syncSegment(s.env, s.deps), undefined, why);
+    assert.ok(s.db.raw.prepare("SELECT id FROM subscribers WHERE id = 'velho'").get(), why);
+    assert.match((s.db.raw.prepare("SELECT v FROM meta WHERE k = 'last_sync_error'").get() as { v: string }).v, /listagem inválida|sem progresso/, why);
+  }
+});
+
+test('G5: descadastro feito pelo painel durante o cron não é desfeito; reinscrição feita no Resend é respeitada', async () => {
+  const s = setup({ contacts: [contact('a', 'ana@x.com'), contact('b', 'bia@x.com')] });
+  seed(s.db, [{ id: 'a', email: 'ana@x.com' }, { id: 'b', email: 'bia@x.com' }]);
+  let fired = false;
+  // O cron lê "a" inscrita; logo depois o Gui descadastra "a" pelo painel; o cron termina e grava o que leu.
+  const racing = setup({ contacts: [], afterContactGet: async (id) => {
+    if (id !== 'a' || fired) return;
+    fired = true;
+    const r = await post(s, { id: 'a', confirmar: 'sim' });
+    assert.equal(r.status, 303);
+  } });
+  racing.env.DB = s.db;
+  for (const c of s.contacts.values()) racing.contacts.set(c.id, c); // mesmo Resend falso
+  assert.equal(await syncSegment(racing.env, racing.deps), 2);
+  assert.ok(fired);
+  const row = () => plain(s.db.raw.prepare("SELECT unsubscribed, admin_unsubscribed_at FROM subscribers WHERE id = 'a'").get());
+  const audit = new Date(NOW).toISOString();
+  assert.deepEqual(row(), { unsubscribed: 1, admin_unsubscribed_at: audit });
+  assert.equal(plain(s.db.raw.prepare("SELECT unsubscribed FROM subscribers WHERE id = 'b'").get()).unsubscribed, 0);
+  // Próximo cron: o Resend já mostra a mesma auditoria; segue descadastrada.
+  await syncSegment(s.env, s.deps);
+  assert.deepEqual(row(), { unsubscribed: 1, admin_unsubscribed_at: audit });
+  // Reinscrição feita direto no Resend (mesma auditoria): vale o Resend.
+  s.contacts.get('a')!.unsubscribed = false;
+  await syncSegment(s.env, s.deps);
+  assert.deepEqual(row(), { unsubscribed: 0, admin_unsubscribed_at: audit });
 });
 
 test('G5: a propriedade de auditoria só é criada quando falta', async () => {

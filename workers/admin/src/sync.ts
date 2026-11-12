@@ -29,8 +29,11 @@ export interface SyncEnv {
 export const RESEND = 'https://api.resend.com';
 export const PAGE = 100;
 export const MAX_PAGES = 200;
-export const GAP_MS = 250; // 4 req/s
+export const GAP_MS = 250; // 4 req/s, para toda chamada ao Resend
 const MAX_RETRIES = 4;
+export const MAX_RETRY_AFTER_S = 60; // espera maior que isso: aborta e deixa para a próxima execução
+export const DEADLINE_MS = 12 * 60 * 1000; // folga sobre os 15 min do cron
+export const MAX_CALLS = 9000; // folga sobre os 10.000 subrequests do plano pago
 const BATCH = 50;
 export const AUDIT_PROPERTY = 'admin_unsubscribed_at';
 
@@ -57,8 +60,14 @@ export function rowFrom(c: Contact, run: string) {
   };
 }
 
-export async function resend(env: SyncEnv, deps: SyncDeps, method: string, path: string, body?: unknown): Promise<Record<string, unknown>> {
+export type Budget = { start: number; calls: number };
+
+export async function resend(env: SyncEnv, deps: SyncDeps, method: string, path: string, body?: unknown, budget?: Budget): Promise<Record<string, unknown>> {
   for (let i = 0; i < MAX_RETRIES; i++) {
+    if (budget) {
+      if (++budget.calls > MAX_CALLS || deps.now() - budget.start > DEADLINE_MS) throw new SyncError('orçamento da execução esgotado');
+      await deps.sleep(GAP_MS); // espaçamento central: nenhuma chamada da sincronização sai sem os 250 ms
+    }
     const res = await deps.fetch(`${RESEND}${path}`, {
       method,
       headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, 'content-type': 'application/json' },
@@ -66,7 +75,10 @@ export async function resend(env: SyncEnv, deps: SyncDeps, method: string, path:
     });
     if (res.status === 429) {
       const ra = Number(res.headers.get('retry-after'));
-      await deps.sleep(Number.isFinite(ra) && ra > 0 ? Math.min(ra, 60) * 1000 : 1000);
+      const wait = Number.isFinite(ra) && ra > 0 ? ra : 1;
+      // Respeita o Retry-After inteiro; se for longo demais para o cron, desiste em vez de repetir antes da hora.
+      if (wait > MAX_RETRY_AFTER_S) throw new SyncError(`Resend 429 com espera de ${wait} s em ${method} ${path.split('/')[1].split('?')[0]}`);
+      await deps.sleep(wait * 1000);
       continue;
     }
     // Só o código e a rota fixa: nunca o caminho (pode ter id ou email) nem o texto da API.
@@ -77,50 +89,57 @@ export async function resend(env: SyncEnv, deps: SyncDeps, method: string, path:
   throw new SyncError(`Resend 429 persistente em ${method} ${path.split('/')[1].split('?')[0]}`);
 }
 
-async function paged(env: SyncEnv, deps: SyncDeps, route: string, extra = ''): Promise<Record<string, unknown>[]> {
+async function paged(env: SyncEnv, deps: SyncDeps, budget: Budget, route: string, extra = ''): Promise<Record<string, unknown>[]> {
   const out: Record<string, unknown>[] = [];
   let after = '';
   for (let i = 0; i < MAX_PAGES; i++) {
     const q = new URLSearchParams({ limit: String(PAGE) });
     if (extra) q.set('segment_id', extra);
     if (after) q.set('after', after);
-    const data = await resend(env, deps, 'GET', `/${route}?${q}`);
-    await deps.sleep(GAP_MS);
-    const page = Array.isArray(data.data) ? (data.data as Record<string, unknown>[]) : [];
+    const data = await resend(env, deps, 'GET', `/${route}?${q}`, undefined, budget);
+    // Só um término explícito vale: resposta sem lista, sem has_more booleano ou com cursor que não avança é erro,
+    // e a cópia antiga fica intacta (a remoção só roda depois de uma listagem completa).
+    if (!Array.isArray(data.data) || typeof data.has_more !== 'boolean') throw new SyncError(`listagem inválida em ${route}`);
+    const page = data.data as Record<string, unknown>[];
     out.push(...page);
+    if (!data.has_more) return out;
     const last = page.length ? String(page[page.length - 1].id ?? '') : '';
-    if (data.has_more !== true || !last || last === after) return out;
+    if (!last || last === after) throw new SyncError(`paginação sem progresso em ${route}`);
     after = last;
   }
   throw new SyncError(`paginação sem fim em ${route}`);
 }
 
 /** Garante a propriedade de auditoria do descadastro pelo painel (o Resend recusa gravar propriedade inexistente). */
-export async function ensureAuditProperty(env: SyncEnv, deps: SyncDeps): Promise<boolean> {
-  const props = await paged(env, deps, 'contact-properties');
+export async function ensureAuditProperty(env: SyncEnv, deps: SyncDeps, budget: Budget): Promise<boolean> {
+  const props = await paged(env, deps, budget, 'contact-properties');
   if (props.some((p) => p.key === AUDIT_PROPERTY)) return false;
-  await resend(env, deps, 'POST', '/contact-properties', { key: AUDIT_PROPERTY, type: 'string' });
+  await resend(env, deps, 'POST', '/contact-properties', { key: AUDIT_PROPERTY, type: 'string' }, budget);
   return true;
 }
 
 export async function syncSegment(env: SyncEnv, deps: SyncDeps): Promise<number> {
   const run = new Date(deps.now()).toISOString();
+  const budget: Budget = { start: deps.now(), calls: 0 };
   try {
-    await ensureAuditProperty(env, deps);
-    const listed = await paged(env, deps, 'contacts', env.SEGMENT_ID);
+    await ensureAuditProperty(env, deps, budget);
+    const listed = await paged(env, deps, budget, 'contacts', env.SEGMENT_ID);
     const rows = [];
     for (const c of listed) {
       if (typeof c.id !== 'string' || !c.id) throw new SyncError('contato sem id na listagem');
-      const full = (await resend(env, deps, 'GET', `/contacts/${encodeURIComponent(c.id)}`)) as Contact;
-      await deps.sleep(GAP_MS);
+      const full = (await resend(env, deps, 'GET', `/contacts/${encodeURIComponent(c.id)}`, undefined, budget)) as Contact;
       rows.push(rowFrom({ ...full, id: c.id }, run));
     }
     const up = env.DB.prepare(
       `INSERT INTO subscribers (id, email, unsubscribed, origin, joined_at, paid_until, site_confirmed_at, admin_unsubscribed_at, created_at, run)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET email=excluded.email, unsubscribed=excluded.unsubscribed, origin=excluded.origin,
+       ON CONFLICT(id) DO UPDATE SET email=excluded.email, origin=excluded.origin,
          joined_at=excluded.joined_at, paid_until=excluded.paid_until, site_confirmed_at=excluded.site_confirmed_at,
-         admin_unsubscribed_at=excluded.admin_unsubscribed_at, created_at=excluded.created_at, run=excluded.run`);
+         created_at=excluded.created_at, run=excluded.run,
+         -- Descadastro do painel que a leitura ainda não via (auditoria local mais nova que a lida) vence a leitura;
+         -- quando o Resend já mostra a mesma auditoria, vale o Resend (inclusive uma reinscrição feita lá).
+         unsubscribed = CASE WHEN subscribers.admin_unsubscribed_at > excluded.admin_unsubscribed_at THEN subscribers.unsubscribed ELSE excluded.unsubscribed END,
+         admin_unsubscribed_at = CASE WHEN subscribers.admin_unsubscribed_at > excluded.admin_unsubscribed_at THEN subscribers.admin_unsubscribed_at ELSE excluded.admin_unsubscribed_at END`);
     for (let i = 0; i < rows.length; i += BATCH) {
       await env.DB.batch(rows.slice(i, i + BATCH).map((r) => up.bind(r.id, r.email, r.unsubscribed, r.origin, r.joined_at,
         r.paid_until, r.site_confirmed_at, r.admin_unsubscribed_at, r.created_at, r.run)));

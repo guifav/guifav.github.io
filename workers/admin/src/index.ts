@@ -5,7 +5,7 @@
 //   POST /admin/unsubscribe  descadastra no Resend, com auditoria no contato, e atualiza a cópia
 // Qualquer outro caminho que a rota pegue (ex.: /administrar) segue para o site no GitHub Pages.
 import { accessEmail } from './access.ts';
-import { AUDIT_PROPERTY, resend, syncSegment, SyncError, type D1Like, type SyncDeps } from './sync.ts';
+import { AUDIT_PROPERTY, prop, resend, syncSegment, SyncError, type D1Like, type SyncDeps } from './sync.ts';
 
 export interface Env {
   DB: D1Like;
@@ -144,20 +144,33 @@ async function unsubscribe(req: Request, env: Env, deps: Deps): Promise<Response
   const form = new URLSearchParams(raw);
   const id = form.get('id') ?? '';
   if (form.get('confirmar') !== 'sim') return text(400, 'marque "confirmo" para descadastrar');
-  const row = await env.DB.prepare('SELECT id FROM subscribers WHERE id = ?').bind(id).first<{ id: string }>();
+  const fail = (msg: string) => respond(502, `<!doctype html><meta charset="utf-8"><p>${esc(msg)} <a href="/admin">voltar</a></p>`,
+    'text/html; charset=utf-8');
+  let row: { id: string } | null;
+  try {
+    row = await env.DB.prepare('SELECT id FROM subscribers WHERE id = ?').bind(id).first<{ id: string }>();
+  } catch {
+    return fail('Não foi possível ler a cópia do painel. Nada foi alterado.');
+  }
   if (!row) return text(404, 'contato não encontrado no painel');
   const at = new Date(deps.now()).toISOString();
   const path = `/contacts/${encodeURIComponent(id)}`;
   try {
     await resend(env, deps, 'PATCH', path, { unsubscribed: true, properties: { [AUDIT_PROPERTY]: at } });
-    // Sucesso só com prova: a releitura no Resend mostra o descadastro.
+    // Sucesso só com prova: a releitura no Resend mostra o mesmo contato, descadastrado, com esta auditoria.
     const after = await resend(env, deps, 'GET', path);
-    if (after.unsubscribed !== true) throw new SyncError('releitura sem o descadastro');
+    if (after.id !== id || after.unsubscribed !== true || prop(after, AUDIT_PROPERTY) !== at) {
+      throw new SyncError('releitura sem o descadastro e a auditoria');
+    }
   } catch (e) {
     const why = e instanceof SyncError ? e.message : 'falha de rede';
-    return respond(502, `<!doctype html><meta charset="utf-8"><p>Não foi possível descadastrar (${esc(why)}). Nada foi alterado no painel. <a href="/admin">voltar</a></p>`, 'text/html; charset=utf-8');
+    return fail(`Não foi possível descadastrar (${why}). Nada foi alterado no painel.`);
   }
-  await env.DB.prepare('UPDATE subscribers SET unsubscribed = 1, admin_unsubscribed_at = ? WHERE id = ?').bind(at, id).run();
+  try {
+    await env.DB.prepare('UPDATE subscribers SET unsubscribed = 1, admin_unsubscribed_at = ? WHERE id = ?').bind(at, id).run();
+  } catch {
+    return fail('Descadastrado no Resend, mas a cópia do painel não foi atualizada; a próxima sincronização (a cada hora) corrige.');
+  }
   return redirect('/admin?msg=descadastrado');
 }
 
