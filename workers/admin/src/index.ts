@@ -5,12 +5,13 @@
 //   POST /admin/unsubscribe  descadastra no Resend, com auditoria no contato, e atualiza a cópia
 // Qualquer outro caminho que a rota pegue (ex.: /administrar) segue para o site no GitHub Pages.
 import { accessEmail } from './access.ts';
-import { AUDIT_PROPERTY, prop, resend, syncSegment, SyncError, type D1Like, type SyncDeps } from './sync.ts';
+import { AUDIT_PROPERTY, prop, resend, syncSegment, SyncError, topicSubscription, type D1Like, type SyncDeps } from './sync.ts';
 
 export interface Env {
   DB: D1Like;
   RESEND_API_KEY: string;
   SEGMENT_ID: string;
+  TOPIC_ID: string;
   ACCESS_TEAM_DOMAIN: string;
   ACCESS_AUD: string;
   ALLOWED_EMAILS: string; // segredo: emails separados por vírgula
@@ -144,6 +145,7 @@ async function unsubscribe(req: Request, env: Env, deps: Deps): Promise<Response
   const form = new URLSearchParams(raw);
   const id = form.get('id') ?? '';
   if (form.get('confirmar') !== 'sim') return text(400, 'marque "confirmo" para descadastrar');
+  if (!env.TOPIC_ID) return text(500, 'painel sem configuração do tópico; nada foi alterado');
   const fail = (msg: string) => respond(502, `<!doctype html><meta charset="utf-8"><p>${esc(msg)} <a href="/admin">voltar</a></p>`,
     'text/html; charset=utf-8');
   let row: { id: string } | null;
@@ -156,12 +158,14 @@ async function unsubscribe(req: Request, env: Env, deps: Deps): Promise<Response
   const at = new Date(deps.now()).toISOString();
   const path = `/contacts/${encodeURIComponent(id)}`;
   try {
-    await resend(env, deps, 'PATCH', path, { unsubscribed: true, properties: { [AUDIT_PROPERTY]: at } });
-    // Sucesso só com prova: a releitura no Resend mostra o mesmo contato, descadastrado, com esta auditoria.
+    // Só da newsletter (tópico), não da conta inteira: a pessoa continua recebendo os outros envios.
+    // Auditoria primeiro: se a saída do tópico falhar, nada indica descadastro no painel.
+    await resend(env, deps, 'PATCH', path, { properties: { [AUDIT_PROPERTY]: at } });
+    await resend(env, deps, 'PATCH', `${path}/topics`, [{ id: env.TOPIC_ID, subscription: 'opt_out' }]);
+    // Sucesso só com prova: a releitura mostra o mesmo contato com esta auditoria e fora do tópico.
     const after = await resend(env, deps, 'GET', path);
-    if (after.id !== id || after.unsubscribed !== true || prop(after, AUDIT_PROPERTY) !== at) {
-      throw new SyncError('releitura sem o descadastro e a auditoria');
-    }
+    if (after.id !== id || prop(after, AUDIT_PROPERTY) !== at) throw new SyncError('releitura sem a auditoria');
+    if ((await topicSubscription(env, deps, id)) !== 'opt_out') throw new SyncError('releitura ainda no tópico');
   } catch (e) {
     const why = e instanceof SyncError ? e.message : 'falha de rede';
     return fail(`Não foi possível descadastrar (${why}). Nada foi alterado no painel.`);

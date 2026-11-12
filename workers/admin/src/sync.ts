@@ -24,6 +24,7 @@ export interface SyncEnv {
   DB: D1Like;
   RESEND_API_KEY: string;
   SEGMENT_ID: string;
+  TOPIC_ID: string;
 }
 
 export const RESEND = 'https://api.resend.com';
@@ -125,6 +126,16 @@ export async function ensureAuditProperty(env: SyncEnv, deps: SyncDeps, budget: 
   return true;
 }
 
+// Status do contato no tópico da newsletter. Formato real (2026-11-12): o tópico aparece mesmo sem estado explícito,
+// com o padrão opt_in. Resposta sem lista, sem o tópico ou com valor desconhecido é erro (nada é publicado).
+export async function topicSubscription(env: SyncEnv, deps: SyncDeps, id: string, budget?: Budget): Promise<'opt_in' | 'opt_out'> {
+  const data = await resend(env, deps, 'GET', `/contacts/${encodeURIComponent(id)}/topics?limit=100`, undefined, budget);
+  if (!Array.isArray(data.data)) throw new SyncError('tópicos do contato em formato inválido');
+  const t = (data.data as Record<string, unknown>[]).find((x) => x?.id === env.TOPIC_ID);
+  if (!t || (t.subscription !== 'opt_in' && t.subscription !== 'opt_out')) throw new SyncError('tópico da newsletter ausente no contato');
+  return t.subscription;
+}
+
 export async function syncSegment(env: SyncEnv, deps: SyncDeps): Promise<number> {
   const run = new Date(deps.now()).toISOString();
   // Identidade desta execução. Quem começa por último é o dono: toda escrita é condicionada a isso, e uma execução
@@ -132,6 +143,7 @@ export async function syncSegment(env: SyncEnv, deps: SyncDeps): Promise<number>
   const runId = `${run}#${crypto.randomUUID().slice(0, 8)}`;
   const budget: Budget = { start: deps.now(), calls: 0 };
   try {
+    if (!env.TOPIC_ID) throw new SyncError('sem TOPIC_ID: o status da newsletter depende do tópico');
     await setMeta(env.DB, 'sync_owner', runId).run();
     await ensureAuditProperty(env, deps, budget);
     const listed = await paged(env, deps, budget, 'contacts', env.SEGMENT_ID);
@@ -143,7 +155,9 @@ export async function syncSegment(env: SyncEnv, deps: SyncDeps): Promise<number>
     for (const c of listed) {
       if (typeof c.id !== 'string' || !c.id) throw new SyncError('contato sem id na listagem');
       const full = (await resend(env, deps, 'GET', `/contacts/${encodeURIComponent(c.id)}`, undefined, budget)) as Contact;
-      rows.push({ ...rowFrom({ ...full, id: c.id }, runId), rev: revs.get(c.id) ?? 0 });
+      // Descadastrado da newsletter: saiu do tópico dela, ou da conta inteira (status global do Resend).
+      const out = (await topicSubscription(env, deps, c.id, budget)) === 'opt_out';
+      rows.push({ ...rowFrom({ ...full, id: c.id, unsubscribed: Boolean(full.unsubscribed) || out }, runId), rev: revs.get(c.id) ?? 0 });
     }
     const owned = "EXISTS (SELECT 1 FROM meta WHERE k = 'sync_owner' AND v = ?)";
     const up = env.DB.prepare(
