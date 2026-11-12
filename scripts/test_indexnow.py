@@ -137,8 +137,9 @@ class DiffTest(Site):
         self.assertEqual(I.plan(self.site, web)["urls"], [])
 
     def test_removed_non_html_that_still_exists_is_not_announced(self):
-        self.w("doc.pdf", b"%PDF")
-        self.assertEqual(I.changed({"https://guifav.dev/doc.pdf": ""}, {}, self.site), [])
+        # Arquivo que não é página: não se lê meta robots dele, mesmo que o texto tenha uma.
+        self.w("exemplo.txt", NOINDEX)
+        self.assertEqual(I.changed({"https://guifav.dev/exemplo.txt": ""}, {}, self.site), [])
 
     def test_live_unreadable_falls_back_to_all_urls(self):
         cases = {
@@ -254,6 +255,15 @@ class SubmitTest(Site):
             rc = I.main(["submit", "--plan", self.plan_file(plan), "--timeout", timeout], get=web, post=post, sleep=sleeps.append)
         return rc, sleeps, out.getvalue() + err.getvalue()
 
+    def sitemaps_503(self):
+        """Sitemaps com o corpo certo mas status 503 (erro do CDN); a chave responde 200."""
+        web = self.live()
+
+        def get(url):
+            status, body = web(url)
+            return (503, body) if "sitemap" in url and status == 200 else (status, body)
+        return get
+
     def plan(self, urls, mode="diff"):
         return {"mode": mode, "urls": urls, "sitemaps": self.shas()}
 
@@ -302,7 +312,8 @@ class SubmitTest(Site):
                           "índice antigo": self.live(**{"https://guifav.dev/sitemap.xml": b"antigo"}),
                           "chave errada": self.live(**{I.KEY_LOCATION: b"outra"}),
                           "chave fora do ar": FakeWeb(self.built()),
-                          "erro com corpo certo": ErrorWeb(dict(self.built(), **{I.KEY_LOCATION: I.KEY.encode()}))}.items():
+                          "erro com corpo certo": ErrorWeb(dict(self.built(), **{I.KEY_LOCATION: I.KEY.encode()})),
+                          "sitemaps com erro e chave ok": self.sitemaps_503()}.items():
             with self.subTest(name=name):
                 post = FakePost()
                 rc, sleeps, text = self.run_submit(self.plan(["https://guifav.dev/"]), web, post, timeout="30")
