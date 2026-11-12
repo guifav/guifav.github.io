@@ -143,15 +143,18 @@ async function enroll(email: string, env: Env, deps: Deps): Promise<Response> {
   // A propriedade precisa existir no Resend antes do deploy (o importador a cria), senão a gravação falha.
   const properties = { site_confirmed_at: new Date(deps.now()).toISOString() };
 
+  // Contrato real (sondado em 2026-11-12): para um email que já existe, este POST é upsert (201, mesmo id) e aplica
+  // cada campo do corpo. Sem `topics`, quem saiu só da newsletter continuaria fora dela depois de confirmar.
   const created = await deps.fetch(`${RESEND}/contacts`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ email, unsubscribed: false, segments: [{ id: env.SEGMENT_ID }], properties }),
+    body: JSON.stringify({ email, unsubscribed: false, segments: [{ id: env.SEGMENT_ID }], properties,
+      topics: [{ id: env.TOPIC_ID, subscription: 'opt_in' }] }),
   });
   if (created.ok) return done;
   if (created.status >= 500) return plain(502, 'falha temporária; tente o link de novo em alguns minutos');
 
-  // Contato já existe (confirmação repetida, ou alguém que saiu e voltou): reativa e garante o segmento (A5).
+  // Reserva, se a API recusar o POST de um email existente (409/422): reativa, devolve ao tópico e garante o segmento (A5).
   // Sucesso só com prova: a inclusão respondeu 2xx, ou a lista de segmentos do contato contém o segmento.
   // Qualquer outro caso (409 resource_locked, 422, 5xx) vira 502, e o leitor pode abrir o link de novo.
   const retry = plain(502, 'falha temporária; tente o link de novo em alguns minutos');

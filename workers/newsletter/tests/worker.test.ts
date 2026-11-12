@@ -32,12 +32,17 @@ type Opts = {
   segments?: string[];
   segListStatus?: number;
   topicStatus?: number;
+  topic?: 'opt_in' | 'opt_out'; // estado do contato existente no tópico
   throwOn?: string;
   badJsonOn?: string;
 };
 
 function setup(opts: Opts = {}) {
   const calls: Call[] = [];
+  // Estado do contato no Resend, para provar o efeito e não só as chamadas.
+  const exists = Boolean(opts.contact && opts.contact !== 'none');
+  const state = { exists, unsubscribed: opts.contact === 'unsubscribed', topic: opts.topic ?? 'opt_in',
+    inSegment: exists && (opts.segments ?? []).includes('seg-1'), props: {} as Record<string, string> };
   const rl: string[] = [];
   const fetchFn = async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
@@ -56,11 +61,21 @@ function setup(opts: Opts = {}) {
       return opts.emailStatus ? new Response('falha', { status: opts.emailStatus }) : Response.json({ id: 'email-1' });
     }
     if (url === 'https://api.resend.com/contacts' && method === 'POST') {
-      const st = opts.createStatus ?? (opts.contact && opts.contact !== 'none' ? 409 : 200);
-      return st === 200 ? Response.json({ id: 'c1' }) : Response.json({ name: 'conflict' }, { status: st });
+      // Contrato real (sondado em 2026-11-12): email que já existe NÃO dá erro; é upsert, 201 com o mesmo id.
+      // Aplica unsubscribed, segments, properties e topics do corpo; sem `topics`, o tópico fica como estava.
+      if (opts.createStatus) return Response.json({ name: 'conflict' }, { status: opts.createStatus });
+      const b = body as { unsubscribed?: boolean; segments?: { id: string }[]; properties?: Record<string, string>;
+        topics?: { id: string; subscription: 'opt_in' | 'opt_out' }[] };
+      state.exists = true;
+      if (b.unsubscribed !== undefined) state.unsubscribed = b.unsubscribed;
+      if (b.segments?.some((x) => x.id === 'seg-1')) state.inSegment = true;
+      Object.assign(state.props, b.properties ?? {});
+      for (const t of b.topics ?? []) if (t.id === 'topic-1') state.topic = t.subscription;
+      return Response.json({ object: 'contact', id: 'c1' }, { status: 201 });
     }
     if (url === 'https://api.resend.com/contacts/c1/segments/seg-1' && method === 'POST') {
       const st = opts.segStatus ?? 201;
+      if (st < 300) state.inSegment = true;
       return st < 300 ? Response.json({ id: 'seg-1' }, { status: st }) : Response.json({ name: 'resource_locked' }, { status: st });
     }
     if (url.startsWith('https://api.resend.com/contacts/c1/segments?') && method === 'GET') {
@@ -78,6 +93,7 @@ function setup(opts: Opts = {}) {
       // Contrato conferido na API em 2026-11-12: corpo é um array puro; {topics: [...]} dá 422.
       if (!Array.isArray(body)) return Response.json({ name: 'validation_error' }, { status: 422 });
       const st = opts.topicStatus ?? 200;
+      if (st < 300) for (const t of body as { id: string; subscription: 'opt_in' | 'opt_out' }[]) if (t.id === 'topic-1') state.topic = t.subscription;
       return st < 300 ? Response.json({ object: 'contact_topics', id: 'c1' }) : Response.json({ name: 'internal_server_error' }, { status: st });
     }
     if (url.startsWith('https://api.resend.com/contacts/') && method === 'GET') {
@@ -86,6 +102,7 @@ function setup(opts: Opts = {}) {
     }
     if (url.startsWith('https://api.resend.com/contacts/') && method === 'PATCH') {
       const st = opts.patchStatus ?? 200;
+      if (st < 300 && (body as { unsubscribed?: boolean }).unsubscribed !== undefined) state.unsubscribed = (body as { unsubscribed: boolean }).unsubscribed;
       return st < 300 ? Response.json({ id: 'c1' }) : Response.json({ name: 'internal_server_error' }, { status: st });
     }
     return new Response('inesperado', { status: 500 });
@@ -106,7 +123,7 @@ function setup(opts: Opts = {}) {
     RL_IP: { limit: async ({ key }) => (rl.push('ip:' + key), { success: opts.rlIp ?? true }) },
   };
   const run = (req: Request) => handle(req, env, { fetch: fetchFn as typeof fetch, now: () => NOW });
-  return { env, run, calls, rl };
+  return { env, run, calls, rl, state };
 }
 
 function subscribe(fields: Record<string, string>, headers: Record<string, string> = {}) {
@@ -241,12 +258,26 @@ test('A1: /confirm válido cria o contato no segmento e redireciona para inscric
   assert.deepEqual(create?.body, {
     email: 'leitor@exemplo.com', unsubscribed: false, segments: [{ id: 'seg-1' }],
     properties: { site_confirmed_at: new Date(NOW).toISOString() },
+    topics: [{ id: 'topic-1', subscription: 'opt_in' }],
   });
 });
 
-test('A5: confirmação repetida e contato descadastrado reativado, sem duplicar', async () => {
+test('T1: email que já existe (POST real é upsert 201): status global, segmento e tópico voltam, com o opt-in registrado', async () => {
   for (const contact of ['active', 'unsubscribed'] as const) {
-    const s = setup({ contact });
+    for (const topic of ['opt_in', 'opt_out'] as const) {
+      const s = setup({ contact, topic });
+      const r = await s.run(new Request(`https://insights.guifav.dev/confirm?${await signLink('leitor@exemplo.com', NOW, SECRET)}`));
+      const why = `${contact}/${topic}`;
+      assert.equal(loc(r), 'https://guifav.dev/blog/inscricao-confirmada/', why);
+      assert.deepEqual({ ...s.state, props: { ...s.state.props } }, { exists: true, unsubscribed: false, topic: 'opt_in', inSegment: true,
+        props: { site_confirmed_at: new Date(NOW).toISOString() } }, why);
+    }
+  }
+});
+
+test('A5: se a API recusar o POST de um email existente (409/422), o caminho de reserva reativa sem duplicar', async () => {
+  for (const [contact, createStatus] of [['active', 409], ['unsubscribed', 422]] as const) {
+    const s = setup({ contact, createStatus, topic: 'opt_out' });
     const r = await s.run(new Request(`https://insights.guifav.dev/confirm?${await signLink('leitor@exemplo.com', NOW, SECRET)}`));
     assert.equal(loc(r), 'https://guifav.dev/blog/inscricao-confirmada/', contact);
     const writes = s.calls.filter((c) => c.method !== 'GET' && c.url.includes('/contacts'));
@@ -260,6 +291,7 @@ test('A5: confirmação repetida e contato descadastrado reativado, sem duplicar
     assert.deepEqual(writes[2].body, [{ id: 'topic-1', subscription: 'opt_in' }], contact);
     // A8: a reativação também registra o opt-in pelo site, que protege o contato da sincronização com o Substack.
     assert.deepEqual(writes[1].body, { unsubscribed: false, properties: { site_confirmed_at: new Date(NOW).toISOString() } }, contact);
+    assert.deepEqual([s.state.unsubscribed, s.state.topic, s.state.inSegment], [false, 'opt_in', true], contact);
   }
 });
 
@@ -357,7 +389,7 @@ const confirmUrl = async () => `https://insights.guifav.dev/confirm?${await sign
 
 test('A5: erro do Resend ao incluir no segmento não vira sucesso (409 resource_locked, 422, 500)', async () => {
   for (const segStatus of [409, 422, 500]) {
-    const s = setup({ contact: 'active', segStatus });
+    const s = setup({ contact: 'active', createStatus: 409, segStatus });
     const r = await s.run(new Request(await confirmUrl()));
     assert.equal(r.status, 502, String(segStatus));
     assert.ok(s.calls.some((c) => c.url.startsWith('https://api.resend.com/contacts/c1/segments?') && c.method === 'GET'), String(segStatus));
@@ -365,12 +397,12 @@ test('A5: erro do Resend ao incluir no segmento não vira sucesso (409 resource_
 });
 
 test('A5: inclusão que falha, mas a lista do contato mostra o segmento, é sucesso', async () => {
-  const s = setup({ contact: 'active', segStatus: 409, segments: ['outro', 'seg-1'] });
+  const s = setup({ contact: 'active', createStatus: 409, segStatus: 409, segments: ['outro', 'seg-1'] });
   const r = await s.run(new Request(await confirmUrl()));
   assert.equal(loc(r), 'https://guifav.dev/blog/inscricao-confirmada/');
 });
 
-test('T1: contato novo entra no tópico pelo padrão (opt_in), sem chamada extra', async () => {
+test('T1: contato novo entra no tópico pelo próprio POST, sem chamada extra', async () => {
   const s = setup({ contact: 'none' });
   const r = await s.run(new Request(await confirmUrl()));
   assert.equal(r.status, 303);
@@ -379,7 +411,7 @@ test('T1: contato novo entra no tópico pelo padrão (opt_in), sem chamada extra
 
 test('T1: falha ao devolver o contato ao tópico vira 502, sem incluir no segmento', async () => {
   for (const topicStatus of [422, 500]) {
-    const s = setup({ contact: 'unsubscribed', topicStatus });
+    const s = setup({ contact: 'unsubscribed', createStatus: 409, topicStatus });
     const r = await s.run(new Request(await confirmUrl()));
     assert.equal(r.status, 502, String(topicStatus));
     assert.equal(s.calls.filter((c) => c.url.includes('/segments/')).length, 0, String(topicStatus));
@@ -396,7 +428,7 @@ test('T1: sem TOPIC_ID o Worker não cadastra ninguém (500), e o wrangler.toml 
 });
 
 test('A5: falha ao reativar o contato devolve 502', async () => {
-  const s = setup({ contact: 'unsubscribed', patchStatus: 500 });
+  const s = setup({ contact: 'unsubscribed', createStatus: 409, patchStatus: 500 });
   const r = await s.run(new Request(await confirmUrl()));
   assert.equal(r.status, 502);
 });
@@ -485,7 +517,7 @@ test('A9: remetente e reply-to vêm do wrangler.toml real; um único link, o de 
 // ---------------------------------------------------------------- rodada 2 do gate (#31), P3 do Astra
 
 test('A5: inclusão recusada e o contato só em outro segmento: 502, nunca sucesso', async () => {
-  const s = setup({ contact: 'active', segStatus: 409, segments: ['outro'] });
+  const s = setup({ contact: 'active', createStatus: 409, segStatus: 409, segments: ['outro'] });
   const r = await s.run(new Request(await confirmUrl()));
   assert.equal(r.status, 502);
   assert.equal(loc(r), null);
@@ -494,7 +526,7 @@ test('A5: inclusão recusada e o contato só em outro segmento: 502, nunca suces
 test('A5: o segmento na segunda página da lista conta (paginação por after, 100 por página)', async () => {
   const many = Array.from({ length: 130 }, (_, i) => `s${i}`);
   many.splice(110, 0, 'seg-1');
-  const s = setup({ contact: 'active', segStatus: 409, segments: many });
+  const s = setup({ contact: 'active', createStatus: 409, segStatus: 409, segments: many });
   const r = await s.run(new Request(await confirmUrl()));
   assert.equal(loc(r), 'https://guifav.dev/blog/inscricao-confirmada/');
   const pages = s.calls.filter((c) => c.url.startsWith('https://api.resend.com/contacts/c1/segments?'));
@@ -505,9 +537,9 @@ test('A5: o segmento na segunda página da lista conta (paginação por after, 1
 
 test('A5: lista sem o segmento em nenhuma página, ou página que falha: 502', async () => {
   const many = Array.from({ length: 150 }, (_, i) => `s${i}`);
-  const s = setup({ contact: 'active', segStatus: 409, segments: many });
+  const s = setup({ contact: 'active', createStatus: 409, segStatus: 409, segments: many });
   assert.equal((await s.run(new Request(await confirmUrl()))).status, 502);
-  const t = setup({ contact: 'active', segStatus: 409, segments: many, segListStatus: 500 });
+  const t = setup({ contact: 'active', createStatus: 409, segStatus: 409, segments: many, segListStatus: 500 });
   assert.equal((await t.run(new Request(await confirmUrl()))).status, 502);
 });
 
@@ -515,7 +547,7 @@ test('A5: a leitura dos segmentos para em 20 páginas; o segmento na 21ª não c
   // P3 do Astra no #34: sem este teste, trocar o teto de 20 páginas passava em silêncio.
   const many = Array.from({ length: 2100 }, (_, i) => `s${i}`);
   many.splice(2050, 0, 'seg-1');
-  const s = setup({ contact: 'active', segStatus: 409, segments: many });
+  const s = setup({ contact: 'active', createStatus: 409, segStatus: 409, segments: many });
   const r = await s.run(new Request(await confirmUrl()));
   assert.equal(r.status, 502);
   assert.notEqual(loc(r), 'https://guifav.dev/blog/inscricao-confirmada/');
@@ -525,9 +557,9 @@ test('A5: a leitura dos segmentos para em 20 páginas; o segmento na 21ª não c
 test('A5: falha de rede ou JSON inválido do Resend na confirmação viram 502, sem rejeitar o handler', async () => {
   const cases: Opts[] = [
     { contact: 'none', throwOn: 'api.resend.com/contacts' },
-    { contact: 'active', throwOn: 'api.resend.com/contacts/c1/segments' },
-    { contact: 'active', badJsonOn: 'api.resend.com/contacts/leitor' },
-    { contact: 'active', segStatus: 409, badJsonOn: 'api.resend.com/contacts/c1/segments?' },
+    { contact: 'active', createStatus: 409, throwOn: 'api.resend.com/contacts/c1/segments' },
+    { contact: 'active', createStatus: 409, badJsonOn: 'api.resend.com/contacts/leitor' },
+    { contact: 'active', createStatus: 409, segStatus: 409, badJsonOn: 'api.resend.com/contacts/c1/segments?' },
   ];
   for (const o of cases) {
     const s = setup(o);
