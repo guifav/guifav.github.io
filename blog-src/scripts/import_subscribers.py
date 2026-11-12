@@ -11,24 +11,37 @@ que só cria as propriedades).
   da importação sem origem entrou pelo site (Worker anterior ao site_confirmed_at) e fica intocado: o sync o ignora.
 - --schema: só cria as propriedades. Rodar antes do deploy do Worker que grava site_confirmed_at; a importação vem
   depois do deploy, para que nenhuma confirmação pelo site fique sem o marcador.
+- O descadastro da newsletter é o tópico "IA Aplicada" (NEWSLETTER_TOPIC_ID), não o status global da conta, que
+  bloquearia todos os broadcasts. "Fora da newsletter" = saiu do tópico ou da conta inteira.
 - --sync (export novo, antes do primeiro envio): quem veio do Substack, está no segmento, não confirmou pelo site
-  (site_confirmed_at, gravado pelo Worker) e não está mais no export é descadastrado (unsubscribed=true). Ninguém é
-  apagado nem tirado do segmento. Recusa antes de gravar se o export estiver vazio ou se fosse descadastrar mais de 10
+  (site_confirmed_at, gravado pelo Worker) e não está mais no export sai do tópico (opt_out). O status global, o
+  segmento e o contato ficam intocados. Recusa antes de gravar se o export estiver vazio ou se fosse descadastrar mais de 10
   pessoas e mais de 10% dos vindos do Substack (export errado ou incompleto).
   Contrato de falhas (adjudicado pelo consultor na rodada 3 do #39; texto completo na descrição do PR):
-  S1 nenhum script grava unsubscribed=false: só a confirmação do próprio leitor reinscreve.
-  S2 a única escrita do sync é um PATCH com unsubscribed=true e substack_sync_unsubscribed_at juntos, depois de uma
-     releitura que mostra source=substack, sem site_confirmed_at e inscrito.
+  S1 nenhum script reinscreve quem já existe: não há PATCH com unsubscribed=false nem opt_in no tópico, e a criação
+     só vai para um email que a conferência imediatamente anterior mostrou inexistente. Só a confirmação do próprio
+     leitor reinscreve. Exceção única e residual: F2.
+  S2 as únicas escritas do sync, nesta ordem, são a auditoria substack_sync_unsubscribed_at e o opt_out no tópico,
+     depois de uma releitura que mostra source=substack, sem site_confirmed_at, inscrito na conta e no tópico. Com a
+     auditoria primeiro, ninguém fica fora do tópico sem registro de quem o tirou.
   S5 toda execução com --sync (inclusive a simulação) conta sync_conflito_confirmacao (site_confirmed_at,
-     substack_sync_unsubscribed_at e unsubscribed=true) e, se houver algum, sai com código 3.
-  F1 confirmação pelo site entre a releitura e o PATCH: o contato fica descadastrado, aparece em S5 e é reinscrito à
-     mão antes do primeiro envio.
+     substack_sync_unsubscribed_at e fora da newsletter) e, se houver algum, sai com código 3.
+  F1 confirmação pelo site entre a releitura e as escritas: o contato fica fora do tópico, aparece em S5 e é
+     reinscrito à mão antes do primeiro envio.
+  F2 na API real, o POST de email existente é upsert (201, mesmo id): grava as propriedades do corpo e volta o status
+     global a inscrito, mesmo sem o campo. Por isso cada criação é precedida de um GET por email; quem já existe
+     (inscrição pelo site depois da listagem) segue como existente, sem POST (contagem corrida_existente). Resta a
+     janela entre esse GET e o POST, que o Resend não permite fechar (não há criação exclusiva): se alguém for criado
+     e descadastrado da conta inteira nesses milissegundos, o descadastro global é desfeito. site_confirmed_at e o
+     tópico são preservados nesse caso. Nenhum caminho do sistema usa o descadastro global (só o painel do Resend,
+     à mão), então a exceção é aceita e fica declarada aqui.
 - Nada de envio: o cliente recusa qualquer rota fora das de contatos e propriedades.
 - A saída, inclusive a de erro, tem só contagens, operações e códigos HTTP: nunca emails nem texto da API.
 
 Rodar na KVM (a chave fica só no ambiente):
     RESEND_API_KEY=... NEWSLETTER_SEGMENT_ID=... python3 scripts/import_subscribers.py --schema
-    RESEND_API_KEY=... NEWSLETTER_SEGMENT_ID=... python3 scripts/import_subscribers.py <export.csv> [--apply] [--sync]
+    RESEND_API_KEY=... NEWSLETTER_SEGMENT_ID=... NEWSLETTER_TOPIC_ID=... \
+        python3 scripts/import_subscribers.py <export.csv> [--apply] [--sync]
 """
 from __future__ import annotations
 
@@ -153,6 +166,7 @@ class Api:
         ("GET", r"/contact-properties\?[^/#]*"), ("POST", r"/contact-properties"),
         ("GET", r"/contacts\?[^/#]*"), ("GET", r"/contacts/[^/?#]+"), ("POST", r"/contacts"),
         ("PATCH", r"/contacts/[^/?#]+"), ("POST", r"/contacts/[^/?#]+/segments/[^/?#]+"),
+        ("GET", r"/contacts/[^/?#]+/topics\?[^/#]*"), ("PATCH", r"/contacts/[^/?#]+/topics"),
     )
 
     def __init__(self, key: str, transport=_urllib_transport, sleep=time.sleep):
@@ -215,23 +229,51 @@ def _protected(full: dict) -> bool:
     return prop(full, "source") != "substack" or bool(prop(full, "site_confirmed_at"))
 
 
+def topic_subscription(api: Api, cid: str, topic_id: str) -> str:
+    """Estado do contato no tópico da newsletter. Formato real (2026-11-12): o tópico aparece mesmo sem estado
+    explícito, com o padrão opt_in. Resposta sem lista, sem o tópico ou com valor desconhecido é erro."""
+    _, data = api.request("GET", f"/contacts/{cid}/topics?limit={PAGE}", op="ler tópicos")
+    items = data.get("data")
+    if not isinstance(items, list):
+        raise ImportError_("tópicos do contato em formato inválido")
+    sub = next((t.get("subscription") for t in items if isinstance(t, dict) and t.get("id") == topic_id), None)
+    if sub is None:
+        raise ImportError_("tópico da newsletter ausente no contato")
+    if sub not in ("opt_in", "opt_out"):
+        raise ImportError_("valor desconhecido no tópico da newsletter")
+    return sub
+
+
 def _needs_props(full: dict) -> bool:
     return not prop(full, "source") and not prop(full, "site_confirmed_at")
 
 
-def run(api: Api, export_path: str, segment_id: str, *, out=None, apply: bool = False, sync: bool = False) -> Counter:
+def run(api: Api, export_path: str, segment_id: str, topic_id: str, *, out=None, apply: bool = False,
+        sync: bool = False) -> Counter:
     out = out or sys.stdout  # resolvido na chamada, para o redirecionamento da saída valer
     subs, skipped = load_export(export_path)
+    if not topic_id:
+        raise ImportError_("falta o tópico da newsletter; nada foi lido nem gravado")
     counts: Counter = Counter({f"ignorado_{k}": v for k, v in skipped.items()})
     counts["export_validos"] = len(subs)
     everyone = {c["email"].lower(): c for c in list_contacts(api)}
     in_seg = {c["email"].lower(): c for c in list_contacts(api, segment_id)}
     full: dict[str, dict] = {}
 
+    topics: dict[str, str] = {}
+
     def read(email: str, cid: str) -> dict:
         if email not in full:
             full[email] = api.request("GET", f"/contacts/{cid}", op="ler contato")[1]
         return full[email]
+
+    def is_out(email: str, cid: str) -> bool:
+        """Fora da newsletter: saiu da conta inteira ou do tópico dela."""
+        if read(email, cid).get("unsubscribed"):
+            return True
+        if email not in topics:
+            topics[email] = topic_subscription(api, cid, topic_id)
+        return topics[email] == "opt_out"
 
     create = [s for s in subs if s.email not in everyone]
     existing = [s for s in subs if s.email in everyone]
@@ -243,7 +285,7 @@ def run(api: Api, export_path: str, segment_id: str, *, out=None, apply: bool = 
     counts["adicionar_ao_segmento"] = len(attach)
     counts["completar_propriedades"] = len(fill)
     counts["no_segmento"] = sum(1 for s in subs if s.email in in_seg)
-    counts["existente_descadastrado"] = sum(1 for s in existing if full[s.email].get("unsubscribed"))
+    counts["existente_descadastrado"] = sum(1 for s in existing if is_out(s.email, everyone[s.email]["id"]))
 
     to_unsub = []
     if sync:
@@ -256,14 +298,14 @@ def run(api: Api, export_path: str, segment_id: str, *, out=None, apply: bool = 
             if _protected(f):
                 continue
             substack_in_seg += 1
-            if email not in wanted and not f.get("unsubscribed"):
+            if email not in wanted and not is_out(email, c["id"]):
                 to_unsub.append(c["id"])
         counts["sync_substack_no_segmento"] = substack_in_seg
         counts["sync_descadastrar"] = len(to_unsub)
         # S5: conflito lido do estado dos contatos, não só de quem esta execução tocou.
         counts["sync_conflito_confirmacao"] = sum(
             1 for email, c in in_seg.items()
-            if prop(full[email], "site_confirmed_at") and prop(full[email], SYNC_AUDIT) and full[email].get("unsubscribed"))
+            if prop(full[email], "site_confirmed_at") and prop(full[email], SYNC_AUDIT) and is_out(email, c["id"]))
         if len(to_unsub) > max(SYNC_MAX_ABS, SYNC_MAX_RATIO * substack_in_seg):
             raise ImportError_(f"o sync descadastraria {len(to_unsub)} de {substack_in_seg} vindos do Substack: acima de "
                                f"{SYNC_MAX_ABS} e de {SYNC_MAX_RATIO:.0%}; export provavelmente errado; nada foi gravado")
@@ -274,17 +316,27 @@ def run(api: Api, export_path: str, segment_id: str, *, out=None, apply: bool = 
 
     counts["propriedades_criadas"] = ensure_properties(api)
     ids = {s.email: everyone[s.email]["id"] for s in existing}
+    def as_existing(s: Subscriber, c: dict) -> None:
+        # Criado depois da listagem (inscrição pelo site): segue como existente, sem reinscrever. A inclusão no
+        # segmento é idempotente na API real (201 para quem já está nele, sondado em 2026-11-12).
+        ids[s.email] = c["id"]
+        attach.append(s)
+        if _needs_props(c):
+            fill.append(s)
+
     for s in create:
+        # F2: o POST do Resend é upsert e desfaria um descadastro global; confere logo antes de criar.
+        st, c = api.request("GET", contact_path(s.email), op="conferir antes de criar", ok=(200, 404))
+        if st == 200:
+            as_existing(s, c)
+            counts["corrida_existente"] += 1
+            continue
         status, _ = api.request("POST", "/contacts", {"email": s.email, "unsubscribed": False,
                                                        "segments": [{"id": segment_id}], "properties": _props(s)},
                                 op="criar contato", ok=(200, 201, 409))
-        if status == 409:
-            # Criado entre a leitura e a escrita (inscrição pelo site): trata como existente, sem reinscrever.
+        if status == 409:  # reserva, se a API passar a recusar email existente
             _, c = api.request("GET", contact_path(s.email), op="ler contato por email")
-            ids[s.email] = c["id"]
-            attach.append(s)
-            if _needs_props(c):
-                fill.append(s)
+            as_existing(s, c)
             counts["corrida_409"] += 1
             continue
         counts["criado"] += 1
@@ -300,11 +352,13 @@ def run(api: Api, export_path: str, segment_id: str, *, out=None, apply: bool = 
     for cid in to_unsub:
         # S2: releitura imediatamente anterior; sem compensação depois (S1). A corrida residual é o desfecho F1.
         before = api.request("GET", f"/contacts/{cid}", op="reler contato")[1]
-        if _protected(before) or before.get("unsubscribed"):
+        if _protected(before) or before.get("unsubscribed") or topic_subscription(api, cid, topic_id) == "opt_out":
             counts["sync_pulado_na_releitura"] += 1
             continue
         at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
-        api.request("PATCH", f"/contacts/{cid}", {"unsubscribed": True, "properties": {SYNC_AUDIT: at}}, op="descadastrar")
+        api.request("PATCH", f"/contacts/{cid}", {"properties": {SYNC_AUDIT: at}}, op="auditoria do sync")
+        api.request("PATCH", f"/contacts/{cid}/topics", [{"id": topic_id, "subscription": "opt_out"}],
+                    op="tirar do tópico")
         counts["sincronizado_descadastrado"] += 1
     _report(counts, out, "gravado")
     return counts
@@ -351,13 +405,17 @@ def main(argv=None, transport=_urllib_transport, sleep=time.sleep) -> int:
     if not a.schema and not a.export:
         print("ERRO: informe o export ou use --schema", file=sys.stderr)
         return 2
+    topic = os.environ.get("NEWSLETTER_TOPIC_ID", "")
+    if not a.schema and not topic:  # sem tópico, o sync usaria o descadastro da conta inteira
+        print("ERRO: falta NEWSLETTER_TOPIC_ID no ambiente", file=sys.stderr)
+        return 2
     # Mensagens fixas: nenhuma exceção original é impressa, porque caminho, URL e texto podem conter email.
     try:
         api = Api(key, transport, sleep)
         if a.schema:
             print(f"propriedades_criadas: {ensure_properties(api)}")
         else:
-            counts = run(api, a.export, seg, apply=a.apply, sync=a.sync)
+            counts = run(api, a.export, seg, topic, apply=a.apply, sync=a.sync)
             if counts.get("sync_conflito_confirmacao"):
                 print("ERRO: há contatos confirmados pelo site e descadastrados pelo sync (sync_conflito_confirmacao); "
                       "reinscrever à mão antes do primeiro envio", file=sys.stderr)
