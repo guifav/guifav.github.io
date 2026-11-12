@@ -18,7 +18,7 @@ ENV = {"CLOUDFLARE_API_TOKEN": "cf", "CLOUDFLARE_ACCOUNT_ID": "acc", "D1_DATABAS
 class Fake:
     """D1 pela API da Cloudflare e Twenty local (metadados GraphQL e REST de pessoas), em memória."""
 
-    def __init__(self, rows=None, people=None, fields=(), meta=None, fail=None, listing=None, rate429=0):
+    def __init__(self, rows=None, people=None, fields=(), meta=None, fail=None, listing=None, rate429=0, clock=None, per_minute=None):
         self.rows = rows or []
         self.meta = meta or {"last_sync_at": "2026-11-12T11:17:00Z", "last_sync_error": ""}
         self.people = {p["id"]: p for p in (people or [])}
@@ -29,8 +29,16 @@ class Fake:
         self.created = 0
         self.listing = listing  # substitui a resposta da listagem de pessoas: f(query) -> (status, corpo)
         self.rate429 = rate429
+        self.clock = clock  # relógio virtual compartilhado com o cliente (lista de 1 elemento, em segundos)
+        self.per_minute = per_minute  # limite documentado do Twenty: 100 requisições por minuto
+        self.twenty_times = []
+        self.limited = 0
 
     def __call__(self, method, url, headers, body):
+        st, res = self._call(method, url, headers, body)
+        return st, json.loads(json.dumps(res))  # como HTTP: o cliente nunca recebe os objetos do servidor
+
+    def _call(self, method, url, headers, body):
         data = json.loads(body) if body else None
         u = urllib.parse.urlparse(url)
         self.calls.append((method, u.path, data))
@@ -45,6 +53,13 @@ class Fake:
         if self.rate429 > 0:
             self.rate429 -= 1
             return 429, {"messages": ["Too Many Requests"]}
+        if self.per_minute:
+            now = self.clock[0]
+            recent = [t for t in self.twenty_times if t > now - 60]
+            if len(recent) >= self.per_minute:
+                self.limited += 1
+                return 429, {"messages": ["Too Many Requests"]}
+            self.twenty_times.append(now)
         if u.path == "/metadata":
             if "createOneField" in data["query"]:
                 f = data["variables"]["input"]["field"]
@@ -110,6 +125,9 @@ class SyncTest(unittest.TestCase):
         self.assertEqual({c["name"]: (c["type"], c["objectMetadataId"]) for c in creates},
                          {"iaAplicadaStatus": ("SELECT", "obj-person"), "iaAplicadaOrigem": ("SELECT", "obj-person"),
                           "iaAplicadaEntrada": ("DATE_TIME", "obj-person")})
+        opts = {c["name"]: [o["value"] for o in c.get("options") or []] for c in creates}
+        self.assertEqual(opts, {"iaAplicadaStatus": ["INSCRITO", "DESCADASTRADO"], "iaAplicadaOrigem": ["SUBSTACK", "SITE", "OUTRA"],
+                                "iaAplicadaEntrada": []})
         p1 = f.people["p1"]
         self.assertEqual((p1["name"], p1["jobTitle"], p1["emails"]["primaryEmail"]), ({"firstName": "Nome", "lastName": "X"}, "CTO", "outro@y.com"))
         self.assertEqual((p1["iaAplicadaStatus"], p1["iaAplicadaOrigem"], p1["iaAplicadaEntrada"]), ("INSCRITO", "SUBSTACK", "2024-02-18T15:38:10.000Z"))
@@ -168,13 +186,56 @@ class SyncTest(unittest.TestCase):
     def test_429_has_limited_retries(self):
         f = Fake(rows=[sub("ana@x.com")], fields=T.FIELDS, rate429=2)
         sleeps = []
-        counts = T.run(T.Clients(ENV, f, sleep=sleeps.append), apply=True, out=io.StringIO())
+        counts = T.run(T.Clients(ENV, f, sleep=sleeps.append, now=lambda: 0.0), apply=True, out=io.StringIO())
         self.assertEqual(counts["criar"], 1)
-        self.assertEqual(sleeps, [2, 2])
+        self.assertEqual([x for x in sleeps if x >= 1], [60, 60])  # a janela documentada do limite é de 1 minuto
         g = Fake(rows=[sub("ana@x.com")], fields=T.FIELDS, rate429=1000)
         with self.assertRaisesRegex(T.SyncError, "429 persistente"):
             T.run(T.Clients(ENV, g, sleep=lambda s: None), apply=True, out=io.StringIO())
-        self.assertEqual(len(g.calls), 5)
+        self.assertEqual(len([c for c in g.calls if not c[1].endswith("/query")]), 5)  # 5 tentativas no Twenty
+
+    def test_initial_load_respects_twenty_rate_limit(self):
+        # 639 criações, como na carga real, contra o limite documentado de 100 requisições por minuto.
+        clock = [0.0]
+        f = Fake(rows=[sub(f"p{i}@x.com") for i in range(639)], fields=(), clock=clock, per_minute=100)
+        c = T.Clients(ENV, f, sleep=lambda s: clock.__setitem__(0, clock[0] + s), now=lambda: clock[0])
+        counts = T.run(c, apply=True, out=io.StringIO())
+        self.assertEqual(counts["criar"], 639)
+        self.assertEqual(f.created, 639)
+        self.assertEqual(f.limited, 0)  # o ritmo evita o 429 em vez de depender da nova tentativa
+
+    def test_people_listing_has_a_page_ceiling(self):
+        n = [0]
+        def listing(q):
+            n[0] += 1
+            return 200, {"data": {"people": [person(f"x{n[0]:06d}", f"x{n[0]}@y.com")]}, "pageInfo": {"hasNextPage": True, "endCursor": f"x{n[0]:06d}"}}
+        f = Fake(rows=[sub("a@x.com")], fields=(), listing=listing)
+        with self.assertRaisesRegex(T.SyncError, "paginação sem fim"):
+            run(f, apply=True)
+        self.assertEqual(n[0], T.MAX_PAGES)
+        self.assertEqual(f.writes(), [])
+
+    def test_person_with_divergent_subscriber_emails_is_left_alone_and_stable(self):
+        p = person("p1", "a@x.com", extra=["b@x.com"])
+        f = Fake(rows=[sub("a@x.com", 0), sub("b@x.com", 1)], people=[p], fields=T.FIELDS)
+        for _ in range(3):
+            counts, _ = run(f, apply=True)
+            self.assertEqual(counts["conflito_pessoa_com_emails_divergentes"], 1)
+        self.assertEqual([w for w in f.writes() if w[0] in ("PATCH", "POST")], [])
+        # os dois emails com o mesmo estado: uma única gravação na Pessoa
+        g = Fake(rows=[sub("a@x.com", 1), sub("b@x.com", 1)], people=[person("p1", "a@x.com", extra=["B@x.com"])], fields=T.FIELDS)
+        counts, _ = run(g, apply=True)
+        self.assertEqual([m for m, p, _ in g.calls if m == "PATCH"], ["PATCH"])
+        self.assertEqual(run(g, apply=True)[0]["sem_mudanca"], 1)
+
+    def test_repeated_email_in_the_copy_creates_one_person(self):
+        f = Fake(rows=[sub("a@x.com"), sub("A@x.com"), sub("a@x.com")], fields=T.FIELDS)
+        counts, _ = run(f, apply=True)
+        self.assertEqual((counts["criar"], f.created), (1, 1))
+        self.assertEqual(run(f, apply=True)[0]["criar"], 0)
+        g = Fake(rows=[sub("c@x.com", 0), sub("C@x.com", 1)], fields=T.FIELDS)  # repetido e divergente: não cria
+        counts, _ = run(g, apply=True)
+        self.assertEqual((counts["criar"], g.created, counts["conflito_email_repetido_na_copia"]), (0, 0, 1))
 
     def test_unsubscribed_status_updates_and_nobody_is_deleted(self):
         f = Fake(rows=[sub("a@x.com", 1)], people=[person("p1", "a@x.com", iaAplicadaStatus="INSCRITO", iaAplicadaOrigem="SUBSTACK",
@@ -186,7 +247,13 @@ class SyncTest(unittest.TestCase):
         self.assertNotIn("DELETE", [m for m, _ in f.writes()])
 
     def test_empty_copy_is_refused_and_last_copy_error_is_flagged(self):
-        f = Fake(rows=[], fields=T.FIELDS)
+        for fields in (T.FIELDS, ()):  # também com campos faltando: nada de metadado antes de validar a fonte
+            f = Fake(rows=[], fields=fields)
+            with self.assertRaises(T.SyncError):
+                run(f, apply=True)
+            self.assertEqual(f.writes(), [], fields)
+        # listagem do Twenty inválida com campos faltando: também nenhum metadado criado
+        f = Fake(rows=[sub("a@x.com")], fields=(), listing=lambda q: (200, {"data": {}}))
         with self.assertRaises(T.SyncError):
             run(f, apply=True)
         self.assertEqual(f.writes(), [])

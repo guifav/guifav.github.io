@@ -7,6 +7,10 @@ Simulação por padrão: lê o D1 e o Twenty e mostra só contagens. Grava apena
   (SUBSTACK, SITE, OUTRA) e iaAplicadaEntrada (data de entrada).
 - Correspondência por email, no principal e nos adicionais, sem diferença de caixa. Quem já está no CRM só tem os três
   campos atualizados; nada mais da Pessoa muda. Mais de uma Pessoa com o mesmo email: todas recebem os campos.
+- Um estado por Pessoa: se emails da mesma Pessoa têm estados diferentes na cópia, a Pessoa fica como está (conflito
+  contado). Email repetido na cópia com estados diferentes: nada é gravado para ele. Cada email cria no máximo uma Pessoa.
+- Lê e valida tudo (cópia, metadados e Pessoas) antes de qualquer escrita.
+- Ritmo de 650 ms entre chamadas ao Twenty (limite documentado: 100 por minuto); 429 espera 60 s, até 5 tentativas.
 - Quem não está no CRM vira Pessoa nova só com o email e os campos (sem nome inventado).
 - Idempotente: só grava o que mudou. Nunca apaga Pessoa; quem saiu do segmento continua com o último status.
 - A saída tem só contagens, nunca emails, e erros saem com mensagem fixa.
@@ -43,6 +47,10 @@ FIELDS = {
 }
 PAGE = 200
 MAX_PAGES = 500
+# Limite documentado do Twenty: 100 requisições por minuto (docs.twenty.com, importação via API, recomenda >= 600 ms).
+GAP_S = 0.65
+RETRY_429_S = 60  # janela do limite: depois de um 429, espera a janela inteira
+MAX_ATTEMPTS = 5
 
 
 class SyncError(Exception):
@@ -77,8 +85,9 @@ def iso(value: str) -> str:
 
 
 class Clients:
-    def __init__(self, env: dict, transport=_transport, sleep=time.sleep):
-        self.env, self.t, self.sleep = env, transport, sleep
+    def __init__(self, env: dict, transport=_transport, sleep=time.sleep, now=time.monotonic):
+        self.env, self.t, self.sleep, self.now = env, transport, sleep, now
+        self._last = None
 
     def d1(self, sql: str) -> list[dict]:
         e = self.env
@@ -95,10 +104,15 @@ class Clients:
         url = self.env["TWENTY_LOCAL_URL"].rstrip("/") + path
         headers = {"Authorization": f"Bearer {self.env['TWENTY_API_KEY']}", "Content-Type": "application/json",
                    "User-Agent": "guifav-twenty-sync"}
-        for _ in range(5):
+        for _ in range(MAX_ATTEMPTS):
+            if self._last is not None:  # ritmo: toda chamada ao Twenty respeita o intervalo mínimo
+                wait = GAP_S - (self.now() - self._last)
+                if wait > 0:
+                    self.sleep(wait)
             st, data = self.t(method, url, headers, json.dumps(body) if body is not None else None)
+            self._last = self.now()
             if st == 429:
-                self.sleep(2)
+                self.sleep(RETRY_429_S)
                 continue
             if st not in (200, 201) or (isinstance(data, dict) and data.get("errors")):
                 raise SyncError(f"Twenty respondeu {st} em {method} ({op})")
@@ -106,20 +120,22 @@ class Clients:
         raise SyncError(f"Twenty 429 persistente em {method} ({op})")
 
 
-def ensure_fields(c: Clients, apply: bool) -> int:
+def missing_fields(c: Clients) -> tuple[str, list[str]]:
+    """Só leitura: id do objeto Person e os campos "IA Aplicada" que faltam."""
     q = "{ objects(paging:{first:200}){ edges{ node{ id nameSingular fields(paging:{first:500}){ edges{ node{ name } } } } } } }"
     data = c.twenty("POST", "/metadata", {"query": q}, op="ler metadados")
     person = next((e["node"] for e in data["data"]["objects"]["edges"] if e["node"]["nameSingular"] == "person"), None)
     if not person:
         raise SyncError("objeto Person não encontrado")
     have = {f["node"]["name"] for f in person["fields"]["edges"]}
-    missing = [k for k in FIELDS if k not in have]
-    if apply:
-        m = "mutation($input: CreateOneFieldMetadataInput!){ createOneField(input:$input){ id } }"
-        for k in missing:
-            f = {"objectMetadataId": person["id"], "name": k, "isNullable": True, **FIELDS[k]}
-            c.twenty("POST", "/metadata", {"query": m, "variables": {"input": {"field": f}}}, op="criar campo")
-    return len(missing)
+    return person["id"], [k for k in FIELDS if k not in have]
+
+
+def create_fields(c: Clients, object_id: str, missing: list[str]) -> None:
+    m = "mutation($input: CreateOneFieldMetadataInput!){ createOneField(input:$input){ id } }"
+    for k in missing:
+        f = {"objectMetadataId": object_id, "name": k, "isNullable": True, **FIELDS[k]}
+        c.twenty("POST", "/metadata", {"query": m, "variables": {"input": {"field": f}}}, op="criar campo")
 
 
 def list_people(c: Clients) -> list[dict]:
@@ -160,37 +176,56 @@ def _same(person: dict, want: dict) -> bool:
 def run(c: Clients, *, apply: bool = False, out=None) -> Counter:
     out = out or sys.stdout
     counts: Counter = Counter()
-    counts["campos_a_criar"] = ensure_fields(c, apply)
+    # 1) Só leituras e validações; nenhuma escrita antes de a fonte e o CRM estarem lidos por inteiro.
     rows = c.d1("SELECT email, unsubscribed, origin, joined_at FROM subscribers")
     if not rows:
         raise SyncError("cópia do D1 vazia; nada foi gravado")
     meta = {r["k"]: r["v"] for r in c.d1("SELECT k, v FROM meta")}
     if meta.get("last_sync_error"):
         counts["aviso_ultima_copia_com_erro"] = 1
+    object_id, missing = missing_fields(c)
+    counts["campos_a_criar"] = len(missing)
     people = list_people(c)
-    by_email: dict[str, list[dict]] = {}
-    for p in people:
-        for e in _emails(p):
-            by_email.setdefault(e, []).append(p)
-    counts["assinantes"] = len(rows)
+
+    # 2) Plano. Um estado por email (email repetido na cópia com estados diferentes: não grava esse email).
+    by_sub: dict[str, dict] = {}
+    conflicted: set[str] = set()
     for r in rows:
-        want = wanted(r)
-        matches = by_email.get(r["email"].lower(), [])
-        if not matches:
-            counts["criar"] += 1
-            if apply:
-                c.twenty("POST", "/rest/people", {"emails": {"primaryEmail": r["email"].lower(), "additionalEmails": []}, **want},
-                         op="criar pessoa")
+        e, want = r["email"].strip().lower(), wanted(r)
+        if e in by_sub and by_sub[e] != want:
+            conflicted.add(e)
+        by_sub.setdefault(e, want)
+    for e in conflicted:
+        del by_sub[e]
+    counts["conflito_email_repetido_na_copia"] = len(conflicted)
+    counts["assinantes"] = len(by_sub) + len(conflicted)
+    # Um estado por Pessoa: emails da mesma Pessoa com estados diferentes deixam a Pessoa como está.
+    matched: set[str] = set()
+    updates: list[tuple[str, dict]] = []
+    for p in people:
+        wants = [by_sub[e] for e in _emails(p) if e in by_sub]
+        matched.update(e for e in _emails(p) if e in by_sub)
+        if not wants:
             continue
-        if len(matches) > 1:
-            counts["email_em_mais_de_uma_pessoa"] += 1
-        for p in matches:
-            if _same(p, want):
-                counts["sem_mudanca"] += 1
-                continue
-            counts["atualizar"] += 1
-            if apply:
-                c.twenty("PATCH", f"/rest/people/{urllib.parse.quote(p['id'])}", want, op="atualizar pessoa")
+        if any(w != wants[0] for w in wants):
+            counts["conflito_pessoa_com_emails_divergentes"] += 1
+            continue
+        if _same(p, wants[0]):
+            counts["sem_mudanca"] += 1
+        else:
+            updates.append((p["id"], wants[0]))
+    counts["conflito_pessoa_com_emails_divergentes"] += 0  # sempre visível na saída
+    creates = [(e, w) for e, w in by_sub.items() if e not in matched]
+    counts["atualizar"], counts["criar"] = len(updates), len(creates)
+    counts["email_em_mais_de_uma_pessoa"] = sum(1 for e in matched if sum(e in _emails(p) for p in people) > 1)
+
+    # 3) Escritas, só com --apply: campos, Pessoas existentes (só os três campos) e Pessoas novas (só email e campos).
+    if apply:
+        create_fields(c, object_id, missing)
+        for pid, want in updates:
+            c.twenty("PATCH", f"/rest/people/{urllib.parse.quote(pid)}", want, op="atualizar pessoa")
+        for e, want in creates:
+            c.twenty("POST", "/rest/people", {"emails": {"primaryEmail": e, "additionalEmails": []}, **want}, op="criar pessoa")
     _report(counts, out, "gravado" if apply else "simulação: nada foi gravado (use --apply)")
     return counts
 
