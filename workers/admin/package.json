@@ -1,0 +1,12 @@
+{
+  "name": "blog-admin",
+  "private": true,
+  "type": "module",
+  "description": "Painel de assinantes da newsletter em guifav.dev/admin (issue #40). Deploy manual: ver README.md.",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "test": "node --no-warnings=ExperimentalWarning --test 'tests/*.test.ts'"
+  }
+}
