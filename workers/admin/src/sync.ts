@@ -73,11 +73,10 @@ export async function resend(env: SyncEnv, deps: SyncDeps, method: string, path:
   for (let i = 0; i < MAX_RETRIES; i++) {
     if (budget) {
       if (++budget.calls > MAX_CALLS) throw new SyncError('orçamento da execução esgotado');
-      checkDeadline(deps, budget);
       // Espaçamento central: nenhuma chamada da sincronização começa a menos de 250 ms do início da anterior.
       const wait = budget.lastStart === undefined ? 0 : budget.lastStart + GAP_MS - deps.now();
       if (wait > 0) await deps.sleep(wait);
-      checkDeadline(deps, budget); // a espera pode ter atravessado o prazo: nenhuma chamada começa depois dele
+      checkDeadline(deps, budget); // depois da espera, que pode atravessar o prazo: nenhuma chamada começa depois dele
       budget.lastStart = deps.now();
     }
     const res = await deps.fetch(`${RESEND}${path}`, {
