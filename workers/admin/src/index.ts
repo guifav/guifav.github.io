@@ -167,7 +167,10 @@ async function unsubscribe(req: Request, env: Env, deps: Deps): Promise<Response
     return fail(`Não foi possível descadastrar (${why}). Nada foi alterado no painel.`);
   }
   try {
-    await env.DB.prepare('UPDATE subscribers SET unsubscribed = 1, admin_unsubscribed_at = ? WHERE id = ?').bind(at, id).run();
+    // local_changed_at: momento da gravação local, depois da confirmação; o cron só preserva o status local se ele for
+    // posterior ao início da leitura do contato.
+    await env.DB.prepare('UPDATE subscribers SET unsubscribed = 1, admin_unsubscribed_at = ?, local_changed_at = ? WHERE id = ?')
+      .bind(at, new Date(deps.now()).toISOString(), id).run();
   } catch {
     return fail('Descadastrado no Resend, mas a cópia do painel não foi atualizada; a próxima sincronização (a cada hora) corrige.');
   }

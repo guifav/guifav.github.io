@@ -54,10 +54,10 @@ function d1(failBatch?: number, failSql?: RegExp): D1Like & { raw: DatabaseSync 
 
 function seed(db: D1Like & { raw: DatabaseSync }, rows: Partial<Record<string, unknown>>[]) {
   const ins = db.raw.prepare(`INSERT INTO subscribers (id, email, unsubscribed, origin, joined_at, paid_until, site_confirmed_at,
-    admin_unsubscribed_at, created_at, run) VALUES (?, ?, ?, ?, ?, ?, '', ?, '', 'r0')`);
+    admin_unsubscribed_at, created_at, run, local_changed_at) VALUES (?, ?, ?, ?, ?, ?, '', ?, '', 'r0', ?)`);
   for (const r of rows) {
     ins.run(String(r.id), String(r.email), Number(r.unsubscribed ?? 0), String(r.origin ?? 'substack'), String(r.joined_at ?? '2025-01-01'),
-      String(r.paid_until ?? ''), String(r.admin_unsubscribed_at ?? ''));
+      String(r.paid_until ?? ''), String(r.admin_unsubscribed_at ?? ''), String(r.local_changed_at ?? ''));
   }
 }
 
@@ -82,10 +82,11 @@ type Call = { method: string; url: string; body: unknown; t: number };
 function setup(opts: { contacts?: FakeContact[]; props?: string[]; patchStatus?: number; rereadKeepsSubscribed?: boolean;
   certs?: () => unknown; failGetAfter?: number; rate429?: number; retryAfter?: string; latencyMs?: number;
   reread?: (c: Record<string, unknown>) => Record<string, unknown>; list?: (u: URL) => Response | null;
-  afterContactGet?: (id: string) => Promise<void> } = {}) {
+  afterContactGet?: (id: string) => Promise<void>; clock?: { t: number }; latencyFor?: (url: string) => number } = {}) {
   const calls: Call[] = [];
   const sleeps: number[] = [];
-  let t = NOW; // relógio virtual: avança com as esperas e com a latência simulada
+  const clock = opts.clock ?? { t: NOW }; // relógio virtual: avança com as esperas e com a latência simulada
+  const inits: (RequestInit | undefined)[] = [];
   const contacts = new Map((opts.contacts ?? []).map((c) => [c.id, c]));
   const props = new Set(opts.props ?? [AUDIT_PROPERTY]);
   let gets = 0;
@@ -94,8 +95,9 @@ function setup(opts: { contacts?: FakeContact[]; props?: string[]; patchStatus?:
     const url = String(input instanceof Request ? input.url : input);
     const method = init?.method ?? 'GET';
     const body = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined;
-    calls.push({ method, url, body, t });
-    t += opts.latencyMs ?? 0;
+    calls.push({ method, url, body, t: clock.t });
+    inits.push(init);
+    clock.t += (opts.latencyFor?.(url) ?? 0) + (opts.latencyMs ?? 0);
     if (url === `https://${TEAM}/cdn-cgi/access/certs`) return Response.json(opts.certs ? opts.certs() : { keys: [jwk] });
     if (rate > 0 && url.startsWith('https://api.resend.com')) {
       rate--;
@@ -147,9 +149,9 @@ function setup(opts: { contacts?: FakeContact[]; props?: string[]; patchStatus?:
   const env: Env = { DB: db, RESEND_API_KEY: 're_test', SEGMENT_ID: SEG, ACCESS_TEAM_DOMAIN: TEAM, ACCESS_AUD: AUD,
     ALLOWED_EMAILS: ` ${GUI.toUpperCase()} `, SITE_ORIGIN: tomlVar('SITE_ORIGIN') };
   const passed: string[] = [];
-  const deps: Deps = { fetch: fetchFn as typeof fetch, now: () => t, sleep: async (ms) => { sleeps.push(ms); t += ms; },
+  const deps: Deps = { fetch: fetchFn as typeof fetch, now: () => clock.t, sleep: async (ms) => { sleeps.push(ms); clock.t += ms; },
     origin: async (req) => { passed.push(new URL(req.url).pathname); return new Response('pages', { status: 200 }); } };
-  return { env, deps, db, calls, sleeps, contacts, props, passed, run: (req: Request) => handle(req, env, deps) };
+  return { env, deps, db, calls, inits, clock, sleeps, contacts, props, passed, run: (req: Request) => handle(req, env, deps) };
 }
 
 const contact = (id: string, email: string, props: Record<string, string> = {}, extra: Partial<FakeContact> = {}): FakeContact =>
@@ -542,13 +544,16 @@ test('G5: listagem inválida ou sem progresso é erro e não apaga a cópia', as
 });
 
 test('G5: descadastro feito pelo painel durante o cron não é desfeito; reinscrição feita no Resend é respeitada', async () => {
-  const s = setup({ contacts: [contact('a', 'ana@x.com'), contact('b', 'bia@x.com')] });
+  const clock = { t: NOW };
+  const s = setup({ clock, contacts: [contact('a', 'ana@x.com'), contact('b', 'bia@x.com')] });
   seed(s.db, [{ id: 'a', email: 'ana@x.com' }, { id: 'b', email: 'bia@x.com' }]);
   let fired = false;
+  let audit = '';
   // O cron lê "a" inscrita; logo depois o Gui descadastra "a" pelo painel; o cron termina e grava o que leu.
-  const racing = setup({ contacts: [], afterContactGet: async (id) => {
+  const racing = setup({ clock, contacts: [], afterContactGet: async (id) => {
     if (id !== 'a' || fired) return;
     fired = true;
+    audit = new Date(clock.t).toISOString();
     const r = await post(s, { id: 'a', confirmar: 'sim' });
     assert.equal(r.status, 303);
   } });
@@ -557,7 +562,6 @@ test('G5: descadastro feito pelo painel durante o cron não é desfeito; reinscr
   assert.equal(await syncSegment(racing.env, racing.deps), 2);
   assert.ok(fired);
   const row = () => plain(s.db.raw.prepare("SELECT unsubscribed, admin_unsubscribed_at FROM subscribers WHERE id = 'a'").get());
-  const audit = new Date(NOW).toISOString();
   assert.deepEqual(row(), { unsubscribed: 1, admin_unsubscribed_at: audit });
   assert.equal(plain(s.db.raw.prepare("SELECT unsubscribed FROM subscribers WHERE id = 'b'").get()).unsubscribed, 0);
   // Próximo cron: o Resend já mostra a mesma auditoria; segue descadastrada.
@@ -573,4 +577,37 @@ test('G5: a propriedade de auditoria só é criada quando falta', async () => {
   const s = setup({ props: [AUDIT_PROPERTY], contacts: [contact('a', 'ana@x.com')] });
   await syncSegment(s.env, s.deps);
   assert.equal(s.calls.filter((c) => c.method === 'POST').length, 0);
+});
+
+test('G5: marca antiga do painel não vence o Resend: propriedade limpa ou status mudado lá valem na cópia', async () => {
+  const OLD = '2026-01-01T00:00:00.000Z';
+  // a) descadastrada pelo painel há tempo; reinscrita no Resend com a auditoria limpa
+  const s = setup({ contacts: [contact('a', 'ana@x.com', {}, { unsubscribed: false }), contact('b', 'bia@x.com', {}, { unsubscribed: true })] });
+  seed(s.db, [{ id: 'a', email: 'ana@x.com', unsubscribed: 1, admin_unsubscribed_at: OLD, local_changed_at: OLD },
+    // b) inscrita na cópia com marca antiga; descadastrada no Resend sem auditoria do painel
+    { id: 'b', email: 'bia@x.com', unsubscribed: 0, admin_unsubscribed_at: OLD, local_changed_at: OLD }]);
+  await syncSegment(s.env, s.deps);
+  assert.deepEqual(s.db.raw.prepare('SELECT id, unsubscribed, admin_unsubscribed_at FROM subscribers ORDER BY id').all().map(plain),
+    [{ id: 'a', unsubscribed: 0, admin_unsubscribed_at: '' }, { id: 'b', unsubscribed: 1, admin_unsubscribed_at: '' }]);
+});
+
+test('G5: o prazo vale também para a chamada em andamento: chamada lenta no fim aborta antes de gravar', async () => {
+  const s = setup({ contacts: [contact('a', 'ana@x.com')], latencyFor: (url) => (url.endsWith('/contacts/a') ? 16 * 60_000 : 0) });
+  seed(s.db, [{ id: 'velho', email: 'velho@x.com' }]);
+  await assert.rejects(syncSegment(s.env, s.deps), /orçamento da execução esgotado/);
+  assert.ok(s.db.raw.prepare("SELECT id FROM subscribers WHERE id = 'velho'").get());
+  assert.equal((s.db.raw.prepare('SELECT count(*) AS n FROM subscribers').get() as { n: number }).n, 1);
+  assert.match((s.db.raw.prepare("SELECT v FROM meta WHERE k = 'last_sync_error'").get() as { v: string }).v, /orçamento/);
+  // toda chamada da sincronização leva um sinal de cancelamento pelo tempo restante
+  const resendInits = s.inits.filter((_, i) => s.calls[i].url.startsWith('https://api.resend.com'));
+  assert.ok(resendInits.length > 0 && resendInits.every((i) => i?.signal instanceof AbortSignal));
+});
+
+test('G5: empate entre a gravação do painel e o início da leitura favorece o painel (status já confirmado no Resend)', async () => {
+  const s = setup({ contacts: [contact('a', 'ana@x.com')] }); // propriedade existe: 1 listagem de props + 1 de contatos antes do GET
+  const readAt = new Date(NOW + 2 * GAP_MS).toISOString();
+  seed(s.db, [{ id: 'a', email: 'ana@x.com', unsubscribed: 1, admin_unsubscribed_at: readAt, local_changed_at: readAt }]);
+  await syncSegment(s.env, s.deps);
+  assert.equal(s.calls.find((c) => c.url.endsWith('/contacts/a'))!.t, NOW + 3 * GAP_MS);
+  assert.deepEqual(plain(s.db.raw.prepare("SELECT unsubscribed, read_at FROM subscribers WHERE id = 'a'").get()), { unsubscribed: 1, read_at: readAt });
 });

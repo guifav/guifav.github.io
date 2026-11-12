@@ -47,7 +47,7 @@ export function prop(c: { properties?: Record<string, unknown> }, key: string): 
   return v === null || v === undefined ? '' : String(v);
 }
 
-export function rowFrom(c: Contact, run: string) {
+export function rowFrom(c: Contact, run: string, readAt = '') {
   const source = prop(c, 'source');
   const site = prop(c, 'site_confirmed_at');
   const origin = source === 'substack' ? 'substack' : site ? 'site' : 'outra';
@@ -56,20 +56,27 @@ export function rowFrom(c: Contact, run: string) {
   return {
     id: c.id, email: String(c.email).toLowerCase(), unsubscribed: c.unsubscribed ? 1 : 0, origin, joined_at: joined,
     paid_until: prop(c, 'substack_paid_until'), site_confirmed_at: site, admin_unsubscribed_at: prop(c, AUDIT_PROPERTY),
-    created_at: created, run,
+    created_at: created, run, read_at: readAt,
   };
 }
 
 export type Budget = { start: number; calls: number };
 
+export function checkDeadline(deps: SyncDeps, budget: Budget): void {
+  if (deps.now() - budget.start > DEADLINE_MS) throw new SyncError('orçamento da execução esgotado');
+}
+
 export async function resend(env: SyncEnv, deps: SyncDeps, method: string, path: string, body?: unknown, budget?: Budget): Promise<Record<string, unknown>> {
   for (let i = 0; i < MAX_RETRIES; i++) {
     if (budget) {
-      if (++budget.calls > MAX_CALLS || deps.now() - budget.start > DEADLINE_MS) throw new SyncError('orçamento da execução esgotado');
+      if (++budget.calls > MAX_CALLS) throw new SyncError('orçamento da execução esgotado');
+      checkDeadline(deps, budget);
       await deps.sleep(GAP_MS); // espaçamento central: nenhuma chamada da sincronização sai sem os 250 ms
     }
     const res = await deps.fetch(`${RESEND}${path}`, {
       method,
+      // Chamada em andamento também respeita o prazo: cancelada pelo tempo restante (corpo incluído).
+      signal: budget ? AbortSignal.timeout(Math.max(1, DEADLINE_MS - (deps.now() - budget.start))) : undefined,
       headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, 'content-type': 'application/json' },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
@@ -127,22 +134,24 @@ export async function syncSegment(env: SyncEnv, deps: SyncDeps): Promise<number>
     const rows = [];
     for (const c of listed) {
       if (typeof c.id !== 'string' || !c.id) throw new SyncError('contato sem id na listagem');
+      const readAt = new Date(deps.now()).toISOString(); // antes do GET: base da proteção contra a corrida com o painel
       const full = (await resend(env, deps, 'GET', `/contacts/${encodeURIComponent(c.id)}`, undefined, budget)) as Contact;
-      rows.push(rowFrom({ ...full, id: c.id }, run));
+      rows.push(rowFrom({ ...full, id: c.id }, run, readAt));
     }
+    checkDeadline(deps, budget); // a última chamada pode ter terminado depois do prazo: não grava
     const up = env.DB.prepare(
-      `INSERT INTO subscribers (id, email, unsubscribed, origin, joined_at, paid_until, site_confirmed_at, admin_unsubscribed_at, created_at, run)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO subscribers (id, email, unsubscribed, origin, joined_at, paid_until, site_confirmed_at, admin_unsubscribed_at, created_at, run, read_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET email=excluded.email, origin=excluded.origin,
          joined_at=excluded.joined_at, paid_until=excluded.paid_until, site_confirmed_at=excluded.site_confirmed_at,
-         created_at=excluded.created_at, run=excluded.run,
-         -- Descadastro do painel que a leitura ainda não via (auditoria local mais nova que a lida) vence a leitura;
-         -- quando o Resend já mostra a mesma auditoria, vale o Resend (inclusive uma reinscrição feita lá).
-         unsubscribed = CASE WHEN subscribers.admin_unsubscribed_at > excluded.admin_unsubscribed_at THEN subscribers.unsubscribed ELSE excluded.unsubscribed END,
-         admin_unsubscribed_at = CASE WHEN subscribers.admin_unsubscribed_at > excluded.admin_unsubscribed_at THEN subscribers.admin_unsubscribed_at ELSE excluded.admin_unsubscribed_at END`);
+         created_at=excluded.created_at, run=excluded.run, read_at=excluded.read_at,
+         -- Só um descadastro gravado pelo painel a partir do início da leitura deste contato vence a leitura (corrida);
+         -- fora disso vale o Resend, mesmo com a auditoria limpa ou o status mudado lá.
+         unsubscribed = CASE WHEN subscribers.local_changed_at != '' AND subscribers.local_changed_at >= excluded.read_at THEN subscribers.unsubscribed ELSE excluded.unsubscribed END,
+         admin_unsubscribed_at = CASE WHEN subscribers.local_changed_at != '' AND subscribers.local_changed_at >= excluded.read_at THEN subscribers.admin_unsubscribed_at ELSE excluded.admin_unsubscribed_at END`);
     for (let i = 0; i < rows.length; i += BATCH) {
       await env.DB.batch(rows.slice(i, i + BATCH).map((r) => up.bind(r.id, r.email, r.unsubscribed, r.origin, r.joined_at,
-        r.paid_until, r.site_confirmed_at, r.admin_unsubscribed_at, r.created_at, r.run)));
+        r.paid_until, r.site_confirmed_at, r.admin_unsubscribed_at, r.created_at, r.run, r.read_at)));
     }
     // Só depois de gravar tudo: sai quem não está mais no segmento.
     await env.DB.batch([

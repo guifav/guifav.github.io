@@ -9,7 +9,9 @@ CREATE TABLE IF NOT EXISTS subscribers (
   site_confirmed_at TEXT NOT NULL DEFAULT '',
   admin_unsubscribed_at TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL DEFAULT '',
-  run TEXT NOT NULL                    -- sincronização que gravou a linha
+  run TEXT NOT NULL,                   -- sincronização que gravou a linha
+  read_at TEXT NOT NULL DEFAULT '',    -- quando o cron começou a ler este contato no Resend
+  local_changed_at TEXT NOT NULL DEFAULT '' -- quando o painel gravou um descadastro já confirmado no Resend
 );
 CREATE INDEX IF NOT EXISTS subscribers_email ON subscribers (email);
 
