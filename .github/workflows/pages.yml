@@ -42,6 +42,10 @@ jobs:
         working-directory: workers/newsletter
         run: npm test
 
+      - name: Testes do Worker do painel de assinantes
+        working-directory: workers/admin
+        run: npm test
+
       - name: Build do blog
         working-directory: blog-src
         env:

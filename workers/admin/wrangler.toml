@@ -1,0 +1,28 @@
+# Painel de assinantes da newsletter em guifav.dev/admin (issue #40). O deploy é manual, depois do merge: ver README.md.
+#
+# Segredos: só via `wrangler secret`, nunca neste arquivo.
+#   RESEND_API_KEY   chave dedicada do Resend com full_access (lê contatos e descadastra), revogável sem afetar as outras
+#   ALLOWED_EMAILS   emails que podem usar o painel, separados por vírgula (o do Gui)
+name = "blog-admin"
+main = "src/index.ts"
+compatibility_date = "2026-11-01"
+workers_dev = false
+# Só este caminho passa pelo Worker; o resto de guifav.dev segue direto para o GitHub Pages.
+routes = [{ pattern = "guifav.dev/admin*", zone_name = "guifav.dev" }]
+
+[triggers]
+crons = ["17 * * * *"]
+
+[vars]
+# Segmento "IA Aplicada" do Resend (o mesmo do Worker de inscrição).
+SEGMENT_ID = "34c37605-670a-4c09-9dff-5e5a05c9e0fa"
+ACCESS_TEAM_DOMAIN = "guifav.cloudflareaccess.com"
+# Tag de audiência da aplicação do Access "Painel de assinantes (guifav.dev/admin)", criada em 2026-11-11.
+ACCESS_AUD = "06d4b5bb6516b079eb6773cdc190fa6a7ec0946e2fa2bf08310a93b8e04923c3"
+SITE_ORIGIN = "https://guifav.dev"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "blog-admin"
+database_id = "f54f10dc-960e-468a-aca1-2c74c4c6dc4d"
+migrations_dir = "migrations"
