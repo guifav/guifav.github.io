@@ -34,6 +34,23 @@ from pathlib import Path
 from urllib.parse import unquote
 
 SITE_HOST = "guifav.dev"
+# Domínio antigo do Substack (#24): depois do cutover, nada no site aponta para ele.
+OLD_DOMAIN = "guilhermefavaron.com.br"
+OLD_HOSTS = {OLD_DOMAIN, "www." + OLD_DOMAIN}
+# Links de posts importados que já davam 404 no Substack antes do cutover (caminhos da era Wix, conferidos em
+# 2026-11-12). A importação não altera texto, então eles ficam; o 301 genérico os leva à raiz do blog.
+_W = "https://www." + OLD_DOMAIN
+OLD_DOMAIN_DEAD_LINKS = (
+    ("blog/desbloqueando-a-inteligencia-artificial-o-guia-definitivo-para-empresarios-na-era-da-ia-livro-da-ia/index.html",
+     _W + "/livro-ia-guia-estrategico-empresarios-era-digital"),
+    ("blog/decifrando-o-codigo-da-ia-estrategias-para-mitigar-vieses-em-negocios-inteligentes/index.html",
+     _W + "/livro-ia-guia-estrategico-empresarios-era-digital"),
+    ("blog/microservices-vs-monolith-decisoes/index.html", _W + "/post/modernizacao-sistemas-legados-vantagem-competitiva"),
+    ("blog/como-designers-profissionais-usam-ia-guia-completo-2024/index.html", _W + "/pagina-inicial/hashtags/FF0000"),
+    ("blog/como-designers-profissionais-usam-ia-guia-completo-2024/index.html", _W + "/pagina-inicial/hashtags/000000"),
+    ("blog/modernizacao-de-sistemas-legados/index.html", _W + "/pagina-inicial"),
+    ("blog/data-pipelines-empresariais-como/index.html", _W + "/post/machine-learning-producao-modelos-empresariais-roi"),
+)
 BLOG_PREFIX = "/blog/"
 SITE_ORIGIN = "https://" + SITE_HOST
 SITEMAP_NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
@@ -92,6 +109,11 @@ def resolve_urls(pairs: list[tuple[str, str]]) -> list[dict | None]:
         if not isinstance(item, dict) or not all(isinstance(item.get(k), str) for k in ("protocol", "hostname", "pathname")):
             raise ResolverError(f"resolve_urls.mjs devolveu um item malformado: {item!r}"[:200])
     return out
+
+
+def _old_host(res: dict | None) -> bool:
+    """A URL resolvida aponta para o domínio antigo do Substack (com ou sem www e ponto final DNS)?"""
+    return bool(res) and (res.get("hostname") or "").rstrip(".") in OLD_HOSTS
 
 
 def _internal(res: dict | None) -> str | None:
@@ -259,6 +281,9 @@ class _Page(HTMLParser):
                 self.active.append(f"<{tag} srcdoc>")
             elif k == "formaction":
                 self.active.append(f"<{tag} formaction>")
+                # Também é destino: fora do blog o conteúdo ativo não é barrado, mas o domínio antigo é (#50 r2).
+                if v.strip():
+                    self.url_values.append((f"<{tag} formaction={v[:40]!r}>", v.strip()))
             elif k in ACTIVE_URL_ATTRS:
                 for u in (parse_srcset(v) if k == "srcset" else [v]):
                     if u.strip():
@@ -395,6 +420,16 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
                 problems.append(f"{rel}: post com index: false sem noindex")
             if len(parts) == 1 and parts[0] in BLOG_PRIVATE_PAGES and not has_noindex:
                 problems.append(f"{rel}: página da newsletter sem noindex")
+        if not pre_cutover:
+            # Fora do blog, qualquer menção literal conta (inclusive JSON-LD e texto): o código é do site.
+            if not in_blog and OLD_DOMAIN in (site / rel).read_text(encoding="utf-8").lower():
+                problems.append(f"{rel}: menciona o domínio antigo ({OLD_DOMAIN})")
+            # Em todo o site, links e embeds pela URL resolvida: pega entidade HTML, percent-encoding e ponto final,
+            # que a busca literal não vê. No blog, menção em texto corrido de post importado fica, e só os links
+            # mortos conhecidos passam, cada um na sua página (todas do blog; o teste confere contra os fontes).
+            for u in dict.fromkeys(list(p.refs) + [v for _, v in p.url_values]):
+                if _old_host(resolved[(base, u)]) and (rel, u) not in OLD_DOMAIN_DEAD_LINKS:
+                    problems.append(f"{rel}: link para o domínio antigo: {u[:80]}")
         for ref in p.refs:
             path = _internal(resolved[(base, ref)])
             if path is None:

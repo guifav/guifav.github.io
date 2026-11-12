@@ -3,6 +3,7 @@
 Rodar: python3 scripts/test_check_site.py
 """
 import os
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -55,6 +56,117 @@ class Base(unittest.TestCase):
 
     def problems(self, pre_cutover: bool = True) -> list[str]:
         return C.check(self.site, self.posts, pre_cutover=pre_cutover)
+
+
+_OLD_URL_IN_SOURCE = re.compile(
+    r"""(?:https?://(?:www\.)?|(?<![\w./-])www\.)guilhermefavaron\.com\.br[^\s)"'<>\]]*""", re.I)
+
+
+def old_links_in_sources(posts: Path) -> list[tuple[str, str]]:
+    """Toda URL do domínio antigo nos fontes (inline, referência, autolink, solta, www.), com a página de destino."""
+    # Pontuação final fica fora do link, como no GFM.
+    return [(f"blog/{f.stem}/index.html", m.group(0).rstrip(".,;:!?*_~"))
+            for f in sorted(posts.glob("*.md*")) for m in _OLD_URL_IN_SOURCE.finditer(f.read_text(encoding="utf-8"))]
+
+
+class OldDomainTest(Base):
+    """Depois do cutover (#24), nada no site aponta para o domínio antigo do Substack."""
+
+    def flagged(self, rel: str, html: str) -> list[str]:
+        self.w(rel, html)
+        return [p for p in self.problems(pre_cutover=False) if "domínio antigo" in p]
+
+    def test_encoded_and_fqdn_links_are_flagged_everywhere(self):
+        # #50 r1: a busca literal não vê entidade HTML nem percent-encoding; o parser WHATWG mantém o ponto final.
+        for url in ("https://guilhermefavaron&#46;com.br/p/x", "https://%67uilhermefavaron.com.br/p/x",
+                    "https://guilhermefavaron.com.br./p/x", "https://www.guilhermefavaron.com.br./p/x",
+                    "https://www.guilhermefavaron.com.br\u3002/p/x"):
+            for rel, robots in (("index.html", ""), ("blog/um-post/index.html", ROBOTS_INDEX)):
+                with self.subTest(url=url, rel=rel):
+                    self.setUp()
+                    got = self.flagged(rel, page(f'<a href="{url}">n</a>', robots=robots))
+                    self.assertTrue(any("link para o domínio antigo" in g for g in got), got)
+
+    def test_links_and_embeds_to_the_old_domain_are_flagged(self):
+        for host in ("guilhermefavaron.com.br", "www.guilhermefavaron.com.br", "WWW.GuilhermeFavaron.com.br"):
+            for rel, html in (
+                ("index.html", page(f'<a href="https://{host}/p/x">n</a>', robots="")),
+                ("portfolio/index.html", page(f'<iframe src="https://{host}/embed"></iframe>', robots="")),
+                ("blog/um-post/index.html", page(f'<a href="//{host}/post/y">n</a>', robots=ROBOTS_INDEX)),
+                ("blog/index.html", page(f'<iframe src="https://{host}/embed"></iframe>', robots=ROBOTS_INDEX)),
+                ("blog/um-post/index.html", page(f'<form method="post" action="https://{host}/x"></form>', robots=ROBOTS_INDEX)),
+            ):
+                with self.subTest(host=host, rel=rel):
+                    self.setUp()
+                    got = self.flagged(rel, html)
+                    self.assertTrue(any("link para o domínio antigo" in g for g in got), got)
+                    if rel.startswith("blog/"):
+                        self.assertEqual(len(got), 1, got)
+
+    def test_text_mention_inside_a_post_is_not_a_link(self):
+        self.assertEqual(self.flagged("blog/um-post/index.html",
+                                      page("<p>antes em guilhermefavaron.com.br</p>", robots=ROBOTS_INDEX)), [])
+
+    def test_any_mention_outside_the_blog_is_flagged_including_json_ld(self):
+        for host in ("guilhermefavaron.com.br", "GuilhermeFavaron.COM.br"):
+            with self.subTest(host=host):
+                self.setUp()
+                ld = f'<script type="application/ld+json">{{"sameAs":["https://{host}"]}}</script>'
+                self.assertEqual(len(self.flagged("index.html", page(ld, robots=""))), 1)
+
+    def test_encoded_formaction_outside_the_blog_is_flagged(self):
+        # #50 r2: formaction era só "conteúdo ativo", que fora do blog não é barrado; o destino escapava.
+        for url in ("https://%67uilhermefavaron.com.br/subscribe", "https://guilhermefavaron&#46;com.br/subscribe"):
+            for rel in ("index.html", "portfolio/index.html"):
+                with self.subTest(url=url, rel=rel):
+                    self.setUp()
+                    html = page(f'<form action="/x"><button formaction="{url}">ok</button></form>', robots="")
+                    got = self.flagged(rel, html)
+                    self.assertTrue(any("link para o domínio antigo" in g for g in got), got)
+
+    def test_meta_refresh_to_the_old_domain_is_flagged(self):
+        # O navegador navega para essa URL; só entra em p.refs (não é atributo de URL).
+        html = page('<meta http-equiv="refresh" content="0; url=https://www.guilhermefavaron.com.br/p/x">', robots=ROBOTS_INDEX)
+        self.assertEqual(len(self.flagged("blog/um-post/index.html", html)), 1)
+
+    def test_known_dead_links_from_the_import_are_allowed_only_on_their_page(self):
+        rel, url = C.OLD_DOMAIN_DEAD_LINKS[0]
+        self.w("blog/" + rel.split("/")[1] + "/index.html", "")
+        self.assertEqual(self.flagged(rel, page(f'<a href="{url}">x</a>', robots=ROBOTS_INDEX)), [])
+        self.assertEqual(len(self.flagged("blog/um-post/index.html", page(f'<a href="{url}">x</a>', robots=ROBOTS_INDEX))), 1)
+
+    def test_other_old_link_on_an_allowed_page_is_flagged(self):
+        rel, url = C.OLD_DOMAIN_DEAD_LINKS[0]
+        for other in ("https://www.guilhermefavaron.com.br", url + "/", url.replace("https://www.", "https://")):
+            with self.subTest(other=other):
+                self.setUp()
+                self.assertEqual(len(self.flagged(rel, page(f'<a href="{other}">x</a>', robots=ROBOTS_INDEX))), 1)
+
+    def test_source_scan_catches_every_markdown_link_form(self):
+        # #50 r2: link por referência, autolink, URL solta e www. (o GFM transforma os dois últimos em link).
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "p.md").write_text(
+                "[a](https://guilhermefavaron.com.br/a) [b][r] <https://www.guilhermefavaron.com.br/c>\n"
+                "solta https://GuilhermeFavaron.com.br/d e www.guilhermefavaron.com.br/e; texto guilhermefavaron.com.br\n\n"
+                "[r]: https://www.guilhermefavaron.com.br/b\n", encoding="utf-8")
+            got = [u for _, u in old_links_in_sources(Path(d))]
+        self.assertEqual(got, ["https://guilhermefavaron.com.br/a", "https://www.guilhermefavaron.com.br/c",
+                               "https://GuilhermeFavaron.com.br/d", "www.guilhermefavaron.com.br/e",
+                               "https://www.guilhermefavaron.com.br/b"])
+
+    def test_known_dead_list_matches_the_post_sources(self):
+        # Referência independente da lista: toda URL do domínio antigo nos fontes dos posts importados.
+        # 7 pares (8 ocorrências: um deles aparece duas vezes no mesmo post) que já davam 404 no Substack antes do
+        # cutover (caminhos da era Wix); a importação não altera texto.
+        found = old_links_in_sources(Path(__file__).resolve().parent.parent / "blog-src/src/content/posts")
+        self.assertEqual(len(found), 8)
+        self.assertEqual(set(found), set(C.OLD_DOMAIN_DEAD_LINKS))
+        self.assertTrue(all(rel.startswith("blog/") for rel, _ in C.OLD_DOMAIN_DEAD_LINKS))
+        self.assertEqual(len(C.OLD_DOMAIN_DEAD_LINKS), len(set(C.OLD_DOMAIN_DEAD_LINKS)))
+
+    def test_not_checked_before_the_cutover(self):
+        self.w("index.html", page('<a href="https://guilhermefavaron.com.br">n</a>', robots=""))
+        self.assertFalse(any("domínio antigo" in p for p in self.problems(pre_cutover=True)))
 
 
 class CheckTest(Base):
