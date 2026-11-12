@@ -76,12 +76,13 @@ Os três posts `teste-*` existem só para conferir o leiaute e saem com a import
 # só gera email.html e email.txt para conferir
 python3 scripts/newsletter_draft.py <slug> --dry-run --out /tmp/email
 # cria o rascunho "blog/<slug>" (com --update, reescreve o rascunho que já existe)
-RESEND_API_KEY=... NEWSLETTER_SEGMENT_ID=... python3 scripts/newsletter_draft.py <slug>
+RESEND_API_KEY=... NEWSLETTER_SEGMENT_ID=... NEWSLETTER_TOPIC_ID=... python3 scripts/newsletter_draft.py <slug>
 ```
 
 - A fonte é a página publicada em `https://guifav.dev/blog/<slug>/` (`--source dist` usa o build local). O post precisa estar no ar antes do rascunho.
 - A conversão é por lista fechada de tags, classes, atributos e esquemas de link. O que estiver fora dela interrompe o script.
 - Um broadcast por post: se já existe um rascunho, nada muda; se já existe um enviado, agendado ou em envio, o script para.
+- O rascunho sai preso ao tópico "IA Aplicada" (`NEWSLETTER_TOPIC_ID`, obrigatório): o link de descadastro do email tira a pessoa só da newsletter, não de todos os broadcasts da conta. Um rascunho que já existe sem esse tópico faz o script parar; `--update` o corrige.
 - HTML acima de 102 KB, o limite em que o Gmail corta a mensagem, leva só o começo do post e o link "Ler no site".
 - Remetente padrão `IA Aplicada <insights@expert.guifav.dev>` (`NEWSLETTER_FROM` só aceita `expert.guifav.dev`), reply-to `contact@guifav.dev`.
 - Testes: `python3 scripts/test_newsletter_draft.py` (sem rede; rodam no CI).

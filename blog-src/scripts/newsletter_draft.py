@@ -1,6 +1,6 @@
 """Cria o rascunho do email de um post do blog no Resend (issue #21, parte B). Nunca envia.
 
-    RESEND_API_KEY=... NEWSLETTER_SEGMENT_ID=... python3 blog-src/scripts/newsletter_draft.py <slug>
+    RESEND_API_KEY=... NEWSLETTER_SEGMENT_ID=... NEWSLETTER_TOPIC_ID=... python3 blog-src/scripts/newsletter_draft.py <slug>
     python3 blog-src/scripts/newsletter_draft.py <slug> --dry-run --out /tmp/email    # só gera os arquivos
 
 Roda na KVM, por linha de comando (decisão do Gui em 2026-11-10: sem GitHub Actions). A chave do Resend
@@ -17,6 +17,8 @@ Garantias:
   qualquer corpo com "send" ou "scheduled_at";
 - HTML acima do limite em que o Gmail corta a mensagem (102 KB) leva só o começo do post e o link;
 - rodapé com o link de descadastro do Resend ({{{RESEND_UNSUBSCRIBE_URL}}}) no HTML e no texto.
+- o rascunho sai preso ao tópico "IA Aplicada" (NEWSLETTER_TOPIC_ID): o link de descadastro tira a pessoa só da
+  newsletter, não de todos os broadcasts da conta do Resend.
 """
 from __future__ import annotations
 
@@ -487,16 +489,20 @@ class Config:
     segment_id: str
     sender: str = DEFAULT_FROM
     reply_to: str = DEFAULT_REPLY_TO
+    topic_id: str = ""
 
     @classmethod
     def from_env(cls, env) -> "Config":
         key, seg = env.get("RESEND_API_KEY", ""), env.get("NEWSLETTER_SEGMENT_ID", "")
         if not key or not seg:
             raise DraftError("faltam RESEND_API_KEY e NEWSLETTER_SEGMENT_ID no ambiente")
+        topic = env.get("NEWSLETTER_TOPIC_ID", "")
+        if not topic:  # sem tópico, o descadastro pelo email valeria para todos os broadcasts da conta
+            raise DraftError("falta NEWSLETTER_TOPIC_ID no ambiente")
         sender = env.get("NEWSLETTER_FROM", DEFAULT_FROM)
         if not SENDER_RE.fullmatch(sender):
             raise DraftError(f"o remetente precisa ser um único endereço de {SENDER_DOMAIN}: {sender!r}")
-        return cls(key, seg, sender, env.get("NEWSLETTER_REPLY_TO", DEFAULT_REPLY_TO))
+        return cls(key, seg, sender, env.get("NEWSLETTER_REPLY_TO", DEFAULT_REPLY_TO), topic)
 
 
 def _urllib_transport(method, url, headers, body):
@@ -514,7 +520,8 @@ def _urllib_transport(method, url, headers, body):
 class Api:
     """Só as chamadas que o rascunho precisa. Envio, agendamento e exclusão são recusados aqui."""
 
-    ALLOWED = {("GET", r"/broadcasts"), ("POST", r"/broadcasts"), ("PATCH", r"/broadcasts/[A-Za-z0-9-]+")}
+    ALLOWED = {("GET", r"/broadcasts"), ("GET", r"/broadcasts/[A-Za-z0-9-]+"), ("POST", r"/broadcasts"),
+               ("PATCH", r"/broadcasts/[A-Za-z0-9-]+")}
 
     def __init__(self, cfg: Config, transport=_urllib_transport):
         self.cfg = cfg
@@ -552,18 +559,24 @@ def create_draft(api: Api, post: Post, cfg: Config, *, update: bool = False,
 
 
 def _create_draft(api: Api, post: Post, cfg: Config, *, update: bool = False) -> tuple[str, str]:
+    if not cfg.topic_id:  # antes de qualquer chamada: sem tópico, o descadastro valeria para a conta inteira
+        raise DraftError("rascunho sem tópico recusado: o descadastro valeria para a conta inteira")
     html, text = render_email(post)
     name = f"blog/{post.slug}"
     data = api.request("GET", "/broadcasts").get("data") or []
     same = [b for b in data if b.get("name") == name]
     if len(same) > 1:
         raise DraftError(f"{len(same)} broadcasts chamados {name}: resolva no painel do Resend")
-    content = {"from": cfg.sender, "reply_to": cfg.reply_to, "subject": post.title, "html": html, "text": text}
+    content = {"topic_id": cfg.topic_id, "from": cfg.sender, "reply_to": cfg.reply_to, "subject": post.title,
+               "html": html, "text": text}
     if same:
         b = same[0]
         if b.get("status") != "draft":
             raise DraftError(f"{name} já existe com status {b.get('status')} ({b.get('id')}): nada foi alterado")
         if not update:
+            # A listagem não traz topic_id: confere no detalhe. Rascunho antigo sem o tópico não passa calado.
+            if api.request("GET", f"/broadcasts/{b['id']}").get("topic_id") != cfg.topic_id:
+                raise DraftError(f"{name} existe sem o tópico da newsletter ({b['id']}): rode com --update")
             return "existe", b["id"]
         api.request("PATCH", f"/broadcasts/{b['id']}", content)
         return "atualizado", b["id"]

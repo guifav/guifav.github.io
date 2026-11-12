@@ -26,6 +26,7 @@ Node 22.18 ou mais novo (TypeScript direto pelo `node --test`). Os testes rodam 
 O deploy é manual, depois do merge, e não está no CI. O DNS de `guifav.dev` só muda com ok do Gui.
 
 1. **Segmento** "IA Aplicada" no Resend. Copie o id para `SEGMENT_ID` no `wrangler.toml`. Com `SEGMENT_ID` vazio, o Worker responde 500 e não cadastra ninguém.
+   **Tópico** "IA Aplicada" no Resend (privado, `default_subscription` opt_in), com o id em `TOPIC_ID`. O descadastro da newsletter vale só para o tópico, e não para todos os broadcasts da conta. Quem confirma de novo pelo site volta ao tópico; o contato novo já nasce nele. Com `TOPIC_ID` vazio, o Worker responde 500.
 2. **Turnstile:** crie um widget para `guifav.dev`. A chave pública vai para `TURNSTILE_SITE_KEY` em `blog-src/src/consts.ts`; a secreta, para o segredo abaixo.
 3. **Publicação:** `npx wrangler@4 deploy`. A rota `insights.guifav.dev` é um domínio próprio do Worker, e o Cloudflare cria o registro DNS do subdomínio.
 4. **Segredos**, os três de uma vez (`npx wrangler@4 secret bulk`, lendo um JSON pela entrada padrão, sem o valor passar pela tela nem pelo histórico): `RESEND_API_KEY`, `TURNSTILE_SECRET` e `CONFIRM_SECRET` (`openssl rand -base64 48`). Confira com `npx wrangler@4 secret list`.
