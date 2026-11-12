@@ -325,12 +325,21 @@ class _Parser(argparse.ArgumentParser):
 
 
 def main(argv=None, transport=_urllib_transport, sleep=time.sleep) -> int:
-    ap = _Parser(description="Importa assinantes do export do Substack para o Resend (simulação por padrão).")
+    # Ajuda sem saída automática do argparse: combinada com outra opção, recusa (senão --sync --help sairia com zero
+    # sem a contagem S5).
+    ap = _Parser(description="Importa assinantes do export do Substack para o Resend (simulação por padrão).", add_help=False)
+    ap.add_argument("-h", "--help", action="store_true", help="mostra esta ajuda e sai")
     ap.add_argument("export", nargs="?", help="email_list.*.csv do export do Substack (fora do repo)")
     ap.add_argument("--schema", action="store_true", help="só cria as propriedades (antes do deploy do Worker)")
     ap.add_argument("--apply", action="store_true", help="grava no Resend")
     ap.add_argument("--sync", action="store_true", help="descadastra quem veio do Substack e saiu do export")
     a = ap.parse_args(argv)
+    if a.help:
+        if a.export or a.apply or a.sync or a.schema:
+            print("ERRO: argumentos inválidos (--help não se combina com outras opções)", file=sys.stderr)
+            return 2
+        ap.print_help()
+        return 0
     key, seg = os.environ.get("RESEND_API_KEY", ""), os.environ.get("NEWSLETTER_SEGMENT_ID", "")
     if not key or not seg:
         print("ERRO: faltam RESEND_API_KEY e NEWSLETTER_SEGMENT_ID no ambiente", file=sys.stderr)

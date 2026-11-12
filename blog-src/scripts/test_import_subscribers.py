@@ -581,6 +581,20 @@ class CliTest(unittest.TestCase):
         f = FakeResend(props=S.PROPERTIES)
         self.assertEqual(cli(f, None, "--schema")[0], 0)
 
+    def test_help_alone_exits_zero_and_help_with_other_options_is_refused(self):
+        import subprocess
+        script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "import_subscribers.py")
+        env = {**os.environ, "RESEND_API_KEY": "re_x", "NEWSLETTER_SEGMENT_ID": SEG}
+        for h in ("-h", "--help"):
+            r = subprocess.run([sys.executable, "-B", script, h], capture_output=True, text=True, env=env)
+            self.assertEqual(r.returncode, 0, h)
+            self.assertIn("--sync", r.stdout, h)
+            for args in ([h, "--sync", "a.csv"], ["a.csv", "--sync", h], ["a.csv", "--apply", "--sync", h], [h, "--schema"],
+                         [h, "--sync"], ["--sync", h]):
+                r = subprocess.run([sys.executable, "-B", script, *args], capture_output=True, text=True, env=env)
+                self.assertEqual(r.returncode, 2, args)
+                self.assertIn("ERRO: argumentos inválidos", r.stderr, args)
+
     def test_argument_errors_do_not_echo_the_arguments(self):
         import subprocess
         script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "import_subscribers.py")
