@@ -34,6 +34,23 @@ from pathlib import Path
 from urllib.parse import unquote
 
 SITE_HOST = "guifav.dev"
+# Domínio antigo do Substack (#24): depois do cutover, nada no site aponta para ele.
+OLD_DOMAIN = "guilhermefavaron.com.br"
+OLD_HOSTS = {OLD_DOMAIN, "www." + OLD_DOMAIN}
+# Links de posts importados que já davam 404 no Substack antes do cutover (caminhos da era Wix, conferidos em
+# 2026-11-12). A importação não altera texto, então eles ficam; o 301 genérico os leva à raiz do blog.
+_W = "https://www." + OLD_DOMAIN
+OLD_DOMAIN_DEAD_LINKS = (
+    ("blog/desbloqueando-a-inteligencia-artificial-o-guia-definitivo-para-empresarios-na-era-da-ia-livro-da-ia/index.html",
+     _W + "/livro-ia-guia-estrategico-empresarios-era-digital"),
+    ("blog/decifrando-o-codigo-da-ia-estrategias-para-mitigar-vieses-em-negocios-inteligentes/index.html",
+     _W + "/livro-ia-guia-estrategico-empresarios-era-digital"),
+    ("blog/microservices-vs-monolith-decisoes/index.html", _W + "/post/modernizacao-sistemas-legados-vantagem-competitiva"),
+    ("blog/como-designers-profissionais-usam-ia-guia-completo-2024/index.html", _W + "/pagina-inicial/hashtags/FF0000"),
+    ("blog/como-designers-profissionais-usam-ia-guia-completo-2024/index.html", _W + "/pagina-inicial/hashtags/000000"),
+    ("blog/modernizacao-de-sistemas-legados/index.html", _W + "/pagina-inicial"),
+    ("blog/data-pipelines-empresariais-como/index.html", _W + "/post/machine-learning-producao-modelos-empresariais-roi"),
+)
 BLOG_PREFIX = "/blog/"
 SITE_ORIGIN = "https://" + SITE_HOST
 SITEMAP_NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
@@ -395,6 +412,17 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
                 problems.append(f"{rel}: post com index: false sem noindex")
             if len(parts) == 1 and parts[0] in BLOG_PRIVATE_PAGES and not has_noindex:
                 problems.append(f"{rel}: página da newsletter sem noindex")
+        if not pre_cutover:
+            if not in_blog:
+                # Fora do blog, qualquer menção conta (inclusive JSON-LD e texto): o código é do site.
+                if OLD_DOMAIN in (site / rel).read_text(encoding="utf-8").lower():
+                    problems.append(f"{rel}: menciona o domínio antigo ({OLD_DOMAIN})")
+            else:
+                # No blog, só links e embeds: menção em texto corrido de post importado fica.
+                for u in dict.fromkeys(list(p.refs) + [v for _, v in p.url_values]):
+                    res = resolved[(base, u)]
+                    if res and res.get("hostname") in OLD_HOSTS and (rel, u) not in OLD_DOMAIN_DEAD_LINKS:
+                        problems.append(f"{rel}: link para o domínio antigo: {u[:80]}")
         for ref in p.refs:
             path = _internal(resolved[(base, ref)])
             if path is None:

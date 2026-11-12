@@ -57,6 +57,51 @@ class Base(unittest.TestCase):
         return C.check(self.site, self.posts, pre_cutover=pre_cutover)
 
 
+class OldDomainTest(Base):
+    """Depois do cutover (#24), nada no site aponta para o domínio antigo do Substack."""
+
+    def flagged(self, rel: str, html: str) -> list[str]:
+        self.w(rel, html)
+        return [p for p in self.problems(pre_cutover=False) if "domínio antigo" in p]
+
+    def test_links_and_embeds_to_the_old_domain_are_flagged(self):
+        for host in ("guilhermefavaron.com.br", "www.guilhermefavaron.com.br", "WWW.GuilhermeFavaron.com.br"):
+            for rel, html in (
+                ("index.html", page(f'<a href="https://{host}/p/x">n</a>', robots="")),
+                ("portfolio/index.html", page(f'<iframe src="https://{host}/embed"></iframe>', robots="")),
+                ("blog/um-post/index.html", page(f'<a href="//{host}/post/y">n</a>', robots=ROBOTS_INDEX)),
+                ("blog/index.html", page(f'<iframe src="https://{host}/embed"></iframe>', robots=ROBOTS_INDEX)),
+                ("blog/um-post/index.html", page(f'<form method="post" action="https://{host}/x"></form>', robots=ROBOTS_INDEX)),
+            ):
+                with self.subTest(host=host, rel=rel):
+                    self.setUp()
+                    self.assertEqual(len(self.flagged(rel, html)), 1, rel)
+
+    def test_text_mention_inside_a_post_is_not_a_link(self):
+        self.assertEqual(self.flagged("blog/um-post/index.html",
+                                      page("<p>antes em guilhermefavaron.com.br</p>", robots=ROBOTS_INDEX)), [])
+
+    def test_any_mention_outside_the_blog_is_flagged_including_json_ld(self):
+        ld = '<script type="application/ld+json">{"sameAs":["https://guilhermefavaron.com.br"]}</script>'
+        self.assertEqual(len(self.flagged("index.html", page(ld, robots=""))), 1)
+
+    def test_known_dead_links_from_the_import_are_allowed_only_on_their_page(self):
+        rel, url = C.OLD_DOMAIN_DEAD_LINKS[0]
+        self.w("blog/" + rel.split("/")[1] + "/index.html", "")
+        self.assertEqual(self.flagged(rel, page(f'<a href="{url}">x</a>', robots=ROBOTS_INDEX)), [])
+        self.assertEqual(len(self.flagged("blog/um-post/index.html", page(f'<a href="{url}">x</a>', robots=ROBOTS_INDEX))), 1)
+
+    def test_known_dead_list_matches_the_build(self):
+        # 7 pares (9 hrefs) que já davam 404 no Substack antes do cutover (era Wix); a importação não altera texto.
+        self.assertEqual(len(C.OLD_DOMAIN_DEAD_LINKS), 7)
+        self.assertEqual(len(set(C.OLD_DOMAIN_DEAD_LINKS)), 7)
+        self.assertTrue(all(rel.startswith("blog/") and rel.endswith("/index.html") for rel, _ in C.OLD_DOMAIN_DEAD_LINKS))
+
+    def test_not_checked_before_the_cutover(self):
+        self.w("index.html", page('<a href="https://guilhermefavaron.com.br">n</a>', robots=""))
+        self.assertFalse(any("domínio antigo" in p for p in self.problems(pre_cutover=True)))
+
+
 class CheckTest(Base):
     def test_clean_site_passes(self):
         self.assertEqual(self.problems(), [])
