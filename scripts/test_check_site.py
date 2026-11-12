@@ -3,6 +3,7 @@
 Rodar: python3 scripts/test_check_site.py
 """
 import os
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -64,6 +65,17 @@ class OldDomainTest(Base):
         self.w(rel, html)
         return [p for p in self.problems(pre_cutover=False) if "domínio antigo" in p]
 
+    def test_encoded_and_fqdn_links_are_flagged_everywhere(self):
+        # #50 r1: a busca literal não vê entidade HTML nem percent-encoding; o parser WHATWG mantém o ponto final.
+        for url in ("https://guilhermefavaron&#46;com.br/p/x", "https://%67uilhermefavaron.com.br/p/x",
+                    "https://guilhermefavaron.com.br./p/x", "https://www.guilhermefavaron.com.br./p/x",
+                    "https://www.guilhermefavaron.com.br\u3002/p/x"):
+            for rel, robots in (("index.html", ""), ("blog/um-post/index.html", ROBOTS_INDEX)):
+                with self.subTest(url=url, rel=rel):
+                    self.setUp()
+                    got = self.flagged(rel, page(f'<a href="{url}">n</a>', robots=robots))
+                    self.assertTrue(any("link para o domínio antigo" in g for g in got), got)
+
     def test_links_and_embeds_to_the_old_domain_are_flagged(self):
         for host in ("guilhermefavaron.com.br", "www.guilhermefavaron.com.br", "WWW.GuilhermeFavaron.com.br"):
             for rel, html in (
@@ -75,7 +87,10 @@ class OldDomainTest(Base):
             ):
                 with self.subTest(host=host, rel=rel):
                     self.setUp()
-                    self.assertEqual(len(self.flagged(rel, html)), 1, rel)
+                    got = self.flagged(rel, html)
+                    self.assertTrue(any("link para o domínio antigo" in g for g in got), got)
+                    if rel.startswith("blog/"):
+                        self.assertEqual(len(got), 1, got)
 
     def test_text_mention_inside_a_post_is_not_a_link(self):
         self.assertEqual(self.flagged("blog/um-post/index.html",
@@ -91,11 +106,24 @@ class OldDomainTest(Base):
         self.assertEqual(self.flagged(rel, page(f'<a href="{url}">x</a>', robots=ROBOTS_INDEX)), [])
         self.assertEqual(len(self.flagged("blog/um-post/index.html", page(f'<a href="{url}">x</a>', robots=ROBOTS_INDEX))), 1)
 
-    def test_known_dead_list_matches_the_build(self):
-        # 7 pares (9 hrefs) que já davam 404 no Substack antes do cutover (era Wix); a importação não altera texto.
-        self.assertEqual(len(C.OLD_DOMAIN_DEAD_LINKS), 7)
-        self.assertEqual(len(set(C.OLD_DOMAIN_DEAD_LINKS)), 7)
-        self.assertTrue(all(rel.startswith("blog/") and rel.endswith("/index.html") for rel, _ in C.OLD_DOMAIN_DEAD_LINKS))
+    def test_other_old_link_on_an_allowed_page_is_flagged(self):
+        rel, url = C.OLD_DOMAIN_DEAD_LINKS[0]
+        for other in ("https://www.guilhermefavaron.com.br", url + "/", url.replace("https://www.", "https://")):
+            with self.subTest(other=other):
+                self.setUp()
+                self.assertEqual(len(self.flagged(rel, page(f'<a href="{other}">x</a>', robots=ROBOTS_INDEX))), 1)
+
+    def test_known_dead_list_matches_the_post_sources(self):
+        # Referência independente da lista: os links para o domínio antigo nos fontes dos posts importados.
+        # 7 pares (8 hrefs: um deles aparece duas vezes no mesmo post) que já davam 404 no Substack antes do
+        # cutover (caminhos da era Wix); a importação não altera texto.
+        posts = Path(__file__).resolve().parent.parent / "blog-src/src/content/posts"
+        rx = re.compile(r"""(?:\]\(|href=["'])(https?://(?:www\.)?guilhermefavaron\.com\.br[^)\s"'<>]*)""", re.I)
+        found = [(f"blog/{f.stem}/index.html", m.group(1))
+                 for f in sorted(posts.glob("*.md*")) for m in rx.finditer(f.read_text(encoding="utf-8"))]
+        self.assertEqual(len(found), 8)
+        self.assertEqual(set(found), set(C.OLD_DOMAIN_DEAD_LINKS))
+        self.assertEqual(len(C.OLD_DOMAIN_DEAD_LINKS), len(set(C.OLD_DOMAIN_DEAD_LINKS)))
 
     def test_not_checked_before_the_cutover(self):
         self.w("index.html", page('<a href="https://guilhermefavaron.com.br">n</a>', robots=""))

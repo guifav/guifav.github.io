@@ -111,6 +111,11 @@ def resolve_urls(pairs: list[tuple[str, str]]) -> list[dict | None]:
     return out
 
 
+def _old_host(res: dict | None) -> bool:
+    """A URL resolvida aponta para o domínio antigo do Substack (com ou sem www e ponto final DNS)?"""
+    return bool(res) and (res.get("hostname") or "").rstrip(".") in OLD_HOSTS
+
+
 def _internal(res: dict | None) -> str | None:
     """Caminho no disco (sem percent-encoding) se a URL resolvida for deste site; senão None."""
     if not res or res["protocol"] not in ("http:", "https:"):
@@ -413,16 +418,15 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
             if len(parts) == 1 and parts[0] in BLOG_PRIVATE_PAGES and not has_noindex:
                 problems.append(f"{rel}: página da newsletter sem noindex")
         if not pre_cutover:
-            if not in_blog:
-                # Fora do blog, qualquer menção conta (inclusive JSON-LD e texto): o código é do site.
-                if OLD_DOMAIN in (site / rel).read_text(encoding="utf-8").lower():
-                    problems.append(f"{rel}: menciona o domínio antigo ({OLD_DOMAIN})")
-            else:
-                # No blog, só links e embeds: menção em texto corrido de post importado fica.
-                for u in dict.fromkeys(list(p.refs) + [v for _, v in p.url_values]):
-                    res = resolved[(base, u)]
-                    if res and res.get("hostname") in OLD_HOSTS and (rel, u) not in OLD_DOMAIN_DEAD_LINKS:
-                        problems.append(f"{rel}: link para o domínio antigo: {u[:80]}")
+            # Fora do blog, qualquer menção literal conta (inclusive JSON-LD e texto): o código é do site.
+            if not in_blog and OLD_DOMAIN in (site / rel).read_text(encoding="utf-8").lower():
+                problems.append(f"{rel}: menciona o domínio antigo ({OLD_DOMAIN})")
+            # Em todo o site, links e embeds pela URL resolvida: pega entidade HTML, percent-encoding e ponto final,
+            # que a busca literal não vê. No blog, menção em texto corrido de post importado fica, e só os links
+            # mortos conhecidos passam, cada um na sua página.
+            for u in dict.fromkeys(list(p.refs) + [v for _, v in p.url_values]):
+                if _old_host(resolved[(base, u)]) and not (in_blog and (rel, u) in OLD_DOMAIN_DEAD_LINKS):
+                    problems.append(f"{rel}: link para o domínio antigo: {u[:80]}")
         for ref in p.refs:
             path = _internal(resolved[(base, ref)])
             if path is None:
