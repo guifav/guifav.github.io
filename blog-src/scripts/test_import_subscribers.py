@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import import_subscribers as S  # noqa: E402
 
 SEG = "seg-1"
+TOPIC = "topic-1"
 HEAD = ["email", "active_subscription", "expiry", "plan", "email_disabled", "created_at", "first_payment_at"]
 
 
@@ -38,11 +39,15 @@ class FakeResend:
     {"value": ..., "type": "string"}; o email no caminho chega codificado; listas paginam por limit/after."""
 
     def __init__(self, contacts=None, props=(), extra_props=0, limit_429=0, retry_after="0", on_create=None,
-                 fail=None, rate_path=None, hook=None):
+                 fail=None, rate_path=None, hook=None, conflict_on_existing=False, topics=None):
         self.contacts = {}  # email -> dict
         for c in contacts or []:
             self.contacts[c["email"]] = {"id": "c-" + c["email"], "unsubscribed": False, "segments": set(),
-                                         "properties": {}, **c}
+                                         "properties": {}, "topic": "opt_in", **c}
+        # Contrato real (sondado em 2026-11-12): POST de email existente é upsert (201, mesmo id). Com
+        # conflict_on_existing, o fake responde 409, para exercitar o caminho de reserva do importador.
+        self.conflict_on_existing = conflict_on_existing
+        self.topics = topics  # topics(contact) -> (status, corpo) substitui a resposta de GET .../topics
         self.props = [f"outra_{i:03d}" for i in range(extra_props)] + list(props)
         self.calls = []
         self.limit_429 = limit_429
@@ -85,6 +90,23 @@ class FakeResend:
                 items = [c for c in items if q["segment_id"] in c["segments"]]
             items = [{"id": c["id"], "email": c["email"], "unsubscribed": c["unsubscribed"]} for c in items]
             return 200, self._page(items, q), {}
+        if method == "GET" and path.startswith("/contacts/") and path.endswith("/topics"):
+            c = by_id[path.split("/")[2]]
+            if self.topics:
+                st, body = self.topics(c)
+                return st, body, {}
+            # Formato real: o tópico aparece mesmo sem estado explícito, com o padrão opt_in.
+            return 200, {"object": "list", "has_more": False, "data": [
+                {"id": TOPIC, "name": "IA Aplicada", "description": "x", "subscription": c["topic"],
+                 "created_at": "2026-11-12 12:05:07+00"}]}, {}
+        if method == "PATCH" and path.startswith("/contacts/") and path.endswith("/topics"):
+            if not isinstance(data, list):  # contrato real: array puro
+                return 422, {"name": "validation_error", "message": "x"}, {}
+            c = by_id[path.split("/")[2]]
+            for t in data:
+                if t["id"] == TOPIC:
+                    c["topic"] = t["subscription"]
+            return 200, {"object": "contact_topics", "id": c["id"]}, {}
         if method == "GET" and path.startswith("/contacts/"):
             key = path[len("/contacts/"):]
             c = self.contacts.get(key) or by_id.get(key)
@@ -95,12 +117,21 @@ class FakeResend:
         if method == "POST" and path == "/contacts":
             if self.on_create:
                 self.on_create(self, data["email"])
-            if data["email"] in self.contacts:
+            c = self.contacts.get(data["email"])
+            if c and self.conflict_on_existing:
                 return 409, {"message": "exists"}, {}
+            if c:  # upsert real: status global volta a inscrito (mesmo sem o campo); tópico só muda com `topics`
+                c["unsubscribed"] = bool(data.get("unsubscribed", False))
+                c["segments"] |= {s["id"] for s in data.get("segments", [])}
+                c["properties"].update(data.get("properties", {}))
+                for t in data.get("topics", []):
+                    if t["id"] == TOPIC:
+                        c["topic"] = t["subscription"]
+                return 201, {"object": "contact", "id": c["id"]}, {}
             self.contacts[data["email"]] = {"id": "c-" + data["email"], "email": data["email"],
-                                            "unsubscribed": data["unsubscribed"],
+                                            "unsubscribed": bool(data.get("unsubscribed", False)),
                                             "segments": {s["id"] for s in data.get("segments", [])},
-                                            "properties": dict(data.get("properties", {}))}
+                                            "properties": dict(data.get("properties", {})), "topic": "opt_in"}
             return 201, {"id": "c-" + data["email"]}, {}
         if method == "PATCH" and path.startswith("/contacts/"):
             c = by_id.get(path[len("/contacts/"):])
@@ -121,13 +152,13 @@ class FakeResend:
 def run(fake, path, sleeps=None, **kw):
     out = io.StringIO()
     api = S.Api("re_test", fake, sleep=(sleeps.append if sleeps is not None else (lambda s: None)))
-    counts = S.run(api, path, SEG, out=out, **kw)
+    counts = S.run(api, path, SEG, TOPIC, out=out, **kw)
     return counts, out.getvalue()
 
 
 def cli(fake, path, *flags):
     out, err = io.StringIO(), io.StringIO()
-    env = {"RESEND_API_KEY": "re_test", "NEWSLETTER_SEGMENT_ID": SEG}
+    env = {"RESEND_API_KEY": "re_test", "NEWSLETTER_SEGMENT_ID": SEG, "NEWSLETTER_TOPIC_ID": TOPIC}
     old = {k: os.environ.get(k) for k in env}
     os.environ.update(env)
     try:
@@ -140,6 +171,11 @@ def cli(fake, path, *flags):
             else:
                 os.environ[k] = v
     return rc, out.getvalue() + err.getvalue()
+
+
+def out(c):
+    """Fora da newsletter: saiu do tópico dela ou da conta inteira."""
+    return c["unsubscribed"] or c["topic"] == "opt_out"
 
 
 def substack(email, **kw):
@@ -274,8 +310,8 @@ class ImportTest(unittest.TestCase):
         self.assertEqual(f.contacts["a@x.com"]["properties"], {})
         self.assertEqual((counts["existente_do_site_intocado"], counts["adicionado_ao_segmento"]), (1, 0))
         counts, _ = run(f, export([row("fica@x.com")]), apply=True, sync=True)
-        self.assertFalse(f.contacts["a@x.com"]["unsubscribed"])
-        self.assertTrue(f.contacts["saiu@x.com"]["unsubscribed"])
+        self.assertFalse(out(f.contacts["a@x.com"]))
+        self.assertEqual((f.contacts["saiu@x.com"]["topic"], f.contacts["saiu@x.com"]["unsubscribed"]), ("opt_out", False))
 
     def test_documented_empty_source_counts_as_no_source(self):
         f = FakeResend(contacts=[{"email": "a@x.com", "properties": {"source": ""}}], props=S.PROPERTIES)
@@ -330,7 +366,7 @@ class ImportTest(unittest.TestCase):
                 if e == email and e not in fake.contacts:
                     fake.contacts[e] = {"id": "c-site", "email": e, "unsubscribed": True, "segments": set(),
                                         "properties": {"site_confirmed_at": "2026-11-11T00:00:00Z"}}
-            f = FakeResend(props=S.PROPERTIES, on_create=signup)
+            f = FakeResend(props=S.PROPERTIES, on_create=signup, conflict_on_existing=True)  # caminho de reserva
             counts, _ = run(f, export([row(email)]), apply=True)
             c = f.contacts[email]
             self.assertEqual((c["id"], c["segments"], c["unsubscribed"]), ("c-site", {SEG}, True), email)
@@ -342,14 +378,55 @@ class ImportTest(unittest.TestCase):
     def test_race_409_with_a_contact_without_origin_gets_substack_properties(self):
         def other(fake, e):
             fake.contacts.setdefault(e, {"id": "c-x", "email": e, "unsubscribed": False, "segments": set(), "properties": {}})
-        f = FakeResend(props=S.PROPERTIES, on_create=other)
+        f = FakeResend(props=S.PROPERTIES, on_create=other, conflict_on_existing=True)
         run(f, export([row("a@x.com")]), apply=True)
         self.assertEqual(f.contacts["a@x.com"]["properties"]["source"], "substack")
         self.assertEqual(f.contacts["a@x.com"]["segments"], {SEG})
 
+    def test_f2_upsert_race_keeps_site_confirmation_and_topic(self):
+        # API real: o POST de quem se inscreveu pelo site entre a listagem e a criação é upsert (201), não 409.
+        for topic in ("opt_in", "opt_out"):
+            def signup(fake, e, topic=topic):
+                fake.contacts.setdefault(e, {"id": "c-site", "email": e, "unsubscribed": False, "segments": {SEG},
+                                             "properties": {"site_confirmed_at": "2026-11-11T00:00:00Z"}, "topic": topic})
+            f = FakeResend(props=S.PROPERTIES, on_create=signup)
+            run(f, export([row("a@x.com")]), apply=True)
+            c = f.contacts["a@x.com"]
+            self.assertEqual((c["id"], c["topic"], c["properties"]["site_confirmed_at"]), ("c-site", topic, "2026-11-11T00:00:00Z"))
+            self.assertTrue(S._protected({"properties": {k: {"value": v} for k, v in c["properties"].items()}}))
+            self.assertEqual([d for m, _, d in f.calls if m == "PATCH"], [], topic)  # nenhum script escreve no tópico
+
+    def test_topic_is_required_before_any_call(self):
+        f = FakeResend(contacts=[substack("saiu@x.com")], props=S.PROPERTIES)
+        with self.assertRaisesRegex(S.ImportError_, "tópico"):
+            S.run(S.Api("re_test", f, sleep=lambda s: None), export([row("outro@x.com")]), SEG, "", apply=True, sync=True)
+        self.assertEqual(f.calls, [])
+        rc, text = cli(f, export([row("outro@x.com")]), "--sync")
+        self.assertEqual(rc, 0)
+        os.environ.pop("NEWSLETTER_TOPIC_ID", None)
+        env = {"RESEND_API_KEY": "re_test", "NEWSLETTER_SEGMENT_ID": SEG}
+        old = {k: os.environ.get(k) for k in env}
+        os.environ.update(env)
+        try:
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+                rc = S.main([export([row("outro@x.com")]), "--sync"], transport=f, sleep=lambda s: None)
+        finally:
+            for k, v in old.items():
+                os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
+        self.assertEqual((rc, "NEWSLETTER_TOPIC_ID" in err.getvalue()), (2, True))
+
+    def test_existing_out_of_topic_counts_as_unsubscribed(self):
+        f = FakeResend(contacts=[substack("a@x.com", topic="opt_out"), substack("b@x.com", unsubscribed=True),
+                                 substack("c@x.com")], props=S.PROPERTIES)
+        counts, _ = run(f, export([row("a@x.com"), row("b@x.com"), row("c@x.com")]))
+        self.assertEqual(counts["existente_descadastrado"], 2)
+        self.assertEqual(f.writes(), [])
+
     def test_lists_ask_for_pages_of_100(self):
-        f = FakeResend()
-        run(f, export([row("a@x.com")]), apply=True)
+        f = FakeResend(contacts=[substack("b@x.com")])  # existente: lê também os tópicos dele
+        run(f, export([row("a@x.com"), row("b@x.com")]), apply=True)
+        self.assertTrue(any("/topics?" in p for m, p, _ in f.calls if m == "GET"))
         lists = [p for m, p, _ in f.calls if m == "GET" and "?" in p]
         self.assertTrue(lists)
         self.assertTrue(all("limit=100" in p for p in lists), lists)
@@ -376,7 +453,7 @@ class ImportTest(unittest.TestCase):
             (FakeResend(fail=("POST", "/contacts", 422, "email segredo@x.com inválido")), ("--apply",)),
             (FakeResend(on_create=lambda f, e: f.contacts.setdefault(e, {"id": "c-1", "email": e, "unsubscribed": False,
                                                                          "segments": set(), "properties": {}}),
-                        fail=("GET", "/contacts/segredo", 500, "erro com segredo@x.com")), ("--apply",)),
+                        fail=("GET", "/contacts/segredo", 500, "erro com segredo@x.com"), conflict_on_existing=True), ("--apply",)),
         ]
         for fake, flags in cases:
             rc, text = cli(fake, export([row("segredo@x.com")]), *flags)
@@ -387,7 +464,7 @@ class ImportTest(unittest.TestCase):
     def test_persistent_rate_limit_error_has_no_email(self):
         race = lambda f, e: f.contacts.setdefault(e, {"id": "c-1", "email": e, "unsubscribed": False,  # noqa: E731
                                                       "segments": set(), "properties": {}})
-        for fake in (FakeResend(limit_429=10_000), FakeResend(on_create=race, rate_path="/contacts/segredo")):
+        for fake in (FakeResend(limit_429=10_000), FakeResend(on_create=race, rate_path="/contacts/segredo", conflict_on_existing=True)):
             rc, text = cli(fake, export([row("segredo@x.com")]), "--apply")
             self.assertEqual(rc, 1)
             self.assertIn("limite", text)
@@ -404,9 +481,11 @@ class SyncTest(unittest.TestCase):
             {"email": "fora@x.com", "properties": {"source": "substack"}},  # fora do segmento
         ], props=S.PROPERTIES)
         counts, _ = run(f, export([row("fica@x.com")]), apply=True, sync=True)
-        state = {e: c["unsubscribed"] for e, c in f.contacts.items()}
-        self.assertEqual(state, {"fica@x.com": False, "saiu@x.com": True, "site@x.com": False,
-                                 "confirmou@x.com": False, "fora@x.com": False})
+        state = {e: c["topic"] for e, c in f.contacts.items()}
+        self.assertEqual(state, {"fica@x.com": "opt_in", "saiu@x.com": "opt_out", "site@x.com": "opt_in",
+                                 "confirmou@x.com": "opt_in", "fora@x.com": "opt_in"})
+        # Só a newsletter: o status global da conta continua inscrito para todos (os outros envios seguem).
+        self.assertEqual({e for e, c in f.contacts.items() if c["unsubscribed"]}, set())
         self.assertEqual(counts["sincronizado_descadastrado"], 1)
         self.assertEqual(counts["sync_conflito_confirmacao"], 0)  # confirmado pelo site e inscrito não é conflito
         self.assertNotIn("DELETE", [m for m, _ in f.writes()])
@@ -427,16 +506,16 @@ class SyncTest(unittest.TestCase):
 
     def test_f1_race_ends_unsubscribed_with_both_stamps_and_the_next_run_flags_it(self):
         def confirm(fake, method, path, data):
-            # O Worker confirma entre a releitura e o PATCH do sync (mesmo corpo que ele envia: reativa + marcador).
-            if method == "PATCH" and data.get("unsubscribed") is True:
+            # O Worker confirma entre a releitura e as escritas do sync (o POST dele: reativa, tópico e marcador).
+            if method == "PATCH" and path == "/contacts/c-saiu@x.com":
                 c = fake.contacts["saiu@x.com"]
-                c["unsubscribed"] = False
+                c["unsubscribed"], c["topic"] = False, "opt_in"
                 c["properties"]["site_confirmed_at"] = "2026-11-12T00:00:00Z"
         f = FakeResend(contacts=[substack("saiu@x.com")], props=S.PROPERTIES, hook=confirm)
         p = export([row("outro@x.com")])
         counts, _ = run(f, p, apply=True, sync=True)
         c = f.contacts["saiu@x.com"]
-        self.assertTrue(c["unsubscribed"])  # desfecho aceito F1: fica do lado seguro (sem email)
+        self.assertEqual(c["topic"], "opt_out")  # desfecho aceito F1: fica do lado seguro (sem a newsletter)
         self.assertTrue(c["properties"]["site_confirmed_at"] and c["properties"][S.SYNC_AUDIT])
         self.assertEqual(counts["sincronizado_descadastrado"], 1)
         f.hook = None
@@ -449,36 +528,68 @@ class SyncTest(unittest.TestCase):
 
     def test_s1_no_script_path_ever_writes_unsubscribed_false(self):
         def confirm(fake, method, path, data):
-            if method == "PATCH" and data.get("unsubscribed") is True:
+            if method == "PATCH" and path == "/contacts/c-saiu@x.com":
                 fake.contacts["saiu@x.com"]["properties"]["site_confirmed_at"] = "2026-11-12T00:00:00Z"
         scenarios = [
             FakeResend(contacts=[substack("saiu@x.com")], props=S.PROPERTIES, hook=confirm),
             FakeResend(contacts=[{"email": "a@x.com", "unsubscribed": True}, substack("saiu@x.com", unsubscribed=True)], props=S.PROPERTIES),
+            FakeResend(contacts=[{"email": "a@x.com", "topic": "opt_out"}, substack("saiu@x.com", topic="opt_out")], props=S.PROPERTIES),
             FakeResend(props=S.PROPERTIES, on_create=lambda fk, e: fk.contacts.setdefault(e, {"id": "c-r", "email": e, "unsubscribed": True,
                                                                                             "segments": set(), "properties": {}})),
         ]
         for f in scenarios:
             run(f, export([row("a@x.com"), row("b@x.com")]), apply=True, sync=True)
-            for m, _, d in f.calls:
-                if m == "PATCH":
-                    self.assertNotEqual(d.get("unsubscribed"), False, d)
+            for m, path, d in f.calls:
+                if m == "PATCH" and path.endswith("/topics"):
+                    self.assertEqual(d, [{"id": TOPIC, "subscription": "opt_out"}], d)  # nunca opt_in
+                elif m == "PATCH":
+                    self.assertNotIn("unsubscribed", d, d)  # o sync não toca no status global
+                if m == "POST" and path == "/contacts":
+                    self.assertNotIn("topics", d, d)  # a criação não escreve no tópico (o padrão já é opt_in)
 
     def test_sync_patch_carries_the_audit_stamp(self):
         f = FakeResend(contacts=[substack("saiu@x.com")], props=S.PROPERTIES)
         run(f, export([row("outro@x.com")]), apply=True, sync=True)
-        (body,) = [d for m, _, d in f.calls if m == "PATCH"]
-        self.assertEqual(sorted(body), ["properties", "unsubscribed"])
-        self.assertTrue(body["unsubscribed"])
-        self.assertRegex(body["properties"][S.SYNC_AUDIT], r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.000Z$")
+        patches = [(path, d) for m, path, d in f.calls if m == "PATCH"]
+        # S2: auditoria primeiro, depois o tópico; nada no status global.
+        self.assertEqual([path for path, _ in patches], ["/contacts/c-saiu@x.com", "/contacts/c-saiu@x.com/topics"])
+        audit, topic = patches[0][1], patches[1][1]
+        self.assertEqual(list(audit), ["properties"])
+        self.assertEqual(list(audit["properties"]), [S.SYNC_AUDIT])
+        self.assertRegex(audit["properties"][S.SYNC_AUDIT], r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.000Z$")
+        self.assertEqual(topic, [{"id": TOPIC, "subscription": "opt_out"}])
+
+    def test_topic_write_failure_stops_with_the_audit_written_and_the_next_run_retries(self):
+        f = FakeResend(contacts=[substack("saiu@x.com")], props=S.PROPERTIES, fail=("PATCH", "/contacts/c-saiu@x.com/topics", 500, "x"))
+        with self.assertRaises(S.ImportError_):
+            run(f, export([row("outro@x.com")]), apply=True, sync=True)
+        c = f.contacts["saiu@x.com"]
+        self.assertEqual((c["topic"], bool(c["properties"].get(S.SYNC_AUDIT))), ("opt_in", True))
+        f.fail = None
+        counts, _ = run(f, export([row("outro@x.com")]), apply=True, sync=True)
+        self.assertEqual((counts["sincronizado_descadastrado"], c["topic"]), (1, "opt_out"))
+
+    def test_invalid_topics_response_stops_before_any_write(self):
+        bad = [((200, {"object": "list", "data": {}}), "formato inválido"),
+               ((200, {"object": "list"}), "formato inválido"),
+               ((200, {"object": "list", "data": [{"id": "outro", "subscription": "opt_in"}]}), "ausente"),
+               ((200, {"object": "list", "data": [{"id": TOPIC, "subscription": "talvez"}]}), "ausente"),
+               ((500, {"name": "x", "message": "x"}), "respondeu 500")]
+        for resp, why in bad:
+            f = FakeResend(contacts=[substack("saiu@x.com")], props=S.PROPERTIES, topics=lambda c, r=resp: r)
+            with self.assertRaisesRegex(S.ImportError_, why, msg=resp):
+                run(f, export([row("outro@x.com")]), apply=True, sync=True)
+            self.assertEqual(f.writes(), [], resp)
 
     def test_sync_preread_skips_a_voluntary_unsubscribe_after_planning(self):
-        def leave(fake, method, path, data):
-            if method == "GET" and path == "/contact-properties":
-                fake.contacts["saiu@x.com"]["unsubscribed"] = True
-        f = FakeResend(contacts=[substack("saiu@x.com")], props=S.PROPERTIES, hook=leave)
-        counts, _ = run(f, export([row("outro@x.com")]), apply=True, sync=True)
-        self.assertEqual([d for m, _, d in f.calls if m == "PATCH"], [])
-        self.assertEqual(counts["sync_pulado_na_releitura"], 1)
+        for field, value in (("unsubscribed", True), ("topic", "opt_out")):  # saiu da conta, ou só da newsletter
+            def leave(fake, method, path, data, field=field, value=value):
+                if method == "GET" and path == "/contact-properties":
+                    fake.contacts["saiu@x.com"][field] = value
+            f = FakeResend(contacts=[substack("saiu@x.com")], props=S.PROPERTIES, hook=leave)
+            counts, _ = run(f, export([row("outro@x.com")]), apply=True, sync=True)
+            self.assertEqual([d for m, _, d in f.calls if m == "PATCH"], [], field)
+            self.assertEqual(counts["sync_pulado_na_releitura"], 1, field)
 
     def test_sync_preread_skips_a_contact_whose_origin_changed(self):
         def change(fake, method, path, data):
@@ -486,7 +597,7 @@ class SyncTest(unittest.TestCase):
                 fake.contacts["saiu@x.com"]["properties"]["source"] = "manual"
         f = FakeResend(contacts=[substack("saiu@x.com")], props=S.PROPERTIES, hook=change)
         counts, _ = run(f, export([row("outro@x.com")]), apply=True, sync=True)
-        self.assertFalse(f.contacts["saiu@x.com"]["unsubscribed"])
+        self.assertFalse(out(f.contacts["saiu@x.com"]))
         self.assertEqual(counts["sync_pulado_na_releitura"], 1)
 
     def test_sync_skips_a_contact_confirmed_after_planning(self):
@@ -495,7 +606,7 @@ class SyncTest(unittest.TestCase):
                 fake.contacts["saiu@x.com"]["properties"]["site_confirmed_at"] = "2026-11-12T00:00:00Z"
         f = FakeResend(contacts=[substack("saiu@x.com")], props=S.PROPERTIES, hook=confirm)
         counts, _ = run(f, export([row("outro@x.com")]), apply=True, sync=True)
-        self.assertFalse(f.contacts["saiu@x.com"]["unsubscribed"])
+        self.assertFalse(out(f.contacts["saiu@x.com"]))
         self.assertEqual(counts["sync_pulado_na_releitura"], 1)
         self.assertEqual([d for m, _, d in f.calls if m == "PATCH"], [])
 
@@ -540,7 +651,8 @@ class ApiTest(unittest.TestCase):
                      ("POST", "/broadcasts/b1/send"), ("DELETE", "/segments/seg-1"), ("POST", "/segments"),
                      ("GET", "/contacts/a@x.com/segments"), ("PATCH", "/contacts"), ("GET", "/api-keys"),
                      ("POST", "/api-keys"), ("DELETE", "/api-keys/k1"), ("DELETE", "/contact-properties/p1"),
-                     ("PATCH", "/contact-properties/p1")):
+                     ("PATCH", "/contact-properties/p1"), ("PATCH", "/contacts/x/segments"), ("PATCH", "/contacts/x/topics/t1"),
+                     ("GET", "/topics"), ("POST", "/topics"), ("PATCH", "/topics/t1"), ("DELETE", "/topics/t1")):
             with self.assertRaisesRegex(S.ImportError_, "chamada recusada", msg=f"{m} {p}") as cm:
                 api.request(m, p, op="teste")
             self.assertNotIn(p, str(cm.exception))
@@ -611,7 +723,7 @@ class CliTest(unittest.TestCase):
         missing = os.path.join(d, "segredo@x.com.csv")
         r = subprocess.run([sys.executable, "-B", os.path.join(os.path.dirname(os.path.abspath(__file__)), "import_subscribers.py"),
                             missing], capture_output=True, text=True,
-                           env={**os.environ, "RESEND_API_KEY": "re_x", "NEWSLETTER_SEGMENT_ID": SEG})
+                           env={**os.environ, "RESEND_API_KEY": "re_x", "NEWSLETTER_SEGMENT_ID": SEG, "NEWSLETTER_TOPIC_ID": TOPIC})
         self.assertEqual(r.returncode, 1)
         self.assertNotIn("segredo", r.stdout + r.stderr)
         self.assertNotIn("Traceback", r.stderr)
