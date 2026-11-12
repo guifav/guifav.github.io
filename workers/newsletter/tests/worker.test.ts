@@ -230,7 +230,10 @@ test('A1: /confirm válido cria o contato no segmento e redireciona para inscric
   assert.equal(r.status, 303);
   assert.equal(loc(r), 'https://guifav.dev/blog/inscricao-confirmada/');
   const create = s.calls.find((c) => c.url === 'https://api.resend.com/contacts' && c.method === 'POST');
-  assert.deepEqual(create?.body, { email: 'leitor@exemplo.com', unsubscribed: false, segments: [{ id: 'seg-1' }] });
+  assert.deepEqual(create?.body, {
+    email: 'leitor@exemplo.com', unsubscribed: false, segments: [{ id: 'seg-1' }],
+    properties: { site_confirmed_at: new Date(NOW).toISOString() },
+  });
 });
 
 test('A5: confirmação repetida e contato descadastrado reativado, sem duplicar', async () => {
@@ -244,7 +247,8 @@ test('A5: confirmação repetida e contato descadastrado reativado, sem duplicar
       'PATCH https://api.resend.com/contacts/leitor@exemplo.com',
       'POST https://api.resend.com/contacts/c1/segments/seg-1',
     ], contact);
-    assert.deepEqual(writes[1].body, { unsubscribed: false }, contact);
+    // A8: a reativação também registra o opt-in pelo site, que protege o contato da sincronização com o Substack.
+    assert.deepEqual(writes[1].body, { unsubscribed: false, properties: { site_confirmed_at: new Date(NOW).toISOString() } }, contact);
   }
 });
 

@@ -138,11 +138,14 @@ async function inSegment(id: string, env: Env, deps: Deps, headers: Record<strin
 async function enroll(email: string, env: Env, deps: Deps): Promise<Response> {
   const headers = { authorization: `Bearer ${env.RESEND_API_KEY}`, 'content-type': 'application/json' };
   const done = redirect(`${env.BLOG_URL}/inscricao-confirmada/`);
+  // Registro do opt-in pelo site: a sincronização com o Substack nunca descadastra quem tem este campo (A8).
+  // A propriedade precisa existir no Resend antes do deploy (o importador a cria), senão a gravação falha.
+  const properties = { site_confirmed_at: new Date(deps.now()).toISOString() };
 
   const created = await deps.fetch(`${RESEND}/contacts`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ email, unsubscribed: false, segments: [{ id: env.SEGMENT_ID }] }),
+    body: JSON.stringify({ email, unsubscribed: false, segments: [{ id: env.SEGMENT_ID }], properties }),
   });
   if (created.ok) return done;
   if (created.status >= 500) return plain(502, 'falha temporária; tente o link de novo em alguns minutos');
@@ -155,7 +158,7 @@ async function enroll(email: string, env: Env, deps: Deps): Promise<Response> {
   if (!existing.ok) return retry;
   const id = ((await existing.json()) as { id?: unknown }).id;
   if (typeof id !== 'string' || !id) return retry;
-  const upd = await deps.fetch(contactPath(email), { method: 'PATCH', headers, body: JSON.stringify({ unsubscribed: false }) });
+  const upd = await deps.fetch(contactPath(email), { method: 'PATCH', headers, body: JSON.stringify({ unsubscribed: false, properties }) });
   if (!upd.ok) return retry;
   const seg = await deps.fetch(`${RESEND}/contacts/${encodeURIComponent(id)}/segments/${env.SEGMENT_ID}`, { method: 'POST', headers });
   if (seg.ok) return done;
