@@ -335,6 +335,10 @@ def main(argv=None, transport=_urllib_transport, sleep=time.sleep) -> int:
     if not key or not seg:
         print("ERRO: faltam RESEND_API_KEY e NEWSLETTER_SEGMENT_ID no ambiente", file=sys.stderr)
         return 2
+    if a.schema and (a.export or a.apply or a.sync):
+        # --schema só cria propriedades: combinado com importação ou sync pularia a contagem S5 e sairia com zero.
+        print("ERRO: argumentos inválidos (--schema não se combina com export, --apply ou --sync)", file=sys.stderr)
+        return 2
     if not a.schema and not a.export:
         print("ERRO: informe o export ou use --schema", file=sys.stderr)
         return 2

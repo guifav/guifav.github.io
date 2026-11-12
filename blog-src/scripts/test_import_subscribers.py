@@ -563,6 +563,24 @@ class CliTest(unittest.TestCase):
         self.assertIn("falha inesperada (KeyError)", text)
         self.assertNotIn("segredo", text)
 
+    def test_schema_cannot_be_combined_with_import_or_sync(self):
+        # --schema só cria propriedades; combinado com --sync ele pularia a contagem S5 e sairia com zero.
+        conflict = substack("c@x.com", unsubscribed=True, properties={"source": "substack", "site_confirmed_at": "2026-11-12T00:00:00Z",
+                                                                       S.SYNC_AUDIT: "2026-11-12T00:00:01Z"})
+        p = export([row("fica@x.com")])
+        for flags in (("--schema", "--sync"), ("--schema", "--apply"), ("--schema", "--apply", "--sync")):
+            f = FakeResend(contacts=[conflict], props=S.PROPERTIES)
+            rc, text = cli(f, p, *flags)
+            self.assertEqual(rc, 2, flags)
+            self.assertIn("ERRO: argumentos inválidos", text, flags)
+            self.assertEqual(f.calls, [], flags)
+        for flags in (("--schema", "--sync"), ("--schema", "--apply")):  # também sem export
+            f = FakeResend(contacts=[conflict], props=S.PROPERTIES)
+            self.assertEqual(cli(f, None, *flags)[0], 2, flags)
+            self.assertEqual(f.calls, [], flags)
+        f = FakeResend(props=S.PROPERTIES)
+        self.assertEqual(cli(f, None, "--schema")[0], 0)
+
     def test_argument_errors_do_not_echo_the_arguments(self):
         import subprocess
         script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "import_subscribers.py")
