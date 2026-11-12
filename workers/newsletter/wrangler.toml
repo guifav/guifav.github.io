@@ -15,6 +15,9 @@ FROM = "IA Aplicada <insights@guifav.dev>"
 REPLY_TO = "contact@guifav.dev"
 # Segmento "IA Aplicada" do Resend (criado em 2026-11-11). Vazio: o Worker responde 500 e não cadastra nada.
 SEGMENT_ID = "34c37605-670a-4c09-9dff-5e5a05c9e0fa"
+# Tópico "IA Aplicada" do Resend (criado em 2026-11-12, privado, opt_in por padrão): o descadastro da newsletter
+# vale só para ele, não para todos os broadcasts da conta. Vazio: o Worker responde 500 e não cadastra nada.
+TOPIC_ID = "77f2a0b8-16aa-4ac6-9840-c352559edb51"
 SITE_ORIGIN = "https://guifav.dev"
 BLOG_URL = "https://guifav.dev/blog"
 WORKER_URL = "https://insights.guifav.dev"

@@ -16,6 +16,7 @@ export interface Env {
   FROM: string;
   REPLY_TO: string;
   SEGMENT_ID: string;
+  TOPIC_ID: string;
   SITE_ORIGIN: string;
   BLOG_URL: string;
   WORKER_URL: string;
@@ -50,7 +51,7 @@ export function normalizeEmail(raw: string): string | null {
 export const contactPath = (email: string) => `${RESEND}/contacts/${encodeURIComponent(email).replace('%40', '@')}`;
 
 function configured(env: Env): boolean {
-  return Boolean(env.CONFIRM_SECRET && env.CONFIRM_SECRET.length >= MIN_SECRET && env.RESEND_API_KEY && env.SEGMENT_ID);
+  return Boolean(env.CONFIRM_SECRET && env.CONFIRM_SECRET.length >= MIN_SECRET && env.RESEND_API_KEY && env.SEGMENT_ID && env.TOPIC_ID);
 }
 
 async function turnstileOk(token: string, ip: string, env: Env, deps: Deps): Promise<boolean> {
@@ -160,6 +161,12 @@ async function enroll(email: string, env: Env, deps: Deps): Promise<Response> {
   if (typeof id !== 'string' || !id) return retry;
   const upd = await deps.fetch(contactPath(email), { method: 'PATCH', headers, body: JSON.stringify({ unsubscribed: false, properties }) });
   if (!upd.ok) return retry;
+  // O descadastro da newsletter é por tópico (não pela conta inteira): quem confirma de novo volta ao tópico.
+  // Contrato real (2026-11-12): o corpo é um array puro. Contato novo já nasce no tópico (padrão opt_in).
+  const topic = await deps.fetch(`${RESEND}/contacts/${encodeURIComponent(id)}/topics`, {
+    method: 'PATCH', headers, body: JSON.stringify([{ id: env.TOPIC_ID, subscription: 'opt_in' }]),
+  });
+  if (!topic.ok) return retry;
   const seg = await deps.fetch(`${RESEND}/contacts/${encodeURIComponent(id)}/segments/${env.SEGMENT_ID}`, { method: 'POST', headers });
   if (seg.ok) return done;
   return (await inSegment(id, env, deps, headers)) === true ? done : retry;

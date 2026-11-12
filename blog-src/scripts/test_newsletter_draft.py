@@ -15,8 +15,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import newsletter_draft as N  # noqa: E402
 
 SEG = "seg-blog"
+TOPIC = "topico-ia"
 CFG = N.Config(api_key="re_teste", segment_id=SEG, sender="IA Aplicada <insights@expert.guifav.dev>",
-               reply_to="contact@guifav.dev")
+               reply_to="contact@guifav.dev", topic_id=TOPIC)
 
 
 def page(body: str, *, slug="um-post", title="Um post", sub="Subtítulo do post", desc="Descrição curta.",
@@ -222,7 +223,11 @@ class FakeResend:
         if self.fail:
             return self.fail, {"message": "erro"}
         if method == "GET" and url == "https://api.resend.com/broadcasts":
-            return 200, {"object": "list", "has_more": False, "data": self.broadcasts}
+            # a listagem real não traz topic_id (conferido na API em 2026-11-12); só o detalhe traz
+            return 200, {"object": "list", "has_more": False, "data": [{k: v for k, v in b.items() if k != "topic_id"} for b in self.broadcasts]}
+        if method == "GET" and url.startswith("https://api.resend.com/broadcasts/"):
+            b = next(b for b in self.broadcasts if b["id"] == url.rsplit("/", 1)[1])
+            return 200, {"object": "broadcast", "topic_id": None, **b}
         if method == "POST" and url == "https://api.resend.com/broadcasts":
             return 201, {"id": "b-novo"}
         if method == "PATCH" and url.startswith("https://api.resend.com/broadcasts/"):
@@ -242,23 +247,42 @@ class DraftTest(unittest.TestCase):
         self.assertEqual([(m, u) for m, u, _ in f.calls],
                          [("GET", "https://api.resend.com/broadcasts"), ("POST", "https://api.resend.com/broadcasts")])
         body = f.calls[1][2]
-        self.assertEqual(set(body), {"segment_id", "from", "reply_to", "subject", "html", "text", "name"})
+        self.assertEqual(set(body), {"segment_id", "topic_id", "from", "reply_to", "subject", "html", "text", "name"})
         self.assertEqual(body["segment_id"], SEG)
+        self.assertEqual(body["topic_id"], TOPIC)  # descadastro pelo link do email vale só para a newsletter
         self.assertEqual(body["from"], "IA Aplicada <insights@expert.guifav.dev>")
         self.assertEqual(body["reply_to"], "contact@guifav.dev")
         self.assertEqual(body["subject"], "Um post")
         self.assertEqual(body["name"], "blog/um-post")
 
     def test_existing_draft_is_kept_without_changes(self):
-        f = FakeResend([{"id": "b1", "name": "blog/um-post", "status": "draft"}])
+        f = FakeResend([{"id": "b1", "name": "blog/um-post", "status": "draft", "topic_id": TOPIC}])
         self.assertEqual(N.create_draft(N.Api(CFG, f), post(), CFG), ("existe", "b1"))
-        self.assertEqual([m for m, _, _ in f.calls], ["GET"])
+        self.assertEqual([(m, u) for m, u, _ in f.calls], [("GET", "https://api.resend.com/broadcasts"),
+                                                            ("GET", "https://api.resend.com/broadcasts/b1")])
+
+    def test_config_without_topic_is_refused_before_any_call(self):
+        def never(*a):
+            raise AssertionError(f"transporte chamado: {a[:2]}")
+        cfg = N.Config(api_key="re_teste", segment_id=SEG)  # montado sem from_env e sem tópico
+        with self.assertRaisesRegex(N.DraftError, "tópico"):
+            N.create_draft(N.Api(cfg, never), post(), cfg)
+
+    def test_existing_draft_without_the_topic_is_refused_unless_updated(self):
+        for topic in (None, "outro-topico"):
+            f = FakeResend([{"id": "b1", "name": "blog/um-post", "status": "draft", "topic_id": topic}])
+            with self.assertRaisesRegex(N.DraftError, "--update"):
+                N.create_draft(N.Api(CFG, f), post(), CFG)
+            self.assertEqual([m for m, _, _ in f.calls], ["GET", "GET"], topic)
+            self.assertEqual(N.create_draft(N.Api(CFG, f), post(), CFG, update=True), ("atualizado", "b1"))
+            self.assertEqual(f.calls[-1][2]["topic_id"], TOPIC)
 
     def test_update_rewrites_only_a_draft(self):
         f = FakeResend([{"id": "b1", "name": "blog/um-post", "status": "draft"}])
         self.assertEqual(N.create_draft(N.Api(CFG, f), post(), CFG, update=True), ("atualizado", "b1"))
         self.assertEqual([(m, u) for m, u, _ in f.calls][-1], ("PATCH", "https://api.resend.com/broadcasts/b1"))
-        self.assertEqual(set(f.calls[-1][2]), {"from", "reply_to", "subject", "html", "text"})
+        self.assertEqual(set(f.calls[-1][2]), {"topic_id", "from", "reply_to", "subject", "html", "text"})
+        self.assertEqual(f.calls[-1][2]["topic_id"], TOPIC)
 
     def test_sent_or_scheduled_broadcast_blocks(self):
         for st in ("sent", "queued", "scheduled", "sending"):
@@ -303,13 +327,16 @@ class ConfigTest(unittest.TestCase):
             N.Config.from_env({"NEWSLETTER_SEGMENT_ID": "s"})
         with self.assertRaises(N.DraftError):
             N.Config.from_env({"RESEND_API_KEY": "k"})
-        c = N.Config.from_env({"RESEND_API_KEY": "k", "NEWSLETTER_SEGMENT_ID": "s"})
+        with self.assertRaisesRegex(N.DraftError, "NEWSLETTER_TOPIC_ID"):  # sem tópico, o descadastro seria da conta inteira
+            N.Config.from_env({"RESEND_API_KEY": "k", "NEWSLETTER_SEGMENT_ID": "s"})
+        c = N.Config.from_env({"RESEND_API_KEY": "k", "NEWSLETTER_SEGMENT_ID": "s", "NEWSLETTER_TOPIC_ID": "t"})
+        self.assertEqual(c.topic_id, "t")
         self.assertEqual(c.sender, "IA Aplicada <insights@expert.guifav.dev>")
         self.assertEqual(c.reply_to, "contact@guifav.dev")
 
     def test_sender_must_be_on_expert_subdomain(self):
         with self.assertRaises(N.DraftError):
-            N.Config.from_env({"RESEND_API_KEY": "k", "NEWSLETTER_SEGMENT_ID": "s",
+            N.Config.from_env({"RESEND_API_KEY": "k", "NEWSLETTER_SEGMENT_ID": "s", "NEWSLETTER_TOPIC_ID": "t",
                                "NEWSLETTER_FROM": "IA Aplicada <insights@guifav.dev>"})
 
 
@@ -326,6 +353,10 @@ class StatefulResend:
         self.posts = 0
 
     def __call__(self, method, url, headers, body):
+        if method == "GET" and url != "https://api.resend.com/broadcasts":  # detalhe: sem barreira
+            with self.lock:
+                b = next(b for b in self.broadcasts if b["id"] == url.rsplit("/", 1)[1])
+            return 200, {"object": "broadcast", **b}
         if method == "GET":
             with self.lock:
                 snap = list(self.broadcasts)
@@ -337,7 +368,8 @@ class StatefulResend:
         if method == "POST":
             with self.lock:
                 self.posts += 1
-                b = {"id": f"b{self.posts}", "name": json.loads(body)["name"], "status": "draft"}
+                b = {"id": f"b{self.posts}", "name": json.loads(body)["name"], "status": "draft",
+                     "topic_id": json.loads(body).get("topic_id")}
                 self.broadcasts.append(b)
             return 201, {"id": b["id"]}
         return 500, {}
@@ -503,7 +535,7 @@ class Round2Test(unittest.TestCase):
                     N.fetch_page("um-post", "live", "")
 
     def test_sender_must_be_a_single_address_on_the_exact_domain(self):
-        base = {"RESEND_API_KEY": "k", "NEWSLETTER_SEGMENT_ID": "s"}
+        base = {"RESEND_API_KEY": "k", "NEWSLETTER_SEGMENT_ID": "s", "NEWSLETTER_TOPIC_ID": "t"}
         for ok in ("IA Aplicada <insights@expert.guifav.dev>", "insights@expert.guifav.dev",
                    "Guilherme Favaron <gui.f+blog@expert.guifav.dev>"):
             self.assertEqual(N.Config.from_env({**base, "NEWSLETTER_FROM": ok}).sender, ok)

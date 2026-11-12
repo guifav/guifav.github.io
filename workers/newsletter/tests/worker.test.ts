@@ -31,6 +31,7 @@ type Opts = {
   segStatus?: number;
   segments?: string[];
   segListStatus?: number;
+  topicStatus?: number;
   throwOn?: string;
   badJsonOn?: string;
 };
@@ -42,7 +43,7 @@ function setup(opts: Opts = {}) {
     const url = String(input instanceof Request ? input.url : input);
     const method = init?.method ?? 'GET';
     let body: unknown = init?.body;
-    if (typeof body === 'string' && body.startsWith('{')) body = JSON.parse(body);
+    if (typeof body === 'string' && (body.startsWith('{') || body.startsWith('['))) body = JSON.parse(body);
     if (body instanceof URLSearchParams) body = Object.fromEntries(body);
     calls.push({ url, method, body });
     if (opts.throwOn && url.includes(opts.throwOn)) throw new TypeError('fetch failed');
@@ -73,6 +74,12 @@ function setup(opts: Opts = {}) {
       const page = all.slice(start, start + limit);
       return Response.json({ object: 'list', has_more: start + limit < all.length, data: page.map((id) => ({ id, name: 'x' })) });
     }
+    if (url === 'https://api.resend.com/contacts/c1/topics' && method === 'PATCH') {
+      // Contrato conferido na API em 2026-11-12: corpo é um array puro; {topics: [...]} dá 422.
+      if (!Array.isArray(body)) return Response.json({ name: 'validation_error' }, { status: 422 });
+      const st = opts.topicStatus ?? 200;
+      return st < 300 ? Response.json({ object: 'contact_topics', id: 'c1' }) : Response.json({ name: 'internal_server_error' }, { status: st });
+    }
     if (url.startsWith('https://api.resend.com/contacts/') && method === 'GET') {
       if (!opts.contact || opts.contact === 'none') return Response.json({ name: 'not_found' }, { status: 404 });
       return Response.json({ id: 'c1', email: 'x', unsubscribed: opts.contact === 'unsubscribed' });
@@ -90,6 +97,7 @@ function setup(opts: Opts = {}) {
     FROM: tomlVar('FROM'),
     REPLY_TO: tomlVar('REPLY_TO'),
     SEGMENT_ID: 'seg-1', // id usado pelos mocks; o real fica no wrangler.toml
+    TOPIC_ID: 'topic-1',
     SITE_ORIGIN: tomlVar('SITE_ORIGIN'),
     BLOG_URL: tomlVar('BLOG_URL'),
     WORKER_URL: tomlVar('WORKER_URL'),
@@ -245,8 +253,11 @@ test('A5: confirmação repetida e contato descadastrado reativado, sem duplicar
     assert.deepEqual(writes.map((c) => `${c.method} ${c.url}`), [
       'POST https://api.resend.com/contacts',
       'PATCH https://api.resend.com/contacts/leitor@exemplo.com',
+      'PATCH https://api.resend.com/contacts/c1/topics',
       'POST https://api.resend.com/contacts/c1/segments/seg-1',
     ], contact);
+    // Quem tinha saído só da newsletter (tópico) volta para ela ao confirmar pelo site.
+    assert.deepEqual(writes[2].body, [{ id: 'topic-1', subscription: 'opt_in' }], contact);
     // A8: a reativação também registra o opt-in pelo site, que protege o contato da sincronização com o Substack.
     assert.deepEqual(writes[1].body, { unsubscribed: false, properties: { site_confirmed_at: new Date(NOW).toISOString() } }, contact);
   }
@@ -357,6 +368,31 @@ test('A5: inclusão que falha, mas a lista do contato mostra o segmento, é suce
   const s = setup({ contact: 'active', segStatus: 409, segments: ['outro', 'seg-1'] });
   const r = await s.run(new Request(await confirmUrl()));
   assert.equal(loc(r), 'https://guifav.dev/blog/inscricao-confirmada/');
+});
+
+test('T1: contato novo entra no tópico pelo padrão (opt_in), sem chamada extra', async () => {
+  const s = setup({ contact: 'none' });
+  const r = await s.run(new Request(await confirmUrl()));
+  assert.equal(r.status, 303);
+  assert.equal(s.calls.filter((c) => c.url.includes('/topics')).length, 0);
+});
+
+test('T1: falha ao devolver o contato ao tópico vira 502, sem incluir no segmento', async () => {
+  for (const topicStatus of [422, 500]) {
+    const s = setup({ contact: 'unsubscribed', topicStatus });
+    const r = await s.run(new Request(await confirmUrl()));
+    assert.equal(r.status, 502, String(topicStatus));
+    assert.equal(s.calls.filter((c) => c.url.includes('/segments/')).length, 0, String(topicStatus));
+  }
+});
+
+test('T1: sem TOPIC_ID o Worker não cadastra ninguém (500), e o wrangler.toml traz o tópico real', async () => {
+  const s = setup({ contact: 'none' });
+  s.env.TOPIC_ID = '';
+  const r = await s.run(new Request(await confirmUrl()));
+  assert.equal(r.status, 500);
+  assert.equal(s.calls.length, 0);
+  assert.equal(tomlVar('TOPIC_ID'), '77f2a0b8-16aa-4ac6-9840-c352559edb51');
 });
 
 test('A5: falha ao reativar o contato devolve 502', async () => {
