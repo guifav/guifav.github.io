@@ -10,6 +10,8 @@ Uma fonte só para as regras de Single Redirects da Cloudflare, com três usos:
         seja deste cutover (o PUT substituiria a fase inteira). Depois, confere campo a campo o que a API devolveu.
         Sem --enable, todas ficam desligadas: serve para preparar antes da janela e para o rollback (antes do
         cutover a fase não tinha nenhuma regra). Ligar só na janela do cutover, com o ok do Gui.
+        A leitura e o PUT não são atômicos: rodar com um escritor só na fase (ninguém editando redirects da zona
+        pelo painel ao mesmo tempo).
         Lê CLOUDFLARE_API_TOKEN do ambiente. Use um token restrito a esta zona, com permissão só de edição de
         Single Redirects (Zone > Single Redirect > Edit).
 
@@ -292,8 +294,9 @@ def slugs() -> list[str]:
     return sorted(f.name.rsplit(".", 1)[0] for f in POSTS.glob("*.md*"))
 
 
-SPECIAL = ["/", "/about", "/about/", "/feed", "/feed/", "/archive", "/podcast", "/leaderboard", "/privacy", "/privacy/",
-           "/tos", "/tos/", "/action/disable_email"] + [f"/p/{s}{v}" for s in LEGAL for v in ("", "/", "/comments",
+SPECIAL = ["/", "/about", "/about/", "/feed", "/feed/", "/archive", "/archive/", "/podcast", "/podcast/", "/leaderboard",
+           "/leaderboard/", "/privacy", "/privacy/", "/tos", "/tos/", "/action/disable_email",
+           "/action/disable_email/"] + [f"/p/{s}{v}" for s in LEGAL for v in ("", "/", "/comments",
                                                                                              "/comments/")]
 VARIANTS = ("/p/{s}", "/p/{s}/", "/p/{s}/comments", "/p/{s}/comments/", "/post/{s}", "/post/{s}/")
 

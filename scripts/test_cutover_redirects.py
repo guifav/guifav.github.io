@@ -66,6 +66,13 @@ class NormalizeTest(unittest.TestCase):
         self.assertEqual(R.normalize("/p/você"), "/p/voc%C3%AA")  # bytes fora do conjunto são codificados
         self.assertEqual(R.normalize("/p/./a/../b"), "/p/b")
         self.assertEqual(R.normalize("//"), "/")
+        # pontos codificados viram segmentos de ponto antes da remoção (decodificação vem primeiro)
+        self.assertEqual(R.normalize("/p/%2e/abc"), "/p/abc")
+        self.assertEqual(R.normalize("/p/x/%2E%2e/abc"), "/p/abc")
+        self.assertEqual(R.normalize("/p/x/.%2e/abc"), "/p/abc")
+        self.assertEqual(R.normalize("/p/%2e%2e%2e/abc"), "/p/.../abc")
+        # decodificar antes de remover: com a ordem trocada, o ".." literal consumiria o "%2e%2e" e daria /a/b/c
+        self.assertEqual(R.normalize("/a/b/%2e%2e/../c"), "/c")
 
     def test_simulation_normalizes_before_matching(self):
         self.assertEqual(R.simulate(WWW, "/p//"), T_BLOG)
@@ -238,10 +245,16 @@ class ApplyTest(unittest.TestCase):
                 rules[2] = dict(rules[2], **{field: value})
                 return rules
             return back
+        def nested(**kw):
+            def back(rules):
+                fv = dict(rules[1]["action_parameters"]["from_value"], **kw)
+                rules[1] = dict(rules[1], action_parameters={"from_value": fv})
+                return rules
+            return back
         cases = [change("expression", "(true)"), change("enabled", True), change("action", "block"),
                  change("description", "outra"),
-                 change("action_parameters", {"from_value": {"status_code": 302, "preserve_query_string": False,
-                                                             "target_url": {"value": T_BLOG}}}),
+                 nested(status_code=302), nested(preserve_query_string=True), nested(target_url={"value": T_BLOG}),
+                 nested(extra=1),
                  lambda rules: rules[:-1], lambda rules: rules + rules[:1], lambda rules: list(reversed(rules))]
         for back in cases:
             with self.subTest(back=back):
@@ -307,6 +320,29 @@ class CliTest(unittest.TestCase):
 
 
 class JobsTest(unittest.TestCase):
+    # Especificação independente das páginas especiais exigidas (com e sem barra), escrita à parte de R.SPECIAL.
+    SPECIAL = ["/", "/about", "/about/", "/feed", "/feed/", "/archive", "/archive/", "/podcast", "/podcast/",
+               "/leaderboard", "/leaderboard/", "/privacy", "/privacy/", "/tos", "/tos/", "/action/disable_email",
+               "/action/disable_email/"] + [f"/p/{s}{v}" for s in ("politica-de-privacidade", "termos-e-condicoes-de-uso")
+                                            for v in ("", "/", "/comments", "/comments/")]
+
+    def test_every_required_special_page_is_checked_on_both_hosts(self):
+        urls = {(j.url, j.method) for j in R.jobs(quick=True)}
+        for p in self.SPECIAL:
+            for h in (APEX, WWW):
+                self.assertIn((f"https://{h}{p}", "GET"), urls, p)
+
+    def test_query_http_and_head_cover_every_form_on_both_hosts(self):
+        s = R.slugs()[0]
+        forms = [f"/p/{s}", f"/p/{s}/", f"/p/{s}/comments", f"/p/{s}/comments/", f"/post/{s}", f"/post/{s}/",
+                 "/", "/feed", "/privacy", "/archive", "/action/x"]
+        urls = {(j.url, j.method) for j in R.jobs()}
+        for h in (APEX, WWW):
+            for p in forms:
+                self.assertIn((f"https://{h}{p}?utm_source=x&ref=y", "GET"), urls, p)
+                self.assertIn((f"http://{h}{p}", "GET"), urls, p)
+                self.assertIn((f"https://{h}{p}", "HEAD"), urls, p)
+
     def test_full_matrix_covers_the_acceptance_criteria(self):
         todo = R.jobs()
         urls = {(j.url, j.method) for j in todo}
@@ -324,7 +360,7 @@ class JobsTest(unittest.TestCase):
             self.assertTrue(any(m == "HEAD" and u.startswith(f"https://{h}/post/") for (u, m) in urls))
             self.assertTrue(any(u.startswith(f"https://{h.upper()}/") for (u, m) in urls))
         self.assertEqual(sum(1 for j in todo if j.method == "GET" and j.url.startswith("https://") and "?" not in j.url
-                             and urlsplit(j.url).netloc in (APEX, WWW)), (233 * 6 + len(R.SPECIAL)) * 2)
+                             and urlsplit(j.url).netloc in (APEX, WWW)), (233 * 6 + len(self.SPECIAL)) * 2)
         self.assertFalse(any(j.allow_404 for j in todo))
 
     def test_quick_is_a_sample_but_keeps_every_form(self):
