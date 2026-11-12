@@ -708,3 +708,19 @@ test('G5: 429 persistente desiste depois de 4 tentativas; paginação acima do t
   assert.equal(n, MAX_PAGES);
   assert.ok(p.db.raw.prepare("SELECT id FROM subscribers WHERE id = 'velho'").get());
 });
+
+test('G5: a consulta ao dono também conta no prazo: lenta, ela impede a publicação', async () => {
+  const s = setup({ contacts: [contact('a', 'ana@x.com')] });
+  const db = d1();
+  const prep = db.prepare;
+  db.prepare = (sql: string) => {
+    const st = prep(sql);
+    if (!sql.includes("k = 'sync_owner'") || !sql.startsWith('SELECT')) return st;
+    return { ...st, first: async <T>() => { s.clock.t += 13 * 60_000; return st.first<T>(); } };
+  };
+  seed(db, [{ id: 'velho', email: 'velho@x.com' }]);
+  s.env.DB = db;
+  await assert.rejects(syncSegment(s.env, s.deps), /orçamento da execução esgotado/);
+  assert.ok(db.raw.prepare("SELECT id FROM subscribers WHERE id = 'velho'").get());
+  assert.equal(db.raw.prepare("SELECT v FROM meta WHERE k = 'last_sync_count'").get(), undefined);
+});

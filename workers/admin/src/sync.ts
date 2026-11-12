@@ -161,9 +161,9 @@ export async function syncSegment(env: SyncEnv, deps: SyncDeps): Promise<number>
       await env.DB.batch(rows.slice(i, i + BATCH).map((r) => up.bind(r.id, r.email, r.unsubscribed, r.origin, r.joined_at,
         r.paid_until, r.site_confirmed_at, r.admin_unsubscribed_at, r.created_at, r.run, r.rev, runId)));
     }
-    checkDeadline(deps, budget); // nem a publicação
     const owner = await env.DB.prepare("SELECT v FROM meta WHERE k = 'sync_owner'").first<{ v: string }>();
     if (owner?.v !== runId) throw new SyncError('execução substituída por outra mais nova');
+    checkDeadline(deps, budget); // nem a publicação: conferido logo antes da transação final
     // Só depois de gravar tudo, na mesma transação dos metadados e ainda condicionado ao dono: sai quem não está mais no segmento.
     await env.DB.batch([
       env.DB.prepare(`DELETE FROM subscribers WHERE run != ? AND ${owned}`).bind(runId, runId),
