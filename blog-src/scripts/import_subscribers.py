@@ -1,6 +1,7 @@
 """Importa os assinantes do export do Substack para o segmento da newsletter no Resend (issue #21, parte C).
 
-Simulação por padrão: lê o export e o Resend e mostra só contagens. Grava apenas com --apply.
+Simulação por padrão: lê o export e o Resend e mostra só contagens. Grava apenas com --apply (a exceção é --schema,
+que só cria as propriedades).
 
 - Entram os emails habilitados, válidos e sem repetição. Na repetição, vale o registro inteiro mais antigo.
 - Contato novo: criado no segmento, inscrito, com as propriedades source=substack, substack_joined_at e
@@ -12,10 +13,16 @@ Simulação por padrão: lê o export e o Resend e mostra só contagens. Grava a
   depois do deploy, para que nenhuma confirmação pelo site fique sem o marcador.
 - --sync (export novo, antes do primeiro envio): quem veio do Substack, está no segmento, não confirmou pelo site
   (site_confirmed_at, gravado pelo Worker) e não está mais no export é descadastrado (unsubscribed=true). Ninguém é
-  apagado. Recusa antes de gravar se o export estiver vazio ou se fosse descadastrar mais de 10 pessoas e mais de 10%
-  dos vindos do Substack (export errado ou incompleto). Cada descadastro relê o contato antes e depois do PATCH: se a
-  confirmação pelo site chegou no meio, o descadastro é desfeito. Assim nenhuma ordem entre Worker e sync deixa quem
-  confirmou descadastrado.
+  apagado nem tirado do segmento. Recusa antes de gravar se o export estiver vazio ou se fosse descadastrar mais de 10
+  pessoas e mais de 10% dos vindos do Substack (export errado ou incompleto).
+  Contrato de falhas (adjudicado pelo consultor na rodada 3 do #39; texto completo na descrição do PR):
+  S1 nenhum script grava unsubscribed=false: só a confirmação do próprio leitor reinscreve.
+  S2 a única escrita do sync é um PATCH com unsubscribed=true e substack_sync_unsubscribed_at juntos, depois de uma
+     releitura que mostra source=substack, sem site_confirmed_at e inscrito.
+  S5 toda execução com --sync (inclusive a simulação) conta sync_conflito_confirmacao (site_confirmed_at,
+     substack_sync_unsubscribed_at e unsubscribed=true) e, se houver algum, sai com código 3.
+  F1 confirmação pelo site entre a releitura e o PATCH: o contato fica descadastrado, aparece em S5 e é reinscrito à
+     mão antes do primeiro envio.
 - Nada de envio: o cliente recusa qualquer rota fora das de contatos e propriedades.
 - A saída, inclusive a de erro, tem só contagens, operações e códigos HTTP: nunca emails nem texto da API.
 
@@ -37,10 +44,13 @@ import urllib.parse
 import urllib.request
 from collections import Counter
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 RESEND = "https://api.resend.com"
 # site_confirmed_at é gravada pelo Worker na confirmação; o importador só garante que a propriedade exista.
-PROPERTIES = ("source", "substack_joined_at", "substack_paid_until", "site_confirmed_at")
+PROPERTIES = ("source", "substack_joined_at", "substack_paid_until", "site_confirmed_at", "substack_sync_unsubscribed_at")
+SYNC_AUDIT = "substack_sync_unsubscribed_at"
+EXIT_CONFLICT = 3
 REQUIRED = {"email", "email_disabled", "created_at", "expiry", "active_subscription"}
 PAGE = 100
 MAX_PAGES = 1000
@@ -250,6 +260,10 @@ def run(api: Api, export_path: str, segment_id: str, *, out=None, apply: bool = 
                 to_unsub.append(c["id"])
         counts["sync_substack_no_segmento"] = substack_in_seg
         counts["sync_descadastrar"] = len(to_unsub)
+        # S5: conflito lido do estado dos contatos, não só de quem esta execução tocou.
+        counts["sync_conflito_confirmacao"] = sum(
+            1 for email, c in in_seg.items()
+            if prop(full[email], "site_confirmed_at") and prop(full[email], SYNC_AUDIT) and full[email].get("unsubscribed"))
         if len(to_unsub) > max(SYNC_MAX_ABS, SYNC_MAX_RATIO * substack_in_seg):
             raise ImportError_(f"o sync descadastraria {len(to_unsub)} de {substack_in_seg} vindos do Substack: acima de "
                                f"{SYNC_MAX_ABS} e de {SYNC_MAX_RATIO:.0%}; export provavelmente errado; nada foi gravado")
@@ -284,17 +298,13 @@ def run(api: Api, export_path: str, segment_id: str, *, out=None, apply: bool = 
         api.request("POST", f"/contacts/{ids[s.email]}/segments/{segment_id}", op="incluir no segmento")
         counts["adicionado_ao_segmento"] += 1
     for cid in to_unsub:
+        # S2: releitura imediatamente anterior; sem compensação depois (S1). A corrida residual é o desfecho F1.
         before = api.request("GET", f"/contacts/{cid}", op="reler contato")[1]
         if _protected(before) or before.get("unsubscribed"):
             counts["sync_pulado_na_releitura"] += 1
             continue
-        api.request("PATCH", f"/contacts/{cid}", {"unsubscribed": True}, op="descadastrar")
-        after = api.request("GET", f"/contacts/{cid}", op="reler contato")[1]
-        if _protected(after):
-            # A confirmação pelo site chegou entre a releitura e o PATCH: o opt-in mais recente vence.
-            api.request("PATCH", f"/contacts/{cid}", {"unsubscribed": False}, op="desfazer descadastro")
-            counts["sync_desfeito_por_confirmacao"] += 1
-            continue
+        at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        api.request("PATCH", f"/contacts/{cid}", {"unsubscribed": True, "properties": {SYNC_AUDIT: at}}, op="descadastrar")
         counts["sincronizado_descadastrado"] += 1
     _report(counts, out, "gravado")
     return counts
@@ -306,8 +316,16 @@ def _report(counts: Counter, out, tail: str) -> None:
     print(tail, file=out)
 
 
+class _Parser(argparse.ArgumentParser):
+    """Erro de argumento com mensagem fixa: o argparse padrão ecoa os argumentos, e um caminho pode ter email."""
+
+    def error(self, message):  # noqa: ARG002
+        print("ERRO: argumentos inválidos (veja --help)", file=sys.stderr)
+        raise SystemExit(2)
+
+
 def main(argv=None, transport=_urllib_transport, sleep=time.sleep) -> int:
-    ap = argparse.ArgumentParser(description="Importa assinantes do export do Substack para o Resend (simulação por padrão).")
+    ap = _Parser(description="Importa assinantes do export do Substack para o Resend (simulação por padrão).")
     ap.add_argument("export", nargs="?", help="email_list.*.csv do export do Substack (fora do repo)")
     ap.add_argument("--schema", action="store_true", help="só cria as propriedades (antes do deploy do Worker)")
     ap.add_argument("--apply", action="store_true", help="grava no Resend")
@@ -326,7 +344,11 @@ def main(argv=None, transport=_urllib_transport, sleep=time.sleep) -> int:
         if a.schema:
             print(f"propriedades_criadas: {ensure_properties(api)}")
         else:
-            run(api, a.export, seg, apply=a.apply, sync=a.sync)
+            counts = run(api, a.export, seg, apply=a.apply, sync=a.sync)
+            if counts.get("sync_conflito_confirmacao"):
+                print("ERRO: há contatos confirmados pelo site e descadastrados pelo sync (sync_conflito_confirmacao); "
+                      "reinscrever à mão antes do primeiro envio", file=sys.stderr)
+                return EXIT_CONFLICT
     except ImportError_ as e:
         print(f"ERRO: {e}", file=sys.stderr)
         return 1

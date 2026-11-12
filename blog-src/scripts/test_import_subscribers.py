@@ -155,6 +155,12 @@ class ExportTest(unittest.TestCase):
         self.assertEqual(subs[0].joined_at, "2023-01-01T00:00:00")  # a entrada mais antiga vale
         self.assertEqual(skipped, {"desabilitado": 1, "invalido": 1, "repetido": 1})
 
+    def test_only_explicit_false_counts_as_enabled(self):
+        subs, skipped = S.load_export(export([row("a@x.com"), row("b@x.com", disabled=""), row("c@x.com", disabled="talvez"),
+                                              row("d@x.com", disabled="FALSE")]))
+        self.assertEqual(sorted(s.email for s in subs), ["a@x.com", "d@x.com"])
+        self.assertEqual(skipped, {"desabilitado": 2})
+
     def test_rejects_malformed_addresses(self):
         bad = ["a@x..com", "a@x.com>", "x" * 65 + "@x.com", ".a@x.com", "a.@x.com", "a..b@x.com", "a@x",
                "a@-x.com", "a b@x.com", "a'b@x.com", "a@" + ".".join(["x" * 63] * 4) + ".com"]
@@ -187,6 +193,13 @@ class ExportTest(unittest.TestCase):
         for rows in ([old, new], [new, old]):
             (s,), _ = S.load_export(export(rows))
             self.assertEqual((s.joined_at, s.paid_until), ("2023-01-01T00:00:00", "2026-01-01T00:00:00.000Z"))
+
+    def test_older_free_record_beats_newer_paid_record_in_any_order(self):
+        old = row("d@x.com", created="2023-01-01T00:00:00")
+        new = row("d@x.com", created="2024-01-01T00:00:00", expiry="2027-01-01T00:00:00.000Z", active="true")
+        for rows in ([old, new], [new, old]):
+            (s,), _ = S.load_export(export(rows))
+            self.assertEqual((s.joined_at, s.paid_until), ("2023-01-01T00:00:00", ""))
 
     def test_paid_until_only_for_active_subscription(self):
         p = export([row("p@x.com", expiry="2026-12-16T22:53:57.000Z", plan="yearly", active="true"),
@@ -225,7 +238,8 @@ class ImportTest(unittest.TestCase):
         prop_bodies = [d for m, p_, d in f.calls if m == "POST" and p_ == "/contact-properties"]
         # Lista literal: site_confirmed_at precisa existir antes do deploy do Worker que a grava.
         self.assertEqual(prop_bodies, [{"key": k, "type": "string"} for k in
-                                       ("source", "substack_joined_at", "substack_paid_until", "site_confirmed_at")])
+                                       ("source", "substack_joined_at", "substack_paid_until", "site_confirmed_at",
+                                        "substack_sync_unsubscribed_at")])
         self.assertEqual(counts["criado"], 2)
 
     def test_property_listing_is_paginated(self):
@@ -267,6 +281,15 @@ class ImportTest(unittest.TestCase):
         f = FakeResend(contacts=[{"email": "a@x.com", "properties": {"source": ""}}], props=S.PROPERTIES)
         run(f, export([row("a@x.com")]), apply=True)
         self.assertEqual(f.contacts["a@x.com"]["properties"]["source"], "substack")
+
+    def test_fill_rereads_and_skips_a_contact_whose_source_was_written_meanwhile(self):
+        def write_source(fake, method, path, data):
+            if method == "GET" and path == "/contact-properties":
+                fake.contacts["a@x.com"]["properties"]["source"] = "site"
+        f = FakeResend(contacts=[{"email": "a@x.com"}], props=S.PROPERTIES, hook=write_source)
+        counts, _ = run(f, export([row("a@x.com")]), apply=True)
+        self.assertEqual(f.contacts["a@x.com"]["properties"], {"source": "site"})
+        self.assertEqual(counts["propriedades_completadas"], 0)
 
     def test_fill_rereads_and_skips_a_contact_confirmed_meanwhile(self):
         def confirm(fake, method, path, data):
@@ -385,6 +408,7 @@ class SyncTest(unittest.TestCase):
         self.assertEqual(state, {"fica@x.com": False, "saiu@x.com": True, "site@x.com": False,
                                  "confirmou@x.com": False, "fora@x.com": False})
         self.assertEqual(counts["sincronizado_descadastrado"], 1)
+        self.assertEqual(counts["sync_conflito_confirmacao"], 0)  # confirmado pelo site e inscrito não é conflito
         self.assertNotIn("DELETE", [m for m, _ in f.writes()])
 
     def test_sync_refuses_a_bad_export_before_any_write(self):
@@ -401,17 +425,69 @@ class SyncTest(unittest.TestCase):
             run(f, export([row("desabilitado@x.com", disabled="true")]), apply=True, sync=True)
         self.assertEqual(f.writes(), [])
 
-    def test_sync_undoes_an_unsubscribe_when_the_site_confirmation_lands_in_between(self):
+    def test_f1_race_ends_unsubscribed_with_both_stamps_and_the_next_run_flags_it(self):
         def confirm(fake, method, path, data):
             # O Worker confirma entre a releitura e o PATCH do sync (mesmo corpo que ele envia: reativa + marcador).
-            if method == "PATCH" and data == {"unsubscribed": True}:
+            if method == "PATCH" and data.get("unsubscribed") is True:
                 c = fake.contacts["saiu@x.com"]
                 c["unsubscribed"] = False
                 c["properties"]["site_confirmed_at"] = "2026-11-12T00:00:00Z"
         f = FakeResend(contacts=[substack("saiu@x.com")], props=S.PROPERTIES, hook=confirm)
+        p = export([row("outro@x.com")])
+        counts, _ = run(f, p, apply=True, sync=True)
+        c = f.contacts["saiu@x.com"]
+        self.assertTrue(c["unsubscribed"])  # desfecho aceito F1: fica do lado seguro (sem email)
+        self.assertTrue(c["properties"]["site_confirmed_at"] and c["properties"][S.SYNC_AUDIT])
+        self.assertEqual(counts["sincronizado_descadastrado"], 1)
+        f.hook = None
+        counts, _ = run(f, p, sync=True)  # S5/S6: a simulação seguinte acusa o conflito
+        self.assertEqual((counts["sync_conflito_confirmacao"], counts["sync_descadastrar"]), (1, 0))
+        rc, text = cli(f, p, "--sync")
+        self.assertEqual(rc, S.EXIT_CONFLICT)
+        self.assertIn("sync_conflito_confirmacao", text)
+        self.assertNotIn("saiu@", text)
+
+    def test_s1_no_script_path_ever_writes_unsubscribed_false(self):
+        def confirm(fake, method, path, data):
+            if method == "PATCH" and data.get("unsubscribed") is True:
+                fake.contacts["saiu@x.com"]["properties"]["site_confirmed_at"] = "2026-11-12T00:00:00Z"
+        scenarios = [
+            FakeResend(contacts=[substack("saiu@x.com")], props=S.PROPERTIES, hook=confirm),
+            FakeResend(contacts=[{"email": "a@x.com", "unsubscribed": True}, substack("saiu@x.com", unsubscribed=True)], props=S.PROPERTIES),
+            FakeResend(props=S.PROPERTIES, on_create=lambda fk, e: fk.contacts.setdefault(e, {"id": "c-r", "email": e, "unsubscribed": True,
+                                                                                            "segments": set(), "properties": {}})),
+        ]
+        for f in scenarios:
+            run(f, export([row("a@x.com"), row("b@x.com")]), apply=True, sync=True)
+            for m, _, d in f.calls:
+                if m == "PATCH":
+                    self.assertNotEqual(d.get("unsubscribed"), False, d)
+
+    def test_sync_patch_carries_the_audit_stamp(self):
+        f = FakeResend(contacts=[substack("saiu@x.com")], props=S.PROPERTIES)
+        run(f, export([row("outro@x.com")]), apply=True, sync=True)
+        (body,) = [d for m, _, d in f.calls if m == "PATCH"]
+        self.assertEqual(sorted(body), ["properties", "unsubscribed"])
+        self.assertTrue(body["unsubscribed"])
+        self.assertRegex(body["properties"][S.SYNC_AUDIT], r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.000Z$")
+
+    def test_sync_preread_skips_a_voluntary_unsubscribe_after_planning(self):
+        def leave(fake, method, path, data):
+            if method == "GET" and path == "/contact-properties":
+                fake.contacts["saiu@x.com"]["unsubscribed"] = True
+        f = FakeResend(contacts=[substack("saiu@x.com")], props=S.PROPERTIES, hook=leave)
+        counts, _ = run(f, export([row("outro@x.com")]), apply=True, sync=True)
+        self.assertEqual([d for m, _, d in f.calls if m == "PATCH"], [])
+        self.assertEqual(counts["sync_pulado_na_releitura"], 1)
+
+    def test_sync_preread_skips_a_contact_whose_origin_changed(self):
+        def change(fake, method, path, data):
+            if method == "GET" and path == "/contact-properties":
+                fake.contacts["saiu@x.com"]["properties"]["source"] = "manual"
+        f = FakeResend(contacts=[substack("saiu@x.com")], props=S.PROPERTIES, hook=change)
         counts, _ = run(f, export([row("outro@x.com")]), apply=True, sync=True)
         self.assertFalse(f.contacts["saiu@x.com"]["unsubscribed"])
-        self.assertEqual((counts["sync_desfeito_por_confirmacao"], counts["sincronizado_descadastrado"]), (1, 0))
+        self.assertEqual(counts["sync_pulado_na_releitura"], 1)
 
     def test_sync_skips_a_contact_confirmed_after_planning(self):
         def confirm(fake, method, path, data):
@@ -421,7 +497,7 @@ class SyncTest(unittest.TestCase):
         counts, _ = run(f, export([row("outro@x.com")]), apply=True, sync=True)
         self.assertFalse(f.contacts["saiu@x.com"]["unsubscribed"])
         self.assertEqual(counts["sync_pulado_na_releitura"], 1)
-        self.assertNotIn({"unsubscribed": True}, [d for m, _, d in f.calls if m == "PATCH"])
+        self.assertEqual([d for m, _, d in f.calls if m == "PATCH"], [])
 
     def test_sync_guard_boundaries(self):
         # Recusa só acima de 10 E acima de 10%: 50 contatos -> 10 passa, 11 não; 200 -> 20 passa, 21 não.
@@ -463,7 +539,8 @@ class ApiTest(unittest.TestCase):
         for m, p in (("DELETE", "/contacts/x"), ("POST", "/emails"), ("POST", "/broadcasts"),
                      ("POST", "/broadcasts/b1/send"), ("DELETE", "/segments/seg-1"), ("POST", "/segments"),
                      ("GET", "/contacts/a@x.com/segments"), ("PATCH", "/contacts"), ("GET", "/api-keys"),
-                     ("POST", "/api-keys"), ("DELETE", "/api-keys/k1")):
+                     ("POST", "/api-keys"), ("DELETE", "/api-keys/k1"), ("DELETE", "/contact-properties/p1"),
+                     ("PATCH", "/contact-properties/p1")):
             with self.assertRaisesRegex(S.ImportError_, "chamada recusada", msg=f"{m} {p}") as cm:
                 api.request(m, p, op="teste")
             self.assertNotIn(p, str(cm.exception))
@@ -476,7 +553,7 @@ class CliTest(unittest.TestCase):
         rc, text = cli(f, None, "--schema")
         self.assertEqual(rc, 0)
         self.assertEqual(f.props, list(S.PROPERTIES))
-        self.assertEqual([p for m, p in f.writes()], ["/contact-properties"] * 4)
+        self.assertEqual([p for m, p in f.writes()], ["/contact-properties"] * 5)
 
     def test_unexpected_transport_error_prints_a_fixed_message(self):
         def broken(method, url, headers, body):
@@ -485,6 +562,16 @@ class CliTest(unittest.TestCase):
         self.assertEqual(rc, 1)
         self.assertIn("falha inesperada (KeyError)", text)
         self.assertNotIn("segredo", text)
+
+    def test_argument_errors_do_not_echo_the_arguments(self):
+        import subprocess
+        script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "import_subscribers.py")
+        for args in (["a.csv", "segredo@x.com.csv"], ["--nao-existe=segredo@x.com"]):
+            r = subprocess.run([sys.executable, "-B", script, *args], capture_output=True, text=True,
+                               env={**os.environ, "RESEND_API_KEY": "re_x", "NEWSLETTER_SEGMENT_ID": SEG})
+            self.assertEqual(r.returncode, 2, args)
+            self.assertNotIn("segredo", r.stdout + r.stderr, args)
+            self.assertIn("ERRO: argumentos inválidos", r.stderr, args)
 
     def test_unexpected_errors_print_a_fixed_message_without_traceback(self):
         import subprocess
