@@ -29,12 +29,13 @@ que só cria as propriedades).
   F1 confirmação pelo site entre a releitura e as escritas: o contato fica fora do tópico, aparece em S5 e é
      reinscrito à mão antes do primeiro envio.
   F2 na API real, o POST de email existente é upsert (201, mesmo id): grava as propriedades do corpo e volta o status
-     global a inscrito, mesmo sem o campo. Por isso cada criação é precedida de um GET por email; quem já existe
-     (inscrição pelo site depois da listagem) segue como existente, sem POST (contagem corrida_existente). Resta a
-     janela entre esse GET e o POST, que o Resend não permite fechar (não há criação exclusiva): se alguém for criado
-     e descadastrado da conta inteira nesses milissegundos, o descadastro global é desfeito. site_confirmed_at e o
-     tópico são preservados nesse caso. Nenhum caminho do sistema usa o descadastro global (só o painel do Resend,
-     à mão), então a exceção é aceita e fica declarada aqui.
+     global a inscrito, mesmo sem o campo. Por isso cada tentativa de criação é precedida de um GET por email; quem
+     já existe (inscrição pelo site depois da listagem) segue como existente, sem POST (contagem corrida_existente).
+     Um 429 no POST espera o Retry-After e volta à conferência. Resta a janela entre um GET e o POST seguinte (a
+     latência das duas chamadas), que o Resend não permite fechar (não há criação exclusiva): se alguém for criado
+     e descadastrado da conta inteira nessa janela, o descadastro global é desfeito. site_confirmed_at e o tópico
+     são preservados nesse caso. Desde o #45, nenhum caminho do sistema usa o descadastro global (só o painel do
+     Resend, à mão), então a exceção é aceita e fica declarada aqui.
 - Nada de envio: o cliente recusa qualquer rota fora das de contatos e propriedades.
 - A saída, inclusive a de erro, tem só contagens, operações e códigos HTTP: nunca emails nem texto da API.
 
@@ -174,7 +175,9 @@ class Api:
         self.transport = transport
         self.sleep = sleep
 
-    def request(self, method: str, path: str, body: dict | None = None, *, op: str, ok=(200, 201)) -> tuple[int, dict]:
+    def request(self, method: str, path: str, body: dict | list | None = None, *, op: str, ok=(200, 201),
+                retry_429: bool = True) -> tuple[int, dict]:
+        """retry_429=False: no 429, espera o Retry-After e devolve (429, {}) sem repetir; quem chama decide."""
         if not any(m == method and re.fullmatch(p, path) for m, p in self.ALLOWED):
             raise ImportError_(f"chamada recusada: {method} ({op})")
         headers = {"Authorization": f"Bearer {self.key}", "Content-Type": "application/json",
@@ -185,6 +188,8 @@ class Api:
             if status == 429:
                 retry = str({k.lower(): v for k, v in (h or {}).items()}.get("retry-after", "1")).strip()
                 self.sleep(min(float(retry), 60.0) if re.fullmatch(r"\d+(\.\d+)?", retry) else 1.0)
+                if not retry_429:
+                    return 429, {}
                 continue
             if status not in ok:
                 raise ImportError_(f"Resend respondeu {status} em {method} ({op})")
@@ -236,9 +241,10 @@ def topic_subscription(api: Api, cid: str, topic_id: str) -> str:
     items = data.get("data")
     if not isinstance(items, list):
         raise ImportError_("tópicos do contato em formato inválido")
-    sub = next((t.get("subscription") for t in items if isinstance(t, dict) and t.get("id") == topic_id), None)
-    if sub is None:
+    found = next((t for t in items if isinstance(t, dict) and t.get("id") == topic_id), None)
+    if found is None:
         raise ImportError_("tópico da newsletter ausente no contato")
+    sub = found.get("subscription")  # nulo, omitido ou fora do contrato: valor desconhecido (sem ecoar o valor)
     if sub not in ("opt_in", "opt_out"):
         raise ImportError_("valor desconhecido no tópico da newsletter")
     return sub
@@ -325,15 +331,23 @@ def run(api: Api, export_path: str, segment_id: str, topic_id: str, *, out=None,
             fill.append(s)
 
     for s in create:
-        # F2: o POST do Resend é upsert e desfaria um descadastro global; confere logo antes de criar.
-        st, c = api.request("GET", contact_path(s.email), op="conferir antes de criar", ok=(200, 404))
+        # F2: o POST do Resend é upsert e desfaria um descadastro global. Confere logo antes de cada tentativa: um
+        # 429 na criação espera o Retry-After e volta à conferência, em vez de repetir o POST às cegas.
+        for _ in range(MAX_RETRIES):
+            st, c = api.request("GET", contact_path(s.email), op="conferir antes de criar", ok=(200, 404))
+            if st == 200:
+                break
+            status, _ = api.request("POST", "/contacts", {"email": s.email, "unsubscribed": False,
+                                                           "segments": [{"id": segment_id}], "properties": _props(s)},
+                                    op="criar contato", ok=(200, 201, 409), retry_429=False)
+            if status != 429:
+                break
+        else:
+            raise ImportError_("limite de requisições do Resend persistiu em POST (criar contato)")
         if st == 200:
             as_existing(s, c)
             counts["corrida_existente"] += 1
             continue
-        status, _ = api.request("POST", "/contacts", {"email": s.email, "unsubscribed": False,
-                                                       "segments": [{"id": segment_id}], "properties": _props(s)},
-                                op="criar contato", ok=(200, 201, 409))
         if status == 409:  # reserva, se a API passar a recusar email existente
             _, c = api.request("GET", contact_path(s.email), op="ler contato por email")
             as_existing(s, c)

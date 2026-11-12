@@ -39,7 +39,7 @@ class FakeResend:
     {"value": ..., "type": "string"}; o email no caminho chega codificado; listas paginam por limit/after."""
 
     def __init__(self, contacts=None, props=(), extra_props=0, limit_429=0, retry_after="0", on_create=None,
-                 fail=None, rate_path=None, hook=None, conflict_on_existing=False, topics=None):
+                 fail=None, rate_path=None, hook=None, conflict_on_existing=False, topics=None, post_429=0):
         self.contacts = {}  # email -> dict
         for c in contacts or []:
             self.contacts[c["email"]] = {"id": "c-" + c["email"], "unsubscribed": False, "segments": set(),
@@ -48,6 +48,7 @@ class FakeResend:
         # conflict_on_existing, o fake responde 409, para exercitar o caminho de reserva do importador.
         self.conflict_on_existing = conflict_on_existing
         self.topics = topics  # topics(contact) -> (status, corpo) substitui a resposta de GET .../topics
+        self.post_429 = post_429  # quantas vezes o POST /contacts responde 429 (Retry-After = retry_after)
         self.props = [f"outra_{i:03d}" for i in range(extra_props)] + list(props)
         self.calls = []
         self.limit_429 = limit_429
@@ -115,6 +116,9 @@ class FakeResend:
             return 200, {"object": "contact", "id": c["id"], "email": c["email"], "unsubscribed": c["unsubscribed"],
                          "properties": {k: {"value": v, "type": "string"} for k, v in c["properties"].items()}}, {}
         if method == "POST" and path == "/contacts":
+            if self.post_429:
+                self.post_429 -= 1
+                return 429, {"message": "rate"}, {"Retry-After": self.retry_after}
             if self.on_create:
                 self.on_create(self, data["email"])
             c = self.contacts.get(data["email"])
@@ -402,6 +406,34 @@ class ImportTest(unittest.TestCase):
                 self.assertEqual((c["unsubscribed"], c["topic"], c["properties"]), (unsub, topic, {"site_confirmed_at": "2026-11-11T00:00:00Z"}), why)
                 self.assertIn("corrida_existente: 1", text, why)
 
+    def test_f2_create_429_rechecks_before_reposting(self):
+        # Um 429 na criação não repete o POST às cegas depois da espera: refaz a conferência por email antes.
+        appear = {"id": "c-site", "email": "a@x.com", "unsubscribed": True, "segments": {SEG},
+                  "properties": {"site_confirmed_at": "2026-11-11T00:00:00Z"}, "topic": "opt_in"}
+        for race in (True, False):
+            f = FakeResend(props=S.PROPERTIES, post_429=1, retry_after="60")
+            def sleep(sec, f=f, race=race):
+                if sec == 60.0 and race and "a@x.com" not in f.contacts:  # criado e descadastrado durante a espera
+                    f.contacts["a@x.com"] = {**appear, "segments": set(appear["segments"]), "properties": dict(appear["properties"])}
+            counts = S.run(S.Api("re_test", f, sleep=sleep), export([row("a@x.com")]), SEG, TOPIC, out=io.StringIO(),
+                           apply=True, sync=True)
+            posts = [d for m, p, d in f.calls if m == "POST" and p == "/contacts"]
+            checks = [p for m, p, _ in f.calls if m == "GET" and p == "/contacts/a@x.com"]
+            self.assertEqual(len(checks), 2, race)  # conferência antes de cada tentativa
+            if race:
+                self.assertEqual((len(posts), counts["corrida_existente"], counts["criado"]), (1, 1, 0))
+                self.assertTrue(f.contacts["a@x.com"]["unsubscribed"])  # o descadastro global não é desfeito
+            else:
+                self.assertEqual((len(posts), counts["corrida_existente"], counts["criado"]), (2, 0, 1))
+
+    def test_f2_persistent_429_on_create_stops_without_email(self):
+        f = FakeResend(props=S.PROPERTIES, post_429=10_000, retry_after="1")
+        rc, text = cli(f, export([row("segredo@x.com")]), "--apply")
+        self.assertEqual(rc, 1)
+        self.assertIn("limite", text)
+        self.assertNotIn("segredo", text)
+        self.assertLessEqual(len([1 for m, p, _ in f.calls if m == "POST" and p == "/contacts"]), S.MAX_RETRIES)
+
     def test_f2_residual_window_is_the_documented_exception(self):
         # Janela residual (entre a conferência e o POST): o upsert volta o global a inscrito, como documentado em F2;
         # tópico e site_confirmed_at são preservados, e nenhum PATCH é feito.
@@ -609,6 +641,8 @@ class SyncTest(unittest.TestCase):
                ((200, {"object": "list"}), "formato inválido"),
                ((200, {"object": "list", "data": [{"id": "outro", "subscription": "opt_in"}]}), "ausente"),
                ((200, {"object": "list", "data": [{"id": TOPIC, "subscription": "talvez"}]}), "valor desconhecido"),
+               ((200, {"object": "list", "data": [{"id": TOPIC, "subscription": None}]}), "valor desconhecido"),
+               ((200, {"object": "list", "data": [{"id": TOPIC}]}), "valor desconhecido"),
                ((500, {"name": "x", "message": "x"}), "respondeu 500")]
         for resp, why in bad:
             f = FakeResend(contacts=[substack("saiu@x.com")], props=S.PROPERTIES, topics=lambda c, r=resp: r)
