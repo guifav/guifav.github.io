@@ -102,7 +102,11 @@ function setup(opts: Opts = {}) {
     }
     if (url.startsWith('https://api.resend.com/contacts/') && method === 'PATCH') {
       const st = opts.patchStatus ?? 200;
-      if (st < 300 && (body as { unsubscribed?: boolean }).unsubscribed !== undefined) state.unsubscribed = (body as { unsubscribed: boolean }).unsubscribed;
+      if (st < 300) {
+        const b = body as { unsubscribed?: boolean; properties?: Record<string, string> };
+        if (b.unsubscribed !== undefined) state.unsubscribed = b.unsubscribed;
+        Object.assign(state.props, b.properties ?? {});
+      }
       return st < 300 ? Response.json({ id: 'c1' }) : Response.json({ name: 'internal_server_error' }, { status: st });
     }
     return new Response('inesperado', { status: 500 });
@@ -292,6 +296,7 @@ test('A5: se a API recusar o POST de um email existente (409/422), o caminho de 
     // A8: a reativação também registra o opt-in pelo site, que protege o contato da sincronização com o Substack.
     assert.deepEqual(writes[1].body, { unsubscribed: false, properties: { site_confirmed_at: new Date(NOW).toISOString() } }, contact);
     assert.deepEqual([s.state.unsubscribed, s.state.topic, s.state.inSegment], [false, 'opt_in', true], contact);
+    assert.deepEqual(s.state.props, { site_confirmed_at: new Date(NOW).toISOString() }, contact); // estado final, não só o corpo
   }
 });
 
