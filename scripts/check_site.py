@@ -281,6 +281,9 @@ class _Page(HTMLParser):
                 self.active.append(f"<{tag} srcdoc>")
             elif k == "formaction":
                 self.active.append(f"<{tag} formaction>")
+                # Também é destino: fora do blog o conteúdo ativo não é barrado, mas o domínio antigo é (#50 r2).
+                if v.strip():
+                    self.url_values.append((f"<{tag} formaction={v[:40]!r}>", v.strip()))
             elif k in ACTIVE_URL_ATTRS:
                 for u in (parse_srcset(v) if k == "srcset" else [v]):
                     if u.strip():

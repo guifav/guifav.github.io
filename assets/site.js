@@ -241,15 +241,3 @@
     render();
   });
 })();
-
-// Formulário da newsletter na home: o Turnstile normal tem 300 px; numa caixa mais estreita (telas de 320 px),
-// usa o compacto. O tamanho é decidido antes de carregar o script, que lê data-size ao renderizar.
-(function () {
-  var ts = document.querySelector('.cf-turnstile');
-  if (!ts) return;
-  if (ts.parentElement && ts.parentElement.clientWidth < 300) ts.setAttribute('data-size', 'compact');
-  var s = document.createElement('script');
-  s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
-  s.async = true;
-  document.head.appendChild(s);
-})();
