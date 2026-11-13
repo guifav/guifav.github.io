@@ -195,6 +195,7 @@ test('só o email do Gui e o Google Calendar são CTA', () => {
     s.fire('click', new El('a', { href }, s.main));
   }
   s.fire('click', new El('a', {}, s.main)); // âncora sem href
+  s.fire('click', new El('a', {}, s.footer)); // no rodapé também não é link
   s.fire('click', new El('div', {}, s.main));
   assert.deepEqual(events(s.calls), []);
 });
