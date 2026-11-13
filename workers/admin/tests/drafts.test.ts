@@ -200,6 +200,8 @@ test('R3: sem barra final redireciona; slug desconhecido, inválido ou com manif
   const r = await s.req('/admin/rascunhos/sales-coach');
   assert.equal(r.status, 308);
   assert.equal(r.headers.get('location'), '/admin/rascunhos/sales-coach/');
+  // Slug inválido nem redireciona.
+  assert.equal((await s.req('/admin/rascunhos/Sales-Coach')).status, 404);
   for (const p of ['/admin/rascunhos/outro/', '/admin/rascunhos/Sales-Coach/', '/admin/rascunhos/sales_coach/', '/admin/rascunhos/sales%2Fcoach/']) {
     assert.equal((await s.req(p)).status, 404, p);
   }
