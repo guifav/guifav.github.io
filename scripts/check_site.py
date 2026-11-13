@@ -30,6 +30,7 @@ import subprocess
 import sys
 import xml.etree.ElementTree as ET
 from datetime import datetime
+from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import unquote
@@ -395,6 +396,7 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
         text = f.read_text(encoding="utf-8")
         if GA4_TAG in text and not _has_clarity(text):
             problems.append(f"{f.relative_to(site).as_posix()}: tem o GA4 mas não o Microsoft Clarity")
+        problems += check_titles_and_groups(f.relative_to(site).as_posix(), text)
         p.feed(text)
         p.close()
         url = _page_url(site, f)
@@ -505,16 +507,95 @@ def _valid_datetime(s: str) -> bool:
     return True
 
 
-def _has_clarity(html: str) -> bool:
-    """O snippet do Clarity está num <script> que roda: fora de comentário e sem type de dado (JSON-LD)."""
+def _exec_scripts(html: str) -> list[str]:
+    """Corpo dos <script> que rodam: fora de comentário e sem type de dado (JSON-LD)."""
     html = re.sub(r"<!--.*?-->", "", html, flags=re.S)
+    out = []
     for attrs, body in re.findall(r"<script\b([^>]*)>(.*?)</script\s*>", html, flags=re.S | re.I):
         m = re.search(r"""\btype\s*=\s*["']?([^"'\s>]+)""", attrs, flags=re.I)
         if m and m.group(1).lower() not in ("text/javascript", "module", "application/javascript"):
             continue
-        if all(k in body for k in CLARITY_MARKERS):
-            return True
-    return False
+        out.append(body)
+    return out
+
+
+def _has_clarity(html: str) -> bool:
+    """O snippet do Clarity está num <script> que roda."""
+    return any(all(k in body for k in CLARITY_MARKERS) for body in _exec_scripts(html))
+
+
+# Títulos (Gui, 13/11/2026): "Página | Guilherme Favaron"; a home leva o nome primeiro, "Guilherme Favaron | ...".
+# As telas de exemplo do portfólio (portfolio/mockups) aparecem dentro do portfólio e ficam fora da regra.
+SITE_NAME = "Guilherme Favaron"
+TITLE_SEP = " | "
+TITLE_EXEMPT_PREFIXES = ("portfolio/mockups/",)
+# Grupos de conteúdo do GA4 (content_group), um por tipo de página; espelha CONTENT_GROUPS do consts.ts do blog.
+CONTENT_GROUPS = ("home", "portfolio", "insights-lista", "insights-artigo", "expert-insights")
+EXPERT_INSIGHTS_PAGES = {f"blog/{p}/index.html" for p in
+                         ("assinar", "inscricao-enviada", "inscricao-confirmada", "inscricao-invalida", "privacidade")}
+
+
+def expected_content_group(rel: str) -> str | None:
+    if rel == "index.html":
+        return "home"
+    if rel == "portfolio/index.html":
+        return "portfolio"
+    if rel == "blog/index.html" or re.fullmatch(r"blog/pagina/\d+/index\.html", rel):
+        return "insights-lista"
+    if rel in EXPERT_INSIGHTS_PAGES:
+        return "expert-insights"
+    if re.fullmatch(r"blog/[a-z0-9][a-z0-9-]*/index\.html", rel):
+        return "insights-artigo"
+    return None
+
+
+def _content_groups(html: str) -> list[str]:
+    """Valores de content_group passados ao gtag('config', ...) nos scripts que rodam (literal ou const do define:vars)."""
+    found = []
+    for body in _exec_scripts(html):
+        if not re.search(r"""gtag\(\s*['"]config['"]""", body):
+            continue
+        for m in re.finditer(r"""['"]?\bcontent_group['"]?\s*:\s*(?:(["'])(.*?)\1|([A-Za-z_$][\w$]*))""", body):
+            if m.group(3) is None:
+                found.append(m.group(2))
+                continue
+            v = re.search(r"(?:const|let|var)\s+" + re.escape(m.group(3)) + r"""\s*=\s*(["'])(.*?)\1""", body)
+            found.append(v.group(2) if v else f"<{m.group(3)} sem valor>")
+    return found
+
+
+def _meta_content(html: str, prop: str) -> str | None:
+    for tag in re.findall(r"<meta\b[^>]*>", html, flags=re.I):
+        if re.search(r"""\b(?:property|name)\s*=\s*["']""" + re.escape(prop) + r"""["']""", tag, flags=re.I):
+            m = re.search(r"""\bcontent\s*=\s*(["'])(.*?)\1""", tag, flags=re.S)
+            return unescape(m.group(2)).strip() if m else ""
+    return None
+
+
+def check_titles_and_groups(rel: str, html: str) -> list[str]:
+    problems = []
+    if not rel.startswith(TITLE_EXEMPT_PREFIXES):
+        m = re.search(r"<title[^>]*>(.*?)</title\s*>", re.sub(r"<!--.*?-->", "", html, flags=re.S), flags=re.S | re.I)
+        if not m:
+            problems.append(f"{rel}: página sem <title>")
+        else:
+            title = unescape(m.group(1)).strip()
+            if rel == "index.html":
+                if not title.startswith(SITE_NAME + TITLE_SEP):
+                    problems.append(f"{rel}: o título da home precisa começar com '{SITE_NAME}{TITLE_SEP}': {title!r}")
+            elif not title.endswith(TITLE_SEP + SITE_NAME):
+                problems.append(f"{rel}: o título precisa terminar em '{TITLE_SEP}{SITE_NAME}': {title!r}")
+            for prop in ("og:title", "twitter:title"):
+                v = _meta_content(html, prop)
+                if v is not None and v != title:
+                    problems.append(f"{rel}: {prop} diferente do <title>: {v!r}")
+    if GA4_TAG in html:
+        expected, groups = expected_content_group(rel), _content_groups(html)
+        if expected is None:
+            problems.append(f"{rel}: página com GA4 sem grupo de conteúdo previsto no check_site")
+        elif groups != [expected]:
+            problems.append(f"{rel}: content_group do GA4 {groups}, esperado [{expected!r}]")
+    return problems
 
 
 ROOT_INDEX_CHILDREN = [SITE_ORIGIN + "/sitemap-site.xml", SITE_ORIGIN + "/blog/sitemap.xml"]

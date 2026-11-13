@@ -14,8 +14,13 @@ ROBOTS_NOINDEX = '<meta name="robots" content="noindex, follow">'
 ROBOTS_INDEX = '<meta name="robots" content="index, follow">'
 
 
-def page(body: str = "", robots: str = ROBOTS_NOINDEX) -> str:
-    return f"<!DOCTYPE html><html><head>{robots}</head><body>{body}</body></html>"
+# Título que passa nas duas formas da regra de títulos (home "Guilherme Favaron | ..." e demais "... | Guilherme
+# Favaron"), para os testes que não tratam de título; TitleAndGroupTest testa a regra com títulos próprios.
+FIXTURE_TITLE = "<title>Guilherme Favaron | Teste | Guilherme Favaron</title>"
+
+
+def page(body: str = "", robots: str = ROBOTS_NOINDEX, title: str = FIXTURE_TITLE) -> str:
+    return f"<!DOCTYPE html><html><head>{title}{robots}</head><body>{body}</body></html>"
 
 
 SITEMAP = (
@@ -727,6 +732,141 @@ class ClarityTest(Base):
         self.w("index.html", page(self.GA + self.CL.replace("<script>", '<script type="text/javascript" data-site-script>')
                                   + '<a href="/portfolio/">p</a><img src="/assets/a.png">', robots=""))
         self.assertFalse(self.flagged())
+
+
+class TitleAndGroupTest(unittest.TestCase):
+    """Títulos "Página | Guilherme Favaron" (home com o nome primeiro) e content_group do GA4 por tipo de página."""
+
+    GA = '<script async src="https://www.googletagmanager.com/gtag/js?id=G-K7Y87QNCX8"></script>'
+
+    @staticmethod
+    def doc(title="", head=""):
+        return f"<!DOCTYPE html><html><head>{title}{head}</head><body></body></html>"
+
+    def check(self, rel, html):
+        return C.check_titles_and_groups(rel, html)
+
+    def cfg(self, group_js):
+        return f"<script>window.dataLayer=[];function gtag(){{}};gtag('js',new Date());gtag('config','G-K7Y87QNCX8'{group_js});</script>"
+
+    def test_title_forms(self):
+        cases = [("index.html", "Guilherme Favaron | Builder e CTO", True),
+                 ("index.html", "Guilherme Favaron, builder e CTO", False),
+                 ("index.html", "Builder e CTO | Guilherme Favaron", False),
+                 ("portfolio/index.html", "Portfólio | Guilherme Favaron", True),
+                 ("portfolio/index.html", "Portfólio, Guilherme Favaron", False),
+                 ("llm-ranking/index.html", "Ranking: Qual é o Melhor LLM?", False),
+                 ("blog/um-post/index.html", "Um post | Guilherme Favaron", True),
+                 ("blog/um-post/index.html", "Um post | Guilherme Favaron ", True),  # espaço em volta não conta
+                 ("blog/um-post/index.html", "Guilherme Favaron | Um post", False),
+                 ("404.html", "Página não encontrada | Guilherme Favaron", True)]
+        for rel, title, ok in cases:
+            with self.subTest(rel=rel, title=title):
+                self.assertEqual(self.check(rel, self.doc(f"<title>{title}</title>")) == [], ok)
+
+    def test_entities_are_decoded(self):
+        self.assertEqual(self.check("blog/x/index.html", self.doc("<title>A &amp; B &#124; Guilherme Favaron</title>")), [])
+
+    def test_missing_or_commented_title(self):
+        for html in (self.doc(), self.doc("<!-- <title>X | Guilherme Favaron</title> -->")):
+            with self.subTest(html=html):
+                self.assertTrue(any("sem <title>" in p for p in self.check("blog/x/index.html", html)))
+
+    def test_mockups_are_exempt(self):
+        self.assertEqual(self.check("portfolio/mockups/crm.html", self.doc("<title>Pessoas · CRM</title>")), [])
+        self.assertEqual(self.check("portfolio/mockups/crm.html", self.doc()), [])
+
+    def test_og_and_twitter_must_match_title(self):
+        t = "<title>Portfólio | Guilherme Favaron</title>"
+        ok = '<meta property="og:title" content="Portfólio | Guilherme Favaron"><meta name="twitter:title" content="Portfólio | Guilherme Favaron">'
+        self.assertEqual(self.check("portfolio/index.html", self.doc(t, ok)), [])
+        for prop in ("og:title", "twitter:title"):
+            with self.subTest(prop=prop):
+                bad = ok.replace(f'"{prop}" content="Portfólio | Guilherme Favaron"', f'"{prop}" content="Portfólio, Guilherme Favaron"')
+                self.assertTrue(any(prop in p for p in self.check("portfolio/index.html", self.doc(t, bad))))
+
+    def test_expected_groups(self):
+        E = C.expected_content_group
+        for rel, g in (("index.html", "home"), ("portfolio/index.html", "portfolio"), ("blog/index.html", "insights-lista"),
+                       ("blog/pagina/2/index.html", "insights-lista"), ("blog/pagina/12/index.html", "insights-lista"),
+                       ("blog/assinar/index.html", "expert-insights"), ("blog/privacidade/index.html", "expert-insights"),
+                       ("blog/inscricao-enviada/index.html", "expert-insights"),
+                       ("blog/inscricao-confirmada/index.html", "expert-insights"),
+                       ("blog/inscricao-invalida/index.html", "expert-insights"),
+                       ("blog/o-exame-virou-conspiracao/index.html", "insights-artigo"),
+                       ("llm-ranking/index.html", None), ("blog/pagina/x/index.html", None),
+                       ("blog/a/b/index.html", None)):
+            with self.subTest(rel=rel):
+                self.assertEqual(E(rel), g)
+        self.assertEqual(set(C.CONTENT_GROUPS), {"home", "portfolio", "insights-lista", "insights-artigo", "expert-insights"})
+
+    def test_group_literal_and_define_vars(self):
+        title = "<title>Guilherme Favaron | Builder e CTO</title>"
+        self.assertEqual(self.check("index.html", self.doc(title, self.GA + self.cfg(",{content_group:'home'}"))), [])
+        astro = ('<script>(function(){const GA4_ID = "G-K7Y87QNCX8";\nconst CONTENT_GROUP = "insights-artigo";\n'
+                 "gtag('config', GA4_ID, { content_group: CONTENT_GROUP });})();</script>")
+        self.assertEqual(self.check("blog/um-post/index.html", self.doc("<title>X | Guilherme Favaron</title>", self.GA + astro)), [])
+
+    def test_group_missing_wrong_duplicated_or_inert(self):
+        title = "<title>Guilherme Favaron | Builder e CTO</title>"
+        bad = {"sem grupo": self.cfg(""),
+               "grupo errado": self.cfg(",{content_group:'portfolio'}"),
+               "grupo inventado": self.cfg(",{content_group:'casa'}"),
+               "duas vezes": self.cfg(",{content_group:'home'}") + self.cfg(",{content_group:'home'}"),
+               "comentado": "<!-- " + self.cfg(",{content_group:'home'}") + " -->",
+               "json-ld": self.cfg(",{content_group:'home'}").replace("<script>", '<script type="application/ld+json">'),
+               "fora do config": "<script>gtag('event','x',{content_group:'home'});</script>",
+               "variável sem valor": "<script>gtag('config','G-K7Y87QNCX8',{content_group:GRUPO});</script>",
+               # nome de variável igual ao grupo esperado, sem const: no navegador é ReferenceError, não 'home'
+               "variável homônima": "<script>gtag('config','G-K7Y87QNCX8',{content_group:home});</script>"}
+        for name, js in bad.items():
+            with self.subTest(name=name):
+                self.assertTrue(any("content_group" in p for p in self.check("index.html", self.doc(title, self.GA + js))), name)
+
+    def test_ga_page_outside_the_map_is_flagged(self):
+        html = self.doc("<title>LLM Ranking | Guilherme Favaron</title>", self.GA + self.cfg(",{content_group:'home'}"))
+        self.assertTrue(any("sem grupo de conteúdo previsto" in p for p in self.check("llm-ranking/index.html", html)))
+
+    def test_no_ga_no_group_needed(self):
+        self.assertEqual(self.check("llm-ranking/index.html", self.doc("<title>LLM Ranking | Guilherme Favaron</title>")), [])
+
+    def test_check_runs_the_rule_on_every_page(self):
+        with tempfile.TemporaryDirectory() as d:
+            site = Path(d) / "_site"; (site / "blog" / "um").mkdir(parents=True)
+            (site / "blog" / "um" / "index.html").write_text(self.doc("<title>Sem barra</title>"), encoding="utf-8")
+            posts = Path(d) / "posts"; posts.mkdir()
+            self.assertTrue(any("precisa terminar em" in p for p in C.check(site, posts, pre_cutover=False)))
+
+
+class TitleAndGroupSourcesTest(unittest.TestCase):
+    """Fontes: Base.astro exige contentGroup e cada página do blog passa o seu; consts.ts e check_site têm os mesmos grupos."""
+
+    REPO = Path(__file__).resolve().parent.parent
+
+    def read(self, rel):
+        return (self.REPO / rel).read_text(encoding="utf-8")
+
+    def test_base_requires_group_and_sends_it(self):
+        base = self.read("blog-src/src/layouts/Base.astro")
+        self.assertIn("  contentGroup: ContentGroup;\n", base)  # obrigatório: sem "?"
+        self.assertIn("define:vars={{ GA4_ID, CONTENT_GROUP: contentGroup }}", base)
+        self.assertIn("gtag('config', GA4_ID, { content_group: CONTENT_GROUP });", base)
+
+    def test_each_page_passes_its_group(self):
+        for rel, g in (("blog-src/src/layouts/PostList.astro", "insights-lista"),
+                       ("blog-src/src/pages/[slug].astro", "insights-artigo"),
+                       ("blog-src/src/pages/assinar.astro", "expert-insights"),
+                       ("blog-src/src/pages/privacidade.astro", "expert-insights"),
+                       ("blog-src/src/pages/inscricao-enviada.astro", "expert-insights"),
+                       ("blog-src/src/pages/inscricao-confirmada.astro", "expert-insights"),
+                       ("blog-src/src/pages/inscricao-invalida.astro", "expert-insights")):
+            with self.subTest(rel=rel):
+                self.assertIn(f'contentGroup="{g}"', self.read(rel))
+
+    def test_groups_match_consts(self):
+        consts = self.read("blog-src/src/consts.ts")
+        m = re.search(r"CONTENT_GROUPS = \[([^\]]*)\] as const", consts)
+        self.assertEqual(tuple(re.findall(r"'([^']+)'", m.group(1))), C.CONTENT_GROUPS)
 
 
 class ClaritySourcesTest(unittest.TestCase):

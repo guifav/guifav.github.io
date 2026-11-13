@@ -36,7 +36,7 @@ const ld = blogPostingLd({
   authorId: AUTHOR_ID,
 });
 ---
-<Base title={`${d.title} | ${AUTHOR_NAME}`} description={d.description} index={d.index} image={coverUrl} ogType="article" jsonLd={ld} turnstile={NEWSLETTER_FORM_ENABLED}>
+<Base title={`${d.title} | ${AUTHOR_NAME}`} contentGroup="insights-artigo" description={d.description} index={d.index} image={coverUrl} ogType="article" jsonLd={ld} turnstile={NEWSLETTER_FORM_ENABLED}>
   <article class="post">
     <header class="post-head">
       <p class="post-crumb"><a href={base}>{BLOG_NAME}</a></p>

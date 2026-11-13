@@ -5,7 +5,7 @@ import { AUTHOR_NAME, BLOG_NAME, EMAIL_LIST_NAME } from '../consts';
 
 const base = import.meta.env.BASE_URL;
 ---
-<Base title={`Inscrição confirmada | ${AUTHOR_NAME}`} description={`Inscrição nos ${EMAIL_LIST_NAME} confirmada.`} index={false}>
+<Base title={`${EMAIL_LIST_NAME}: inscrição confirmada | ${AUTHOR_NAME}`} contentGroup="expert-insights" description={`Inscrição nos ${EMAIL_LIST_NAME} confirmada.`} index={false}>
   <article class="post page">
     <header class="post-head">
       <p class="post-crumb"><a href={base}>{BLOG_NAME}</a></p>
