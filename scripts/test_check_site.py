@@ -690,5 +690,60 @@ class RootSitemapTest(Base):
         self.assertTrue(self.has("robots.txt", "só o índice"))
 
 
+class ClarityTest(Base):
+    """Toda página com o GA4 do site também tem o Microsoft Clarity."""
+
+    GA = '<script async src="https://www.googletagmanager.com/gtag/js?id=G-K7Y87QNCX8"></script>'
+    CL = '<script>(function(c,l,a,r,i,t,y){t.src="https://www.clarity.ms/tag/"+i;})(window,document,"clarity","script","zcs8f7r329");</script>'
+
+    def flagged(self) -> bool:
+        return any("tem o GA4 mas não o Microsoft Clarity" in p for p in self.problems(pre_cutover=False))
+
+    def test_ga_without_clarity_is_flagged(self):
+        self.w("index.html", page(self.GA + '<a href="/portfolio/">p</a><img src="/assets/a.png">', robots=""))
+        self.assertTrue(self.flagged())
+
+    def test_ga_with_clarity_ok(self):
+        self.w("index.html", page(self.GA + self.CL + '<a href="/portfolio/">p</a><img src="/assets/a.png">', robots=""))
+        self.assertFalse(self.flagged())
+
+    def test_clarity_with_other_project_is_flagged(self):
+        self.w("index.html", page(self.GA + self.CL.replace("zcs8f7r329", "outro") + '<a href="/portfolio/">p</a><img src="/assets/a.png">', robots=""))
+        self.assertTrue(self.flagged())
+
+    def test_page_without_ga_needs_nothing(self):
+        self.assertFalse(self.flagged())
+
+
+class ClaritySourcesTest(unittest.TestCase):
+    """Fontes do repo: tag nas páginas com GA, formulários mascarados e a política de privacidade citando o Clarity."""
+
+    REPO = Path(__file__).resolve().parent.parent
+
+    def read(self, rel: str) -> str:
+        return (self.REPO / rel).read_text(encoding="utf-8")
+
+    def test_root_pages(self):
+        for rel in ("index.html", "portfolio/index.html"):
+            with self.subTest(rel=rel):
+                t = self.read(rel)
+                self.assertIn(C.GA4_TAG, t)
+                for m in C.CLARITY_MARKERS:
+                    self.assertIn(m, t)
+
+    def test_blog_layout_and_const(self):
+        self.assertIn("export const CLARITY_ID = 'zcs8f7r329';", self.read("blog-src/src/consts.ts"))
+        base = self.read("blog-src/src/layouts/Base.astro")
+        self.assertIn("define:vars={{ CLARITY_ID }}", base)
+        self.assertIn('"https://www.clarity.ms/tag/"+i', base)
+
+    def test_forms_masked(self):
+        self.assertIn('action="https://insights.guifav.dev/subscribe" data-clarity-mask="true"', self.read("index.html"))
+        self.assertIn('data-clarity-mask="true"', self.read("blog-src/src/components/SubscribeForm.astro"))
+
+    def test_privacy_mentions_clarity(self):
+        self.assertIn("Microsoft Clarity", self.read("blog-src/src/pages/privacidade.astro"))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

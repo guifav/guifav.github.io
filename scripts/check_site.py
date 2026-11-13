@@ -56,6 +56,9 @@ OLD_DOMAIN_DEAD_LINKS = (
     ("blog/data-pipelines-empresariais-como/index.html", _W + "/post/machine-learning-producao-modelos-empresariais-roi"),
 )
 BLOG_PREFIX = "/blog/"
+# Toda página com o GA4 do site também carrega o Microsoft Clarity (mesmo escopo de medição).
+GA4_TAG = "googletagmanager.com/gtag/js?id=G-K7Y87QNCX8"
+CLARITY_MARKERS = ('"https://www.clarity.ms/tag/"+i', "zcs8f7r329")
 SITE_ORIGIN = "https://" + SITE_HOST
 SITEMAP_NS = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
 RESOLVER = Path(__file__).resolve().parent / "resolve_urls.mjs"
@@ -389,7 +392,10 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
     pages = []
     for f in html_files(site):
         p = _Page()
-        p.feed(f.read_text(encoding="utf-8"))
+        text = f.read_text(encoding="utf-8")
+        if GA4_TAG in text and not all(m in text for m in CLARITY_MARKERS):
+            problems.append(f"{f.relative_to(site).as_posix()}: tem o GA4 mas não o Microsoft Clarity")
+        p.feed(text)
         p.close()
         url = _page_url(site, f)
         pages.append((f.relative_to(site).as_posix(), url, url.startswith(BLOG_PREFIX), p))
