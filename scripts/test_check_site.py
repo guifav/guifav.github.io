@@ -714,6 +714,20 @@ class ClarityTest(Base):
     def test_page_without_ga_needs_nothing(self):
         self.assertFalse(self.flagged())
 
+    def test_commented_or_inert_clarity_is_flagged(self):
+        # r1 (Astra P3): snippet comentado, em JSON-LD ou só no texto não roda.
+        for name, cl in {"comentado": "<!-- " + self.CL + " -->",
+                         "json": self.CL.replace("<script>", '<script type="application/ld+json">'),
+                         "texto": "<p>" + self.CL.replace("<script>", "").replace("</script>", "") + "</p>"}.items():
+            with self.subTest(name=name):
+                self.w("index.html", page(self.GA + cl + '<a href="/portfolio/">p</a><img src="/assets/a.png">', robots=""))
+                self.assertTrue(self.flagged(), name)
+
+    def test_typed_javascript_clarity_ok(self):
+        self.w("index.html", page(self.GA + self.CL.replace("<script>", '<script type="text/javascript" data-site-script>')
+                                  + '<a href="/portfolio/">p</a><img src="/assets/a.png">', robots=""))
+        self.assertFalse(self.flagged())
+
 
 class ClaritySourcesTest(unittest.TestCase):
     """Fontes do repo: tag nas páginas com GA, formulários mascarados e a política de privacidade citando o Clarity."""
@@ -742,7 +756,12 @@ class ClaritySourcesTest(unittest.TestCase):
         self.assertIn('data-clarity-mask="true"', self.read("blog-src/src/components/SubscribeForm.astro"))
 
     def test_privacy_mentions_clarity(self):
-        self.assertIn("Microsoft Clarity", self.read("blog-src/src/pages/privacidade.astro"))
+        t = self.read("blog-src/src/pages/privacidade.astro")
+        self.assertIn("Microsoft Clarity", t)
+        # r1 (Kimi e Astra P2): a política cita os cookies e o identificador, e não promete anonimato.
+        for must in ("_clck", "_clsk", "identificador", "privacy.microsoft.com"):
+            self.assertIn(must, t)
+        self.assertNotIn("sem identificar quem visita", t)
 
 
 if __name__ == "__main__":
