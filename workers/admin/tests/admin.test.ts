@@ -171,7 +171,9 @@ function setup(opts: { contacts?: FakeContact[]; props?: string[]; patchStatus?:
   };
   const db = d1();
   const env: Env = { DB: db, RESEND_API_KEY: 're_test', SEGMENT_ID: SEG, TOPIC_ID: TOPIC, ACCESS_TEAM_DOMAIN: TEAM, ACCESS_AUD: AUD,
-    ALLOWED_EMAILS: ` ${GUI.toUpperCase()} `, SITE_ORIGIN: tomlVar('SITE_ORIGIN') };
+    ALLOWED_EMAILS: ` ${GUI.toUpperCase()} `, SITE_ORIGIN: tomlVar('SITE_ORIGIN'),
+    DRAFTS: { get: async () => null, list: async () => ({ objects: [], delimitedPrefixes: [], truncated: false }) },
+    DRAFT_NOTIFY_FROM: '', DRAFT_NOTIFY_TO: '' };
   const passed: string[] = [];
   const deps: Deps = { fetch: fetchFn as typeof fetch, now: () => clock.t, sleep: async (ms) => { sleeps.push(ms); clock.t += ms; },
     origin: async (req) => { passed.push(new URL(req.url).pathname); return new Response('pages', { status: 200 }); } };

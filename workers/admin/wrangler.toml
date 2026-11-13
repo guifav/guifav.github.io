@@ -3,6 +3,8 @@
 # Segredos: só via `wrangler secret`, nunca neste arquivo.
 #   RESEND_API_KEY   chave dedicada do Resend com full_access (lê contatos e descadastra), revogável sem afetar as outras
 #   ALLOWED_EMAILS   emails que podem usar o painel, separados por vírgula (o do Gui)
+#   DRAFT_NOTIFY_FROM remetente do aviso de rascunho aprovado (issue #62), num domínio verificado no Resend
+#   DRAFT_NOTIFY_TO   quem recebe esse aviso (o Roger)
 name = "blog-admin"
 main = "src/index.ts"
 compatibility_date = "2026-11-01"
@@ -28,3 +30,8 @@ binding = "DB"
 database_name = "blog-admin"
 database_id = "f54f10dc-960e-468a-aca1-2c74c4c6dc4d"
 migrations_dir = "migrations"
+
+# Rascunhos do blog (issue #62): bucket privado, sem domínio público; só este Worker lê.
+[[r2_buckets]]
+binding = "DRAFTS"
+bucket_name = "blog-rascunhos"

@@ -65,6 +65,7 @@ jobs:
           python3 blog-src/scripts/test_newsletter_draft.py
           python3 blog-src/scripts/test_import_subscribers.py
           python3 blog-src/scripts/test_twenty_sync.py
+          python3 blog-src/scripts/test_draft_preview.py
 
       - name: Montar _site (manifesto + blog) e verificar byte a byte
         run: python3 scripts/assemble_site.py

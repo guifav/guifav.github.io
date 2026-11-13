@@ -3,8 +3,10 @@
 //   GET  /admin              lista, busca, filtros e contadores
 //   GET  /admin/export.csv   os mesmos filtros, em CSV
 //   POST /admin/unsubscribe  descadastra no Resend, com auditoria no contato, e atualiza a cópia
+//   /admin/rascunhos...      rascunhos privados do blog e aprovação de publicação (src/drafts.ts, issue #62)
 // Qualquer outro caminho que a rota pegue (ex.: /administrar) segue para o site no GitHub Pages.
 import { accessEmail } from './access.ts';
+import { handleDrafts, type R2Like } from './drafts.ts';
 import { AUDIT_PROPERTY, prop, resend, syncSegment, SyncError, topicSubscription, type D1Like, type SyncDeps } from './sync.ts';
 
 export interface Env {
@@ -16,6 +18,9 @@ export interface Env {
   ACCESS_AUD: string;
   ALLOWED_EMAILS: string; // segredo: emails separados por vírgula
   SITE_ORIGIN: string;
+  DRAFTS: R2Like; // bucket R2 privado blog-rascunhos
+  DRAFT_NOTIFY_FROM: string; // segredo: remetente do aviso de rascunho aprovado
+  DRAFT_NOTIFY_TO: string; // segredo: quem recebe o aviso (o Roger)
 }
 
 export type Deps = SyncDeps & { origin: (req: Request) => Promise<Response> };
@@ -120,6 +125,7 @@ function page(f: Filters, data: Awaited<ReturnType<typeof query>>, k: Awaited<Re
 <style>body{font:15px/1.45 system-ui,sans-serif;margin:1.5rem;color:#111}table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid #ddd;padding:.35rem .5rem;text-align:left;vertical-align:top}
 .k{display:flex;flex-wrap:wrap;gap:1rem;margin:.5rem 0 1rem}.k div{background:#f4f4f4;padding:.4rem .7rem;border-radius:6px}.erro{color:#a00}.ok{color:#060}form.f{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem}
 td form{margin:0}</style></head><body>
+<p>Assinantes · <a href="/admin/rascunhos">Rascunhos</a></p>
 <h1>Assinantes dos Expert Insights</h1>
 ${msg ? `<p class="ok">${esc(msg)}</p>` : ''}${err}
 <div class="k"><div>Total ${n(k.c.total)}</div><div>Inscritos ${n(k.c.inscritos)}</div><div>Descadastrados ${n(k.c.descadastrados)}</div>
@@ -192,6 +198,9 @@ export async function handle(req: Request, env: Env, deps: Deps): Promise<Respon
     allowedEmails: (env.ALLOWED_EMAILS ?? '').split(',').map((s) => s.trim().toLowerCase()).filter(Boolean),
   }, deps.fetch, deps.now());
   if (!email) return text(403, 'acesso negado');
+
+  const draft = await handleDrafts(req, url, env, deps, email);
+  if (draft) return draft;
 
   const p = url.pathname.replace(/\/+$/, '') || '/admin';
   if (p === '/admin' && req.method === 'GET') {

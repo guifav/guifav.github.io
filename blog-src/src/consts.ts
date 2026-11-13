@@ -15,6 +15,9 @@ export const BLOG_DESCRIPTION =
 export const GA4_ID = 'G-K7Y87QNCX8';
 // Microsoft Clarity (mapas de calor e gravações de sessão), em todas as páginas que têm o GA4.
 export const CLARITY_ID = 'zcs8f7r329';
+// Prévia de rascunho (issue #62): build só na KVM, pelo scripts/draft_preview.py, com DRAFT_PREVIEW=1. Nesse
+// build nenhuma página carrega GA4 nem Clarity e todas saem com noindex. O build do site nunca define a variável.
+export const DRAFT_PREVIEW = process.env.DRAFT_PREVIEW === '1';
 export const POSTS_PER_PAGE = 20;
 export const RSS_LIMIT = 50;
 
