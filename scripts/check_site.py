@@ -33,7 +33,7 @@ from datetime import datetime
 from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
-from urllib.parse import unquote
+from urllib.parse import unquote, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_sitemaps import canonical_is_self, robots_disallow  # noqa: E402
@@ -397,6 +397,7 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
         if GA4_TAG in text and not _has_clarity(text):
             problems.append(f"{f.relative_to(site).as_posix()}: tem o GA4 mas não o Microsoft Clarity")
         problems += check_titles_and_groups(f.relative_to(site).as_posix(), text)
+        problems += check_tracking(f.relative_to(site).as_posix(), text)
         p.feed(text)
         p.close()
         url = _page_url(site, f)
@@ -507,8 +508,8 @@ def _valid_datetime(s: str) -> bool:
     return True
 
 
-def _exec_scripts(html: str) -> list[str]:
-    """Corpo dos <script> que rodam: fora de comentário, template/noscript e sem type de dado (JSON-LD)."""
+def _live_scripts(html: str) -> list[tuple[str, str]]:
+    """(atributos, corpo) dos <script> que rodam: fora de comentário, template/noscript e sem type de dado (JSON-LD)."""
     html = re.sub(r"<!--.*?-->", "", html, flags=re.S)
     html = re.sub(r"<(template|noscript)\b[^>]*>.*?</\1\s*>", "", html, flags=re.S | re.I)
     out = []
@@ -516,8 +517,13 @@ def _exec_scripts(html: str) -> list[str]:
         m = re.search(r"""(?:^|\s)type\s*=\s*["']?([^"'\s>]+)""", attrs, flags=re.I)
         if m and m.group(1).lower() not in ("text/javascript", "module", "application/javascript"):
             continue
-        out.append(body)
+        out.append((attrs, body))
     return out
+
+
+def _exec_scripts(html: str) -> list[str]:
+    """Corpo dos <script> que rodam."""
+    return [body for _, body in _live_scripts(html)]
 
 
 def _has_clarity(html: str) -> bool:
@@ -693,6 +699,111 @@ def check_titles_and_groups(rel: str, html: str) -> list[str]:
             problems.append(f"{rel}: página com GA4 sem grupo de conteúdo previsto no check_site")
         elif groups != [expected]:
             problems.append(f"{rel}: content_group do GA4 {groups}, esperado [{expected!r}]")
+    return problems
+
+
+# Eventos próprios do GA4 (issue #60): assets/track.js. Contrato igual ao de check_titles_and_groups: alarme de
+# integridade sobre o HTML dos três templates (index.html, portfolio/index.html e Base.astro do blog).
+TRACK_PATH = "/assets/track.js"
+CTA_LOCATIONS = ("hero", "projetos", "consultoria", "chamada-final")
+SIGNUP_PAGE = "blog/inscricao-confirmada/index.html"
+CONTACT_EMAIL = "contact@guifav.dev"
+SCHEDULE_HOST = "calendar.app.google"
+
+
+def cta_event(href: str) -> str | None:
+    """O evento que o track.js manda para um link: contact_click, schedule_click ou nenhum."""
+    try:
+        u = urlsplit(href.strip())
+    except ValueError:
+        return None
+    if u.scheme.lower() == "mailto":
+        return "contact_click" if unquote(u.path).lower() == CONTACT_EMAIL else None
+    if u.scheme.lower() == "https" and (u.hostname or "") == SCHEDULE_HOST:
+        return "schedule_click"
+    return None
+
+
+def _track_loads(html: str) -> int:
+    n = 0
+    for attrs, _ in _live_scripts(html):
+        m = re.search(r"""(?:^|\s)src\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))""", attrs, flags=re.I)
+        if not m:
+            continue
+        u = urlsplit(unescape(next(g for g in m.groups() if g is not None)).strip())
+        if (u.scheme, u.netloc) in (("", ""), ("https", SITE_HOST)) and u.path == TRACK_PATH:
+            n += 1
+    return n
+
+
+class _Tracking(HTMLParser):
+    """CTAs (evento, onde, data-cta-location) e marcadores data-ga-event da página."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.depth = {"nav": 0, "footer": 0}
+        self.divs: list[bool] = []  # pilha de <div>: True para o div.post-body
+        self.ctas: list[tuple[str, str, str | None]] = []
+        self.ga_events: list[str] = []
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        a: dict[str, str | None] = {}
+        for k, v in attrs:
+            a.setdefault(k, v)
+        if tag in self.depth:
+            self.depth[tag] += 1
+        if tag == "div":
+            self.divs.append("post-body" in (a.get("class") or "").split())
+        if "data-ga-event" in a:
+            self.ga_events.append(a["data-ga-event"] or "")
+        if tag == "a" and a.get("href"):
+            ev = cta_event(a["href"] or "")
+            if ev:
+                where = ("menu" if self.depth["nav"] else "rodape" if self.depth["footer"]
+                         else "post" if any(self.divs) else "pagina")
+                self.ctas.append((ev, where, a.get("data-cta-location")))
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in self.depth:
+            self.depth[tag] = max(0, self.depth[tag] - 1)
+        elif tag == "div" and self.divs:
+            self.divs.pop()
+
+
+def check_tracking(rel: str, html: str) -> list[str]:
+    """track.js uma vez em toda página com GA4 (e em nenhuma outra), CTAs com posição e o marcador do sign_up."""
+    problems = []
+    has_ga = GA4_TAG in html
+    n = _track_loads(html)
+    if has_ga and n != 1:
+        problems.append(f"{rel}: página com GA4 precisa carregar o {TRACK_PATH} uma vez, carrega {n}")
+    if not has_ga and n:
+        problems.append(f"{rel}: página sem GA4 não carrega o {TRACK_PATH}")
+    t = _Tracking()
+    t.feed(html)
+    t.close()
+    if has_ga:
+        seen: set[tuple[str, str]] = set()
+        for ev, where, loc in t.ctas:
+            if where in ("menu", "rodape"):
+                if loc is not None:
+                    problems.append(f"{rel}: {ev} no {where} não leva data-cta-location (a posição vem da estrutura)")
+                continue
+            if where == "post" and loc is None:
+                continue  # link de dentro de um post: "conteudo"
+            if loc not in CTA_LOCATIONS:
+                problems.append(f"{rel}: {ev} fora do menu e do rodapé sem data-cta-location da lista "
+                                f"{', '.join(CTA_LOCATIONS)}: {loc!r}")
+            elif (ev, loc) in seen:
+                problems.append(f"{rel}: {ev} com data-cta-location={loc!r} repetido na página")
+            else:
+                seen.add((ev, loc))
+    expected = ["sign_up"] if rel == SIGNUP_PAGE else []
+    if t.ga_events != expected:
+        problems.append(f"{rel}: data-ga-event {t.ga_events}, esperado {expected}")
     return problems
 
 
