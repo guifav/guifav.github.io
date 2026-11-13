@@ -15,6 +15,7 @@ class El {
   attrs: Attrs;
   parent: El | null;
   children: El[] = [];
+  handlers: Record<string, ((e: unknown) => void)[]> = {};
   constructor(tag: string, attrs: Attrs = {}, parent: El | null = null) {
     this.tag = tag;
     this.attrs = { ...attrs };
@@ -26,6 +27,9 @@ class El {
   }
   set lang(v: string) {
     this.attrs.lang = v;
+  }
+  addEventListener(type: string, fn: (e: unknown) => void) {
+    (this.handlers[type] ??= []).push(fn);
   }
   getAttribute(k: string): string | null {
     return k in this.attrs ? this.attrs[k] : null;
@@ -96,13 +100,15 @@ function setup(opts: Opts = {}) {
   const main = new El('main', {}, body);
   const footer = new El('footer', {}, body);
   if (opts.signup) new El('article', { 'data-ga-event': 'sign_up' }, main);
-  const listeners: Record<string, ((e: unknown) => void)[]> = {};
+  // Ouvintes do document com a fase: captura roda antes do alvo; borbulha, depois dele e dos ancestrais.
+  const listeners: Record<string, { fn: (e: unknown) => void; capture: boolean }[]> = {};
   const document = {
     documentElement: html,
     body,
     baseURI: 'https://guifav.dev/portfolio/',
-    addEventListener(type: string, fn: (e: unknown) => void) {
-      (listeners[type] ??= []).push(fn);
+    addEventListener(type: string, fn: (e: unknown) => void, opt?: boolean | { capture?: boolean }) {
+      const capture = typeof opt === 'boolean' ? opt : Boolean(opt?.capture);
+      (listeners[type] ??= []).push({ fn, capture });
     },
     querySelector(sel: string) {
       return walk(html).find((e) => e.matches(sel)) ?? null;
@@ -121,8 +127,12 @@ function setup(opts: Opts = {}) {
   // Cópia por JSON: os objetos nascem em outro realm (vm), e o deepStrictEqual compara protótipos.
   if (opts.gtag !== false) ctx.gtag = (...a: unknown[]) => calls.push(JSON.parse(JSON.stringify(a)));
   vm.runInContext(SRC, vm.createContext(ctx));
+  // Despacho com as fases do DOM: captura no document, alvo e ancestrais (borbulha), borbulha no document.
   const fire = (type: string, target: El, extra: Record<string, unknown> = {}) => {
-    for (const fn of listeners[type] ?? []) fn({ type, target, button: 0, ...extra });
+    const ev = { type, target, button: 0, ...extra };
+    for (const l of listeners[type] ?? []) if (l.capture) l.fn(ev);
+    for (let e: El | null = target; e; e = e.parent) for (const fn of e.handlers[type] ?? []) fn(ev);
+    for (const l of listeners[type] ?? []) if (!l.capture) l.fn(ev);
   };
   return { calls, html, body, nav, main, footer, fire, listeners, ctx };
 }
@@ -196,6 +206,7 @@ test('só o email do Gui e o Google Calendar são CTA', () => {
   }
   s.fire('click', new El('a', {}, s.main)); // âncora sem href
   s.fire('click', new El('a', {}, s.footer)); // no rodapé também não é link
+  s.fire('click', new El('a', { href: 'http://[invalido' }, s.footer)); // href inválido: nem footer_click
   s.fire('click', new El('div', {}, s.main));
   assert.deepEqual(events(s.calls), []);
 });
@@ -237,13 +248,15 @@ test('troca de idioma e de tema: evento e propriedade do usuário com o estado n
   const s = setup();
   const lt = new El('button', { id: 'lang-toggle' }, s.nav);
   const tt = new El('button', { id: 'theme-toggle' }, s.nav);
+  // Como o site.js e o script do blog: o handler do próprio botão troca o estado, no alvo.
+  lt.addEventListener('click', () => { s.html.lang = s.html.lang === 'en' ? 'pt-BR' : 'en'; });
+  tt.addEventListener('click', () => {
+    s.body.setAttribute('data-theme', s.body.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+  });
   s.calls.length = 0;
-  // O handler do próprio botão (site.js) roda antes, no alvo; o do track.js, depois, no document.
-  s.html.lang = 'en';
+  // O ouvinte do track.js roda depois, na borbulha até o document, e já lê o estado novo.
   s.fire('click', lt);
-  s.body.setAttribute('data-theme', 'dark');
   s.fire('click', new El('span', {}, tt));
-  s.html.lang = 'pt-BR';
   s.fire('click', lt);
   assert.deepEqual(s.calls, [
     ['set', 'user_properties', { site_language: 'en' }],
@@ -328,13 +341,15 @@ test('sem gtag (página sem GA4): nada quebra e nada é enviado', () => {
 test('alvo sem closest (documento, nó de texto) é ignorado', () => {
   const s = setup();
   s.calls.length = 0;
-  for (const fn of s.listeners.click) {
+  for (const { fn } of s.listeners.click) {
     fn({ type: 'click', target: null, button: 0 });
     fn({ type: 'click', target: { nodeType: 3 }, button: 0 });
   }
   assert.deepEqual(s.calls, []);
 });
 
-test('registra só os ouvintes de click e auxclick', () => {
-  assert.deepEqual(Object.keys(setup().listeners).sort(), ['auxclick', 'click']);
+test('registra só os ouvintes de click e auxclick, na borbulha (depois do handler do botão)', () => {
+  const l = setup().listeners;
+  assert.deepEqual(Object.keys(l).sort(), ['auxclick', 'click']);
+  assert.deepEqual(Object.values(l).flat().map((x) => x.capture), [false, false]);
 });

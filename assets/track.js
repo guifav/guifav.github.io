@@ -56,6 +56,7 @@
 
   function onLink(a) {
     var u = parse(a);
+    if (!u) return; // href que o navegador não interpreta: nenhum evento, nem de rodapé
     var ev = ctaEvent(u);
     if (ev) send('event', ev, { cta_location: ctaLocation(a), transport_type: 'beacon' });
     if (a.closest('footer')) send('event', 'footer_click', { link_label: footerLabel(u), transport_type: 'beacon' });
