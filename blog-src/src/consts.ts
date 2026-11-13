@@ -7,6 +7,8 @@ export const AUTHOR_ID = 'https://guifav.dev/#person';
 export const BLOG_DESCRIPTION =
   'Artigos de Guilherme Favaron sobre IA aplicada, dados e engenharia de software, com código, arquitetura e decisões técnicas.';
 export const GA4_ID = 'G-K7Y87QNCX8';
+// Microsoft Clarity (mapas de calor e gravações de sessão), em todas as páginas que têm o GA4.
+export const CLARITY_ID = 'zcs8f7r329';
 export const POSTS_PER_PAGE = 20;
 export const RSS_LIMIT = 50;
 
