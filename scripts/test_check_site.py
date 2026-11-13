@@ -1172,6 +1172,16 @@ class TrackingSourcesTest(unittest.TestCase):
         self.assertIn("alguns cliques: contato, agendamento, links do rodapé, troca de idioma e de tema e a "
                       "confirmação da inscrição (sem o email)", t)
 
+    def test_privacy_discloses_google_ads(self):
+        # #64: GA4 vinculado ao Google Ads com publicidade personalizada (Gui, 13/11/2026). A política diz o recurso,
+        # os cookies, como o Google usa os dados e como desativar.
+        t = self.read("blog-src/src/pages/privacidade.astro")
+        for must in ("Google Ads", "publicidade personalizada", "<code>_ga</code>", "<code>_ga_",
+                     "https://adssettings.google.com/", "https://tools.google.com/dlpage/gaoptout",
+                     "https://policies.google.com/technologies/partner-sites"):
+            self.assertIn(must, t)
+        self.assertIn("Atualizada em 13 de novembro de 2026.", t)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
