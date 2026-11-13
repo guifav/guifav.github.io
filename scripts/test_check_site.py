@@ -848,6 +848,9 @@ class TitleAndGroupTest(unittest.TestCase):
             "grupo em comentário": "gtag('config','G-K7Y87QNCX8'); // content_group:'home'",
             "grupo em comentário no objeto": "gtag('config','G-K7Y87QNCX8',{/* content_group:'home' */});",
             "const em comentário": "gtag('config','G-K7Y87QNCX8',{content_group:CONTENT_GROUP}); /* const CONTENT_GROUP=\"home\"; */",
+            "comentário antes do config sem grupo": valid + "gtag(/* init */'config','G-K7Y87QNCX8');",
+            "comentário depois do config sem grupo": valid + "gtag('config' /* init */,'G-K7Y87QNCX8');",
+            "grupo aninhado": "gtag('config','G-K7Y87QNCX8',{custom_map:{content_group:'home'}});",
             "código em string": 'const exemplo = "' + valid + '";',
         }
         for name, js in bad.items():
@@ -856,6 +859,8 @@ class TitleAndGroupTest(unittest.TestCase):
                 self.assertTrue(any("content_group" in p for p in self.check("index.html", html)), name)
         with_event = valid + "gtag('event','x',{content_group:'portfolio'});"
         self.assertEqual(self.check("index.html", self.doc(title, self.GA + "<script>" + with_event + "</script>")), [])
+        commented_ok = "gtag(/* init */'config' /* id */,'G-K7Y87QNCX8',{send_page_view:true,/* x */content_group:'home'});"
+        self.assertEqual(self.check("index.html", self.doc(title, self.GA + "<script>" + commented_ok + "</script>")), [])
 
     def test_template_and_noscript_do_not_supply_group(self):
         title = "<title>Guilherme Favaron | Builder e CTO</title>"

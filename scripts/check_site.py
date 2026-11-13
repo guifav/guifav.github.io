@@ -550,16 +550,16 @@ def expected_content_group(rel: str) -> str | None:
     return None
 
 
-def _js_mask(js: str) -> str:
-    """Código JS com strings e comentários mascarados, preservando posições e novas linhas."""
+def _js_mask(js: str, keep_strings: bool = False) -> str:
+    """Código JS com comentários (e, por padrão, strings) mascarados, preservando posições e novas linhas."""
     out = list(js)
     i, quote = 0, None
     while i < len(js):
         if quote:
-            if js[i] != "\n":
+            if js[i] != "\n" and not keep_strings:
                 out[i] = " "
             if js[i] == "\\" and i + 1 < len(js):
-                if js[i + 1] != "\n":
+                if js[i + 1] != "\n" and not keep_strings:
                     out[i + 1] = " "
                 i += 2
                 continue
@@ -569,7 +569,7 @@ def _js_mask(js: str) -> str:
             continue
         if js.startswith(("//", "/*"), i):
             end = js.find("\n", i) if js.startswith("//", i) else js.find("*/", i + 2)
-            end = len(js) if end < 0 else end
+            end = len(js) if end < 0 else end + (0 if js.startswith("//", i) else 2)
             for j in range(i, end):
                 if js[j] != "\n":
                     out[j] = " "
@@ -577,7 +577,8 @@ def _js_mask(js: str) -> str:
             continue
         if js[i] in "'\"`":
             quote = js[i]
-            out[i] = " "
+            if not keep_strings:
+                out[i] = " "
         i += 1
     return "".join(out)
 
@@ -588,8 +589,9 @@ def _content_groups(html: str) -> list[str]:
     group_re = re.compile(r"""(['"]?)\bcontent_group\1\s*:\s*(?:(["'])(.*?)\2|([A-Za-z_$][\w$]*))""")
     for body in _exec_scripts(html):
         mask = _js_mask(body)
+        code = _js_mask(body, keep_strings=True)  # sem comentários, com strings
         for call in re.finditer(r"\bgtag\s*\(", mask):
-            if not re.match(r"""gtag\s*\(\s*(['"])config\1\s*,""", body[call.start():]):
+            if not re.match(r"""gtag\s*\(\s*(['"])config\1\s*,""", code[call.start():]):
                 continue
             open_paren = mask.find("(", call.start(), call.end())
             depth, end = 0, None
@@ -617,10 +619,14 @@ def _content_groups(html: str) -> list[str]:
             call_groups = []
             if len(args) >= 3:
                 a, b = args[2]
-                third = body[a:b]
+                third = code[a:b]
                 for m in group_re.finditer(third):
                     colon = third.find(":", m.start(), m.end())
                     if mask[a + colon] != ":":
+                        continue
+                    # Só propriedade de primeiro nível do objeto do config: aninhada não é o content_group do GA4.
+                    level = sum(1 if c in "({[" else -1 if c in ")}]" else 0 for c in mask[a:a + m.start()])
+                    if level != 1:
                         continue
                     if m.group(4) is None:
                         call_groups.append(m.group(3))
@@ -655,6 +661,14 @@ def _meta_contents(html: str, prop: str) -> list[str]:
 
 
 def check_titles_and_groups(rel: str, html: str) -> list[str]:
+    """Títulos e content_group das páginas montadas.
+
+    Contrato (Gui, 13/11/2026, PR #57): esta regra é alarme de integridade sobre o HTML que os três templates
+    geram (Base.astro do blog, index.html e portfolio/index.html), não barreira contra HTML ou JS forjado. Ela lê
+    os snippets nas formas que esses templates usam; construções JS ou HTML que nenhum template produz (regex
+    literal, interpolação de template literal, expressão no valor, template aninhado, atributo sem aspas) ficam
+    fora do escopo e estão listadas na issue de follow-up.
+    """
     problems = []
     if not rel.startswith(TITLE_EXEMPT_PREFIXES):
         visible = _visible_html(html)
