@@ -524,10 +524,12 @@ class CheckTest(Base):
     def test_private_newsletter_pages_need_noindex_in_both_modes(self):
         # Páginas da newsletter (#21): sempre noindex e fora do sitemap, também depois do cutover.
         for name in sorted(C.BLOG_PRIVATE_PAGES):
-            self.w(f"blog/{name}/index.html", page('<a href="/blog/">b</a>', robots=ROBOTS_INDEX))
+            # A confirmação leva o marcador do sign_up (issue #60), que o check_tracking exige ali.
+            body = '<a href="/blog/">b</a>' + ('<article data-ga-event="sign_up"></article>' if name == "inscricao-confirmada" else "")
+            self.w(f"blog/{name}/index.html", page(body, robots=ROBOTS_INDEX))
             for pre in (True, False):
                 self.assertTrue(any(name in p and "noindex" in p for p in self.problems(pre_cutover=pre)), (name, pre))
-            self.w(f"blog/{name}/index.html", page('<a href="/blog/">b</a>'))
+            self.w(f"blog/{name}/index.html", page(body))
             self.assertEqual(self.problems(pre_cutover=False), [], name)
 
     def test_private_newsletter_pages_cannot_be_in_sitemap(self):
@@ -1017,6 +1019,158 @@ class NamingSourcesTest(unittest.TestCase):
         self.assertIn('FOOTER_LIST_NAME = "Expert Insights"', verify)
         base = (self.REPO / "blog-src/src/layouts/Base.astro").read_text(encoding="utf-8")
         self.assertIn("'assinar/')}>{EMAIL_LIST_NAME}</a>", base)  # o mesmo texto que o verify_import procura
+
+
+class TrackingTest(unittest.TestCase):
+    """Eventos próprios do GA4 (issue #60): track.js nas páginas com GA4, CTAs com posição e marcador do sign_up."""
+
+    GA = '<script async src="https://www.googletagmanager.com/gtag/js?id=G-K7Y87QNCX8"></script>'
+    TR = '<script src="/assets/track.js?v=1"></script>'
+
+    def doc(self, body="", ga=True, track=1):
+        head = (self.GA if ga else "")
+        return f"<!DOCTYPE html><html><head>{head}</head><body>{body}{self.TR * track}</body></html>"
+
+    def check(self, html, rel="index.html"):
+        return C.check_tracking(rel, html)
+
+    def test_track_once_on_every_ga_page_and_never_without_ga(self):
+        self.assertEqual(self.check(self.doc()), [])
+        self.assertEqual(self.check(self.doc(ga=False, track=0)), [])
+        for name, html in {"sem": self.doc(track=0), "duas": self.doc(track=2),
+                           "sem GA": self.doc(ga=False, track=1)}.items():
+            with self.subTest(name=name):
+                self.assertTrue(any("track.js" in p for p in self.check(html)), name)
+
+    def test_inert_or_foreign_track_does_not_count(self):
+        for name, tag in {
+            "comentado": "<!-- " + self.TR + " -->",
+            "json": self.TR.replace("<script ", '<script type="application/json" '),
+            "template": "<template>" + self.TR + "</template>",
+            "noscript": "<noscript>" + self.TR + "</noscript>",
+            "outro host": '<script src="https://exemplo.com/assets/track.js"></script>',
+            "outro caminho": '<script src="/x/assets/track.js"></script>',
+            "outro arquivo": '<script src="/assets/track.js.bak"></script>',
+            "http": '<script src="http://guifav.dev/assets/track.js"></script>',
+        }.items():
+            with self.subTest(name=name):
+                self.assertTrue(any("track.js uma vez, carrega 0" in p for p in self.check(self.doc(tag, track=0))), name)
+        for name, tag in {"absoluto": '<script src="https://guifav.dev/assets/track.js?v=2"></script>',
+                          "sem versão": '<script data-site-script src="/assets/track.js"></script>',
+                          "aspas simples": "<script src='/assets/track.js?v=3'></script>",
+                          "tipo js": '<script type="text/javascript" src="/assets/track.js"></script>'}.items():
+            with self.subTest(name=name):
+                self.assertEqual(self.check(self.doc(tag, track=0)), [], name)
+
+    def test_cta_in_menu_and_footer_take_position_from_structure(self):
+        ok = ('<nav><a href="mailto:contact@guifav.dev">Contato</a>'
+              '<a href="https://calendar.app.google/x">Agende</a></nav>'
+              '<footer><a href="mailto:contact@guifav.dev">Contato</a></footer>')
+        self.assertEqual(self.check(self.doc(ok)), [])
+        for where in ("nav", "footer"):
+            with self.subTest(where=where):
+                html = self.doc(f'<{where}><a href="mailto:contact@guifav.dev" data-cta-location="hero">c</a></{where}>')
+                self.assertTrue(any("não leva data-cta-location" in p for p in self.check(html)), where)
+
+    def test_cta_in_page_needs_location_from_list(self):
+        for loc in C.CTA_LOCATIONS:
+            with self.subTest(loc=loc):
+                html = self.doc(f'<main><a href="https://calendar.app.google/x" data-cta-location="{loc}">a</a></main>')
+                self.assertEqual(self.check(html), [])
+        self.assertEqual(C.CTA_LOCATIONS, ("hero", "projetos", "consultoria", "chamada-final"))
+        for name, a in {
+            "sem atributo": '<a href="mailto:contact@guifav.dev">c</a>',
+            "vazio": '<a href="mailto:contact@guifav.dev" data-cta-location="">c</a>',
+            "fora da lista": '<a href="https://calendar.app.google/x" data-cta-location="topo">a</a>',
+            "conteudo fora do post": '<a href="https://calendar.app.google/x" data-cta-location="conteudo">a</a>',
+            "mailto com variação": '<a href="MAILTO:Contact@GuiFav.dev?subject=Oi">c</a>',
+            "mailto codificado": '<a href="mailto:contact%40guifav.dev">c</a>',
+        }.items():
+            with self.subTest(name=name):
+                self.assertTrue(any("sem data-cta-location da lista" in p for p in self.check(self.doc(f"<main>{a}</main>"))), name)
+
+    def test_non_cta_links_and_post_body_are_free(self):
+        body = ('<main><a href="mailto:outro@guifav.dev">o</a><a href="http://calendar.app.google/x">h</a>'
+                '<a href="https://calendar.google.com/x">g</a><a href="/portfolio/">p</a>'
+                '<div class="post-body"><p><a href="https://calendar.app.google/y">no post</a>'
+                '<a href="mailto:contact@guifav.dev">no post</a></p></div></main>')
+        self.assertEqual(self.check(self.doc(body)), [])
+        # Depois que o div.post-body fecha, a regra volta a valer.
+        after = self.doc('<main><div class="post-body"><div>x</div></div><a href="mailto:contact@guifav.dev">c</a></main>')
+        self.assertTrue(any("sem data-cta-location da lista" in p for p in self.check(after)))
+        bad = self.doc('<div class="post-body"><a href="mailto:contact@guifav.dev" data-cta-location="topo">c</a></div>')
+        self.assertTrue(any("sem data-cta-location da lista" in p for p in self.check(bad)))
+
+    def test_same_event_and_position_twice_is_flagged(self):
+        a = '<a href="https://calendar.app.google/x" data-cta-location="projetos">a</a>'
+        self.assertTrue(any("repetido" in p for p in self.check(self.doc(f"<main>{a}{a}</main>"))))
+        mixed = ('<main><a href="https://calendar.app.google/x" data-cta-location="chamada-final">a</a>'
+                 '<a href="mailto:contact@guifav.dev" data-cta-location="chamada-final">c</a></main>')
+        self.assertEqual(self.check(self.doc(mixed)), [])
+
+    def test_cta_rule_only_on_ga_pages(self):
+        self.assertEqual(self.check(self.doc('<main><a href="mailto:contact@guifav.dev">c</a></main>', ga=False, track=0)), [])
+
+    def test_signup_marker_only_on_confirmation_page(self):
+        mark = '<article data-ga-event="sign_up">x</article>'
+        self.assertEqual(self.check(self.doc(mark), rel=C.SIGNUP_PAGE), [])
+        self.assertEqual(C.SIGNUP_PAGE, "blog/inscricao-confirmada/index.html")
+        for name, (rel, body) in {
+            "falta": (C.SIGNUP_PAGE, ""),
+            "duas vezes": (C.SIGNUP_PAGE, mark + mark),
+            "outro valor": (C.SIGNUP_PAGE, '<article data-ga-event="signup">x</article>'),
+            "outra página": ("blog/assinar/index.html", mark),
+            "home": ("index.html", '<div data-ga-event="purchase"></div>'),
+        }.items():
+            with self.subTest(name=name):
+                self.assertTrue(any("data-ga-event" in p for p in self.check(self.doc(body), rel=rel)), name)
+
+
+class TrackingWiredTest(Base):
+    def test_check_runs_tracking_rule(self):
+        ga = TrackingTest.GA
+        self.w("portfolio/index.html", page(ga + '<a href="/">home</a>', robots=""))
+        self.assertTrue(any("portfolio/index.html: página com GA4 precisa carregar" in p
+                            for p in self.problems(pre_cutover=False)))
+
+
+class TrackingSourcesTest(unittest.TestCase):
+    """Fontes: track.js com a mesma versão nas três origens, CTAs da home e do portfólio e o marcador do sign_up."""
+
+    REPO = Path(__file__).resolve().parent.parent
+
+    def read(self, rel):
+        return (self.REPO / rel).read_text(encoding="utf-8")
+
+    def test_same_track_src_everywhere(self):
+        m = re.search(r"export const TRACK_SRC = '([^']+)';", self.read("blog-src/src/consts.ts"))
+        self.assertTrue(m)
+        src = m.group(1)
+        self.assertTrue(src.startswith(C.TRACK_PATH + "?v="))
+        for rel in ("index.html", "portfolio/index.html"):
+            with self.subTest(rel=rel):
+                t = self.read(rel)
+                self.assertEqual(t.count(f'<script src="{src}"></script>'), 1)
+                # Depois do site.js, para ler o idioma e o tema que ele aplica.
+                self.assertLess(t.index("/assets/site.js"), t.index(src))
+        base = self.read("blog-src/src/layouts/Base.astro")
+        self.assertEqual(base.count("<script data-site-script is:inline src={TRACK_SRC}></script>"), 1)
+        self.assertLess(base.index("localStorage.setItem('theme', next)"), base.index("src={TRACK_SRC}"))
+
+    def test_cta_locations_in_sources(self):
+        home = self.read("index.html")
+        for loc in ("hero", "projetos", "consultoria"):
+            self.assertEqual(home.count(f'data-cta-location="{loc}"'), 1, loc)
+        self.assertEqual(self.read("portfolio/index.html").count('data-cta-location="chamada-final"'), 2)
+
+    def test_signup_marker_in_source(self):
+        self.assertIn('<article class="post page" data-ga-event="sign_up">',
+                      self.read("blog-src/src/pages/inscricao-confirmada.astro"))
+
+    def test_privacy_mentions_events(self):
+        t = self.read("blog-src/src/pages/privacidade.astro")
+        self.assertIn("alguns cliques: contato, agendamento, links do rodapé, troca de idioma e de tema e a "
+                      "confirmação da inscrição (sem o email)", t)
 
 
 if __name__ == "__main__":
