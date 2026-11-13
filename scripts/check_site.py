@@ -508,11 +508,12 @@ def _valid_datetime(s: str) -> bool:
 
 
 def _exec_scripts(html: str) -> list[str]:
-    """Corpo dos <script> que rodam: fora de comentário e sem type de dado (JSON-LD)."""
+    """Corpo dos <script> que rodam: fora de comentário, template/noscript e sem type de dado (JSON-LD)."""
     html = re.sub(r"<!--.*?-->", "", html, flags=re.S)
+    html = re.sub(r"<(template|noscript)\b[^>]*>.*?</\1\s*>", "", html, flags=re.S | re.I)
     out = []
     for attrs, body in re.findall(r"<script\b([^>]*)>(.*?)</script\s*>", html, flags=re.S | re.I):
-        m = re.search(r"""\btype\s*=\s*["']?([^"'\s>]+)""", attrs, flags=re.I)
+        m = re.search(r"""(?:^|\s)type\s*=\s*["']?([^"'\s>]+)""", attrs, flags=re.I)
         if m and m.group(1).lower() not in ("text/javascript", "module", "application/javascript"):
             continue
         out.append(body)
@@ -549,46 +550,129 @@ def expected_content_group(rel: str) -> str | None:
     return None
 
 
-def _content_groups(html: str) -> list[str]:
-    """Valores de content_group passados ao gtag('config', ...) nos scripts que rodam (literal ou const do define:vars)."""
-    found = []
-    for body in _exec_scripts(html):
-        if not re.search(r"""gtag\(\s*['"]config['"]""", body):
-            continue
-        for m in re.finditer(r"""['"]?\bcontent_group['"]?\s*:\s*(?:(["'])(.*?)\1|([A-Za-z_$][\w$]*))""", body):
-            if m.group(3) is None:
-                found.append(m.group(2))
+def _js_mask(js: str) -> str:
+    """Código JS com strings e comentários mascarados, preservando posições e novas linhas."""
+    out = list(js)
+    i, quote = 0, None
+    while i < len(js):
+        if quote:
+            if js[i] != "\n":
+                out[i] = " "
+            if js[i] == "\\" and i + 1 < len(js):
+                if js[i + 1] != "\n":
+                    out[i + 1] = " "
+                i += 2
                 continue
-            v = re.search(r"(?:const|let|var)\s+" + re.escape(m.group(3)) + r"""\s*=\s*(["'])(.*?)\1""", body)
-            found.append(v.group(2) if v else f"<{m.group(3)} sem valor>")
+            if js[i] == quote:
+                quote = None
+            i += 1
+            continue
+        if js.startswith(("//", "/*"), i):
+            end = js.find("\n", i) if js.startswith("//", i) else js.find("*/", i + 2)
+            end = len(js) if end < 0 else end
+            for j in range(i, end):
+                if js[j] != "\n":
+                    out[j] = " "
+            i = end
+            continue
+        if js[i] in "'\"`":
+            quote = js[i]
+            out[i] = " "
+        i += 1
+    return "".join(out)
+
+
+def _content_groups(html: str) -> list[str]:
+    """Um valor por content_group de cada gtag('config', ...) ativo; configs sem grupo também contam."""
+    found = []
+    group_re = re.compile(r"""(['"]?)\bcontent_group\1\s*:\s*(?:(["'])(.*?)\2|([A-Za-z_$][\w$]*))""")
+    for body in _exec_scripts(html):
+        mask = _js_mask(body)
+        for call in re.finditer(r"\bgtag\s*\(", mask):
+            if not re.match(r"""gtag\s*\(\s*(['"])config\1\s*,""", body[call.start():]):
+                continue
+            open_paren = mask.find("(", call.start(), call.end())
+            depth, end = 0, None
+            for i in range(open_paren, len(mask)):
+                if mask[i] == "(":
+                    depth += 1
+                elif mask[i] == ")":
+                    depth -= 1
+                    if depth == 0:
+                        end = i + 1
+                        break
+            if end is None:
+                found.append("<config sem fechamento>")
+                continue
+            args, depth, start = [], 0, open_paren + 1
+            for i in range(start, end - 1):
+                if mask[i] in "({[":
+                    depth += 1
+                elif mask[i] in ")}]":
+                    depth -= 1
+                elif mask[i] == "," and depth == 0:
+                    args.append((start, i))
+                    start = i + 1
+            args.append((start, end - 1))
+            call_groups = []
+            if len(args) >= 3:
+                a, b = args[2]
+                third = body[a:b]
+                for m in group_re.finditer(third):
+                    colon = third.find(":", m.start(), m.end())
+                    if mask[a + colon] != ":":
+                        continue
+                    if m.group(4) is None:
+                        call_groups.append(m.group(3))
+                        continue
+                    name = m.group(4)
+                    assignment = None
+                    assign_re = re.compile(r"(?:const|let|var)\s+" + re.escape(name) + r"\s*=\s*([\"'])(.*?)\1")
+                    for candidate in assign_re.finditer(body):
+                        equals = body.find("=", candidate.start(), candidate.end())
+                        if mask[candidate.start()] != " " and mask[equals] == "=":
+                            assignment = candidate
+                            break
+                    call_groups.append(assignment.group(2) if assignment else f"<{name} sem valor>")
+            found.extend(call_groups or ["<config sem content_group>"])
     return found
 
 
-def _meta_content(html: str, prop: str) -> str | None:
+def _visible_html(html: str) -> str:
+    """HTML fora de comentários e containers cujo conteúdo não vira título/metadado da página."""
+    html = re.sub(r"<!--.*?-->", "", html, flags=re.S)
+    html = re.sub(r"<(template|noscript)\b[^>]*>.*?</\1\s*>", "", html, flags=re.S | re.I)
+    return re.sub(r"<script\b[^>]*>.*?</script\s*>", "", html, flags=re.S | re.I)
+
+
+def _meta_contents(html: str, prop: str) -> list[str]:
+    values = []
     for tag in re.findall(r"<meta\b[^>]*>", html, flags=re.I):
-        if re.search(r"""\b(?:property|name)\s*=\s*["']""" + re.escape(prop) + r"""["']""", tag, flags=re.I):
-            m = re.search(r"""\bcontent\s*=\s*(["'])(.*?)\1""", tag, flags=re.S)
-            return unescape(m.group(2)).strip() if m else ""
-    return None
+        if re.search(r"""(?:^|\s)(?:property|name)\s*=\s*["']""" + re.escape(prop) + r"""["']""", tag, flags=re.I):
+            m = re.search(r"""(?:^|\s)content\s*=\s*(["'])(.*?)\1""", tag, flags=re.S)
+            values.append(unescape(m.group(2)).strip() if m else "")
+    return values
 
 
 def check_titles_and_groups(rel: str, html: str) -> list[str]:
     problems = []
     if not rel.startswith(TITLE_EXEMPT_PREFIXES):
-        m = re.search(r"<title[^>]*>(.*?)</title\s*>", re.sub(r"<!--.*?-->", "", html, flags=re.S), flags=re.S | re.I)
+        visible = _visible_html(html)
+        m = re.search(r"<title[^>]*>(.*?)</title\s*>", visible, flags=re.S | re.I)
         if not m:
             problems.append(f"{rel}: página sem <title>")
         else:
             title = unescape(m.group(1)).strip()
             if rel == "index.html":
-                if not title.startswith(SITE_NAME + TITLE_SEP):
-                    problems.append(f"{rel}: o título da home precisa começar com '{SITE_NAME}{TITLE_SEP}': {title!r}")
+                home_title = SITE_NAME + TITLE_SEP + "Builder e CTO"
+                if title != home_title:
+                    problems.append(f"{rel}: o título da home precisa ser {home_title!r}: {title!r}")
             elif not title.endswith(TITLE_SEP + SITE_NAME):
                 problems.append(f"{rel}: o título precisa terminar em '{TITLE_SEP}{SITE_NAME}': {title!r}")
             for prop in ("og:title", "twitter:title"):
-                v = _meta_content(html, prop)
-                if v is not None and v != title:
-                    problems.append(f"{rel}: {prop} diferente do <title>: {v!r}")
+                for v in _meta_contents(visible, prop):
+                    if v != title:
+                        problems.append(f"{rel}: {prop} diferente do <title>: {v!r}")
     if GA4_TAG in html:
         expected, groups = expected_content_group(rel), _content_groups(html)
         if expected is None:

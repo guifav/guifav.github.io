@@ -14,9 +14,10 @@ ROBOTS_NOINDEX = '<meta name="robots" content="noindex, follow">'
 ROBOTS_INDEX = '<meta name="robots" content="index, follow">'
 
 
-# Título que passa nas duas formas da regra de títulos (home "Guilherme Favaron | ..." e demais "... | Guilherme
-# Favaron"), para os testes que não tratam de título; TitleAndGroupTest testa a regra com títulos próprios.
+# Títulos dos testes que não tratam dessa regra: a home tem texto exato; as demais páginas usam o sufixo.
+# TitleAndGroupTest testa a regra com títulos próprios.
 FIXTURE_TITLE = "<title>Guilherme Favaron | Teste | Guilherme Favaron</title>"
+HOME_FIXTURE_TITLE = "<title>Guilherme Favaron | Builder e CTO</title>"
 
 
 def page(body: str = "", robots: str = ROBOTS_NOINDEX, title: str = FIXTURE_TITLE) -> str:
@@ -68,6 +69,8 @@ class Base(unittest.TestCase):
         self.tmp.cleanup()
 
     def w(self, rel: str, text: str) -> None:
+        if rel == "index.html":
+            text = text.replace(FIXTURE_TITLE, HOME_FIXTURE_TITLE)
         p = self.site / rel
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(text, encoding="utf-8")
@@ -753,6 +756,7 @@ class TitleAndGroupTest(unittest.TestCase):
         cases = [("index.html", "Guilherme Favaron | Builder e CTO", True),
                  ("index.html", "Guilherme Favaron, builder e CTO", False),
                  ("index.html", "Builder e CTO | Guilherme Favaron", False),
+                 ("index.html", "Guilherme Favaron | Subtítulo errado", False),
                  ("portfolio/index.html", "Portfólio | Guilherme Favaron", True),
                  ("portfolio/index.html", "Portfólio, Guilherme Favaron", False),
                  ("llm-ranking/index.html", "Ranking: Qual é o Melhor LLM?", False),
@@ -768,7 +772,8 @@ class TitleAndGroupTest(unittest.TestCase):
         self.assertEqual(self.check("blog/x/index.html", self.doc("<title>A &amp; B &#124; Guilherme Favaron</title>")), [])
 
     def test_missing_or_commented_title(self):
-        for html in (self.doc(), self.doc("<!-- <title>X | Guilherme Favaron</title> -->")):
+        fake_title = '<script type="application/ld+json">{"x":"<title>X | Guilherme Favaron</title>"}</script>'
+        for html in (self.doc(), self.doc("<!-- <title>X | Guilherme Favaron</title> -->"), self.doc(fake_title)):
             with self.subTest(html=html):
                 self.assertTrue(any("sem <title>" in p for p in self.check("blog/x/index.html", html)))
 
@@ -784,6 +789,14 @@ class TitleAndGroupTest(unittest.TestCase):
             with self.subTest(prop=prop):
                 bad = ok.replace(f'"{prop}" content="Portfólio | Guilherme Favaron"', f'"{prop}" content="Portfólio, Guilherme Favaron"')
                 self.assertTrue(any(prop in p for p in self.check("portfolio/index.html", self.doc(t, bad))))
+
+    def test_social_meta_ignores_comments_and_checks_every_live_tag(self):
+        t = "<title>Portfólio | Guilherme Favaron</title>"
+        good = '<meta property="og:title" content="Portfólio | Guilherme Favaron">'
+        bad = '<meta property="og:title" content="Título antigo">'
+        self.assertTrue(self.check("portfolio/index.html", self.doc(t, f"<!-- {good} -->{bad}")))
+        self.assertTrue(self.check("portfolio/index.html", self.doc(t, good + bad)))
+        self.assertEqual(self.check("portfolio/index.html", self.doc(t, f"<!-- {bad} -->{good}")), [])
 
     def test_expected_groups(self):
         E = C.expected_content_group
@@ -815,6 +828,7 @@ class TitleAndGroupTest(unittest.TestCase):
                "duas vezes": self.cfg(",{content_group:'home'}") + self.cfg(",{content_group:'home'}"),
                "comentado": "<!-- " + self.cfg(",{content_group:'home'}") + " -->",
                "json-ld": self.cfg(",{content_group:'home'}").replace("<script>", '<script type="application/ld+json">'),
+               "json-ld com data-type": self.cfg(",{content_group:'home'}").replace("<script>", '<script data-type="text/javascript" type="application/ld+json">'),
                "fora do config": "<script>gtag('event','x',{content_group:'home'});</script>",
                "variável sem valor": "<script>gtag('config','G-K7Y87QNCX8',{content_group:GRUPO});</script>",
                # nome de variável igual ao grupo esperado, sem const: no navegador é ReferenceError, não 'home'
@@ -822,6 +836,33 @@ class TitleAndGroupTest(unittest.TestCase):
         for name, js in bad.items():
             with self.subTest(name=name):
                 self.assertTrue(any("content_group" in p for p in self.check("index.html", self.doc(title, self.GA + js))), name)
+
+    def test_group_must_belong_to_every_live_config_call(self):
+        title = "<title>Guilherme Favaron | Builder e CTO</title>"
+        valid = "gtag('config','G-K7Y87QNCX8',{content_group:'home'});"
+        bad = {
+            "grupo só no evento": "gtag('config','G-K7Y87QNCX8');gtag('event','x',{content_group:'home'});",
+            "segundo config sem grupo": valid + "gtag('config','G-K7Y87QNCX8');",
+            "config em comentário de linha": "// " + valid,
+            "config em comentário de bloco": "/* " + valid + " */",
+            "grupo em comentário": "gtag('config','G-K7Y87QNCX8'); // content_group:'home'",
+            "grupo em comentário no objeto": "gtag('config','G-K7Y87QNCX8',{/* content_group:'home' */});",
+            "const em comentário": "gtag('config','G-K7Y87QNCX8',{content_group:CONTENT_GROUP}); /* const CONTENT_GROUP=\"home\"; */",
+            "código em string": 'const exemplo = "' + valid + '";',
+        }
+        for name, js in bad.items():
+            with self.subTest(name=name):
+                html = self.doc(title, self.GA + "<script>" + js + "</script>")
+                self.assertTrue(any("content_group" in p for p in self.check("index.html", html)), name)
+        with_event = valid + "gtag('event','x',{content_group:'portfolio'});"
+        self.assertEqual(self.check("index.html", self.doc(title, self.GA + "<script>" + with_event + "</script>")), [])
+
+    def test_template_and_noscript_do_not_supply_group(self):
+        title = "<title>Guilherme Favaron | Builder e CTO</title>"
+        for container in ("template", "noscript"):
+            with self.subTest(container=container):
+                inert = f"<{container}>{self.cfg(',{content_group:\'home\'}')}</{container}>"
+                self.assertTrue(self.check("index.html", self.doc(title, self.GA + inert)))
 
     def test_ga_page_outside_the_map_is_flagged(self):
         html = self.doc("<title>LLM Ranking | Guilherme Favaron</title>", self.GA + self.cfg(",{content_group:'home'}"))
