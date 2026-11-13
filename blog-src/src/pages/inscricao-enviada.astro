@@ -5,7 +5,7 @@ import { AUTHOR_NAME, BLOG_NAME, EMAIL_LIST_NAME } from '../consts';
 
 const base = import.meta.env.BASE_URL;
 ---
-<Base title={`Confira seu email | ${AUTHOR_NAME}`} description="Falta confirmar a inscrição pelo link enviado ao seu email." index={false}>
+<Base title={`${EMAIL_LIST_NAME}: confira seu email | ${AUTHOR_NAME}`} contentGroup="expert-insights" description="Falta confirmar a inscrição pelo link enviado ao seu email." index={false}>
   <article class="post page">
     <header class="post-head">
       <p class="post-crumb"><a href={base}>{BLOG_NAME}</a></p>

@@ -15,7 +15,7 @@ const { posts, page, pages } = Astro.props;
 const base = import.meta.env.BASE_URL;
 const title = page === 1 ? `${BLOG_NAME} | ${AUTHOR_NAME}` : `${BLOG_NAME}, página ${page} | ${AUTHOR_NAME}`;
 ---
-<Base title={title} description={BLOG_DESCRIPTION}>
+<Base title={title} contentGroup="insights-lista" description={BLOG_DESCRIPTION}>
   <header class="blog-head">
     <div class="eyebrow">{BLOG_NAME}</div>
     <h1>Artigos</h1>

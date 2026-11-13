@@ -5,7 +5,7 @@ import { AUTHOR_NAME, BLOG_NAME, EMAIL_LIST_NAME, NEWSLETTER_FORM_ENABLED } from
 import SubscribeForm from '../components/SubscribeForm.astro';
 const base = import.meta.env.BASE_URL;
 ---
-<Base title={`Assine os ${EMAIL_LIST_NAME} | ${AUTHOR_NAME}`} description="Receba por email os artigos de Guilherme Favaron sobre IA aplicada, dados e engenharia de software." index={false} turnstile={NEWSLETTER_FORM_ENABLED}>
+<Base title={`Assine os ${EMAIL_LIST_NAME} | ${AUTHOR_NAME}`} contentGroup="expert-insights" description="Receba por email os artigos de Guilherme Favaron sobre IA aplicada, dados e engenharia de software." index={false} turnstile={NEWSLETTER_FORM_ENABLED}>
   <article class="post page">
     <header class="post-head">
       <p class="post-crumb"><a href={base}>{BLOG_NAME}</a></p>

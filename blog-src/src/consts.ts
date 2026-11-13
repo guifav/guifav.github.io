@@ -5,6 +5,9 @@ export const SITE_URL = 'https://guifav.dev';
 export const BLOG_NAME = 'Insights';
 // Nome da lista de email (Gui, 12/11/2026), sempre associado a Guilherme Favaron. Em frase: "os Expert Insights".
 export const EMAIL_LIST_NAME = 'Expert Insights';
+// Grupos de conteúdo do GA4 (parâmetro content_group), um por tipo de página (Gui, 13/11/2026).
+export const CONTENT_GROUPS = ['home', 'portfolio', 'insights-lista', 'insights-artigo', 'expert-insights'] as const;
+export type ContentGroup = (typeof CONTENT_GROUPS)[number];
 export const AUTHOR_NAME = 'Guilherme Favaron';
 export const AUTHOR_ID = 'https://guifav.dev/#person';
 export const BLOG_DESCRIPTION =
