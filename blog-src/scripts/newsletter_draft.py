@@ -17,7 +17,7 @@ Garantias:
   qualquer corpo com "send" ou "scheduled_at";
 - HTML acima do limite em que o Gmail corta a mensagem (102 KB) leva só o começo do post e o link;
 - rodapé com o link de descadastro do Resend ({{{RESEND_UNSUBSCRIBE_URL}}}) no HTML e no texto.
-- o rascunho sai preso ao tópico "IA Aplicada" (NEWSLETTER_TOPIC_ID): o link de descadastro tira a pessoa só da
+- o rascunho sai preso ao tópico "Expert Insights, de Guilherme Favaron" (NEWSLETTER_TOPIC_ID): o link de descadastro tira a pessoa só da
   newsletter, não de todos os broadcasts da conta do Resend.
 """
 from __future__ import annotations
@@ -56,6 +56,7 @@ FOOTER = f"Você recebe este email porque assinou os {LIST_NAME}, de Guilherme F
 # Lembrete da mudança de nome no rodapé até três meses depois do primeiro envio pelo Resend (19/11/2026).
 FOOTER_HISTORY = "Até novembro de 2026 a lista se chamava IA Aplicada e ficava no Substack."
 FOOTER_HISTORY_UNTIL = datetime.date(2027, 2, 19)
+FOOTER_REPLY = "Quer comentar? É só responder a este email."
 # Aviso de transição no topo, escolhido pelo --aviso: completo no 1º envio, curto no 2º e no 3º.
 NOTICES = {
     "completo": ("A IA Aplicada mudou de casa e de nome. Saiu do Substack: os artigos agora ficam em guifav.dev/blog e "
@@ -418,7 +419,7 @@ def _clean_text(s: str) -> str:
 # ---------------------------------------------------------------- envelope
 
 def _footer_lines(today: datetime.date) -> list[str]:
-    return [FOOTER] + ([FOOTER_HISTORY] if today < FOOTER_HISTORY_UNTIL else [])
+    return [FOOTER] + ([FOOTER_HISTORY] if today < FOOTER_HISTORY_UNTIL else []) + [FOOTER_REPLY]
 
 
 def _envelope(post: Post, body_html: str, truncated: bool, notice: str = "", today: datetime.date | None = None) -> str:
@@ -455,7 +456,7 @@ def _envelope(post: Post, body_html: str, truncated: bool, notice: str = "", tod
         f'{pod}{body_html}{note}{cta}'
         '</td></tr>'
         '<tr><td style="padding:24px 20px 28px;border-top:1px solid #eee;font-family:Arial,sans-serif;font-size:13px;line-height:1.5;color:#777;">'
-        + e(" ".join(_footer_lines(today))) + ' Para responder, é só responder a este email.<br>'
+        + e(" ".join(_footer_lines(today))) + '<br>'
         '<a href="{{{RESEND_UNSUBSCRIBE_URL}}}" style="color:#777;">Sair da lista</a> &middot; '
         f'<a href="{BLOG}/privacidade/" style="color:#777;">Privacidade</a>'
         '</td></tr></table></td></tr></table></body></html>'

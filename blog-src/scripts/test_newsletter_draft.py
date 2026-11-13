@@ -203,6 +203,8 @@ class ExpertInsightsTest(unittest.TestCase):
             self.assertIn("Você recebe este email porque assinou os Expert Insights, de Guilherme Favaron.", out)
             self.assertNotIn("newsletter", out.lower())
             self.assertIn("Até novembro de 2026 a lista se chamava IA Aplicada e ficava no Substack.", out)
+            self.assertEqual(out.count("Quer comentar? É só responder a este email."), 1)  # r1 (Kimi): frase aprovada nos dois
+            self.assertNotIn("Para responder", out)
 
     def test_history_line_leaves_after_three_months(self):
         for day, has in ((N.datetime.date(2027, 2, 18), True), (N.datetime.date(2027, 2, 19), False), (N.datetime.date(2027, 6, 1), False)):
@@ -249,6 +251,28 @@ class ExpertInsightsTest(unittest.TestCase):
         N.create_draft(N.Api(CFG, fake), post(), CFG, notice="curto", lock_dir=tempfile.mkdtemp())
         sent = [b for m, url, b in fake.calls if m == "POST"][0]
         self.assertIn(N.NOTICES["curto"], sent["text"])
+
+    def test_cli_without_dry_run_passes_notice_to_draft(self):
+        # r1 (Astra P3): o caminho real da CLI (main -> create_draft), com transporte falso; nunca envia.
+        fake, real_api = FakeResend(), N.Api
+        env = {"RESEND_API_KEY": "re_test", "NEWSLETTER_SEGMENT_ID": "seg", "NEWSLETTER_TOPIC_ID": "top"}
+        for notice in ("completo", "curto", ""):
+            with self.subTest(notice=notice), tempfile.TemporaryDirectory() as lock, \
+                    mock.patch.dict(os.environ, env, clear=False), \
+                    mock.patch.object(N, "DEFAULT_LOCK_DIR", lock), \
+                    mock.patch.object(N, "fetch_page", return_value=page("<p>Corpo.</p>")), \
+                    mock.patch.object(N, "Api", lambda cfg: real_api(cfg, fake)):
+                fake.calls.clear()
+                args = ["um-post"] + (["--aviso", notice] if notice else [])
+                self.assertEqual(N.main(args), 0)
+                posts = [b for m, url, b in fake.calls if m == "POST"]
+                self.assertEqual(len(posts), 1)
+                self.assertFalse(any("/send" in url for m, url, b in fake.calls))
+                for field in ("html", "text"):
+                    if notice:
+                        self.assertIn(N.H.escape(N.NOTICES[notice]) if field == "html" else N.NOTICES[notice], posts[0][field])
+                    else:
+                        self.assertFalse(any(n[:30] in posts[0][field] for n in N.NOTICES.values()))
 
 
 class SizeTest(unittest.TestCase):

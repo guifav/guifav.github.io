@@ -82,7 +82,8 @@ RESEND_API_KEY=... NEWSLETTER_SEGMENT_ID=... NEWSLETTER_TOPIC_ID=... python3 scr
 - A fonte é a página publicada em `https://guifav.dev/blog/<slug>/` (`--source dist` usa o build local). O post precisa estar no ar antes do rascunho.
 - A conversão é por lista fechada de tags, classes, atributos e esquemas de link. O que estiver fora dela interrompe o script.
 - Um broadcast por post: se já existe um rascunho, nada muda; se já existe um enviado, agendado ou em envio, o script para.
-- O rascunho sai preso ao tópico "IA Aplicada" (`NEWSLETTER_TOPIC_ID`, obrigatório): o link de descadastro do email tira a pessoa só da newsletter, não de todos os broadcasts da conta. Um rascunho que já existe sem esse tópico faz o script parar; `--update` o corrige.
+- O rascunho sai preso ao tópico "Expert Insights, de Guilherme Favaron" (antes "IA Aplicada"; `NEWSLETTER_TOPIC_ID`, obrigatório): o link de descadastro do email tira a pessoa só da newsletter, não de todos os broadcasts da conta. Um rascunho que já existe sem esse tópico faz o script parar; `--update` o corrige.
 - HTML acima de 102 KB, o limite em que o Gmail corta a mensagem, leva só o começo do post e o link "Ler no site".
-- Remetente padrão `IA Aplicada <insights@expert.guifav.dev>` (`NEWSLETTER_FROM` só aceita `expert.guifav.dev`), reply-to `contact@guifav.dev`.
+- Remetente padrão `Guilherme Favaron | Expert Insights <insights@expert.guifav.dev>` (`NEWSLETTER_FROM` só aceita `expert.guifav.dev`), reply-to `contact@guifav.dev`.
+- `--aviso completo|curto` põe no topo o aviso da mudança de IA Aplicada para Expert Insights: `completo` no 1º envio (19/11/2026, também troca o preheader), `curto` no 2º e no 3º. Sem a flag, não há aviso. O rodapé lembra o nome antigo até 19/02/2027.
 - Testes: `python3 scripts/test_newsletter_draft.py` (sem rede; rodam no CI).

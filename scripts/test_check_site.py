@@ -777,7 +777,7 @@ class NamingSourcesTest(unittest.TestCase):
              "blog-src/src/pages/[slug].astro", "blog-src/src/pages/assinar.astro",
              "blog-src/src/pages/inscricao-enviada.astro", "blog-src/src/pages/inscricao-confirmada.astro",
              "blog-src/src/pages/inscricao-invalida.astro", "blog-src/src/pages/privacidade.astro",
-             "blog-src/src/pages/rss.xml.ts", "workers/newsletter/src/email.ts")
+             "blog-src/src/pages/rss.xml.ts", "workers/newsletter/src/email.ts", "workers/admin/src/index.ts")
     ALLOWED = ("Newsletter no LinkedIn: O CTO na Mesa", "LinkedIn newsletter: O CTO na Mesa", "YouTube: IA Aplicada",
                "assinava a IA Aplicada no Substack", "linkedin.com/newsletters/",
                # o que a fábrica de conteúdo produz (portfólio), não o nome da lista
@@ -788,7 +788,9 @@ class NamingSourcesTest(unittest.TestCase):
         """Tira comentários, identificadores e classes: sobra o que pode chegar ao leitor."""
         text = re.sub(r"<!--.*?-->", "", text, flags=re.S)
         text = re.sub(r"^[ \t]*//[^\n]*", "", text, flags=re.M)  # só a linha do comentário
-        text = re.sub(r"\b[A-Z_]*NEWSLETTER[A-Z_]*\b|newsletter-box|workers/newsletter|class=\"[^\"]*\"", "", text)
+        # Só os identificadores internos conhecidos; "NEWSLETTER" solto em caixa alta é texto e tem de ser pego.
+        text = re.sub(r"\bNEWSLETTER_(?:FORM_ENABLED|ENDPOINT|SUBSTACK_URL)\b|newsletter-box|workers/newsletter|class=\"[^\"]*\"",
+                      "", text)
         return text
 
     def test_no_newsletter_or_ia_aplicada_as_list_name(self):
@@ -800,6 +802,18 @@ class NamingSourcesTest(unittest.TestCase):
                 self.assertNotRegex(t, r"(?i)newsletter")
                 self.assertNotIn("IA Aplicada", t)
 
+    def test_visible_keeps_text_and_drops_only_code(self):
+        v = self.visible
+        for shown in ("<h1>NEWSLETTER</h1>", "<p>Assine a newsletter</p>", '<aside aria-label="Newsletter">',
+                      "<title>Assinantes da newsletter IA Aplicada</title>"):
+            with self.subTest(shown=shown):
+                self.assertRegex(v(shown), r"(?i)newsletter")
+        for code in ("{NEWSLETTER_FORM_ENABLED ? a : b}", "const NEWSLETTER_ENDPOINT = x;", '<div class="newsletter-box">',
+                     "<!-- newsletter -->", "// Página da newsletter (issue #21)"):
+            with self.subTest(code=code):
+                self.assertNotRegex(v(code), r"(?i)newsletter")
+        self.assertIn("<p>depois</p>", v("// newsletter\n<p>depois</p>"))  # o comentário não engole o resto
+
     def test_names_present(self):
         consts = (self.REPO / "blog-src/src/consts.ts").read_text(encoding="utf-8")
         self.assertIn("export const BLOG_NAME = 'Insights';", consts)
@@ -810,6 +824,13 @@ class NamingSourcesTest(unittest.TestCase):
             self.assertIn(s, home)
         self.assertIn('FROM = "Guilherme Favaron | Expert Insights <insights@guifav.dev>"',
                       (self.REPO / "workers/newsletter/wrangler.toml").read_text(encoding="utf-8"))
+        admin = (self.REPO / "workers/admin/src/index.ts").read_text(encoding="utf-8")
+        for s in ("<title>Assinantes | Expert Insights</title>", "<h1>Assinantes dos Expert Insights</h1>"):
+            self.assertIn(s, admin)
+        verify = (self.REPO / "blog-src/scripts/verify_import.py").read_text(encoding="utf-8")
+        self.assertIn('FOOTER_LIST_NAME = "Expert Insights"', verify)
+        base = (self.REPO / "blog-src/src/layouts/Base.astro").read_text(encoding="utf-8")
+        self.assertIn("'assinar/')}>{EMAIL_LIST_NAME}</a>", base)  # o mesmo texto que o verify_import procura
 
 
 if __name__ == "__main__":
