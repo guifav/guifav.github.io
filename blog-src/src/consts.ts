@@ -15,6 +15,10 @@ export const RSS_LIMIT = 50;
 // (index: false) e as páginas da inscrição seguem com noindex. Redirects e Search Console continuam na #24.
 export const PRE_CUTOVER_NOINDEX = false;
 
+// Momento em que o blog passou a ser indexável (commit a1e09bc). Commits de posts depois disso contam no
+// lastmod do sitemap (lib/lastmod.ts); os anteriores, de importação e limpeza, não.
+export const INDEXABLE_SINCE = '2026-11-11T23:27:33Z';
+
 // Formulário de inscrição (issue #21). Fica desligado até o Worker estar no ar e testado; o PR que
 // liga também preenche a chave pública do Turnstile.
 export const NEWSLETTER_FORM_ENABLED = true;

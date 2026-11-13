@@ -7,7 +7,9 @@ index.html
 CNAME
 .nojekyll
 robots.txt
-sitemap.xml
+# /sitemap.xml e /sitemap-site.xml são gerados no build (scripts/build_sitemaps.py).
+# Chave do IndexNow (scripts/indexnow.py), pública por exigência do protocolo.
+f43d1d074f05d2e83d6b8d0189bd29b3.txt
 favicon.ico
 favicon.svg
 apple-touch-icon.png

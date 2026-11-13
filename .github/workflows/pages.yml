@@ -23,6 +23,9 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Histórico completo: o lastmod do /sitemap-site.xml vem do último commit de cada página.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v7
         with:
@@ -57,6 +60,8 @@ jobs:
           python3 scripts/test_assemble_site.py
           python3 scripts/test_check_site.py
           python3 scripts/test_cutover_redirects.py
+          python3 scripts/test_build_sitemaps.py
+          python3 scripts/test_indexnow.py
           python3 blog-src/scripts/test_newsletter_draft.py
           python3 blog-src/scripts/test_import_subscribers.py
           python3 blog-src/scripts/test_twenty_sync.py
@@ -64,8 +69,30 @@ jobs:
       - name: Montar _site (manifesto + blog) e verificar byte a byte
         run: python3 scripts/assemble_site.py
 
-      - name: Verificar links, noindex, RSS e sitemap
+      - name: Gerar o índice /sitemap.xml e o /sitemap-site.xml
+        run: python3 scripts/build_sitemaps.py
+
+      - name: Verificar links, noindex, RSS e sitemaps
         run: python3 scripts/check_site.py
+
+      - name: Plano do IndexNow (URLs que mudaram em relação ao site publicado)
+        id: indexnow
+        # Opcional: se falhar, o deploy segue; o job indexnow fica vermelho por falta do plano.
+        continue-on-error: true
+        env:
+          # Commit publicado antes deste push: base das remoções se o site publicado estiver ilegível.
+          INDEXNOW_BEFORE: ${{ github.event.before }}
+        run: python3 scripts/indexnow.py diff --out "$RUNNER_TEMP/indexnow/plan.json"
+
+      - name: Guardar o plano do IndexNow para o job seguinte
+        if: steps.indexnow.outcome == 'success' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: indexnow-plan
+          path: ${{ runner.temp }}/indexnow/plan.json
+          retention-days: 7
+          if-no-files-found: error
 
       - name: Publicar artefato do Pages
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
@@ -88,3 +115,26 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v5
+
+  indexnow:
+    # Depois do deploy, avisa os buscadores do IndexNow (Bing e outros) sobre as URLs do plano.
+    # Falha aqui não desfaz o deploy; aparece em vermelho para olhar.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: [build, deploy]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: |
+            scripts/indexnow.py
+            scripts/build_sitemaps.py
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: indexnow-plan
+          path: ${{ runner.temp }}/indexnow
+
+      - name: Avisar o IndexNow
+        run: python3 scripts/indexnow.py submit --plan "$RUNNER_TEMP/indexnow/plan.json"

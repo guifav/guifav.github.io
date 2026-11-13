@@ -29,9 +29,13 @@ import shutil
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
+from datetime import datetime
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import unquote
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from build_sitemaps import canonical_is_self, robots_disallow  # noqa: E402
 
 SITE_HOST = "guifav.dev"
 # Domínio antigo do Substack (#24): depois do cutover, nada no site aponta para ele.
@@ -225,6 +229,7 @@ class _Page(HTMLParser):
         # (descrição, url) de atributos que podem carregar esquema ativo, todas as ocorrências.
         self.url_values: list[tuple[str, str]] = []
         self.iframes: list[str] = []
+        self.canonicals: list[str] = []
         self.main_depth = 0
         self.divs: list[bool] = []  # pilha de <div>: True para o div.post-body (conteúdo do post)
 
@@ -246,6 +251,8 @@ class _Page(HTMLParser):
             a.setdefault(k, v or "")
         if tag == "meta" and a.get("name", "").lower() == "robots":
             self.robots.append(a.get("content", "").lower())
+        if tag == "link" and "canonical" in a.get("rel", "").lower().split():
+            self.canonicals.append(a.get("href", "").strip())
         if tag == "meta" and a.get("http-equiv", "").lower() == "refresh":
             # O navegador navega para essa URL: conta como link (destino, blog antes do cutover).
             u = refresh_url(a.get("content", ""))
@@ -358,6 +365,7 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
     problems: list[str] = []
     noindex_slugs: set[str] = set()
     seen: dict[str, str] = {}
+    indexable_slugs: set[str] = set()
     for md in sorted(posts.glob("**/*.md")):
         fm = frontmatter(md.read_text(encoding="utf-8"))
         slug = fm.get("slug") or md.stem
@@ -369,6 +377,8 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
             problems.append(f"posts: {rel_md} sem página publicada em /blog/{slug}/")
         if fm.get("index") == "false":
             noindex_slugs.add(slug)
+        else:
+            indexable_slugs.add(slug)
 
     # Contrato, barreira 2: sob /blog/ só páginas, RSS, sitemap e mídia da lista.
     for f in sorted((site / "blog").rglob("*")):
@@ -462,6 +472,83 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
             problems.append(f"sitemap: lista post com index: false: {href}")
         if path[len(BLOG_PREFIX):].strip("/") in BLOG_PRIVATE_PAGES:
             problems.append(f"sitemap: lista página da newsletter: {href}")
+        if path.startswith(BLOG_PREFIX + "pagina/"):
+            problems.append(f"sitemap: lista página de paginação: {href}")
+    # Completude do blog: a capa e todo post indexável, uma vez cada.
+    if sitemap_locs is not None:
+        want_blog = {SITE_ORIGIN + BLOG_PREFIX} | {f"{SITE_ORIGIN}{BLOG_PREFIX}{s}/" for s in indexable_slugs}
+        for loc in sorted(want_blog - set(sitemap_locs)):
+            problems.append(f"sitemap: falta página indexável do blog: {loc}")
+        if len(sitemap_locs) != len(set(sitemap_locs)):
+            problems.append("sitemap: URL repetida no sitemap do blog")
+    problems += check_root_sitemaps(site, [(rel, url, p) for rel, url, in_blog, p in pages if not in_blog])
+    return problems
+
+
+_W3C_DATETIME = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)")
+
+
+def _valid_datetime(s: str) -> bool:
+    """Data e hora completas com fuso (a forma W3C que o gerador usa), num instante que existe."""
+    if not _W3C_DATETIME.fullmatch(s):
+        return False
+    try:
+        datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    return True
+
+
+ROOT_INDEX_CHILDREN = [SITE_ORIGIN + "/sitemap-site.xml", SITE_ORIGIN + "/blog/sitemap.xml"]
+
+
+def _sitemap(site: Path, rel: str, kind: str, item: str, problems: list[str]) -> list[tuple[str, str]] | None:
+    """(loc, lastmod) de um sitemap do _site, ou None com o problema anotado."""
+    try:
+        root = ET.parse(site / rel).getroot()
+    except (ET.ParseError, FileNotFoundError) as e:
+        problems.append(f"{rel} inválido: {e}")
+        return None
+    if root.tag != f"{SITEMAP_NS}{kind}":
+        problems.append(f"{rel}: precisa ser <{kind}>, é <{root.tag.split('}')[-1]}>")
+        return None
+    return [((e.findtext(f"{SITEMAP_NS}loc") or "").strip(), (e.findtext(f"{SITEMAP_NS}lastmod") or "").strip())
+            for e in root.iter(f"{SITEMAP_NS}{item}")]
+
+
+def check_root_sitemaps(site: Path, root_pages: list[tuple[str, str, "_Page"]]) -> list[str]:
+    """Índice /sitemap.xml, /sitemap-site.xml completo e robots.txt citando só o índice."""
+    problems: list[str] = []
+    robots = site / "robots.txt"
+    robots_txt = robots.read_text(encoding="utf-8") if robots.is_file() else ""
+    cited = [ln.split(":", 1)[1].strip() for ln in robots_txt.splitlines() if ln.lower().startswith("sitemap:")]
+    if cited != [SITE_ORIGIN + "/sitemap.xml"]:
+        problems.append(f"robots.txt: precisa citar só o índice {SITE_ORIGIN}/sitemap.xml, cita {cited}")
+    index = _sitemap(site, "sitemap.xml", "sitemapindex", "sitemap", problems)
+    if index is not None and sorted(loc for loc, _ in index) != sorted(ROOT_INDEX_CHILDREN):
+        problems.append(f"sitemap.xml: o índice precisa citar exatamente {ROOT_INDEX_CHILDREN}, cita {[l for l, _ in index]}")
+    # Páginas do site que o buscador deve indexar: fora do blog, não a 404, liberadas no robots, sem noindex.
+    disallow = robots_disallow(robots_txt)
+    want = set()
+    for rel, url, p in root_pages:
+        if rel == "404.html" or any(url.startswith(d) for d in disallow) or any(_robots_noindex(r) for r in p.robots):
+            continue
+        if not canonical_is_self(p.canonicals, url):
+            problems.append(f"{rel}: canonical aponta para outra URL ({p.canonicals}); a página não entraria no sitemap")
+            continue
+        want.add(SITE_ORIGIN + url)
+    entries = _sitemap(site, "sitemap-site.xml", "urlset", "url", problems)
+    if entries is not None:
+        got = [loc for loc, _ in entries]
+        for loc in sorted(want - set(got)):
+            problems.append(f"sitemap-site.xml: falta página indexável: {loc}")
+        for loc in sorted(set(got) - want):
+            problems.append(f"sitemap-site.xml: lista o que não deve ser indexado: {loc}")
+        if len(got) != len(set(got)):
+            problems.append("sitemap-site.xml: URL repetida")
+        for loc, lm in entries:
+            if not _valid_datetime(lm):
+                problems.append(f"sitemap-site.xml: lastmod ausente ou inválido (data, hora e fuso, W3C): {loc} {lm!r}")
     return problems
 
 
