@@ -1,7 +1,7 @@
 ---
 // Leiaute de todas as páginas do blog: cabeçalho e rodapé iguais aos do site.
 import '../styles/blog.css';
-import { AUTHOR_NAME, CLARITY_ID, GA4_ID, NEWSLETTER_FORM_ENABLED, NEWSLETTER_SUBSTACK_URL, PRE_CUTOVER_NOINDEX } from '../consts';
+import { AUTHOR_NAME, BLOG_NAME, CLARITY_ID, EMAIL_LIST_NAME, GA4_ID, NEWSLETTER_FORM_ENABLED, NEWSLETTER_SUBSTACK_URL, PRE_CUTOVER_NOINDEX } from '../consts';
 import { robotsContent, absoluteUrl, jsonLdScript, withBase } from '../lib/blog';
 
 interface Props {
@@ -42,7 +42,7 @@ const base = import.meta.env.BASE_URL;
   <meta name="twitter:title" content={title} />
   <meta name="twitter:description" content={description} />
   <meta name="twitter:image" content={ogImage} />
-  <link rel="alternate" type="application/rss+xml" title="Blog de Guilherme Favaron" href={withBase(base, 'rss.xml')} />
+  <link rel="alternate" type="application/rss+xml" title={`${BLOG_NAME} de ${AUTHOR_NAME}`} href={withBase(base, 'rss.xml')} />
   <link rel="stylesheet" href="/assets/site.css" />
   <link rel="icon" href="/favicon.ico" sizes="any" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
@@ -79,7 +79,7 @@ const base = import.meta.env.BASE_URL;
       <a href="/" class="nav-name">Guilherme Favaron</a>
       <div class="nav-links">
         <a href="/portfolio/">Portfólio</a>
-        <a href={base} aria-current="page">Blog</a>
+        <a href={base} aria-current="page">{BLOG_NAME}</a>
         <a href="mailto:contact@guifav.dev" class="nav-hide-sm">Contato</a>
         <a href="https://calendar.app.google/VyG67Nq5p6zsstAt8" target="_blank" rel="noopener" class="nav-cta">Agende um horário</a>
         <button id="theme-toggle" class="nav-btn" type="button" aria-label="Alternar tema">&#9790;</button>
@@ -88,7 +88,7 @@ const base = import.meta.env.BASE_URL;
     <main>
       <slot />
     </main>
-    <footer><p><a href="https://github.com/guifav" target="_blank" rel="noopener">GitHub</a> &middot; <a href="https://linkedin.com/in/guilhermefavaron" target="_blank" rel="noopener">LinkedIn</a> &middot; <a href="https://huggingface.co/guifav" target="_blank" rel="noopener">Hugging Face</a> &middot; <a href="https://youtube.com/@ia-aplicada-guilhermefavaron" target="_blank" rel="noopener">YouTube</a> &middot; <a href="mailto:contact@guifav.dev">Contato</a> &middot; {NEWSLETTER_FORM_ENABLED ? <a href={withBase(import.meta.env.BASE_URL, 'assinar/')}>Newsletter</a> : <a href={NEWSLETTER_SUBSTACK_URL} target="_blank" rel="noopener">Newsletter</a>}</p></footer>
+    <footer><p><a href="https://github.com/guifav" target="_blank" rel="noopener">GitHub</a> &middot; <a href="https://linkedin.com/in/guilhermefavaron" target="_blank" rel="noopener">LinkedIn</a> &middot; <a href="https://huggingface.co/guifav" target="_blank" rel="noopener">Hugging Face</a> &middot; <a href="https://youtube.com/@ia-aplicada-guilhermefavaron" target="_blank" rel="noopener">YouTube</a> &middot; <a href="mailto:contact@guifav.dev">Contato</a> &middot; {NEWSLETTER_FORM_ENABLED ? <a href={withBase(import.meta.env.BASE_URL, 'assinar/')}>{EMAIL_LIST_NAME}</a> : <a href={NEWSLETTER_SUBSTACK_URL} target="_blank" rel="noopener">{EMAIL_LIST_NAME}</a>}</p></footer>
   </div>
   <script data-site-script is:inline>
     (function () {

@@ -116,11 +116,11 @@ function page(f: Filters, data: Awaited<ReturnType<typeof query>>, k: Awaited<Re
   const pages = Math.max(1, Math.ceil(data.filtered / PAGE_SIZE));
   const err = k.m.last_sync_error ? `<p class="erro">Última sincronização com erro: ${esc(k.m.last_sync_error)}</p>` : '';
   return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex, nofollow"><title>Assinantes | IA Aplicada</title>
+<meta name="robots" content="noindex, nofollow"><title>Assinantes | Expert Insights</title>
 <style>body{font:15px/1.45 system-ui,sans-serif;margin:1.5rem;color:#111}table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid #ddd;padding:.35rem .5rem;text-align:left;vertical-align:top}
 .k{display:flex;flex-wrap:wrap;gap:1rem;margin:.5rem 0 1rem}.k div{background:#f4f4f4;padding:.4rem .7rem;border-radius:6px}.erro{color:#a00}.ok{color:#060}form.f{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem}
 td form{margin:0}</style></head><body>
-<h1>Assinantes da IA Aplicada</h1>
+<h1>Assinantes dos Expert Insights</h1>
 ${msg ? `<p class="ok">${esc(msg)}</p>` : ''}${err}
 <div class="k"><div>Total ${n(k.c.total)}</div><div>Inscritos ${n(k.c.inscritos)}</div><div>Descadastrados ${n(k.c.descadastrados)}</div>
 <div>Substack ${n(k.c.substack)}</div><div>Site ${n(k.c.site)}</div><div>Outra origem ${n(k.c.outra)}</div><div>Pagos ativos ${n(k.c.pagos)}</div></div>

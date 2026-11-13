@@ -1,7 +1,7 @@
 // RSS do blog: /blog/rss.xml, com os posts mais recentes.
 import rss from '@astrojs/rss';
 import type { APIContext } from 'astro';
-import { BLOG_DESCRIPTION, RSS_LIMIT } from '../consts';
+import { AUTHOR_NAME, BLOG_DESCRIPTION, BLOG_NAME, RSS_LIMIT } from '../consts';
 import { absoluteUrl, postPath, withBase } from '../lib/blog';
 import { sortedPosts } from '../lib/posts';
 
@@ -10,7 +10,7 @@ export async function GET(context: APIContext) {
   const site = context.site!.href;
   const posts = (await sortedPosts()).slice(0, RSS_LIMIT);
   return rss({
-    title: 'Blog de Guilherme Favaron',
+    title: `${BLOG_NAME} de ${AUTHOR_NAME}`,
     description: BLOG_DESCRIPTION,
     site: absoluteUrl(site, base),
     xmlns: { atom: 'http://www.w3.org/2005/Atom' },

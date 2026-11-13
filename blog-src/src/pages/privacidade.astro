@@ -1,30 +1,30 @@
 ---
 // Página da newsletter (issue #21). Fora do sitemap e sempre com noindex.
 import Base from '../layouts/Base.astro';
-import { AUTHOR_NAME } from '../consts';
+import { AUTHOR_NAME, BLOG_NAME, EMAIL_LIST_NAME } from '../consts';
 
 const base = import.meta.env.BASE_URL;
 ---
-<Base title={`Privacidade da newsletter | ${AUTHOR_NAME}`} description="Quais dados a newsletter IA Aplicada coleta, para quê, quem os processa e como sair da lista." index={false}>
+<Base title={`Privacidade da lista de email | ${AUTHOR_NAME}`} description={`Quais dados os ${EMAIL_LIST_NAME}, a lista de email de Guilherme Favaron, coletam, para quê, quem os processa e como sair.`} index={false}>
   <article class="post page">
     <header class="post-head">
-      <p class="post-crumb"><a href={base}>Blog</a></p>
-      <h1>Privacidade da newsletter</h1>
+      <p class="post-crumb"><a href={base}>{BLOG_NAME}</a></p>
+      <h1>Privacidade da lista de email</h1>
     </header>
     <div class="post-body">
       <p><em>Atualizada em 12 de novembro de 2026.</em></p>
       <h2>Quem é o responsável</h2>
-      <p>Guilherme Favaron, autor do blog e da newsletter IA Aplicada. Contato: <a href="mailto:contact@guifav.dev">contact@guifav.dev</a>.</p>
+      <p>Guilherme Favaron, autor do blog e dos {EMAIL_LIST_NAME}, a lista de email do blog. Contato: <a href="mailto:contact@guifav.dev">contact@guifav.dev</a>.</p>
       <h2>Que dados são coletados</h2>
       <ul>
         <li><strong>Seu email</strong>, quando você se inscreve e confirma pelo link enviado a ele.</li>
-        <li><strong>Abertura e clique</strong> nos emails da newsletter, registrados pelo serviço de envio para medir o alcance de cada artigo.</li>
+        <li><strong>Abertura e clique</strong> nos emails enviados à lista, registrados pelo serviço de envio para medir o alcance de cada artigo.</li>
         <li><strong>Como você usa as páginas</strong>: cliques, rolagem e gravação da visita, registrados pelo Microsoft Clarity com cookies que guardam um identificador aleatório. Esse identificador liga as páginas de uma visita e as visitas seguintes do mesmo navegador, sem nome nem email.</li>
         <li><strong>Endereço IP e o teste antirrobô</strong> no momento da inscrição, usados só para barrar cadastros automáticos. O blog não guarda esses dados.</li>
       </ul>
       <p>Nada mais é pedido: nem nome, nem telefone.</p>
       <h2>Para que são usados</h2>
-      <p>Para enviar a newsletter a cada artigo novo. O email não é vendido, cedido nem usado para outra finalidade.</p>
+      <p>Para enviar os {EMAIL_LIST_NAME}: um email a cada artigo novo. Seu endereço não é vendido, cedido nem usado para outra finalidade.</p>
       <p>A base legal é o seu consentimento (Lei 13.709/2018, art. 7º, I), dado ao confirmar a inscrição pelo link.</p>
       <h2>Quem processa</h2>
       <ul>
@@ -34,9 +34,9 @@ const base = import.meta.env.BASE_URL;
         <li><strong>Microsoft Clarity</strong>: registra como as páginas são usadas (cliques, rolagem e gravação das visitas) para melhorar o site, com os cookies <code>_clck</code> e <code>_clsk</code>. O campo de email do formulário é mascarado e nunca é gravado. Veja a <a href="https://privacy.microsoft.com/pt-br/privacystatement" target="_blank" rel="noopener">declaração de privacidade da Microsoft</a>.</li>
       </ul>
       <h2>Quem assinava pelo Substack</h2>
-      <p>Se você assinava a IA Aplicada no Substack, seu email foi transferido para esta lista na mudança de plataforma, com a mesma finalidade.</p>
+      <p>Se você assinava a IA Aplicada no Substack, seu email foi transferido para esta lista na mudança de plataforma, com a mesma finalidade. Na mudança, a lista passou a se chamar {EMAIL_LIST_NAME}.</p>
       <h2>Como sair e outros direitos</h2>
-      <p>Todo email da newsletter tem um link para sair da lista. Depois disso, seu endereço fica marcado como descadastrado, só para não receber mais nada.</p>
+      <p>Todo email enviado à lista tem um link para sair. Depois disso, seu endereço fica marcado como descadastrado, só para não receber mais nada.</p>
       <p>Para ver, corrigir ou apagar seus dados, escreva para <a href="mailto:contact@guifav.dev">contact@guifav.dev</a>.</p>
     </div>
   </article>

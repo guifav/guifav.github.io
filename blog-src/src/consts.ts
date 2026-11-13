@@ -1,7 +1,10 @@
 // Constantes do blog. Mudanças de política (indexação, formulário) passam por aqui.
 
 export const SITE_URL = 'https://guifav.dev';
-export const BLOG_NAME = 'Blog';
+// Nome da seção no menu (Gui, 12/11/2026); a URL continua /blog.
+export const BLOG_NAME = 'Insights';
+// Nome da lista de email (Gui, 12/11/2026), sempre associado a Guilherme Favaron. Em frase: "os Expert Insights".
+export const EMAIL_LIST_NAME = 'Expert Insights';
 export const AUTHOR_NAME = 'Guilherme Favaron';
 export const AUTHOR_ID = 'https://guifav.dev/#person';
 export const BLOG_DESCRIPTION =

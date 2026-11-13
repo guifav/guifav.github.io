@@ -764,5 +764,53 @@ class ClaritySourcesTest(unittest.TestCase):
         self.assertNotIn("sem identificar quem visita", t)
 
 
+class NamingSourcesTest(unittest.TestCase):
+    """Textos ao leitor sem "newsletter" e sem "IA Aplicada" como nome da lista (Gui, 12/11/2026).
+
+    Exceções: o card "Newsletter no LinkedIn: O CTO na Mesa" (nome do produto do LinkedIn), o canal "YouTube: IA
+    Aplicada" e as frases que contam a mudança do Substack.
+    """
+
+    REPO = Path(__file__).resolve().parent.parent
+    FILES = ("index.html", "portfolio/index.html", "404.html", "blog-src/src/layouts/Base.astro",
+             "blog-src/src/layouts/PostList.astro", "blog-src/src/components/SubscribeForm.astro",
+             "blog-src/src/pages/[slug].astro", "blog-src/src/pages/assinar.astro",
+             "blog-src/src/pages/inscricao-enviada.astro", "blog-src/src/pages/inscricao-confirmada.astro",
+             "blog-src/src/pages/inscricao-invalida.astro", "blog-src/src/pages/privacidade.astro",
+             "blog-src/src/pages/rss.xml.ts", "workers/newsletter/src/email.ts")
+    ALLOWED = ("Newsletter no LinkedIn: O CTO na Mesa", "LinkedIn newsletter: O CTO na Mesa", "YouTube: IA Aplicada",
+               "assinava a IA Aplicada no Substack", "linkedin.com/newsletters/",
+               # o que a fábrica de conteúdo produz (portfólio), não o nome da lista
+               "vídeo, newsletters, e-mails", "cuts, newsletters, emails")
+
+    @staticmethod
+    def visible(text: str) -> str:
+        """Tira comentários, identificadores e classes: sobra o que pode chegar ao leitor."""
+        text = re.sub(r"<!--.*?-->", "", text, flags=re.S)
+        text = re.sub(r"^[ \t]*//[^\n]*", "", text, flags=re.M)  # só a linha do comentário
+        text = re.sub(r"\b[A-Z_]*NEWSLETTER[A-Z_]*\b|newsletter-box|workers/newsletter|class=\"[^\"]*\"", "", text)
+        return text
+
+    def test_no_newsletter_or_ia_aplicada_as_list_name(self):
+        for rel in self.FILES:
+            with self.subTest(rel=rel):
+                t = self.visible((self.REPO / rel).read_text(encoding="utf-8"))
+                for ok in self.ALLOWED:
+                    t = t.replace(ok, "")
+                self.assertNotRegex(t, r"(?i)newsletter")
+                self.assertNotIn("IA Aplicada", t)
+
+    def test_names_present(self):
+        consts = (self.REPO / "blog-src/src/consts.ts").read_text(encoding="utf-8")
+        self.assertIn("export const BLOG_NAME = 'Insights';", consts)
+        self.assertIn("export const EMAIL_LIST_NAME = 'Expert Insights';", consts)
+        home = (self.REPO / "index.html").read_text(encoding="utf-8")
+        for s in ('data-i18n="nav_blog">Insights</a>', '"nav_blog": "Insights"', "<h3>Expert Insights</h3>",
+                  '<a href="/blog/assinar/">Expert Insights</a>'):
+            self.assertIn(s, home)
+        self.assertIn('FROM = "Guilherme Favaron | Expert Insights <insights@guifav.dev>"',
+                      (self.REPO / "workers/newsletter/wrangler.toml").read_text(encoding="utf-8"))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

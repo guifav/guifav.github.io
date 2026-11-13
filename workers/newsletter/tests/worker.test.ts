@@ -364,7 +364,7 @@ test('A9: email de confirmação com remetente, reply-to, HTML e texto, e um ún
   const s = setup();
   await s.run(subscribe(ok));
   const mail = s.calls.find((c) => c.url.endsWith('/emails'))!.body as Record<string, unknown>;
-  assert.equal(mail.from, 'IA Aplicada <insights@guifav.dev>');
+  assert.equal(mail.from, 'Guilherme Favaron | Expert Insights <insights@guifav.dev>');
   assert.equal(mail.reply_to, 'contact@guifav.dev');
   assert.match(String(mail.subject), /Confirme/);
   const links = String(mail.html).match(/href="[^"]+"/g) ?? [];
@@ -502,7 +502,7 @@ test('A8: nenhum arquivo do Worker atribui segredo, com chave TOML entre aspas o
 });
 
 test('A9: remetente e reply-to vêm do wrangler.toml real; um único link, o de confirmação, no HTML e no texto', async () => {
-  assert.equal(tomlVar('FROM'), 'IA Aplicada <insights@guifav.dev>');
+  assert.equal(tomlVar('FROM'), 'Guilherme Favaron | Expert Insights <insights@guifav.dev>');
   assert.equal(tomlVar('REPLY_TO'), 'contact@guifav.dev');
   const s = setup();
   await s.run(subscribe(ok));
@@ -570,5 +570,15 @@ test('A5: falha de rede ou JSON inválido do Resend na confirmação viram 502, 
     const s = setup(o);
     const r = await s.run(new Request(await confirmUrl()));
     assert.equal(r.status, 502, JSON.stringify(o));
+  }
+});
+
+test('nome da lista: Expert Insights, de Guilherme Favaron, sem "newsletter" nem "IA Aplicada" (Gui, 12/11/2026)', () => {
+  const m = confirmationEmail('a@b.com', 'https://insights.guifav.dev/confirm?x=1');
+  assert.equal(m.subject, 'Confirme sua inscrição nos Expert Insights');
+  for (const body of [m.text, m.html]) {
+    assert.match(body, /nos Expert Insights, os artigos de Guilherme Favaron por email\./);
+    assert.doesNotMatch(body, /newsletter/i);
+    assert.doesNotMatch(body, /IA Aplicada/);
   }
 });

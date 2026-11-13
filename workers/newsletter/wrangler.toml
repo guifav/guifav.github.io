@@ -11,7 +11,7 @@ workers_dev = false
 routes = [{ pattern = "insights.guifav.dev", custom_domain = true }]
 
 [vars]
-FROM = "IA Aplicada <insights@guifav.dev>"
+FROM = "Guilherme Favaron | Expert Insights <insights@guifav.dev>"
 REPLY_TO = "contact@guifav.dev"
 # Segmento "IA Aplicada" do Resend (criado em 2026-11-11). Vazio: o Worker responde 500 e não cadastra nada.
 SEGMENT_ID = "34c37605-670a-4c09-9dff-5e5a05c9e0fa"
