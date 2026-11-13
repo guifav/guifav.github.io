@@ -231,7 +231,7 @@ class GitRemovalsTest(Site):
         self.repo = Path(self.tmp.name) / "repo"
         posts = self.repo / "blog-src/src/content/posts"
         posts.mkdir(parents=True)
-        for name in ("apagado", "virou-podcast", "editado"):
+        for name in ("apagado", "virou-podcast", "editado", "antigo"):
             (posts / f"{name}.md").write_text(f"---\nslug: {name}\n---\n", encoding="utf-8")
         (posts / "sub").mkdir()
         (posts / "sub" / "aninhado.md").write_text("x", encoding="utf-8")
@@ -242,6 +242,7 @@ class GitRemovalsTest(Site):
         self.git("commit", "-q", "-m", "antes")
         self.before = self.git("rev-parse", "HEAD").strip()
         (posts / "apagado.md").unlink()
+        self.git("mv", "blog-src/src/content/posts/antigo.md", "blog-src/src/content/posts/movido.md")  # slug mudou
         (posts / "sub" / "aninhado.md").unlink()
         (self.repo / "velha.html").unlink()
         (posts / "virou-podcast.md").write_text("---\nslug: virou-podcast\nindex: false\n---\n", encoding="utf-8")
@@ -260,7 +261,14 @@ class GitRemovalsTest(Site):
 
     def test_removals_from_git(self):
         self.assertEqual(I.git_removals(self.repo, self.before, self.site), [
-            "https://guifav.dev/blog/apagado/", "https://guifav.dev/blog/virou-podcast/", "https://guifav.dev/velha.html"])
+            "https://guifav.dev/blog/antigo/", "https://guifav.dev/blog/apagado/", "https://guifav.dev/blog/virou-podcast/",
+            "https://guifav.dev/velha.html"])
+
+    def test_zero_before_never_calls_git(self):
+        # Push que cria a branch: before vem só com zeros; não há base, nem se pergunta ao git.
+        def git(*a):
+            raise AssertionError("git chamado")
+        self.assertIsNone(I.git_removals(self.repo, "0" * 40, self.site, git))
 
     def test_unknown_before(self):
         for before in (None, "", "0" * 40, "f" * 40):
@@ -274,8 +282,9 @@ class GitRemovalsTest(Site):
         self.assertEqual(p["mode"], "all")
         self.assertFalse(p["incomplete"])
         self.assertEqual(p["urls"], sorted({**SITE_NEW, **BLOG_NEW} | {
-            "https://guifav.dev/blog/apagado/": "", "https://guifav.dev/blog/virou-podcast/": "", "https://guifav.dev/velha.html": ""}))
-        self.assertIn("3 que saíram do índice", out.getvalue())
+            "https://guifav.dev/blog/antigo/": "", "https://guifav.dev/blog/apagado/": "",
+            "https://guifav.dev/blog/virou-podcast/": "", "https://guifav.dev/velha.html": ""}))
+        self.assertIn("4 que saíram do índice", out.getvalue())
 
     def test_fallback_without_before_is_incomplete(self):
         with redirect_stdout(io.StringIO()):
