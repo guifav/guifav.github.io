@@ -15,6 +15,8 @@ export const BLOG_DESCRIPTION =
 export const GA4_ID = 'G-K7Y87QNCX8';
 // Microsoft Clarity (mapas de calor e gravações de sessão), em todas as páginas que têm o GA4.
 export const CLARITY_ID = 'zcs8f7r329';
+// Eventos próprios do GA4 (issue #60). Mesmo endereço, com a mesma versão, na home e no portfólio.
+export const TRACK_SRC = '/assets/track.js?v=202611131600';
 export const POSTS_PER_PAGE = 20;
 export const RSS_LIMIT = 50;
 

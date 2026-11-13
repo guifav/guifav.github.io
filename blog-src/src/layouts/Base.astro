@@ -1,7 +1,7 @@
 ---
 // Leiaute de todas as páginas do blog: cabeçalho e rodapé iguais aos do site.
 import '../styles/blog.css';
-import { AUTHOR_NAME, BLOG_NAME, CLARITY_ID, type ContentGroup, EMAIL_LIST_NAME, GA4_ID, NEWSLETTER_FORM_ENABLED, NEWSLETTER_SUBSTACK_URL, PRE_CUTOVER_NOINDEX } from '../consts';
+import { AUTHOR_NAME, BLOG_NAME, CLARITY_ID, type ContentGroup, EMAIL_LIST_NAME, GA4_ID, NEWSLETTER_FORM_ENABLED, NEWSLETTER_SUBSTACK_URL, PRE_CUTOVER_NOINDEX, TRACK_SRC } from '../consts';
 import { robotsContent, absoluteUrl, jsonLdScript, withBase } from '../lib/blog';
 
 interface Props {
@@ -108,5 +108,6 @@ const base = import.meta.env.BASE_URL;
       });
     })();
   </script>
+  <script data-site-script is:inline src={TRACK_SRC}></script>
 </body>
 </html>
