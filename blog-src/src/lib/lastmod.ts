@@ -8,6 +8,9 @@ import { execFileSync } from 'node:child_process';
 
 const MARK = '@@';
 
+/** Pasta dos posts, relativa a blog-src (o cwd do build do Astro e do npm test). */
+export const POSTS_DIR = 'src/content/posts';
+
 /** Saída de `git log --format=@@%cI --name-only` (mais recente primeiro) -> nome do arquivo -> data ISO. */
 export function parseGitLog(out: string): Map<string, string> {
   const dates = new Map<string, string>();

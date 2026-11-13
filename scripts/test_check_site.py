@@ -665,7 +665,8 @@ class RootSitemapTest(Base):
 
     def test_lastmod_required_and_w3c(self):
         for lm in ("", "<lastmod>12/11/2026</lastmod>", "<lastmod>2026-11-12</lastmod>",
-                   "<lastmod>2026-13-40T25:61:61+99:99</lastmod>", "<lastmod>2026-02-30T10:00:00Z</lastmod>"):
+                   "<lastmod>2026-13-40T25:61:61+99:99</lastmod>", "<lastmod>2026-02-30T10:00:00Z</lastmod>",
+                   "<lastmod>2026-11-12T10:00:00+00:99</lastmod>", "<lastmod>2026-11-12T10:00:00+24:00</lastmod>"):
             with self.subTest(lm=lm):
                 self.w("sitemap-site.xml", SITEMAP.format(
                     f"<url><loc>https://guifav.dev/</loc>{lm}</url>"

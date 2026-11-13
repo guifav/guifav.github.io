@@ -79,6 +79,9 @@ jobs:
         id: indexnow
         # Opcional: se falhar, o deploy segue; o job indexnow fica vermelho por falta do plano.
         continue-on-error: true
+        env:
+          # Commit publicado antes deste push: base das remoções se o site publicado estiver ilegível.
+          INDEXNOW_BEFORE: ${{ github.event.before }}
         run: python3 scripts/indexnow.py diff --out "$RUNNER_TEMP/indexnow/plan.json"
 
       - name: Guardar o plano do IndexNow para o job seguinte

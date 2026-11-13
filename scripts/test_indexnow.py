@@ -5,7 +5,9 @@ Rodar: python3 scripts/test_indexnow.py
 import http.server
 import io
 import json
+import os
 import socket
+import subprocess
 import tempfile
 import threading
 import unittest
@@ -124,6 +126,37 @@ class DiffTest(Site):
             dict(BLOG_NEW, **{"https://guifav.dev/blog/a/": "2025-12-01T00:00:00.000Z"}))}))
         self.assertEqual(I.plan(self.site, web)["urls"], ["https://guifav.dev/blog/a/"])
 
+    def capa_case(self, live_html: bytes | None, status: int = 200):
+        """/blog/ sem lastmod nos dois lados; o HTML publicado é `live_html`."""
+        blog = dict(BLOG_NEW, **{"https://guifav.dev/blog/": ""})
+        self.w("blog/sitemap.xml", urlset(blog))
+        self.w("blog/index.html", b"<html>capa nova</html>")
+        pages = dict(self.built())
+        web = FakeWeb(pages)
+        if live_html is not None:
+            pages["https://guifav.dev/blog/"] = live_html
+        if status != 200:
+            return I.changed(I.built_entries(self.site), I.built_entries(self.site), self.site, ErrorWeb(pages))
+        return I.changed(I.built_entries(self.site), I.built_entries(self.site), self.site, web)
+
+    def test_page_without_lastmod_announced_only_when_html_changes(self):
+        self.assertEqual(self.capa_case(b"<html>capa nova</html>"), [])
+        self.assertEqual(self.capa_case(b"<html>capa velha</html>"), ["https://guifav.dev/blog/"])
+        self.assertEqual(self.capa_case(None), ["https://guifav.dev/blog/"])  # 404 publicado
+        self.assertEqual(self.capa_case(b"<html>capa nova</html>", status=503), ["https://guifav.dev/blog/"])
+
+    def test_page_without_lastmod_cannot_compare_without_get(self):
+        self.w("blog/sitemap.xml", urlset(dict(BLOG_NEW, **{"https://guifav.dev/blog/": ""})))
+        e = I.built_entries(self.site)
+        self.assertEqual(I.changed(e, e, self.site), ["https://guifav.dev/blog/"])
+
+    def test_page_without_lastmod_uses_cache_busting(self):
+        self.w("blog/sitemap.xml", urlset(dict(BLOG_NEW, **{"https://guifav.dev/blog/": ""})))
+        web = FakeWeb({"https://guifav.dev/blog/": (self.site / "blog/index.html").read_bytes()})
+        e = I.built_entries(self.site)
+        self.assertEqual(I.changed(e, e, self.site, web), [])
+        self.assertTrue(web.calls[0].startswith("https://guifav.dev/blog/?indexnow="), web.calls)
+
     def test_removed_from_sitemap_because_of_noindex_is_announced(self):
         # Post que virou index: false: continua publicado, mas com noindex; o buscador precisa recrawlear.
         old = dict(BLOG_NEW, **{"https://guifav.dev/blog/virou-podcast/": "2026-01-01T00:00:00.000Z"})
@@ -159,7 +192,7 @@ class DiffTest(Site):
                 out = io.StringIO()
                 with redirect_stdout(out):
                     p = I.plan(self.site, web)
-                self.assertEqual((p["mode"], p["urls"]), ("all", sorted({**SITE_NEW, **BLOG_NEW})))
+                self.assertEqual((p["mode"], p["urls"], p["incomplete"]), ("all", sorted({**SITE_NEW, **BLOG_NEW}), True))
                 self.assertEqual(p["sitemaps"], self.shas())
                 self.assertIn("::warning::", out.getvalue())
 
@@ -188,6 +221,79 @@ class DiffTest(Site):
         p = json.loads(out.read_text())
         self.assertTrue(I.valid_plan(p))
         self.assertEqual(len(p["urls"]), 5)
+
+
+class GitRemovalsTest(Site):
+    """No fallback, as URLs que saíram do índice vêm do git diff contra o commit publicado antes."""
+
+    def setUp(self):
+        super().setUp()
+        self.repo = Path(self.tmp.name) / "repo"
+        posts = self.repo / "blog-src/src/content/posts"
+        posts.mkdir(parents=True)
+        for name in ("apagado", "virou-podcast", "editado"):
+            (posts / f"{name}.md").write_text(f"---\nslug: {name}\n---\n", encoding="utf-8")
+        (posts / "sub").mkdir()
+        (posts / "sub" / "aninhado.md").write_text("x", encoding="utf-8")
+        (self.repo / "velha.html").write_text("<html></html>", encoding="utf-8")
+        (self.repo / "fica.html").write_text("<html></html>", encoding="utf-8")
+        self.git("init", "-q")
+        self.git("add", "-A")
+        self.git("commit", "-q", "-m", "antes")
+        self.before = self.git("rev-parse", "HEAD").strip()
+        (posts / "apagado.md").unlink()
+        (posts / "sub" / "aninhado.md").unlink()
+        (self.repo / "velha.html").unlink()
+        (posts / "virou-podcast.md").write_text("---\nslug: virou-podcast\nindex: false\n---\n", encoding="utf-8")
+        (posts / "editado.md").write_text("---\nslug: editado\n---\nnovo\n", encoding="utf-8")
+        (self.repo / "fica.html").write_text("<html>v2</html>", encoding="utf-8")
+        self.git("add", "-A")
+        self.git("commit", "-q", "-m", "depois")
+        # _site do build novo: o podcast com noindex, o editado e a fica.html indexáveis; o resto sumiu.
+        self.w("blog/virou-podcast/index.html", NOINDEX)
+        self.w("blog/editado/index.html", b"<html></html>")
+        self.w("fica.html", b"<html>v2</html>")
+
+    def git(self, *args):
+        env = dict(os.environ, GIT_AUTHOR_NAME="t", GIT_AUTHOR_EMAIL="t@t", GIT_COMMITTER_NAME="t", GIT_COMMITTER_EMAIL="t@t")
+        return subprocess.run(["git", "-C", str(self.repo), *args], check=True, env=env, capture_output=True, text=True).stdout
+
+    def test_removals_from_git(self):
+        self.assertEqual(I.git_removals(self.repo, self.before, self.site), [
+            "https://guifav.dev/blog/apagado/", "https://guifav.dev/blog/virou-podcast/", "https://guifav.dev/velha.html"])
+
+    def test_unknown_before(self):
+        for before in (None, "", "0" * 40, "f" * 40):
+            with self.subTest(before=before):
+                self.assertIsNone(I.git_removals(self.repo, before, self.site))
+
+    def test_fallback_plan_includes_removals(self):
+        out = io.StringIO()
+        with redirect_stdout(out):
+            p = I.plan(self.site, FakeWeb({}), self.repo, self.before)
+        self.assertEqual(p["mode"], "all")
+        self.assertFalse(p["incomplete"])
+        self.assertEqual(p["urls"], sorted({**SITE_NEW, **BLOG_NEW} | {
+            "https://guifav.dev/blog/apagado/": "", "https://guifav.dev/blog/virou-podcast/": "", "https://guifav.dev/velha.html": ""}))
+        self.assertIn("3 que saíram do índice", out.getvalue())
+
+    def test_fallback_without_before_is_incomplete(self):
+        with redirect_stdout(io.StringIO()):
+            p = I.plan(self.site, FakeWeb({}), self.repo, None)
+        self.assertTrue(p["incomplete"])
+
+    def test_normal_diff_ignores_git(self):
+        calls = []
+        p = I.plan(self.site, FakeWeb(self.built()), self.repo, self.before, git=lambda *a: calls.append(a))
+        self.assertEqual((p["mode"], p["incomplete"], calls), ("diff", False, []))
+
+    def test_cli_reads_before_from_env(self):
+        out = self.site / "plan.json"
+        os.environ["INDEXNOW_BEFORE"] = self.before
+        self.addCleanup(os.environ.pop, "INDEXNOW_BEFORE", None)
+        with redirect_stdout(io.StringIO()):
+            I.main(["diff", "--site", str(self.site), "--out", str(out), "--repo", str(self.repo)], get=FakeWeb({}))
+        self.assertIn("https://guifav.dev/blog/apagado/", json.loads(out.read_text())["urls"])
 
 
 class _Truncating(http.server.BaseHTTPRequestHandler):
@@ -264,8 +370,8 @@ class SubmitTest(Site):
             return (503, body) if "sitemap" in url and status == 200 else (status, body)
         return get
 
-    def plan(self, urls, mode="diff"):
-        return {"mode": mode, "urls": urls, "sitemaps": self.shas()}
+    def plan(self, urls, mode="diff", incomplete=False):
+        return {"mode": mode, "urls": urls, "sitemaps": self.shas(), "incomplete": incomplete}
 
     def test_submits_after_live_matches(self):
         post = FakePost([202])
@@ -322,6 +428,12 @@ class SubmitTest(Site):
                 self.assertEqual(sleeps, [15, 15])
                 self.assertIn("não ficaram iguais", text)
 
+    def test_incomplete_plan_sends_then_fails(self):
+        post = FakePost()
+        rc, _, text = self.run_submit(self.plan(["https://guifav.dev/"], mode="all", incomplete=True), self.live(), post)
+        self.assertEqual((rc, len(post.bodies)), (1, 1))
+        self.assertIn("indexnow.py urls", text)
+
     def test_empty_plan_does_nothing(self):
         web, post = self.live(), FakePost()
         rc, _, text = self.run_submit(self.plan([]), web, post)
@@ -336,6 +448,7 @@ class SubmitTest(Site):
             dict(good, sitemaps={"/sitemap.xml": good["sitemaps"]["/sitemap.xml"]}),
             dict(good, sitemaps=dict(good["sitemaps"], **{"/sitemap.xml": "curto"})),
             dict(good, sitemaps=dict(good["sitemaps"], **{"/outro.xml": "0" * 64})),
+            {k: v for k, v in good.items() if k != "incomplete"}, dict(good, incomplete="nao"),
         ]
         for raw in bad:
             with self.subTest(raw=raw):
@@ -397,6 +510,24 @@ class AllTest(Site):
                 self.assertIn("chave fora do ar", err.getvalue())
 
 
+class UrlsTest(Site):
+    def test_urls_command(self):
+        web = FakeWeb({I.KEY_LOCATION: I.KEY.encode()})
+        post = FakePost()
+        with redirect_stdout(io.StringIO()):
+            rc = I.main(["urls", "https://guifav.dev/blog/b/", "https://guifav.dev/blog/a/", "https://guifav.dev/blog/a/"], get=web, post=post)
+        self.assertEqual((rc, post.bodies[0]["urlList"]), (0, ["https://guifav.dev/blog/a/", "https://guifav.dev/blog/b/"]))
+
+    def test_urls_command_guards(self):
+        for name, web, urls in (("sem chave", FakeWeb({}), ["https://guifav.dev/x/"]),
+                                ("outro host", FakeWeb({I.KEY_LOCATION: I.KEY.encode()}), ["https://outro.dev/x/"])):
+            with self.subTest(name=name):
+                post = FakePost()
+                with redirect_stderr(io.StringIO()), redirect_stdout(io.StringIO()):
+                    self.assertEqual(I.main(["urls", *urls], get=web, post=post), 1)
+                self.assertEqual(post.bodies, [])
+
+
 class RepoTest(unittest.TestCase):
     """A chave publicada é a do script e vai ao ar pelo manifesto; o workflow passa o plano por artefato."""
 
@@ -417,6 +548,10 @@ class RepoTest(unittest.TestCase):
         # O plano é opcional para o deploy: passo com continue-on-error e upload só se ele deu certo.
         self.assertRegex(build, r"id: indexnow\n\s+# [^\n]*\n\s+continue-on-error: true\n")
         self.assertIn("if: steps.indexnow.outcome == 'success'", build)
+        upload = build.split("Guardar o plano do IndexNow")[1].split("\n      - ")[0]
+        self.assertIn("continue-on-error: true", upload)  # falha do upload não pode barrar o deploy (r2)
+        self.assertIn("if-no-files-found: error", upload)
+        self.assertIn("INDEXNOW_BEFORE: ${{ github.event.before }}", build)
         self.assertIn("uses: actions/upload-artifact@", build)
         self.assertNotIn("GITHUB_OUTPUT", build)
         self.assertIn("fetch-depth: 0", build)
