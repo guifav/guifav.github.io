@@ -16,7 +16,7 @@ import newsletter_draft as N  # noqa: E402
 
 SEG = "seg-blog"
 TOPIC = "topico-ia"
-CFG = N.Config(api_key="re_teste", segment_id=SEG, sender="IA Aplicada <insights@expert.guifav.dev>",
+CFG = N.Config(api_key="re_teste", segment_id=SEG, sender="Guilherme Favaron | Expert Insights <insights@expert.guifav.dev>",
                reply_to="contact@guifav.dev", topic_id=TOPIC)
 
 
@@ -189,6 +189,92 @@ class EnvelopeTest(unittest.TestCase):
         self.assertNotIn("\u2014", html + text)
 
 
+class ExpertInsightsTest(unittest.TestCase):
+    """Nome da lista (Gui, 12/11/2026): Expert Insights, de Guilherme Favaron; sem "newsletter" nem "IA Aplicada" como nome."""
+
+    def render(self, notice="", today=None):
+        return N.render_email(N.parse_post(page("<p>Corpo.</p>"), "um-post"), notice, today)
+
+    def test_name_header_and_footer(self):
+        html, text = self.render(today=N.datetime.date(2026, 11, 19))
+        self.assertIn(">Expert Insights</a></p>", html)
+        self.assertTrue(text.startswith("EXPERT INSIGHTS\n"))
+        for out in (html, text):
+            self.assertIn("Você recebe este email porque assinou os Expert Insights, de Guilherme Favaron.", out)
+            self.assertNotIn("newsletter", out.lower())
+            self.assertIn("Até novembro de 2026 a lista se chamava IA Aplicada e ficava no Substack.", out)
+            self.assertEqual(out.count("Quer comentar? É só responder a este email."), 1)  # r1 (Kimi): frase aprovada nos dois
+            self.assertNotIn("Para responder", out)
+
+    def test_history_line_leaves_after_three_months(self):
+        for day, has in ((N.datetime.date(2027, 2, 18), True), (N.datetime.date(2027, 2, 19), False), (N.datetime.date(2027, 6, 1), False)):
+            with self.subTest(day=day):
+                html, text = self.render(today=day)
+                for out in (html, text):
+                    self.assertEqual("se chamava IA Aplicada" in out, has)
+                    self.assertNotIn("IA Aplicada", out) if not has else None
+
+    def test_default_sender(self):
+        self.assertEqual(N.DEFAULT_FROM, "Guilherme Favaron | Expert Insights <insights@expert.guifav.dev>")
+        self.assertTrue(N.SENDER_RE.fullmatch(N.DEFAULT_FROM))
+
+    def test_full_notice_on_top_and_preheader(self):
+        html, text = self.render("completo", N.datetime.date(2026, 11, 19))
+        notice = N.NOTICES["completo"]
+        self.assertIn(N.H.escape(notice), html)
+        self.assertLess(html.index(N.H.escape(notice)), html.index("<h1"))  # acima do título
+        self.assertIn(N.NOTICE_PREHEADER, html.split("<table", 1)[0])  # preheader
+        self.assertNotIn("Descrição curta.", html.split("<table", 1)[0])
+        self.assertLess(text.index(notice), text.index("Um post"))
+
+    def test_short_notice_keeps_preheader(self):
+        html, text = self.render("curto", N.datetime.date(2026, 11, 26))
+        self.assertIn(N.NOTICES["curto"], html)
+        self.assertIn(N.NOTICES["curto"], text)
+        self.assertIn("Descrição curta.", html.split("<table", 1)[0])
+        self.assertNotIn(N.NOTICES["completo"][:40], html)
+
+    def test_no_notice_by_default(self):
+        html, text = self.render(today=N.datetime.date(2026, 11, 19))
+        for n in N.NOTICES.values():
+            self.assertNotIn(n[:30], html + text)
+
+    def test_unknown_notice_refused(self):
+        with self.assertRaisesRegex(N.DraftError, "aviso desconhecido"):
+            self.render("gritado")
+
+    def test_cli_flag_reaches_draft(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(N, "fetch_page", return_value=page("<p>Corpo.</p>")):
+            self.assertEqual(N.main(["um-post", "--dry-run", "--out", d, "--aviso", "completo"]), 0)
+            self.assertIn(N.NOTICES["completo"][:40], open(os.path.join(d, "email.txt"), encoding="utf-8").read())
+        fake = FakeResend()
+        N.create_draft(N.Api(CFG, fake), post(), CFG, notice="curto", lock_dir=tempfile.mkdtemp())
+        sent = [b for m, url, b in fake.calls if m == "POST"][0]
+        self.assertIn(N.NOTICES["curto"], sent["text"])
+
+    def test_cli_without_dry_run_passes_notice_to_draft(self):
+        # r1 (Astra P3): o caminho real da CLI (main -> create_draft), com transporte falso; nunca envia.
+        fake, real_api = FakeResend(), N.Api
+        env = {"RESEND_API_KEY": "re_test", "NEWSLETTER_SEGMENT_ID": "seg", "NEWSLETTER_TOPIC_ID": "top"}
+        for notice in ("completo", "curto", ""):
+            with self.subTest(notice=notice), tempfile.TemporaryDirectory() as lock, \
+                    mock.patch.dict(os.environ, env, clear=False), \
+                    mock.patch.object(N, "DEFAULT_LOCK_DIR", lock), \
+                    mock.patch.object(N, "fetch_page", return_value=page("<p>Corpo.</p>")), \
+                    mock.patch.object(N, "Api", lambda cfg: real_api(cfg, fake)):
+                fake.calls.clear()
+                args = ["um-post"] + (["--aviso", notice] if notice else [])
+                self.assertEqual(N.main(args), 0)
+                posts = [b for m, url, b in fake.calls if m == "POST"]
+                self.assertEqual(len(posts), 1)
+                self.assertFalse(any("/send" in url for m, url, b in fake.calls))
+                for field in ("html", "text"):
+                    if notice:
+                        self.assertIn(N.H.escape(N.NOTICES[notice]) if field == "html" else N.NOTICES[notice], posts[0][field])
+                    else:
+                        self.assertFalse(any(n[:30] in posts[0][field] for n in N.NOTICES.values()))
+
+
 class SizeTest(unittest.TestCase):
     def test_small_post_is_full(self):
         p = N.parse_post(page("<p>Curto.</p>"), "um-post")
@@ -250,7 +336,7 @@ class DraftTest(unittest.TestCase):
         self.assertEqual(set(body), {"segment_id", "topic_id", "from", "reply_to", "subject", "html", "text", "name"})
         self.assertEqual(body["segment_id"], SEG)
         self.assertEqual(body["topic_id"], TOPIC)  # descadastro pelo link do email vale só para a newsletter
-        self.assertEqual(body["from"], "IA Aplicada <insights@expert.guifav.dev>")
+        self.assertEqual(body["from"], "Guilherme Favaron | Expert Insights <insights@expert.guifav.dev>")
         self.assertEqual(body["reply_to"], "contact@guifav.dev")
         self.assertEqual(body["subject"], "Um post")
         self.assertEqual(body["name"], "blog/um-post")
@@ -331,13 +417,13 @@ class ConfigTest(unittest.TestCase):
             N.Config.from_env({"RESEND_API_KEY": "k", "NEWSLETTER_SEGMENT_ID": "s"})
         c = N.Config.from_env({"RESEND_API_KEY": "k", "NEWSLETTER_SEGMENT_ID": "s", "NEWSLETTER_TOPIC_ID": "t"})
         self.assertEqual(c.topic_id, "t")
-        self.assertEqual(c.sender, "IA Aplicada <insights@expert.guifav.dev>")
+        self.assertEqual(c.sender, "Guilherme Favaron | Expert Insights <insights@expert.guifav.dev>")
         self.assertEqual(c.reply_to, "contact@guifav.dev")
 
     def test_sender_must_be_on_expert_subdomain(self):
         with self.assertRaises(N.DraftError):
             N.Config.from_env({"RESEND_API_KEY": "k", "NEWSLETTER_SEGMENT_ID": "s", "NEWSLETTER_TOPIC_ID": "t",
-                               "NEWSLETTER_FROM": "IA Aplicada <insights@guifav.dev>"})
+                               "NEWSLETTER_FROM": "Guilherme Favaron | Expert Insights <insights@guifav.dev>"})
 
 
 
@@ -536,7 +622,7 @@ class Round2Test(unittest.TestCase):
 
     def test_sender_must_be_a_single_address_on_the_exact_domain(self):
         base = {"RESEND_API_KEY": "k", "NEWSLETTER_SEGMENT_ID": "s", "NEWSLETTER_TOPIC_ID": "t"}
-        for ok in ("IA Aplicada <insights@expert.guifav.dev>", "insights@expert.guifav.dev",
+        for ok in ("Guilherme Favaron | Expert Insights <insights@expert.guifav.dev>", "insights@expert.guifav.dev",
                    "Guilherme Favaron <gui.f+blog@expert.guifav.dev>"):
             self.assertEqual(N.Config.from_env({**base, "NEWSLETTER_FROM": ok}).sender, ok)
         for bad in ("IA <insights@expert.guifav.dev>\n", "insights@guifav.dev\nBcc: destino@expert.guifav.dev",

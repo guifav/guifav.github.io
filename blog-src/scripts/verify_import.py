@@ -54,10 +54,12 @@ EPISODE_DATE_TOLERANCE = timedelta(days=2)
 # R3 com referência revisada, independente do importador: post renomeado depois de publicado. O card do
 # gui-brain com o slug antigo tem o mesmo título do post atual.
 RENAMED = {"sistema-de-registros-para-agentes": "a-memoria-dos-meus-agentes-na-pratica"}
-# Único href para o domínio antigo fora do conteúdo: o link "Newsletter" do rodapé, que aponta para o
+# Único href para o domínio antigo fora do conteúdo: o link "Expert Insights" do rodapé, que aponta para o
 # Substack só enquanto o formulário novo está desligado (#21). Ligado, o rodapé aponta para a assinatura.
-FOOTER_NEWSLETTER = '<a href="https://guilhermefavaron.com.br" target="_blank" rel="noopener">Newsletter</a>'
-FOOTER_SUBSCRIBE = '<a href="/blog/assinar/">Newsletter</a>'
+# O texto do link segue EMAIL_LIST_NAME (consts.ts), que trocou "Newsletter" em 12/11/2026 (#55).
+FOOTER_LIST_NAME = "Expert Insights"
+FOOTER_NEWSLETTER = f'<a href="https://guilhermefavaron.com.br" target="_blank" rel="noopener">{FOOTER_LIST_NAME}</a>'
+FOOTER_SUBSCRIBE = f'<a href="/blog/assinar/">{FOOTER_LIST_NAME}</a>'
 # Atributos que o navegador lê como URL (srcset, imagesrcset e ping são listas).
 URL_ATTRS = {"href", "src", "srcset", "imagesrcset", "poster", "action", "formaction", "cite", "data", "background",
              "xlink:href", "longdesc", "ping", "icon", "manifest", "itemid", "codebase", "archive", "usemap",

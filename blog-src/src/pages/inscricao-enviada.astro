@@ -1,19 +1,19 @@
 ---
 // Página da newsletter (issue #21). Fora do sitemap e sempre com noindex.
 import Base from '../layouts/Base.astro';
-import { AUTHOR_NAME } from '../consts';
+import { AUTHOR_NAME, BLOG_NAME, EMAIL_LIST_NAME } from '../consts';
 
 const base = import.meta.env.BASE_URL;
 ---
 <Base title={`Confira seu email | ${AUTHOR_NAME}`} description="Falta confirmar a inscrição pelo link enviado ao seu email." index={false}>
   <article class="post page">
     <header class="post-head">
-      <p class="post-crumb"><a href={base}>Blog</a></p>
+      <p class="post-crumb"><a href={base}>{BLOG_NAME}</a></p>
       <h1>Confira seu email</h1>
     </header>
     <div class="post-body">
       <p>Se o endereço estiver correto, você vai receber em alguns minutos um email com o link para confirmar a inscrição. O link vale por 48 horas.</p>
-      <p>Não chegou? Procure nas pastas de spam e de promoções, ou <a href={`${base}assinar/`}>tente de novo</a>.</p>
+      <p>Não chegou? Procure por "{EMAIL_LIST_NAME}" nas pastas de spam e de promoções, ou <a href={`${base}assinar/`}>tente de novo</a>.</p>
     </div>
   </article>
 </Base>

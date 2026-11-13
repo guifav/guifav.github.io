@@ -17,12 +17,13 @@ Garantias:
   qualquer corpo com "send" ou "scheduled_at";
 - HTML acima do limite em que o Gmail corta a mensagem (102 KB) leva só o começo do post e o link;
 - rodapé com o link de descadastro do Resend ({{{RESEND_UNSUBSCRIBE_URL}}}) no HTML e no texto.
-- o rascunho sai preso ao tópico "IA Aplicada" (NEWSLETTER_TOPIC_ID): o link de descadastro tira a pessoa só da
+- o rascunho sai preso ao tópico "Expert Insights, de Guilherme Favaron" (NEWSLETTER_TOPIC_ID): o link de descadastro tira a pessoa só da
   newsletter, não de todos os broadcasts da conta do Resend.
 """
 from __future__ import annotations
 
 import argparse
+import datetime
 import contextlib
 import fcntl
 import html as H
@@ -39,7 +40,8 @@ from html.parser import HTMLParser
 SITE = "https://guifav.dev"
 BLOG = SITE + "/blog"
 RESEND = "https://api.resend.com"
-DEFAULT_FROM = "IA Aplicada <insights@expert.guifav.dev>"
+LIST_NAME = "Expert Insights"  # nome da lista (Gui, 12/11/2026); em frase, "os Expert Insights"
+DEFAULT_FROM = f"Guilherme Favaron | {LIST_NAME} <insights@expert.guifav.dev>"
 DEFAULT_REPLY_TO = "contact@guifav.dev"
 SENDER_DOMAIN = "expert.guifav.dev"
 _ADDR = r"[A-Za-z0-9._%+-]+@" + re.escape(SENDER_DOMAIN)
@@ -50,6 +52,20 @@ GMAIL_CLIP_BYTES = 102 * 1024
 SIZE_MARGIN = 4 * 1024  # folga para a reescrita de links do rastreamento de clique
 IMG_MAX = 560
 TRUNCATED_NOTE = "Este email traz só o começo do texto. A versão completa está no site."
+FOOTER = f"Você recebe este email porque assinou os {LIST_NAME}, de Guilherme Favaron."
+# Lembrete da mudança de nome no rodapé até três meses depois do primeiro envio pelo Resend (19/11/2026).
+FOOTER_HISTORY = "Até novembro de 2026 a lista se chamava IA Aplicada e ficava no Substack."
+FOOTER_HISTORY_UNTIL = datetime.date(2027, 2, 19)
+FOOTER_REPLY = "Quer comentar? É só responder a este email."
+# Aviso de transição no topo, escolhido pelo --aviso: completo no 1º envio, curto no 2º e no 3º.
+NOTICES = {
+    "completo": ("A IA Aplicada mudou de casa e de nome. Saiu do Substack: os artigos agora ficam em guifav.dev/blog e "
+                 f"chegam por email como {LIST_NAME}, enviados de insights@expert.guifav.dev. Autor, temas e ritmo são os "
+                 "mesmos, um email a cada artigo novo. Você não precisa fazer nada. Se preferir sair, o link está no fim "
+                 "deste email."),
+    "curto": f"A IA Aplicada agora se chama {LIST_NAME} e sai de guifav.dev. Mesmo autor, mesmos temas.",
+}
+NOTICE_PREHEADER = f"A IA Aplicada agora é {LIST_NAME}. Mesmo autor, mesmos temas."
 PREHEADER_MAX = 200
 DEFAULT_LOCK_DIR = os.path.expanduser("~/.cache/guifav-newsletter-draft")
 CODE_START, CODE_END = "\x02", "\x03"  # delimitam código no texto puro, que não é normalizado
@@ -402,9 +418,14 @@ def _clean_text(s: str) -> str:
 
 # ---------------------------------------------------------------- envelope
 
-def _envelope(post: Post, body_html: str, truncated: bool) -> str:
+def _footer_lines(today: datetime.date) -> list[str]:
+    return [FOOTER] + ([FOOTER_HISTORY] if today < FOOTER_HISTORY_UNTIL else []) + [FOOTER_REPLY]
+
+
+def _envelope(post: Post, body_html: str, truncated: bool, notice: str = "", today: datetime.date | None = None) -> str:
     e = H.escape
-    pre_text = post.description or post.subtitle
+    today = today or datetime.date.today()
+    pre_text = NOTICE_PREHEADER if notice == "completo" else (post.description or post.subtitle)
     if len(pre_text) > PREHEADER_MAX:
         pre_text = pre_text[:PREHEADER_MAX - 3].rstrip() + "..."
     pre = e(pre_text)
@@ -413,6 +434,8 @@ def _envelope(post: Post, body_html: str, truncated: bool) -> str:
     sub = f'<p style="margin:0 0 20px;font-size:19px;line-height:1.45;color:#555;">{e(post.subtitle)}</p>' if post.subtitle else ""
     pod = _link_block(post.spotify, "Ouvir o episódio no Spotify") if post.spotify else ""
     note = f'<p style="{S_P}font-style:italic;color:#555;">{e(TRUNCATED_NOTE)}</p>' if truncated else ""
+    top = (f'<p style="margin:0 0 24px;padding:14px 16px;background:#f3f3f1;border-left:3px solid #111;'
+           f'font-family:Arial,sans-serif;font-size:15px;line-height:1.5;color:#333;">{e(NOTICES[notice])}</p>') if notice else ""
     cta = ('<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 8px;"><tr>'
            f'<td style="background:#111;border-radius:6px;"><a href="{_attr(post.url)}" '
            'style="display:inline-block;padding:12px 22px;color:#fff;text-decoration:none;font-size:16px;font-weight:bold;">'
@@ -427,22 +450,22 @@ def _envelope(post: Post, body_html: str, truncated: bool) -> str:
         '<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;">'
         '<tr><td style="padding:28px 20px 0;font-family:Georgia,\'Times New Roman\',serif;overflow-wrap:break-word;word-wrap:break-word;word-break:break-word;">'
         f'<p style="margin:0 0 20px;font-family:Arial,sans-serif;font-size:13px;letter-spacing:1px;text-transform:uppercase;">'
-        f'<a href="{BLOG}/" style="color:#666;text-decoration:none;">IA Aplicada</a></p>'
+        f'<a href="{BLOG}/" style="color:#666;text-decoration:none;">{e(LIST_NAME)}</a></p>{top}'
         f'<h1 style="margin:0 0 12px;font-size:30px;line-height:1.25;color:#111;">{e(post.title)}</h1>{sub}'
         '<table role="presentation" width="100%" cellpadding="0" cellspacing="0">' + cover + '</table>'
         f'{pod}{body_html}{note}{cta}'
         '</td></tr>'
         '<tr><td style="padding:24px 20px 28px;border-top:1px solid #eee;font-family:Arial,sans-serif;font-size:13px;line-height:1.5;color:#777;">'
-        'Você recebe este email porque assinou a newsletter IA Aplicada, de Guilherme Favaron. '
-        'Para responder, é só responder a este email.<br>'
+        + e(" ".join(_footer_lines(today))) + '<br>'
         '<a href="{{{RESEND_UNSUBSCRIBE_URL}}}" style="color:#777;">Sair da lista</a> &middot; '
         f'<a href="{BLOG}/privacidade/" style="color:#777;">Privacidade</a>'
         '</td></tr></table></td></tr></table></body></html>'
     )
 
 
-def _text(post: Post, body_text: str, truncated: bool) -> str:
-    parts = ["IA APLICADA", post.title]
+def _text(post: Post, body_text: str, truncated: bool, notice: str = "", today: datetime.date | None = None) -> str:
+    today = today or datetime.date.today()
+    parts = [LIST_NAME.upper(), NOTICES[notice] if notice else "", post.title]
     if post.subtitle:
         parts.append(post.subtitle)
     if post.spotify:
@@ -451,19 +474,21 @@ def _text(post: Post, body_text: str, truncated: bool) -> str:
     if truncated:
         parts.append(TRUNCATED_NOTE)
     parts.append(f"Ler no site: {post.url}")
-    parts.append("Você recebe este email porque assinou a newsletter IA Aplicada, de Guilherme Favaron.\n"
+    parts.append(" ".join(_footer_lines(today)) + "\n"
                  "Sair da lista: {{{RESEND_UNSUBSCRIBE_URL}}}\n"
                  f"Privacidade: {BLOG}/privacidade/")
     return "\n\n".join(p for p in parts if p) + "\n"
 
 
-def render_email(post: Post) -> tuple[str, str]:
+def render_email(post: Post, notice: str = "", today: datetime.date | None = None) -> tuple[str, str]:
+    if notice and notice not in NOTICES:
+        raise DraftError(f"aviso desconhecido: {notice!r}")
     limit = GMAIL_CLIP_BYTES - SIZE_MARGIN
     blocks = Converter(post).blocks()
-    full = _envelope(post, "".join(h for h, _ in blocks), False)
+    full = _envelope(post, "".join(h for h, _ in blocks), False, notice, today)
     if len(full.encode("utf-8")) < limit:
-        return full, _text(post, "\n\n".join(t for _, t in blocks if t), False)
-    budget = limit - len(_envelope(post, "", True).encode("utf-8"))
+        return full, _text(post, "\n\n".join(t for _, t in blocks if t), False, notice, today)
+    budget = limit - len(_envelope(post, "", True, notice, today).encode("utf-8"))
     if budget <= 0:
         raise DraftError(f"{post.slug}: título e subtítulo sozinhos passam do limite do Gmail")
     used, keep = 0, []
@@ -475,10 +500,10 @@ def render_email(post: Post) -> tuple[str, str]:
         keep.append((h, t))
     if not keep:
         raise DraftError(f"{post.slug}: o primeiro bloco do post sozinho passa do limite do Gmail; o email não teria o começo do texto")
-    html = _envelope(post, "".join(h for h, _ in keep), True)
+    html = _envelope(post, "".join(h for h, _ in keep), True, notice, today)
     if len(html.encode("utf-8")) >= limit:
         raise DraftError(f"{post.slug}: email com {len(html.encode('utf-8'))} bytes, acima do limite")
-    return html, _text(post, "\n\n".join(t for _, t in keep if t), True)
+    return html, _text(post, "\n\n".join(t for _, t in keep if t), True, notice, today)
 
 
 # ---------------------------------------------------------------- Resend
@@ -553,15 +578,15 @@ def slug_lock(lock_dir: str, slug: str):
 
 
 def create_draft(api: Api, post: Post, cfg: Config, *, update: bool = False,
-                 lock_dir: str = DEFAULT_LOCK_DIR) -> tuple[str, str]:
+                 lock_dir: str = DEFAULT_LOCK_DIR, notice: str = "") -> tuple[str, str]:
     with slug_lock(lock_dir, post.slug):
-        return _create_draft(api, post, cfg, update=update)
+        return _create_draft(api, post, cfg, update=update, notice=notice)
 
 
-def _create_draft(api: Api, post: Post, cfg: Config, *, update: bool = False) -> tuple[str, str]:
+def _create_draft(api: Api, post: Post, cfg: Config, *, update: bool = False, notice: str = "") -> tuple[str, str]:
     if not cfg.topic_id:  # antes de qualquer chamada: sem tópico, o descadastro valeria para a conta inteira
         raise DraftError("rascunho sem tópico recusado: o descadastro valeria para a conta inteira")
-    html, text = render_email(post)
+    html, text = render_email(post, notice)
     name = f"blog/{post.slug}"
     data = api.request("GET", "/broadcasts").get("data") or []
     same = [b for b in data if b.get("name") == name]
@@ -612,10 +637,12 @@ def main(argv=None) -> int:
     ap.add_argument("--update", action="store_true", help="reescreve o rascunho que já existe")
     ap.add_argument("--dry-run", action="store_true", help="não chama o Resend; grava email.html e email.txt em --out")
     ap.add_argument("--out", default=".")
+    ap.add_argument("--aviso", choices=sorted(NOTICES), default="",
+                    help="aviso da mudança para Expert Insights no topo: completo no 1º envio, curto no 2º e no 3º")
     a = ap.parse_args(argv)
     try:
         post = parse_post(fetch_page(a.slug, a.source, a.dist), a.slug)
-        html, text = render_email(post)
+        html, text = render_email(post, a.aviso)
         size = len(html.encode("utf-8"))
         cut = TRUNCATED_NOTE in html
         if a.dry_run:
@@ -626,7 +653,7 @@ def main(argv=None) -> int:
             print(f"{a.slug}: {size} bytes de HTML{' (cortado)' if cut else ''}; arquivos em {a.out}")
             return 0
         cfg = Config.from_env(os.environ)
-        what, bid = create_draft(Api(cfg), post, cfg, update=a.update)
+        what, bid = create_draft(Api(cfg), post, cfg, update=a.update, notice=a.aviso)
         print(f"{a.slug}: rascunho {what} ({bid}); {size} bytes de HTML{' (cortado)' if cut else ''}. "
               "O envio é feito pelo Gui no painel do Resend.")
         return 0

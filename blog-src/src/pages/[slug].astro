@@ -3,7 +3,7 @@
 import { render } from 'astro:content';
 import Base from '../layouts/Base.astro';
 import SubscribeForm from '../components/SubscribeForm.astro';
-import { AUTHOR_ID, AUTHOR_NAME, NEWSLETTER_FORM_ENABLED } from '../consts';
+import { AUTHOR_ID, AUTHOR_NAME, BLOG_NAME, EMAIL_LIST_NAME, NEWSLETTER_FORM_ENABLED } from '../consts';
 import { absoluteUrl, blogPostingLd, formatDate, spotifyEmbedUrl, withBase } from '../lib/blog';
 import { sortedPosts, type Post } from '../lib/posts';
 
@@ -39,7 +39,7 @@ const ld = blogPostingLd({
 <Base title={`${d.title} | ${AUTHOR_NAME}`} description={d.description} index={d.index} image={coverUrl} ogType="article" jsonLd={ld} turnstile={NEWSLETTER_FORM_ENABLED}>
   <article class="post">
     <header class="post-head">
-      <p class="post-crumb"><a href={base}>Blog</a></p>
+      <p class="post-crumb"><a href={base}>{BLOG_NAME}</a></p>
       <h1>{d.title}</h1>
       {d.subtitle && <p class="post-sub">{d.subtitle}</p>}
       <p class="post-meta">
@@ -59,8 +59,8 @@ const ld = blogPostingLd({
       <Content />
     </div>
     {NEWSLETTER_FORM_ENABLED && (
-      <aside class="subscribe" id="assinar" aria-label="Newsletter">
-        <h2>Receba os próximos artigos</h2>
+      <aside class="subscribe" id="assinar" aria-label="Inscrição por email">
+        <h2>{EMAIL_LIST_NAME}: receba os próximos artigos por email</h2>
         <SubscribeForm />
       </aside>
     )}
