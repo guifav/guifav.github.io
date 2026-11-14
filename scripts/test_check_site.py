@@ -2,7 +2,10 @@
 
 Rodar: python3 scripts/test_check_site.py
 """
+import json
 import os
+import shutil
+import subprocess
 import re
 import tempfile
 import unittest
@@ -1126,11 +1129,94 @@ class TrackingTest(unittest.TestCase):
                 self.assertTrue(any("data-ga-event" in p for p in self.check(self.doc(body), rel=rel)), name)
 
 
+class GaHostGuardTest(unittest.TestCase):
+    """#66: fora de guifav.dev o gtag.js não envia nada (prévias locais entravam como visita)."""
+
+    GA = '<script async src="https://www.googletagmanager.com/gtag/js?id=G-K7Y87QNCX8"></script>'
+    GUARD = "window['ga-disable-G-K7Y87QNCX8']=location.hostname.replace(/\\.$/,'')!=='guifav.dev';"
+    CONFIG = "window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-K7Y87QNCX8',{content_group:'home'});"
+
+    def doc(self, *scripts, ga=True):
+        body = "".join(f"<script>{s}</script>" for s in scripts)
+        return f"<!DOCTYPE html><html><head>{self.GA if ga else ''}{body}</head><body></body></html>"
+
+    def flagged(self, html):
+        return [p for p in C.check_ga_host_guard("index.html", html) if "ga-disable" in p]
+
+    def test_guard_before_config_ok(self):
+        self.assertEqual(self.flagged(self.doc(self.GUARD + self.CONFIG)), [])
+        self.assertEqual(self.flagged(self.doc(self.GUARD, self.CONFIG)), [])
+        spaced = "window[ 'ga-disable-G-K7Y87QNCX8' ] = location.hostname.replace( /\\.$/ , '' ) !== 'guifav.dev' ;\n"
+        self.assertEqual(self.flagged(self.doc(spaced + self.CONFIG)), [])
+        # Só o gtag('config') conta como limite; gtag('js') antes da linha não importa (mutante H6).
+        js_first = "window.dataLayer=[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());"
+        self.assertEqual(self.flagged(self.doc(js_first + self.GUARD + "gtag('config','G-K7Y87QNCX8');")), [])
+        # Comentário dentro da linha é só comentário: a linha vale (mutante H1).
+        commented = "window['ga-disable-G-K7Y87QNCX8'] /* prévias */ = location.hostname.replace(/\\.$/,'') !== 'guifav.dev';"
+        self.assertEqual(self.flagged(self.doc(commented + self.CONFIG)), [])
+
+    def test_page_without_ga_needs_no_guard(self):
+        self.assertEqual(self.flagged(self.doc(ga=False)), [])
+
+    def test_missing_late_or_wrong_guard_is_flagged(self):
+        g = self.GUARD
+        for name, html in {
+            "sem": self.doc(self.CONFIG),
+            "depois do config": self.doc(self.CONFIG + g),
+            "script seguinte": self.doc(self.CONFIG, g),
+            "duas vezes": self.doc(g + g + self.CONFIG),
+            "comentário de linha": self.doc("// " + g + "\n" + self.CONFIG),
+            "comentário de bloco": self.doc("/* " + g + " */" + self.CONFIG),
+            "comentário HTML": "<!-- <script>" + g + "</script> -->" + self.doc(self.CONFIG),
+            "script de dado": self.doc(self.CONFIG).replace("<head>", '<head><script type="application/json">' + g + "</script>"),
+            "outro host": self.doc(g.replace("guifav.dev", "guifav.github.io") + self.CONFIG),
+            "igualdade invertida": self.doc(g.replace("!==", "===") + self.CONFIG),
+            "outro ID": self.doc(g.replace("K7Y87QNCX8", "XXXXXXXXXX") + self.CONFIG),
+            "false fixo": self.doc("window['ga-disable-G-K7Y87QNCX8']=false;" + self.CONFIG),
+            # r1 (Kimi P2): sem tirar o ponto final, https://guifav.dev./ (200, mesmo HTML) perdia a coleta.
+            "sem o ponto final": self.doc("window['ga-disable-G-K7Y87QNCX8']=location.hostname!=='guifav.dev';" + self.CONFIG),
+            "dentro de string": self.doc('var s="' + g.replace("'", "\\'") + '";' + self.CONFIG),
+            "dentro de template": self.doc("var s=`" + g + "`;" + self.CONFIG),
+        }.items():
+            with self.subTest(name=name):
+                self.assertTrue(self.flagged(html), name)
+
+    def test_guard_semantics_in_node(self):
+        # O que a linha faz em cada host, avaliada no node (r1, Kimi P2: guifav.dev. é o mesmo site).
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("node ausente")
+        js = ("const out={};for(const h of ['guifav.dev','guifav.dev.','localhost','127.0.0.1','guifav.github.io',"
+              "'www.guifav.dev','guifav.dev.evil.com','xguifav.dev']){const window={};const location={hostname:h};"
+              + self.GUARD + "out[h]=window['ga-disable-G-K7Y87QNCX8'];}console.log(JSON.stringify(out));")
+        got = json.loads(subprocess.run([node, "-e", js], capture_output=True, text=True, check=True).stdout)
+        self.assertEqual(got, {"guifav.dev": False, "guifav.dev.": False, "localhost": True, "127.0.0.1": True,
+                               "guifav.github.io": True, "www.guifav.dev": True, "guifav.dev.evil.com": True,
+                               "xguifav.dev": True})
+
+    def test_sources_carry_the_guard_before_config(self):
+        root = Path(__file__).resolve().parent.parent
+        for rel, config in (("index.html", "gtag('config','G-K7Y87QNCX8'"),
+                            ("portfolio/index.html", "gtag('config','G-K7Y87QNCX8'"),
+                            ("blog-src/src/layouts/Base.astro", "gtag('config', GA4_ID")):
+            with self.subTest(rel=rel):
+                t = (root / rel).read_text(encoding="utf-8")
+                compact = re.sub(r"\s+", "", t)
+                self.assertEqual(compact.count(re.sub(r"\s+", "", self.GUARD)), 1)
+                self.assertLess(compact.index(re.sub(r"\s+", "", self.GUARD)), compact.index(re.sub(r"\s+", "", config)))
+
+
 class TrackingWiredTest(Base):
     def test_check_runs_tracking_rule(self):
         ga = TrackingTest.GA
         self.w("portfolio/index.html", page(ga + '<a href="/">home</a>', robots=""))
         self.assertTrue(any("portfolio/index.html: página com GA4 precisa carregar" in p
+                            for p in self.problems(pre_cutover=False)))
+
+    def test_check_runs_ga_host_guard_rule(self):
+        ga = TrackingTest.GA
+        self.w("portfolio/index.html", page(ga + '<a href="/">home</a>', robots=""))
+        self.assertTrue(any("portfolio/index.html: página com GA4 precisa de window['ga-disable" in p
                             for p in self.problems(pre_cutover=False)))
 
 
