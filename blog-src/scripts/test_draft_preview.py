@@ -2,7 +2,9 @@
 
 Sem rede e sem build: o build e o wrangler entram por um executor falso. O build real é conferido à mão no PR.
 """
+import hashlib
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -115,17 +117,22 @@ class SourceTest(unittest.TestCase):
         self.tmp.cleanup()
 
     def test_hash_changes_with_text_image_bytes_and_image_name(self):
+        # r1 (Astra P3): cada entrada muda o hash isoladamente, a partir da MESMA base.
         h0 = D.source_sha256(self.md, self.imgs)
         self.assertEqual(h0, D.source_sha256(self.md, self.imgs))
         self.assertRegex(h0, r"^[0-9a-f]{64}$")
         self.assertNotEqual(h0, D.source_sha256(self.md, None))
-        (self.imgs / "a-728.webp").write_bytes(b"B")
-        h1 = D.source_sha256(self.md, self.imgs)
-        self.assertNotEqual(h0, h1)
-        (self.imgs / "a-728.webp").rename(self.imgs / "b-728.webp")
-        self.assertNotEqual(h1, D.source_sha256(self.md, self.imgs))
-        self.md.write_text(self.md.read_text() + "mais\n", encoding="utf-8")
-        self.assertNotEqual(h1, D.source_sha256(self.md, self.imgs))
+        md0, img = self.md.read_bytes(), self.imgs / "a-728.webp"
+        self.md.write_bytes(md0 + b"mais\n")
+        self.assertNotEqual(h0, D.source_sha256(self.md, self.imgs), "texto")
+        self.md.write_bytes(md0)
+        self.assertEqual(h0, D.source_sha256(self.md, self.imgs))
+        img.write_bytes(b"B")
+        self.assertNotEqual(h0, D.source_sha256(self.md, self.imgs), "bytes da imagem")
+        img.write_bytes(b"A")
+        self.assertEqual(h0, D.source_sha256(self.md, self.imgs))
+        img.rename(self.imgs / "b-728.webp")
+        self.assertNotEqual(h0, D.source_sha256(self.md, self.imgs), "nome da imagem")
 
     def test_image_names_and_types_are_checked(self):
         for bad in (".oculto.webp", "x.exe", "x y.webp"):
@@ -205,21 +212,60 @@ class UploadTest(unittest.TestCase):
     def test_manifest_last_and_exact_keys_and_types(self):
         p = D.Preview(SLUG, "Sales Coach", b"<html>", {"img/sales-coach/a.webp": (b"A", "image/webp")})
         man = D.manifest(p, "a" * 64, now=datetime(2026, 11, 13, 19, 0, tzinfo=timezone.utc))
+        html = hashlib.sha256(b"<html>").hexdigest()
+        version = hashlib.sha256(f"html:{html}\nsource:{'a' * 64}".encode()).hexdigest()
         self.assertEqual(man, {"slug": SLUG, "title": "Sales Coach", "uploaded_at": "2026-11-13T19:00:00.000Z",
-                               "source_sha256": "a" * 64,
+                               "source_sha256": "a" * 64, "html_sha256": html, "version": version,
                                "files": {"index.html": "text/html; charset=utf-8", "img/sales-coach/a.webp": "image/webp"}})
+        # A versão muda com o HTML e com a fonte, cada um isolado (r1: a aprovação vale para os dois).
+        self.assertNotEqual(version, D.version_id(html, "b" * 64))
+        self.assertNotEqual(version, D.version_id("c" * 64, "a" * 64))
         fake = Fake()
         with tempfile.TemporaryDirectory() as t:
             keys = D.upload(p, man, Path(t), run=fake)
-            sent = Path(t) / "upload" / "manifest.json"
+            sent = Path(t) / "upload" / SLUG / "manifest.json"
             self.assertEqual(json.loads(sent.read_text(encoding="utf-8")), man)
-        self.assertEqual(keys, ["blog-rascunhos/sales-coach/img/sales-coach/a.webp", "blog-rascunhos/sales-coach/index.html",
-                                "blog-rascunhos/sales-coach/manifest.json"])
+        # Versão inteira na pasta dela e o manifesto (o ponteiro) por último (r1, Astra P2).
+        v = f"blog-rascunhos/sales-coach/v/{version}/"
+        self.assertEqual(keys, [v + "img/sales-coach/a.webp", v + "index.html", "blog-rascunhos/sales-coach/manifest.json"])
         for (args, kw), ctype in zip(fake.calls, ["image/webp", "text/html; charset=utf-8", "application/json"]):
             self.assertEqual(args[:6], ["npx", "--yes", "wrangler@4", "r2", "object", "put"])
             self.assertEqual(args[args.index("--content-type") + 1], ctype)
             self.assertIn("--remote", args)
             self.assertEqual(kw["cwd"], D.ADMIN_WORKER)
+
+    def test_upload_refuses_manifest_that_does_not_match_the_html(self):
+        p = D.Preview(SLUG, "t", b"<html>", {})
+        man = D.manifest(p, "a" * 64)
+        for k, v in (("html_sha256", "c" * 64), ("version", "d" * 64), ("source_sha256", "e" * 64)):
+            with self.subTest(k=k), tempfile.TemporaryDirectory() as t, self.assertRaisesRegex(D.DraftError, "não confere"):
+                D.upload(p, {**man, k: v}, Path(t), run=Fake())
+
+    def test_remover_deletes_manifest_first_then_the_current_version(self):
+        man = {"version": "f" * 64, "files": {"index.html": "text/html; charset=utf-8", "img/sales-coach/a.webp": "image/webp"}}
+        calls = []
+
+        def fake_wrangler(args, run=None, input_bytes=None):
+            calls.append(args)
+            return subprocess.CompletedProcess(args, 0, json.dumps(man).encode(), b"")
+        old, D.wrangler = D.wrangler, fake_wrangler
+        try:
+            self.assertEqual(D.main(["remover", SLUG]), 0)
+        finally:
+            D.wrangler = old
+        deleted = [a[3] for a in calls if a[:3] == ["r2", "object", "delete"]]
+        v = f"blog-rascunhos/sales-coach/v/{'f' * 64}/"
+        self.assertEqual(deleted, ["blog-rascunhos/sales-coach/manifest.json", v + "index.html", v + "img/sales-coach/a.webp"])
+
+    def test_worker_and_script_agree_on_version_and_frame_hosts(self):
+        # O Worker calcula a versão igual (versionId) e a CSP da prévia libera os mesmos iframes que o check_site aceita.
+        ts = (D.REPO / "workers" / "admin" / "src" / "drafts.ts").read_text(encoding="utf-8")
+        self.assertIn("return sha256Hex(`html:${html}\\nsource:${source}`);", ts)
+        sys.path.insert(0, str(D.REPO / "scripts"))
+        import check_site
+        frame = re.search(r"'frame-src ([^']+)'\s*\+\s*'([^']+)'", ts)
+        hosts = {u.removeprefix("https://") for u in (frame.group(1) + frame.group(2)).split()}
+        self.assertEqual(hosts, set(check_site.IFRAME_HOSTS))
 
     def test_wrangler_failure_stops(self):
         p = D.Preview(SLUG, "t", b"<html>", {})

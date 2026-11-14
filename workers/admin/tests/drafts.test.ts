@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { handle, type Env, type Deps } from '../src/index.ts';
-import { PREVIEW_CSP, sha256Hex, type R2Like } from '../src/drafts.ts';
+import { PREVIEW_CSP, sha256Hex, versionId, type R2Like } from '../src/drafts.ts';
 import type { D1Like, D1Stmt } from '../src/sync.ts';
 import { resetCertsCache } from '../src/access.ts';
 
@@ -72,14 +72,23 @@ const HTML = (title = 'Post') =>
   `<!DOCTYPE html><html lang="pt-BR"><head><title>${title}</title></head><body class="x">\n<main><h1>${title}</h1>`
   + `<img src="/admin/rascunhos/sales-coach/img/sales-coach/a-728.webp"></main></body></html>`;
 
-function putDraft(b: ReturnType<typeof r2>, slug = 'sales-coach', opts: { html?: string; title?: string; manifest?: Record<string, unknown>; files?: Record<string, string> } = {}) {
+type Draft = { html: string; version: string; htmlSha: string; source: string };
+
+/** Versão imutável em <slug>/v/<versão>/ e o manifesto apontando para ela, como o draft_preview.py envia. */
+async function putDraft(b: ReturnType<typeof r2>, slug = 'sales-coach', opts: { html?: string; title?: string; source?: string;
+  manifest?: Record<string, unknown>; files?: Record<string, string>; image?: string; skipManifest?: boolean } = {}): Promise<Draft> {
   const html = opts.html ?? HTML(opts.title ?? 'Como construí o Sales Coach');
-  b.store.set(`${slug}/index.html`, enc(html));
-  b.store.set(`${slug}/img/${slug}/a-728.webp`, enc('WEBP-BYTES'));
+  const htmlSha = await sha256Hex(html);
+  const source = opts.source ?? SHA('a');
+  const version = await versionId(htmlSha, source);
+  b.store.set(`${slug}/v/${version}/index.html`, enc(html));
+  b.store.set(`${slug}/v/${version}/img/${slug}/a-728.webp`, enc(opts.image ?? 'WEBP-BYTES'));
   const files = opts.files ?? { 'index.html': 'text/html; charset=utf-8', [`img/${slug}/a-728.webp`]: 'image/webp' };
-  b.store.set(`${slug}/manifest.json`, enc(JSON.stringify({ slug, title: opts.title ?? 'Como construí o Sales Coach',
-    uploaded_at: '2026-11-13T19:00:00.000Z', source_sha256: SHA('a'), files, ...(opts.manifest ?? {}) })));
-  return html;
+  if (!opts.skipManifest) {
+    b.store.set(`${slug}/manifest.json`, enc(JSON.stringify({ slug, title: opts.title ?? 'Como construí o Sales Coach',
+      uploaded_at: '2026-11-13T19:00:00.000Z', source_sha256: source, html_sha256: htmlSha, version, files, ...(opts.manifest ?? {}) })));
+  }
+  return { html, version, htmlSha, source };
 }
 
 // ------------------------------------------------------------------ Access (JWT RS256 real)
@@ -131,7 +140,7 @@ function setup(opts: { mailStatus?: number; mailThrows?: boolean; failSql?: RegE
 // ------------------------------------------------------------------ R1: acesso
 test('R1: sem JWT válido ou com email fora da lista, nenhuma rota de rascunho responde (403) e o R2 não é lido', async () => {
   const s = setup();
-  putDraft(s.bucket);
+  await putDraft(s.bucket);
   for (const path of ['/admin/rascunhos', '/admin/rascunhos/sales-coach/', '/admin/rascunhos/sales-coach/img/sales-coach/a-728.webp']) {
     for (const token of [null, 'x.y.z', await jwt('outro@exemplo.com')]) {
       const r = await s.req(path, { token });
@@ -151,7 +160,7 @@ test('R2: lista vazia, e com rascunhos: título escapado, slug, data e estado; m
   let r = await s.req('/admin/rascunhos');
   assert.equal(r.status, 200);
   assert.match(await r.text(), /Nenhum rascunho no momento/);
-  putDraft(s.bucket, 'sales-coach', { title: 'Sales <Coach> & "IA"' });
+  await putDraft(s.bucket, 'sales-coach', { title: 'Sales <Coach> & "IA"' });
   s.bucket.store.set('quebrado/manifest.json', enc('{nao json'));
   s.bucket.store.set('quebrado/index.html', enc('<body>x</body>'));
   r = await s.req('/admin/rascunhos/');
@@ -175,13 +184,12 @@ test('R2: o painel de assinantes tem o link para os rascunhos', async () => {
 // ------------------------------------------------------------------ R3: prévia
 test('R3: prévia com a barra de aprovação logo depois do <body>, hash do HTML servido e CSP da prévia', async () => {
   const s = setup();
-  const html = putDraft(s.bucket);
+  const { html, version } = await putDraft(s.bucket);
   const r = await s.req('/admin/rascunhos/sales-coach/');
   assert.equal(r.status, 200);
   const out = await r.text();
-  const hash = await sha256Hex(html);
   assert.ok(out.startsWith('<!DOCTYPE html><html lang="pt-BR"><head><title>Como construí o Sales Coach</title></head><body class="x"><div id="rascunho-barra"'));
-  assert.ok(out.includes(`<input type="hidden" name="html" value="${hash}">`));
+  assert.ok(out.includes(`<input type="hidden" name="versao" value="${version}">`));
   assert.ok(out.includes('action="/admin/rascunhos/sales-coach/aprovar"'));
   assert.ok(out.includes('Aguardando a sua aprovação.'));
   // O resto do HTML sai intacto.
@@ -190,16 +198,27 @@ test('R3: prévia com a barra de aprovação logo depois do <body>, hash do HTML
   assert.match(PREVIEW_CSP, /form-action 'self'/);
   assert.match(PREVIEW_CSP, /frame-ancestors 'none'/);
   assert.match(PREVIEW_CSP, /connect-src 'none'/);
+  // r1 (Kimi P2): os iframes que o blog gera (blog.ts) e que o check_site aceita precisam carregar na prévia.
+  const frame = PREVIEW_CSP.split('; ').find((d) => d.startsWith('frame-src '))!.split(' ').slice(1);
+  assert.deepEqual(frame.sort(), ['https://creators.spotify.com', 'https://open.spotify.com', 'https://player.vimeo.com',
+    'https://podcasters.spotify.com', 'https://www.youtube-nocookie.com', 'https://www.youtube.com']);
   assert.equal(r.headers.get('cache-control'), 'private, no-store');
   assert.equal(r.headers.get('x-robots-tag'), 'noindex, nofollow');
 });
 
 test('R3: sem barra final redireciona; slug desconhecido, inválido ou com manifesto inválido responde 404', async () => {
   const s = setup();
-  putDraft(s.bucket);
+  await putDraft(s.bucket);
   const r = await s.req('/admin/rascunhos/sales-coach');
   assert.equal(r.status, 308);
   assert.equal(r.headers.get('location'), '/admin/rascunhos/sales-coach/');
+  // r1 (Kimi e Astra P2): o 308 leva os mesmos cabeçalhos das outras respostas.
+  assert.equal(r.headers.get('cache-control'), 'private, no-store');
+  assert.equal(r.headers.get('x-robots-tag'), 'noindex, nofollow');
+  assert.equal(r.headers.get('x-frame-options'), 'DENY');
+  assert.equal(r.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(r.headers.get('referrer-policy'), 'no-referrer');
+  assert.match(r.headers.get('content-security-policy')!, /^default-src 'none'/);
   // Slug inválido nem redireciona.
   assert.equal((await s.req('/admin/rascunhos/Sales-Coach')).status, 404);
   for (const p of ['/admin/rascunhos/outro/', '/admin/rascunhos/Sales-Coach/', '/admin/rascunhos/sales_coach/', '/admin/rascunhos/sales%2Fcoach/']) {
@@ -208,6 +227,9 @@ test('R3: sem barra final redireciona; slug desconhecido, inválido ou com manif
   for (const [name, manifest] of Object.entries({
     'slug diferente': { slug: 'outro' },
     'sha inválido': { source_sha256: 'xyz' },
+    'html_sha256 ausente': { html_sha256: undefined },
+    'versão que não confere com html e fonte': { version: SHA('c') },
+    'fonte trocada sem trocar a versão': { source_sha256: SHA('d') },
     'sem título': { title: 5 },
     'arquivo com ..': { files: { 'index.html': 'text/html; charset=utf-8', '../x': 'image/webp' } },
     'arquivo oculto': { files: { 'index.html': 'text/html; charset=utf-8', 'img/.env': 'text/plain' } },
@@ -215,29 +237,48 @@ test('R3: sem barra final redireciona; slug desconhecido, inválido ou com manif
     'files lista': { files: ['index.html'] },
   })) {
     const t = setup();
-    putDraft(t.bucket, 'sales-coach', { manifest });
+    await putDraft(t.bucket, 'sales-coach', { manifest });
     assert.equal((await t.req('/admin/rascunhos/sales-coach/')).status, 404, name);
   }
   const t = setup();
   t.bucket.store.set('sales-coach/index.html', enc('<html><body>x</body></html>'));
   assert.equal((await t.req('/admin/rascunhos/sales-coach/')).status, 404, 'sem manifesto');
+  // HTML da versão diferente do html_sha256 do manifesto (objeto corrompido): 404, nada servido nem aprovável.
+  const u = setup();
+  const d = await putDraft(u.bucket);
+  u.bucket.store.set(`sales-coach/v/${d.version}/index.html`, enc('<html><body>outro</body></html>'));
+  assert.equal((await u.req('/admin/rascunhos/sales-coach/')).status, 404, 'html adulterado');
+  assert.equal((await u.approve('sales-coach', { confirmar: 'sim', versao: d.version })).status, 404, 'html adulterado: aprovar');
+  assert.deepEqual(u.rows(), []);
 });
 
 // ------------------------------------------------------------------ R4: arquivos
 test('R4: arquivo do manifesto sai com o tipo do manifesto; fora do manifesto, index, manifesto ou caminho estranho dá 404', async () => {
   const s = setup();
-  putDraft(s.bucket);
-  s.bucket.store.set('sales-coach/img/sales-coach/fora.webp', enc('X'));
-  s.bucket.store.set('sales-coach/segredo.txt', enc('X'));
+  const d = await putDraft(s.bucket);
+  s.bucket.store.set(`sales-coach/v/${d.version}/img/sales-coach/fora.webp`, enc('X'));
+  s.bucket.store.set(`sales-coach/v/${d.version}/segredo.txt`, enc('X'));
+  // r1 (Kimi e Astra P2): nomes de propriedades herdadas de Object não estão no manifesto.
+  for (const k of ['constructor', 'toString', '__proto__', 'hasOwnProperty', 'valueOf']) {
+    s.bucket.store.set(`sales-coach/v/${d.version}/${k}`, enc('FORA-DO-MANIFESTO'));
+  }
+  // Arquivo de uma versão antiga, mesmo listado no manifesto atual por nome, só é lido da versão atual.
+  s.bucket.store.set('sales-coach/img/sales-coach/a-728.webp', enc('LEGADO-FORA-DA-VERSAO'));
   const r = await s.req('/admin/rascunhos/sales-coach/img/sales-coach/a-728.webp');
   assert.equal(r.status, 200);
   assert.equal(r.headers.get('content-type'), 'image/webp');
   assert.equal(new TextDecoder().decode(await r.arrayBuffer()), 'WEBP-BYTES');
   assert.equal(r.headers.get('cache-control'), 'private, no-store');
+  const before = s.bucket.gets.length;
   for (const p of ['img/sales-coach/fora.webp', 'segredo.txt', 'index.html', 'manifest.json', 'img/sales-coach/%2e%2e/x',
-    'img//a-728.webp', '.hidden', 'img/sales-coach/a-728.webp/']) {
-    assert.equal((await s.req(`/admin/rascunhos/sales-coach/${p}`)).status, 404, p);
+    'img//a-728.webp', '.hidden', 'img/sales-coach/a-728.webp/', 'constructor', 'toString', 'hasOwnProperty', 'valueOf',
+    `v/${d.version}/index.html`]) {
+    const r = await s.req(`/admin/rascunhos/sales-coach/${p}`);
+    assert.equal(r.status, 404, p);
+    assert.doesNotMatch(await r.text(), /FORA-DO-MANIFESTO|LEGADO/, p);
   }
+  // Fora do manifesto, só o manifesto é lido: nenhum objeto do rascunho.
+  assert.deepEqual(s.bucket.gets.slice(before).filter((k) => !k.endsWith('/manifest.json')), []);
   assert.equal((await s.req('/admin/rascunhos/sales-coach/img/sales-coach/a-728.webp', { method: 'POST' })).status, 405);
   // Caminho com ../ é normalizado pela URL antes de chegar: vira o manifesto, que nunca é servido.
   assert.equal((await s.req('/admin/rascunhos/sales-coach/img/../manifest.json')).status, 404);
@@ -246,9 +287,8 @@ test('R4: arquivo do manifesto sai com o tipo do manifesto; fora do manifesto, i
 // ------------------------------------------------------------------ R5: aprovação
 test('R5: aprovação grava a versão vista, avisa o Roger e a prévia e a lista passam a mostrar aprovado', async () => {
   const s = setup();
-  const html = putDraft(s.bucket);
-  const hash = await sha256Hex(html);
-  const r = await s.approve('sales-coach', { confirmar: 'sim', html: hash });
+  const { htmlSha: hash, version } = await putDraft(s.bucket);
+  const r = await s.approve('sales-coach', { confirmar: 'sim', versao: version });
   assert.equal(r.status, 303);
   assert.equal(r.headers.get('location'), '/admin/rascunhos?msg=aprovado');
   const rows = s.rows();
@@ -259,6 +299,7 @@ test('R5: aprovação grava a versão vista, avisa o Roger e a prévia e a lista
   assert.deepEqual(s.mails[0].body.to, ['roger@exemplo.com']);
   assert.equal(s.mails[0].body.from, 'Painel <painel@guifav.dev>');
   assert.equal(s.mails[0].body.subject, 'Rascunho aprovado: Como construí o Sales Coach');
+  assert.match(String(s.mails[0].body.text), new RegExp(`Versão aprovada: ${version}`));
   assert.match(String(s.mails[0].body.text), new RegExp(`HTML aprovado \\(sha256\\): ${hash}`));
   assert.match(String(s.mails[0].body.text), new RegExp(`Fonte aprovada \\(sha256\\): ${SHA('a')}`));
   assert.equal(s.mails[0].auth, 'Bearer re_test');
@@ -272,19 +313,20 @@ test('R5: aprovação grava a versão vista, avisa o Roger e a prévia e a lista
 
 test('R5: sem confirmação, outra origem, formato errado, grande demais, hash velho, slug desconhecido ou GET: nada é gravado nem enviado', async () => {
   const s = setup();
-  const html = putDraft(s.bucket);
-  const hash = await sha256Hex(html);
+  const { version: hash, htmlSha } = await putDraft(s.bucket);
   const cases: [string, Promise<Response>, number][] = [
-    ['sem confirmar', s.approve('sales-coach', { html: hash }), 400],
-    ['confirmar errado', s.approve('sales-coach', { confirmar: 'on', html: hash }), 400],
-    ['outra origem', s.approve('sales-coach', { confirmar: 'sim', html: hash }, { origin: 'https://evil.example' }), 403],
-    ['sem origem', s.req('/admin/rascunhos/sales-coach/aprovar', { method: 'POST', body: `confirmar=sim&html=${hash}`,
+    ['hash do HTML no lugar da versão', s.approve('sales-coach', { confirmar: 'sim', versao: htmlSha }), 409],
+    ['campo antigo html', s.approve('sales-coach', { confirmar: 'sim', html: hash }), 409],
+    ['sem confirmar', s.approve('sales-coach', { versao: hash }), 400],
+    ['confirmar errado', s.approve('sales-coach', { confirmar: 'on', versao: hash }), 400],
+    ['outra origem', s.approve('sales-coach', { confirmar: 'sim', versao: hash }, { origin: 'https://evil.example' }), 403],
+    ['sem origem', s.req('/admin/rascunhos/sales-coach/aprovar', { method: 'POST', body: `confirmar=sim&versao=${hash}`,
       headers: { 'content-type': 'application/x-www-form-urlencoded' } }), 403],
-    ['json', s.approve('sales-coach', { confirmar: 'sim', html: hash }, { 'content-type': 'application/json' }), 415],
-    ['grande', s.approve('sales-coach', { confirmar: 'sim', html: hash, x: 'a'.repeat(3000) }), 413],
-    ['hash velho', s.approve('sales-coach', { confirmar: 'sim', html: SHA('b') }), 409],
+    ['json', s.approve('sales-coach', { confirmar: 'sim', versao: hash }, { 'content-type': 'application/json' }), 415],
+    ['grande', s.approve('sales-coach', { confirmar: 'sim', versao: hash, x: 'a'.repeat(3000) }), 413],
+    ['hash velho', s.approve('sales-coach', { confirmar: 'sim', versao: SHA('b') }), 409],
     ['hash vazio', s.approve('sales-coach', { confirmar: 'sim' }), 409],
-    ['outro slug', s.approve('outro', { confirmar: 'sim', html: hash }), 404],
+    ['outro slug', s.approve('outro', { confirmar: 'sim', versao: hash }), 404],
     ['GET', s.req('/admin/rascunhos/sales-coach/aprovar'), 405],
   ];
   for (const [name, p, status] of cases) assert.equal((await p).status, status, name);
@@ -294,18 +336,50 @@ test('R5: sem confirmação, outra origem, formato errado, grande demais, hash v
 
 test('R5: versão nova depois da aprovação volta a pedir aprovação, e a nova aprovação vale só para ela', async () => {
   const s = setup();
-  const h1 = await sha256Hex(putDraft(s.bucket));
-  assert.equal((await s.approve('sales-coach', { confirmar: 'sim', html: h1 })).status, 303);
-  const h2 = await sha256Hex(putDraft(s.bucket, 'sales-coach', { title: 'Sales Coach, versão 2' }));
+  const h1 = (await putDraft(s.bucket)).version;
+  assert.equal((await s.approve('sales-coach', { confirmar: 'sim', versao: h1 })).status, 303);
+  const h2 = (await putDraft(s.bucket, 'sales-coach', { title: 'Sales Coach, versão 2' })).version;
   assert.notEqual(h1, h2);
   const prev = await (await s.req('/admin/rascunhos/sales-coach/')).text();
   assert.match(prev, /A versão mudou depois da última aprovação/);
   assert.ok(prev.includes(`value="${h2}"`));
   assert.match(await (await s.req('/admin/rascunhos')).text(), /a versão mudou depois da última aprovação/);
   // A aprovação antiga não serve para a versão nova.
-  assert.equal((await s.approve('sales-coach', { confirmar: 'sim', html: h1 })).status, 409);
-  assert.equal((await s.approve('sales-coach', { confirmar: 'sim', html: h2 })).status, 303);
-  assert.deepEqual(s.rows().map((r) => r.html_sha256), [h1, h2]);
+  assert.equal((await s.approve('sales-coach', { confirmar: 'sim', versao: h1 })).status, 409);
+  assert.equal((await s.approve('sales-coach', { confirmar: 'sim', versao: h2 })).status, 303);
+  assert.equal(s.rows().length, 2);
+});
+
+test('R5 (r1, Kimi P1 e Astra P2): imagem trocada com o mesmo HTML não herda a aprovação; o formulário antigo dá 409', async () => {
+  const s = setup();
+  const a = await putDraft(s.bucket, 'sales-coach', { source: SHA('a') });
+  assert.equal((await s.approve('sales-coach', { confirmar: 'sim', versao: a.version })).status, 303);
+  // Só a imagem mudou: mesma página HTML, fonte nova.
+  const b = await putDraft(s.bucket, 'sales-coach', { source: SHA('b'), image: 'WEBP-NOVO' });
+  assert.equal(a.htmlSha, b.htmlSha);
+  assert.notEqual(a.version, b.version);
+  const prev = await (await s.req('/admin/rascunhos/sales-coach/')).text();
+  assert.match(prev, /A versão mudou depois da última aprovação/);
+  assert.ok(prev.includes(`name="versao" value="${b.version}"`));
+  assert.match(await (await s.req('/admin/rascunhos')).text(), /a versão mudou depois da última aprovação/);
+  assert.equal(new TextDecoder().decode(await (await s.req('/admin/rascunhos/sales-coach/img/sales-coach/a-728.webp')).arrayBuffer()), 'WEBP-NOVO');
+  // Formulário aberto antes da troca: nada gravado.
+  assert.equal((await s.approve('sales-coach', { confirmar: 'sim', versao: a.version })).status, 409);
+  assert.deepEqual(s.rows().map((r) => r.source_sha256), [SHA('a')]);
+  assert.equal((await s.approve('sales-coach', { confirmar: 'sim', versao: b.version })).status, 303);
+  assert.deepEqual(s.rows().map((r) => [r.html_sha256, r.source_sha256]), [[a.htmlSha, SHA('a')], [b.htmlSha, SHA('b')]]);
+});
+
+test('R5 (r1, Astra P2): envio interrompido antes do manifesto deixa a versão anterior inteira, e a aprovação grava a fonte dela', async () => {
+  const s = setup();
+  const a = await putDraft(s.bucket, 'sales-coach', { source: SHA('a') });
+  // A versão B sobe os arquivos, mas o manifesto (último) falha: ele continua apontando para A.
+  await putDraft(s.bucket, 'sales-coach', { source: SHA('b'), title: 'Texto novo', skipManifest: true });
+  const prev = await (await s.req('/admin/rascunhos/sales-coach/')).text();
+  assert.doesNotMatch(prev, /Texto novo/);
+  assert.ok(prev.includes(`name="versao" value="${a.version}"`));
+  assert.equal((await s.approve('sales-coach', { confirmar: 'sim', versao: a.version })).status, 303);
+  assert.deepEqual(s.rows().map((r) => [r.html_sha256, r.source_sha256]), [[a.htmlSha, SHA('a')]]);
 });
 
 test('R5: aviso por email falho fica registrado na aprovação, que continua valendo', async () => {
@@ -315,21 +389,21 @@ test('R5: aviso por email falho fica registrado na aprovação, que continua val
     ['sem configuração', { notify: false }, 'aviso sem configuração'],
   ] as const) {
     const s = setup(opts);
-    const hash = await sha256Hex(putDraft(s.bucket));
-    const r = await s.approve('sales-coach', { confirmar: 'sim', html: hash });
+    const { version: hash, htmlSha } = await putDraft(s.bucket);
+    const r = await s.approve('sales-coach', { confirmar: 'sim', versao: hash });
     assert.equal(r.headers.get('location'), '/admin/rascunhos?msg=aprovado-sem-aviso', name);
     const [row] = s.rows();
     assert.equal(row.notify_error, why, name);
     assert.equal(row.notified_at, '', name);
-    assert.equal(row.html_sha256, hash, name);
+    assert.equal(row.html_sha256, htmlSha, name);
     assert.match(await (await s.req('/admin/rascunhos?msg=aprovado-sem-aviso')).text(), /o aviso por email ao Roger falhou/, name);
   }
 });
 
 test('R5: falha do D1 ao gravar a aprovação: 502 e nenhum email', async () => {
   const s = setup({ failSql: /INSERT INTO draft_approvals/ });
-  const hash = await sha256Hex(putDraft(s.bucket));
-  const r = await s.approve('sales-coach', { confirmar: 'sim', html: hash });
+  const hash = (await putDraft(s.bucket)).version;
+  const r = await s.approve('sales-coach', { confirmar: 'sim', versao: hash });
   assert.equal(r.status, 502);
   assert.match(await r.text(), /Nada foi aprovado/);
   assert.deepEqual(s.mails, []);
@@ -337,8 +411,8 @@ test('R5: falha do D1 ao gravar a aprovação: 502 e nenhum email', async () => 
 
 test('R5: falha ao registrar o aviso não desfaz a aprovação', async () => {
   const s = setup({ failSql: /UPDATE draft_approvals/ });
-  const hash = await sha256Hex(putDraft(s.bucket));
-  const r = await s.approve('sales-coach', { confirmar: 'sim', html: hash });
+  const hash = (await putDraft(s.bucket)).version;
+  const r = await s.approve('sales-coach', { confirmar: 'sim', versao: hash });
   assert.equal(r.status, 303);
   assert.equal(s.rows().length, 1);
   assert.equal(s.mails.length, 1);

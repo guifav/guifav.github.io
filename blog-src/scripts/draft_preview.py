@@ -11,10 +11,13 @@ O rascunho nunca entra no repo antes da aprovação do Gui: o Markdown e as imag
    public/img/<slug>/, e faz o build do Astro com DRAFT_PREVIEW=1 (sem GA4, sem Clarity, tudo com noindex);
 2. pega a página do post e os arquivos dele (img/<slug>/ e video/<slug>.*) e troca /blog/img/<slug>/ e
    /blog/video/<slug>. por /admin/rascunhos/<slug>/...; confere que nada ficou de fora e que não há analytics;
-3. envia os arquivos ao bucket R2 privado blog-rascunhos, com o manifesto por último.
+3. envia os arquivos ao bucket R2 privado blog-rascunhos numa pasta própria da versão (<slug>/v/<versão>/) e, por
+   último, o manifesto <slug>/manifest.json, que aponta para ela. Se o envio parar no meio, o manifesto continua
+   apontando para a versão anterior inteira: o painel nunca mistura duas versões.
 
-O manifesto leva o source_sha256 (Markdown + imagens). O "status" recalcula esse hash e lê no D1 do painel se
-existe aprovação para ele: o PR de publicação só sai com a fonte aprovada.
+A versão é o sha256 do HTML junto com o source_sha256 (Markdown + imagens). A aprovação no painel grava os dois.
+O "status" recalcula o source_sha256 e lê no D1 do painel se existe aprovação para ele: o PR de publicação só sai
+com a fonte aprovada.
 
 Credenciais: CLOUDFLARE_API_TOKEN e CLOUDFLARE_ACCOUNT_ID no ambiente (env da KVM), usadas pelo wrangler.
 """
@@ -177,10 +180,17 @@ def verify(html: str, slug: str, files: dict[str, tuple[bytes, str]]) -> None:
             raise DraftError(f"tipo de arquivo fora da lista: {rel!r}")
 
 
+def version_id(html_sha256: str, source: str) -> str:
+    """Identidade da versão: o HTML e a fonte juntos. O Worker (versionId em drafts.ts) calcula igual."""
+    return hashlib.sha256(f"html:{html_sha256}\nsource:{source}".encode()).hexdigest()
+
+
 def manifest(p: Preview, source: str, now: datetime | None = None) -> dict:
     at = (now or datetime.now(timezone.utc)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     files = {"index.html": HTML_TYPE, **{k: t for k, (_, t) in sorted(p.files.items())}}
-    return {"slug": p.slug, "title": p.title, "uploaded_at": at, "source_sha256": source, "files": files}
+    html = hashlib.sha256(p.html).hexdigest()
+    return {"slug": p.slug, "title": p.title, "uploaded_at": at, "source_sha256": source, "html_sha256": html,
+            "version": version_id(html, source), "files": files}
 
 
 def wrangler(args: list[str], run=subprocess.run, input_bytes: bytes | None = None) -> subprocess.CompletedProcess:
@@ -192,16 +202,19 @@ def wrangler(args: list[str], run=subprocess.run, input_bytes: bytes | None = No
 
 
 def upload(p: Preview, man: dict, work: Path, run=subprocess.run) -> list[str]:
-    """Envia ao R2: arquivos, depois o index.html, e o manifesto por último (sem manifesto, o painel ignora)."""
-    items: list[tuple[str, bytes, str]] = [(k, b, t) for k, (b, t) in sorted(p.files.items())]
-    items.append(("index.html", p.html, HTML_TYPE))
-    items.append(("manifest.json", json.dumps(man, ensure_ascii=False, indent=2).encode("utf-8"), "application/json"))
+    """Envia ao R2: a versão inteira em <slug>/v/<versão>/ e o manifesto por último, apontando para ela."""
+    if man["html_sha256"] != hashlib.sha256(p.html).hexdigest() or man["version"] != version_id(man["html_sha256"], man["source_sha256"]):
+        raise DraftError("manifesto não confere com o HTML da prévia")
+    prefix = f"{p.slug}/v/{man['version']}/"
+    items: list[tuple[str, bytes, str]] = [(prefix + k, b, t) for k, (b, t) in sorted(p.files.items())]
+    items.append((prefix + "index.html", p.html, HTML_TYPE))
+    items.append((f"{p.slug}/manifest.json", json.dumps(man, ensure_ascii=False, indent=2).encode("utf-8"), "application/json"))
     keys = []
     for rel, data, ctype in items:
         f = work / "upload" / rel
         f.parent.mkdir(parents=True, exist_ok=True)
         f.write_bytes(data)
-        key = f"{BUCKET}/{p.slug}/{rel}"
+        key = f"{BUCKET}/{rel}"
         wrangler(["r2", "object", "put", key, "--file", str(f), "--content-type", ctype, "--remote"], run=run)
         keys.append(key)
     return keys
@@ -260,8 +273,12 @@ def cmd_remover(a: argparse.Namespace) -> int:
         raise DraftError(f"slug inválido: {slug!r}")
     r = wrangler(["r2", "object", "get", f"{BUCKET}/{slug}/manifest.json", "--pipe", "--remote"])
     man = json.loads(r.stdout)
-    # Manifesto primeiro: sem ele, o painel já não mostra nem serve nada do rascunho.
-    keys = ["manifest.json", "index.html", *[k for k in man.get("files", {}) if k != "index.html"]]
+    version = man.get("version", "")
+    if not re.fullmatch(r"[0-9a-f]{64}", str(version)):
+        raise DraftError("manifesto sem versão válida")
+    # Manifesto primeiro: sem ele, o painel já não mostra nem serve nada do rascunho. Versões anteriores ficam no
+    # bucket privado, sem nunca serem servidas (o Worker só lê a versão do manifesto atual).
+    keys = ["manifest.json", *[f"v/{version}/{k}" for k in ["index.html", *[k for k in man.get("files", {}) if k != "index.html"]]]]
     for k in keys:
         if not FILE_RE.match(k):
             raise DraftError(f"chave inválida no manifesto: {k!r}")

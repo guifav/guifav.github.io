@@ -11,8 +11,8 @@ Painel de assinantes da newsletter em `guifav.dev/admin` (issue #40). Só o Gui 
 
 | `GET /admin/rascunhos` | Rascunhos do blog (issue #62): título, slug, data da prévia e estado (aguardando aprovação, aprovado em ..., ou versão mudou depois da aprovação). |
 | `GET /admin/rascunhos/<slug>/` | Prévia do post como vai sair, com uma barra no topo e o botão "Aprovar publicação". Vem do bucket R2 privado `blog-rascunhos` (sem domínio público), com `Cache-Control: private, no-store`, `noindex` e CSP própria. |
-| `GET /admin/rascunhos/<slug>/<arquivo>` | Imagens e vídeo do rascunho, só os listados no manifesto. |
-| `POST /admin/rascunhos/<slug>/aprovar` | Grava em `draft_approvals` (D1) a aprovação do HTML exato que foi visto (`html_sha256`), com a fonte (`source_sha256`), quem e quando. Se a prévia mudou depois que a página abriu, responde 409 e não grava nada. Depois avisa o Roger por email; falha no aviso fica registrada na própria linha (`notify_error`) e a aprovação continua valendo. Exige "confirmo" e `Origin` do site. |
+| `GET /admin/rascunhos/<slug>/<arquivo>` | Imagens e vídeo do rascunho: só os listados no manifesto, lidos da versão para a qual ele aponta. |
+| `POST /admin/rascunhos/<slug>/aprovar` | Grava em `draft_approvals` (D1) a aprovação da versão exata que foi vista: o HTML (`html_sha256`) e a fonte (`source_sha256`, Markdown e imagens) juntos, quem e quando. Trocar só uma imagem, com o mesmo HTML, já é versão nova. Se a versão mudou depois que a página abriu, responde 409 e não grava nada. Depois avisa o Roger por email; falha no aviso fica registrada na própria linha (`notify_error`) e a aprovação continua valendo. Exige "confirmo" e `Origin` do site. |
 
 Qualquer outro caminho que a rota `guifav.dev/admin*` pegue (ex.: `/administrar`) segue para o GitHub Pages.
 
@@ -20,7 +20,7 @@ Qualquer outro caminho que a rota `guifav.dev/admin*` pegue (ex.: `/administrar`
 
 O rascunho nunca entra no repo antes da aprovação. Na KVM:
 
-1. `python3 blog-src/scripts/draft_preview.py enviar <slug>.md --imagens <pasta>`: faz o build do blog numa cópia temporária com o rascunho e `DRAFT_PREVIEW=1` (sem GA4, sem Clarity, `noindex`), troca os caminhos dos arquivos do post para `/admin/rascunhos/<slug>/` e envia ao R2, com o manifesto por último.
+1. `python3 blog-src/scripts/draft_preview.py enviar <slug>.md --imagens <pasta>`: faz o build do blog numa cópia temporária com o rascunho e `DRAFT_PREVIEW=1` (sem GA4, sem Clarity, `noindex`), troca os caminhos dos arquivos do post para `/admin/rascunhos/<slug>/` e envia ao R2 a versão inteira em `<slug>/v/<versão>/` e, por último, o manifesto `<slug>/manifest.json`, que aponta para ela. A versão é o sha256 do HTML junto com o da fonte. Envio interrompido deixa o manifesto na versão anterior, inteira.
 2. O Gui abre `guifav.dev/admin/rascunhos`, lê e aprova.
 3. `python3 blog-src/scripts/draft_preview.py status <slug>.md --imagens <pasta>` confirma no D1 que a fonte atual é a aprovada. Só então o Roger abre o PR de publicação, com o mesmo Markdown e as mesmas imagens.
 4. Depois do merge, `python3 blog-src/scripts/draft_preview.py remover <slug>` tira a prévia do R2.

@@ -3,6 +3,9 @@
 //   GET  /admin/rascunhos/<slug>/           prévia do post, com a barra de aprovação no topo
 //   GET  /admin/rascunhos/<slug>/<arquivo>  imagens e vídeo do rascunho (só os do manifesto)
 //   POST /admin/rascunhos/<slug>/aprovar    grava a aprovação da versão exata que foi vista e avisa o Roger
+// Cada envio é uma versão imutável em <slug>/v/<versão>/, e o manifesto <slug>/manifest.json (gravado por último)
+// aponta para ela. A versão é o sha256 do HTML junto com o da fonte (Markdown + imagens): a aprovação vale para
+// as duas coisas, e um envio interrompido nunca mistura o HTML de uma versão com a fonte de outra.
 // A prévia é gerada e enviada ao R2 privado pelo blog-src/scripts/draft_preview.py, na KVM. O rascunho nunca
 // entra no repo antes da aprovação; a publicação é um PR do Roger com o mesmo conteúdo (source_sha256).
 import type { D1Like } from './sync.ts';
@@ -40,7 +43,14 @@ export interface Manifest {
   title: string;
   uploaded_at: string;
   source_sha256: string;
-  files: Record<string, string>; // caminho relativo -> content-type; inclui index.html
+  html_sha256: string;
+  version: string; // versionId(html_sha256, source_sha256)
+  files: Record<string, string>; // caminho relativo -> content-type; inclui index.html (objeto sem protótipo)
+}
+
+/** Identidade da versão: o HTML e a fonte juntos. O draft_preview.py calcula igual. */
+export async function versionId(html: string, source: string): Promise<string> {
+  return sha256Hex(`html:${html}\nsource:${source}`);
 }
 
 export const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -56,7 +66,9 @@ export const PREVIEW_CSP = [
   "script-src 'self' 'unsafe-inline'",
   "media-src 'self'",
   "font-src 'self' data:",
-  'frame-src https://www.youtube-nocookie.com https://open.spotify.com',
+  // Os mesmos hosts de iframe que o check_site aceita no blog (IFRAME_HOSTS) e que o blog.ts gera.
+  'frame-src https://open.spotify.com https://creators.spotify.com https://podcasters.spotify.com https://www.youtube.com '
+    + 'https://www.youtube-nocookie.com https://player.vimeo.com',
   "connect-src 'none'",
   "form-action 'self'",
   "frame-ancestors 'none'",
@@ -103,30 +115,47 @@ export async function readManifest(bucket: R2Like, slug: string): Promise<Manife
   if (!m || typeof m !== 'object') return null;
   const r = m as Record<string, unknown>;
   if (r.slug !== slug || typeof r.title !== 'string' || typeof r.uploaded_at !== 'string') return null;
-  if (typeof r.source_sha256 !== 'string' || !SHA_RE.test(r.source_sha256)) return null;
+  for (const k of ['source_sha256', 'html_sha256', 'version']) {
+    if (typeof r[k] !== 'string' || !SHA_RE.test(r[k] as string)) return null;
+  }
+  const source = r.source_sha256 as string;
+  const html = r.html_sha256 as string;
+  if (r.version !== (await versionId(html, source))) return null;
   if (!r.files || typeof r.files !== 'object' || Array.isArray(r.files)) return null;
-  const files: Record<string, string> = {};
+  // Sem protótipo: "constructor", "toString" e afins não existem aqui (r1, Kimi e Astra P2).
+  const files: Record<string, string> = Object.create(null);
   for (const [k, v] of Object.entries(r.files as Record<string, unknown>)) {
     if (!FILE_RE.test(k) || typeof v !== 'string' || !v) return null;
     files[k] = v;
   }
   if (files['index.html'] !== 'text/html; charset=utf-8') return null;
-  return { slug, title: r.title, uploaded_at: r.uploaded_at, source_sha256: r.source_sha256, files };
+  return { slug, title: r.title, uploaded_at: r.uploaded_at, source_sha256: source, html_sha256: html, version: r.version as string, files };
 }
 
-type Approval = { id: number; html_sha256: string; approved_at: string; approved_by: string; notified_at: string; notify_error: string };
+const objectKey = (m: Manifest, file: string) => `${m.slug}/v/${m.version}/${file}`;
+
+/** HTML da versão do manifesto, conferido contra o html_sha256 dele; null se faltar ou não bater. */
+async function versionHtml(env: DraftEnv, m: Manifest): Promise<ArrayBuffer | null> {
+  const obj = await env.DRAFTS.get(objectKey(m, 'index.html'));
+  if (!obj) return null;
+  const raw = await obj.arrayBuffer();
+  return (await sha256Hex(raw)) === m.html_sha256 ? raw : null;
+}
+
+type Approval = { id: number; html_sha256: string; source_sha256: string; approved_at: string; approved_by: string; notified_at: string; notify_error: string };
 
 async function approvals(db: D1Like, slug: string): Promise<Approval[]> {
   const r = await db
-    .prepare('SELECT id, html_sha256, approved_at, approved_by, notified_at, notify_error FROM draft_approvals WHERE slug = ? ORDER BY id DESC')
+    .prepare('SELECT id, html_sha256, source_sha256, approved_at, approved_by, notified_at, notify_error FROM draft_approvals WHERE slug = ? ORDER BY id DESC')
     .bind(slug)
     .all<Approval>();
   return r.results;
 }
 
-/** Estado da versão atual: aprovada só se a aprovação é do mesmo HTML que está no R2 agora. */
-function state(list: Approval[], html: string): { approved: Approval | null; stale: boolean } {
-  const approved = list.find((a) => a.html_sha256 === html) ?? null;
+/** Estado da versão atual: aprovada só se a aprovação é do mesmo HTML E da mesma fonte (r1: imagem trocada com o
+ * mesmo HTML não herda a aprovação). */
+function state(list: Approval[], m: Manifest): { approved: Approval | null; stale: boolean } {
+  const approved = list.find((a) => a.html_sha256 === m.html_sha256 && a.source_sha256 === m.source_sha256) ?? null;
   return { approved, stale: !approved && list.length > 0 };
 }
 
@@ -146,9 +175,8 @@ async function listPage(env: DraftEnv, msg: string): Promise<Response> {
     const slug = p.replace(/\/$/, '');
     const m = await readManifest(env.DRAFTS, slug);
     if (!m) continue;
-    const html = await env.DRAFTS.get(`${slug}/index.html`);
-    if (!html) continue;
-    const st = state(await approvals(env.DB, slug), await sha256Hex(await html.arrayBuffer()));
+    if (!(await versionHtml(env, m))) continue;
+    const st = state(await approvals(env.DB, slug), m);
     const label = st.approved
       ? `aprovado em ${esc(st.approved.approved_at.slice(0, 16).replace('T', ' '))} UTC`
       : st.stale
@@ -168,14 +196,14 @@ ${rows.length ? `<table><thead><tr><th>Título</th><th>Slug</th><th>Prévia envi
   return new Response(body, { status: 200, headers: headers('text/html; charset=utf-8', ADMIN_CSP) });
 }
 
-function approvalBar(m: Manifest, html: string, st: { approved: Approval | null; stale: boolean }): string {
+function approvalBar(m: Manifest, st: { approved: Approval | null; stale: boolean }): string {
   const box = 'position:sticky;top:0;z-index:2147483647;background:#111;color:#fff;font:14px/1.4 system-ui,sans-serif;padding:.6rem 1rem;'
     + 'display:flex;flex-wrap:wrap;gap:.75rem;align-items:center';
   const status = st.approved
     ? `Aprovado em ${esc(st.approved.approved_at.slice(0, 16).replace('T', ' '))} UTC. O Roger publica esta versão.`
     : `${st.stale ? 'A versão mudou depois da última aprovação. ' : ''}Aguardando a sua aprovação.`;
   const form = st.approved ? '' : `<form method="post" action="/admin/rascunhos/${m.slug}/aprovar" style="margin:0;display:flex;gap:.5rem;align-items:center">
-<input type="hidden" name="html" value="${html}"><label style="color:#fff"><input type="checkbox" name="confirmar" value="sim" required> confirmo</label>
+<input type="hidden" name="versao" value="${m.version}"><label style="color:#fff"><input type="checkbox" name="confirmar" value="sim" required> confirmo</label>
 <button style="font:inherit;padding:.25rem .75rem">Aprovar publicação</button></form>`;
   return `<div id="rascunho-barra" style="${box}"><strong>Rascunho privado</strong><span>${status}</span>${form}
 <a href="/admin/rascunhos" style="color:#fff">todos os rascunhos</a></div>`;
@@ -183,30 +211,28 @@ function approvalBar(m: Manifest, html: string, st: { approved: Approval | null;
 
 async function preview(env: DraftEnv, slug: string): Promise<Response> {
   const m = await readManifest(env.DRAFTS, slug);
-  const obj = m && (await env.DRAFTS.get(`${slug}/index.html`));
-  if (!m || !obj) return text(404, 'rascunho não encontrado');
-  const raw = await obj.arrayBuffer();
-  const hash = await sha256Hex(raw);
-  const st = state(await approvals(env.DB, slug), hash);
+  const raw = m && (await versionHtml(env, m));
+  if (!m || !raw) return text(404, 'rascunho não encontrado');
+  const st = state(await approvals(env.DB, slug), m);
   const html = new TextDecoder().decode(raw);
   const at = html.search(/<body\b[^>]*>/i);
   if (at < 0) return text(500, 'prévia sem <body>');
   const end = html.indexOf('>', at) + 1;
-  const out = html.slice(0, end) + approvalBar(m, hash, st) + html.slice(end);
+  const out = html.slice(0, end) + approvalBar(m, st) + html.slice(end);
   return new Response(out, { status: 200, headers: headers('text/html; charset=utf-8', PREVIEW_CSP) });
 }
 
 async function asset(env: DraftEnv, slug: string, file: string): Promise<Response> {
   if (!FILE_RE.test(file) || file === 'index.html' || file === 'manifest.json') return text(404, 'não encontrado');
   const m = await readManifest(env.DRAFTS, slug);
-  const type = m?.files[file];
-  if (!m || !type) return text(404, 'não encontrado');
-  const obj = await env.DRAFTS.get(`${slug}/${file}`);
+  if (!m || !Object.hasOwn(m.files, file)) return text(404, 'não encontrado');
+  const type = m.files[file];
+  const obj = await env.DRAFTS.get(objectKey(m, file));
   if (!obj) return text(404, 'não encontrado');
   return new Response(await obj.arrayBuffer(), { status: 200, headers: headers(type, PREVIEW_CSP) });
 }
 
-async function notify(env: DraftEnv, deps: DraftDeps, m: Manifest, approval: { at: string; by: string; html: string }): Promise<string> {
+async function notify(env: DraftEnv, deps: DraftDeps, m: Manifest, approval: { at: string; by: string }): Promise<string> {
   if (!env.DRAFT_NOTIFY_TO || !env.DRAFT_NOTIFY_FROM || !env.RESEND_API_KEY) return 'aviso sem configuração';
   try {
     const res = await deps.fetch('https://api.resend.com/emails', {
@@ -217,7 +243,7 @@ async function notify(env: DraftEnv, deps: DraftDeps, m: Manifest, approval: { a
         to: [env.DRAFT_NOTIFY_TO],
         subject: `Rascunho aprovado: ${m.title}`,
         text: `O Gui aprovou a publicação do rascunho "${m.title}" (${m.slug}).\n\nAprovado em: ${approval.at}\nPor: ${approval.by}\n`
-          + `HTML aprovado (sha256): ${approval.html}\nFonte aprovada (sha256): ${m.source_sha256}\n\nPrévia: ${env.SITE_ORIGIN}/admin/rascunhos/${m.slug}/\n`,
+          + `Versão aprovada: ${m.version}\nHTML aprovado (sha256): ${m.html_sha256}\nFonte aprovada (sha256): ${m.source_sha256}\n\nPrévia: ${env.SITE_ORIGIN}/admin/rascunhos/${m.slug}/\n`,
       }),
     });
     return res.ok ? '' : `Resend respondeu ${res.status}`;
@@ -234,27 +260,25 @@ async function approve(req: Request, env: DraftEnv, deps: DraftDeps, slug: strin
   if (raw.length > 2048) return text(413, 'formulário grande demais');
   const form = new URLSearchParams(raw);
   if (form.get('confirmar') !== 'sim') return text(400, 'marque "confirmo" para aprovar');
-  const seen = form.get('html') ?? '';
+  const seen = form.get('versao') ?? '';
   const m = await readManifest(env.DRAFTS, slug);
-  const obj = m && (await env.DRAFTS.get(`${slug}/index.html`));
-  if (!m || !obj) return text(404, 'rascunho não encontrado');
-  // Só vale para a versão que foi vista: se a prévia mudou depois que a página abriu, nada é gravado.
-  const current = await sha256Hex(await obj.arrayBuffer());
-  if (!SHA_RE.test(seen) || seen !== current) {
+  if (!m || !(await versionHtml(env, m))) return text(404, 'rascunho não encontrado');
+  // Só vale para a versão que foi vista (HTML e fonte): se a prévia mudou depois que a página abriu, nada é gravado.
+  if (!SHA_RE.test(seen) || seen !== m.version) {
     return text(409, 'a prévia mudou depois que você abriu a página; recarregue e aprove de novo. Nada foi gravado.');
   }
   const at = new Date(deps.now()).toISOString();
   let id: number;
   try {
     const row = await env.DB.prepare(`INSERT INTO draft_approvals (slug, title, html_sha256, source_sha256, approved_at, approved_by)
-      VALUES (?, ?, ?, ?, ?, ?) RETURNING id`).bind(slug, m.title, current, m.source_sha256, at, email).first<{ id: number }>();
+      VALUES (?, ?, ?, ?, ?, ?) RETURNING id`).bind(slug, m.title, m.html_sha256, m.source_sha256, at, email).first<{ id: number }>();
     if (!row) throw new Error('sem id');
     id = row.id;
   } catch {
     return text(502, 'Não foi possível gravar a aprovação. Nada foi aprovado; tente de novo.');
   }
   // Aprovação já gravada; o aviso por email é melhor esforço, com o resultado na própria linha (diagnosticável).
-  const err = await notify(env, deps, m, { at, by: email, html: current });
+  const err = await notify(env, deps, m, { at, by: email });
   try {
     await env.DB.prepare('UPDATE draft_approvals SET notified_at = ?, notify_error = ? WHERE id = ?')
       .bind(err ? '' : new Date(deps.now()).toISOString(), err, id).run();
@@ -284,7 +308,10 @@ export async function handleDrafts(req: Request, url: URL, env: DraftEnv, deps: 
   const rest = m[3];
   if (m[2] === undefined) {
     // Sem barra final, os caminhos relativos do post quebrariam: redireciona para a forma canônica.
-    return req.method === 'GET' ? new Response(null, { status: 308, headers: { location: `/admin/rascunhos/${slug}/` } }) : text(405, 'método não permitido');
+    // Mesmos cabeçalhos das outras respostas: sem eles o 308 é cacheável (r1, Kimi e Astra P2).
+    return req.method === 'GET'
+      ? new Response(null, { status: 308, headers: { location: `/admin/rascunhos/${slug}/`, ...headers('text/plain; charset=utf-8', ADMIN_CSP) } })
+      : text(405, 'método não permitido');
   }
   if (rest === '') return req.method === 'GET' ? preview(env, slug) : text(405, 'método não permitido');
   if (rest === 'aprovar') return req.method === 'POST' ? approve(req, env, deps, slug, email) : text(405, 'método não permitido');
