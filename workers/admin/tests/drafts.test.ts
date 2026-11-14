@@ -217,7 +217,9 @@ test('R3: sem barra final redireciona; slug desconhecido, inválido ou com manif
   assert.equal(r.headers.get('x-robots-tag'), 'noindex, nofollow');
   assert.equal(r.headers.get('x-frame-options'), 'DENY');
   assert.equal(r.headers.get('x-content-type-options'), 'nosniff');
-  assert.equal(r.headers.get('referrer-policy'), 'no-referrer');
+  // Com no-referrer o navegador manda Origin: null no POST do formulário e a aprovação dava 403 (bug real, 14/11).
+  // same-origin manda o Origin do site no POST da própria página e nenhum referrer para fora.
+  assert.equal(r.headers.get('referrer-policy'), 'same-origin');
   assert.match(r.headers.get('content-security-policy')!, /^default-src 'none'/);
   // Slug inválido nem redireciona.
   assert.equal((await s.req('/admin/rascunhos/Sales-Coach')).status, 404);
