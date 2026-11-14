@@ -51,6 +51,8 @@ const base = import.meta.env.BASE_URL;
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   {!DRAFT_PREVIEW && <script data-site-script is:inline async src={`https://www.googletagmanager.com/gtag/js?id=${GA4_ID}`}></script>}
   {!DRAFT_PREVIEW && <script data-site-script is:inline define:vars={{ GA4_ID, CONTENT_GROUP: contentGroup }}>
+    // Fora de guifav.dev (prévias locais) o gtag.js não envia nada (#66); guifav.dev. (FQDN com ponto) é o mesmo site.
+    window['ga-disable-G-K7Y87QNCX8'] = location.hostname.replace(/\.$/, '') !== 'guifav.dev';
     window.dataLayer = window.dataLayer || [];
     function gtag(){ dataLayer.push(arguments); }
     gtag('js', new Date());
