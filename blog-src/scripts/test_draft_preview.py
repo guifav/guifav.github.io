@@ -200,7 +200,7 @@ class SourcesTest(unittest.TestCase):
         base = self.read("blog-src/src/layouts/Base.astro")
         self.assertIn("const robots = DRAFT_PREVIEW ? 'noindex, nofollow' : robotsContent(index, PRE_CUTOVER_NOINDEX);", base)
         # GA4 (2), Clarity e track.js (#60).
-        self.assertEqual(base.count("{!DRAFT_PREVIEW && <script data-site-script is:inline"), 4)
+        self.assertEqual(base.count("{!DRAFT_PREVIEW && <script data-site-script is:inline"), 5)  # + consent.js (#68)
         self.assertIn("export const DRAFT_PREVIEW = process.env.DRAFT_PREVIEW === '1';", self.read("blog-src/src/consts.ts"))
 
     def test_ci_never_builds_the_preview(self):

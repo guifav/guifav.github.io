@@ -17,6 +17,8 @@ export const GA4_ID = 'G-K7Y87QNCX8';
 export const CLARITY_ID = 'zcs8f7r329';
 // Eventos próprios do GA4 (issue #60). Mesmo endereço, com a mesma versão, na home e no portfólio.
 export const TRACK_SRC = '/assets/track.js?v=202611131600';
+// Banner de consentimento de cookies (issue #68), o mesmo arquivo da home e do portfólio.
+export const CONSENT_SRC = '/assets/consent.js?v=202611140300';
 // Prévia de rascunho (issue #62): build só na KVM, pelo scripts/draft_preview.py, com DRAFT_PREVIEW=1. Nesse
 // build nenhuma página carrega GA4 nem Clarity e todas saem com noindex. O build do site nunca define a variável.
 export const DRAFT_PREVIEW = process.env.DRAFT_PREVIEW === '1';

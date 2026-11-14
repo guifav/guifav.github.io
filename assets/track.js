@@ -18,7 +18,7 @@
   var CONTACT = 'contact@guifav.dev';
   var SCHEDULE_HOST = 'calendar.app.google';
   var HOST_LABELS = { 'github.com': 'github', 'linkedin.com': 'linkedin', 'huggingface.co': 'huggingface', 'youtube.com': 'youtube' };
-  var PATH_LABELS = { '/': 'inicio', '/blog/assinar/': 'expert-insights' };
+  var PATH_LABELS = { '/': 'inicio', '/blog/assinar/': 'expert-insights', '/blog/privacidade/': 'cookies' };
   var SIGNUP_KEY = 'ga_sign_up_sent';
 
   function send() {
