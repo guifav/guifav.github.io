@@ -1206,11 +1206,118 @@ class GaHostGuardTest(unittest.TestCase):
                 self.assertLess(compact.index(re.sub(r"\s+", "", self.GUARD)), compact.index(re.sub(r"\s+", "", config)))
 
 
+class ConsentTest(unittest.TestCase):
+    """#68: Consent Mode v2 avançado (padrão negado antes do config), consent.js uma vez, Clarity só com aceite e o
+    link "Cookies" no rodapé de toda página com GA4."""
+
+    GA = '<script async src="https://www.googletagmanager.com/gtag/js?id=G-K7Y87QNCX8"></script>'
+    DEFAULT = ("gtag('consent','default',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',"
+               "analytics_storage:'denied'});")
+    INIT = "window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}"
+    CONFIG = "gtag('js',new Date());gtag('config','G-K7Y87QNCX8',{content_group:'home'});"
+    CLARITY = ("window.guifavClarity=function(){if(window.clarity)return;(function(c,l,a,r,i,t,y){t=l.createElement(r);"
+               "t.src=\"https://www.clarity.ms/tag/\"+i;})(window,document,\"clarity\",\"script\",\"zcs8f7r329\");};"
+               "if(window.guifavConsent==='granted')window.guifavClarity();")
+    CJS = '<script src="/assets/consent.js?v=1"></script>'
+    FOOT = '<footer><a href="/blog/privacidade/#cookies" data-consent-open>Cookies</a></footer>'
+
+    def doc(self, ga_js=None, clarity=None, cjs=1, foot=None, ga=True):
+        ga_js = self.INIT + self.DEFAULT + self.CONFIG if ga_js is None else ga_js
+        head = (self.GA + f"<script>{ga_js}</script><script>{self.CLARITY if clarity is None else clarity}</script>") if ga else ""
+        return (f"<!DOCTYPE html><html><head>{head}</head><body>{self.FOOT if foot is None else foot}"
+                f"{self.CJS * cjs}</body></html>")
+
+    def flagged(self, html):
+        return C.check_consent("index.html", html)
+
+    def test_complete_page_ok_and_page_without_ga_needs_nothing(self):
+        self.assertEqual(self.flagged(self.doc()), [])
+        # Espaços, aspas duplas, chaves entre aspas e outra ordem das chaves também valem.
+        alt = ('gtag( "consent" , "default" , { "analytics_storage" : "denied", ad_personalization: "denied", '
+               'ad_user_data:"denied", ad_storage:"denied", wait_for_update: 500 } );')
+        self.assertEqual(self.flagged(self.doc(ga_js=self.INIT + alt + self.CONFIG)), [])
+        self.assertEqual(self.flagged(self.doc(ga=False, cjs=0, foot="<footer></footer>")), [])
+
+    def test_default_missing_late_partial_granted_or_inert_is_flagged(self):
+        d, i, c = self.DEFAULT, self.INIT, self.CONFIG
+        for name, js in {
+            "sem padrão": i + c,
+            "depois do config": i + c + d,
+            "dois padrões": i + d + d + c,
+            "falta analytics_storage": i + d.replace(",analytics_storage:'denied'", "") + c,
+            "falta ad_user_data": i + d.replace("ad_user_data:'denied',", "") + c,
+            "falta ad_personalization": i + d.replace("ad_personalization:'denied',", "") + c,
+            "falta ad_storage": i + d.replace("ad_storage:'denied',", "", 1) + c,
+            "ad_storage concedido": i + d.replace("ad_storage:'denied'", "ad_storage:'granted'", 1) + c,
+            "analytics concedido": i + d.replace("analytics_storage:'denied'", "analytics_storage:'granted'") + c,
+            "update no lugar de default": i + d.replace("'default'", "'update'") + c,
+            "comentado": i + "/* " + d + " */" + c,
+            "em string": i + 'var s="' + d.replace("'", "\\'") + '";' + c,
+        }.items():
+            with self.subTest(name=name):
+                self.assertTrue(any("consent" in p and "default" in p for p in self.flagged(self.doc(ga_js=js))), name)
+
+    def test_consent_js_once_only_with_ga(self):
+        for name, html in {"sem": self.doc(cjs=0), "duas": self.doc(cjs=2),
+                           "sem GA": self.doc(ga=False, cjs=1, foot="<footer></footer>")}.items():
+            with self.subTest(name=name):
+                self.assertTrue(any("consent.js" in p for p in self.flagged(html)), name)
+        commented = self.doc(cjs=0).replace("</body>", "<!-- " + self.CJS + " --></body>")
+        self.assertTrue(any("consent.js" in p for p in self.flagged(commented)))
+
+    def test_clarity_only_behind_consent(self):
+        loose = ('(function(c,l,a,r,i,t,y){t=l.createElement(r);t.src="https://www.clarity.ms/tag/"+i;})'
+                 '(window,document,"clarity","script","zcs8f7r329");')
+        for name, cl in {"solto": loose,
+                         "sem a guarda": self.CLARITY.replace("if(window.guifavConsent==='granted')", ""),
+                         "guarda invertida": self.CLARITY.replace("==='granted'", "!=='granted'"),
+                         "guarda comentada": self.CLARITY.replace("if(window.guifavConsent==='granted')window.guifavClarity();",
+                                                                  "/* if(window.guifavConsent==='granted') */window.guifavClarity();")}.items():
+            with self.subTest(name=name):
+                self.assertTrue(any("Clarity" in p for p in self.flagged(self.doc(clarity=cl))), name)
+
+    def test_footer_cookies_link_once(self):
+        for name, foot in {"sem rodapé": "", "rodapé sem link": "<footer><a href='/'>x</a></footer>",
+                           "fora do rodapé": "<main><a href='/blog/privacidade/#cookies' data-consent-open>Cookies</a></main><footer></footer>",
+                           "dois links": "<footer>" + 2 * "<a href='/blog/privacidade/#cookies' data-consent-open>Cookies</a>" + "</footer>",
+                           "sem href": "<footer><a data-consent-open>Cookies</a></footer>"}.items():
+            with self.subTest(name=name):
+                self.assertTrue(any("Cookies" in p for p in self.flagged(self.doc(foot=foot))), name)
+
+
+class ConsentSourcesTest(unittest.TestCase):
+    """As três origens com GA4 carregam o mesmo consent.js e levam o padrão negado antes do config."""
+
+    def read(self, rel):
+        return (Path(__file__).resolve().parent.parent / rel).read_text(encoding="utf-8")
+
+    def test_consent_js_same_version_everywhere(self):
+        src = re.search(r"CONSENT_SRC = '([^']+)'", self.read("blog-src/src/consts.ts")).group(1)
+        self.assertRegex(src, r"^/assets/consent\.js\?v=\d{12}$")
+        for rel in ("index.html", "portfolio/index.html"):
+            with self.subTest(rel=rel):
+                self.assertEqual(self.read(rel).count(f'<script src="{src}"></script>'), 1)
+        self.assertEqual(self.read("blog-src/src/layouts/Base.astro").count(
+            "{!DRAFT_PREVIEW && <script data-site-script is:inline src={CONSENT_SRC}></script>}"), 1)
+
+    def test_policy_has_cookies_section(self):
+        t = self.read("blog-src/src/pages/privacidade.astro")
+        self.assertIn('<h2 id="cookies">', t)
+        for must in ("consentimento", "Sim", "Não", "Cookies", "_ga", "_clck"):
+            self.assertIn(must, t)
+
+
 class TrackingWiredTest(Base):
     def test_check_runs_tracking_rule(self):
         ga = TrackingTest.GA
         self.w("portfolio/index.html", page(ga + '<a href="/">home</a>', robots=""))
         self.assertTrue(any("portfolio/index.html: página com GA4 precisa carregar" in p
+                            for p in self.problems(pre_cutover=False)))
+
+    def test_check_runs_consent_rule(self):
+        ga = TrackingTest.GA
+        self.w("portfolio/index.html", page(ga + '<a href="/">home</a>', robots=""))
+        self.assertTrue(any("portfolio/index.html: página com GA4 precisa do gtag('consent','default'" in p
                             for p in self.problems(pre_cutover=False)))
 
     def test_check_runs_ga_host_guard_rule(self):
@@ -1271,7 +1378,7 @@ class TrackingSourcesTest(unittest.TestCase):
                      "https://adssettings.google.com/", "https://tools.google.com/dlpage/gaoptout",
                      "https://policies.google.com/technologies/partner-sites"):
             self.assertIn(must, t)
-        self.assertIn("Atualizada em 13 de novembro de 2026.", t)
+        self.assertIn("Atualizada em 14 de novembro de 2026.", t)  # #68: seção Cookies
 
 
 if __name__ == "__main__":

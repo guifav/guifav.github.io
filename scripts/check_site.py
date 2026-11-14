@@ -399,6 +399,7 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
         problems += check_titles_and_groups(f.relative_to(site).as_posix(), text)
         problems += check_tracking(f.relative_to(site).as_posix(), text)
         problems += check_ga_host_guard(f.relative_to(site).as_posix(), text)
+        problems += check_consent(f.relative_to(site).as_posix(), text)
         p.feed(text)
         p.close()
         url = _page_url(site, f)
@@ -725,14 +726,15 @@ def cta_event(href: str) -> str | None:
     return None
 
 
-def _track_loads(html: str) -> int:
+def _track_loads(html: str, path: str = TRACK_PATH) -> int:
+    """Quantos <script> que rodam carregam o arquivo do site em `path` (relativo ou https://guifav.dev)."""
     n = 0
     for attrs, _ in _live_scripts(html):
         m = re.search(r"""(?:^|\s)src\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))""", attrs, flags=re.I)
         if not m:
             continue
         u = urlsplit(unescape(next(g for g in m.groups() if g is not None)).strip())
-        if (u.scheme, u.netloc) in (("", ""), ("https", SITE_HOST)) and u.path == TRACK_PATH:
+        if (u.scheme, u.netloc) in (("", ""), ("https", SITE_HOST)) and u.path == path:
             n += 1
     return n
 
@@ -772,6 +774,76 @@ class _Tracking(HTMLParser):
             self.depth[tag] = max(0, self.depth[tag] - 1)
         elif tag == "div" and self.divs:
             self.divs.pop()
+
+
+CONSENT_PATH = "/assets/consent.js"
+CONSENT_KEYS = ("ad_storage", "ad_user_data", "ad_personalization", "analytics_storage")
+CLARITY_GUARD = "if(window.guifavConsent==='granted')window.guifavClarity();"
+
+
+class _ConsentFooter(HTMLParser):
+    """Links com data-consent-open: (dentro do <footer>, tem href)."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.footer = 0
+        self.links: list[tuple[bool, bool]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        a = dict(attrs)
+        if tag == "footer":
+            self.footer += 1
+        if "data-consent-open" in a:
+            self.links.append((self.footer > 0, bool((a.get("href") or "").strip())))
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "footer":
+            self.footer = max(0, self.footer - 1)
+
+
+def check_consent(rel: str, html: str) -> list[str]:
+    """#68: em página com GA4, Consent Mode v2 com tudo negado por padrão (uma vez, antes do primeiro config), o
+    consent.js uma vez, o Clarity só pela guarda de consentimento e o link "Cookies" (data-consent-open) no rodapé.
+    Página sem GA4 não carrega o consent.js. Só conta código: fora de comentário, de string e de <script> de dado."""
+    problems = []
+    n = _track_loads(html, CONSENT_PATH)
+    if GA4_TAG not in html:
+        return [f"{rel}: página sem GA4 não carrega o {CONSENT_PATH}"] if n else []
+    if n != 1:
+        problems.append(f"{rel}: página com GA4 precisa carregar o {CONSENT_PATH} uma vez, carrega {n}")
+    defaults, first_config, bad = [], None, []
+    for i, body in enumerate(_exec_scripts(html)):
+        mask = _js_mask(body)
+        code = _js_mask(body, keep_strings=True)
+        for call in re.finditer(r"\bgtag\s*\(", mask):
+            rest = code[call.start():]
+            if first_config is None and re.match(r"""gtag\s*\(\s*(['"])config\1\s*,""", rest):
+                first_config = (i, call.start())
+            m = re.match(r"""gtag\s*\(\s*(['"])consent\1\s*,\s*(['"])default\2\s*,\s*\{([^{}]*)\}\s*\)""", rest)
+            if m:
+                defaults.append((i, call.start()))
+                obj = m.group(3)
+                for k in CONSENT_KEYS:
+                    if not re.search(r"""(?:^|[,{\s])(['"]?)%s\1\s*:\s*(['"])denied\2""" % k, obj):
+                        bad.append(k)
+                if re.search(r"""(['"])granted\1""", obj):
+                    bad.append("granted")
+    if len(defaults) != 1 or bad or (first_config is not None and defaults[0] > first_config):
+        problems.append(f"{rel}: página com GA4 precisa do gtag('consent','default', {{...}}) uma vez, antes do "
+                        f"primeiro config e com {', '.join(CONSENT_KEYS)} 'denied' (achados: {len(defaults)}, "
+                        f"problemas: {', '.join(sorted(set(bad))) or 'ordem'})")
+    for body in _exec_scripts(html):
+        if all(k in body for k in CLARITY_MARKERS):
+            code = re.sub(r"\s+", "", _js_mask(body, keep_strings=True))
+            if "window.guifavClarity=function(){" not in code or CLARITY_GUARD not in code:
+                problems.append(f"{rel}: o Microsoft Clarity só pode carregar pela guarda de consentimento "
+                                f"(window.guifavClarity e {CLARITY_GUARD})")
+    f = _ConsentFooter()
+    f.feed(re.sub(r"<!--.*?-->", "", html, flags=re.S))
+    if f.links != [(True, True)]:
+        problems.append(f"{rel}: página com GA4 precisa de um link Cookies (data-consent-open, com href) no rodapé, "
+                        f"tem {f.links}")
+    return problems
 
 
 GA_HOST = "guifav.dev"

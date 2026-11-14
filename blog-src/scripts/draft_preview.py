@@ -49,7 +49,7 @@ TYPES = {
     ".avif": "image/avif", ".svg": "image/svg+xml", ".mp4": "video/mp4", ".webm": "video/webm",
 }
 HTML_TYPE = "text/html; charset=utf-8"
-ANALYTICS = ("googletagmanager.com", "clarity.ms", "/assets/track.js", "gtag(")
+ANALYTICS = ("googletagmanager.com", "clarity.ms", "/assets/track.js", "/assets/consent.js", "gtag(")
 COPY_IGNORE = shutil.ignore_patterns("node_modules", "dist", ".astro", "__pycache__")
 
 

@@ -84,6 +84,7 @@ class CollectTest(unittest.TestCase):
             "gtag": GOOD.replace("</head>", '<script async src="https://www.googletagmanager.com/gtag/js?id=G-X"></script></head>'),
             "clarity": GOOD.replace("</head>", '<script>t.src="https://www.clarity.ms/tag/"+i</script></head>'),
             "track": GOOD.replace("</body>", '<script src="/assets/track.js?v=1"></script></body>'),
+            "consent": GOOD.replace("</body>", '<script src="/assets/consent.js?v=1"></script></body>'),
             "config": GOOD.replace("</head>", "<script>gtag('config','G-X')</script></head>"),
             "indexável": GOOD.replace('content="noindex, nofollow"', 'content="index, follow"'),
             "sem robots": GOOD.replace('<meta name="robots" content="noindex, nofollow">', ""),
@@ -200,7 +201,7 @@ class SourcesTest(unittest.TestCase):
         base = self.read("blog-src/src/layouts/Base.astro")
         self.assertIn("const robots = DRAFT_PREVIEW ? 'noindex, nofollow' : robotsContent(index, PRE_CUTOVER_NOINDEX);", base)
         # GA4 (2), Clarity e track.js (#60).
-        self.assertEqual(base.count("{!DRAFT_PREVIEW && <script data-site-script is:inline"), 4)
+        self.assertEqual(base.count("{!DRAFT_PREVIEW && <script data-site-script is:inline"), 5)  # + consent.js (#68)
         self.assertIn("export const DRAFT_PREVIEW = process.env.DRAFT_PREVIEW === '1';", self.read("blog-src/src/consts.ts"))
 
     def test_ci_never_builds_the_preview(self):
