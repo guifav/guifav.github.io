@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { handle, type Env, type Deps } from '../src/index.ts';
-import { PREVIEW_CSP, sha256Hex, versionId, type R2Like } from '../src/drafts.ts';
+import { PREVIEW_CSP, readManifest, sha256Hex, versionId, type R2Like } from '../src/drafts.ts';
 import type { D1Like, D1Stmt } from '../src/sync.ts';
 import { resetCertsCache } from '../src/access.ts';
 
@@ -250,6 +250,18 @@ test('R3: sem barra final redireciona; slug desconhecido, inválido ou com manif
   assert.equal((await u.req('/admin/rascunhos/sales-coach/')).status, 404, 'html adulterado');
   assert.equal((await u.approve('sales-coach', { confirmar: 'sim', versao: d.version })).status, 404, 'html adulterado: aprovar');
   assert.deepEqual(u.rows(), []);
+});
+
+test('R3: readManifest devolve files sem protótipo e recusa html_sha256 fora do formato, mesmo com a versão coerente', async () => {
+  const b = r2();
+  await putDraft(b);
+  const m = (await readManifest(b, 'sales-coach'))!;
+  assert.equal(Object.getPrototypeOf(m.files), null);
+  assert.equal('constructor' in m.files, false);
+  const c = r2();
+  const bad = 'xyz';
+  await putDraft(c, 'sales-coach', { manifest: { html_sha256: bad, version: await versionId(bad, SHA('a')) } });
+  assert.equal(await readManifest(c, 'sales-coach'), null);
 });
 
 // ------------------------------------------------------------------ R4: arquivos
