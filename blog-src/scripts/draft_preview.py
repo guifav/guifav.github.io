@@ -160,7 +160,22 @@ def collect(dist: Path, slug: str, title: str) -> Preview:
     return Preview(slug, title, html.encode("utf-8"), files)
 
 
+# A prévia mora em /admin/rascunhos/...: nenhuma política de referrer pode mandar esse caminho para fora (#72).
+# Estas só mandam a origem (https://guifav.dev/) ou nada para outros sites; o embed do Spotify e do YouTube usa
+# strict-origin-when-cross-origin, igual ao blog publicado.
+SAFE_REFERRER = {"", "no-referrer", "same-origin", "origin", "strict-origin", "origin-when-cross-origin",
+                 "strict-origin-when-cross-origin"}
+REFERRER_ATTR = re.compile(r"""\breferrerpolicy\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))""", re.I)
+META_REFERRER = re.compile(r"""<meta\b[^>]*\bname\s*=\s*["']?referrer\b""", re.I)
+
+
 def verify(html: str, slug: str, files: dict[str, tuple[bytes, str]]) -> None:
+    for m in REFERRER_ATTR.finditer(html):
+        value = next(g for g in m.groups() if g is not None).strip().lower()
+        if value not in SAFE_REFERRER:
+            raise DraftError(f"a prévia tem referrerpolicy={value!r}, que mandaria o caminho /admin para outro site")
+    if META_REFERRER.search(html):
+        raise DraftError("a prévia tem <meta name=referrer>; a política vem só do cabeçalho do Worker")
     for marker in ANALYTICS:
         if marker in html:
             raise DraftError(f"a prévia tem analytics ({marker}); o build não usou DRAFT_PREVIEW=1")

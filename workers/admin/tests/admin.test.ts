@@ -301,6 +301,8 @@ test('G2: a busca não é LIKE (sem curinga) e é escapada no HTML; cabeçalhos 
     const h = (await get(s, path)).headers;
     assert.equal(h.get('cache-control'), 'no-store', path);
     assert.equal(h.get('x-robots-tag'), 'noindex, nofollow', path);
+    // no-referrer faz o navegador mandar Origin: null no POST do formulário de descadastro (403).
+    assert.equal(h.get('referrer-policy'), 'same-origin', path);
     assert.equal(h.get('x-frame-options'), 'DENY', path);
     assert.match(h.get('content-security-policy') ?? '', /default-src 'none'.*frame-ancestors 'none'/, path);
   }

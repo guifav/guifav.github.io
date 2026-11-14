@@ -85,6 +85,12 @@ class CollectTest(unittest.TestCase):
             "clarity": GOOD.replace("</head>", '<script>t.src="https://www.clarity.ms/tag/"+i</script></head>'),
             "track": GOOD.replace("</body>", '<script src="/assets/track.js?v=1"></script></body>'),
             "consent": GOOD.replace("</body>", '<script src="/assets/consent.js?v=1"></script></body>'),
+            # #72: a prévia mora em /admin/...; nenhuma política pode mandar esse caminho para fora (só a origem).
+            "referrer unsafe-url": GOOD.replace("</body>", '<iframe src="https://x.example/" referrerpolicy="unsafe-url"></iframe></body>'),
+            "referrer downgrade": GOOD.replace("</body>", "<a href='https://x.example/' referrerPolicy='no-referrer-when-downgrade'>x</a></body>"),
+            "referrer sem aspas": GOOD.replace("</body>", '<img src="https://x.example/a.png" referrerpolicy=unsafe-url></body>'),
+            "meta referrer": GOOD.replace("</head>", '<meta name="referrer" content="unsafe-url"></head>'),
+            "rel noreferrer não basta": GOOD.replace("</body>", '<a href="https://x.example/" rel=noopener referrerpolicy="UNSAFE-URL">x</a></body>'),
             "config": GOOD.replace("</head>", "<script>gtag('config','G-X')</script></head>"),
             "indexável": GOOD.replace('content="noindex, nofollow"', 'content="index, follow"'),
             "sem robots": GOOD.replace('<meta name="robots" content="noindex, nofollow">', ""),
@@ -96,6 +102,13 @@ class CollectTest(unittest.TestCase):
                     D.collect(dist_with(Path(t), html), SLUG, "x")
         with self.assertRaisesRegex(D.DraftError, "não gerou"):
             D.collect(self.root / "vazio", SLUG, "x")
+
+    def test_embeds_of_the_blog_keep_their_referrer_policy(self):
+        # O embed do Spotify e do YouTube (strict-origin-when-cross-origin) manda só a origem: passa.
+        for pol in ("strict-origin-when-cross-origin", "no-referrer", "Origin"):
+            html = GOOD.replace("</body>", f'<iframe src="https://open.spotify.com/embed/x" referrerpolicy="{pol}"></iframe></body>')
+            with self.subTest(pol=pol), tempfile.TemporaryDirectory() as t:
+                D.collect(dist_with(Path(t), html), SLUG, "x")
 
     def test_refuses_unknown_file_types(self):
         with self.assertRaisesRegex(D.DraftError, "tipo de arquivo fora da lista"):

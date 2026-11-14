@@ -32,7 +32,7 @@ const SECURITY_HEADERS: Record<string, string> = {
   'x-robots-tag': 'noindex, nofollow',
   'x-frame-options': 'DENY',
   'x-content-type-options': 'nosniff',
-  'referrer-policy': 'no-referrer',
+  'referrer-policy': 'same-origin', // no-referrer faz o POST do formulário sair com Origin: null (403)
   'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
 };
 

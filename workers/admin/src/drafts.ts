@@ -84,7 +84,7 @@ function headers(type: string, csp: string): Record<string, string> {
     'x-robots-tag': 'noindex, nofollow',
     'x-frame-options': 'DENY',
     'x-content-type-options': 'nosniff',
-    'referrer-policy': 'no-referrer',
+    'referrer-policy': 'same-origin', // no-referrer faz o POST do formulário sair com Origin: null (403)
     'content-security-policy': csp,
   };
 }
