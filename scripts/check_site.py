@@ -398,6 +398,7 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
             problems.append(f"{f.relative_to(site).as_posix()}: tem o GA4 mas não o Microsoft Clarity")
         problems += check_titles_and_groups(f.relative_to(site).as_posix(), text)
         problems += check_tracking(f.relative_to(site).as_posix(), text)
+        problems += check_ga_host_guard(f.relative_to(site).as_posix(), text)
         p.feed(text)
         p.close()
         url = _page_url(site, f)
@@ -771,6 +772,35 @@ class _Tracking(HTMLParser):
             self.depth[tag] = max(0, self.depth[tag] - 1)
         elif tag == "div" and self.divs:
             self.divs.pop()
+
+
+GA_HOST = "guifav.dev"
+GA_HOST_GUARD = "window['ga-disable-G-K7Y87QNCX8']=location.hostname!=='guifav.dev';"
+
+
+def check_ga_host_guard(rel: str, html: str) -> list[str]:
+    """#66: em página com GA4, a desativação oficial do gtag.js fora de guifav.dev, uma vez e antes do config.
+
+    A linha só conta como código: fora de comentário (HTML ou JS), fora de string e num <script> que roda.
+    """
+    if GA4_TAG not in html:
+        return []
+    shape = re.compile(r"\bwindow\s*\[\s*\]\s*=\s*location\s*\.\s*hostname\s*!==\s*;")
+    guards, first_config = [], None
+    for i, body in enumerate(_exec_scripts(html)):
+        mask = _js_mask(body)  # sem comentários e sem strings
+        code = _js_mask(body, keep_strings=True)  # sem comentários, com strings
+        for m in shape.finditer(mask):
+            if re.sub(r"\s+", "", code[m.start():m.end()]) == GA_HOST_GUARD:
+                guards.append((i, m.start()))
+        for call in re.finditer(r"\bgtag\s*\(", mask):
+            if first_config is None and re.match(r"""gtag\s*\(\s*(['"])config\1\s*,""", code[call.start():]):
+                first_config = (i, call.start())
+    if len(guards) != 1:
+        return [f"{rel}: página com GA4 precisa de {GA_HOST_GUARD} uma vez (ga-disable fora de {GA_HOST}), tem {len(guards)}"]
+    if first_config is not None and guards[0] > first_config:
+        return [f"{rel}: o ga-disable fora de {GA_HOST} precisa vir antes do primeiro gtag('config', ...)"]
+    return []
 
 
 def check_tracking(rel: str, html: str) -> list[str]:
