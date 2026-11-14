@@ -29,7 +29,8 @@
   function read() {
     try {
       var c = JSON.parse(localStorage.getItem(KEY) || 'null');
-      if (c && (c.v === 'granted' || c.v === 'denied') && typeof c.t === 'number' && Date.now() - c.t < MAX_AGE) return c.v;
+      // Idade finita e não negativa: data futura ou Infinity (t: 1e400) nunca vale como escolha.
+      if (c && (c.v === 'granted' || c.v === 'denied') && typeof c.t === 'number' && Date.now() - c.t >= 0 && Date.now() - c.t < MAX_AGE) return c.v;
     } catch (e) { /* sem storage ou valor quebrado: sem escolha */ }
     return null;
   }
@@ -74,7 +75,6 @@
   }
 
   function choose(v) {
-    var before = read();
     write(v);
     consent(v);
     hide();
@@ -82,8 +82,9 @@
       if (typeof window.guifavClarity === 'function') window.guifavClarity();
     } else {
       clearCookies();
-      // O Clarity não para depois de carregado: recarrega para a página voltar sem ele.
-      if (before === 'granted' && window.clarity) location.reload();
+      // O Clarity não para depois de carregado: se ele está rodando nesta página (só carrega depois de um Sim),
+      // recarrega para ela voltar sem ele. Não depende do que estava gravado (storage bloqueado, outra aba).
+      if (window.clarity) location.reload();
     }
   }
 

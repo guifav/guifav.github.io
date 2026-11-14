@@ -212,6 +212,25 @@ test('revogar depois de aceitar com o Clarity rodando recarrega a página', () =
   assert.deepEqual(updates(s.calls), [DENIED]);
 });
 
+test('data futura ou Infinity nunca vale como escolha', () => {
+  for (const stored of [{ v: 'granted', t: NOW + DAY }, { v: 'denied', t: NOW + 1 }, '{"v":"granted","t":1e400}', '{"v":"granted","t":-1e400}']) {
+    assert.ok(setup({ stored }).banner(), JSON.stringify(stored));
+  }
+});
+
+test('Não com o Clarity rodando recarrega mesmo sem escolha gravada (storage bloqueado ou outra aba)', () => {
+  const s = setup({ storage: Blocked, clarityLoaded: true });
+  s.click(s.btn('consent-no'));
+  assert.equal(s.reloads(), 1);
+  const o = setup({ stored: { v: 'denied', t: NOW - DAY }, clarityLoaded: true });
+  o.click(o.cookieLink);
+  o.click(o.btn('consent-no'));
+  assert.equal(o.reloads(), 1);
+  const n = setup();
+  n.click(n.btn('consent-no'));
+  assert.equal(n.reloads(), 0, 'sem Clarity não recarrega');
+});
+
 test('sem localStorage: banner a cada página, Sim ainda concede, nada quebra; sem gtag também não quebra', () => {
   const s = setup({ storage: Blocked });
   assert.ok(s.banner());
@@ -228,17 +247,25 @@ function inlineGa(rel: string): string {
   return [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]).find((b) => b.includes("gtag('consent','default'"))!;
 }
 
+// O Base.astro (blog) usa define:vars: o Astro põe as constantes no começo do mesmo script.
+function inlineBase(): string {
+  const src = readFileSync(new URL('../src/layouts/Base.astro', import.meta.url), 'utf8');
+  const m = src.match(/define:vars=\{\{ GA4_ID, CONTENT_GROUP: contentGroup \}\}>([\s\S]*?)<\/script>/);
+  assert.ok(m, 'inline do GA4 no Base.astro');
+  return "const GA4_ID = 'G-K7Y87QNCX8'; const CONTENT_GROUP = 'insights-artigo';" + m![1];
+}
+
 function runInline(rel: string, stored: unknown) {
   const storage = new Storage();
-  if (stored !== undefined) storage.setItem('consent-v1', JSON.stringify(stored));
+  if (stored !== undefined) storage.setItem('consent-v1', typeof stored === 'string' ? stored : JSON.stringify(stored));
   const ctx: Record<string, unknown> = { localStorage: storage, location: { hostname: 'guifav.dev' }, JSON, Date: Object.assign(function () {}, { now: () => NOW }) };
   ctx.window = ctx;
-  vm.runInContext(inlineGa(rel), vm.createContext(ctx));
+  vm.runInContext(rel === 'Base.astro' ? inlineBase() : inlineGa(rel), vm.createContext(ctx));
   // Cópia por JSON: os objetos nascem em outro realm (vm).
   return JSON.parse(JSON.stringify(((ctx.dataLayer as unknown[]) ?? []).map((a) => Array.from(a as ArrayLike<unknown>)))) as unknown[][];
 }
 
-for (const rel of ['index.html', 'portfolio/index.html']) {
+for (const rel of ['index.html', 'portfolio/index.html', 'Base.astro']) {
   test(`${rel}: padrão negado antes do config; aceite válido vira update granted antes do config; vencido não`, () => {
     const names = (l: unknown[][]) => l.map((c) => `${c[0]}:${c[0] === 'consent' ? c[1] : ''}`);
     const none = runInline(rel, undefined);
@@ -247,7 +274,10 @@ for (const rel of ['index.html', 'portfolio/index.html']) {
     const ok = runInline(rel, { v: 'granted', t: NOW - DAY });
     assert.deepEqual(names(ok).filter((n) => n.startsWith('consent') || n.startsWith('config')), ['consent:default', 'consent:update', 'config:']);
     assert.deepEqual(ok.find((c) => c[0] === 'consent' && c[1] === 'update')![2], GRANTED);
-    for (const stored of [{ v: 'granted', t: NOW - 366 * DAY }, { v: 'denied', t: NOW }, { v: 'granted' }]) {
+    const sets = (l: unknown[][]) => l.filter((c) => c[0] === 'set').map((c) => c.slice(1));
+    assert.deepEqual(sets(none), [['ads_data_redaction', true]]);
+    for (const stored of [{ v: 'granted', t: NOW - 366 * DAY }, { v: 'denied', t: NOW }, { v: 'granted' },
+      { v: 'granted', t: NOW + DAY }, '{"v":"granted","t":1e400}']) {
       assert.deepEqual(names(runInline(rel, stored)).filter((n) => n === 'consent:update'), [], JSON.stringify(stored));
     }
   });

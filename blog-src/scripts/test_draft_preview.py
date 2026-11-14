@@ -84,6 +84,7 @@ class CollectTest(unittest.TestCase):
             "gtag": GOOD.replace("</head>", '<script async src="https://www.googletagmanager.com/gtag/js?id=G-X"></script></head>'),
             "clarity": GOOD.replace("</head>", '<script>t.src="https://www.clarity.ms/tag/"+i</script></head>'),
             "track": GOOD.replace("</body>", '<script src="/assets/track.js?v=1"></script></body>'),
+            "consent": GOOD.replace("</body>", '<script src="/assets/consent.js?v=1"></script></body>'),
             "config": GOOD.replace("</head>", "<script>gtag('config','G-X')</script></head>"),
             "indexável": GOOD.replace('content="noindex, nofollow"', 'content="index, follow"'),
             "sem robots": GOOD.replace('<meta name="robots" content="noindex, nofollow">', ""),

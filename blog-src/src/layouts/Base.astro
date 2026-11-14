@@ -61,7 +61,7 @@ const base = import.meta.env.BASE_URL;
     window.guifavConsent = function () {
       try {
         var c = JSON.parse(localStorage.getItem('consent-v1') || 'null');
-        return c && c.v === 'granted' && typeof c.t === 'number' && Date.now() - c.t < 31536e6 ? 'granted' : null;
+        return c && c.v === 'granted' && typeof c.t === 'number' && Date.now() - c.t >= 0 && Date.now() - c.t < 31536e6 ? 'granted' : null;
       } catch (e) { return null; }
     }();
     if (window.guifavConsent === 'granted') gtag('consent', 'update', { ad_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'granted', analytics_storage: 'granted' });
