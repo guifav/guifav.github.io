@@ -775,7 +775,8 @@ class _Tracking(HTMLParser):
 
 
 GA_HOST = "guifav.dev"
-GA_HOST_GUARD = "window['ga-disable-G-K7Y87QNCX8']=location.hostname!=='guifav.dev';"
+# Sem o ponto final do FQDN: https://guifav.dev./ é o mesmo site (r1, Kimi P2).
+GA_HOST_GUARD = "window['ga-disable-G-K7Y87QNCX8']=location.hostname.replace(/\\.$/,'')!=='guifav.dev';"
 
 
 def check_ga_host_guard(rel: str, html: str) -> list[str]:
@@ -785,7 +786,7 @@ def check_ga_host_guard(rel: str, html: str) -> list[str]:
     """
     if GA4_TAG not in html:
         return []
-    shape = re.compile(r"\bwindow\s*\[\s*\]\s*=\s*location\s*\.\s*hostname\s*!==\s*;")
+    shape = re.compile(r"\bwindow\s*\[\s*\]\s*=\s*location\s*\.\s*hostname\s*\.\s*replace\s*\(\s*/\\\.\$/\s*,\s*\)\s*!==\s*;")
     guards, first_config = [], None
     for i, body in enumerate(_exec_scripts(html)):
         mask = _js_mask(body)  # sem comentários e sem strings

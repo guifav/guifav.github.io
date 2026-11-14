@@ -2,7 +2,10 @@
 
 Rodar: python3 scripts/test_check_site.py
 """
+import json
 import os
+import shutil
+import subprocess
 import re
 import tempfile
 import unittest
@@ -1130,7 +1133,7 @@ class GaHostGuardTest(unittest.TestCase):
     """#66: fora de guifav.dev o gtag.js não envia nada (prévias locais entravam como visita)."""
 
     GA = '<script async src="https://www.googletagmanager.com/gtag/js?id=G-K7Y87QNCX8"></script>'
-    GUARD = "window['ga-disable-G-K7Y87QNCX8']=location.hostname!=='guifav.dev';"
+    GUARD = "window['ga-disable-G-K7Y87QNCX8']=location.hostname.replace(/\\.$/,'')!=='guifav.dev';"
     CONFIG = "window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-K7Y87QNCX8',{content_group:'home'});"
 
     def doc(self, *scripts, ga=True):
@@ -1143,13 +1146,13 @@ class GaHostGuardTest(unittest.TestCase):
     def test_guard_before_config_ok(self):
         self.assertEqual(self.flagged(self.doc(self.GUARD + self.CONFIG)), [])
         self.assertEqual(self.flagged(self.doc(self.GUARD, self.CONFIG)), [])
-        spaced = "window[ 'ga-disable-G-K7Y87QNCX8' ] = location.hostname !== 'guifav.dev' ;\n"
+        spaced = "window[ 'ga-disable-G-K7Y87QNCX8' ] = location.hostname.replace( /\\.$/ , '' ) !== 'guifav.dev' ;\n"
         self.assertEqual(self.flagged(self.doc(spaced + self.CONFIG)), [])
         # Só o gtag('config') conta como limite; gtag('js') antes da linha não importa (mutante H6).
         js_first = "window.dataLayer=[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());"
         self.assertEqual(self.flagged(self.doc(js_first + self.GUARD + "gtag('config','G-K7Y87QNCX8');")), [])
         # Comentário dentro da linha é só comentário: a linha vale (mutante H1).
-        commented = "window['ga-disable-G-K7Y87QNCX8'] /* prévias */ = location.hostname !== 'guifav.dev';"
+        commented = "window['ga-disable-G-K7Y87QNCX8'] /* prévias */ = location.hostname.replace(/\\.$/,'') !== 'guifav.dev';"
         self.assertEqual(self.flagged(self.doc(commented + self.CONFIG)), [])
 
     def test_page_without_ga_needs_no_guard(self):
@@ -1170,11 +1173,26 @@ class GaHostGuardTest(unittest.TestCase):
             "igualdade invertida": self.doc(g.replace("!==", "===") + self.CONFIG),
             "outro ID": self.doc(g.replace("K7Y87QNCX8", "XXXXXXXXXX") + self.CONFIG),
             "false fixo": self.doc("window['ga-disable-G-K7Y87QNCX8']=false;" + self.CONFIG),
+            # r1 (Kimi P2): sem tirar o ponto final, https://guifav.dev./ (200, mesmo HTML) perdia a coleta.
+            "sem o ponto final": self.doc("window['ga-disable-G-K7Y87QNCX8']=location.hostname!=='guifav.dev';" + self.CONFIG),
             "dentro de string": self.doc('var s="' + g.replace("'", "\\'") + '";' + self.CONFIG),
             "dentro de template": self.doc("var s=`" + g + "`;" + self.CONFIG),
         }.items():
             with self.subTest(name=name):
                 self.assertTrue(self.flagged(html), name)
+
+    def test_guard_semantics_in_node(self):
+        # O que a linha faz em cada host, avaliada no node (r1, Kimi P2: guifav.dev. é o mesmo site).
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("node ausente")
+        js = ("const out={};for(const h of ['guifav.dev','guifav.dev.','localhost','127.0.0.1','guifav.github.io',"
+              "'www.guifav.dev','guifav.dev.evil.com','xguifav.dev']){const window={};const location={hostname:h};"
+              + self.GUARD + "out[h]=window['ga-disable-G-K7Y87QNCX8'];}console.log(JSON.stringify(out));")
+        got = json.loads(subprocess.run([node, "-e", js], capture_output=True, text=True, check=True).stdout)
+        self.assertEqual(got, {"guifav.dev": False, "guifav.dev.": False, "localhost": True, "127.0.0.1": True,
+                               "guifav.github.io": True, "www.guifav.dev": True, "guifav.dev.evil.com": True,
+                               "xguifav.dev": True})
 
     def test_sources_carry_the_guard_before_config(self):
         root = Path(__file__).resolve().parent.parent
