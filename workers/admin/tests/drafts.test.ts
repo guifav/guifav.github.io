@@ -524,6 +524,83 @@ test('R7: a prévia do LinkedIn é só leitura, sem formulário, com link para o
   assert.match(await blog.text(), /Aprovar publicação/);
 });
 
+// ------------------------------------------------------------------ R8: outros derivados do artigo, com rótulo (issue #77)
+const RS = { kind: 'derivado', parent: 'sales-coach', rotulo: 'Roteiro do short' };
+
+test('R8: readManifest aceita derivado com parent e rótulo; recusa rótulo ausente, inválido ou fora do lugar', async () => {
+  const s = setup();
+  await putDraft(s.bucket, 'sales-coach-short', { manifest: RS });
+  const m = (await readManifest(s.bucket, 'sales-coach-short'))!;
+  assert.deepEqual([m.kind, m.parent, m.rotulo], ['derivado', 'sales-coach', 'Roteiro do short']);
+  await putDraft(s.bucket, 'sales-coach-linkedin', { manifest: LI });
+  assert.equal((await readManifest(s.bucket, 'sales-coach-linkedin'))!.rotulo, 'LinkedIn');
+  await putDraft(s.bucket, 'sales-coach');
+  assert.equal((await readManifest(s.bucket, 'sales-coach'))!.rotulo, null);
+  assert.equal((await readManifest(s.bucket, 'sales-coach-short'))!.kind, 'derivado');
+  for (const [name, extra] of [
+    ['derivado sem rótulo', { kind: 'derivado', parent: 'sales-coach' }],
+    ['derivado sem parent', { kind: 'derivado', rotulo: 'Roteiro' }],
+    ['rótulo vazio', { ...RS, rotulo: '' }],
+    ['rótulo com 41 caracteres', { ...RS, rotulo: 'x'.repeat(41) }],
+    ['rótulo não string', { ...RS, rotulo: 7 }],
+    ['rótulo com quebra de linha', { ...RS, rotulo: 'Roteiro\ndo short' }],
+    ['rótulo com controle C1', { ...RS, rotulo: 'Roteiro\u0085' }],
+    ['rótulo com espaço na ponta', { ...RS, rotulo: ' Roteiro' }],
+    ['rótulo com espaço não separável na ponta', { ...RS, rotulo: 'Roteiro ' }],
+    ['rótulo com BOM na ponta', { ...RS, rotulo: '﻿Roteiro' }],
+    ['rótulo num artigo', { kind: 'blog', rotulo: 'Roteiro' }],
+    ['rótulo no linkedin', { ...LI, rotulo: 'Roteiro' }],
+  ] as const) {
+    const b = setup().bucket;
+    await putDraft(b, 'outro', { manifest: extra as Record<string, unknown> });
+    assert.equal(await readManifest(b, 'outro'), null, name);
+  }
+  // 40 pontos de código passam, mesmo fora do plano básico; espaço no meio passa.
+  const b = setup().bucket;
+  await putDraft(b, 'outro', { manifest: { ...RS, rotulo: '🎬'.repeat(40) } });
+  assert.ok(await readManifest(b, 'outro'));
+  await putDraft(b, 'outro', { manifest: { ...RS, rotulo: 'Vídeo do short (vertical)' } });
+  assert.ok(await readManifest(b, 'outro'));
+});
+
+test('R8: LinkedIn e derivados ficam todos abaixo do artigo, com o rótulo escapado; derivado sem artigo aparece sozinho', async () => {
+  const s = setup();
+  await putDraft(s.bucket, 'sales-coach');
+  await putDraft(s.bucket, 'sales-coach-linkedin', { manifest: LI });
+  await putDraft(s.bucket, 'sales-coach-short', { title: 'Roteiro', manifest: RS });
+  await putDraft(s.bucket, 'sales-coach-video', { title: 'Vídeo', manifest: { ...RS, rotulo: 'Vídeo <b> & "x"' } });
+  await putDraft(s.bucket, 'solto-short', { title: 'Solto', manifest: { ...RS, parent: 'nao-existe' } });
+  const body = await (await s.req('/admin/rascunhos')).text();
+  const rows = body.split('<tr').slice(2);
+  const at = (slug: string) => rows.findIndex((r) => r.includes(`href="/admin/rascunhos/${slug}/"`));
+  const blog = at('sales-coach');
+  assert.deepEqual([at('sales-coach-linkedin'), at('sales-coach-short'), at('sales-coach-video')].sort(), [blog + 1, blog + 2, blog + 3]);
+  assert.match(rows[at('sales-coach-short')], /<span class="tag">Roteiro do short<\/span>/);
+  assert.match(rows[at('sales-coach-short')], /class="derivado"/);
+  assert.match(rows[at('sales-coach-short')], /só leitura/);
+  assert.match(rows[at('sales-coach-video')], /Vídeo &lt;b&gt; &amp; &quot;x&quot;/);
+  assert.doesNotMatch(body, /Vídeo <b>/);
+  assert.match(rows[at('sales-coach-linkedin')], /class="linkedin"/);
+  assert.match(rows[at('solto-short')], /artigo não encontrado/);
+});
+
+test('R8: a prévia do derivado é só leitura, com o rótulo na barra; aprovar dá 400 e nada é gravado', async () => {
+  const s = setup();
+  await putDraft(s.bucket, 'sales-coach');
+  const d = await putDraft(s.bucket, 'sales-coach-short', { manifest: { ...RS, rotulo: 'Roteiro <i>' } });
+  const r = await s.req('/admin/rascunhos/sales-coach-short/');
+  assert.equal(r.status, 200);
+  const html = await r.text();
+  assert.match(html, /<strong>Roteiro &lt;i&gt;<\/strong><span>só leitura, sem aprovação<\/span>/);
+  assert.match(html, /href="\/admin\/rascunhos\/sales-coach\/"/);
+  assert.doesNotMatch(html, /<form/);
+  const a = await s.approve('sales-coach-short', { confirmar: 'sim', versao: d.version });
+  assert.equal(a.status, 400);
+  assert.match(await a.text(), /só leitura/);
+  assert.deepEqual(s.rows(), []);
+  assert.deepEqual(s.mails, []);
+});
+
 test('R6: wrangler.toml liga o bucket privado e a migração cria a tabela de aprovações', () => {
   assert.match(TOML, /\[\[r2_buckets\]\]\nbinding = "DRAFTS"\nbucket_name = "blog-rascunhos"/);
   assert.doesNotMatch(TOML, /DRAFT_NOTIFY_(FROM|TO)\s*=/); // segredos, não variáveis do repo
