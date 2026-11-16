@@ -46,6 +46,9 @@ export interface Manifest {
   html_sha256: string;
   version: string; // versionId(html_sha256, source_sha256)
   files: Record<string, string>; // caminho relativo -> content-type; inclui index.html (objeto sem protótipo)
+  // #73: versão para a newsletter do LinkedIn de um artigo: só leitura, aninhada abaixo do artigo (parent).
+  kind: 'blog' | 'linkedin';
+  parent: string | null;
 }
 
 /** Identidade da versão: o HTML e a fonte juntos. O draft_preview.py calcula igual. */
@@ -129,7 +132,19 @@ export async function readManifest(bucket: R2Like, slug: string): Promise<Manife
     files[k] = v;
   }
   if (files['index.html'] !== 'text/html; charset=utf-8') return null;
-  return { slug, title: r.title, uploaded_at: r.uploaded_at, source_sha256: source, html_sha256: html, version: r.version as string, files };
+  // Manifesto sem kind é artigo (os enviados antes do #73). parent existe só no LinkedIn e aponta para outro slug.
+  // Só a ausência vira blog: kind null é malformado (r1, Kimi e Astra).
+  const kind = r.kind === undefined ? 'blog' : r.kind;
+  if (kind !== 'blog' && kind !== 'linkedin') return null;
+  let parent: string | null = null;
+  if (kind === 'linkedin') {
+    if (typeof r.parent !== 'string' || !SLUG_RE.test(r.parent) || r.parent === slug) return null;
+    parent = r.parent;
+  } else if (r.parent !== undefined) {
+    return null;
+  }
+  return { slug, title: r.title, uploaded_at: r.uploaded_at, source_sha256: source, html_sha256: html, version: r.version as string, files,
+    kind, parent };
 }
 
 const objectKey = (m: Manifest, file: string) => `${m.slug}/v/${m.version}/${file}`;
@@ -160,7 +175,8 @@ function state(list: Approval[], m: Manifest): { approved: Approval | null; stal
 }
 
 const PAGE_STYLE = `body{font:15px/1.45 system-ui,sans-serif;margin:1.5rem;color:#111}table{border-collapse:collapse;width:100%}
-th,td{border-bottom:1px solid #ddd;padding:.35rem .5rem;text-align:left;vertical-align:top}.ok{color:#060}.erro{color:#a00}`;
+th,td{border-bottom:1px solid #ddd;padding:.35rem .5rem;text-align:left;vertical-align:top}.ok{color:#060}.erro{color:#a00}
+tr.linkedin td{background:#f6f8fb}tr.linkedin td:first-child{padding-left:1.75rem}.tag{font-size:12px;border:1px solid #0a66c2;color:#0a66c2;border-radius:4px;padding:0 .3rem;margin-right:.35rem}`;
 
 async function listPage(env: DraftEnv, msg: string): Promise<Response> {
   const prefixes: string[] = [];
@@ -170,20 +186,39 @@ async function listPage(env: DraftEnv, msg: string): Promise<Response> {
     prefixes.push(...page.delimitedPrefixes);
     cursor = page.truncated ? page.cursor : undefined;
   } while (cursor && prefixes.length < MAX_DRAFTS);
-  const rows: string[] = [];
+  const drafts: Manifest[] = [];
   for (const p of prefixes.slice(0, MAX_DRAFTS)) {
     const slug = p.replace(/\/$/, '');
     const m = await readManifest(env.DRAFTS, slug);
     if (!m) continue;
     if (!(await versionHtml(env, m))) continue;
-    const st = state(await approvals(env.DB, slug), m);
+    drafts.push(m);
+  }
+  // #73: cada LinkedIn vai logo abaixo do artigo dele; sem o artigo na lista, aparece sozinho.
+  const blogs = new Set(drafts.filter((m) => m.kind === 'blog').map((m) => m.slug));
+  const children = new Map<string, Manifest[]>();
+  for (const m of drafts) {
+    if (m.kind === 'linkedin' && m.parent && blogs.has(m.parent)) children.set(m.parent, [...(children.get(m.parent) ?? []), m]);
+  }
+  const when = (m: Manifest) => `${esc(m.uploaded_at.slice(0, 16).replace('T', ' '))} UTC`;
+  const linkedinRow = (m: Manifest, orphan: boolean) => `<tr class="linkedin"><td><span class="tag">LinkedIn</span>`
+    + `<a href="/admin/rascunhos/${m.slug}/">${esc(m.title)}</a></td><td>${esc(m.slug)}</td><td>${when(m)}</td>`
+    + `<td>só leitura${orphan ? ' (artigo não encontrado)' : ''}</td></tr>`;
+  const rows: string[] = [];
+  for (const m of drafts) {
+    if (m.kind === 'linkedin') {
+      if (!m.parent || !blogs.has(m.parent)) rows.push(linkedinRow(m, true));
+      continue;
+    }
+    const st = state(await approvals(env.DB, m.slug), m);
     const label = st.approved
       ? `aprovado em ${esc(st.approved.approved_at.slice(0, 16).replace('T', ' '))} UTC`
       : st.stale
         ? 'aguardando aprovação (a versão mudou depois da última aprovação)'
         : 'aguardando aprovação';
-    rows.push(`<tr><td><a href="/admin/rascunhos/${slug}/">${esc(m.title)}</a></td><td>${esc(slug)}</td>
-<td>${esc(m.uploaded_at.slice(0, 16).replace('T', ' '))} UTC</td><td>${label}</td></tr>`);
+    rows.push(`<tr><td><a href="/admin/rascunhos/${m.slug}/">${esc(m.title)}</a></td><td>${esc(m.slug)}</td>
+<td>${when(m)}</td><td>${label}</td></tr>`);
+    for (const c of children.get(m.slug) ?? []) rows.push(linkedinRow(c, false));
   }
   const body = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow"><title>Rascunhos | Insights</title><style>${PAGE_STYLE}</style></head><body>
@@ -209,16 +244,23 @@ function approvalBar(m: Manifest, st: { approved: Approval | null; stale: boolea
 <a href="/admin/rascunhos" style="color:#fff">todos os rascunhos</a></div>`;
 }
 
+function readOnlyBar(m: Manifest): string {
+  const box = 'position:sticky;top:0;z-index:2147483647;background:#0a66c2;color:#fff;font:14px/1.4 system-ui,sans-serif;padding:.6rem 1rem;'
+    + 'display:flex;flex-wrap:wrap;gap:.75rem;align-items:center';
+  return `<div id="rascunho-barra" style="${box}"><strong>Texto para o LinkedIn</strong><span>só leitura, sem aprovação</span>
+<a href="/admin/rascunhos/${m.parent}/" style="color:#fff">artigo do blog</a><a href="/admin/rascunhos" style="color:#fff">todos os rascunhos</a></div>`;
+}
+
 async function preview(env: DraftEnv, slug: string): Promise<Response> {
   const m = await readManifest(env.DRAFTS, slug);
   const raw = m && (await versionHtml(env, m));
   if (!m || !raw) return text(404, 'rascunho não encontrado');
-  const st = state(await approvals(env.DB, slug), m);
+  const st = m.kind === 'linkedin' ? { approved: null, stale: false } : state(await approvals(env.DB, slug), m);
   const html = new TextDecoder().decode(raw);
   const at = html.search(/<body\b[^>]*>/i);
   if (at < 0) return text(500, 'prévia sem <body>');
   const end = html.indexOf('>', at) + 1;
-  const out = html.slice(0, end) + approvalBar(m, st) + html.slice(end);
+  const out = html.slice(0, end) + (m.kind === 'linkedin' ? readOnlyBar(m) : approvalBar(m, st)) + html.slice(end);
   return new Response(out, { status: 200, headers: headers('text/html; charset=utf-8', PREVIEW_CSP) });
 }
 
@@ -263,6 +305,7 @@ async function approve(req: Request, env: DraftEnv, deps: DraftDeps, slug: strin
   const seen = form.get('versao') ?? '';
   const m = await readManifest(env.DRAFTS, slug);
   if (!m || !(await versionHtml(env, m))) return text(404, 'rascunho não encontrado');
+  if (m.kind === 'linkedin') return text(400, 'o texto do LinkedIn é só leitura e não tem aprovação. Nada foi gravado.');
   // Só vale para a versão que foi vista (HTML e fonte): se a prévia mudou depois que a página abriu, nada é gravado.
   if (!SHA_RE.test(seen) || seen !== m.version) {
     return text(409, 'a prévia mudou depois que você abriu a página; recarregue e aprove de novo. Nada foi gravado.');

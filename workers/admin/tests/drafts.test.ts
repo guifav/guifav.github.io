@@ -433,6 +433,97 @@ test('R5: falha ao registrar o aviso não desfaz a aprovação', async () => {
 });
 
 // ------------------------------------------------------------------ R6: configuração
+// ------------------------------------------------------------------ R7: versão LinkedIn (issue #73)
+const LI = { kind: 'linkedin', parent: 'sales-coach' };
+
+test('R7: readManifest aceita kind blog (padrão) e linkedin com parent; recusa kind desconhecido e parent fora do lugar', async () => {
+  const s = setup();
+  await putDraft(s.bucket);
+  assert.equal((await readManifest(s.bucket, 'sales-coach'))!.kind, 'blog');
+  assert.equal((await readManifest(s.bucket, 'sales-coach'))!.parent, null);
+  await putDraft(s.bucket, 'sales-coach-linkedin', { manifest: LI });
+  const li = (await readManifest(s.bucket, 'sales-coach-linkedin'))!;
+  assert.equal(li.kind, 'linkedin');
+  assert.equal(li.parent, 'sales-coach');
+  for (const [name, extra] of [
+    ['kind desconhecido', { kind: 'twitter' }],
+    ['kind nulo (r1, Kimi e Astra)', { kind: null }],
+    ['parent nulo num artigo', { kind: 'blog', parent: null }],
+    ['blog com parent', { kind: 'blog', parent: 'sales-coach' }],
+    ['parent sem kind', { parent: 'sales-coach' }],
+    ['linkedin sem parent', { kind: 'linkedin' }],
+    ['linkedin com parent inválido', { kind: 'linkedin', parent: 'Sales_Coach' }],
+    ['linkedin com parent não string', { kind: 'linkedin', parent: 7 }],
+    ['linkedin pai de si mesmo', { kind: 'linkedin', parent: 'outro' }],
+  ] as const) {
+    const b = setup().bucket;
+    await putDraft(b, 'outro', { manifest: extra as Record<string, unknown> });
+    assert.equal(await readManifest(b, 'outro'), null, name);
+  }
+});
+
+test('R7: a lista põe o LinkedIn logo abaixo do artigo, só leitura; LinkedIn sem artigo aparece sozinho', async () => {
+  const s = setup();
+  await putDraft(s.bucket, 'aaa-outro', { title: 'Outro artigo' });
+  await putDraft(s.bucket, 'sales-coach');
+  await putDraft(s.bucket, 'sales-coach-linkedin', { title: 'Sales Coach no LinkedIn', manifest: LI });
+  await putDraft(s.bucket, 'solto-linkedin', { title: 'LinkedIn solto', manifest: { kind: 'linkedin', parent: 'nao-existe' } });
+  const body = await (await s.req('/admin/rascunhos')).text();
+  const rows = body.split('<tr').slice(2).map((r) => r);
+  const idx = (re: RegExp) => rows.findIndex((r) => re.test(r));
+  const blog = idx(/href="\/admin\/rascunhos\/sales-coach\/"/);
+  const li = idx(/href="\/admin\/rascunhos\/sales-coach-linkedin\/"/);
+  assert.ok(blog >= 0 && li === blog + 1, `LinkedIn logo depois do artigo: ${blog} ${li}`);
+  assert.match(rows[li], /LinkedIn/);
+  assert.match(rows[li], /só leitura/);
+  assert.doesNotMatch(rows[li], /aguardando aprovação/);
+  assert.match(rows[li], /class="linkedin"/);
+  const solto = idx(/solto-linkedin/);
+  assert.ok(solto >= 0);
+  assert.match(rows[solto], /artigo não encontrado/);
+  assert.equal(rows.filter((r) => /sales-coach-linkedin/.test(r)).length, 1, 'aparece uma vez só');
+});
+
+test('R7 (r1, Kimi P2): dois LinkedIn do mesmo artigo ficam os dois abaixo dele; título escapado; artigo com HTML que não confere deixa o LinkedIn sozinho', async () => {
+  const s = setup();
+  await putDraft(s.bucket, 'sales-coach');
+  await putDraft(s.bucket, 'sales-coach-li-a', { title: 'LI <a> & "b"', manifest: LI });
+  await putDraft(s.bucket, 'sales-coach-li-b', { title: 'LI dois', manifest: LI });
+  const quebrado = await putDraft(s.bucket, 'pai-quebrado');
+  s.bucket.store.set(`pai-quebrado/v/${quebrado.version}/index.html`, enc('<html>outro HTML</html>'));
+  await putDraft(s.bucket, 'filho-do-quebrado', { title: 'Filho', manifest: { kind: 'linkedin', parent: 'pai-quebrado' } });
+  const body = await (await s.req('/admin/rascunhos')).text();
+  const rows = body.split('<tr').slice(2);
+  const at = (slug: string) => rows.findIndex((r) => r.includes(`href="/admin/rascunhos/${slug}/"`));
+  const blog = at('sales-coach');
+  assert.deepEqual([at('sales-coach-li-a'), at('sales-coach-li-b')].sort(), [blog + 1, blog + 2]);
+  assert.match(body, /LI &lt;a&gt; &amp; &quot;b&quot;/);
+  assert.doesNotMatch(body, /LI <a>/);
+  assert.equal(at('pai-quebrado'), -1);
+  assert.match(rows[at('filho-do-quebrado')], /artigo não encontrado/);
+});
+
+test('R7: a prévia do LinkedIn é só leitura, sem formulário, com link para o artigo; aprovar dá 400 e nada é gravado', async () => {
+  const s = setup();
+  await putDraft(s.bucket, 'sales-coach');
+  const d = await putDraft(s.bucket, 'sales-coach-linkedin', { manifest: LI });
+  const r = await s.req('/admin/rascunhos/sales-coach-linkedin/');
+  assert.equal(r.status, 200);
+  const html = await r.text();
+  assert.match(html, /só leitura/);
+  assert.match(html, /href="\/admin\/rascunhos\/sales-coach\/"/);
+  assert.doesNotMatch(html, /<form/);
+  assert.doesNotMatch(html, /Aprovar publicação/);
+  const a = await s.approve('sales-coach-linkedin', { confirmar: 'sim', versao: d.version });
+  assert.equal(a.status, 400);
+  assert.match(await a.text(), /LinkedIn/);
+  assert.deepEqual(s.rows(), []);
+  assert.deepEqual(s.mails, []);
+  // O artigo continua aprovável.
+  const blog = await s.req('/admin/rascunhos/sales-coach/');
+  assert.match(await blog.text(), /Aprovar publicação/);
+});
+
 test('R6: wrangler.toml liga o bucket privado e a migração cria a tabela de aprovações', () => {
   assert.match(TOML, /\[\[r2_buckets\]\]\nbinding = "DRAFTS"\nbucket_name = "blog-rascunhos"/);
   assert.doesNotMatch(TOML, /DRAFT_NOTIFY_(FROM|TO)\s*=/); // segredos, não variáveis do repo
