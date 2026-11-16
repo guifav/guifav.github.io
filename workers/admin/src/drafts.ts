@@ -36,6 +36,8 @@ export interface DraftEnv {
 export interface DraftDeps {
   fetch: typeof fetch;
   now: () => number;
+  // #80: prazo da consulta ao site (resposta e corpo). Os testes encurtam; em produção, 4 s.
+  siteTimeoutMs?: number;
 }
 
 export interface Manifest {
@@ -208,6 +210,33 @@ interface Publicado {
   url: string;
 }
 
+/** Até `limite` bytes do corpo, lidos aos poucos; o resto é cancelado sem ser baixado (r1, Astra e Kimi P2). */
+async function inicioDoCorpo(res: Response, limite: number): Promise<string> {
+  if (!res.body) return '';
+  const reader = res.body.getReader();
+  const partes: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (total < limite) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      partes.push(value);
+      total += value.byteLength;
+    }
+  } finally {
+    reader.cancel().catch(() => {});
+  }
+  const bytes = new Uint8Array(Math.min(total, limite));
+  let at = 0;
+  for (const p of partes) {
+    const n = Math.min(p.byteLength, bytes.byteLength - at);
+    bytes.set(p.subarray(0, n), at);
+    at += n;
+    if (at >= bytes.byteLength) break;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
 const ENTIDADES: Record<string, string> = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&#x27;': "'" };
 
 /** O post /blog/<slug>/ no site, se responder 200 dentro do prazo; o título vem do <title> da página, sem o nome do
@@ -217,9 +246,12 @@ async function publicado(env: DraftEnv, deps: DraftDeps, slug: string): Promise<
   if (!SLUG_RE.test(slug)) return null;
   const url = `${env.SITE_ORIGIN}/blog/${slug}/`;
   try {
-    const res = await deps.fetch(url, { redirect: 'manual', headers: { accept: 'text/html' }, signal: AbortSignal.timeout(4000) });
-    if (res.status !== 200) return null;
-    const head = (await res.text()).slice(0, 65536);
+    const res = await deps.fetch(url, { redirect: 'manual', headers: { accept: 'text/html' }, signal: AbortSignal.timeout(deps.siteTimeoutMs ?? 4000) });
+    if (res.status !== 200) {
+      res.body?.cancel().catch(() => {});
+      return null;
+    }
+    const head = await inicioDoCorpo(res, 65536);
     const m = head.match(/<title>([^<]{1,300})<\/title>/i);
     const title = m ? m[1].replace(/&(amp|lt|gt|quot|#39|#x27);/g, (e) => ENTIDADES[e]).replace(/\s*\|\s*Guilherme Favaron\s*$/, '').trim() : '';
     return { slug, title: title || slug, url };
