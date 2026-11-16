@@ -83,7 +83,7 @@ class NormalizeTest(unittest.TestCase):
 
 class RulesTest(unittest.TestCase):
     def test_corpus_is_real(self):
-        self.assertEqual(len(R.slugs()), 233)
+        self.assertEqual(len(R.slugs()), 234)
         self.assertNotIn("politica-de-privacidade", R.slugs())
 
     def test_simulation_matches_the_plan_for_every_post_and_page(self):
@@ -360,7 +360,7 @@ class JobsTest(unittest.TestCase):
             self.assertTrue(any(m == "HEAD" and u.startswith(f"https://{h}/post/") for (u, m) in urls))
             self.assertTrue(any(u.startswith(f"https://{h.upper()}/") for (u, m) in urls))
         self.assertEqual(sum(1 for j in todo if j.method == "GET" and j.url.startswith("https://") and "?" not in j.url
-                             and urlsplit(j.url).netloc in (APEX, WWW)), (233 * 6 + len(self.SPECIAL)) * 2)
+                             and urlsplit(j.url).netloc in (APEX, WWW)), (234 * 6 + len(self.SPECIAL)) * 2)
         self.assertFalse(any(j.allow_404 for j in todo))
 
     def test_quick_is_a_sample_but_keeps_every_form(self):
