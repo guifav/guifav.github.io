@@ -211,6 +211,22 @@ class SourceTest(unittest.TestCase):
                         self.assertEqual(D.main(argv), 2)
                     self.assertIn(msg, err.getvalue())
 
+    def test_enviar_valid_cli_reaches_upload_with_kind_and_parent(self):
+        # r2 (Kimi P2, Astra P3): a CLI válida precisa levar kind e parent até o manifesto enviado.
+        with tempfile.TemporaryDirectory() as t:
+            md = Path(t) / "post-linkedin.md"
+            md.write_text("---\ntitle: x\n---\n", encoding="utf-8")
+            for argv, kind, parent in ((["enviar", str(md), "--linkedin", "--artigo", "post"], "linkedin", "post"),
+                                       (["enviar", str(md)], "blog", None)):
+                with self.subTest(argv=argv), \
+                        mock.patch.object(D, "build", return_value=Path(t)), \
+                        mock.patch.object(D, "collect", return_value=D.Preview("post-linkedin", "x", b"<html>", {})), \
+                        mock.patch.object(D, "upload", return_value=["a", "b"]) as up, \
+                        contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(D.main(argv), 0)
+                    man = up.call_args.args[1]
+                    self.assertEqual((man["kind"], man.get("parent")), (kind, parent))
+
     def test_draft_inside_repo_is_refused(self):
         import contextlib
         import io
