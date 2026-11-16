@@ -104,9 +104,13 @@ async function jwt(email = GUI) {
 
 type Mail = { url: string; body: Record<string, unknown>; auth: string | null };
 
-function setup(opts: { mailStatus?: number; mailThrows?: boolean; failSql?: RegExp; notify?: boolean } = {}) {
+function setup(opts: { mailStatus?: number; mailThrows?: boolean; failSql?: RegExp; notify?: boolean; site?: Record<string, string | number | 'erro' | 'pendente' | 'corpo-pendente' | 'gigante'> } = {}) {
+  // r1 (Astra e Kimi P2): quantos pedaços do corpo o painel puxou e se cancelou o resto.
+  const corpo = { puxados: 0, cancelado: false };
   const mails: Mail[] = [];
   const other: string[] = [];
+  // #80: posts publicados no site, por slug: HTML (200), status HTTP ou 'erro' (falha de rede). Sem entrada, 404.
+  const site: string[] = [];
   const fetchFn = async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url === `https://${TEAM}/cdn-cgi/access/certs`) return Response.json({ keys: [jwk] });
@@ -114,6 +118,53 @@ function setup(opts: { mailStatus?: number; mailThrows?: boolean; failSql?: RegE
       if (opts.mailThrows) throw new TypeError('network');
       mails.push({ url, body: JSON.parse(String(init?.body)), auth: new Headers(init?.headers).get('authorization') });
       return Response.json({ id: 'e1' }, { status: opts.mailStatus ?? 200 });
+    }
+    const post = url.match(/^https:\/\/guifav\.dev\/blog\/([^/]+)\/$/);
+    if (post) {
+      site.push(url);
+      assert.equal(init?.redirect, 'manual', 'consulta ao site sem seguir redirecionamento');
+      assert.ok(init?.signal, 'consulta ao site com prazo');
+      const v = opts.site?.[post[1]];
+      if (v === 'erro') throw new TypeError('network');
+      // r1 (P3): sem resposta até o prazo, ou resposta 200 cujo corpo nunca termina; só o aborto encerra.
+      const abortou = () => new DOMException('prazo', 'TimeoutError');
+      // O timer de AbortSignal.timeout não segura o processo do Node (unref), e a partir do Node 22.23
+      // o prazo do node:test também não: sem este timer comum, o laço de eventos esvazia antes do aborto
+      // e o teste sai como cancelado. Ele dura mais que o timeout do teste, então, sem o prazo no fetch,
+      // o teste continua falhando por timeout.
+      if (v === 'pendente' || v === 'corpo-pendente') {
+        const segura = setTimeout(() => {}, 10_000);
+        init!.signal!.addEventListener('abort', () => clearTimeout(segura), { once: true });
+      }
+      if (v === 'pendente') {
+        return new Promise<Response>((_, rej) => init!.signal!.addEventListener('abort', () => rej(abortou())));
+      }
+      if (v === 'corpo-pendente') {
+        const body = new ReadableStream<Uint8Array>({
+          start(c) {
+            c.enqueue(new TextEncoder().encode('<html><head>'));
+            init!.signal!.addEventListener('abort', () => c.error(abortou()));
+          },
+        });
+        return new Response(body, { status: 200 });
+      }
+      if (v === 'gigante') {
+        const pedaco = new TextEncoder().encode('<title>Gigante</title>'.padEnd(65536, ' '));
+        const body = new ReadableStream<Uint8Array>({
+          pull(c) {
+            corpo.puxados++;
+            if (corpo.puxados > 128) c.close();
+            else c.enqueue(pedaco);
+          },
+          cancel() {
+            corpo.cancelado = true;
+          },
+        }, { highWaterMark: 0 });
+        return new Response(body, { status: 200 });
+      }
+      if (typeof v === 'number') return new Response('x', { status: v });
+      if (typeof v === 'string') return new Response(v, { status: 200, headers: { 'content-type': 'text/html' } });
+      return new Response('não encontrado', { status: 404 });
     }
     other.push(url);
     return Response.json({ message: 'rota inesperada' }, { status: 500 });
@@ -123,7 +174,7 @@ function setup(opts: { mailStatus?: number; mailThrows?: boolean; failSql?: RegE
   const env: Env = { DB: db, RESEND_API_KEY: 're_test', SEGMENT_ID: 's', TOPIC_ID: 't', ACCESS_TEAM_DOMAIN: TEAM, ACCESS_AUD: AUD,
     ALLOWED_EMAILS: GUI, SITE_ORIGIN: ORIGIN, DRAFTS: bucket,
     DRAFT_NOTIFY_FROM: opts.notify === false ? '' : 'Painel <painel@guifav.dev>', DRAFT_NOTIFY_TO: opts.notify === false ? '' : 'roger@exemplo.com' };
-  const deps: Deps = { fetch: fetchFn as typeof fetch, now: () => NOW, sleep: async () => {}, origin: async () => new Response('pages') };
+  const deps: Deps = { fetch: fetchFn as typeof fetch, now: () => NOW, sleep: async () => {}, origin: async () => new Response('pages'), siteTimeoutMs: 50 };
   const req = async (path: string, init: { method?: string; body?: string; headers?: Record<string, string>; token?: string | null } = {}) => {
     resetCertsCache();
     const h: Record<string, string> = { ...(init.headers ?? {}) };
@@ -134,7 +185,7 @@ function setup(opts: { mailStatus?: number; mailThrows?: boolean; failSql?: RegE
     req(`/admin/rascunhos/${slug}/aprovar`, { method: 'POST', body: new URLSearchParams(form).toString(),
       headers: { origin: ORIGIN, 'content-type': 'application/x-www-form-urlencoded', ...headers } });
   const rows = () => JSON.parse(JSON.stringify(db.raw.prepare('SELECT * FROM draft_approvals ORDER BY id').all())) as Record<string, string>[];
-  return { env, deps, db, bucket, mails, other, req, approve, rows };
+  return { env, deps, db, bucket, mails, other, site, corpo, req, approve, rows };
 }
 
 // ------------------------------------------------------------------ R1: acesso
@@ -599,6 +650,86 @@ test('R8: a prévia do derivado é só leitura, com o rótulo na barra; aprovar 
   assert.match(await a.text(), /só leitura/);
   assert.deepEqual(s.rows(), []);
   assert.deepEqual(s.mails, []);
+});
+
+// ------------------------------------------------------------------ R9: derivados de artigo já publicado (issue #80)
+const pagina = (title: string) => `<!doctype html><html><head><title>${title}</title></head><body>post</body></html>`;
+
+test('R9: rascunho do artigo fora do R2 e post no site: linha "publicado no site" com os derivados abaixo, título escapado', async () => {
+  const s = setup({ site: { 'sales-coach': pagina('Coach &amp; vendas &lt;b&gt; | Guilherme Favaron') } });
+  await putDraft(s.bucket, 'aaa-outro', { title: 'Outro artigo' });
+  await putDraft(s.bucket, 'sales-coach-linkedin', { title: 'No LinkedIn', manifest: LI });
+  await putDraft(s.bucket, 'sales-coach-short', { title: 'Roteiro', manifest: RS });
+  const body = await (await s.req('/admin/rascunhos')).text();
+  const rows = body.split('<tr').slice(2);
+  const at = (re: RegExp) => rows.findIndex((r) => re.test(r));
+  const pai = at(/class="publicado"/);
+  assert.ok(pai >= 0, 'linha do artigo publicado');
+  assert.match(rows[pai], /<a href="https:\/\/guifav\.dev\/blog\/sales-coach\/">Coach &amp; vendas &lt;b&gt;<\/a>/);
+  assert.match(rows[pai], /publicado no site/);
+  assert.doesNotMatch(rows[pai], /Guilherme Favaron/);
+  assert.deepEqual([at(/sales-coach-linkedin/), at(/sales-coach-short/)].sort(), [pai + 1, pai + 2]);
+  assert.doesNotMatch(body, /artigo não encontrado/);
+  assert.deepEqual(s.site, ['https://guifav.dev/blog/sales-coach/'], 'uma consulta ao site por artigo pai');
+  assert.match(body, /publicado no site” aparece só|linha "publicado no site" aparece só/);
+});
+
+test('R9: pai que não é rascunho nem post no ar continua sozinho, sem quebrar a lista (404, redirecionamento, erro de rede)', async () => {
+  for (const v of [404, 301, 500, 'erro'] as const) {
+    const s = setup({ site: { 'sales-coach': v } });
+    await putDraft(s.bucket, 'sales-coach-short', { title: 'Roteiro', manifest: RS });
+    const r = await s.req('/admin/rascunhos');
+    assert.equal(r.status, 200, String(v));
+    const body = await r.text();
+    assert.match(body, /artigo não encontrado/, String(v));
+    assert.doesNotMatch(body, /class="publicado"/, String(v));
+  }
+});
+
+test('R9: post sem <title> usa o slug; com o rascunho do artigo ainda no R2, o site não é consultado', async () => {
+  const s = setup({ site: { 'sales-coach': '<html><body>sem título</body></html>' } });
+  await putDraft(s.bucket, 'sales-coach-short', { manifest: RS });
+  const body = await (await s.req('/admin/rascunhos')).text();
+  assert.match(body, /<a href="https:\/\/guifav\.dev\/blog\/sales-coach\/">sales-coach<\/a>/);
+  const t = setup({ site: { 'sales-coach': pagina('x') } });
+  await putDraft(t.bucket, 'sales-coach');
+  await putDraft(t.bucket, 'sales-coach-short', { manifest: RS });
+  await t.req('/admin/rascunhos');
+  await t.req('/admin/rascunhos/sales-coach-short/');
+  assert.deepEqual(t.site, []);
+});
+
+test('R9: a prévia do derivado de artigo publicado leva ao post no site; sem post, mantém o link do rascunho', async () => {
+  const s = setup({ site: { 'sales-coach': pagina('Coach') } });
+  await putDraft(s.bucket, 'sales-coach-short', { manifest: RS });
+  const html = await (await s.req('/admin/rascunhos/sales-coach-short/')).text();
+  assert.match(html, /<a href="https:\/\/guifav\.dev\/blog\/sales-coach\/" style="color:#fff">artigo no site<\/a>/);
+  const t = setup();
+  await putDraft(t.bucket, 'sales-coach-short', { manifest: RS });
+  const h2 = await (await t.req('/admin/rascunhos/sales-coach-short/')).text();
+  assert.match(h2, /<a href="\/admin\/rascunhos\/sales-coach\/" style="color:#fff">artigo do blog<\/a>/);
+});
+
+// timeout do teste: sem o prazo no fetch, a consulta nunca termina, e o teste falha em vez de travar a suíte.
+test('R9 (r1, Astra e Kimi P3): prazo esgotado na resposta ou no meio do corpo deixa o derivado sozinho, sem quebrar a lista', { timeout: 3000 }, async () => {
+  for (const v of ['pendente', 'corpo-pendente'] as const) {
+    const s = setup({ site: { 'sales-coach': v } });
+    await putDraft(s.bucket, 'sales-coach-short', { manifest: RS });
+    const r = await s.req('/admin/rascunhos');
+    assert.equal(r.status, 200, v);
+    const body = await r.text();
+    assert.match(body, /artigo não encontrado/, v);
+    assert.doesNotMatch(body, /class="publicado"/, v);
+  }
+});
+
+test('R9 (r1, Astra e Kimi P2): página enorme é lida só até 64 KiB e o resto do corpo é cancelado', async () => {
+  const s = setup({ site: { 'sales-coach': 'gigante' } });
+  await putDraft(s.bucket, 'sales-coach-short', { manifest: RS });
+  const body = await (await s.req('/admin/rascunhos')).text();
+  assert.match(body, /<a href="https:\/\/guifav\.dev\/blog\/sales-coach\/">Gigante<\/a>/);
+  assert.ok(s.corpo.puxados <= 2, `pedaços puxados: ${s.corpo.puxados}`);
+  assert.equal(s.corpo.cancelado, true);
 });
 
 test('R6: wrangler.toml liga o bucket privado e a migração cria a tabela de aprovações', () => {
