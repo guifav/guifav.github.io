@@ -44,6 +44,20 @@
 .post-body iframe{border:0}
 .post-body figure{margin:1.8em 0}
 .post-body figcaption{font-size:14px;color:var(--text-secondary);text-align:center;margin-top:10px;line-height:1.5}
+/* Botão de baixar a animação sobre a figura (#75). Só nas figuras que têm o botão: a figura vira uma grade de uma
+   coluna da largura da imagem (até a da coluna do texto), e imagem e botão ocupam a mesma célula, com o botão no
+   canto superior direito da imagem, mesmo quando ela é mais estreita que a coluna. A legenda não alarga a coluna
+   (contain:inline-size). O botão aparece no hover ou no foco do teclado; em tela sem hover (toque), fica visível.
+   Com a margem, ele ocupa cerca de 32px de altura: numa imagem exibida mais baixa que isso, passa da borda de baixo da
+   imagem, sem cobrir a legenda (a linha da grade cresce). Uso previsto: figuras animadas, bem mais altas. */
+.post-body figure:has(>a.baixar){display:grid;grid-template-columns:fit-content(100%)}
+.post-body figure:has(>a.baixar)>*{grid-column:1;grid-row:1}
+.post-body figure:has(>a.baixar)>figcaption{grid-row:2;contain:inline-size}
+.post-body figure>a.baixar{justify-self:end;align-self:start;margin:6px;z-index:1;display:inline-flex;align-items:center;gap:6px;padding:4px 10px;font-size:13px;font-weight:600;line-height:1.2;color:var(--text);background:var(--bg-card);border:1px solid var(--border);border-radius:6px;text-decoration:none;box-shadow:0 1px 2px rgba(0,0,0,.08);opacity:0;transition:opacity .15s ease}
+.post-body figure:hover>a.baixar,.post-body figure:focus-within>a.baixar{opacity:1}
+.post-body figure>a.baixar:hover{color:var(--hl-text);border-color:var(--hl)}
+@media (hover:none){.post-body figure>a.baixar{opacity:.92}}
+@media (prefers-reduced-motion:reduce){.post-body figure>a.baixar{transition:none}}
 .post-body table{width:100%;border-collapse:collapse;font-size:15px;display:block;overflow-x:auto}
 .post-body th,.post-body td{border:1px solid var(--border);padding:8px 12px;text-align:left;vertical-align:top}
 .post-body th{background:var(--tag-bg);font-weight:650}
