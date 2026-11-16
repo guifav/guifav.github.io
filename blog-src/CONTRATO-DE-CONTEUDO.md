@@ -25,7 +25,9 @@ Quem tem escrita no repositório pode publicar qualquer coisa editando um templa
    desta barreira no markdown é bloqueio de gate.
    O atributo download é aceito só em <a> (#75), para o botão de baixar a animação
    sobre a figura (a.baixar): o valor é apenas o nome sugerido do arquivo, o href
-   continua passando por safeUrl e download segue removido em qualquer outra tag.
+   continua passando por safeUrl e download segue removido em qualquer outra tag. O
+   botão é para figuras animadas: numa imagem exibida com menos de 32px de altura, ele
+   passa da borda de baixo da imagem, sem cobrir a legenda.
 2. Lista de extensões de public/ (scripts/check-posts.ts, antes do build, e
    scripts/check_site.py na raiz do repo, depois). Só mídia: webp, png, jpg, jpeg, gif,
    avif, mp4, webm. HTML, SVG, JS, CSS, qualquer outra extensão e link simbólico (o Vite
