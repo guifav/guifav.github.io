@@ -128,6 +128,14 @@ function setup(opts: { mailStatus?: number; mailThrows?: boolean; failSql?: RegE
       if (v === 'erro') throw new TypeError('network');
       // r1 (P3): sem resposta até o prazo, ou resposta 200 cujo corpo nunca termina; só o aborto encerra.
       const abortou = () => new DOMException('prazo', 'TimeoutError');
+      // O timer de AbortSignal.timeout não segura o processo do Node (unref), e a partir do Node 22.23
+      // o prazo do node:test também não: sem este timer comum, o laço de eventos esvazia antes do aborto
+      // e o teste sai como cancelado. Ele dura mais que o timeout do teste, então, sem o prazo no fetch,
+      // o teste continua falhando por timeout.
+      if (v === 'pendente' || v === 'corpo-pendente') {
+        const segura = setTimeout(() => {}, 10_000);
+        init!.signal!.addEventListener('abort', () => clearTimeout(segura), { once: true });
+      }
       if (v === 'pendente') {
         return new Promise<Response>((_, rej) => init!.signal!.addEventListener('abort', () => rej(abortou())));
       }
