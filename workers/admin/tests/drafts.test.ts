@@ -104,9 +104,11 @@ async function jwt(email = GUI) {
 
 type Mail = { url: string; body: Record<string, unknown>; auth: string | null };
 
-function setup(opts: { mailStatus?: number; mailThrows?: boolean; failSql?: RegExp; notify?: boolean } = {}) {
+function setup(opts: { mailStatus?: number; mailThrows?: boolean; failSql?: RegExp; notify?: boolean; site?: Record<string, string | number | 'erro'> } = {}) {
   const mails: Mail[] = [];
   const other: string[] = [];
+  // #80: posts publicados no site, por slug: HTML (200), status HTTP ou 'erro' (falha de rede). Sem entrada, 404.
+  const site: string[] = [];
   const fetchFn = async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url === `https://${TEAM}/cdn-cgi/access/certs`) return Response.json({ keys: [jwk] });
@@ -114,6 +116,17 @@ function setup(opts: { mailStatus?: number; mailThrows?: boolean; failSql?: RegE
       if (opts.mailThrows) throw new TypeError('network');
       mails.push({ url, body: JSON.parse(String(init?.body)), auth: new Headers(init?.headers).get('authorization') });
       return Response.json({ id: 'e1' }, { status: opts.mailStatus ?? 200 });
+    }
+    const post = url.match(/^https:\/\/guifav\.dev\/blog\/([^/]+)\/$/);
+    if (post) {
+      site.push(url);
+      assert.equal(init?.redirect, 'manual', 'consulta ao site sem seguir redirecionamento');
+      assert.ok(init?.signal, 'consulta ao site com prazo');
+      const v = opts.site?.[post[1]];
+      if (v === 'erro') throw new TypeError('network');
+      if (typeof v === 'number') return new Response('x', { status: v });
+      if (typeof v === 'string') return new Response(v, { status: 200, headers: { 'content-type': 'text/html' } });
+      return new Response('não encontrado', { status: 404 });
     }
     other.push(url);
     return Response.json({ message: 'rota inesperada' }, { status: 500 });
@@ -134,7 +147,7 @@ function setup(opts: { mailStatus?: number; mailThrows?: boolean; failSql?: RegE
     req(`/admin/rascunhos/${slug}/aprovar`, { method: 'POST', body: new URLSearchParams(form).toString(),
       headers: { origin: ORIGIN, 'content-type': 'application/x-www-form-urlencoded', ...headers } });
   const rows = () => JSON.parse(JSON.stringify(db.raw.prepare('SELECT * FROM draft_approvals ORDER BY id').all())) as Record<string, string>[];
-  return { env, deps, db, bucket, mails, other, req, approve, rows };
+  return { env, deps, db, bucket, mails, other, site, req, approve, rows };
 }
 
 // ------------------------------------------------------------------ R1: acesso
@@ -599,6 +612,64 @@ test('R8: a prévia do derivado é só leitura, com o rótulo na barra; aprovar 
   assert.match(await a.text(), /só leitura/);
   assert.deepEqual(s.rows(), []);
   assert.deepEqual(s.mails, []);
+});
+
+// ------------------------------------------------------------------ R9: derivados de artigo já publicado (issue #80)
+const pagina = (title: string) => `<!doctype html><html><head><title>${title}</title></head><body>post</body></html>`;
+
+test('R9: rascunho do artigo fora do R2 e post no site: linha "publicado no site" com os derivados abaixo, título escapado', async () => {
+  const s = setup({ site: { 'sales-coach': pagina('Coach &amp; vendas &lt;b&gt; | Guilherme Favaron') } });
+  await putDraft(s.bucket, 'aaa-outro', { title: 'Outro artigo' });
+  await putDraft(s.bucket, 'sales-coach-linkedin', { title: 'No LinkedIn', manifest: LI });
+  await putDraft(s.bucket, 'sales-coach-short', { title: 'Roteiro', manifest: RS });
+  const body = await (await s.req('/admin/rascunhos')).text();
+  const rows = body.split('<tr').slice(2);
+  const at = (re: RegExp) => rows.findIndex((r) => re.test(r));
+  const pai = at(/class="publicado"/);
+  assert.ok(pai >= 0, 'linha do artigo publicado');
+  assert.match(rows[pai], /<a href="https:\/\/guifav\.dev\/blog\/sales-coach\/">Coach &amp; vendas &lt;b&gt;<\/a>/);
+  assert.match(rows[pai], /publicado no site/);
+  assert.doesNotMatch(rows[pai], /Guilherme Favaron/);
+  assert.deepEqual([at(/sales-coach-linkedin/), at(/sales-coach-short/)].sort(), [pai + 1, pai + 2]);
+  assert.doesNotMatch(body, /artigo não encontrado/);
+  assert.deepEqual(s.site, ['https://guifav.dev/blog/sales-coach/'], 'uma consulta ao site por artigo pai');
+  assert.match(body, /publicado no site” aparece só|linha "publicado no site" aparece só/);
+});
+
+test('R9: pai que não é rascunho nem post no ar continua sozinho, sem quebrar a lista (404, redirecionamento, erro de rede)', async () => {
+  for (const v of [404, 301, 500, 'erro'] as const) {
+    const s = setup({ site: { 'sales-coach': v } });
+    await putDraft(s.bucket, 'sales-coach-short', { title: 'Roteiro', manifest: RS });
+    const r = await s.req('/admin/rascunhos');
+    assert.equal(r.status, 200, String(v));
+    const body = await r.text();
+    assert.match(body, /artigo não encontrado/, String(v));
+    assert.doesNotMatch(body, /class="publicado"/, String(v));
+  }
+});
+
+test('R9: post sem <title> usa o slug; com o rascunho do artigo ainda no R2, o site não é consultado', async () => {
+  const s = setup({ site: { 'sales-coach': '<html><body>sem título</body></html>' } });
+  await putDraft(s.bucket, 'sales-coach-short', { manifest: RS });
+  const body = await (await s.req('/admin/rascunhos')).text();
+  assert.match(body, /<a href="https:\/\/guifav\.dev\/blog\/sales-coach\/">sales-coach<\/a>/);
+  const t = setup({ site: { 'sales-coach': pagina('x') } });
+  await putDraft(t.bucket, 'sales-coach');
+  await putDraft(t.bucket, 'sales-coach-short', { manifest: RS });
+  await t.req('/admin/rascunhos');
+  await t.req('/admin/rascunhos/sales-coach-short/');
+  assert.deepEqual(t.site, []);
+});
+
+test('R9: a prévia do derivado de artigo publicado leva ao post no site; sem post, mantém o link do rascunho', async () => {
+  const s = setup({ site: { 'sales-coach': pagina('Coach') } });
+  await putDraft(s.bucket, 'sales-coach-short', { manifest: RS });
+  const html = await (await s.req('/admin/rascunhos/sales-coach-short/')).text();
+  assert.match(html, /<a href="https:\/\/guifav\.dev\/blog\/sales-coach\/" style="color:#fff">artigo no site<\/a>/);
+  const t = setup();
+  await putDraft(t.bucket, 'sales-coach-short', { manifest: RS });
+  const h2 = await (await t.req('/admin/rascunhos/sales-coach-short/')).text();
+  assert.match(h2, /<a href="\/admin\/rascunhos\/sales-coach\/" style="color:#fff">artigo do blog<\/a>/);
 });
 
 test('R6: wrangler.toml liga o bucket privado e a migração cria a tabela de aprovações', () => {

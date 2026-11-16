@@ -199,9 +199,36 @@ function state(list: Approval[], m: Manifest): { approved: Approval | null; stal
 
 const PAGE_STYLE = `body{font:15px/1.45 system-ui,sans-serif;margin:1.5rem;color:#111}table{border-collapse:collapse;width:100%}
 th,td{border-bottom:1px solid #ddd;padding:.35rem .5rem;text-align:left;vertical-align:top}.ok{color:#060}.erro{color:#a00}
-tr.linkedin td,tr.derivado td{background:#f6f8fb}tr.linkedin td:first-child,tr.derivado td:first-child{padding-left:1.75rem}.tag{font-size:12px;border:1px solid #0a66c2;color:#0a66c2;border-radius:4px;padding:0 .3rem;margin-right:.35rem}`;
+tr.linkedin td,tr.derivado td{background:#f6f8fb}tr.publicado td{color:#060}tr.linkedin td:first-child,tr.derivado td:first-child{padding-left:1.75rem}.tag{font-size:12px;border:1px solid #0a66c2;color:#0a66c2;border-radius:4px;padding:0 .3rem;margin-right:.35rem}`;
 
-async function listPage(env: DraftEnv, msg: string): Promise<Response> {
+/** Artigo já publicado no site, usado como pai dos derivados depois que o rascunho dele sai do R2 (#80). */
+interface Publicado {
+  slug: string;
+  title: string;
+  url: string;
+}
+
+const ENTIDADES: Record<string, string> = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&#x27;': "'" };
+
+/** O post /blog/<slug>/ no site, se responder 200 dentro do prazo; o título vem do <title> da página, sem o nome do
+ * autor no fim. Qualquer outra resposta (404, redirecionamento, erro de rede, tempo esgotado) é "não publicado": o
+ * derivado fica sozinho com "artigo não encontrado", como antes, e nada some em silêncio. */
+async function publicado(env: DraftEnv, deps: DraftDeps, slug: string): Promise<Publicado | null> {
+  if (!SLUG_RE.test(slug)) return null;
+  const url = `${env.SITE_ORIGIN}/blog/${slug}/`;
+  try {
+    const res = await deps.fetch(url, { redirect: 'manual', headers: { accept: 'text/html' }, signal: AbortSignal.timeout(4000) });
+    if (res.status !== 200) return null;
+    const head = (await res.text()).slice(0, 65536);
+    const m = head.match(/<title>([^<]{1,300})<\/title>/i);
+    const title = m ? m[1].replace(/&(amp|lt|gt|quot|#39|#x27);/g, (e) => ENTIDADES[e]).replace(/\s*\|\s*Guilherme Favaron\s*$/, '').trim() : '';
+    return { slug, title: title || slug, url };
+  } catch {
+    return null;
+  }
+}
+
+async function listPage(env: DraftEnv, deps: DraftDeps, msg: string): Promise<Response> {
   const prefixes: string[] = [];
   let cursor: string | undefined;
   do {
@@ -217,11 +244,16 @@ async function listPage(env: DraftEnv, msg: string): Promise<Response> {
     if (!(await versionHtml(env, m))) continue;
     drafts.push(m);
   }
-  // #73 e #77: cada derivado (LinkedIn e os demais) vai logo abaixo do artigo dele; sem o artigo na lista, aparece sozinho.
+  // #73 e #77: cada derivado (LinkedIn e os demais) vai logo abaixo do artigo dele. #80: se o rascunho do artigo já saiu
+  // do R2 e o post está no site, os derivados ficam abaixo de uma linha "publicado no site"; sem nenhum dos dois, o
+  // derivado aparece sozinho. Uma consulta ao site por artigo pai.
   const blogs = new Set(drafts.filter((m) => m.kind === 'blog').map((m) => m.slug));
+  const semRascunho = [...new Set(drafts.filter((m) => m.kind !== 'blog' && m.parent && !blogs.has(m.parent)).map((m) => m.parent as string))];
+  const noSite = new Map<string, Publicado>();
+  for (const p of await Promise.all(semRascunho.map((s) => publicado(env, deps, s)))) if (p) noSite.set(p.slug, p);
   const children = new Map<string, Manifest[]>();
   for (const m of drafts) {
-    if (m.kind !== 'blog' && m.parent && blogs.has(m.parent)) children.set(m.parent, [...(children.get(m.parent) ?? []), m]);
+    if (m.kind !== 'blog' && m.parent && (blogs.has(m.parent) || noSite.has(m.parent))) children.set(m.parent, [...(children.get(m.parent) ?? []), m]);
   }
   const when = (m: Manifest) => `${esc(m.uploaded_at.slice(0, 16).replace('T', ' '))} UTC`;
   const childRow = (m: Manifest, orphan: boolean) => `<tr class="${m.kind}"><td><span class="tag">${esc(m.rotulo ?? '')}</span>`
@@ -230,7 +262,7 @@ async function listPage(env: DraftEnv, msg: string): Promise<Response> {
   const rows: string[] = [];
   for (const m of drafts) {
     if (m.kind !== 'blog') {
-      if (!m.parent || !blogs.has(m.parent)) rows.push(childRow(m, true));
+      if (!m.parent || !(blogs.has(m.parent) || noSite.has(m.parent))) rows.push(childRow(m, true));
       continue;
     }
     const st = state(await approvals(env.DB, m.slug), m);
@@ -243,13 +275,17 @@ async function listPage(env: DraftEnv, msg: string): Promise<Response> {
 <td>${when(m)}</td><td>${label}</td></tr>`);
     for (const c of children.get(m.slug) ?? []) rows.push(childRow(c, false));
   }
+  for (const p of noSite.values()) {
+    rows.push(`<tr class="publicado"><td><a href="${esc(p.url)}">${esc(p.title)}</a></td><td>${esc(p.slug)}</td><td></td><td>publicado no site</td></tr>`);
+    for (const c of children.get(p.slug) ?? []) rows.push(childRow(c, false));
+  }
   const body = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow"><title>Rascunhos | Insights</title><style>${PAGE_STYLE}</style></head><body>
 <p><a href="/admin">Assinantes</a> · Rascunhos</p><h1>Rascunhos do blog</h1>
 ${msg ? `<p class="ok">${esc(msg)}</p>` : ''}
 ${rows.length ? `<table><thead><tr><th>Título</th><th>Slug</th><th>Prévia enviada</th><th>Estado</th></tr></thead><tbody>${rows.join('')}</tbody></table>`
     : '<p>Nenhum rascunho no momento.</p>'}
-<p>Só você vê estas páginas. Nada daqui está publicado. Depois da aprovação, o Roger publica o post com o mesmo conteúdo.</p>
+<p>Só você vê estas páginas. Os rascunhos não estão publicados: depois da aprovação, o Roger publica o post com o mesmo conteúdo. A linha "publicado no site" aparece só para manter os derivados de um artigo já publicado agrupados abaixo dele.</p>
 </body></html>`;
   return new Response(body, { status: 200, headers: headers('text/html; charset=utf-8', ADMIN_CSP) });
 }
@@ -267,15 +303,15 @@ function approvalBar(m: Manifest, st: { approved: Approval | null; stale: boolea
 <a href="/admin/rascunhos" style="color:#fff">todos os rascunhos</a></div>`;
 }
 
-function readOnlyBar(m: Manifest): string {
+function readOnlyBar(m: Manifest, pai: { href: string; label: string }): string {
   const box = 'position:sticky;top:0;z-index:2147483647;background:#0a66c2;color:#fff;font:14px/1.4 system-ui,sans-serif;padding:.6rem 1rem;'
     + 'display:flex;flex-wrap:wrap;gap:.75rem;align-items:center';
   const nome = m.kind === 'linkedin' ? 'Texto para o LinkedIn' : esc(m.rotulo ?? '');
   return `<div id="rascunho-barra" style="${box}"><strong>${nome}</strong><span>só leitura, sem aprovação</span>
-<a href="/admin/rascunhos/${m.parent}/" style="color:#fff">artigo do blog</a><a href="/admin/rascunhos" style="color:#fff">todos os rascunhos</a></div>`;
+<a href="${esc(pai.href)}" style="color:#fff">${pai.label}</a><a href="/admin/rascunhos" style="color:#fff">todos os rascunhos</a></div>`;
 }
 
-async function preview(env: DraftEnv, slug: string): Promise<Response> {
+async function preview(env: DraftEnv, deps: DraftDeps, slug: string): Promise<Response> {
   const m = await readManifest(env.DRAFTS, slug);
   const raw = m && (await versionHtml(env, m));
   if (!m || !raw) return text(404, 'rascunho não encontrado');
@@ -284,7 +320,14 @@ async function preview(env: DraftEnv, slug: string): Promise<Response> {
   const at = html.search(/<body\b[^>]*>/i);
   if (at < 0) return text(500, 'prévia sem <body>');
   const end = html.indexOf('>', at) + 1;
-  const out = html.slice(0, end) + (m.kind !== 'blog' ? readOnlyBar(m) : approvalBar(m, st)) + html.slice(end);
+  // #80: com o rascunho do artigo já fora do R2, o link do derivado leva ao post no site.
+  let pai = { href: `/admin/rascunhos/${m.parent}/`, label: 'artigo do blog' };
+  if (m.kind !== 'blog' && m.parent) {
+    const rascunho = await readManifest(env.DRAFTS, m.parent);
+    const p = rascunho && (await versionHtml(env, rascunho)) ? null : await publicado(env, deps, m.parent);
+    if (p) pai = { href: p.url, label: 'artigo no site' };
+  }
+  const out = html.slice(0, end) + (m.kind !== 'blog' ? readOnlyBar(m, pai) : approvalBar(m, st)) + html.slice(end);
   return new Response(out, { status: 200, headers: headers('text/html; charset=utf-8', PREVIEW_CSP) });
 }
 
@@ -367,7 +410,7 @@ export async function handleDrafts(req: Request, url: URL, env: DraftEnv, deps: 
   const path = url.pathname;
   if (path === '/admin/rascunhos' || path === '/admin/rascunhos/') {
     if (req.method !== 'GET') return text(405, 'método não permitido');
-    return listPage(env, MESSAGES[url.searchParams.get('msg') ?? ''] ?? '');
+    return listPage(env, deps, MESSAGES[url.searchParams.get('msg') ?? ''] ?? '');
   }
   const m = path.match(/^\/admin\/rascunhos\/([^/]+)(\/(.*))?$/);
   if (!m) return null;
@@ -381,7 +424,7 @@ export async function handleDrafts(req: Request, url: URL, env: DraftEnv, deps: 
       ? new Response(null, { status: 308, headers: { location: `/admin/rascunhos/${slug}/`, ...headers('text/plain; charset=utf-8', ADMIN_CSP) } })
       : text(405, 'método não permitido');
   }
-  if (rest === '') return req.method === 'GET' ? preview(env, slug) : text(405, 'método não permitido');
+  if (rest === '') return req.method === 'GET' ? preview(env, deps, slug) : text(405, 'método não permitido');
   if (rest === 'aprovar') return req.method === 'POST' ? approve(req, env, deps, slug, email) : text(405, 'método não permitido');
   return req.method === 'GET' ? asset(env, slug, rest) : text(405, 'método não permitido');
 }
