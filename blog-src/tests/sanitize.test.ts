@@ -112,6 +112,23 @@ test('sanitizeElement: iframe só de host permitido e em https; URL ativa derrub
   assert.deepEqual(sanitizeElement('a', { href: 'javascript:x' }).remove, ['href']);
 });
 
+test('sanitizeElement: link aceita download (botão de baixar a animação, #75) e continua limpando o resto', () => {
+  assert.deepEqual(sanitizeElement('a', { href: '/blog/img/x/a.gif', download: true, className: ['baixar'], title: 'Baixar' }).remove, []);
+  assert.deepEqual(sanitizeElement('a', { href: '/blog/img/x/a.gif', download: 'a.gif' }).remove, []);
+  // download não abre exceção para href ativo nem vale em outra tag.
+  assert.deepEqual(sanitizeElement('a', { href: 'javascript:alert(1)', download: true }).remove, ['href']);
+  assert.deepEqual(sanitizeElement('img', { src: '/a.webp', download: true }).remove, ['download']);
+});
+
+test('render: botão de baixar dentro da figura sai com href, classe e download', async () => {
+  const html = await render(
+    '<figure><a href="/blog/img/x/a-1456.webp"><img src="/blog/img/x/a-1456.webp" alt="a"></a>' +
+      '<a class="baixar" href="/blog/img/x/a.gif" download title="Baixar a animação em GIF">↓ Baixar</a>' +
+      '<figcaption>Legenda</figcaption></figure>\n',
+  );
+  assert.match(html, /<a class="baixar" href="\/blog\/img\/x\/a\.gif" download[^>]*>↓ Baixar<\/a>/);
+});
+
 test('sanitizeElement: link com target ganha rel noopener', () => {
   const r = sanitizeElement('a', { href: 'https://x.y', target: '_blank' });
   assert.equal(r.set.rel, 'noopener');

@@ -25,7 +25,9 @@ const attrName = (key: string): string => {
 };
 const GLOBAL_ATTRS = ['id', 'class', 'title', 'lang', 'dir'];
 const TAG_ATTRS: Record<string, string[]> = {
-  a: ['href', 'rel', 'target', 'hreflang'],
+  // download: o botão de baixar a animação sobre a figura (#75) baixa o GIF em vez de abrir outra aba.
+  // O valor é só o nome sugerido do arquivo; a URL continua passando por safeUrl no href.
+  a: ['href', 'rel', 'target', 'hreflang', 'download'],
   img: ['src', 'srcset', 'sizes', 'alt', 'width', 'height', 'loading', 'decoding'],
   source: ['src', 'srcset', 'sizes', 'type', 'media'],
   iframe: ['src', 'width', 'height', 'allow', 'allowfullscreen', 'loading', 'referrerpolicy'],
