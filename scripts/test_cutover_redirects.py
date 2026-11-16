@@ -82,13 +82,18 @@ class NormalizeTest(unittest.TestCase):
 
 
 class RulesTest(unittest.TestCase):
-    # Piso: 233 posts importados do Substack (#19) mais o primeiro publicado direto no blog (#79). Post novo não
-    # exige editar este teste; post removido exige, porque cada slug do Substack sustenta um redirecionamento.
-    PISO_DE_POSTS = 234
+    # Referência fixa dos slugs já publicados (scripts/posts_publicados.txt). Post novo não exige editar nada;
+    # post removido exige tirá-lo da lista, porque cada slug sustenta uma URL pública e, nos do Substack, um
+    # redirecionamento.
+    PUBLICADOS = Path(__file__).resolve().parent / "posts_publicados.txt"
 
     def test_corpus_is_real(self):
         s = R.slugs()
-        self.assertGreaterEqual(len(s), self.PISO_DE_POSTS)
+        ref = [l.strip() for l in self.PUBLICADOS.read_text(encoding="utf-8").splitlines()
+               if l.strip() and not l.startswith("#")]
+        self.assertGreaterEqual(len(ref), 234)
+        self.assertEqual(len(set(ref)), len(ref))
+        self.assertEqual(sorted(set(ref) - set(s)), [])
         # Contagem independente do glob do módulo: o que o Astro publica (pattern '*.md' direto na pasta, em
         # blog-src/src/content.config.ts). Pega glob quebrado e arquivo que o site não publicaria.
         publicados = sorted(n[:-3] for n in os.listdir(R.POSTS)
