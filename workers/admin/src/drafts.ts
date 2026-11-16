@@ -46,9 +46,22 @@ export interface Manifest {
   html_sha256: string;
   version: string; // versionId(html_sha256, source_sha256)
   files: Record<string, string>; // caminho relativo -> content-type; inclui index.html (objeto sem protótipo)
-  // #73: versão para a newsletter do LinkedIn de um artigo: só leitura, aninhada abaixo do artigo (parent).
-  kind: 'blog' | 'linkedin';
+  // Rascunhos derivados de um artigo, só leitura e aninhados abaixo dele (parent): 'linkedin' é o texto para a
+  // newsletter do LinkedIn (#73); 'derivado' é qualquer outro artefato do mesmo artigo (roteiro de short, vídeo,
+  // carrossel...), identificado por um rótulo livre, para um artefato novo não exigir mudança de código (#77).
+  kind: 'blog' | 'linkedin' | 'derivado';
   parent: string | null;
+  // Texto da etiqueta na lista e da barra da prévia: 'LinkedIn' no linkedin, o rótulo enviado no derivado, null no artigo.
+  rotulo: string | null;
+}
+
+/** Rótulo de um derivado: de 1 a 40 caracteres (pontos de código), sem caractere de controle (C0, DEL, C1) e sem espaço
+ * nas pontas. A mesma expressão está no draft_preview.py (ROTULO_RE), com o conjunto de espaços escrito por extenso para
+ * os dois lados concordarem: trim() do JavaScript e strip() do Python não removem os mesmos caracteres. */
+export const ROTULO_RE =
+  /^(?!.*[\u0000-\u001f\u007f-\u009f])(?![ \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff])(?!.*[ \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]$).{1,40}$/su;
+export function rotuloValido(v: unknown): v is string {
+  return typeof v === 'string' && ROTULO_RE.test(v);
 }
 
 /** Identidade da versão: o HTML e a fonte juntos. O draft_preview.py calcula igual. */
@@ -132,19 +145,29 @@ export async function readManifest(bucket: R2Like, slug: string): Promise<Manife
     files[k] = v;
   }
   if (files['index.html'] !== 'text/html; charset=utf-8') return null;
-  // Manifesto sem kind é artigo (os enviados antes do #73). parent existe só no LinkedIn e aponta para outro slug.
+  // Manifesto sem kind é artigo (os enviados antes do #73). parent existe só nos derivados e aponta para outro slug.
   // Só a ausência vira blog: kind null é malformado (r1, Kimi e Astra).
   const kind = r.kind === undefined ? 'blog' : r.kind;
-  if (kind !== 'blog' && kind !== 'linkedin') return null;
+  if (kind !== 'blog' && kind !== 'linkedin' && kind !== 'derivado') return null;
   let parent: string | null = null;
-  if (kind === 'linkedin') {
+  if (kind !== 'blog') {
     if (typeof r.parent !== 'string' || !SLUG_RE.test(r.parent) || r.parent === slug) return null;
     parent = r.parent;
   } else if (r.parent !== undefined) {
     return null;
   }
+  // rotulo existe só no derivado (#77); no linkedin a etiqueta é fixa.
+  let rotulo: string | null = null;
+  if (kind === 'derivado') {
+    if (!rotuloValido(r.rotulo)) return null;
+    rotulo = r.rotulo;
+  } else if (r.rotulo !== undefined) {
+    return null;
+  } else if (kind === 'linkedin') {
+    rotulo = 'LinkedIn';
+  }
   return { slug, title: r.title, uploaded_at: r.uploaded_at, source_sha256: source, html_sha256: html, version: r.version as string, files,
-    kind, parent };
+    kind, parent, rotulo };
 }
 
 const objectKey = (m: Manifest, file: string) => `${m.slug}/v/${m.version}/${file}`;
@@ -176,7 +199,7 @@ function state(list: Approval[], m: Manifest): { approved: Approval | null; stal
 
 const PAGE_STYLE = `body{font:15px/1.45 system-ui,sans-serif;margin:1.5rem;color:#111}table{border-collapse:collapse;width:100%}
 th,td{border-bottom:1px solid #ddd;padding:.35rem .5rem;text-align:left;vertical-align:top}.ok{color:#060}.erro{color:#a00}
-tr.linkedin td{background:#f6f8fb}tr.linkedin td:first-child{padding-left:1.75rem}.tag{font-size:12px;border:1px solid #0a66c2;color:#0a66c2;border-radius:4px;padding:0 .3rem;margin-right:.35rem}`;
+tr.linkedin td,tr.derivado td{background:#f6f8fb}tr.linkedin td:first-child,tr.derivado td:first-child{padding-left:1.75rem}.tag{font-size:12px;border:1px solid #0a66c2;color:#0a66c2;border-radius:4px;padding:0 .3rem;margin-right:.35rem}`;
 
 async function listPage(env: DraftEnv, msg: string): Promise<Response> {
   const prefixes: string[] = [];
@@ -194,20 +217,20 @@ async function listPage(env: DraftEnv, msg: string): Promise<Response> {
     if (!(await versionHtml(env, m))) continue;
     drafts.push(m);
   }
-  // #73: cada LinkedIn vai logo abaixo do artigo dele; sem o artigo na lista, aparece sozinho.
+  // #73 e #77: cada derivado (LinkedIn e os demais) vai logo abaixo do artigo dele; sem o artigo na lista, aparece sozinho.
   const blogs = new Set(drafts.filter((m) => m.kind === 'blog').map((m) => m.slug));
   const children = new Map<string, Manifest[]>();
   for (const m of drafts) {
-    if (m.kind === 'linkedin' && m.parent && blogs.has(m.parent)) children.set(m.parent, [...(children.get(m.parent) ?? []), m]);
+    if (m.kind !== 'blog' && m.parent && blogs.has(m.parent)) children.set(m.parent, [...(children.get(m.parent) ?? []), m]);
   }
   const when = (m: Manifest) => `${esc(m.uploaded_at.slice(0, 16).replace('T', ' '))} UTC`;
-  const linkedinRow = (m: Manifest, orphan: boolean) => `<tr class="linkedin"><td><span class="tag">LinkedIn</span>`
+  const childRow = (m: Manifest, orphan: boolean) => `<tr class="${m.kind}"><td><span class="tag">${esc(m.rotulo ?? '')}</span>`
     + `<a href="/admin/rascunhos/${m.slug}/">${esc(m.title)}</a></td><td>${esc(m.slug)}</td><td>${when(m)}</td>`
     + `<td>só leitura${orphan ? ' (artigo não encontrado)' : ''}</td></tr>`;
   const rows: string[] = [];
   for (const m of drafts) {
-    if (m.kind === 'linkedin') {
-      if (!m.parent || !blogs.has(m.parent)) rows.push(linkedinRow(m, true));
+    if (m.kind !== 'blog') {
+      if (!m.parent || !blogs.has(m.parent)) rows.push(childRow(m, true));
       continue;
     }
     const st = state(await approvals(env.DB, m.slug), m);
@@ -218,7 +241,7 @@ async function listPage(env: DraftEnv, msg: string): Promise<Response> {
         : 'aguardando aprovação';
     rows.push(`<tr><td><a href="/admin/rascunhos/${m.slug}/">${esc(m.title)}</a></td><td>${esc(m.slug)}</td>
 <td>${when(m)}</td><td>${label}</td></tr>`);
-    for (const c of children.get(m.slug) ?? []) rows.push(linkedinRow(c, false));
+    for (const c of children.get(m.slug) ?? []) rows.push(childRow(c, false));
   }
   const body = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow"><title>Rascunhos | Insights</title><style>${PAGE_STYLE}</style></head><body>
@@ -247,7 +270,8 @@ function approvalBar(m: Manifest, st: { approved: Approval | null; stale: boolea
 function readOnlyBar(m: Manifest): string {
   const box = 'position:sticky;top:0;z-index:2147483647;background:#0a66c2;color:#fff;font:14px/1.4 system-ui,sans-serif;padding:.6rem 1rem;'
     + 'display:flex;flex-wrap:wrap;gap:.75rem;align-items:center';
-  return `<div id="rascunho-barra" style="${box}"><strong>Texto para o LinkedIn</strong><span>só leitura, sem aprovação</span>
+  const nome = m.kind === 'linkedin' ? 'Texto para o LinkedIn' : esc(m.rotulo ?? '');
+  return `<div id="rascunho-barra" style="${box}"><strong>${nome}</strong><span>só leitura, sem aprovação</span>
 <a href="/admin/rascunhos/${m.parent}/" style="color:#fff">artigo do blog</a><a href="/admin/rascunhos" style="color:#fff">todos os rascunhos</a></div>`;
 }
 
@@ -255,12 +279,12 @@ async function preview(env: DraftEnv, slug: string): Promise<Response> {
   const m = await readManifest(env.DRAFTS, slug);
   const raw = m && (await versionHtml(env, m));
   if (!m || !raw) return text(404, 'rascunho não encontrado');
-  const st = m.kind === 'linkedin' ? { approved: null, stale: false } : state(await approvals(env.DB, slug), m);
+  const st = m.kind !== 'blog' ? { approved: null, stale: false } : state(await approvals(env.DB, slug), m);
   const html = new TextDecoder().decode(raw);
   const at = html.search(/<body\b[^>]*>/i);
   if (at < 0) return text(500, 'prévia sem <body>');
   const end = html.indexOf('>', at) + 1;
-  const out = html.slice(0, end) + (m.kind === 'linkedin' ? readOnlyBar(m) : approvalBar(m, st)) + html.slice(end);
+  const out = html.slice(0, end) + (m.kind !== 'blog' ? readOnlyBar(m) : approvalBar(m, st)) + html.slice(end);
   return new Response(out, { status: 200, headers: headers('text/html; charset=utf-8', PREVIEW_CSP) });
 }
 
@@ -306,6 +330,7 @@ async function approve(req: Request, env: DraftEnv, deps: DraftDeps, slug: strin
   const m = await readManifest(env.DRAFTS, slug);
   if (!m || !(await versionHtml(env, m))) return text(404, 'rascunho não encontrado');
   if (m.kind === 'linkedin') return text(400, 'o texto do LinkedIn é só leitura e não tem aprovação. Nada foi gravado.');
+  if (m.kind === 'derivado') return text(400, `${m.rotulo} é só leitura e não tem aprovação. Nada foi gravado.`);
   // Só vale para a versão que foi vista (HTML e fonte): se a prévia mudou depois que a página abriu, nada é gravado.
   if (!SHA_RE.test(seen) || seen !== m.version) {
     return text(409, 'a prévia mudou depois que você abriu a página; recarregue e aprove de novo. Nada foi gravado.');

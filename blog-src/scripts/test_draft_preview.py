@@ -227,6 +227,42 @@ class SourceTest(unittest.TestCase):
                     man = up.call_args.args[1]
                     self.assertEqual((man["kind"], man.get("parent")), (kind, parent))
 
+    def test_derivado_cli(self):
+        # #77: --derivado <rótulo> anda com --artigo, não anda com --linkedin, e o rótulo segue a regra do Worker.
+        with tempfile.TemporaryDirectory() as t:
+            md = Path(t) / "post-short.md"
+            md.write_text("---\ntitle: x\n---\n", encoding="utf-8")
+            for argv, msg in ((["enviar", str(md), "--derivado", "Roteiro do short"], "andam juntos"),
+                              (["enviar", str(md), "--derivado", "", "--artigo", "post"], "rótulo inválido"),
+                              (["enviar", str(md), "--derivado", " Roteiro", "--artigo", "post"], "rótulo inválido"),
+                              (["enviar", str(md), "--derivado", "\ufeffRoteiro", "--artigo", "post"], "rótulo inválido"),
+                              (["enviar", str(md), "--derivado", "Roteiro\u0085", "--artigo", "post"], "rótulo inválido"),
+                              (["enviar", str(md), "--derivado", "x" * 41, "--artigo", "post"], "rótulo inválido"),
+                              (["enviar", str(md), "--linkedin", "--derivado", "Roteiro", "--artigo", "post"], "não andam juntos")):
+                with self.subTest(argv=argv), mock.patch.object(D, "build", side_effect=AssertionError("não chega ao build")):
+                    err = io.StringIO()
+                    with contextlib.redirect_stderr(err):
+                        self.assertEqual(D.main(argv), 2)
+                    self.assertIn(msg, err.getvalue())
+            with mock.patch.object(D, "build", return_value=Path(t)), \
+                    mock.patch.object(D, "collect", return_value=D.Preview("post-short", "x", b"<html>", {})), \
+                    mock.patch.object(D, "upload", return_value=["a", "b"]) as up:
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out):
+                    self.assertEqual(D.main(["enviar", str(md), "--derivado", "Roteiro do short", "--artigo", "post"]), 0)
+                man = up.call_args.args[1]
+                self.assertEqual((man["kind"], man["parent"], man["rotulo"]), ("derivado", "post", "Roteiro do short"))
+                self.assertIn("(Roteiro do short, só leitura)", out.getvalue())
+
+    def test_rotulo_valido_matches_worker_rule(self):
+        # Mesma regra de ROTULO_RE em drafts.ts: 1 a 40 pontos de código, sem C0, DEL nem C1, sem espaço nas pontas,
+        # com o conjunto de espaços do trim() do JavaScript (o strip() do Python não remove o BOM).
+        for ok in ("Roteiro do short", "x", "x" * 40, "\U0001f3ac" * 40, "Vídeo (vertical) 9:16"):
+            self.assertTrue(D.rotulo_valido(ok), ok)
+        for bad in ("", "x" * 41, " Roteiro", "Roteiro ", "\u00a0Roteiro", "Roteiro\u3000", "\ufeffRoteiro",
+                    "Roteiro\ndo", "Roteiro\u0085", "Rot\u007feiro", 7, None):
+            self.assertFalse(D.rotulo_valido(bad), repr(bad))
+
     def test_draft_inside_repo_is_refused(self):
         import contextlib
         import io
@@ -271,6 +307,13 @@ class UploadTest(unittest.TestCase):
         for bad in ("Artigo", "artigo_pai", "", SLUG, "artigo\n", "artigo\n\n"):  # r1 (Kimi P1): newline
             with self.subTest(parent=bad), self.assertRaises(D.DraftError):
                 D.manifest(p, "a" * 64, parent=bad)
+        # #77: com rótulo, o derivado leva kind "derivado" e o rótulo; rótulo sem parent ou inválido é recusado.
+        rs = D.manifest(p, "a" * 64, now=datetime(2026, 11, 13, 19, 0, tzinfo=timezone.utc), parent="artigo-pai", rotulo="Roteiro do short")
+        self.assertEqual((rs["kind"], rs["parent"], rs["rotulo"], rs["version"]), ("derivado", "artigo-pai", "Roteiro do short", version))
+        self.assertNotIn("rotulo", li)
+        for parent, rot in ((None, "Roteiro"), ("artigo-pai", ""), ("artigo-pai", " Roteiro")):
+            with self.subTest(parent=parent, rotulo=rot), self.assertRaises(D.DraftError):
+                D.manifest(p, "a" * 64, parent=parent, rotulo=rot)
         # A versão muda com o HTML e com a fonte, cada um isolado (r1: a aprovação vale para os dois).
         self.assertNotEqual(version, D.version_id(html, "b" * 64))
         self.assertNotEqual(version, D.version_id("c" * 64, "a" * 64))
