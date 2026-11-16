@@ -2,13 +2,16 @@
 
 Sem rede e sem build: o build e o wrangler entram por um executor falso. O build real é conferido à mão no PR.
 """
+import contextlib
 import hashlib
+import io
 import json
 import re
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -193,6 +196,17 @@ class SourceTest(unittest.TestCase):
             w3.mkdir()
             D.build(self.md, None, w3, run=Fake(rc=1, stdout="erro x"))
 
+    def test_linkedin_and_artigo_go_together(self):
+        with tempfile.TemporaryDirectory() as t:
+            md = Path(t) / "post-linkedin.md"
+            md.write_text("---\ntitle: x\n---\n", encoding="utf-8")
+            for argv in (["enviar", str(md), "--linkedin"], ["enviar", str(md), "--artigo", "post"]):
+                with self.subTest(argv=argv), mock.patch.object(D, "build", side_effect=AssertionError("não chega ao build")):
+                    err = io.StringIO()
+                    with contextlib.redirect_stderr(err):
+                        self.assertEqual(D.main(argv), 2)
+                    self.assertIn("andam juntos", err.getvalue())
+
     def test_draft_inside_repo_is_refused(self):
         import contextlib
         import io
@@ -229,8 +243,14 @@ class UploadTest(unittest.TestCase):
         html = hashlib.sha256(b"<html>").hexdigest()
         version = hashlib.sha256(f"html:{html}\nsource:{'a' * 64}".encode()).hexdigest()
         self.assertEqual(man, {"slug": SLUG, "title": "Sales Coach", "uploaded_at": "2026-11-13T19:00:00.000Z",
-                               "source_sha256": "a" * 64, "html_sha256": html, "version": version,
+                               "source_sha256": "a" * 64, "html_sha256": html, "version": version, "kind": "blog",
                                "files": {"index.html": "text/html; charset=utf-8", "img/sales-coach/a.webp": "image/webp"}})
+        # #73: a versão LinkedIn leva kind e parent (o slug do artigo); a versão (html + fonte) não muda.
+        li = D.manifest(p, "a" * 64, now=datetime(2026, 11, 13, 19, 0, tzinfo=timezone.utc), parent="artigo-pai")
+        self.assertEqual((li["kind"], li["parent"], li["version"]), ("linkedin", "artigo-pai", version))
+        for bad in ("Artigo", "artigo_pai", "", SLUG):
+            with self.subTest(parent=bad), self.assertRaises(D.DraftError):
+                D.manifest(p, "a" * 64, parent=bad)
         # A versão muda com o HTML e com a fonte, cada um isolado (r1: a aprovação vale para os dois).
         self.assertNotEqual(version, D.version_id(html, "b" * 64))
         self.assertNotEqual(version, D.version_id("c" * 64, "a" * 64))

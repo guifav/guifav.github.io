@@ -200,12 +200,18 @@ def version_id(html_sha256: str, source: str) -> str:
     return hashlib.sha256(f"html:{html_sha256}\nsource:{source}".encode()).hexdigest()
 
 
-def manifest(p: Preview, source: str, now: datetime | None = None) -> dict:
+def manifest(p: Preview, source: str, now: datetime | None = None, parent: str | None = None) -> dict:
+    """Manifesto da prévia. Com parent (#73), é a versão LinkedIn do artigo `parent`: só leitura no painel."""
+    if parent is not None and (not SLUG_RE.match(parent) or parent == p.slug):
+        raise DraftError(f"slug do artigo inválido para a versão LinkedIn: {parent!r}")
     at = (now or datetime.now(timezone.utc)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     files = {"index.html": HTML_TYPE, **{k: t for k, (_, t) in sorted(p.files.items())}}
     html = hashlib.sha256(p.html).hexdigest()
-    return {"slug": p.slug, "title": p.title, "uploaded_at": at, "source_sha256": source, "html_sha256": html,
-            "version": version_id(html, source), "files": files}
+    man = {"slug": p.slug, "title": p.title, "uploaded_at": at, "source_sha256": source, "html_sha256": html,
+           "version": version_id(html, source), "kind": "linkedin" if parent is not None else "blog", "files": files}
+    if parent is not None:
+        man["parent"] = parent
+    return man
 
 
 def wrangler(args: list[str], run=subprocess.run, input_bytes: bytes | None = None) -> subprocess.CompletedProcess:
@@ -245,6 +251,9 @@ def approvals(slug: str, run=subprocess.run) -> list[dict]:
 
 
 def cmd_enviar(a: argparse.Namespace) -> int:
+    if bool(a.linkedin) != bool(a.artigo):
+        raise DraftError("--linkedin e --artigo <slug-do-artigo> andam juntos")
+    parent = a.artigo if a.linkedin else None
     md = Path(a.rascunho).resolve()
     images = Path(a.imagens).resolve() if a.imagens else None
     if REPO in md.parents:
@@ -255,7 +264,7 @@ def cmd_enviar(a: argparse.Namespace) -> int:
     with tempfile.TemporaryDirectory(prefix=f"rascunho-{slug}-") as tmp:
         work = Path(tmp)
         p = collect(build(md, images, work), slug, title)
-        man = manifest(p, source)
+        man = manifest(p, source, parent=parent)
         if a.dry_run:
             out = Path(a.out or work / "out")
             out.mkdir(parents=True, exist_ok=True)
@@ -267,7 +276,7 @@ def cmd_enviar(a: argparse.Namespace) -> int:
             print(f"simulação: {len(p.files) + 2} arquivos em {out}; source_sha256 {source}")
             return 0
         keys = upload(p, man, work)
-    print(f"prévia enviada: {len(keys)} objetos; {SITE}/admin/rascunhos/{slug}/ ; source_sha256 {source}")
+    print(f"prévia enviada{' (LinkedIn, só leitura)' if parent else ''}: {len(keys)} objetos; {SITE}/admin/rascunhos/{slug}/ ; source_sha256 {source}")
     return 0
 
 
@@ -310,6 +319,8 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--imagens")
     e.add_argument("--dry-run", action="store_true")
     e.add_argument("--out")
+    e.add_argument("--linkedin", action="store_true", help="versão LinkedIn de um artigo: só leitura no painel (#73)")
+    e.add_argument("--artigo", help="slug do artigo do blog a que a versão LinkedIn pertence")
     s = sub.add_parser("status", help="diz se a fonte atual foi aprovada")
     s.add_argument("rascunho")
     s.add_argument("--imagens")
