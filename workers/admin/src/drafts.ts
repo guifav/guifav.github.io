@@ -133,7 +133,8 @@ export async function readManifest(bucket: R2Like, slug: string): Promise<Manife
   }
   if (files['index.html'] !== 'text/html; charset=utf-8') return null;
   // Manifesto sem kind é artigo (os enviados antes do #73). parent existe só no LinkedIn e aponta para outro slug.
-  const kind = r.kind ?? 'blog';
+  // Só a ausência vira blog: kind null é malformado (r1, Kimi e Astra).
+  const kind = r.kind === undefined ? 'blog' : r.kind;
   if (kind !== 'blog' && kind !== 'linkedin') return null;
   let parent: string | null = null;
   if (kind === 'linkedin') {

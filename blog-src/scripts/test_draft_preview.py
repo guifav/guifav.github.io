@@ -200,12 +200,16 @@ class SourceTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as t:
             md = Path(t) / "post-linkedin.md"
             md.write_text("---\ntitle: x\n---\n", encoding="utf-8")
-            for argv in (["enviar", str(md), "--linkedin"], ["enviar", str(md), "--artigo", "post"]):
+            for argv, msg in ((["enviar", str(md), "--linkedin"], "andam juntos"),
+                              (["enviar", str(md), "--artigo", "post"], "andam juntos"),
+                              (["enviar", str(md), "--artigo", ""], "andam juntos"),  # r1 (Kimi P1): "" também é presença
+                              (["enviar", str(md), "--linkedin", "--artigo", ""], "inválido"),
+                              (["enviar", str(md), "--linkedin", "--artigo", "post\n"], "inválido")):
                 with self.subTest(argv=argv), mock.patch.object(D, "build", side_effect=AssertionError("não chega ao build")):
                     err = io.StringIO()
                     with contextlib.redirect_stderr(err):
                         self.assertEqual(D.main(argv), 2)
-                    self.assertIn("andam juntos", err.getvalue())
+                    self.assertIn(msg, err.getvalue())
 
     def test_draft_inside_repo_is_refused(self):
         import contextlib
@@ -248,7 +252,7 @@ class UploadTest(unittest.TestCase):
         # #73: a versão LinkedIn leva kind e parent (o slug do artigo); a versão (html + fonte) não muda.
         li = D.manifest(p, "a" * 64, now=datetime(2026, 11, 13, 19, 0, tzinfo=timezone.utc), parent="artigo-pai")
         self.assertEqual((li["kind"], li["parent"], li["version"]), ("linkedin", "artigo-pai", version))
-        for bad in ("Artigo", "artigo_pai", "", SLUG):
+        for bad in ("Artigo", "artigo_pai", "", SLUG, "artigo\n", "artigo\n\n"):  # r1 (Kimi P1): newline
             with self.subTest(parent=bad), self.assertRaises(D.DraftError):
                 D.manifest(p, "a" * 64, parent=bad)
         # A versão muda com o HTML e com a fonte, cada um isolado (r1: a aprovação vale para os dois).

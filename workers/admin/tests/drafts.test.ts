@@ -447,6 +447,8 @@ test('R7: readManifest aceita kind blog (padrão) e linkedin com parent; recusa 
   assert.equal(li.parent, 'sales-coach');
   for (const [name, extra] of [
     ['kind desconhecido', { kind: 'twitter' }],
+    ['kind nulo (r1, Kimi e Astra)', { kind: null }],
+    ['parent nulo num artigo', { kind: 'blog', parent: null }],
     ['blog com parent', { kind: 'blog', parent: 'sales-coach' }],
     ['parent sem kind', { parent: 'sales-coach' }],
     ['linkedin sem parent', { kind: 'linkedin' }],
@@ -480,6 +482,25 @@ test('R7: a lista põe o LinkedIn logo abaixo do artigo, só leitura; LinkedIn s
   assert.ok(solto >= 0);
   assert.match(rows[solto], /artigo não encontrado/);
   assert.equal(rows.filter((r) => /sales-coach-linkedin/.test(r)).length, 1, 'aparece uma vez só');
+});
+
+test('R7 (r1, Kimi P2): dois LinkedIn do mesmo artigo ficam os dois abaixo dele; título escapado; artigo com HTML que não confere deixa o LinkedIn sozinho', async () => {
+  const s = setup();
+  await putDraft(s.bucket, 'sales-coach');
+  await putDraft(s.bucket, 'sales-coach-li-a', { title: 'LI <a> & "b"', manifest: LI });
+  await putDraft(s.bucket, 'sales-coach-li-b', { title: 'LI dois', manifest: LI });
+  const quebrado = await putDraft(s.bucket, 'pai-quebrado');
+  s.bucket.store.set(`pai-quebrado/v/${quebrado.version}/index.html`, enc('<html>outro HTML</html>'));
+  await putDraft(s.bucket, 'filho-do-quebrado', { title: 'Filho', manifest: { kind: 'linkedin', parent: 'pai-quebrado' } });
+  const body = await (await s.req('/admin/rascunhos')).text();
+  const rows = body.split('<tr').slice(2);
+  const at = (slug: string) => rows.findIndex((r) => r.includes(`href="/admin/rascunhos/${slug}/"`));
+  const blog = at('sales-coach');
+  assert.deepEqual([at('sales-coach-li-a'), at('sales-coach-li-b')].sort(), [blog + 1, blog + 2]);
+  assert.match(body, /LI &lt;a&gt; &amp; &quot;b&quot;/);
+  assert.doesNotMatch(body, /LI <a>/);
+  assert.equal(at('pai-quebrado'), -1);
+  assert.match(rows[at('filho-do-quebrado')], /artigo não encontrado/);
 });
 
 test('R7: a prévia do LinkedIn é só leitura, sem formulário, com link para o artigo; aprovar dá 400 e nada é gravado', async () => {

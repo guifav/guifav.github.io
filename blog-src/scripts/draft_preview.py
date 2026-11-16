@@ -202,7 +202,8 @@ def version_id(html_sha256: str, source: str) -> str:
 
 def manifest(p: Preview, source: str, now: datetime | None = None, parent: str | None = None) -> dict:
     """Manifesto da prévia. Com parent (#73), é a versão LinkedIn do artigo `parent`: só leitura no painel."""
-    if parent is not None and (not SLUG_RE.match(parent) or parent == p.slug):
+    # fullmatch: com match, o $ do Python aceita "artigo\n" e o Worker faria o rascunho sumir (r1, Kimi P1).
+    if parent is not None and (not SLUG_RE.fullmatch(parent) or parent == p.slug):
         raise DraftError(f"slug do artigo inválido para a versão LinkedIn: {parent!r}")
     at = (now or datetime.now(timezone.utc)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     files = {"index.html": HTML_TYPE, **{k: t for k, (_, t) in sorted(p.files.items())}}
@@ -251,9 +252,12 @@ def approvals(slug: str, run=subprocess.run) -> list[dict]:
 
 
 def cmd_enviar(a: argparse.Namespace) -> int:
-    if bool(a.linkedin) != bool(a.artigo):
+    # Presença, não verdade: --artigo "" também conta como --artigo (r1, Kimi P1).
+    if a.linkedin != (a.artigo is not None):
         raise DraftError("--linkedin e --artigo <slug-do-artigo> andam juntos")
     parent = a.artigo if a.linkedin else None
+    if parent is not None and not SLUG_RE.fullmatch(parent):
+        raise DraftError(f"slug do artigo inválido para a versão LinkedIn: {parent!r}")
     md = Path(a.rascunho).resolve()
     images = Path(a.imagens).resolve() if a.imagens else None
     if REPO in md.parents:
