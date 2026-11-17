@@ -3,10 +3,10 @@
 //   GET  /admin              lista, busca, filtros e contadores
 //   GET  /admin/export.csv   os mesmos filtros, em CSV
 //   POST /admin/unsubscribe  descadastra no Resend, com auditoria no contato, e atualiza a cópia
-//   /admin/rascunhos...      rascunhos privados do blog e aprovação de publicação (src/drafts.ts, issue #62)
+//   /admin/rascunhos...      rascunhos privados do blog, aprovação e disparo da publicação (src/drafts.ts, issues #62 e #82)
 // Qualquer outro caminho que a rota pegue (ex.: /administrar) segue para o site no GitHub Pages.
 import { accessEmail } from './access.ts';
-import { handleDrafts, type R2Like } from './drafts.ts';
+import { handleDrafts, type DraftDeps, type R2Like } from './drafts.ts';
 import { AUDIT_PROPERTY, prop, resend, syncSegment, SyncError, topicSubscription, type D1Like, type SyncDeps } from './sync.ts';
 
 export interface Env {
@@ -21,9 +21,10 @@ export interface Env {
   DRAFTS: R2Like; // bucket R2 privado blog-rascunhos
   DRAFT_NOTIFY_FROM: string; // segredo: remetente do aviso de rascunho aprovado
   DRAFT_NOTIFY_TO: string; // segredo: quem recebe o aviso (o Roger)
+  GITHUB_DISPATCH_TOKEN: string; // segredo: token fino só deste repositório, só com Actions (disparo da publicação, #82)
 }
 
-export type Deps = SyncDeps & { origin: (req: Request) => Promise<Response> };
+export type Deps = SyncDeps & Pick<DraftDeps, 'siteTimeoutMs' | 'githubTimeoutMs' | 'mailTimeoutMs'> & { origin: (req: Request) => Promise<Response> };
 
 export const PAGE_SIZE = 100;
 
