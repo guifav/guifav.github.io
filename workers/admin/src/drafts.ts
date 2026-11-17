@@ -9,7 +9,8 @@
 // as duas coisas, e um envio interrompido nunca mistura o HTML de uma versão com a fonte de outra.
 // A prévia é gerada e enviada ao R2 privado pelo blog-src/scripts/draft_preview.py, na KVM. O rascunho nunca
 // entra no repo antes da aprovação. A aprovação dispara o workflow publicar.yml (#82), que baixa a fonte da versão,
-// confere o hash contra a aprovação no D1 e abre o PR de publicação; a lista lê o estado direto do GitHub.
+// confere o hash contra a aprovação no D1 e abre o PR de publicação; a lista lê o estado direto do GitHub. Depois do
+// merge, com o post no ar, o cron tira o rascunho do artigo do R2 (limparPublicados, fatia 5).
 import type { D1Like } from './sync.ts';
 
 export interface R2Body {
@@ -24,6 +25,8 @@ export interface R2Like {
     truncated: boolean;
     cursor?: string;
   }>;
+  // #82, fatia 5: o cron apaga o rascunho do artigo publicado (o binding do R2 aceita até 1000 chaves por chamada).
+  delete(keys: string | string[]): Promise<void>;
 }
 
 export interface DraftEnv {
@@ -410,18 +413,25 @@ async function ciDoPr(env: DraftEnv, deps: DraftDeps, sha: string): Promise<stri
   return soEsperando.size ? 'CI pendente' : 'CI verde';
 }
 
+/** PR do branch da versão contra a main; null se não existe, undefined se o GitHub não respondeu uma lista. Só esse PR
+ * conta: o mesmo branch retargetado para outra base não publica (r4, Kimi P3). Usado pelo estado na lista e pelo cron
+ * que remove o rascunho publicado (fatia 5), para os dois decidirem pelo mesmo PR. */
+async function prDaVersao(env: DraftEnv, deps: DraftDeps, m: Manifest): Promise<Record<string, unknown> | null | undefined> {
+  const branch = publishBranch(m);
+  const pulls = await githubGet(env, deps, `/pulls?state=all&per_page=5&base=main&head=${encodeURIComponent(`guifav:${branch}`)}`);
+  if (!Array.isArray(pulls)) return undefined;
+  return pulls.find((p): p is Record<string, unknown> => isObj(p) && isId(p.number) && isObj(p.head) && p.head.ref === branch
+    && isObj(p.base) && p.base.ref === 'main') ?? null;
+}
+
 /** Estado calculado na hora, do D1 e do GitHub: uma chamada (PR do branch da versão) e, no máximo, uma segunda (CI do
  * PR aberto ou execução do publicar.yml). PR mergeado consulta o site, como a linha "publicado no site" do #80. */
 async function publicacao(env: DraftEnv, deps: DraftDeps, m: Manifest, a: Approval, firstApprovedAt: string): Promise<Publicacao> {
   const falhou = { html: `disparo falhou (${esc(a.dispatch_error)})`, redisparar: true };
   if (!env.GITHUB_DISPATCH_TOKEN) return a.dispatch_error ? falhou : { html: 'estado indisponível (painel sem o token do GitHub)', redisparar: false };
-  const branch = publishBranch(m);
-  // Só o PR do branch da versão contra a main: o mesmo branch retargetado para outra base não publica (r4, Kimi P3).
-  const pulls = await githubGet(env, deps, `/pulls?state=all&per_page=5&base=main&head=${encodeURIComponent(`guifav:${branch}`)}`);
+  const pr = await prDaVersao(env, deps, m);
   // GitHub fora do ar: o motivo de um disparo falho continua visível (e com o botão); sem ele, "estado indisponível".
-  if (!Array.isArray(pulls)) return a.dispatch_error ? falhou : { html: 'estado indisponível', redisparar: false };
-  const pr = pulls.find((p): p is Record<string, unknown> => isObj(p) && isId(p.number) && isObj(p.head) && p.head.ref === branch
-    && isObj(p.base) && p.base.ref === 'main');
+  if (pr === undefined) return a.dispatch_error ? falhou : { html: 'estado indisponível', redisparar: false };
   if (pr) {
     const n = pr.number as number;
     const link = `<a href="${GITHUB_WEB}/pull/${n}">#${n}</a>`;
@@ -485,7 +495,8 @@ function estadoDaExecucao(run: Record<string, unknown>, desdeD1: string, now: nu
   return { html: `execução interrompida${como}: ${exec}`, redisparar: true };
 }
 
-async function listPage(env: DraftEnv, deps: DraftDeps, msg: Mensagem | undefined, registroFalhou: boolean): Promise<Response> {
+/** Prefixos <slug>/ do bucket, no máximo MAX_DRAFTS, como a lista os enxerga. */
+async function slugsDoBucket(env: DraftEnv): Promise<string[]> {
   const prefixes: string[] = [];
   let cursor: string | undefined;
   do {
@@ -493,9 +504,52 @@ async function listPage(env: DraftEnv, deps: DraftDeps, msg: Mensagem | undefine
     prefixes.push(...page.delimitedPrefixes);
     cursor = page.truncated ? page.cursor : undefined;
   } while (cursor && prefixes.length < MAX_DRAFTS);
+  return prefixes.slice(0, MAX_DRAFTS).map((p) => p.replace(/\/$/, ''));
+}
+
+/** Apaga tudo em <slug>/: o manifesto primeiro (sem ele, o painel já não mostra nem serve nada do rascunho), depois as
+ * versões, inclusive as anteriores e a fonte. O "/" do fim garante que o slug "x" não leva junto o "x-linkedin/". A lista
+ * inteira vem antes de qualquer remoção das versões: apagar enquanto pagina pode pular objetos, conforme o cursor. */
+async function apagarRascunho(bucket: R2Like, slug: string): Promise<void> {
+  await bucket.delete(`${slug}/manifest.json`);
+  const keys: string[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await bucket.list({ prefix: `${slug}/`, cursor, limit: 1000 });
+    keys.push(...page.objects.map((o) => o.key));
+    cursor = page.truncated ? page.cursor : undefined;
+  } while (cursor);
+  for (let i = 0; i < keys.length; i += 1000) await bucket.delete(keys.slice(i, i + 1000));
+}
+
+/** #82, fatia 5, no cron: remove do R2 o rascunho do artigo cuja versão vigente está aprovada e publicada, ou seja, o PR
+ * do branch dessa versão está mergeado na main e o post responde 200 no site. Mergeado sozinho não garante o deploy,
+ * por isso o site. Só artigos: os derivados ficam e passam a aparecer abaixo da linha "publicado no site" (#80). Um
+ * rascunho reenviado depois do merge tem outra versão, sem aprovação, e não sai. A falha num rascunho não impede os
+ * outros; nada é apagado sem as duas confirmações. Devolve os slugs removidos. */
+export async function limparPublicados(env: DraftEnv, deps: DraftDeps): Promise<string[]> {
+  if (!env.GITHUB_DISPATCH_TOKEN) return [];
+  const removidos: string[] = [];
+  for (const slug of await slugsDoBucket(env)) {
+    try {
+      const m = await readManifest(env.DRAFTS, slug);
+      if (!m || m.kind !== 'blog') continue;
+      if (!state(await approvals(env.DB, slug), m).approved) continue;
+      const pr = await prDaVersao(env, deps, m);
+      if (!pr || typeof pr.merged_at !== 'string' || !pr.merged_at) continue;
+      if (!(await publicado(env, deps, slug))) continue;
+      await apagarRascunho(env.DRAFTS, slug);
+      removidos.push(slug);
+    } catch (e) {
+      console.log(`limparPublicados: ${slug} ficou, ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  return removidos;
+}
+
+async function listPage(env: DraftEnv, deps: DraftDeps, msg: Mensagem | undefined, registroFalhou: boolean): Promise<Response> {
   const drafts: Manifest[] = [];
-  for (const p of prefixes.slice(0, MAX_DRAFTS)) {
-    const slug = p.replace(/\/$/, '');
+  for (const slug of await slugsDoBucket(env)) {
     const m = await readManifest(env.DRAFTS, slug);
     if (!m) continue;
     if (!(await versionHtml(env, m))) continue;

@@ -6,7 +6,7 @@
 //   /admin/rascunhos...      rascunhos privados do blog, aprovação e disparo da publicação (src/drafts.ts, issues #62 e #82)
 // Qualquer outro caminho que a rota pegue (ex.: /administrar) segue para o site no GitHub Pages.
 import { accessEmail } from './access.ts';
-import { handleDrafts, type DraftDeps, type R2Like } from './drafts.ts';
+import { handleDrafts, limparPublicados, type DraftDeps, type R2Like } from './drafts.ts';
 import { AUDIT_PROPERTY, prop, resend, syncSegment, SyncError, topicSubscription, type D1Like, type SyncDeps } from './sync.ts';
 
 export interface Env {
@@ -230,9 +230,19 @@ const deps = (): Deps => ({
   origin: (req) => fetch(req),
 });
 
+/** O cron das 17: a cópia dos assinantes e, separada dela, a remoção dos rascunhos de artigos já publicados (#82, fatia
+ * 5). Uma não espera a outra, e a falha de uma não derruba a outra. */
+export async function agendado(env: Env, d: Deps): Promise<PromiseSettledResult<unknown>[]> {
+  const r = await Promise.allSettled([syncSegment(env, d), limparPublicados(env, d)]);
+  if (r[0].status === 'rejected') console.log(`cópia de assinantes falhou: ${String(r[0].reason)}`);
+  if (r[1].status === 'rejected') console.log(`remoção de rascunhos publicados falhou: ${String(r[1].reason)}`);
+  else if ((r[1].value as string[]).length) console.log(`rascunhos publicados removidos: ${(r[1].value as string[]).join(', ')}`);
+  return r;
+}
+
 export default {
   fetch: (req: Request, env: Env) => handle(req, env, deps()),
   scheduled: async (_c: unknown, env: Env, ctx: { waitUntil(p: Promise<unknown>): void }) => {
-    ctx.waitUntil(syncSegment(env, deps()));
+    ctx.waitUntil(agendado(env, deps()));
   },
 };

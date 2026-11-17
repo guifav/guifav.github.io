@@ -4,8 +4,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { handle, type Env, type Deps } from '../src/index.ts';
-import { execucaoDa, PREVIEW_CSP, readManifest, sha256Hex, versionId, type R2Like } from '../src/drafts.ts';
+import { agendado, handle, type Env, type Deps } from '../src/index.ts';
+import { execucaoDa, limparPublicados, PREVIEW_CSP, publishBranch, readManifest, sha256Hex, versionId, type R2Like } from '../src/drafts.ts';
 import type { D1Like, D1Stmt } from '../src/sync.ts';
 import { resetCertsCache } from '../src/access.ts';
 
@@ -43,17 +43,32 @@ function r2() {
     arrayBuffer: async () => b.slice().buffer,
     text: async () => new TextDecoder().decode(b),
   });
-  const bucket: R2Like & { store: Map<string, Uint8Array>; gets: string[] } = {
+  // pagina: tamanho máximo de página da listagem sem delimitador (como o limit do binding), para exercitar o cursor.
+  const bucket: R2Like & { store: Map<string, Uint8Array>; gets: string[]; deletes: string[][]; pagina: number } = {
     store,
     gets: [],
+    deletes: [],
+    pagina: 1000,
+    // #82, fatia 5: como o binding, aceita uma chave ou uma lista (até 1000) e ignora chave que não existe.
+    async delete(keys) {
+      const lista = Array.isArray(keys) ? keys : [keys];
+      assert.ok(lista.length <= 1000, 'até 1000 chaves por chamada');
+      bucket.deletes.push(lista);
+      for (const k of lista) store.delete(k);
+    },
     async get(key) {
       bucket.gets.push(key);
       const b = store.get(key);
       return b ? body(b) : null;
     },
-    async list({ prefix = '', delimiter } = {}) {
+    async list({ prefix = '', delimiter, cursor, limit = 1000 } = {}) {
       const keys = [...store.keys()].filter((k) => k.startsWith(prefix)).sort();
-      if (!delimiter) return { objects: keys.map((key) => ({ key })), delimitedPrefixes: [], truncated: false };
+      if (!delimiter) {
+        const ini = cursor ? Number(cursor) : 0;
+        const fim = ini + Math.min(limit, bucket.pagina);
+        const truncated = fim < keys.length;
+        return { objects: keys.slice(ini, fim).map((key) => ({ key })), delimitedPrefixes: [], truncated, ...(truncated ? { cursor: String(fim) } : {}) };
+      }
       const pre = new Set<string>();
       const objects: { key: string }[] = [];
       for (const k of keys) {
@@ -1466,4 +1481,137 @@ test('R10 (r6, Astra P2): reenviar o mesmo conteúdo renova o uploaded_at, mas a
   s.gh.length = 0;
   await s.req('/admin/rascunhos');
   assert.equal(leituras(s)[1].query.created, '>=2026-11-13T19:55:00Z');
+});
+
+// ------------------------------------------------------------------ #82, fatia 5: remoção do rascunho publicado
+const POST_HTML = '<!DOCTYPE html><html><head><title>Como construí o Sales Coach | Guilherme Favaron</title></head><body></body></html>';
+
+/** Artigo aprovado na versão vigente, com uma versão anterior e a fonte no bucket, mais um derivado e um rascunho cujo
+ * slug começa igual ("sales-coach-2"), para provar que só o prefixo "sales-coach/" sai. */
+async function cenarioPublicado(opts: Parameters<typeof setup>[0] = {}) {
+  const s = setup({ site: { 'sales-coach': POST_HTML }, ...opts });
+  await putDraft(s.bucket, 'sales-coach', { title: 'Versão antiga', skipManifest: true });
+  const d = await putDraft(s.bucket);
+  s.bucket.store.set(`sales-coach/v/${d.version}/fonte/sales-coach.md`, enc('# fonte'));
+  await putDraft(s.bucket, 'sales-coach-short', { manifest: RS });
+  await putDraft(s.bucket, 'sales-coach-2', { title: 'Outro post' });
+  s.db.raw.prepare(`INSERT INTO draft_approvals (slug, title, html_sha256, source_sha256, approved_at, approved_by, dispatched_at)
+    VALUES ('sales-coach', 't', ?, ?, '2026-11-13T19:10:00.000Z', ?, '2026-11-13T19:10:02.000Z')`).run(d.htmlSha, d.source, GUI);
+  const ramo = publishBranch({ slug: 'sales-coach', version: d.version });
+  s.ghOpts.pulls = [pr(12, 'closed', '2026-11-13T19:30:00Z', ramo)];
+  return { s, d, ramo };
+}
+const chavesDe = (s: ReturnType<typeof setup>, slug: string) => [...s.bucket.store.keys()].filter((k) => k.startsWith(`${slug}/`));
+
+test('R11: rascunho do artigo com o PR da versão mergeado e o post no ar sai inteiro do R2; derivado e slug parecido ficam', async () => {
+  const { s } = await cenarioPublicado();
+  assert.ok(chavesDe(s, 'sales-coach').length >= 5, 'manifesto, duas versões e a fonte');
+  assert.deepEqual(await limparPublicados(s.env, s.deps), ['sales-coach']);
+  assert.deepEqual(chavesDe(s, 'sales-coach'), [], 'manifesto, versões anteriores e fonte');
+  assert.deepEqual(s.bucket.deletes[0], ['sales-coach/manifest.json'], 'o manifesto sai primeiro');
+  assert.ok(chavesDe(s, 'sales-coach-short').length > 0, 'derivado continua');
+  assert.ok(chavesDe(s, 'sales-coach-2').length > 0, 'slug que só começa igual continua');
+  assert.equal(s.rows().length, 1, 'a aprovação continua no D1');
+  assert.deepEqual(s.site, ['https://guifav.dev/blog/sales-coach/'], 'uma consulta ao site, só do artigo');
+  assert.equal(leituras(s).length, 1, 'uma leitura do GitHub: o PR da versão');
+  // Depois da remoção, o painel mostra o derivado abaixo da linha "publicado no site" (#80).
+  const lista = await (await s.req('/admin/rascunhos')).text();
+  assert.match(lista, /<tr class="publicado">/);
+  assert.match(linhaDe(lista, 'sales-coach-short'), /só leitura<\/td>/);
+  // Rodar de novo não faz nada.
+  assert.deepEqual(await limparPublicados(s.env, s.deps), []);
+});
+
+test('R11: rascunho com mais objetos que uma página da listagem sai inteiro', async () => {
+  const { s, d } = await cenarioPublicado();
+  for (let i = 0; i < 7; i++) s.bucket.store.set(`sales-coach/v/${d.version}/img/sales-coach/extra-${i}.webp`, enc('x'));
+  s.bucket.pagina = 3;
+  assert.deepEqual(await limparPublicados(s.env, s.deps), ['sales-coach']);
+  assert.deepEqual(chavesDe(s, 'sales-coach'), []);
+  assert.ok(chavesDe(s, 'sales-coach-short').length > 0);
+});
+
+test('R11: mais de 1000 objetos saem em lotes de até 1000 chaves', async () => {
+  const { s, d } = await cenarioPublicado();
+  for (let i = 0; i < 1100; i++) s.bucket.store.set(`sales-coach/v/${d.version}/img/sales-coach/x-${i}.webp`, enc('x'));
+  assert.deepEqual(await limparPublicados(s.env, s.deps), ['sales-coach']);
+  assert.deepEqual(chavesDe(s, 'sales-coach'), []);
+  assert.ok(s.bucket.deletes.every((l) => l.length <= 1000));
+});
+
+test('R11: sem as duas confirmações, nada sai (PR aberto, fechado sem merge, de outra base, post fora do ar, GitHub fora)', async () => {
+  const casos: [string, (c: Awaited<ReturnType<typeof cenarioPublicado>>) => void][] = [
+    ['PR aberto', (c) => { c.s.ghOpts.pulls = [pr(12, 'open', null, c.ramo)]; }],
+    ['PR fechado sem merge', (c) => { c.s.ghOpts.pulls = [pr(12, 'closed', null, c.ramo)]; }],
+    ['PR mergeado em outra base', (c) => { c.s.ghOpts.pulls = [pr(12, 'closed', '2026-11-13T19:30:00Z', c.ramo, 'b'.repeat(40), 'outra')]; }],
+    ['PR de outro branch', (c) => { c.s.ghOpts.pulls = [pr(12, 'closed', '2026-11-13T19:30:00Z', 'publica/sales-coach-00000000')]; }],
+    ['sem PR', (c) => { c.s.ghOpts.pulls = []; }],
+    ['GitHub fora do ar', (c) => { c.s.ghOpts.pulls = 502; }],
+    ['GitHub sem resposta', (c) => { c.s.ghOpts.pulls = 'pendente'; }],
+  ];
+  for (const [nome, ajusta] of casos) {
+    const c = await cenarioPublicado();
+    ajusta(c);
+    const antes = chavesDe(c.s, 'sales-coach').length;
+    assert.deepEqual(await limparPublicados(c.s.env, c.s.deps), [], nome);
+    assert.equal(chavesDe(c.s, 'sales-coach').length, antes, nome);
+    assert.equal(c.s.bucket.deletes.length, 0, nome);
+  }
+  for (const site of [404, 301, 500, 'erro', 'pendente'] as const) {
+    const c = await cenarioPublicado({ site: { 'sales-coach': site } });
+    assert.deepEqual(await limparPublicados(c.s.env, c.s.deps), [], `site ${site}`);
+    assert.equal(c.s.bucket.deletes.length, 0, `site ${site}`);
+  }
+});
+
+test('R11: versão vigente sem aprovação (reenvio depois do merge), derivado e painel sem token não consultam nada nem apagam', async () => {
+  // Reenvio depois da aprovação: a versão vigente é outra, sem aprovação, mesmo com o PR da anterior mergeado.
+  const c = await cenarioPublicado();
+  await putDraft(c.s.bucket, 'sales-coach', { title: 'Correção depois do merge' });
+  assert.deepEqual(await limparPublicados(c.s.env, c.s.deps), []);
+  assert.equal(leituras(c.s).length, 0, 'versão sem aprovação não consulta o GitHub');
+  assert.equal(c.s.bucket.deletes.length, 0);
+  // Derivado com aprovação registrada (não acontece pelo painel, mas o cron não depende disso) nunca sai.
+  const s = setup({ site: { 'sales-coach-short': POST_HTML } });
+  const d = await putDraft(s.bucket, 'sales-coach-short', { manifest: RS });
+  s.db.raw.prepare(`INSERT INTO draft_approvals (slug, title, html_sha256, source_sha256, approved_at, approved_by)
+    VALUES ('sales-coach-short', 't', ?, ?, '2026-11-13T19:10:00.000Z', ?)`).run(d.htmlSha, d.source, GUI);
+  s.ghOpts.pulls = [pr(12, 'closed', '2026-11-13T19:30:00Z', publishBranch({ slug: 'sales-coach-short', version: d.version }))];
+  assert.deepEqual(await limparPublicados(s.env, s.deps), []);
+  assert.equal(leituras(s).length, 0);
+  // Sem o token do GitHub, o cron não faz nada.
+  const t = await cenarioPublicado({ token: '' });
+  assert.deepEqual(await limparPublicados(t.s.env, t.s.deps), []);
+  assert.equal(t.s.bucket.deletes.length, 0);
+  assert.equal(leituras(t.s).length, 0);
+});
+
+test('R11: a falha num rascunho não impede a remoção de outro', async () => {
+  const { s } = await cenarioPublicado();
+  // "a-quebrado" vem antes na ordem do bucket e falha ao ler o D1; "sales-coach" sai mesmo assim.
+  const q = await putDraft(s.bucket, 'a-quebrado', { title: 'Quebrado' });
+  s.db.raw.prepare(`INSERT INTO draft_approvals (slug, title, html_sha256, source_sha256, approved_at, approved_by)
+    VALUES ('a-quebrado', 't', ?, ?, '2026-11-13T19:10:00.000Z', ?)`).run(q.htmlSha, q.source, GUI);
+  const getOriginal = s.bucket.get.bind(s.bucket);
+  s.bucket.get = async (key: string) => {
+    if (key === 'a-quebrado/manifest.json') throw new Error('R2 indisponível');
+    return getOriginal(key);
+  };
+  assert.deepEqual(await limparPublicados(s.env, s.deps), ['sales-coach']);
+  assert.ok(chavesDe(s, 'a-quebrado').length > 0);
+});
+
+test('R11: no cron, a cópia de assinantes e a remoção correm separadas; a falha de uma não impede a outra', async () => {
+  // A cópia de assinantes falha (o Resend falso só conhece /emails); a remoção acontece.
+  const { s } = await cenarioPublicado();
+  const r = await agendado(s.env, s.deps);
+  assert.equal(r[0].status, 'rejected', 'cópia de assinantes falhou');
+  assert.equal(r[1].status, 'fulfilled');
+  assert.deepEqual((r[1] as PromiseFulfilledResult<unknown>).value, ['sales-coach']);
+  // A remoção falha por inteiro (bucket fora do ar); a cópia de assinantes roda do mesmo jeito.
+  const c = await cenarioPublicado();
+  c.s.bucket.list = async () => { throw new Error('R2 indisponível'); };
+  const r2b = await agendado(c.s.env, c.s.deps);
+  assert.equal(r2b[1].status, 'rejected');
+  assert.ok(c.s.other.some((u) => u.startsWith('https://api.resend.com/')), 'a cópia de assinantes chamou o Resend');
 });

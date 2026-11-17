@@ -41,6 +41,12 @@ já existe na main ou se a fonte tem um arquivo que a barreira 2 não aceita em 
 Manifestos de antes do #82, sem o campo fonte, continuam válidos para o painel, mas não
 publicam: o rascunho precisa ser reenviado.
 
+Depois da publicação, o cron do Worker do painel tira do R2 o rascunho do artigo (o
+manifesto, todas as versões e a fonte) quando duas coisas valem para a versão vigente: o PR
+do branch dela está mergeado na main e o post responde 200 no site. Os derivados ficam e
+passam a aparecer abaixo da linha "publicado no site". Um rascunho reenviado depois do
+merge é outra versão, sem aprovação, e não sai.
+
 ## Barreiras
 
 1. Limpeza no render (src/lib/sanitize.ts). É a barreira de segurança do conteúdo do
