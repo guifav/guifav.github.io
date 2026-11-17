@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { handle, type Env, type Deps } from '../src/index.ts';
-import { execucaoDa, PREVIEW_CSP, readManifest, sha256Hex, versionId, type R2Like } from '../src/drafts.ts';
+import { canonicais, execucaoDa, mergeado, PREVIEW_CSP, publishBranch, readManifest, sha256Hex, versionId, type R2Like } from '../src/drafts.ts';
 import type { D1Like, D1Stmt } from '../src/sync.ts';
 import { resetCertsCache } from '../src/access.ts';
 
@@ -38,22 +38,46 @@ function d1(falha: { sql?: RegExp } = {}): D1Like & { raw: DatabaseSync } {
 
 // ------------------------------------------------------------------ R2 falso
 function r2() {
-  const store = new Map<string, Uint8Array>();
+  // Cada gravação ganha um instante crescente, como o uploaded do R2: o que foi gravado depois tem instante maior.
+  const gravadoEm = new Map<string, number>();
+  let relogioR2 = NOW;
+  const store = new (class extends Map<string, Uint8Array> {
+    set(k: string, v: Uint8Array) {
+      gravadoEm.set(k, relogioR2++);
+      return super.set(k, v);
+    }
+  })();
   const body = (b: Uint8Array) => ({
     arrayBuffer: async () => b.slice().buffer,
     text: async () => new TextDecoder().decode(b),
   });
-  const bucket: R2Like & { store: Map<string, Uint8Array>; gets: string[] } = {
+  // pagina: tamanho máximo de página da listagem sem delimitador (como o limit do binding), para exercitar o cursor.
+  const bucket: R2Like & { store: Map<string, Uint8Array>; gets: string[]; deletes: string[][]; pagina: number } = {
     store,
     gets: [],
+    deletes: [],
+    pagina: 1000,
+    // #82, fatia 5: como o binding, aceita uma chave ou uma lista (até 1000) e ignora chave que não existe.
+    async delete(keys) {
+      const lista = Array.isArray(keys) ? keys : [keys];
+      assert.ok(lista.length <= 1000, 'até 1000 chaves por chamada');
+      bucket.deletes.push(lista);
+      for (const k of lista) store.delete(k);
+    },
     async get(key) {
       bucket.gets.push(key);
       const b = store.get(key);
       return b ? body(b) : null;
     },
-    async list({ prefix = '', delimiter } = {}) {
+    async list({ prefix = '', delimiter, cursor, limit = 1000 } = {}) {
       const keys = [...store.keys()].filter((k) => k.startsWith(prefix)).sort();
-      if (!delimiter) return { objects: keys.map((key) => ({ key })), delimitedPrefixes: [], truncated: false };
+      if (!delimiter) {
+        const ini = cursor ? Number(cursor) : 0;
+        const fim = ini + Math.min(limit, bucket.pagina);
+        const truncated = fim < keys.length;
+        return { objects: keys.slice(ini, fim).map((key) => ({ key, uploaded: new Date(gravadoEm.get(key) ?? 0) })), delimitedPrefixes: [], truncated,
+          ...(truncated ? { cursor: String(fim) } : {}) };
+      }
       const pre = new Set<string>();
       const objects: { key: string }[] = [];
       for (const k of keys) {
@@ -127,6 +151,8 @@ function segurarAteAbortar(signal: AbortSignal) {
 function setup(opts: { mailStatus?: number; mailThrows?: boolean; mailPendente?: boolean; failSql?: RegExp; notify?: boolean; site?: Record<string, string | number | 'erro' | 'pendente' | 'corpo-pendente' | 'gigante'>;
   gh?: GhOpts; token?: string } = {}) {
   const ghOpts: GhOpts = { ...(opts.gh ?? {}) };
+  // Posts no site, mutável no meio do teste como o ghOpts.
+  const siteOpts: Record<string, string | number | 'erro' | 'pendente' | 'corpo-pendente' | 'gigante'> = { ...(opts.site ?? {}) };
   const gh: GhCall[] = [];
   const relogio = { t: NOW };
   // r1 (Astra e Kimi P2): quantos pedaços do corpo o painel puxou e se cancelou o resto.
@@ -199,7 +225,7 @@ function setup(opts: { mailStatus?: number; mailThrows?: boolean; mailPendente?:
       site.push(url);
       assert.equal(init?.redirect, 'manual', 'consulta ao site sem seguir redirecionamento');
       assert.ok(init?.signal, 'consulta ao site com prazo');
-      const v = opts.site?.[post[1]];
+      const v = siteOpts[post[1]];
       if (v === 'erro') throw new TypeError('network');
       // r1 (P3): sem resposta até o prazo, ou resposta 200 cujo corpo nunca termina; só o aborto encerra.
       const abortou = () => new DOMException('prazo', 'TimeoutError');
@@ -258,7 +284,7 @@ function setup(opts: { mailStatus?: number; mailThrows?: boolean; mailPendente?:
       headers: { origin: ORIGIN, 'content-type': 'application/x-www-form-urlencoded', ...headers } });
   const rows = () => JSON.parse(JSON.stringify(db.raw.prepare('SELECT * FROM draft_approvals ORDER BY id').all())) as Record<string, string>[];
   const avancar = (min: number) => { relogio.t += min * 60000; };
-  return { env, deps, db, bucket, mails, other, site, corpo, req, approve, rows, gh, ghOpts, avancar, falha };
+  return { env, deps, db, bucket, mails, other, site, siteOpts, corpo, req, approve, rows, gh, ghOpts, avancar, falha };
 }
 
 // ------------------------------------------------------------------ R1: acesso
@@ -1466,4 +1492,292 @@ test('R10 (r6, Astra P2): reenviar o mesmo conteúdo renova o uploaded_at, mas a
   s.gh.length = 0;
   await s.req('/admin/rascunhos');
   assert.equal(leituras(s)[1].query.created, '>=2026-11-13T19:55:00Z');
+});
+
+// ------------------------------------------------------------------ #82, fatia 5: botão "Remover rascunho"
+const POST_HTML = '<!DOCTYPE html><html><head><title>Como construí o Sales Coach | Guilherme Favaron</title>'
+  + '<link rel="canonical" href="https://guifav.dev/blog/sales-coach/"></head><body></body></html>';
+
+/** Artigo aprovado na versão vigente, com uma versão anterior e a fonte no bucket, mais um derivado e um rascunho cujo
+ * slug começa igual ("sales-coach-2"), para provar que só o prefixo "sales-coach/" sai. */
+async function cenarioPublicado(opts: Parameters<typeof setup>[0] = {}) {
+  const s = setup({ site: { 'sales-coach': POST_HTML }, ...opts });
+  // Vizinho gravado antes, cujas chaves cortadas no tamanho do slug parecem uma pasta de versão ("v/v/...").
+  await putDraft(s.bucket, 'sales-coachxv', { title: 'Vizinho' });
+  await putDraft(s.bucket, 'sales-coach', { title: 'Versão antiga', skipManifest: true });
+  const d = await putDraft(s.bucket);
+  s.bucket.store.set(`sales-coach/v/${d.version}/fonte/sales-coach.md`, enc('# fonte'));
+  await putDraft(s.bucket, 'sales-coach-short', { manifest: RS });
+  await putDraft(s.bucket, 'sales-coach-2', { title: 'Outro post' });
+  s.db.raw.prepare(`INSERT INTO draft_approvals (slug, title, html_sha256, source_sha256, approved_at, approved_by, dispatched_at)
+    VALUES ('sales-coach', 't', ?, ?, '2026-11-13T19:10:00.000Z', ?, '2026-11-13T19:10:02.000Z')`).run(d.htmlSha, d.source, GUI);
+  const ramo = publishBranch({ slug: 'sales-coach', version: d.version });
+  s.ghOpts.pulls = [pr(12, 'closed', '2026-11-13T19:30:00Z', ramo)];
+  const remover = async (form: Record<string, string> = { versao: d.version, confirmar: 'sim' }, slug = 'sales-coach', headers: Record<string, string> = {}) =>
+    s.req(`/admin/rascunhos/${slug}/remover`, { method: 'POST', body: new URLSearchParams(form).toString(),
+      headers: { origin: ORIGIN, 'content-type': 'application/x-www-form-urlencoded', ...headers } });
+  return { s, d, ramo, remover };
+}
+const chavesDe = (s: ReturnType<typeof setup>, slug: string) => [...s.bucket.store.keys()].filter((k) => k.startsWith(`${slug}/`));
+const destino = (r: Response) => r.headers.get('location') ?? '';
+
+test('R11: a lista mostra "Remover rascunho" só quando o PR da versão está mergeado e o post no ar', async () => {
+  const { s, d, ramo } = await cenarioPublicado();
+  const linha = linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach');
+  assert.match(linha, /publicado em 2026-11-13: <a href="https:\/\/guifav\.dev\/blog\/sales-coach\/">ver o post<\/a>/);
+  assert.match(linha, new RegExp(`<form method="post" action="/admin/rascunhos/sales-coach/remover"[^>]*><input type="hidden" name="versao" value="${d.version}"><label><input type="checkbox" name="confirmar" value="sim" required> confirmo</label> <button>Remover rascunho</button></form>`));
+  for (const [nome, pulls, site] of [['PR aberto', [pr(12, 'open', null, ramo)], POST_HTML], ['post fora do ar', [pr(12, 'closed', '2026-11-13T19:30:00Z', ramo)], 404]] as const) {
+    const c = await cenarioPublicado({ site: { 'sales-coach': site } });
+    c.s.ghOpts.pulls = [...pulls];
+    assert.doesNotMatch(await (await c.s.req('/admin/rascunhos')).text(), /Remover rascunho/, nome);
+  }
+});
+
+test('R11: remover tira o rascunho do artigo inteiro do R2; derivado e slug parecido ficam; nada é removido só por abrir a lista', async () => {
+  const { s, remover } = await cenarioPublicado();
+  await s.req('/admin/rascunhos');
+  assert.equal(s.bucket.deletes.length, 0, 'abrir a lista não remove nada');
+  assert.ok(chavesDe(s, 'sales-coach').length >= 5, 'manifesto, duas versões e a fonte');
+  const r = await remover();
+  assert.equal(r.status, 303);
+  assert.equal(destino(r), '/admin/rascunhos?msg=removido');
+  assert.deepEqual(chavesDe(s, 'sales-coach'), [], 'manifesto, versões anteriores e fonte');
+  assert.deepEqual(s.bucket.deletes.at(-1), ['sales-coach/manifest.json'], 'o manifesto sai por último (r1, Codex P2)');
+  assert.ok(chavesDe(s, 'sales-coach-short').length > 0, 'derivado continua');
+  assert.ok(chavesDe(s, 'sales-coach-2').length > 0, 'slug que só começa igual continua');
+  assert.equal(chavesDe(s, 'sales-coachxv').length, 3, 'vizinho mais antigo continua inteiro');
+  assert.equal(s.rows().length, 1, 'a aprovação continua no D1');
+  const lista = await (await s.req('/admin/rascunhos?msg=removido')).text();
+  assert.match(lista, /Rascunho removido do R2/);
+  assert.match(lista, /<tr class="publicado">/);
+  assert.match(linhaDe(lista, 'sales-coach-short'), /só leitura<\/td>/);
+});
+
+test('R11: remover recusa sem as confirmações, e nada sai', async () => {
+  type Caso = [string, (c: Awaited<ReturnType<typeof cenarioPublicado>>) => Promise<Response>, number, RegExp];
+  const casos: Caso[] = [
+    ['sem confirmo', (c) => c.remover({ versao: c.d.version }), 400, /confirmo/],
+    ['origem de fora', (c) => c.remover(undefined, undefined, { origin: 'https://exemplo.com' }), 403, /origem/],
+    ['versão vista diferente', (c) => c.remover({ versao: SHA('9'), confirmar: 'sim' }), 409, /mudou/],
+    // r3 (Kimi P2): derivado com versão própria, aprovação, PR mergeado e post no ar; só a regra do derivado o segura.
+    ['derivado', async (c) => {
+      const der = (await readManifest(c.s.bucket, 'sales-coach-short'))!;
+      c.s.db.raw.prepare(`INSERT INTO draft_approvals (slug, title, html_sha256, source_sha256, approved_at, approved_by)
+        VALUES ('sales-coach-short', 't', ?, ?, '2026-11-13T19:10:00.000Z', ?)`).run(der.html_sha256, der.source_sha256, GUI);
+      (c.s.ghOpts.pulls as unknown[]).push(pr(14, 'closed', '2026-11-13T19:30:00Z', publishBranch(der)));
+      // r4 (Astra e Kimi): o "post" do derivado também responde, com o canonical dele; sobra só a regra do derivado.
+      c.s.siteOpts['sales-coach-short'] = POST_HTML.replaceAll('/blog/sales-coach/', '/blog/sales-coach-short/');
+      return c.remover({ versao: der.version, confirmar: 'sim' }, 'sales-coach-short');
+    }, 400, /derivado/],
+    ['sem aprovação', async (c) => { c.s.db.raw.prepare('DELETE FROM draft_approvals').run(); return c.remover(); }, 409, /não está aprovada/],
+    ['PR aberto', (c) => { c.s.ghOpts.pulls = [pr(12, 'open', null, c.ramo)]; return c.remover(); }, 409, /não está mergeado/],
+    ['PR fechado sem merge', (c) => { c.s.ghOpts.pulls = [pr(12, 'closed', null, c.ramo)]; return c.remover(); }, 409, /não está mergeado/],
+    ['PR mergeado em outra base', (c) => { c.s.ghOpts.pulls = [pr(12, 'closed', '2026-11-13T19:30:00Z', c.ramo, 'b'.repeat(40), 'outra')]; return c.remover(); }, 409, /não está mergeado/],
+    ['PR de outro branch', (c) => { c.s.ghOpts.pulls = [pr(12, 'closed', '2026-11-13T19:30:00Z', 'publica/sales-coach-00000000')]; return c.remover(); }, 409, /não está mergeado/],
+    ['GitHub fora do ar', (c) => { c.s.ghOpts.pulls = 502; return c.remover(); }, 503, /GitHub não respondeu/],
+    ['GitHub sem resposta', (c) => { c.s.ghOpts.pulls = 'pendente'; return c.remover(); }, 503, /GitHub não respondeu/],
+  ];
+  for (const [nome, faz, status, msg] of casos) {
+    const c = await cenarioPublicado();
+    const antes = chavesDe(c.s, 'sales-coach').length;
+    const r = await faz(c);
+    assert.equal(r.status, status, nome);
+    assert.match(await r.text(), msg, nome);
+    assert.equal(chavesDe(c.s, 'sales-coach').length, antes, nome);
+    assert.ok(chavesDe(c.s, 'sales-coach-short').length > 0, `${nome}: derivado intacto`);
+    assert.equal(c.s.bucket.deletes.length, 0, nome);
+  }
+  // r3 (Astra P1): só a página do post de fato confirma; qualquer outro 200 não basta, nem para o botão aparecer.
+  const semCanonical = '<!DOCTYPE html><html><head><title>Como construí o Sales Coach</title></head><body></body></html>';
+  const outroCanonical = semCanonical.replace('</head>', '<link rel="canonical" href="https://guifav.dev/blog/outro/"></head>');
+  // r4 (Astra e Kimi P1): canonical só em texto (comentário, script, title, textarea) ou um segundo canonical errado.
+  const comentado = outroCanonical.replace('</head>', '<!-- <link rel="canonical" href="https://guifav.dev/blog/sales-coach/"> --></head>');
+  const tudoComentado = '<!--' + POST_HTML + '-->';
+  const noScript = semCanonical.replace('</head>', '<script>var x = \'<link rel="canonical" href="https://guifav.dev/blog/sales-coach/">\';</script></head>');
+  const noTitulo = '<!DOCTYPE html><html><head><title><link rel="canonical" href="https://guifav.dev/blog/sales-coach/"></title></head></html>';
+  const doisCanonicais = POST_HTML.replace('</head>', '<link rel="canonical" href="https://guifav.dev/blog/outro/"></head>');
+  for (const site of [404, 301, 500, 'erro', 'pendente', semCanonical, outroCanonical, '', comentado, tudoComentado, noScript, noTitulo, doisCanonicais] as const) {
+    const c = await cenarioPublicado({ site: { 'sales-coach': site } });
+    const r = await c.remover();
+    assert.equal(r.status, 409, `site ${JSON.stringify(site).slice(0, 40)}`);
+    assert.equal(c.s.bucket.deletes.length, 0, `site ${JSON.stringify(site).slice(0, 40)}`);
+    assert.doesNotMatch(linhaDe(await (await c.s.req('/admin/rascunhos')).text(), 'sales-coach'), /Remover rascunho/);
+  }
+  // 200 com o mesmo texto da página, mas sem ser HTML (JSON, texto puro, sem content-type): não confirma.
+  for (const tipo of ['application/json', 'text/plain', null, 'text/html-not-html', 'text/htmlx; charset=utf-8']) {
+    const c = await cenarioPublicado();
+    const fetchOriginal = c.s.deps.fetch;
+    c.s.deps.fetch = (async (i: string | URL | Request, init?: RequestInit) => {
+      if (!String(i).startsWith('https://guifav.dev/blog/')) return fetchOriginal(i, init);
+      const r = new Response(new TextEncoder().encode(POST_HTML), { status: 200 });
+      if (tipo) r.headers.set('content-type', tipo);
+      return r;
+    }) as typeof fetch;
+    assert.equal((await c.remover()).status, 409, `tipo ${tipo}`);
+    assert.equal(c.s.bucket.deletes.length, 0, `tipo ${tipo}`);
+  }
+  const t = await cenarioPublicado({ token: '' });
+  assert.equal((await t.remover()).status, 503, 'sem token');
+  assert.equal(t.s.bucket.deletes.length, 0);
+});
+
+test('R11 (r4, Astra e Kimi P1): canonicais() lê só elementos <link rel="canonical"> de verdade', () => {
+  const u = 'https://guifav.dev/blog/x/';
+  assert.deepEqual(canonicais(`<head><link rel="canonical" href="${u}"></head>`), [u]);
+  assert.deepEqual(canonicais(`<head><LINK HREF='${u}' REL='Canonical'></head>`), [u], 'maiúsculas, aspas simples, ordem trocada');
+  assert.deepEqual(canonicais(`<link rel="alternate canonical" href=${u}>`), [u], 'rel com mais de uma palavra, href sem aspas');
+  assert.deepEqual(canonicais(`<link rel="alternate" href="${u}"><link rel="stylesheet" href="${u}">`), []);
+  assert.deepEqual(canonicais(`<!-- <link rel="canonical" href="${u}"> -->`), []);
+  assert.deepEqual(canonicais(`<!-- sem fim <link rel="canonical" href="${u}">`), [], 'comentário sem fim apaga o resto');
+  assert.deepEqual(canonicais(`<script><link rel="canonical" href="${u}"></script>`), []);
+  assert.deepEqual(canonicais(`<SCRIPT type="x"><link rel="canonical" href="${u}"></SCRIPT >`), []);
+  assert.deepEqual(canonicais(`<style>/* <link rel="canonical" href="${u}"> */</style>`), []);
+  assert.deepEqual(canonicais(`<textarea><link rel="canonical" href="${u}"></textarea>`), []);
+  assert.deepEqual(canonicais(`<title><link rel="canonical" href="${u}"></title>`), []);
+  assert.deepEqual(canonicais(`<template><link rel="canonical" href="${u}"></template>`), []);
+  assert.deepEqual(canonicais(`<noscript><link rel="canonical" href="${u}"></noscript>`), []);
+  assert.deepEqual(canonicais(`<link data-rel="canonical" href="${u}">`), [], 'outro atributo terminado em rel');
+  assert.deepEqual(canonicais(`<link rel="noncanonical" href="${u}">`), [], 'rel vale por palavra inteira');
+  assert.deepEqual(canonicais(`<link rel="canonical" href="https://guifav.dev/blog/y/"><link rel="canonical" href="${u}">`), ['https://guifav.dev/blog/y/', u]);
+  // A página real do post tem esta forma (conferido em guifav.dev/blog/mcp-ou-aplicacao-dados-da-empresa-na-ia/).
+  assert.deepEqual(canonicais(POST_HTML), ['https://guifav.dev/blog/sales-coach/']);
+});
+
+test('R11 (r1 e r2, Astra e Kimi P2): resposta do GitHub incoerente ou com data inválida não conta como merge', async () => {
+  const ruins: [string, Record<string, unknown>][] = [
+    ['aberto com merged_at', { state: 'open', merged_at: '2026-11-13T19:30:00Z' }],
+    ['sem state', { state: undefined, merged_at: '2026-11-13T19:30:00Z' }],
+    ['merged_at que não é data', { state: 'closed', merged_at: 'não é uma data' }],
+    ['merged_at com espaço', { state: 'closed', merged_at: '2026-11-13 19:30:00Z' }],
+    ['merged_at impossível', { state: 'closed', merged_at: '2026-13-45T99:99:99Z' }],
+    ['30 de fevereiro', { state: 'closed', merged_at: '2026-02-30T19:30:00Z' }],
+    ['merged_at numérico', { state: 'closed', merged_at: 1763062200 }],
+  ];
+  for (const [nome, campos] of ruins) {
+    assert.equal(mergeado({ ...pr(12, 'closed', '2026-11-13T19:30:00Z', 'x'), ...campos }), false, nome);
+    const c = await cenarioPublicado();
+    c.s.ghOpts.pulls = [{ ...pr(12, 'closed', '2026-11-13T19:30:00Z', c.ramo), ...campos }];
+    assert.equal((await c.remover()).status, 409, nome);
+    assert.equal(c.s.bucket.deletes.length, 0, nome);
+    assert.equal(c.s.site.length, 0, `${nome}: sem merge, nem consulta o site`);
+    assert.doesNotMatch(await (await c.s.req('/admin/rascunhos')).text(), /publicado em|Remover rascunho/, `${nome}: a lista não mostra publicado`);
+  }
+  assert.equal(mergeado(pr(12, 'closed', '2026-11-13T19:30:00Z', 'x')), true);
+});
+
+test('R11: rascunho com mais objetos que uma página sai inteiro; mais de 1000 saem em lotes; histórico grande demais fica', async () => {
+  {
+    const { s, d, remover } = await cenarioPublicado();
+    for (let i = 0; i < 7; i++) s.bucket.store.set(`sales-coach/v/${d.version}/img/sales-coach/extra-${i}.webp`, enc('x'));
+    s.bucket.pagina = 3;
+    assert.equal(destino(await remover()), '/admin/rascunhos?msg=removido');
+    assert.deepEqual(chavesDe(s, 'sales-coach'), []);
+  }
+  {
+    const { s, d, remover } = await cenarioPublicado();
+    for (let i = 0; i < 1100; i++) s.bucket.store.set(`sales-coach/v/${d.version}/img/sales-coach/x-${i}.webp`, enc('x'));
+    assert.equal(destino(await remover()), '/admin/rascunhos?msg=removido');
+    assert.deepEqual(chavesDe(s, 'sales-coach'), []);
+    assert.ok(s.bucket.deletes.every((l) => l.length <= 1000));
+  }
+  {
+    const { s, d, remover } = await cenarioPublicado();
+    for (let i = 0; i < 9; i++) s.bucket.store.set(`sales-coach/v/${d.version}/img/sales-coach/extra-${i}.webp`, enc('x'));
+    s.bucket.pagina = 3;
+    s.deps.remocaoMaxPaginas = 2;
+    const antes = chavesDe(s, 'sales-coach').length;
+    assert.equal(destino(await remover()), '/admin/rascunhos?msg=remocao-grande', 'r3 (Astra P2): limite não é falha no meio');
+    assert.equal(chavesDe(s, 'sales-coach').length, antes, 'nada sai');
+    assert.match(await (await s.req('/admin/rascunhos?msg=remocao-grande')).text(), /Nada foi removido, e repetir não resolve/);
+  }
+});
+
+test('R11 (r1, Codex P1): envio novo durante a remoção não é apagado', async () => {
+  // O envio chega enquanto o painel consulta o site: versão nova inteira e manifesto novo. Nada do slug sai.
+  {
+    const { s, remover } = await cenarioPublicado();
+    const fetchOriginal = s.deps.fetch;
+    let nova: Draft | undefined;
+    s.deps.fetch = (async (i: string | URL | Request, init?: RequestInit) => {
+      if (String(i).startsWith('https://guifav.dev/blog/') && !nova) nova = await putDraft(s.bucket, 'sales-coach', { title: 'Correção' });
+      return fetchOriginal(i, init);
+    }) as typeof fetch;
+    assert.equal(destino(await remover()), '/admin/rascunhos?msg=remocao-mudou');
+    assert.equal(s.bucket.deletes.length, 0, 'manifesto mudou antes da remoção: nada sai');
+    assert.equal((await readManifest(s.bucket, 'sales-coach'))?.version, nova!.version);
+  }
+  // O envio está no meio: objetos da versão nova já gravados, manifesto ainda o antigo. A versão aprovada e as
+  // anteriores saem; a nova, gravada depois do manifesto vigente, fica inteira.
+  {
+    const { s, d, remover } = await cenarioPublicado();
+    const fetchOriginal = s.deps.fetch;
+    let nova: Draft | undefined;
+    s.deps.fetch = (async (i: string | URL | Request, init?: RequestInit) => {
+      if (String(i).startsWith('https://guifav.dev/blog/') && !nova) nova = await putDraft(s.bucket, 'sales-coach', { title: 'Em andamento', skipManifest: true });
+      return fetchOriginal(i, init);
+    }) as typeof fetch;
+    assert.equal(destino(await remover()), '/admin/rascunhos?msg=removido');
+    const restam = chavesDe(s, 'sales-coach');
+    assert.ok(restam.length > 0 && restam.every((k) => k.startsWith(`sales-coach/v/${nova!.version}/`)), 'só a versão em andamento fica');
+    assert.ok(!restam.some((k) => k.includes(d.version)));
+  }
+  // Reenvio em andamento de um conteúdo igual ao de uma versão antiga: a pasta dela fica com objetos de antes e de
+  // depois do manifesto vigente, e não sai.
+  {
+    const { s, remover } = await cenarioPublicado();
+    const vigente = (await readManifest(s.bucket, 'sales-coach'))!.version;
+    const antiga = [...s.bucket.store.keys()].find((k) => k.startsWith('sales-coach/v/') && k.endsWith('/index.html') && !k.includes(vigente))!;
+    const pastaAntiga = antiga.replace(/index\.html$/, '');
+    const fetchOriginal = s.deps.fetch;
+    let regravou = false;
+    s.deps.fetch = (async (i: string | URL | Request, init?: RequestInit) => {
+      if (String(i).startsWith('https://guifav.dev/blog/') && !regravou) {
+        regravou = true;
+        s.bucket.store.set(antiga, s.bucket.store.get(antiga)!);
+      }
+      return fetchOriginal(i, init);
+    }) as typeof fetch;
+    assert.equal(destino(await remover()), '/admin/rascunhos?msg=removido');
+    assert.ok(chavesDe(s, 'sales-coach').length > 0 && chavesDe(s, 'sales-coach').every((k) => k.startsWith(pastaAntiga)), 'a pasta regravada fica inteira');
+    assert.equal(chavesDe(s, 'sales-coach').length, 2, 'index.html e a imagem da versão antiga');
+  }
+  // O envio troca o manifesto entre a remoção das versões e a do manifesto: o manifesto novo fica.
+  {
+    const { s, remover } = await cenarioPublicado();
+    const deleteOriginal = s.bucket.delete.bind(s.bucket);
+    let nova: Draft | undefined;
+    s.bucket.delete = async (keys: string | string[]) => {
+      await deleteOriginal(keys);
+      if (!nova) nova = await putDraft(s.bucket, 'sales-coach', { title: 'Chegou no fim' });
+    };
+    assert.equal(destino(await remover()), '/admin/rascunhos?msg=remocao-mudou');
+    assert.equal((await readManifest(s.bucket, 'sales-coach'))?.version, nova!.version, 'manifesto novo continua');
+  }
+});
+
+test('R11 (r1, Codex P2; r2, Astra P2): remoção que para no meio fica na lista com "prévia incompleta" e o botão termina', async () => {
+  const { s, d, remover } = await cenarioPublicado();
+  for (let i = 0; i < 5; i++) s.bucket.store.set(`sales-coach/v/${d.version}/img/sales-coach/extra-${i}.webp`, enc('x'));
+  const deleteOriginal = s.bucket.delete.bind(s.bucket);
+  // Os objetos saem; a remoção do manifesto falha.
+  s.bucket.delete = async (keys: string | string[]) => {
+    if (keys === 'sales-coach/manifest.json') throw new Error('R2 indisponível');
+    return deleteOriginal(keys);
+  };
+  assert.equal(destino(await remover()), '/admin/rascunhos?msg=remocao-falhou');
+  assert.ok(await readManifest(s.bucket, 'sales-coach'), 'o manifesto continua');
+  const lista = await (await s.req('/admin/rascunhos?msg=remocao-falhou')).text();
+  assert.match(lista, /A remoção parou no meio/);
+  const linha = lista.split('<tr').find((r) => r.includes('<td>sales-coach</td>')) ?? '';
+  assert.match(linha, /prévia incompleta/);
+  assert.match(linha, /Remover rascunho/);
+  assert.doesNotMatch(linha, /href="\/admin\/rascunhos\/sales-coach\/"/, 'sem link para a prévia que não existe mais');
+  assert.match(linhaDe(lista, 'sales-coach-short'), /só leitura<\/td>/, 'o derivado continua abaixo dele');
+  s.bucket.delete = deleteOriginal;
+  assert.equal(destino(await remover()), '/admin/rascunhos?msg=removido');
+  assert.deepEqual(chavesDe(s, 'sales-coach'), []);
+});
+
+test('R11: o cron só faz a cópia dos assinantes; a remoção não é automática', () => {
+  assert.match(TOML, /crons = \["17 \* \* \* \*"\]/);
 });

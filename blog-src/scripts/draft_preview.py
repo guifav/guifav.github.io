@@ -676,8 +676,8 @@ def corpo_pr(p: Publicacao) -> str:
         "",
         "## Depois do merge",
         "",
-        f"Conferir o post no ar e remover do R2 só o rascunho do artigo (`draft_preview.py remover {p.slug}`). "
-        "Os derivados continuam no painel.",
+        "Com este PR mergeado e o post no ar, a linha do artigo no painel mostra o botão \"Remover rascunho\", "
+        "que tira do R2 o rascunho do artigo. Os derivados continuam no painel.",
     ]
     return "\n".join(linhas) + "\n"
 

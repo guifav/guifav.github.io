@@ -24,7 +24,7 @@ export interface Env {
   GITHUB_DISPATCH_TOKEN: string; // segredo: token fino só deste repositório, só com Actions (disparo da publicação, #82)
 }
 
-export type Deps = SyncDeps & Pick<DraftDeps, 'siteTimeoutMs' | 'githubTimeoutMs' | 'mailTimeoutMs'> & { origin: (req: Request) => Promise<Response> };
+export type Deps = SyncDeps & Pick<DraftDeps, 'siteTimeoutMs' | 'githubTimeoutMs' | 'mailTimeoutMs' | 'remocaoMaxPaginas'> & { origin: (req: Request) => Promise<Response> };
 
 export const PAGE_SIZE = 100;
 

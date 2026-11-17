@@ -41,6 +41,13 @@ já existe na main ou se a fonte tem um arquivo que a barreira 2 não aceita em 
 Manifestos de antes do #82, sem o campo fonte, continuam válidos para o painel, mas não
 publicam: o rascunho precisa ser reenviado.
 
+Depois da publicação, com o PR da versão mergeado e o post no ar (o endereço responde 200
+com HTML cujo elemento canonical aponta para ele), o painel mostra o botão "Remover
+rascunho", que tira do R2 o rascunho do artigo (o manifesto, todas as versões e a fonte). Os
+derivados ficam e passam a aparecer abaixo da linha "publicado no site". A remoção é manual
+porque o R2 não tem remoção condicional: um envio do mesmo slug durante a remoção poderia se
+perder.
+
 ## Barreiras
 
 1. Limpeza no render (src/lib/sanitize.ts). É a barreira de segurança do conteúdo do
