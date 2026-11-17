@@ -386,9 +386,11 @@ async function ciDoPr(env: DraftEnv, deps: DraftDeps, sha: string): Promise<stri
   // mesmo commit não deixa a CI vermelha (r1, Astra P2). Recente pela última tentativa: reexecutar mantém o id da
   // execução, mas renova o run_started_at, e a API devolve o estado dessa tentativa (r2, Astra P2). Sem data, o id
   // desempata.
+  // Execução parada em "aprovação necessária" (action_required) não rodou: o PR aberto pelo bot gera uma pelo evento de
+  // PR, que o GitHub segura, ao lado da que o publicar.yml dispara. Ela não entra na conta (teste de ponta a ponta, #82).
   const vigente = new Map<string, Record<string, unknown>>();
   for (const x of r.workflow_runs) {
-    if (!isObj(x) || !isId(x.id)) continue;
+    if (!isObj(x) || !isId(x.id) || x.conclusion === 'action_required') continue;
     const wf = isId(x.workflow_id) ? `id:${x.workflow_id}` : `nome:${String(x.name ?? '')}`;
     const atual = vigente.get(wf);
     vigente.set(wf, atual ? maisRecente(x, atual) : x);

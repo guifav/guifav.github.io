@@ -1068,6 +1068,14 @@ test('R10: estados da publicação, calculados do D1 e do GitHub, com no máximo
     'PR aberto, CI vermelha quando a execução mais nova do workflow falhou': { gh: { pulls: [pr(12, 'open', null, ramo)],
       ci: [exec(3, 'Pages', 'completed', 'success', 100), exec(9, 'Pages', 'completed', 'failure', 100)] },
       esperado: new RegExp(`^PR aberto ${prLink}, CI vermelha$`), botao: false, leituras: 2 },
+    // Caso real do teste de ponta a ponta (#82, PR #87): o pages.yml disparado pelo publicar.yml passou, e a execução
+    // mais nova do mesmo workflow, pelo evento do PR aberto pelo bot, ficou esperando aprovação sem rodar.
+    'PR aberto, CI verde com a execução do evento de PR esperando aprovação': { gh: { pulls: [pr(12, 'open', null, ramo)],
+      ci: [exec(36, 'Pages', 'completed', 'success', 100), exec(39, 'Pages', 'completed', 'action_required', 100)] },
+      esperado: new RegExp(`^PR aberto ${prLink}, CI verde$`), botao: false, leituras: 2 },
+    'PR aberto, só a execução esperando aprovação: CI pendente': { gh: { pulls: [pr(12, 'open', null, ramo)],
+      ci: [exec(39, 'Pages', 'completed', 'action_required', 100)] },
+      esperado: new RegExp(`^PR aberto ${prLink}, CI pendente$`), botao: false, leituras: 2 },
     'PR aberto, página incompleta de execuções da CI (r1, Astra P2)': { gh: { pulls: [pr(12, 'open', null, ramo)], ci: [exec(1, 'Pages', 'completed', 'success')], total: 150 },
       esperado: new RegExp(`^PR aberto ${prLink}, CI indisponível$`), botao: false, leituras: 2 },
     'execução fora da primeira página (r1, Astra P2)': { min: 40, gh: { runs: [exec(5, `Publica outro-post (${SHA('0')})`, 'completed', 'success')], total: 150 },
