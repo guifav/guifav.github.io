@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { handle, type Env, type Deps } from '../src/index.ts';
-import { execucaoDa, mergeado, PREVIEW_CSP, publishBranch, readManifest, sha256Hex, versionId, type R2Like } from '../src/drafts.ts';
+import { canonicais, execucaoDa, mergeado, PREVIEW_CSP, publishBranch, readManifest, sha256Hex, versionId, type R2Like } from '../src/drafts.ts';
 import type { D1Like, D1Stmt } from '../src/sync.ts';
 import { resetCertsCache } from '../src/access.ts';
 
@@ -151,6 +151,8 @@ function segurarAteAbortar(signal: AbortSignal) {
 function setup(opts: { mailStatus?: number; mailThrows?: boolean; mailPendente?: boolean; failSql?: RegExp; notify?: boolean; site?: Record<string, string | number | 'erro' | 'pendente' | 'corpo-pendente' | 'gigante'>;
   gh?: GhOpts; token?: string } = {}) {
   const ghOpts: GhOpts = { ...(opts.gh ?? {}) };
+  // Posts no site, mutável no meio do teste como o ghOpts.
+  const siteOpts: Record<string, string | number | 'erro' | 'pendente' | 'corpo-pendente' | 'gigante'> = { ...(opts.site ?? {}) };
   const gh: GhCall[] = [];
   const relogio = { t: NOW };
   // r1 (Astra e Kimi P2): quantos pedaços do corpo o painel puxou e se cancelou o resto.
@@ -223,7 +225,7 @@ function setup(opts: { mailStatus?: number; mailThrows?: boolean; mailPendente?:
       site.push(url);
       assert.equal(init?.redirect, 'manual', 'consulta ao site sem seguir redirecionamento');
       assert.ok(init?.signal, 'consulta ao site com prazo');
-      const v = opts.site?.[post[1]];
+      const v = siteOpts[post[1]];
       if (v === 'erro') throw new TypeError('network');
       // r1 (P3): sem resposta até o prazo, ou resposta 200 cujo corpo nunca termina; só o aborto encerra.
       const abortou = () => new DOMException('prazo', 'TimeoutError');
@@ -282,7 +284,7 @@ function setup(opts: { mailStatus?: number; mailThrows?: boolean; mailPendente?:
       headers: { origin: ORIGIN, 'content-type': 'application/x-www-form-urlencoded', ...headers } });
   const rows = () => JSON.parse(JSON.stringify(db.raw.prepare('SELECT * FROM draft_approvals ORDER BY id').all())) as Record<string, string>[];
   const avancar = (min: number) => { relogio.t += min * 60000; };
-  return { env, deps, db, bucket, mails, other, site, corpo, req, approve, rows, gh, ghOpts, avancar, falha };
+  return { env, deps, db, bucket, mails, other, site, siteOpts, corpo, req, approve, rows, gh, ghOpts, avancar, falha };
 }
 
 // ------------------------------------------------------------------ R1: acesso
@@ -1563,6 +1565,8 @@ test('R11: remover recusa sem as confirmações, e nada sai', async () => {
       c.s.db.raw.prepare(`INSERT INTO draft_approvals (slug, title, html_sha256, source_sha256, approved_at, approved_by)
         VALUES ('sales-coach-short', 't', ?, ?, '2026-11-13T19:10:00.000Z', ?)`).run(der.html_sha256, der.source_sha256, GUI);
       (c.s.ghOpts.pulls as unknown[]).push(pr(14, 'closed', '2026-11-13T19:30:00Z', publishBranch(der)));
+      // r4 (Astra e Kimi): o "post" do derivado também responde, com o canonical dele; sobra só a regra do derivado.
+      c.s.siteOpts['sales-coach-short'] = POST_HTML.replaceAll('/blog/sales-coach/', '/blog/sales-coach-short/');
       return c.remover({ versao: der.version, confirmar: 'sim' }, 'sales-coach-short');
     }, 400, /derivado/],
     ['sem aprovação', async (c) => { c.s.db.raw.prepare('DELETE FROM draft_approvals').run(); return c.remover(); }, 409, /não está aprovada/],
@@ -1586,7 +1590,13 @@ test('R11: remover recusa sem as confirmações, e nada sai', async () => {
   // r3 (Astra P1): só a página do post de fato confirma; qualquer outro 200 não basta, nem para o botão aparecer.
   const semCanonical = '<!DOCTYPE html><html><head><title>Como construí o Sales Coach</title></head><body></body></html>';
   const outroCanonical = semCanonical.replace('</head>', '<link rel="canonical" href="https://guifav.dev/blog/outro/"></head>');
-  for (const site of [404, 301, 500, 'erro', 'pendente', semCanonical, outroCanonical, ''] as const) {
+  // r4 (Astra e Kimi P1): canonical só em texto (comentário, script, title, textarea) ou um segundo canonical errado.
+  const comentado = outroCanonical.replace('</head>', '<!-- <link rel="canonical" href="https://guifav.dev/blog/sales-coach/"> --></head>');
+  const tudoComentado = '<!--' + POST_HTML + '-->';
+  const noScript = semCanonical.replace('</head>', '<script>var x = \'<link rel="canonical" href="https://guifav.dev/blog/sales-coach/">\';</script></head>');
+  const noTitulo = '<!DOCTYPE html><html><head><title><link rel="canonical" href="https://guifav.dev/blog/sales-coach/"></title></head></html>';
+  const doisCanonicais = POST_HTML.replace('</head>', '<link rel="canonical" href="https://guifav.dev/blog/outro/"></head>');
+  for (const site of [404, 301, 500, 'erro', 'pendente', semCanonical, outroCanonical, '', comentado, tudoComentado, noScript, noTitulo, doisCanonicais] as const) {
     const c = await cenarioPublicado({ site: { 'sales-coach': site } });
     const r = await c.remover();
     assert.equal(r.status, 409, `site ${JSON.stringify(site).slice(0, 40)}`);
@@ -1594,7 +1604,7 @@ test('R11: remover recusa sem as confirmações, e nada sai', async () => {
     assert.doesNotMatch(linhaDe(await (await c.s.req('/admin/rascunhos')).text(), 'sales-coach'), /Remover rascunho/);
   }
   // 200 com o mesmo texto da página, mas sem ser HTML (JSON, texto puro, sem content-type): não confirma.
-  for (const tipo of ['application/json', 'text/plain', null]) {
+  for (const tipo of ['application/json', 'text/plain', null, 'text/html-not-html', 'text/htmlx; charset=utf-8']) {
     const c = await cenarioPublicado();
     const fetchOriginal = c.s.deps.fetch;
     c.s.deps.fetch = (async (i: string | URL | Request, init?: RequestInit) => {
@@ -1609,6 +1619,28 @@ test('R11: remover recusa sem as confirmações, e nada sai', async () => {
   const t = await cenarioPublicado({ token: '' });
   assert.equal((await t.remover()).status, 503, 'sem token');
   assert.equal(t.s.bucket.deletes.length, 0);
+});
+
+test('R11 (r4, Astra e Kimi P1): canonicais() lê só elementos <link rel="canonical"> de verdade', () => {
+  const u = 'https://guifav.dev/blog/x/';
+  assert.deepEqual(canonicais(`<head><link rel="canonical" href="${u}"></head>`), [u]);
+  assert.deepEqual(canonicais(`<head><LINK HREF='${u}' REL='Canonical'></head>`), [u], 'maiúsculas, aspas simples, ordem trocada');
+  assert.deepEqual(canonicais(`<link rel="alternate canonical" href=${u}>`), [u], 'rel com mais de uma palavra, href sem aspas');
+  assert.deepEqual(canonicais(`<link rel="alternate" href="${u}"><link rel="stylesheet" href="${u}">`), []);
+  assert.deepEqual(canonicais(`<!-- <link rel="canonical" href="${u}"> -->`), []);
+  assert.deepEqual(canonicais(`<!-- sem fim <link rel="canonical" href="${u}">`), [], 'comentário sem fim apaga o resto');
+  assert.deepEqual(canonicais(`<script><link rel="canonical" href="${u}"></script>`), []);
+  assert.deepEqual(canonicais(`<SCRIPT type="x"><link rel="canonical" href="${u}"></SCRIPT >`), []);
+  assert.deepEqual(canonicais(`<style>/* <link rel="canonical" href="${u}"> */</style>`), []);
+  assert.deepEqual(canonicais(`<textarea><link rel="canonical" href="${u}"></textarea>`), []);
+  assert.deepEqual(canonicais(`<title><link rel="canonical" href="${u}"></title>`), []);
+  assert.deepEqual(canonicais(`<template><link rel="canonical" href="${u}"></template>`), []);
+  assert.deepEqual(canonicais(`<noscript><link rel="canonical" href="${u}"></noscript>`), []);
+  assert.deepEqual(canonicais(`<link data-rel="canonical" href="${u}">`), [], 'outro atributo terminado em rel');
+  assert.deepEqual(canonicais(`<link rel="noncanonical" href="${u}">`), [], 'rel vale por palavra inteira');
+  assert.deepEqual(canonicais(`<link rel="canonical" href="https://guifav.dev/blog/y/"><link rel="canonical" href="${u}">`), ['https://guifav.dev/blog/y/', u]);
+  // A página real do post tem esta forma (conferido em guifav.dev/blog/mcp-ou-aplicacao-dados-da-empresa-na-ia/).
+  assert.deepEqual(canonicais(POST_HTML), ['https://guifav.dev/blog/sales-coach/']);
 });
 
 test('R11 (r1 e r2, Astra e Kimi P2): resposta do GitHub incoerente ou com data inválida não conta como merge', async () => {

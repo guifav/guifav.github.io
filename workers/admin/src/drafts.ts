@@ -262,6 +262,25 @@ async function inicioDoCorpo(res: Response, limite: number): Promise<string> {
 
 const ENTIDADES: Record<string, string> = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'", '&#x27;': "'" };
 
+/** href de cada elemento <link rel="canonical"> do HTML (r4, Astra e Kimi P1). Comentários e o conteúdo de script, style,
+ * template, noscript, textarea e title saem antes, para um canonical só em texto não contar; comentário ou elemento sem
+ * fim apaga o resto, o que só pode recusar. O rel vale por palavra ("canonical" entre outras) e o href, com aspas
+ * duplas, simples ou sem aspas. */
+export function canonicais(html: string): string[] {
+  const limpo = html.replace(/<!--[\s\S]*?(?:-->|$)/g, '')
+    .replace(/<(script|style|template|noscript|textarea|title)\b[\s\S]*?(?:<\/\1\s*>|$)/gi, '');
+  const hrefs: string[] = [];
+  for (const tag of limpo.match(/<link\b[^>]*>/gi) ?? []) {
+    const attrs = new Map<string, string>();
+    for (const a of tag.slice(5).matchAll(/([^\s=/>]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/g)) {
+      const nome = a[1].toLowerCase();
+      if (!attrs.has(nome)) attrs.set(nome, a[2] ?? a[3] ?? a[4] ?? '');
+    }
+    if ((attrs.get('rel') ?? '').toLowerCase().split(/\s+/).includes('canonical')) hrefs.push(attrs.get('href') ?? '');
+  }
+  return hrefs;
+}
+
 /** O post /blog/<slug>/ no site, se responder 200 dentro do prazo; o título vem do <title> da página, sem o nome do
  * autor no fim. Qualquer outra resposta (404, redirecionamento, erro de rede, tempo esgotado) é "não publicado": o
  * derivado fica sozinho com "artigo não encontrado", como antes, e nada some em silêncio. */
@@ -277,8 +296,9 @@ async function publicado(env: DraftEnv, deps: DraftDeps, slug: string): Promise<
     const head = await inicioDoCorpo(res, 65536);
     const m = head.match(/<title>([^<]{1,300})<\/title>/i);
     const title = m ? m[1].replace(/&(amp|lt|gt|quot|#39|#x27);/g, (e) => ENTIDADES[e]).replace(/\s*\|\s*Guilherme Favaron\s*$/, '').trim() : '';
-    const html = (res.headers.get('content-type') ?? '').toLowerCase().startsWith('text/html');
-    return { slug, title: title || slug, url, confirmado: html && head.includes(`<link rel="canonical" href="${url}">`) };
+    const html = (res.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase() === 'text/html';
+    const canon = canonicais(head);
+    return { slug, title: title || slug, url, confirmado: html && canon.length > 0 && canon.every((h) => h === url) };
   } catch {
     return null;
   }
