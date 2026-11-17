@@ -801,7 +801,11 @@ class CloudflareTest(unittest.TestCase):
 
         def lixo(req, timeout):
             return contextlib.nullcontext(io.BytesIO(b'{"success": false}'))
-        for http, padrao in ((recusa, "respondeu 403"), (lixo, "fora do formato")):
+
+        def falhou_com_linhas(req, timeout):
+            # success false vale mesmo com linhas na resposta: nada de aprovação tirada de uma consulta que falhou.
+            return contextlib.nullcontext(io.BytesIO(b'{"success": false, "result": [{"results": [{"id": 1}]}]}'))
+        for http, padrao in ((recusa, "respondeu 403"), (lixo, "fora do formato"), (falhou_com_linhas, "fora do formato")):
             with self.subTest(padrao=padrao), self.assertRaisesRegex(D.DraftError, padrao) as ctx:
                 D.Cloudflare(self.ENV, http=http).aprovacoes(SLUG)
             self.assertNotIn("SEGREDO", str(ctx.exception))
