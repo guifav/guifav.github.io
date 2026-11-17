@@ -7,17 +7,28 @@
 O rascunho nunca entra no repo antes da aprovação do Gui: o Markdown e as imagens ficam fora dele (ex.:
 /root/.roger/inbox/blog/rascunhos/). O "enviar":
 
-1. copia o blog-src para uma pasta temporária, põe o rascunho em src/content/posts/<slug>.md e as imagens em
+1. lê a fonte uma vez só, para uma cópia temporária no formato <slug>.md e img/<caminho dentro de --imagens>; o
+   título, o build, o source_sha256 e os bytes enviados saem todos dessa cópia (#82);
+2. copia o blog-src para uma pasta temporária, põe o rascunho em src/content/posts/<slug>.md e as imagens em
    public/img/<slug>/, e faz o build do Astro com DRAFT_PREVIEW=1 (sem GA4, sem Clarity, tudo com noindex);
-2. pega a página do post e os arquivos dele (img/<slug>/ e video/<slug>.*) e troca /blog/img/<slug>/ e
+3. pega a página do post e os arquivos dele (img/<slug>/ e video/<slug>.*) e troca /blog/img/<slug>/ e
    /blog/video/<slug>. por /admin/rascunhos/<slug>/...; confere que nada ficou de fora e que não há analytics;
-3. envia os arquivos ao bucket R2 privado blog-rascunhos numa pasta própria da versão (<slug>/v/<versão>/) e, por
-   último, o manifesto <slug>/manifest.json, que aponta para ela. Se o envio parar no meio, o manifesto continua
-   apontando para a versão anterior inteira: o painel nunca mistura duas versões.
+4. envia ao bucket R2 privado blog-rascunhos, numa pasta própria da versão (<slug>/v/<versão>/), os arquivos da
+   prévia e a fonte em fonte/ (<slug>/v/<versão>/fonte/<slug>.md e fonte/img/...), e, por último, o manifesto
+   <slug>/manifest.json, que aponta para ela. Se o envio parar no meio, o manifesto continua apontando para a
+   versão anterior inteira: o painel nunca mistura duas versões.
 
 A versão é o sha256 do HTML junto com o source_sha256 (Markdown + imagens). A aprovação no painel grava os dois.
 O "status" recalcula o source_sha256 e lê no D1 do painel se existe aprovação para ele: o PR de publicação só sai
 com a fonte aprovada.
+
+Manifesto: além de "files" (caminho -> content-type, o que o painel serve), o campo "fonte" (#82) lista cada arquivo
+da fonte pelo caminho relativo a fonte/, com o sha256 dele ({"<slug>.md": "...", "img/a.webp": "..."}). O Worker só
+serve o que está em "files", então a fonte nunca sai pelo painel. O conteúdo de fonte/ é exatamente o que gerou o
+source_sha256 da versão: baixada para uma pasta, fonte_sha256(pasta, slug) devolve o mesmo hash da aprovação. O
+envio confere isso antes de mandar o primeiro objeto. Derivados (--linkedin, --derivado) levam a fonte pela mesma
+regra. Manifestos de antes do #82, sem "fonte", continuam válidos. O "remover" apaga o manifesto, a prévia e a fonte
+da versão atual, nessa ordem, e confere toda chave antes do primeiro delete.
 
 Credenciais: CLOUDFLARE_API_TOKEN e CLOUDFLARE_ACCOUNT_ID no ambiente (env da KVM), usadas pelo wrangler.
 """
@@ -95,6 +106,58 @@ def source_sha256(md: Path, images: Path | None) -> str:
         rel = p.relative_to(images).as_posix().encode()  # type: ignore[arg-type]
         h.update(b"img\0" + rel + b"\0" + hashlib.sha256(p.read_bytes()).digest())
     return h.hexdigest()
+
+
+# Fonte do rascunho (#82): o Markdown e as imagens, guardados no R2 em <slug>/v/<versão>/fonte/ para o PR de
+# publicação sair do bucket, sem depender de arquivo na máquina de quem enviou. O formato da pasta é o mesmo aqui
+# (snapshot) e no R2: <slug>.md e img/<caminho dentro de --imagens>. Assim o source_sha256 de uma pasta fonte/ baixada
+# é o fonte_sha256 dela, pelo mesmo source_sha256 de sempre, e confere byte a byte com o da aprovação.
+FONTE_MD_TYPE = "text/markdown; charset=utf-8"
+
+
+def fonte_paths(pasta: Path, slug: str) -> tuple[Path, Path | None]:
+    """O Markdown e a pasta de imagens (None se não houver) de uma pasta no formato de fonte/."""
+    img = pasta / "img"
+    return pasta / f"{slug}.md", (img if img.is_dir() else None)
+
+
+def fonte_sha256(pasta: Path, slug: str) -> str:
+    """source_sha256 de uma pasta no formato de fonte/: a cópia local no envio, a pasta baixada do R2 na publicação."""
+    return source_sha256(*fonte_paths(pasta, slug))
+
+
+def fonte_files(pasta: Path, slug: str) -> dict[str, bytes]:
+    """Arquivos de uma pasta no formato de fonte/, por caminho relativo: os mesmos que entram no fonte_sha256."""
+    md, img = fonte_paths(pasta, slug)
+    out = {f"{slug}.md": md.read_bytes()}
+    for p in image_files(img):
+        out["img/" + p.relative_to(img).as_posix()] = p.read_bytes()  # type: ignore[arg-type]
+    return out
+
+
+def snapshot(md: Path, images: Path | None, dest: Path) -> Path:
+    """Cópia da fonte em dest, no formato de fonte/. O envio lê a fonte uma vez só, para esta cópia, e daí saem o
+    build, o source_sha256 e os bytes enviados: um arquivo trocado no meio do envio não separa a prévia da fonte."""
+    slug = slug_of(md)
+    imgs = image_files(images)
+    dest.mkdir(parents=True)
+    shutil.copyfile(md, dest / f"{slug}.md")
+    for p in imgs:
+        t = dest / "img" / p.relative_to(images)  # type: ignore[arg-type]
+        t.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(p, t)
+    return dest
+
+
+def fonte_valida(fonte: dict, slug: str) -> None:
+    """Caminhos da fonte com as regras de FILE_RE e do slug: o <slug>.md e imagens em img/, nada mais."""
+    if not isinstance(fonte, dict) or not isinstance(fonte.get(f"{slug}.md"), bytes):
+        raise DraftError(f"fonte sem o Markdown {slug}.md")
+    for rel, data in fonte.items():
+        ok = isinstance(rel, str) and FILE_RE.fullmatch(rel) is not None and isinstance(data, bytes) and (
+            rel == f"{slug}.md" or (rel.startswith("img/") and Path(rel).suffix.lower() in TYPES))
+        if not ok:
+            raise DraftError(f"caminho inválido na fonte: {rel!r} (só {slug}.md e imagens em img/)")
 
 
 def frontmatter_title(md_text: str) -> str:
@@ -212,22 +275,30 @@ def rotulo_valido(v: object) -> bool:
     return isinstance(v, str) and ROTULO_RE.fullmatch(v) is not None
 
 
-def manifest(p: Preview, source: str, now: datetime | None = None, parent: str | None = None,
+def manifest(p: Preview, source: str, fonte: dict[str, bytes], now: datetime | None = None, parent: str | None = None,
              rotulo: str | None = None) -> dict:
     """Manifesto da prévia. Com parent, é um derivado do artigo `parent`, só leitura e aninhado abaixo dele no painel:
     sem rótulo, a versão LinkedIn (#73, kind "linkedin"); com rótulo, qualquer outro artefato do mesmo artigo
-    (roteiro de short, vídeo, carrossel...), kind "derivado" (#77)."""
+    (roteiro de short, vídeo, carrossel...), kind "derivado" (#77).
+
+    `fonte` (#82) é o Markdown e as imagens que geraram o source_sha256, por caminho relativo (fonte_files). O
+    manifesto guarda o sha256 de cada um no campo "fonte", separado de "files": o Worker só serve o que está em
+    "files", então a fonte nunca sai pelo painel. Derivados levam a fonte pela mesma regra do artigo."""
     # fullmatch: com match, o $ do Python aceita "artigo\n" e o Worker faria o rascunho sumir (r1, Kimi P1).
     if parent is not None and (not SLUG_RE.fullmatch(parent) or parent == p.slug):
         raise DraftError(f"slug do artigo inválido para o rascunho derivado: {parent!r}")
     if rotulo is not None and (parent is None or not rotulo_valido(rotulo)):
         raise DraftError(f"rótulo inválido (1 a 40 caracteres, sem controle nem espaço nas pontas, e com --artigo): {rotulo!r}")
+    fonte_valida(fonte, p.slug)
+    if any(k.split("/")[0] == "fonte" for k in p.files):
+        raise DraftError("arquivo da prévia dentro de fonte/, que é a pasta da fonte na versão")
     at = (now or datetime.now(timezone.utc)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
     files = {"index.html": HTML_TYPE, **{k: t for k, (_, t) in sorted(p.files.items())}}
     html = hashlib.sha256(p.html).hexdigest()
     man = {"slug": p.slug, "title": p.title, "uploaded_at": at, "source_sha256": source, "html_sha256": html,
            "version": version_id(html, source),
-           "kind": "blog" if parent is None else ("derivado" if rotulo is not None else "linkedin"), "files": files}
+           "kind": "blog" if parent is None else ("derivado" if rotulo is not None else "linkedin"), "files": files,
+           "fonte": {k: hashlib.sha256(b).hexdigest() for k, b in sorted(fonte.items())}}
     if parent is not None:
         man["parent"] = parent
     if rotulo is not None:
@@ -243,19 +314,31 @@ def wrangler(args: list[str], run=subprocess.run, input_bytes: bytes | None = No
     return r
 
 
-def upload(p: Preview, man: dict, work: Path, run=subprocess.run) -> list[str]:
-    """Envia ao R2: a versão inteira em <slug>/v/<versão>/ e o manifesto por último, apontando para ela."""
+def upload(p: Preview, man: dict, fonte: dict[str, bytes], work: Path, run=subprocess.run) -> list[str]:
+    """Envia ao R2: a versão inteira em <slug>/v/<versão>/ (prévia e fonte/) e o manifesto por último, apontando para
+    ela. Antes do primeiro envio, confere que a fonte é a do manifesto: o sha256 de cada arquivo e o source_sha256
+    recalculado dos bytes que vão subir, pelo mesmo fonte_sha256 que a publicação usa na pasta baixada."""
     if man["html_sha256"] != hashlib.sha256(p.html).hexdigest() or man["version"] != version_id(man["html_sha256"], man["source_sha256"]):
         raise DraftError("manifesto não confere com o HTML da prévia")
+    fonte_valida(fonte, p.slug)
+    if man.get("fonte") != {k: hashlib.sha256(b).hexdigest() for k, b in fonte.items()}:
+        raise DraftError("a fonte não confere com o manifesto (arquivos ou sha256 diferentes)")
     prefix = f"{p.slug}/v/{man['version']}/"
     items: list[tuple[str, bytes, str]] = [(prefix + k, b, t) for k, (b, t) in sorted(p.files.items())]
+    items += [(prefix + "fonte/" + k, b, FONTE_MD_TYPE if k == f"{p.slug}.md" else TYPES[Path(k).suffix.lower()])
+              for k, b in sorted(fonte.items())]
     items.append((prefix + "index.html", p.html, HTML_TYPE))
     items.append((f"{p.slug}/manifest.json", json.dumps(man, ensure_ascii=False, indent=2).encode("utf-8"), "application/json"))
-    keys = []
+    staged = []
     for rel, data, ctype in items:
         f = work / "upload" / rel
         f.parent.mkdir(parents=True, exist_ok=True)
         f.write_bytes(data)
+        staged.append((rel, f, ctype))
+    if fonte_sha256(work / "upload" / prefix / "fonte", p.slug) != man["source_sha256"]:
+        raise DraftError("a fonte não confere com o source_sha256 do manifesto")
+    keys = []
+    for rel, f, ctype in staged:
         key = f"{BUCKET}/{rel}"
         wrangler(["r2", "object", "put", key, "--file", str(f), "--content-type", ctype, "--remote"], run=run)
         keys.append(key)
@@ -288,23 +371,28 @@ def cmd_enviar(a: argparse.Namespace) -> int:
     if REPO in md.parents:
         raise DraftError("o rascunho fica fora do repo até a aprovação; mova o arquivo para fora de " + str(REPO))
     slug = slug_of(md)
-    title = frontmatter_title(md.read_text(encoding="utf-8"))
-    source = source_sha256(md, images)
     with tempfile.TemporaryDirectory(prefix=f"rascunho-{slug}-") as tmp:
         work = Path(tmp)
-        p = collect(build(md, images, work), slug, title)
-        man = manifest(p, source, parent=parent, rotulo=a.derivado)
+        # A fonte é lida uma vez, para a cópia no formato de fonte/ (#82): o título, o build, o source_sha256 e os
+        # bytes enviados saem todos dela.
+        pasta = snapshot(md, images, work / "fonte")
+        fmd, fimg = fonte_paths(pasta, slug)
+        title = frontmatter_title(fmd.read_text(encoding="utf-8"))
+        source = fonte_sha256(pasta, slug)
+        fonte = fonte_files(pasta, slug)
+        p = collect(build(fmd, fimg, work), slug, title)
+        man = manifest(p, source, fonte, parent=parent, rotulo=a.derivado)
         if a.dry_run:
             out = Path(a.out or work / "out")
             out.mkdir(parents=True, exist_ok=True)
             (out / "index.html").write_bytes(p.html)
-            for rel, (b, _) in p.files.items():
+            for rel, b in [*((r, b) for r, (b, _) in p.files.items()), *((f"fonte/{r}", b) for r, b in fonte.items())]:
                 (out / rel).parent.mkdir(parents=True, exist_ok=True)
                 (out / rel).write_bytes(b)
             (out / "manifest.json").write_text(json.dumps(man, ensure_ascii=False, indent=2), encoding="utf-8")
-            print(f"simulação: {len(p.files) + 2} arquivos em {out}; source_sha256 {source}")
+            print(f"simulação: {len(p.files) + len(fonte) + 2} arquivos em {out}; source_sha256 {source}")
             return 0
-        keys = upload(p, man, work)
+        keys = upload(p, man, fonte, work)
     tipo = f" ({a.derivado if derivado else 'LinkedIn'}, só leitura)" if parent else ""
     print(f"prévia enviada{tipo}: {len(keys)} objetos; {SITE}/admin/rascunhos/{slug}/ ; source_sha256 {source}")
     return 0
@@ -323,19 +411,26 @@ def cmd_status(a: argparse.Namespace) -> int:
 
 def cmd_remover(a: argparse.Namespace) -> int:
     slug = a.slug
-    if not SLUG_RE.match(slug):
+    if not SLUG_RE.fullmatch(slug):
         raise DraftError(f"slug inválido: {slug!r}")
     r = wrangler(["r2", "object", "get", f"{BUCKET}/{slug}/manifest.json", "--pipe", "--remote"])
     man = json.loads(r.stdout)
     version = man.get("version", "")
     if not re.fullmatch(r"[0-9a-f]{64}", str(version)):
         raise DraftError("manifesto sem versão válida")
-    # Manifesto primeiro: sem ele, o painel já não mostra nem serve nada do rascunho. Versões anteriores ficam no
-    # bucket privado, sem nunca serem servidas (o Worker só lê a versão do manifesto atual).
-    keys = ["manifest.json", *[f"v/{version}/{k}" for k in ["index.html", *[k for k in man.get("files", {}) if k != "index.html"]]]]
+    # Manifestos de antes do #82 não têm fonte e continuam valendo.
+    fonte = man.get("fonte", {})
+    if not isinstance(fonte, dict):
+        raise DraftError("campo fonte do manifesto não é um objeto")
+    # Manifesto primeiro: sem ele, o painel já não mostra nem serve nada do rascunho. Depois a prévia e a fonte da
+    # versão. Versões anteriores ficam no bucket privado, sem nunca serem servidas (o Worker só lê a versão do
+    # manifesto atual). Toda chave é conferida antes do primeiro delete.
+    keys = ["manifest.json", *[f"v/{version}/{k}" for k in ["index.html", *[k for k in man.get("files", {}) if k != "index.html"]]],
+            *[f"v/{version}/fonte/{k}" for k in fonte]]
     for k in keys:
-        if not FILE_RE.match(k):
+        if not FILE_RE.fullmatch(k):
             raise DraftError(f"chave inválida no manifesto: {k!r}")
+    for k in keys:
         wrangler(["r2", "object", "delete", f"{BUCKET}/{slug}/{k}", "--remote"])
     print(f"rascunho {slug} removido do R2 ({len(keys)} objetos)")
     return 0

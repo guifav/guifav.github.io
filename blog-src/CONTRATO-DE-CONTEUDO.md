@@ -9,12 +9,30 @@ O site é estático. Não há entrada de terceiro em tempo de execução. Só tr
 produzem HTML do blog:
 
 1. Markdown dos posts em src/content/posts/, gerado pelo importador do Substack (#19)
-   a partir de conteúdo do próprio autor.
+   a partir de conteúdo do próprio autor, ou vindo da fonte aprovada de um rascunho
+   (ver "Rascunhos e fonte no R2", abaixo).
 2. Templates Astro em src/layouts/ e src/pages/, que são código revisado em PR.
 3. Arquivos de public/, copiados pelo Astro sem transformação.
 
 Quem tem escrita no repositório pode publicar qualquer coisa editando um template. Isso
 é o que a revisão de PR cobre, e nenhuma barreira abaixo tenta impedir.
+
+## Rascunhos e fonte no R2
+
+O rascunho de um post novo fica fora do repositório até a aprovação do Gui no painel
+guifav.dev/admin/rascunhos (#62), no bucket R2 privado blog-rascunhos. Cada versão que o
+blog-src/scripts/draft_preview.py envia guarda duas coisas em <slug>/v/<versão>/ (#82):
+
+- a prévia (o HTML montado e os arquivos dele), listada no campo files do manifesto. É o
+  único conteúdo que o painel serve;
+- a fonte, em fonte/: o Markdown (<slug>.md) e as imagens (img/...), listada no campo fonte
+  do manifesto com o sha256 de cada arquivo. O painel nunca serve a fonte.
+
+A fonte é exatamente o que gerou o source_sha256 da versão, e é esse hash que a aprovação
+grava no D1. Um post que chega a src/content/posts/ vindo de um rascunho tem de ser o da
+fonte aprovada, com o hash conferido. Até a publicação automática da #82 entrar, quem
+publica confere com o status do script; depois, a Action de publicação confere sozinha.
+Manifestos de antes do #82, sem o campo fonte, continuam válidos para o painel.
 
 ## Barreiras
 

@@ -44,6 +44,20 @@ def dist_with(root: Path, html: str = GOOD, files=("img/sales-coach/a-1456.webp"
     return d
 
 
+MD = b'---\ntitle: "Sales Coach"\n---\ntexto\n'
+
+
+def fonte_de(slug=SLUG, md=MD, imgs=None):
+    """Fonte (caminho -> bytes) e o source_sha256 dela, pelo mesmo caminho do script: os arquivos numa pasta no formato
+    de fonte/ do R2 e o fonte_sha256 dessa pasta."""
+    fonte = {f"{slug}.md": md, **{f"img/{k}": v for k, v in ({"a.webp": b"A"} if imgs is None else imgs).items()}}
+    with tempfile.TemporaryDirectory() as t:
+        for rel, b in fonte.items():
+            (Path(t) / rel).parent.mkdir(parents=True, exist_ok=True)
+            (Path(t) / rel).write_bytes(b)
+        return fonte, D.fonte_sha256(Path(t), slug)
+
+
 class Fake:
     """Executor falso: grava cada chamada e devolve o que o teste mandar."""
 
@@ -151,6 +165,32 @@ class SourceTest(unittest.TestCase):
         img.rename(self.imgs / "b-728.webp")
         self.assertNotEqual(h0, D.source_sha256(self.md, self.imgs), "nome da imagem")
 
+    def test_snapshot_has_the_r2_layout_and_the_same_source_hash(self):
+        # #82: a cópia da fonte tem o formato de <slug>/v/<versão>/fonte/ (<slug>.md e img/<caminho>), e o
+        # fonte_sha256 dela é o source_sha256 do original, com e sem imagens: a fatia 3 confere a fonte baixada assim.
+        (self.imgs / "a-b").mkdir()
+        (self.imgs / "a-b" / "x.png").write_bytes(b"X")
+        (self.imgs / "a").mkdir()
+        (self.imgs / "a" / "x.png").write_bytes(b"Y")
+        pasta = D.snapshot(self.md, self.imgs, self.root / "copia")
+        self.assertEqual(sorted(p.relative_to(pasta).as_posix() for p in pasta.rglob("*") if p.is_file()),
+                         ["img/a-728.webp", "img/a-b/x.png", "img/a/x.png", f"{SLUG}.md"])
+        self.assertEqual(D.fonte_sha256(pasta, SLUG), D.source_sha256(self.md, self.imgs))
+        self.assertEqual(D.fonte_files(pasta, SLUG), {f"{SLUG}.md": self.md.read_bytes(), "img/a-728.webp": b"A",
+                                                      "img/a-b/x.png": b"X", "img/a/x.png": b"Y"})
+        sem = D.snapshot(self.md, None, self.root / "sem-imagens")
+        self.assertFalse((sem / "img").exists())
+        self.assertEqual(D.fonte_sha256(sem, SLUG), D.source_sha256(self.md, None))
+        self.assertEqual(D.fonte_files(sem, SLUG), {f"{SLUG}.md": self.md.read_bytes()})
+        # Pasta de imagens vazia dá o mesmo hash que sem imagens, dos dois lados.
+        vazia = self.root / "vazia"
+        vazia.mkdir()
+        self.assertEqual(D.fonte_sha256(D.snapshot(self.md, vazia, self.root / "c3"), SLUG), D.source_sha256(self.md, vazia))
+        # Imagem com nome inválido é recusada antes da cópia, pela regra de sempre.
+        (self.imgs / "x y.webp").write_bytes(b"x")
+        with self.assertRaises(D.DraftError):
+            D.snapshot(self.md, self.imgs, self.root / "c4")
+
     def test_image_names_and_types_are_checked(self):
         for bad in (".oculto.webp", "x.exe", "x y.webp"):
             with self.subTest(bad=bad), tempfile.TemporaryDirectory() as t:
@@ -226,6 +266,47 @@ class SourceTest(unittest.TestCase):
                     self.assertEqual(D.main(argv), 0)
                     man = up.call_args.args[1]
                     self.assertEqual((man["kind"], man.get("parent")), (kind, parent))
+                    # #82: o derivado também leva a fonte, pela mesma regra do artigo.
+                    self.assertEqual(up.call_args.args[2], {"post-linkedin.md": md.read_bytes()})
+                    self.assertEqual(man["fonte"], {"post-linkedin.md": hashlib.sha256(md.read_bytes()).hexdigest()})
+
+    def test_enviar_builds_hashes_and_uploads_the_same_snapshot_of_the_source(self):
+        # #82: a fonte é lida uma vez, para uma cópia no formato de fonte/ do R2. O build sai dessa cópia, o
+        # source_sha256 é o dela (igual ao do arquivo original, o que o status confere) e o envio leva os mesmos bytes.
+        (self.imgs / "sub").mkdir()
+        (self.imgs / "sub" / "b.png").write_bytes(b"PNG")
+        seen = {}
+
+        def fake_build(md, images, work, **kw):
+            seen["md"], seen["images"] = md, images
+            seen["md_bytes"] = md.read_bytes()
+            seen["imgs"] = sorted(p.relative_to(images).as_posix() for p in images.rglob("*") if p.is_file())
+            return work / "dist"
+        with mock.patch.object(D, "build", side_effect=fake_build), \
+                mock.patch.object(D, "collect", return_value=D.Preview(SLUG, "x", b"<html>", {})), \
+                mock.patch.object(D, "upload", return_value=["a"]) as up, contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(D.main(["enviar", str(self.md), "--imagens", str(self.imgs)]), 0)
+        self.assertNotEqual(seen["md"], self.md.resolve(), "o build usa a cópia, não o arquivo original")
+        self.assertEqual((seen["md"].name, seen["images"].name, seen["md"].parent), (f"{SLUG}.md", "img", seen["images"].parent))
+        self.assertEqual(seen["md_bytes"], self.md.read_bytes())
+        self.assertEqual(seen["imgs"], ["a-728.webp", "sub/b.png"])
+        man, fonte = up.call_args.args[1], up.call_args.args[2]
+        self.assertEqual(man["source_sha256"], D.source_sha256(self.md, self.imgs))
+        self.assertEqual(fonte, {f"{SLUG}.md": self.md.read_bytes(), "img/a-728.webp": b"A", "img/sub/b.png": b"PNG"})
+        self.assertEqual(man["fonte"], {k: hashlib.sha256(v).hexdigest() for k, v in fonte.items()})
+
+    def test_dry_run_writes_the_source_next_to_the_preview(self):
+        with tempfile.TemporaryDirectory() as out, \
+                mock.patch.object(D, "build", return_value=self.root), \
+                mock.patch.object(D, "collect", return_value=D.Preview(SLUG, "x", b"<html>", {})), \
+                mock.patch.object(D, "upload", side_effect=AssertionError("simulação não envia")), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(D.main(["enviar", str(self.md), "--imagens", str(self.imgs), "--dry-run", "--out", out]), 0)
+            o = Path(out)
+            self.assertEqual((o / "fonte" / f"{SLUG}.md").read_bytes(), self.md.read_bytes())
+            self.assertEqual((o / "fonte" / "img" / "a-728.webp").read_bytes(), b"A")
+            self.assertEqual(D.fonte_sha256(o / "fonte", SLUG), D.source_sha256(self.md, self.imgs))
+            self.assertIn("fonte", json.loads((o / "manifest.json").read_text(encoding="utf-8")))
 
     def test_derivado_cli(self):
         # #77: --derivado <rótulo> anda com --artigo, não anda com --linkedin, e o rótulo segue a regra do Worker.
@@ -295,64 +376,138 @@ class SourcesTest(unittest.TestCase):
 class UploadTest(unittest.TestCase):
     def test_manifest_last_and_exact_keys_and_types(self):
         p = D.Preview(SLUG, "Sales Coach", b"<html>", {"img/sales-coach/a.webp": (b"A", "image/webp")})
-        man = D.manifest(p, "a" * 64, now=datetime(2026, 11, 13, 19, 0, tzinfo=timezone.utc))
+        fonte, source = fonte_de()
+        man = D.manifest(p, source, fonte, now=datetime(2026, 11, 13, 19, 0, tzinfo=timezone.utc))
         html = hashlib.sha256(b"<html>").hexdigest()
-        version = hashlib.sha256(f"html:{html}\nsource:{'a' * 64}".encode()).hexdigest()
+        version = hashlib.sha256(f"html:{html}\nsource:{source}".encode()).hexdigest()
         self.assertEqual(man, {"slug": SLUG, "title": "Sales Coach", "uploaded_at": "2026-11-13T19:00:00.000Z",
-                               "source_sha256": "a" * 64, "html_sha256": html, "version": version, "kind": "blog",
-                               "files": {"index.html": "text/html; charset=utf-8", "img/sales-coach/a.webp": "image/webp"}})
+                               "source_sha256": source, "html_sha256": html, "version": version, "kind": "blog",
+                               "files": {"index.html": "text/html; charset=utf-8", "img/sales-coach/a.webp": "image/webp"},
+                               # #82: a fonte fica fora de files (o Worker só serve files), com o sha256 de cada arquivo.
+                               "fonte": {"sales-coach.md": hashlib.sha256(MD).hexdigest(), "img/a.webp": hashlib.sha256(b"A").hexdigest()}})
         # #73: a versão LinkedIn leva kind e parent (o slug do artigo); a versão (html + fonte) não muda.
-        li = D.manifest(p, "a" * 64, now=datetime(2026, 11, 13, 19, 0, tzinfo=timezone.utc), parent="artigo-pai")
+        li = D.manifest(p, source, fonte, now=datetime(2026, 11, 13, 19, 0, tzinfo=timezone.utc), parent="artigo-pai")
         self.assertEqual((li["kind"], li["parent"], li["version"]), ("linkedin", "artigo-pai", version))
         for bad in ("Artigo", "artigo_pai", "", SLUG, "artigo\n", "artigo\n\n"):  # r1 (Kimi P1): newline
             with self.subTest(parent=bad), self.assertRaises(D.DraftError):
-                D.manifest(p, "a" * 64, parent=bad)
+                D.manifest(p, source, fonte, parent=bad)
         # #77: com rótulo, o derivado leva kind "derivado" e o rótulo; rótulo sem parent ou inválido é recusado.
-        rs = D.manifest(p, "a" * 64, now=datetime(2026, 11, 13, 19, 0, tzinfo=timezone.utc), parent="artigo-pai", rotulo="Roteiro do short")
+        rs = D.manifest(p, source, fonte, now=datetime(2026, 11, 13, 19, 0, tzinfo=timezone.utc), parent="artigo-pai", rotulo="Roteiro do short")
         self.assertEqual((rs["kind"], rs["parent"], rs["rotulo"], rs["version"]), ("derivado", "artigo-pai", "Roteiro do short", version))
         self.assertNotIn("rotulo", li)
         for parent, rot in ((None, "Roteiro"), ("artigo-pai", ""), ("artigo-pai", " Roteiro")):
             with self.subTest(parent=parent, rotulo=rot), self.assertRaises(D.DraftError):
-                D.manifest(p, "a" * 64, parent=parent, rotulo=rot)
+                D.manifest(p, source, fonte, parent=parent, rotulo=rot)
         # A versão muda com o HTML e com a fonte, cada um isolado (r1: a aprovação vale para os dois).
         self.assertNotEqual(version, D.version_id(html, "b" * 64))
-        self.assertNotEqual(version, D.version_id("c" * 64, "a" * 64))
+        self.assertNotEqual(version, D.version_id("c" * 64, source))
         fake = Fake()
         with tempfile.TemporaryDirectory() as t:
-            keys = D.upload(p, man, Path(t), run=fake)
+            keys = D.upload(p, man, fonte, Path(t), run=fake)
             sent = Path(t) / "upload" / SLUG / "manifest.json"
             self.assertEqual(json.loads(sent.read_text(encoding="utf-8")), man)
-        # Versão inteira na pasta dela e o manifesto (o ponteiro) por último (r1, Astra P2).
+            # O que a fatia 3 vai fazer: baixar a fonte/ enviada para uma pasta e recalcular o hash. Bate byte a byte.
+            baixada = Path(t) / "baixada"
+            for args, _ in fake.calls:
+                key = args[6]
+                if "/fonte/" in key:
+                    f = baixada / key.split("/fonte/", 1)[1]
+                    f.parent.mkdir(parents=True, exist_ok=True)
+                    f.write_bytes(Path(args[args.index("--file") + 1]).read_bytes())
+            self.assertEqual(D.fonte_sha256(baixada, SLUG), man["source_sha256"])
+        # Versão inteira na pasta dela, com a fonte em fonte/, e o manifesto (o ponteiro) por último (r1, Astra P2).
         v = f"blog-rascunhos/sales-coach/v/{version}/"
-        self.assertEqual(keys, [v + "img/sales-coach/a.webp", v + "index.html", "blog-rascunhos/sales-coach/manifest.json"])
-        for (args, kw), ctype in zip(fake.calls, ["image/webp", "text/html; charset=utf-8", "application/json"]):
+        self.assertEqual(keys, [v + "img/sales-coach/a.webp", v + "fonte/img/a.webp", v + "fonte/sales-coach.md", v + "index.html",
+                                "blog-rascunhos/sales-coach/manifest.json"])
+        for (args, kw), ctype in zip(fake.calls, ["image/webp", "image/webp", "text/markdown; charset=utf-8",
+                                                  "text/html; charset=utf-8", "application/json"], strict=True):
             self.assertEqual(args[:6], ["npx", "--yes", "wrangler@4", "r2", "object", "put"])
             self.assertEqual(args[args.index("--content-type") + 1], ctype)
             self.assertIn("--remote", args)
             self.assertEqual(kw["cwd"], D.ADMIN_WORKER)
 
+    def test_manifest_refuses_invalid_source_paths(self):
+        # #82: caminhos da fonte com as regras de FILE_RE e do slug: <slug>.md e img/<caminho de imagem>, nada mais.
+        p = D.Preview(SLUG, "t", b"<html>", {})
+        fonte, source = fonte_de()
+        for name, extra in (("..", {"img/../x.webp": b"x"}), ("absoluto", {"/img/x.webp": b"x"}), ("barra dupla", {"img//x.webp": b"x"}),
+                            ("oculto", {"img/.x.webp": b"x"}), ("fora de img", {"x.webp": b"x"}), ("tipo", {"img/x.exe": b"x"}),
+                            ("outro md", {"outro.md": b"x"}), ("newline", {"img/x.webp\n": b"x"}), ("img sem arquivo", {"img/": b"x"}),
+                            ("img sozinho", {"img": b"x"}), ("não é bytes", {"img/x.webp": "x"})):
+            with self.subTest(name=name), self.assertRaises(D.DraftError):
+                D.manifest(p, source, {**fonte, **extra})
+        for name, f in (("sem o md", {"img/a.webp": b"A"}), ("md de outro slug", {"outro-post.md": MD}), ("vazia", {}),
+                        ("md com newline", {f"{SLUG}.md\n": MD})):
+            with self.subTest(name=name), self.assertRaises(D.DraftError):
+                D.manifest(p, source, f)
+        # Arquivo da prévia sob fonte/ esconderia a fonte: recusado.
+        q = D.Preview(SLUG, "t", b"<html>", {"fonte/sales-coach.md": (b"x", "image/webp")})
+        with self.assertRaises(D.DraftError):
+            D.manifest(q, source, fonte)
+
     def test_upload_refuses_manifest_that_does_not_match_the_html(self):
         p = D.Preview(SLUG, "t", b"<html>", {})
-        man = D.manifest(p, "a" * 64)
+        fonte, source = fonte_de()
+        man = D.manifest(p, source, fonte)
         for k, v in (("html_sha256", "c" * 64), ("version", "d" * 64), ("source_sha256", "e" * 64)):
             with self.subTest(k=k), tempfile.TemporaryDirectory() as t, self.assertRaisesRegex(D.DraftError, "não confere"):
-                D.upload(p, {**man, k: v}, Path(t), run=Fake())
+                D.upload(p, {**man, k: v}, fonte, Path(t), run=Fake())
 
-    def test_remover_deletes_manifest_first_then_the_current_version(self):
-        man = {"version": "f" * 64, "files": {"index.html": "text/html; charset=utf-8", "img/sales-coach/a.webp": "image/webp"}}
+    def test_upload_refuses_source_that_does_not_match_the_manifest(self):
+        # #82: a fonte enviada tem de ser exatamente a que gerou o source_sha256 da versão. Nada sobe se não for.
+        p = D.Preview(SLUG, "t", b"<html>", {})
+        fonte, source = fonte_de()
+        outra, outra_source = fonte_de(md=MD + b"mais\n")
+        cases = {
+            # Bytes trocados com o manifesto antigo: o sha256 do arquivo não bate.
+            "bytes": (D.manifest(p, source, fonte), {**fonte, f"{SLUG}.md": MD + b"x"}),
+            # Arquivo a mais ou a menos que o manifesto.
+            "a mais": (D.manifest(p, source, fonte), {**fonte, "img/b.webp": b"B"}),
+            "a menos": (D.manifest(p, source, fonte), {f"{SLUG}.md": MD}),
+            # Manifesto coerente com a fonte, mas com o source_sha256 de outra fonte (versão recalculada junto).
+            "source de outra fonte": (D.manifest(p, outra_source, fonte), fonte),
+        }
+        for name, (man, f) in cases.items():
+            fake = Fake()
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as t:
+                with self.assertRaisesRegex(D.DraftError, "fonte"):
+                    D.upload(p, man, f, Path(t), run=fake)
+                self.assertEqual(fake.calls, [], "nada sobe")
+        self.assertNotEqual(source, outra_source)
+        with tempfile.TemporaryDirectory() as t:
+            D.upload(p, D.manifest(p, outra_source, outra), outra, Path(t), run=Fake())
+
+    def remover(self, man, rc=0):
         calls = []
 
         def fake_wrangler(args, run=None, input_bytes=None):
             calls.append(args)
             return subprocess.CompletedProcess(args, 0, json.dumps(man).encode(), b"")
-        old, D.wrangler = D.wrangler, fake_wrangler
-        try:
-            self.assertEqual(D.main(["remover", SLUG]), 0)
-        finally:
-            D.wrangler = old
-        deleted = [a[3] for a in calls if a[:3] == ["r2", "object", "delete"]]
+        err = io.StringIO()
+        with mock.patch.object(D, "wrangler", fake_wrangler), contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(D.main(["remover", SLUG]), rc, err.getvalue())
+        return [a[3] for a in calls if a[:3] == ["r2", "object", "delete"]]
+
+    def test_remover_deletes_manifest_first_then_the_current_version(self):
+        # Manifesto antigo, sem fonte: continua valendo.
+        man = {"version": "f" * 64, "files": {"index.html": "text/html; charset=utf-8", "img/sales-coach/a.webp": "image/webp"}}
         v = f"blog-rascunhos/sales-coach/v/{'f' * 64}/"
-        self.assertEqual(deleted, ["blog-rascunhos/sales-coach/manifest.json", v + "index.html", v + "img/sales-coach/a.webp"])
+        self.assertEqual(self.remover(man), ["blog-rascunhos/sales-coach/manifest.json", v + "index.html", v + "img/sales-coach/a.webp"])
+        # #82: com fonte, apaga também cada arquivo dela, depois da prévia.
+        com = {**man, "fonte": {"sales-coach.md": "1" * 64, "img/a.webp": "2" * 64}}
+        self.assertEqual(self.remover(com), ["blog-rascunhos/sales-coach/manifest.json", v + "index.html", v + "img/sales-coach/a.webp",
+                                             v + "fonte/sales-coach.md", v + "fonte/img/a.webp"])
+
+    def test_remover_checks_every_key_before_deleting_anything(self):
+        # #82: chave inválida na fonte (ou em files) recusa a remoção antes do primeiro delete, manifesto incluído.
+        man = {"version": "f" * 64, "files": {"index.html": "text/html; charset=utf-8"}}
+        for name, extra in (("..", {"fonte": {"../../outro-post/manifest.json": "1" * 64}}), ("absoluto", {"fonte": {"/x.md": "1" * 64}}),
+                            ("newline", {"fonte": {"sales-coach.md\n": "1" * 64}}), ("fonte lista", {"fonte": ["sales-coach.md"]}),
+                            ("files com ..", {"files": {"index.html": "text/html; charset=utf-8", "img/../../x": "image/webp"}})):
+            with self.subTest(name=name):
+                self.assertEqual(self.remover({**man, **extra}, rc=2), [])
+        with mock.patch.object(D, "wrangler", side_effect=AssertionError("não chega ao R2")), contextlib.redirect_stderr(io.StringIO()):
+            self.assertEqual(D.main(["remover", "sales-coach\n"]), 2)
 
     def test_worker_and_script_agree_on_version_and_frame_hosts(self):
         # O Worker calcula a versão igual (versionId) e a CSP da prévia libera os mesmos iframes que o check_site aceita.
@@ -366,8 +521,9 @@ class UploadTest(unittest.TestCase):
 
     def test_wrangler_failure_stops(self):
         p = D.Preview(SLUG, "t", b"<html>", {})
+        fonte, source = fonte_de()
         with tempfile.TemporaryDirectory() as t, self.assertRaisesRegex(D.DraftError, "wrangler r2 object put falhou"):
-            D.upload(p, D.manifest(p, "a" * 64), Path(t), run=Fake(rc=1, stderr=b"sem permissao"))
+            D.upload(p, D.manifest(p, source, fonte), fonte, Path(t), run=Fake(rc=1, stderr=b"sem permissao"))
 
     def test_approvals_query_and_slug_guard(self):
         fake = Fake(stdout=json.dumps([{"results": [{"html_sha256": "h", "source_sha256": "s"}]}]).encode())
