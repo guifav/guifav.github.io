@@ -271,8 +271,8 @@ async function publicado(env: DraftEnv, deps: DraftDeps, slug: string): Promise<
 }
 
 // ------------------------------------------------------------------ Publicação pelo GitHub (#82, fatia 4)
-// Contrato com o publicar.yml (fatia 3): workflow_dispatch na main com os inputs slug e versao (64 hex); run-name com
-// o slug e os 8 primeiros caracteres da versão; PR aberto pelo github-actions[bot] a partir do branch determinístico
+// Contrato com o publicar.yml (fatia 3): workflow_dispatch na main com os inputs slug e versao (64 hex); run-name
+// "Publica <slug> (<versão inteira>)"; PR aberto pelo github-actions[bot] a partir do branch determinístico
 // publica/<slug>-<versão8>; idempotente (branch ou PR da versão já existente termina sem erro).
 const GITHUB_REPO = 'guifav/guifav.github.io';
 const GITHUB_API = `https://api.github.com/repos/${GITHUB_REPO}`;
@@ -333,15 +333,15 @@ async function githubGet(env: DraftEnv, deps: DraftDeps, path: string): Promise<
   }
 }
 
-/** O run-name é da execução desta versão? Ele é lido em palavras (letras, números, "-" e "/"): vale uma palavra igual a
- * publica/<slug>-<versão8> (o nome do branch) ou duas palavras, uma igual ao slug e outra igual à versão8, como em
- * "Publica <slug> (<versão8>)". Palavras inteiras, e não trechos: "mcp" não casa com "mcp-aberto", e o slug
- * mcp-abcde123 com outra versão não passa por "mcp" na versão abcde123 (r1, Kimi P2). */
+/** O run-name é da execução desta versão? O publicar.yml usa "Publica <slug> (<versão>)", com a versão inteira (64 hex),
+ * porque as expressões do Actions não cortam texto. O run-name é lido em palavras (letras, números e "-") e precisa ter
+ * uma palavra igual ao slug e outra igual à versão inteira. Palavras inteiras, e não trechos: "mcp" não casa com
+ * "mcp-aberto", e um slug terminado em hex de outra versão não passa pelo slug mais curto (r1, Kimi P2). A versão,
+ * como palavra inteira, tem fronteira de não hex dos dois lados. */
 export function execucaoDa(m: Pick<Manifest, 'slug' | 'version'>, displayTitle: unknown): boolean {
   if (typeof displayTitle !== 'string') return false;
-  const palavras = new Set(displayTitle.split(/[^A-Za-z0-9/-]+/).filter(Boolean));
-  const v8 = m.version.slice(0, 8);
-  return palavras.has(publishBranch(m)) || (palavras.has(m.slug) && palavras.has(v8));
+  const palavras = new Set(displayTitle.split(/[^A-Za-z0-9-]+/).filter(Boolean));
+  return palavras.has(m.slug) && palavras.has(m.version);
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);

@@ -1020,7 +1020,7 @@ test('R10: estados da publicação, calculados do D1 e do GitHub, com no máximo
   const v = await versionId(await sha256Hex(HTML('Como construí o Sales Coach')), SHA('a'));
   const v8 = v.slice(0, 8);
   const ramo = `publica/sales-coach-${v8}`;
-  const RUN = `Publica sales-coach (${v8})`;
+  const RUN = `Publica sales-coach (${v})`; // o run-name real do publicar.yml, com a versão inteira
   const execLink = '<a href="https://github.com/guifav/guifav.github.io/actions/runs/77">ver a execução</a>';
   const prLink = '<a href="https://github.com/guifav/guifav.github.io/pull/12">#12</a>';
   const casos: Record<string, Caso> = {
@@ -1049,7 +1049,7 @@ test('R10: estados da publicação, calculados do D1 e do GitHub, com no máximo
       esperado: new RegExp(`^PR aberto ${prLink}, CI vermelha$`), botao: false, leituras: 2 },
     'PR aberto, página incompleta de execuções da CI (r1, Astra P2)': { gh: { pulls: [pr(12, 'open', null, ramo)], ci: [exec(1, 'Pages', 'completed', 'success')], total: 150 },
       esperado: new RegExp(`^PR aberto ${prLink}, CI indisponível$`), botao: false, leituras: 2 },
-    'execução fora da primeira página (r1, Astra P2)': { min: 40, gh: { runs: [exec(5, 'Publica outro-post (00000000)', 'completed', 'success')], total: 150 },
+    'execução fora da primeira página (r1, Astra P2)': { min: 40, gh: { runs: [exec(5, `Publica outro-post (${SHA('0')})`, 'completed', 'success')], total: 150 },
       esperado: /^estado indisponível$/, botao: false, leituras: 2 },
     'execução achada na primeira página, mesmo com mais páginas': { min: 3, gh: { runs: [exec(77, RUN, 'in_progress')], total: 150 },
       esperado: new RegExp(`^preparando o PR \\(disparado há 3 min\\): ${execLink}$`), botao: false, leituras: 2 },
@@ -1109,21 +1109,24 @@ test('R10: as consultas usam o branch da versão, a janela do disparo e o head d
   assert.equal(leituras(t)[1].query.per_page, '100');
 });
 
-test('R10: a execução certa é a do slug e da versão; slug vizinho, outra versão e PR de outro branch não contam', async () => {
+test('R10: a execução certa é a do slug e da versão inteira; slug vizinho, outra versão e PR de outro branch não contam', async () => {
   const s = setup();
   const { version } = await putDraft(s.bucket);
   const v8 = version.slice(0, 8);
+  const outra = SHA('d');
   s.ghOpts.pulls = [pr(30, 'open', null, 'publica/sales-coach-2-00000000'), pr(31, 'open', null, `publica/sales-${v8}`)];
+  // Run-names no formato real do publicar.yml: "Publica <slug> (<versão inteira>)". A mais recente vem primeiro.
   s.ghOpts.runs = [
-    // r1 (Kimi P2): o slug sales-coach-<v8>, de outra versão, não é sales-coach na versão <v8>.
-    exec(9, `Publica sales-coach-${v8} (deadbeef)`, 'completed', 'failure'),
-    exec(8, `publica/sales-coach-${v8}-deadbeef`, 'completed', 'failure'),
-    exec(1, `Publica sales-coach-2 (${v8})`, 'completed', 'failure'),
-    exec(2, `Publica sales (${v8})`, 'completed', 'failure'),
-    exec(3, `Publica sales-coach (${v8}0)`, 'completed', 'failure'),
-    exec(4, 'Publica sales-coach (deadbeef)', 'completed', 'failure'),
-    exec(5, `publica/sales-coach-${v8}`, 'in_progress'),
-    exec(6, `Publica sales-coach (${v8})`, 'completed', 'failure'),
+    // r1 (Kimi P2): o slug sales-coach-<v8>, de outra versão, não é sales-coach nesta versão.
+    exec(9, `Publica sales-coach-${v8} (${outra})`, 'completed', 'failure'),
+    exec(1, `Publica sales-coach-2 (${version})`, 'completed', 'failure'),
+    exec(2, `Publica sales (${version})`, 'completed', 'failure'),
+    exec(3, `Publica sales-coach (${version}0)`, 'completed', 'failure'),
+    exec(4, `Publica sales-coach (${outra})`, 'completed', 'failure'),
+    // Só a versão8 não basta: o contrato traz a versão inteira.
+    exec(8, `Publica sales-coach (${v8})`, 'completed', 'failure'),
+    exec(5, `Publica sales-coach (${version})`, 'in_progress'),
+    exec(6, `Publica sales-coach (${version})`, 'completed', 'failure'),
   ];
   await s.approve('sales-coach', { confirmar: 'sim', versao: version });
   s.avancar(2);
@@ -1194,11 +1197,14 @@ test('R10: sem o token, a lista não consulta o GitHub e diz por quê', async ()
   assert.deepEqual(s.gh, []);
 });
 
-test('R10 (r1, Kimi P2): o run-name casa por palavras inteiras, no formato do branch ou com slug e versão8 separados', () => {
-  const m = { slug: 'mcp', version: 'abcde123'.padEnd(64, '0') };
-  for (const t of ['Publica mcp (abcde123)', 'publica/mcp-abcde123', 'Publicar: mcp abcde123', 'abcde123 mcp']) assert.equal(execucaoDa(m, t), true, t);
-  for (const t of ['Publica mcp-abcde123 (deadbeef)', 'Publica mcp-aberto (abcde123)', 'Publica mcp (abcde1234)', 'Publica mcpx (abcde123)',
-    'publica/mcp-abcde123-deadbeef', 'publica/mcp-abcde12', 'Publica MCP (ABCDE123)', 'Publica mcp', '', null, 7]) {
+test('R10 (r1, Kimi P2, e contrato da fatia 3): o run-name casa o slug e a versão inteira, como palavras inteiras', () => {
+  const v = 'abcde123'.padEnd(64, '0');
+  const outra = 'deadbeef'.padEnd(64, '1');
+  const m = { slug: 'mcp', version: v };
+  for (const t of [`Publica mcp (${v})`, `Publica: mcp ${v}`, `${v} mcp`]) assert.equal(execucaoDa(m, t), true, t);
+  for (const t of [`Publica mcp-abcde123 (${outra})`, `Publica mcp-aberto (${v})`, `Publica mcp (${v}0)`, `Publica mcp (f${v})`,
+    `Publica mcpx (${v})`, 'Publica mcp (abcde123)', `publica/mcp-abcde123`, `Publica mcp (${v.slice(0, 63)})`, `Publica MCP (${v.toUpperCase()})`,
+    `Publica mcp (${v}-x)`, 'Publica mcp', '', null, 7]) {
     assert.equal(execucaoDa(m, t), false, String(t));
   }
 });

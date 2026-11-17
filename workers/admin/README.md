@@ -34,7 +34,7 @@ O rascunho nunca entra no repo antes da aprovação. Na KVM:
 Contrato com o `.github/workflows/publicar.yml`:
 
 - gatilho `workflow_dispatch` na `main`, com os inputs `slug` e `versao` (a versão inteira, 64 hex);
-- o `run-name` traz o slug e os 8 primeiros caracteres da versão, para o painel achar a execução. O painel lê o `run-name` em palavras (letras, números, `-` e `/`) e aceita uma palavra igual a `publica/<slug>-<versão8>` ou duas palavras, uma igual ao slug e outra igual à versão8, como em `Publica <slug> (<versão8>)`. Slug e versão colados de outro jeito (`<slug>-<versão8>` sem o `publica/`) não casam, porque seriam ambíguos com um slug que termina em 8 hex;
+- o `run-name` é `Publica <slug> (<versão>)`, com a versão inteira (64 hex), porque as expressões do Actions não cortam texto. O painel lê o `run-name` em palavras (letras, números e `-`) e exige uma palavra igual ao slug e outra igual à versão inteira. Assim `mcp` não casa com `mcp-aberto`, um slug terminado em hex de outra versão não passa pelo slug mais curto, e a versão tem fronteira de não hex dos dois lados;
 - o PR sai do branch `publica/<slug>-<versão8>`, aberto pelo `github-actions[bot]`;
 - a workflow é idempotente: se o branch ou o PR da versão já existe, termina sem erro. Por isso o "Disparar de novo" é seguro.
 
