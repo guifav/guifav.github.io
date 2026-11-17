@@ -66,7 +66,8 @@ def passos(yml: str) -> list[dict]:
 
 
 GH = r'''#!/usr/bin/env python3
-"""gh falso: pr list, pr create, run list e workflow run, sobre o estado em $SIM_STATE."""
+"""gh falso: api .../pulls, pr create, run list e workflow run, sobre o estado em $SIM_STATE. Cada PR guardado tem
+head, state (OPEN, MERGED ou CLOSED), base e owner (o dono do head; um fork tem outro dono)."""
 import json, os, subprocess, sys
 p = os.environ["SIM_STATE"]
 st = json.load(open(p))
@@ -77,8 +78,12 @@ def opt(n):
 def jq(data):
     return subprocess.run(["jq", "-r", opt("--jq")], input=json.dumps(data), capture_output=True, text=True, check=True).stdout
 out = ""
-if a[:2] == ["pr", "list"]:
-    out = jq([{k: x.get(k, False) for k in ("number", "url", "state", "isCrossRepository")} for x in st["prs"] if x["head"] == opt("--head")])
+campos = dict(v.split("=", 1) for k, v in zip(a, a[1:]) if k == "-f")
+if a[:1] == ["api"] and a[a.index("--method") + 1] == "GET" and a[3].endswith("/pulls") and campos.get("state") == "all":
+    dono, _, branch = campos["head"].partition(":")
+    out = jq([{"number": x["number"], "html_url": x["url"], "state": "open" if x["state"] == "OPEN" else "closed",
+               "merged_at": "2026-11-16T21:00:00Z" if x["state"] == "MERGED" else None, "base": {"ref": x.get("base", "main")}}
+              for x in st["prs"] if x["head"] == branch and x.get("owner", "guifav") == dono])
 elif a[:2] == ["run", "list"]:
     out = jq([{"databaseId": 1} for r in st["runs"] if r == opt("--branch")])
 elif a[:2] == ["pr", "create"]:
@@ -189,7 +194,7 @@ class PublicarWorkflowBehaviorTest(unittest.TestCase):
         env = {"PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}", "HOME": str(self.root), "SLUG": slug,
                "VERSAO": self.versao if versao is None else versao, "GH_TOKEN": "x", "GITHUB_REF": ref, "RUNNER_TEMP": str(runner),
                "GITHUB_ENV": str(genv), "GITHUB_STEP_SUMMARY": str(summary), "GITHUB_SERVER_URL": "https://github.com",
-               "GITHUB_REPOSITORY": "guifav/guifav.github.io", "GITHUB_RUN_ID": "123", "SIM_STATE": str(self.root / "gh.json"),
+               "GITHUB_REPOSITORY": "guifav/guifav.github.io", "GITHUB_REPOSITORY_OWNER": "guifav", "GITHUB_RUN_ID": "123", "SIM_STATE": str(self.root / "gh.json"),
                "SIM_NUVEM": str(self.root / "nuvem.json"), "SIM_REAL_PY": sys.executable, "GIT_CONFIG_GLOBAL": os.devnull,
                "GIT_CONFIG_NOSYSTEM": "1",
                # Datas fixas: duas execuções sobre a mesma main fazem o mesmo commit, o caso mais difícil da recuperação
@@ -205,15 +210,23 @@ class PublicarWorkflowBehaviorTest(unittest.TestCase):
             elif falhou:
                 continue
             elif cond:
-                k, op, v = cond.split()
-                val = outputs.get(k.split(".")[1], {}).get("estado", "")
-                if (op == "==") != (val == v.strip("'")):
+                # Só a forma usada no YAML: steps.<id>.outputs.estado (==|!=) '<valor>', unidas por ||.
+                vale = False
+                for parte in cond.split("||"):
+                    k, op, v = parte.split()
+                    val = outputs.get(k.split(".")[1], {}).get("estado", "")
+                    vale = vale or ((op == "==") == (val == v.strip("'")))
+                if not vale:
                     continue
             if "run" not in st:
                 continue
             out = runner / "out"
             out.write_text("")
-            passo = {k: ({"CLOUDFLARE_ACCOUNT_ID": "a" * 32}.get(k, "falso") if "${{" in v else v) for k, v in st.get("env", {}).items()}
+            def valor(k, v):
+                if "steps.existe.outputs.url" in v:
+                    return outputs.get("existe", {}).get("url", "")
+                return {"CLOUDFLARE_ACCOUNT_ID": "a" * 32}.get(k, "falso") if "${{" in v else v
+            passo = {k: valor(k, v) for k, v in st.get("env", {}).items()}
             e = {**env, **passo, "GITHUB_OUTPUT": str(out)}
             for line in genv.read_text().splitlines():
                 k, _, v = line.partition("=")
@@ -224,8 +237,8 @@ class PublicarWorkflowBehaviorTest(unittest.TestCase):
             if st.get("id"):
                 outputs[st["id"]] = dict(ln.split("=", 1) for ln in out.read_text().splitlines() if "=" in ln)
             falhou = falhou or r.returncode != 0
-        resumo = summary.read_text(encoding="utf-8")
-        return not falhou, resumo + ("" if not falhou else f"\nlog dos passos: {self.log}")
+        # O log dos passos fica à parte, só para as mensagens de falha: o stderr do script não pode passar por resumo.
+        return not falhou, summary.read_text(encoding="utf-8")
 
     def arquivos_do_branch(self):
         r = self.git("diff", "--name-only", "main", self.branch, cwd=self.remote, check=False)
@@ -251,15 +264,16 @@ class PublicarWorkflowBehaviorTest(unittest.TestCase):
     def test_passos_lidos_do_yaml(self):
         nomes = [st.get("name", st.get("uses")) for st in self.steps]
         self.assertEqual(nomes, ["Conferir as entradas", "actions/checkout@v7", "PR ou branch da versão já existe?",
-                                 "Conferir a versão aprovada e gravar o post", "Enviar o branch", "Conferir o branch que já existe sem PR",
-                                 "Abrir o PR e disparar o build", "Motivo da recusa"])
+                                 "Conferir a versão aprovada e gravar o post", "Enviar o branch", "Conferir o branch que já existe",
+                                 "Abrir o PR e disparar o build", "PR aberto conferido", "Motivo da recusa"])
+        self.assertEqual(self.steps[5]["if"], "steps.existe.outputs.estado == 'branch' || steps.existe.outputs.estado == 'pr-aberto'")
         self.assertIn("CF_PUBLICAR_API_TOKEN", self.steps[3]["env"])
         self.assertEqual(self.steps[2]["id"], "existe")
         self.assertEqual(self.steps[4]["run"], 'git push origin "HEAD:refs/heads/$BRANCH"')
 
     def test_caso_novo_abre_o_pr_do_branch_da_versao_e_dispara_o_build(self):
         ok, resumo = self.rodar()
-        self.assertTrue(ok, resumo)
+        self.assertTrue(ok, f"{resumo}\nlog dos passos: {self.log}")
         self.assertEqual(self.arquivos_do_branch(), ESPERADOS)
         mostra = self.git("show", f"{self.branch}:blog-src/src/content/posts/{SLUG}.md", cwd=self.remote).stdout
         self.assertEqual(mostra.encode(), MD)
@@ -278,23 +292,27 @@ class PublicarWorkflowBehaviorTest(unittest.TestCase):
         self.assertTrue(self.rodar()[0])
         self.limpar_chamadas(runs=[self.branch])
         ok, resumo = self.rodar()
-        self.assertTrue(ok, resumo)
+        self.assertTrue(ok, f"{resumo}\nlog dos passos: {self.log}")
         self.assertEqual(self.chamadas("pr", "create") + self.chamadas("workflow", "run"), [])
-        self.assertIn("## PR da versão já existe", resumo)
-        # Mergeado ou fechado: também nada, nem build.
+        self.assertIn("## PR da versão já está aberto", resumo)
+        self.assertIn("https://github.com/guifav/guifav.github.io/pull/100, com o head conferido de novo", resumo)
+        # Mergeado ou fechado: nada, nem build, e nem a conferência (o D1 e o R2 nem são lidos).
+        self.nuvem(aprovar=False)
         for estado in ("MERGED", "CLOSED"):
             st = self.estado()
             st["prs"][0]["state"], st["runs"], st["calls"] = estado, [], []
             self.estado(st)
             with self.subTest(estado=estado):
-                self.assertTrue(self.rodar()[0])
+                ok, resumo = self.rodar()
+                self.assertTrue(ok, f"{resumo}\nlog dos passos: {self.log}")
+                self.assertIn(f"({estado}). Nada a publicar de novo.", resumo)
                 self.assertEqual(self.chamadas("pr", "create") + self.chamadas("workflow", "run"), [])
 
     def test_pr_aberto_sem_build_ganha_o_build(self):
         self.assertTrue(self.rodar()[0])
         self.limpar_chamadas(runs=[])
         ok, resumo = self.rodar()
-        self.assertTrue(ok, resumo)
+        self.assertTrue(ok, f"{resumo}\nlog dos passos: {self.log}")
         self.assertEqual(self.chamadas("pr", "create"), [])
         self.assertEqual(self.chamadas("workflow", "run"), [["workflow", "run", "pages.yml", "--ref", self.branch]])
 
@@ -303,12 +321,12 @@ class PublicarWorkflowBehaviorTest(unittest.TestCase):
         antes = self.git("rev-parse", self.branch, cwd=self.remote).stdout
         self.limpar_chamadas(prs=[], bodies=[])
         ok, resumo = self.rodar()
-        self.assertTrue(ok, resumo)
+        self.assertTrue(ok, f"{resumo}\nlog dos passos: {self.log}")
         self.assertEqual(len(self.chamadas("pr", "create")), 1)
         self.assertEqual(self.git("rev-parse", self.branch, cwd=self.remote).stdout, antes, "o branch não é reescrito")
         local = self.git("rev-parse", "HEAD", cwd=self.root / f"work-{self.execucoes}").stdout
         self.assertEqual(local, antes, "com as datas fixas, o commit conferido agora é o mesmo do branch")
-        self.assertIn("já existia sem PR, com exatamente os arquivos conferidos", resumo)
+        self.assertIn("já existia, com exatamente os arquivos conferidos agora", resumo)
 
     def test_branch_sem_pr_adulterado_e_recusado(self):
         self.assertTrue(self.rodar()[0])
@@ -358,10 +376,40 @@ class PublicarWorkflowBehaviorTest(unittest.TestCase):
                 self.assertEqual(self.estado()["calls"], [], "nada vai ao GitHub")
                 self.assertFalse(marca.exists())
 
-    def test_pr_de_fork_com_o_mesmo_branch_nao_conta(self):
-        self.limpar_chamadas(prs=[{"number": 99, "head": self.branch, "state": "OPEN", "url": "https://github.com/x/pr/99", "isCrossRepository": True}])
+    def test_pr_aberto_adulterado_ou_com_base_errada_e_recusado(self):
+        # O PR aberto da versão não vale só por existir: o head é conferido de novo, e a base tem de ser a main (r2, Kimi P2).
+        self.assertTrue(self.rodar()[0])
+        md = f"blog-src/src/content/posts/{SLUG}.md"
+        self.empurrar_no_branch(lambda c: (c / md).write_bytes(MD + b"injetado depois do PR\n"))
+        for runs in ([self.branch], []):
+            self.limpar_chamadas(runs=runs)
+            with self.subTest(build_existente=bool(runs)):
+                ok, resumo = self.rodar()
+                self.assertFalse(ok)
+                self.assertIn("o conteúdo dele não é o da versão conferida", resumo)
+                self.assertEqual(self.chamadas("pr", "create") + self.chamadas("workflow", "run"), [], "nem PR nem build")
+        st = self.estado()
+        st["prs"][0]["base"], st["calls"] = "outra", []
+        self.estado(st)
         ok, resumo = self.rodar()
-        self.assertTrue(ok, resumo)
+        self.assertFalse(ok)
+        self.assertIn("tem base outra, não main", resumo)
+        self.assertEqual(self.chamadas("pr", "create") + self.chamadas("workflow", "run"), [])
+
+    def test_pr_aberto_sem_aprovacao_valida_e_recusado(self):
+        # A conferência do PR aberto passa pelo D1: sem a aprovação, o disparo de novo falha em vez de dar verde.
+        self.assertTrue(self.rodar()[0])
+        self.nuvem(aprovar=False)
+        self.limpar_chamadas(runs=[])
+        ok, resumo = self.rodar()
+        self.assertFalse(ok)
+        self.assertIn("nenhuma aprovação no painel", resumo)
+        self.assertEqual(self.chamadas("workflow", "run"), [])
+
+    def test_pr_de_fork_com_o_mesmo_branch_nao_conta(self):
+        self.limpar_chamadas(prs=[{"number": 99, "head": self.branch, "state": "OPEN", "url": "https://github.com/x/pr/99", "owner": "x"}])
+        ok, resumo = self.rodar()
+        self.assertTrue(ok, f"{resumo}\nlog dos passos: {self.log}")
         self.assertEqual(len(self.chamadas("pr", "create")), 1)
 
 

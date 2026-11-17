@@ -4,9 +4,10 @@
 #   gh workflow run publicar.yml --ref main -f slug=<slug> -f versao=<versão, 64 hex>
 #
 # 1. Confere as entradas (regex) e que roda na main. As entradas só entram no shell por variável de ambiente.
-# 2. Idempotência: se o PR da versão já existe, termina sem erro (e dispara o build se o PR aberto ainda não tem
-#    nenhum). Se só o branch existe (uma execução anterior parou entre o push e o PR), o PR só é aberto se o branch
-#    muda exatamente os arquivos conferidos agora, com o mesmo conteúdo.
+# 2. Idempotência: PR da versão mergeado ou fechado termina sem erro e sem nada a fazer. PR aberto só vale se for
+#    para a main e se o head ainda mudar exatamente os arquivos conferidos agora, com o mesmo conteúdo; aí termina
+#    sem erro e dispara o build se o PR ainda não tem nenhum. Branch sem PR (uma execução anterior parou entre o push
+#    e o PR) passa pela mesma conferência e só então ganha o PR. Qualquer diferença recusa.
 # 3. blog-src/scripts/draft_preview.py publicar: confere no D1 que existe aprovação desta versão, que o rascunho é de
 #    um artigo, baixa do R2 o manifesto e a fonte da versão, confere o sha256 de cada arquivo e o source_sha256, e
 #    grava o Markdown em blog-src/src/content/posts/ e as imagens em blog-src/public/img/<slug>/.
@@ -77,22 +78,26 @@ jobs:
         id: existe
         run: |
           recusa() { printf '%s\n' "$1" > "$RUNNER_TEMP/motivo.txt"; exit 1; }
-          # Só PR deste repositório: um fork com um branch de mesmo nome não conta.
-          pr=$(gh pr list --head "$BRANCH" --state all --limit 20 --json number,url,state,isCrossRepository \
-            --jq 'map(select(.isCrossRepository | not)) | .[0] // empty | "\(.number) \(.state) \(.url)"')
+          # O head qualificado pelo dono deste repositório: PR de fork com branch de mesmo nome não aparece, e não há
+          # limite de resultados antes do filtro (r2, Kimi P3).
+          pr=$(gh api --method GET "repos/$GITHUB_REPOSITORY/pulls" -f head="$GITHUB_REPOSITORY_OWNER:$BRANCH" -f state=all \
+            --jq '.[0] // empty | "\(.number) \(if .state == "open" then "OPEN" elif .merged_at then "MERGED" else "CLOSED" end) \(.base.ref) \(.html_url)"')
           if [ -n "$pr" ]; then
-            read -r _ estado url <<< "$pr"
-            {
-              echo "## PR da versão já existe"
-              echo
-              echo "$url ($estado). Nada a publicar de novo."
-            } >> "$GITHUB_STEP_SUMMARY"
-            # Uma execução anterior pode ter parado entre o PR e o disparo do build.
-            if [ "$estado" = OPEN ] && [ -z "$(gh run list --workflow pages.yml --branch "$BRANCH" --limit 1 --json databaseId --jq '.[]')" ]; then
-              gh workflow run pages.yml --ref "$BRANCH"
-              echo "O PR não tinha build; o pages.yml foi disparado no branch." >> "$GITHUB_STEP_SUMMARY"
+            read -r _ estado base url <<< "$pr"
+            echo "url=$url" >> "$GITHUB_OUTPUT"
+            if [ "$estado" != OPEN ]; then
+              {
+                echo "## PR da versão já existe"
+                echo
+                echo "$url ($estado). Nada a publicar de novo."
+              } >> "$GITHUB_STEP_SUMMARY"
+              echo "estado=pr" >> "$GITHUB_OUTPUT"
+              exit 0
             fi
-            echo "estado=pr" >> "$GITHUB_OUTPUT"
+            # PR aberto: só vale como o PR da versão se for para a main e se o head ainda tiver exatamente a fonte
+            # conferida, o que os passos seguintes refazem (r2, Kimi P2).
+            [ "$base" = main ] || recusa "O PR da versão ($url) tem base $base, não main."
+            echo "estado=pr-aberto" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           rc=0
@@ -136,23 +141,24 @@ jobs:
         if: steps.existe.outputs.estado == 'novo'
         run: git push origin "HEAD:refs/heads/$BRANCH"
 
-      - name: Conferir o branch que já existe sem PR
-        if: steps.existe.outputs.estado == 'branch'
+      - name: Conferir o branch que já existe
+        # Branch sem PR (uma execução anterior parou entre o push e o PR) ou head de um PR aberto.
+        if: steps.existe.outputs.estado == 'branch' || steps.existe.outputs.estado == 'pr-aberto'
         run: |
           recusa() { printf '%s\n' "$1" > "$RUNNER_TEMP/motivo.txt"; exit 1; }
           git fetch -q --no-tags origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH"
           # HEAD^ é o topo da main: o HEAD é o commit conferido agora e pode até ser o mesmo commit do branch.
-          base=$(git merge-base HEAD^ "origin/$BRANCH") || recusa "O branch $BRANCH já existe sem PR e não tem base comum com a main."
+          base=$(git merge-base HEAD^ "origin/$BRANCH") || recusa "O branch $BRANCH já existe e não tem base comum com a main."
           mudou=$(git diff --no-renames --name-only "$base" "origin/$BRANCH" | sort)
           esperado=$(sort "$RUNNER_TEMP/pr/arquivos.txt")
-          [ "$mudou" = "$esperado" ] || recusa "O branch $BRANCH já existe sem PR e muda arquivos diferentes dos da versão conferida."
+          [ "$mudou" = "$esperado" ] || recusa "O branch $BRANCH já existe e muda arquivos diferentes dos da versão conferida."
           mapfile -t arquivos < "$RUNNER_TEMP/pr/arquivos.txt"
           git --literal-pathspecs diff --quiet HEAD "origin/$BRANCH" -- "${arquivos[@]}" \
-            || recusa "O branch $BRANCH já existe sem PR e o conteúdo dele não é o da versão conferida."
-          echo "O branch $BRANCH já existia sem PR, com exatamente os arquivos conferidos; o PR sai dele." >> "$GITHUB_STEP_SUMMARY"
+            || recusa "O branch $BRANCH já existe e o conteúdo dele não é o da versão conferida."
+          echo "O branch $BRANCH já existia, com exatamente os arquivos conferidos agora." >> "$GITHUB_STEP_SUMMARY"
 
       - name: Abrir o PR e disparar o build
-        if: steps.existe.outputs.estado != 'pr'
+        if: steps.existe.outputs.estado == 'novo' || steps.existe.outputs.estado == 'branch'
         run: |
           {
             cat "$RUNNER_TEMP/pr/corpo.md"
@@ -168,6 +174,22 @@ jobs:
             echo
             cat "$RUNNER_TEMP/pr/corpo.md"
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: PR aberto conferido
+        if: steps.existe.outputs.estado == 'pr-aberto'
+        env:
+          URL: ${{ steps.existe.outputs.url }}
+        run: |
+          {
+            echo "## PR da versão já está aberto"
+            echo
+            echo "$URL, com o head conferido de novo contra a aprovação e a fonte."
+          } >> "$GITHUB_STEP_SUMMARY"
+          # Uma execução anterior pode ter parado entre o PR e o disparo do build.
+          if [ -z "$(gh run list --workflow pages.yml --branch "$BRANCH" --limit 1 --json databaseId --jq '.[]')" ]; then
+            gh workflow run pages.yml --ref "$BRANCH"
+            echo "O PR não tinha build; o pages.yml foi disparado no branch." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Motivo da recusa
         if: failure()
