@@ -81,7 +81,8 @@ jobs:
           # O head qualificado pelo dono deste repositório: PR de fork com branch de mesmo nome não aparece, e não há
           # limite de resultados antes do filtro (r2, Kimi P3).
           pr=$(gh api --method GET "repos/$GITHUB_REPOSITORY/pulls" -f head="$GITHUB_REPOSITORY_OWNER:$BRANCH" -f state=all \
-            --jq '.[0] // empty | "\(.number) \(if .state == "open" then "OPEN" elif .merged_at then "MERGED" else "CLOSED" end) \(.base.ref) \(.html_url)"')
+            --jq '.[0] // empty | "\(.number) \(if .state == "open" then "OPEN" elif .merged_at then "MERGED" else "CLOSED" end) \(.base.ref) \(.html_url)"') \
+            || recusa "Não consegui consultar no GitHub os PRs do branch $BRANCH."
           if [ -n "$pr" ]; then
             read -r _ estado base url <<< "$pr"
             echo "url=$url" >> "$GITHUB_OUTPUT"
@@ -180,13 +181,19 @@ jobs:
         env:
           URL: ${{ steps.existe.outputs.url }}
         run: |
+          recusa() { printf '%s\n' "$1" > "$RUNNER_TEMP/motivo.txt"; exit 1; }
           {
             echo "## PR da versão já está aberto"
             echo
             echo "$URL, com o head conferido de novo contra a aprovação e a fonte."
           } >> "$GITHUB_STEP_SUMMARY"
-          # Uma execução anterior pode ter parado entre o PR e o disparo do build.
-          if [ -z "$(gh run list --workflow pages.yml --branch "$BRANCH" --limit 1 --json databaseId --jq '.[]')" ]; then
+          # Uma execução anterior pode ter parado entre o PR e o disparo do build. Vale o build do head conferido agora:
+          # um commit novo no branch, mesmo com a mesma árvore, não herda o build do anterior (r3, Astra P2).
+          # Atribuição à parte: dentro do [ ], uma falha do gh viraria "nenhum build" e dispararia outro (r3, Kimi P3).
+          head=$(git rev-parse "origin/$BRANCH")
+          builds=$(gh run list --workflow pages.yml --branch "$BRANCH" --commit "$head" --limit 1 --json databaseId --jq '.[]') \
+            || recusa "Não consegui consultar no GitHub os builds do PR; nada foi disparado."
+          if [ -z "$builds" ]; then
             gh workflow run pages.yml --ref "$BRANCH"
             echo "O PR não tinha build; o pages.yml foi disparado no branch." >> "$GITHUB_STEP_SUMMARY"
           fi

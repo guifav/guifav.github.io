@@ -73,6 +73,9 @@ p = os.environ["SIM_STATE"]
 st = json.load(open(p))
 a = sys.argv[1:]
 st["calls"].append(a)
+if " ".join(a[:2]) in st.get("falha", []):
+    json.dump(st, open(p, "w"))
+    sys.exit("gh falso: falha simulada")
 def opt(n):
     return a[a.index(n) + 1] if n in a else None
 def jq(data):
@@ -85,7 +88,8 @@ if a[:1] == ["api"] and a[a.index("--method") + 1] == "GET" and a[3].endswith("/
                "merged_at": "2026-11-16T21:00:00Z" if x["state"] == "MERGED" else None, "base": {"ref": x.get("base", "main")}}
               for x in st["prs"] if x["head"] == branch and x.get("owner", "guifav") == dono])
 elif a[:2] == ["run", "list"]:
-    out = jq([{"databaseId": 1} for r in st["runs"] if r == opt("--branch")])
+    # Cada execução guardada é [branch, sha]; sha None vale para qualquer commit (o gh real sem --commit).
+    out = jq([{"databaseId": 1} for b, c in st["runs"] if b == opt("--branch") and (opt("--commit") is None or c in (None, opt("--commit")))])
 elif a[:2] == ["pr", "create"]:
     n = 100 + len(st["prs"])
     st["prs"].append({"number": n, "head": opt("--head"), "state": "OPEN", "url": f"https://github.com/guifav/guifav.github.io/pull/{n}"})
@@ -240,6 +244,9 @@ class PublicarWorkflowBehaviorTest(unittest.TestCase):
         # O log dos passos fica à parte, só para as mensagens de falha: o stderr do script não pode passar por resumo.
         return not falhou, summary.read_text(encoding="utf-8")
 
+    def head_do_branch(self):
+        return self.git("rev-parse", self.branch, cwd=self.remote).stdout.strip()
+
     def arquivos_do_branch(self):
         r = self.git("diff", "--name-only", "main", self.branch, cwd=self.remote, check=False)
         return sorted(r.stdout.split()) if r.returncode == 0 else None
@@ -290,7 +297,7 @@ class PublicarWorkflowBehaviorTest(unittest.TestCase):
 
     def test_repetir_com_o_pr_existente_nao_faz_nada(self):
         self.assertTrue(self.rodar()[0])
-        self.limpar_chamadas(runs=[self.branch])
+        self.limpar_chamadas(runs=[[self.branch, self.head_do_branch()]])
         ok, resumo = self.rodar()
         self.assertTrue(ok, f"{resumo}\nlog dos passos: {self.log}")
         self.assertEqual(self.chamadas("pr", "create") + self.chamadas("workflow", "run"), [])
@@ -315,6 +322,27 @@ class PublicarWorkflowBehaviorTest(unittest.TestCase):
         self.assertTrue(ok, f"{resumo}\nlog dos passos: {self.log}")
         self.assertEqual(self.chamadas("pr", "create"), [])
         self.assertEqual(self.chamadas("workflow", "run"), [["workflow", "run", "pages.yml", "--ref", self.branch]])
+
+    def test_pr_aberto_com_head_novo_da_mesma_arvore_ganha_o_build_do_head(self):
+        # O build que conta é o do head conferido agora: um commit novo (aqui, vazio) com a mesma árvore aprovada não
+        # herda o build do commit anterior (r3, Astra P2).
+        self.assertTrue(self.rodar()[0])
+        antigo = self.head_do_branch()
+        c = self.root / "vazio"
+        self.git("clone", "-q", "--branch", self.branch, str(self.remote), str(c))
+        self.git("-c", "user.name=x", "-c", "user.email=x@x", "commit", "-q", "--allow-empty", "-m", "vazio", cwd=c)
+        self.git("push", "-q", "origin", self.branch, cwd=c)
+        self.assertNotEqual(self.head_do_branch(), antigo)
+        self.limpar_chamadas(runs=[[self.branch, antigo]])
+        ok, resumo = self.rodar()
+        self.assertTrue(ok, f"{resumo}\nlog dos passos: {self.log}")
+        self.assertEqual(self.chamadas("workflow", "run"), [["workflow", "run", "pages.yml", "--ref", self.branch]])
+        [lista] = self.chamadas("run", "list")
+        self.assertEqual(lista[lista.index("--commit") + 1], self.head_do_branch())
+        # Com o build do head atual, nada a disparar.
+        self.limpar_chamadas(runs=[[self.branch, self.head_do_branch()]])
+        self.assertTrue(self.rodar()[0])
+        self.assertEqual(self.chamadas("workflow", "run"), [])
 
     def test_branch_sem_pr_com_o_conteudo_conferido_ganha_o_pr(self):
         self.assertTrue(self.rodar()[0])
@@ -381,7 +409,7 @@ class PublicarWorkflowBehaviorTest(unittest.TestCase):
         self.assertTrue(self.rodar()[0])
         md = f"blog-src/src/content/posts/{SLUG}.md"
         self.empurrar_no_branch(lambda c: (c / md).write_bytes(MD + b"injetado depois do PR\n"))
-        for runs in ([self.branch], []):
+        for runs in ([[self.branch, self.head_do_branch()]], []):
             self.limpar_chamadas(runs=runs)
             with self.subTest(build_existente=bool(runs)):
                 ok, resumo = self.rodar()
@@ -405,6 +433,21 @@ class PublicarWorkflowBehaviorTest(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("nenhuma aprovação no painel", resumo)
         self.assertEqual(self.chamadas("workflow", "run"), [])
+
+    def test_falha_do_gh_nas_consultas_recusa_sem_disparar(self):
+        # Falha ao consultar os PRs ou os builds não vira "nenhum PR" nem "nenhum build" (r3, Kimi P3).
+        self.limpar_chamadas(falha=["api --method"])
+        ok, resumo = self.rodar()
+        self.assertFalse(ok)
+        self.assertIn("Não consegui consultar no GitHub os PRs do branch", resumo)
+        self.assertEqual(self.chamadas("pr", "create") + self.chamadas("workflow", "run"), [])
+        self.limpar_chamadas(falha=[])
+        self.assertTrue(self.rodar()[0])
+        self.limpar_chamadas(falha=["run list"], runs=[[self.branch, self.head_do_branch()]])
+        ok, resumo = self.rodar()
+        self.assertFalse(ok)
+        self.assertIn("Não consegui consultar no GitHub os builds do PR; nada foi disparado.", resumo)
+        self.assertEqual(self.chamadas("pr", "create") + self.chamadas("workflow", "run"), [])
 
     def test_pr_de_fork_com_o_mesmo_branch_nao_conta(self):
         self.limpar_chamadas(prs=[{"number": 99, "head": self.branch, "state": "OPEN", "url": "https://github.com/x/pr/99", "owner": "x"}])

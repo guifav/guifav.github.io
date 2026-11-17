@@ -814,10 +814,15 @@ class CloudflareTest(unittest.TestCase):
         def falhou_com_linhas(req, timeout):
             # success false vale mesmo com linhas na resposta: nada de aprovação tirada de uma consulta que falhou.
             return contextlib.nullcontext(io.BytesIO(b'{"success": false, "result": [{"results": [{"id": 1}]}]}'))
-        for http, padrao in ((recusa, "respondeu 403"), (lixo, "fora do formato"), (falhou_com_linhas, "fora do formato")):
+        def sem_rede(req, timeout):
+            raise urllib.error.URLError(f"falha ao abrir {req.full_url}")
+        for http, padrao in ((recusa, "respondeu 403"), (lixo, "fora do formato"), (falhou_com_linhas, "fora do formato"),
+                             (sem_rede, r"falha ao consultar as aprovações no D1 \(URLError\)")):
             with self.subTest(padrao=padrao), self.assertRaisesRegex(D.DraftError, padrao) as ctx:
                 D.Cloudflare(self.ENV, http=http).aprovacoes(SLUG)
+            # Nem o token nem o id da conta, que está na URL da consulta (r3, Kimi P4).
             self.assertNotIn("SEGREDO", str(ctx.exception))
+            self.assertNotIn("a" * 32, str(ctx.exception))
 
     def test_r2_pela_api_s3_com_as_chaves_no_ambiente(self):
         chamadas = []
