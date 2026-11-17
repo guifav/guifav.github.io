@@ -482,8 +482,9 @@ class Cloudflare:
         self.conta = env["CLOUDFLARE_ACCOUNT_ID"]
         self._token = env["CF_PUBLICAR_API_TOKEN"]
         self._aws_env = {k: v for k, v in env.items() if not k.startswith("AWS_") and k not in SEGREDOS}
+        # O endpoint leva o id da conta: vai pelo ambiente (AWS_ENDPOINT_URL_S3, aws CLI 2.13+), não por argumento (r1, Astra P2).
         self._aws_env.update({"AWS_ACCESS_KEY_ID": env["R2_ACCESS_KEY_ID"], "AWS_SECRET_ACCESS_KEY": env["R2_SECRET_ACCESS_KEY"],
-                              "AWS_DEFAULT_REGION": "auto", "AWS_CONFIG_FILE": os.devnull, "AWS_SHARED_CREDENTIALS_FILE": os.devnull,
+                              "AWS_ENDPOINT_URL_S3": f"https://{self.conta}.r2.cloudflarestorage.com", "AWS_DEFAULT_REGION": "auto", "AWS_CONFIG_FILE": os.devnull, "AWS_SHARED_CREDENTIALS_FILE": os.devnull,
                               "AWS_REQUEST_CHECKSUM_CALCULATION": "when_required", "AWS_RESPONSE_CHECKSUM_VALIDATION": "when_required"})
         self.run = run
         if http is None:
@@ -520,12 +521,15 @@ class Cloudflare:
         fd, nome = tempfile.mkstemp(dir=work)
         os.close(fd)
         dest = Path(nome)
-        r = self.run(["aws", "s3api", "get-object", "--bucket", BUCKET, "--key", key,
-                      "--endpoint-url", f"https://{self.conta}.r2.cloudflarestorage.com", str(dest)],
+        r = self.run(["aws", "s3api", "get-object", "--bucket", BUCKET, "--key", key, str(dest)],
                      capture_output=True, env=self._aws_env)
         if r.returncode != 0:
+            # Só o código de erro do S3 sai daqui: o texto do aws CLI pode trazer o endpoint, com o id da conta, e vai
+            # para o log e o resumo da execução (r1, Astra P2).
             err = r.stderr.decode(errors="replace") if isinstance(r.stderr, bytes) else str(r.stderr)
-            raise DraftError(f"não consegui baixar {key} do R2: {err.strip()[-500:]}")
+            codigo = re.search(r"An error occurred \(([A-Za-z0-9]{1,64})\)", err)
+            motivo = f"o R2 respondeu {codigo.group(1)}" if codigo else f"o aws CLI saiu com {r.returncode}, sem código de erro do S3"
+            raise DraftError(f"não consegui baixar {key} do R2: {motivo}")
         try:
             return dest.read_bytes()
         finally:
@@ -620,13 +624,18 @@ def publicar(slug: str, versao: str, nuvem, blog_src: Path, work: Path) -> Publi
     # 5. Gravação: só arquivos novos, dentro de posts/<slug>.md e public/img/<slug>/.
     plano = [(md_dest, fonte[f"{slug}.md"])]
     plano += [(img_dest / rel.removeprefix("img/"), data) for rel, data in sorted(fonte.items()) if rel != f"{slug}.md"]
-    raiz = blog_src.resolve()
+    # Os caminhos já são do post por construção (FILE_RE não deixa ..); o que ainda desviaria a gravação é um link
+    # simbólico no caminho, para fora do repo ou para outra pasta dele, como src/content/posts -> ../pages (r1, Astra P3).
+    # Nenhuma pasta existente do repo até o destino pode ser link.
+    repo = blog_src.parent
     for dest, _ in plano:
-        alvo = dest.parent.resolve() / dest.name
-        if alvo != md_dest.resolve() and img_dest.resolve() not in alvo.parents:
-            raise DraftError(f"destino fora do post: {dest}")
-        if raiz not in alvo.parents:
-            raise DraftError(f"destino fora do blog-src: {dest}")
+        for p in [dest.parent, *dest.parent.parents]:
+            if p == repo:
+                break
+            if p.is_symlink():
+                raise DraftError(f"link simbólico no caminho do destino: {p.relative_to(repo)}; nada foi gravado")
+        else:
+            raise DraftError(f"destino fora do repositório: {dest}")
     arquivos = []
     for dest, data in plano:
         dest.parent.mkdir(parents=True, exist_ok=True)

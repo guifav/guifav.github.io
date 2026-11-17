@@ -729,15 +729,24 @@ class PublicarTest(unittest.TestCase):
         man = {**self.man, "fonte": {**self.man["fonte"], "img/a.webp": "nao-hex"}}
         self.recusa(Nuvem([self.row], self.objetos(man)), "sha256 inválido")
 
-    def test_recusa_destino_fora_do_blog_src_por_link_simbolico(self):
-        # Defesa em profundidade: public/img apontando para fora do repo.
+    def test_recusa_link_simbolico_no_caminho_do_destino(self):
+        # Um link no caminho desviaria a gravação: para fora do repo (public/img) ou para outra pasta dele
+        # (src/content/posts -> ../pages, r1, Astra P3). Nada é gravado em nenhum dos dois casos.
+        import shutil
         fora = Path(self.tmp.name) / "fora"
         fora.mkdir()
-        import shutil
         shutil.rmtree(self.blog / "public" / "img")
         (self.blog / "public" / "img").symlink_to(fora)
-        self.recusa(Nuvem([self.row], self.objetos()), "fora do blog-src")
+        self.recusa(Nuvem([self.row], self.objetos()), "link simbólico no caminho do destino: blog-src/public/img")
         self.assertEqual(list(fora.iterdir()), [])
+        (self.blog / "public" / "img").unlink()
+        (self.blog / "public" / "img").mkdir()
+        pages = self.blog / "src" / "pages"
+        pages.mkdir()
+        shutil.rmtree(self.blog / "src" / "content" / "posts")
+        (self.blog / "src" / "content" / "posts").symlink_to("../pages")
+        self.recusa(Nuvem([self.row], self.objetos()), "link simbólico no caminho do destino: blog-src/src/content/posts")
+        self.assertEqual(list(pages.iterdir()), [])
 
     def test_cli_publicar_grava_os_arquivos_do_pr(self):
         saida = Path(self.tmp.name) / "pr"
@@ -821,17 +830,28 @@ class CloudflareTest(unittest.TestCase):
             self.assertEqual(D.Cloudflare(self.ENV, run=run).baixar("sales-coach/manifest.json", Path(t)), b"conteudo")
             self.assertEqual(list(Path(t).iterdir()), [], "o arquivo temporário sai")
         args, kw = chamadas[0]
-        self.assertEqual(args[:9], ["aws", "s3api", "get-object", "--bucket", "blog-rascunhos", "--key", "sales-coach/manifest.json",
-                                    "--endpoint-url", f"https://{'a' * 32}.r2.cloudflarestorage.com"])
-        self.assertNotIn("SEGREDO", " ".join(args))
+        self.assertEqual(args[:7], ["aws", "s3api", "get-object", "--bucket", "blog-rascunhos", "--key", "sales-coach/manifest.json"])
+        self.assertEqual(len(args), 8)
+        # Nenhum dos quatro segredos em argumento, nem o id da conta, que vai no endpoint (r1, Astra P2).
+        for segredo in ("a" * 32, "SEGREDO"):
+            self.assertNotIn(segredo, " ".join(args))
         env = kw["env"]
+        self.assertEqual(env["AWS_ENDPOINT_URL_S3"], f"https://{'a' * 32}.r2.cloudflarestorage.com")
         self.assertEqual((env["AWS_ACCESS_KEY_ID"], env["AWS_SECRET_ACCESS_KEY"]), ("id-SEGREDO-r2", "chave-SEGREDO-r2"))
         self.assertNotIn("CF_PUBLICAR_API_TOKEN", env)
         self.assertNotIn("AWS_PROFILE", env, "credencial de outro perfil não entra")
-        falha = Fake(rc=254, stderr=b"An error occurred (NoSuchKey)")
-        with tempfile.TemporaryDirectory() as t, self.assertRaisesRegex(D.DraftError, "NoSuchKey") as ctx:
-            D.Cloudflare(self.ENV, run=falha).baixar("sales-coach/manifest.json", Path(t))
-        self.assertNotIn("SEGREDO", str(ctx.exception))
+        # Do erro do aws CLI só sai o código do S3: o texto dele pode trazer o endpoint (com o id da conta) ou outra
+        # coisa que vai para o log e o resumo da execução (r1, Astra P2).
+        conta = "a" * 32
+        for stderr, padrao in (
+                (f"An error occurred (NoSuchKey) when calling GetObject at https://{conta}.r2.cloudflarestorage.com key id-SEGREDO-r2".encode(),
+                 "o R2 respondeu NoSuchKey$"),
+                (f"Could not connect to the endpoint URL: \"https://{conta}.r2.cloudflarestorage.com/blog-rascunhos/x\"".encode(),
+                 "o aws CLI saiu com 255, sem código de erro do S3$")):
+            with self.subTest(padrao=padrao), tempfile.TemporaryDirectory() as t, self.assertRaisesRegex(D.DraftError, padrao) as ctx:
+                D.Cloudflare(self.ENV, run=Fake(rc=255, stderr=stderr)).baixar("sales-coach/manifest.json", Path(t))
+            self.assertNotIn("SEGREDO", str(ctx.exception))
+            self.assertNotIn(conta, str(ctx.exception))
 
     def test_d1_id_e_o_do_wrangler_toml(self):
         toml = (D.ADMIN_WORKER / "wrangler.toml").read_text(encoding="utf-8")

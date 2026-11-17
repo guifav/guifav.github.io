@@ -141,7 +141,8 @@ jobs:
         run: |
           recusa() { printf '%s\n' "$1" > "$RUNNER_TEMP/motivo.txt"; exit 1; }
           git fetch -q --no-tags origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH"
-          base=$(git merge-base HEAD "origin/$BRANCH") || recusa "O branch $BRANCH já existe sem PR e não tem base comum com a main."
+          # HEAD^ é o topo da main: o HEAD é o commit conferido agora e pode até ser o mesmo commit do branch.
+          base=$(git merge-base HEAD^ "origin/$BRANCH") || recusa "O branch $BRANCH já existe sem PR e não tem base comum com a main."
           mudou=$(git diff --no-renames --name-only "$base" "origin/$BRANCH" | sort)
           esperado=$(sort "$RUNNER_TEMP/pr/arquivos.txt")
           [ "$mudou" = "$esperado" ] || recusa "O branch $BRANCH já existe sem PR e muda arquivos diferentes dos da versão conferida."
