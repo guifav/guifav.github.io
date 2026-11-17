@@ -1,0 +1,185 @@
+# Publicação de um rascunho aprovado no painel guifav.dev/admin/rascunhos (issue #82, fatia 3).
+#
+# Disparada pelo Worker blog-admin quando o Gui aprova um artigo, ou à mão:
+#   gh workflow run publicar.yml --ref main -f slug=<slug> -f versao=<versão, 64 hex>
+#
+# 1. Confere as entradas (regex) e que roda na main. As entradas só entram no shell por variável de ambiente.
+# 2. Idempotência: se o PR da versão já existe, termina sem erro (e dispara o build se o PR aberto ainda não tem
+#    nenhum). Se só o branch existe (uma execução anterior parou entre o push e o PR), o PR só é aberto se o branch
+#    muda exatamente os arquivos conferidos agora, com o mesmo conteúdo.
+# 3. blog-src/scripts/draft_preview.py publicar: confere no D1 que existe aprovação desta versão, que o rascunho é de
+#    um artigo, baixa do R2 o manifesto e a fonte da versão, confere o sha256 de cada arquivo e o source_sha256, e
+#    grava o Markdown em blog-src/src/content/posts/ e as imagens em blog-src/public/img/<slug>/.
+# 4. Commit no branch publica/<slug>-<versão8>, PR aberto com o GITHUB_TOKEN (autor github-actions[bot]) e a
+#    evidência no corpo, e disparo do pages.yml no branch. PR aberto com o GITHUB_TOKEN não dispara workflows;
+#    workflow_dispatch é a exceção, e assim o check build aparece no head do PR.
+# Recusa com o motivo no resumo da execução; o painel só aponta para ela.
+#
+# Segredos, todos só de leitura: CLOUDFLARE_ACCOUNT_ID, CF_PUBLICAR_API_TOKEN (D1 blog-admin pela API REST),
+# R2_ACCESS_KEY_ID e R2_SECRET_ACCESS_KEY (bucket blog-rascunhos pela API S3 do R2). Requer em Settings > Actions
+# "Allow GitHub Actions to create and approve pull requests".
+name: Publicar
+# As expressões do Actions não cortam texto: vai a versão inteira, que começa pelos 8 caracteres do branch.
+run-name: Publica ${{ inputs.slug }} (${{ inputs.versao }})
+
+on:
+  workflow_dispatch:
+    inputs:
+      slug:
+        description: Slug do artigo aprovado
+        required: true
+        type: string
+      versao:
+        description: Versão aprovada (64 caracteres hexadecimais)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+concurrency:
+  # Uma publicação por slug de cada vez, sem cancelar a que está no meio.
+  group: publicar-${{ inputs.slug }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SLUG: ${{ inputs.slug }}
+      VERSAO: ${{ inputs.versao }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Conferir as entradas
+        env:
+          LC_ALL: C
+        run: |
+          recusa() { printf '%s\n' "$1" > "$RUNNER_TEMP/motivo.txt"; exit 1; }
+          [ "$GITHUB_REF" = refs/heads/main ] || recusa "A publicação só roda na main; esta execução foi disparada em outro ref."
+          [[ "$SLUG" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]] || recusa "Slug inválido: só minúsculas, dígitos e hífens."
+          [[ "$VERSAO" =~ ^[0-9a-f]{64}$ ]] || recusa "Versão inválida: são 64 caracteres hexadecimais minúsculos."
+          echo "BRANCH=publica/$SLUG-${VERSAO:0:8}" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          # Histórico completo: o merge-base com um branch da versão que já exista sem PR.
+          fetch-depth: 0
+
+      - name: PR ou branch da versão já existe?
+        id: existe
+        run: |
+          recusa() { printf '%s\n' "$1" > "$RUNNER_TEMP/motivo.txt"; exit 1; }
+          # Só PR deste repositório: um fork com um branch de mesmo nome não conta.
+          pr=$(gh pr list --head "$BRANCH" --state all --limit 20 --json number,url,state,isCrossRepository \
+            --jq 'map(select(.isCrossRepository | not)) | .[0] // empty | "\(.number) \(.state) \(.url)"')
+          if [ -n "$pr" ]; then
+            read -r _ estado url <<< "$pr"
+            {
+              echo "## PR da versão já existe"
+              echo
+              echo "$url ($estado). Nada a publicar de novo."
+            } >> "$GITHUB_STEP_SUMMARY"
+            # Uma execução anterior pode ter parado entre o PR e o disparo do build.
+            if [ "$estado" = OPEN ] && [ -z "$(gh run list --workflow pages.yml --branch "$BRANCH" --limit 1 --json databaseId --jq '.[]')" ]; then
+              gh workflow run pages.yml --ref "$BRANCH"
+              echo "O PR não tinha build; o pages.yml foi disparado no branch." >> "$GITHUB_STEP_SUMMARY"
+            fi
+            echo "estado=pr" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          rc=0
+          git ls-remote --exit-code --heads origin "refs/heads/$BRANCH" > /dev/null || rc=$?
+          case "$rc" in
+            0) echo "estado=branch" >> "$GITHUB_OUTPUT" ;;
+            2) echo "estado=novo" >> "$GITHUB_OUTPUT" ;;
+            *) recusa "Não consegui consultar o branch $BRANCH (git ls-remote saiu com $rc)." ;;
+          esac
+
+      - name: Conferir a versão aprovada e gravar o post
+        if: steps.existe.outputs.estado != 'pr'
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CF_PUBLICAR_API_TOKEN: ${{ secrets.CF_PUBLICAR_API_TOKEN }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+        run: |
+          recusa() { printf '%s\n' "$1" > "$RUNNER_TEMP/motivo.txt"; exit 1; }
+          if ! python3 blog-src/scripts/draft_preview.py publicar "$SLUG" --versao "$VERSAO" --saida "$RUNNER_TEMP/pr" 2> "$RUNNER_TEMP/erro.txt"; then
+            cat "$RUNNER_TEMP/erro.txt" >&2
+            recusa "$(cat "$RUNNER_TEMP/erro.txt")"
+          fi
+          # O checkout só pode ter mudado nos arquivos que o script listou.
+          if ! diff <(git status --porcelain --untracked-files=all | sort) <(sed 's/^/?? /' "$RUNNER_TEMP/pr/arquivos.txt" | sort) >&2; then
+            recusa "O checkout mudou fora dos arquivos conferidos; nada foi publicado."
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c "$BRANCH"
+          git --literal-pathspecs add --pathspec-from-file="$RUNNER_TEMP/pr/arquivos.txt"
+          {
+            echo "Publica artigo: $(cat "$RUNNER_TEMP/pr/titulo.txt")"
+            echo
+            echo "Versão aprovada no painel: $VERSAO."
+            echo "Aberto pela workflow publicar.yml (#82)."
+          } > "$RUNNER_TEMP/commit.txt"
+          git commit -q -F "$RUNNER_TEMP/commit.txt"
+
+      - name: Enviar o branch
+        if: steps.existe.outputs.estado == 'novo'
+        run: git push origin "HEAD:refs/heads/$BRANCH"
+
+      - name: Conferir o branch que já existe sem PR
+        if: steps.existe.outputs.estado == 'branch'
+        run: |
+          recusa() { printf '%s\n' "$1" > "$RUNNER_TEMP/motivo.txt"; exit 1; }
+          git fetch -q --no-tags origin "+refs/heads/$BRANCH:refs/remotes/origin/$BRANCH"
+          base=$(git merge-base HEAD "origin/$BRANCH") || recusa "O branch $BRANCH já existe sem PR e não tem base comum com a main."
+          mudou=$(git diff --no-renames --name-only "$base" "origin/$BRANCH" | sort)
+          esperado=$(sort "$RUNNER_TEMP/pr/arquivos.txt")
+          [ "$mudou" = "$esperado" ] || recusa "O branch $BRANCH já existe sem PR e muda arquivos diferentes dos da versão conferida."
+          mapfile -t arquivos < "$RUNNER_TEMP/pr/arquivos.txt"
+          git --literal-pathspecs diff --quiet HEAD "origin/$BRANCH" -- "${arquivos[@]}" \
+            || recusa "O branch $BRANCH já existe sem PR e o conteúdo dele não é o da versão conferida."
+          echo "O branch $BRANCH já existia sem PR, com exatamente os arquivos conferidos; o PR sai dele." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Abrir o PR e disparar o build
+        if: steps.existe.outputs.estado != 'pr'
+        run: |
+          {
+            cat "$RUNNER_TEMP/pr/corpo.md"
+            echo
+            echo "Execução: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } > "$RUNNER_TEMP/corpo.md"
+          url=$(gh pr create --base main --head "$BRANCH" --title "Publica artigo: $(cat "$RUNNER_TEMP/pr/titulo.txt")" --body-file "$RUNNER_TEMP/corpo.md")
+          gh workflow run pages.yml --ref "$BRANCH"
+          {
+            echo "## PR de publicação aberto"
+            echo
+            echo "$url"
+            echo
+            cat "$RUNNER_TEMP/pr/corpo.md"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Motivo da recusa
+        if: failure()
+        run: |
+          # shellcheck disable=SC2016 # as crases são a cerca de código do Markdown, não expansão
+          {
+            echo "## Publicação recusada"
+            echo
+            echo '```text'
+            if [ -s "$RUNNER_TEMP/motivo.txt" ]; then
+              sed 's/```/` ` `/g' "$RUNNER_TEMP/motivo.txt"
+            else
+              echo "Falha fora das conferências; veja o log do passo que falhou."
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
