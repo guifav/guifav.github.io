@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { handle, type Env, type Deps } from '../src/index.ts';
-import { PREVIEW_CSP, readManifest, sha256Hex, versionId, type R2Like } from '../src/drafts.ts';
+import { execucaoDa, PREVIEW_CSP, readManifest, sha256Hex, versionId, type R2Like } from '../src/drafts.ts';
 import type { D1Like, D1Stmt } from '../src/sync.ts';
 import { resetCertsCache } from '../src/access.ts';
 
@@ -19,16 +19,16 @@ const GUI = 'gui@exemplo.com';
 const SHA = (c: string) => c.repeat(64);
 
 // ------------------------------------------------------------------ D1 falso com todas as migrações
-function d1(failSql?: RegExp): D1Like & { raw: DatabaseSync } {
+function d1(falha: { sql?: RegExp } = {}): D1Like & { raw: DatabaseSync } {
   const db = new DatabaseSync(':memory:');
   const dir = new URL('../migrations/', import.meta.url);
   for (const f of readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()) db.exec(readFileSync(new URL(f, dir), 'utf-8'));
   const stmt = (sql: string, args: unknown[] = []): D1Stmt => ({
     bind: (...v: unknown[]) => stmt(sql, v),
-    run: async () => { if (failSql?.test(sql)) throw new Error('D1 indisponível'); return db.prepare(sql).run(...(args as never[])); },
+    run: async () => { if (falha.sql?.test(sql)) throw new Error('D1 indisponível'); return db.prepare(sql).run(...(args as never[])); },
     all: async <T>() => ({ results: JSON.parse(JSON.stringify(db.prepare(sql).all(...(args as never[])))) as T[] }),
     first: async <T>() => {
-      if (failSql?.test(sql)) throw new Error('D1 indisponível');
+      if (falha.sql?.test(sql)) throw new Error('D1 indisponível');
       const r = db.prepare(sql).get(...(args as never[]));
       return (r ? JSON.parse(JSON.stringify(r)) : null) as T;
     },
@@ -102,13 +102,15 @@ async function jwt(email = GUI, agora = NOW) {
   return `${h}.${p}.${b64u(sig)}`;
 }
 
-type Mail = { url: string; body: Record<string, unknown>; auth: string | null };
+// disparoGravado: dispatched_at da última aprovação no momento do envio (r1: o disparo é gravado antes do email).
+type Mail = { url: string; body: Record<string, unknown>; auth: string | null; disparoGravado?: string };
 
 // #82: GitHub falso. Cada rota responde com um valor: número (status HTTP), 'erro' (rede caída), 'pendente' (sem
 // resposta até o prazo), 'corpo-pendente' (200 cujo corpo nunca termina), { status, body } (corpo cru) ou a lista
 // de PRs (pulls) e de execuções (runs do publicar.yml, ci das execuções do head do PR).
 type GhValor = number | 'erro' | 'pendente' | 'corpo-pendente' | { status: number; body: string };
-type GhOpts = { dispatch?: GhValor; pulls?: GhValor | unknown[]; runs?: GhValor | unknown[]; ci?: GhValor | unknown[] };
+// total: total_count da listagem (runs e ci), para simular uma página incompleta; sem ele, é o tamanho da lista.
+type GhOpts = { dispatch?: GhValor; pulls?: GhValor | unknown[]; runs?: GhValor | unknown[]; ci?: GhValor | unknown[]; total?: number };
 type GhCall = { method: string; path: string; query: Record<string, string>; body: unknown; auth: string | null; ua: string | null;
   accept: string | null; version: string | null };
 const GH_BASE = '/repos/guifav/guifav.github.io';
@@ -122,7 +124,7 @@ function segurarAteAbortar(signal: AbortSignal) {
   signal.addEventListener('abort', () => clearTimeout(segura), { once: true });
 }
 
-function setup(opts: { mailStatus?: number; mailThrows?: boolean; failSql?: RegExp; notify?: boolean; site?: Record<string, string | number | 'erro' | 'pendente' | 'corpo-pendente' | 'gigante'>;
+function setup(opts: { mailStatus?: number; mailThrows?: boolean; mailPendente?: boolean; failSql?: RegExp; notify?: boolean; site?: Record<string, string | number | 'erro' | 'pendente' | 'corpo-pendente' | 'gigante'>;
   gh?: GhOpts; token?: string } = {}) {
   const ghOpts: GhOpts = { ...(opts.gh ?? {}) };
   const gh: GhCall[] = [];
@@ -137,8 +139,14 @@ function setup(opts: { mailStatus?: number; mailThrows?: boolean; failSql?: RegE
     const url = String(input instanceof Request ? input.url : input);
     if (url === `https://${TEAM}/cdn-cgi/access/certs`) return Response.json({ keys: [jwk] });
     if (url === 'https://api.resend.com/emails') {
+      const ultima = db.raw.prepare('SELECT dispatched_at FROM draft_approvals ORDER BY id DESC LIMIT 1').get() as { dispatched_at: string } | undefined;
       if (opts.mailThrows) throw new TypeError('network');
-      mails.push({ url, body: JSON.parse(String(init?.body)), auth: new Headers(init?.headers).get('authorization') });
+      if (opts.mailPendente) {
+        assert.ok(init?.signal, 'aviso por email com prazo');
+        segurarAteAbortar(init!.signal!);
+        return new Promise<Response>((_, rej) => init!.signal!.addEventListener('abort', () => rej(new DOMException('prazo', 'TimeoutError'))));
+      }
+      mails.push({ url, body: JSON.parse(String(init?.body)), auth: new Headers(init?.headers).get('authorization'), disparoGravado: ultima?.dispatched_at });
       return Response.json({ id: 'e1' }, { status: opts.mailStatus ?? 200 });
     }
     if (url.startsWith('https://api.github.com/')) {
@@ -171,7 +179,7 @@ function setup(opts: { mailStatus?: number; mailThrows?: boolean; failSql?: RegE
         }), { status: 200 });
       }
       if (typeof v === 'number') return v === 204 ? new Response(null, { status: 204 }) : Response.json({ message: 'falhou' }, { status: v });
-      if (Array.isArray(v)) return Response.json(lista ? { total_count: v.length, workflow_runs: v } : v);
+      if (Array.isArray(v)) return Response.json(lista ? { total_count: ghOpts.total ?? v.length, workflow_runs: v } : v);
       return new Response(v.body, { status: v.status });
     }
     const post = url.match(/^https:\/\/guifav\.dev\/blog\/([^/]+)\/$/);
@@ -217,14 +225,16 @@ function setup(opts: { mailStatus?: number; mailThrows?: boolean; failSql?: RegE
     other.push(url);
     return Response.json({ message: 'rota inesperada' }, { status: 500 });
   };
-  const db = d1(opts.failSql);
+  // r1 (Kimi P2): a falha do D1 pode ser ligada no meio do teste, para atingir só o "Disparar de novo".
+  const falha: { sql?: RegExp } = { sql: opts.failSql };
+  const db = d1(falha);
   const bucket = r2();
   const env: Env = { DB: db, RESEND_API_KEY: 're_test', SEGMENT_ID: 's', TOPIC_ID: 't', ACCESS_TEAM_DOMAIN: TEAM, ACCESS_AUD: AUD,
     ALLOWED_EMAILS: GUI, SITE_ORIGIN: ORIGIN, DRAFTS: bucket,
     DRAFT_NOTIFY_FROM: opts.notify === false ? '' : 'Painel <painel@guifav.dev>', DRAFT_NOTIFY_TO: opts.notify === false ? '' : 'roger@exemplo.com',
     GITHUB_DISPATCH_TOKEN: opts.token ?? 'gh-teste' };
   const deps: Deps = { fetch: fetchFn as typeof fetch, now: () => relogio.t, sleep: async () => {}, origin: async () => new Response('pages'),
-    siteTimeoutMs: 50, githubTimeoutMs: 50 };
+    siteTimeoutMs: 50, githubTimeoutMs: 50, mailTimeoutMs: 50 };
   const req = async (path: string, init: { method?: string; body?: string; headers?: Record<string, string>; token?: string | null } = {}) => {
     resetCertsCache();
     const h: Record<string, string> = { ...(init.headers ?? {}) };
@@ -236,7 +246,7 @@ function setup(opts: { mailStatus?: number; mailThrows?: boolean; failSql?: RegE
       headers: { origin: ORIGIN, 'content-type': 'application/x-www-form-urlencoded', ...headers } });
   const rows = () => JSON.parse(JSON.stringify(db.raw.prepare('SELECT * FROM draft_approvals ORDER BY id').all())) as Record<string, string>[];
   const avancar = (min: number) => { relogio.t += min * 60000; };
-  return { env, deps, db, bucket, mails, other, site, corpo, req, approve, rows, gh, ghOpts, avancar };
+  return { env, deps, db, bucket, mails, other, site, corpo, req, approve, rows, gh, ghOpts, avancar, falha };
 }
 
 // ------------------------------------------------------------------ R1: acesso
@@ -807,7 +817,8 @@ const linhaDe = (body: string, slug: string) => body.split('<tr').find((r) => r.
 const disparos = (s: ReturnType<typeof setup>) => s.gh.filter((c) => c.method === 'POST');
 const leituras = (s: ReturnType<typeof setup>) => s.gh.filter((c) => c.method === 'GET');
 const pr = (n: number, state: 'open' | 'closed', merged_at: string | null, ref: string, sha = 'b'.repeat(40)) => ({ number: n, state, merged_at, head: { ref, sha } });
-const exec = (id: number, display_title: string, status: string, conclusion: string | null = null) => ({ id, display_title, status, conclusion });
+const exec = (id: number, display_title: string, status: string, conclusion: string | null = null, workflow_id?: number) =>
+  ({ id, display_title, status, conclusion, ...(workflow_id ? { workflow_id } : {}) });
 
 test('R10: aprovar dispara o publicar.yml na main com slug e versão, grava o disparo e o email avisa que a publicação foi disparada', async () => {
   const s = setup();
@@ -1005,6 +1016,18 @@ test('R10: estados da publicação, calculados do D1 e do GitHub, com no máximo
       esperado: new RegExp(`^PR aberto ${prLink}, CI rodando$`), botao: false, leituras: 2 },
     'PR aberto, CI ainda não começou': { gh: { pulls: [pr(12, 'open', null, ramo)] }, esperado: new RegExp(`^PR aberto ${prLink}, CI pendente$`), botao: false, leituras: 2 },
     'PR aberto, CI indisponível': { gh: { pulls: [pr(12, 'open', null, ramo)], ci: 502 }, esperado: new RegExp(`^PR aberto ${prLink}, CI indisponível$`), botao: false, leituras: 2 },
+    'PR aberto, CI verde depois de uma falha substituída no mesmo workflow (r1, Astra P2)': { gh: { pulls: [pr(12, 'open', null, ramo)],
+      ci: [exec(9, 'Pages', 'completed', 'success', 100), exec(3, 'Pages', 'completed', 'failure', 100), exec(4, 'Outro', 'completed', 'success', 200)] },
+      esperado: new RegExp(`^PR aberto ${prLink}, CI verde$`), botao: false, leituras: 2 },
+    'PR aberto, CI vermelha quando a execução mais nova do workflow falhou': { gh: { pulls: [pr(12, 'open', null, ramo)],
+      ci: [exec(3, 'Pages', 'completed', 'success', 100), exec(9, 'Pages', 'completed', 'failure', 100)] },
+      esperado: new RegExp(`^PR aberto ${prLink}, CI vermelha$`), botao: false, leituras: 2 },
+    'PR aberto, página incompleta de execuções da CI (r1, Astra P2)': { gh: { pulls: [pr(12, 'open', null, ramo)], ci: [exec(1, 'Pages', 'completed', 'success')], total: 150 },
+      esperado: new RegExp(`^PR aberto ${prLink}, CI indisponível$`), botao: false, leituras: 2 },
+    'execução fora da primeira página (r1, Astra P2)': { min: 40, gh: { runs: [exec(5, 'Publica outro-post (00000000)', 'completed', 'success')], total: 150 },
+      esperado: /^estado indisponível$/, botao: false, leituras: 2 },
+    'execução achada na primeira página, mesmo com mais páginas': { min: 3, gh: { runs: [exec(77, RUN, 'in_progress')], total: 150 },
+      esperado: new RegExp(`^preparando o PR \\(disparado há 3 min\\): ${execLink}$`), botao: false, leituras: 2 },
     'PR aberto, CI responde lixo': { gh: { pulls: [pr(12, 'open', null, ramo)], ci: { status: 200, body: '{"total_count": 1}' } },
       esperado: new RegExp(`^PR aberto ${prLink}, CI indisponível$`), botao: false, leituras: 2 },
     'publicado: PR mergeado e post no ar': { gh: { pulls: [pr(12, 'closed', '2026-11-14T10:00:00Z', ramo)] }, site: { 'sales-coach': pagina('Coach') },
@@ -1049,7 +1072,8 @@ test('R10: as consultas usam o branch da versão, a janela do disparo e o head d
   assert.equal(pulls.query.state, 'all');
   assert.equal(runs.path, `${GH_BASE}/actions/workflows/publicar.yml/runs`);
   assert.equal(runs.query.event, 'workflow_dispatch');
-  assert.equal(runs.query.created, '>=2026-11-13T19:55:00Z', 'cinco minutos antes do disparo, contra relógio adiantado');
+  assert.equal(runs.query.created, '2026-11-13T19:55:00Z..2026-11-13T21:00:00Z', 'de cinco minutos antes do disparo até uma hora depois');
+  assert.equal(runs.query.per_page, '100');
   const t = setup({ gh: { pulls: [pr(12, 'open', null, `publica/sales-coach-${version.slice(0, 8)}`, 'c'.repeat(40))] } });
   await putDraft(t.bucket);
   await t.approve('sales-coach', { confirmar: 'sim', versao: version });
@@ -1057,6 +1081,7 @@ test('R10: as consultas usam o branch da versão, a janela do disparo e o head d
   await t.req('/admin/rascunhos');
   assert.equal(leituras(t)[1].path, `${GH_BASE}/actions/runs`);
   assert.equal(leituras(t)[1].query.head_sha, 'c'.repeat(40));
+  assert.equal(leituras(t)[1].query.per_page, '100');
 });
 
 test('R10: a execução certa é a do slug e da versão; slug vizinho, outra versão e PR de outro branch não contam', async () => {
@@ -1065,6 +1090,9 @@ test('R10: a execução certa é a do slug e da versão; slug vizinho, outra ver
   const v8 = version.slice(0, 8);
   s.ghOpts.pulls = [pr(30, 'open', null, 'publica/sales-coach-2-00000000'), pr(31, 'open', null, `publica/sales-${v8}`)];
   s.ghOpts.runs = [
+    // r1 (Kimi P2): o slug sales-coach-<v8>, de outra versão, não é sales-coach na versão <v8>.
+    exec(9, `Publica sales-coach-${v8} (deadbeef)`, 'completed', 'failure'),
+    exec(8, `publica/sales-coach-${v8}-deadbeef`, 'completed', 'failure'),
     exec(1, `Publica sales-coach-2 (${v8})`, 'completed', 'failure'),
     exec(2, `Publica sales (${v8})`, 'completed', 'failure'),
     exec(3, `Publica sales-coach (${v8}0)`, 'completed', 'failure'),
@@ -1139,4 +1167,54 @@ test('R10: sem o token, a lista não consulta o GitHub e diz por quê', async ()
   const linha = linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach');
   assert.match(linha, /estado indisponível \(painel sem o token do GitHub\)/);
   assert.deepEqual(s.gh, []);
+});
+
+test('R10 (r1, Kimi P2): o run-name casa por palavras inteiras, no formato do branch ou com slug e versão8 separados', () => {
+  const m = { slug: 'mcp', version: 'abcde123'.padEnd(64, '0') };
+  for (const t of ['Publica mcp (abcde123)', 'publica/mcp-abcde123', 'Publicar: mcp abcde123', 'abcde123 mcp']) assert.equal(execucaoDa(m, t), true, t);
+  for (const t of ['Publica mcp-abcde123 (deadbeef)', 'Publica mcp-aberto (abcde123)', 'Publica mcp (abcde1234)', 'Publica mcpx (abcde123)',
+    'publica/mcp-abcde123-deadbeef', 'publica/mcp-abcde12', 'Publica MCP (ABCDE123)', 'Publica mcp', '', null, 7]) {
+    assert.equal(execucaoDa(m, t), false, String(t));
+  }
+});
+
+test('R10 (r1, Astra e Kimi P2): email sem resposta não segura a aprovação nem apaga o registro do disparo', { timeout: 3000 }, async () => {
+  const s = setup({ mailPendente: true });
+  const { version } = await putDraft(s.bucket);
+  const r = await s.approve('sales-coach', { confirmar: 'sim', versao: version });
+  assert.equal(r.headers.get('location'), '/admin/rascunhos?msg=aprovado-sem-aviso');
+  const [row] = s.rows();
+  assert.deepEqual([row.dispatched_at, row.dispatch_error, row.notify_error], ['2026-11-13T20:00:00.000Z', '', 'tempo esgotado']);
+});
+
+test('R10 (r1, Astra e Kimi P2): o disparo fica gravado antes do email; falha ao gravar o aviso não apaga o disparo', async () => {
+  const s = setup({ failSql: /SET notified_at/ });
+  const { version } = await putDraft(s.bucket);
+  const r = await s.approve('sales-coach', { confirmar: 'sim', versao: version });
+  assert.equal(r.headers.get('location'), '/admin/rascunhos?msg=aprovado');
+  assert.deepEqual([s.rows()[0].dispatched_at, s.rows()[0].notified_at], ['2026-11-13T20:00:00.000Z', '']);
+  assert.equal(s.mails[0].disparoGravado, '2026-11-13T20:00:00.000Z', 'o disparo já estava gravado quando o email saiu');
+});
+
+test('R10 (r1, Kimi P2): falha do D1 ao gravar o disparo, na aprovação ou no "Disparar de novo", é avisada na tela', async () => {
+  const s = setup({ gh: { dispatch: 500 } });
+  const { version } = await putDraft(s.bucket);
+  await s.approve('sales-coach', { confirmar: 'sim', versao: version });
+  s.ghOpts.dispatch = 204;
+  s.falha.sql = /SET dispatched_at/;
+  const r = await disparar(s, 'sales-coach', { versao: version });
+  assert.equal(r.headers.get('location'), '/admin/rascunhos?msg=disparado&registro=falhou');
+  assert.equal(disparos(s).length, 2, 'o disparo foi feito');
+  assert.equal(s.rows()[0].dispatch_error, 'GitHub respondeu 500: falhou', 'o registro antigo ficou');
+  const list = await (await s.req('/admin/rascunhos?msg=disparado&registro=falhou')).text();
+  assert.match(list, /<p class="erro">O resultado do disparo não foi gravado no painel, então a linha do rascunho pode mostrar o estado anterior\./);
+  assert.doesNotMatch(await (await s.req('/admin/rascunhos?msg=disparado')).text(), /não foi gravado no painel/);
+  // Na aprovação: o disparo vai, o registro dele falha, o email sai e a tela avisa.
+  const t = setup({ failSql: /SET dispatched_at/ });
+  const v2 = (await putDraft(t.bucket)).version;
+  const a = await t.approve('sales-coach', { confirmar: 'sim', versao: v2 });
+  assert.equal(a.headers.get('location'), '/admin/rascunhos?msg=aprovado&registro=falhou');
+  assert.equal(disparos(t).length, 1);
+  assert.equal(t.mails.length, 1);
+  assert.equal(t.rows()[0].dispatched_at, '');
 });

@@ -44,6 +44,8 @@ export interface DraftDeps {
   siteTimeoutMs?: number;
   // #82: prazo de cada chamada à API do GitHub (resposta e corpo). Os testes encurtam; em produção, 5 s.
   githubTimeoutMs?: number;
+  // #82 (r1, Astra e Kimi P2): prazo do aviso por email ao Resend. Os testes encurtam; em produção, 5 s.
+  mailTimeoutMs?: number;
 }
 
 export interface Manifest {
@@ -331,9 +333,19 @@ async function githubGet(env: DraftEnv, deps: DraftDeps, path: string): Promise<
   }
 }
 
+/** O run-name é da execução desta versão? Ele é lido em palavras (letras, números, "-" e "/"): vale uma palavra igual a
+ * publica/<slug>-<versão8> (o nome do branch) ou duas palavras, uma igual ao slug e outra igual à versão8, como em
+ * "Publica <slug> (<versão8>)". Palavras inteiras, e não trechos: "mcp" não casa com "mcp-aberto", e o slug
+ * mcp-abcde123 com outra versão não passa por "mcp" na versão abcde123 (r1, Kimi P2). */
+export function execucaoDa(m: Pick<Manifest, 'slug' | 'version'>, displayTitle: unknown): boolean {
+  if (typeof displayTitle !== 'string') return false;
+  const palavras = new Set(displayTitle.split(/[^A-Za-z0-9/-]+/).filter(Boolean));
+  const v8 = m.version.slice(0, 8);
+  return palavras.has(publishBranch(m)) || (palavras.has(m.slug) && palavras.has(v8));
+}
+
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const isId = (v: unknown): v is number => Number.isSafeInteger(v) && (v as number) > 0;
-const escRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 function ha(desde: string, now: number): string {
   const min = Math.max(0, Math.floor((now - Date.parse(desde)) / 60000));
@@ -349,9 +361,21 @@ interface Publicacao {
 
 /** CI do head do PR: as execuções de Actions daquele commit (o publicar.yml dispara o pages.yml no branch). */
 async function ciDoPr(env: DraftEnv, deps: DraftDeps, sha: string): Promise<string> {
-  const r = await githubGet(env, deps, `/actions/runs?per_page=30&head_sha=${sha}`);
+  const r = await githubGet(env, deps, `/actions/runs?per_page=100&head_sha=${sha}`);
   if (!isObj(r) || !Array.isArray(r.workflow_runs)) return 'CI indisponível';
-  const runs = r.workflow_runs.filter(isObj);
+  // Página incompleta: sem todas as execuções, não dá para afirmar a cor (r1, Astra P2).
+  if (typeof r.total_count === 'number' && r.total_count > r.workflow_runs.length) return 'CI indisponível';
+  // Vale a execução mais recente de cada workflow: uma falha substituída por um novo disparo do mesmo workflow no
+  // mesmo commit não deixa a CI vermelha (r1, Astra P2). O id cresce a cada execução nova; a nova tentativa de uma
+  // execução mantém o id e a API devolve o estado da tentativa mais recente.
+  const vigente = new Map<string, Record<string, unknown>>();
+  for (const x of r.workflow_runs) {
+    if (!isObj(x) || !isId(x.id)) continue;
+    const wf = isId(x.workflow_id) ? `id:${x.workflow_id}` : `nome:${String(x.name ?? '')}`;
+    const atual = vigente.get(wf);
+    if (!atual || (x.id as number) > (atual.id as number)) vigente.set(wf, x);
+  }
+  const runs = [...vigente.values()];
   if (!runs.length) return 'CI pendente';
   if (runs.some((x) => x.status !== 'completed')) return 'CI rodando';
   return runs.every((x) => x.conclusion === 'success' || x.conclusion === 'skipped' || x.conclusion === 'neutral') ? 'CI verde' : 'CI vermelha';
@@ -384,15 +408,18 @@ async function publicacao(env: DraftEnv, deps: DraftDeps, m: Manifest, a: Approv
   if (!a.dispatched_at) return { html: 'publicação não disparada', redisparar: true };
   const desde = ha(a.dispatched_at, deps.now());
   const t = Date.parse(a.dispatched_at);
-  const created = Number.isFinite(t) ? `&created=${encodeURIComponent(`>=${new Date(t - 5 * 60000).toISOString().slice(0, 19)}Z`)}` : '';
-  const r = await githubGet(env, deps, `/actions/workflows/${PUBLISH_WORKFLOW}/runs?event=workflow_dispatch&per_page=30${created}`);
+  // Janela fechada em volta do disparo (5 min antes, contra relógio adiantado, até 1 h depois): a execução de um
+  // workflow_dispatch é criada na hora, então execuções de outros artigos depois disso não empurram a certa para
+  // fora da página (r1, Astra P2).
+  const iso = (ms: number) => `${new Date(ms).toISOString().slice(0, 19)}Z`;
+  const created = Number.isFinite(t) ? `&created=${encodeURIComponent(`${iso(t - 5 * 60000)}..${iso(t + 60 * 60000)}`)}` : '';
+  const r = await githubGet(env, deps, `/actions/workflows/${PUBLISH_WORKFLOW}/runs?event=workflow_dispatch&per_page=100${created}`);
   if (!isObj(r) || !Array.isArray(r.workflow_runs)) return { html: 'estado indisponível', redisparar: false };
-  // O run-name traz o slug e a versão8; o slug não pode ser só o começo de outro (mcp casaria com mcp-aberto).
-  const v8 = m.version.slice(0, 8);
-  const nome = new RegExp(`(?<![a-z0-9-])${escRe(m.slug)}(?:-${v8}(?![0-9a-z])|(?![a-z0-9-]))`);
-  const versao = new RegExp(`(?<![0-9a-f])${v8}(?![0-9a-f])`);
-  const run = r.workflow_runs.find((x): x is Record<string, unknown> =>
-    isObj(x) && isId(x.id) && typeof x.display_title === 'string' && nome.test(x.display_title) && versao.test(x.display_title));
+  const run = r.workflow_runs.find((x): x is Record<string, unknown> => isObj(x) && isId(x.id) && execucaoDa(m, x.display_title));
+  if (!run && typeof r.total_count === 'number' && r.total_count > r.workflow_runs.length) {
+    // Só a primeira página: sem a execução nela, não dá para afirmar que ela não existe.
+    return { html: 'estado indisponível', redisparar: false };
+  }
   if (!run) {
     return Date.parse(a.dispatched_at) > deps.now() - PARADO_MIN * 60000
       ? { html: `preparando o PR (disparado ${desde})`, redisparar: false }
@@ -406,7 +433,7 @@ async function publicacao(env: DraftEnv, deps: DraftDeps, m: Manifest, a: Approv
   return { html: `execução interrompida${como}: ${exec}`, redisparar: true };
 }
 
-async function listPage(env: DraftEnv, deps: DraftDeps, msg: Mensagem | undefined): Promise<Response> {
+async function listPage(env: DraftEnv, deps: DraftDeps, msg: Mensagem | undefined, registroFalhou: boolean): Promise<Response> {
   const prefixes: string[] = [];
   let cursor: string | undefined;
   do {
@@ -473,6 +500,7 @@ async function listPage(env: DraftEnv, deps: DraftDeps, msg: Mensagem | undefine
 <meta name="robots" content="noindex, nofollow"><title>Rascunhos | Insights</title><style>${PAGE_STYLE}</style></head><body>
 <p><a href="/admin">Assinantes</a> · Rascunhos</p><h1>Rascunhos do blog</h1>
 ${msg ? `<p class="${msg.erro ? 'erro' : 'ok'}">${esc(msg.texto)}</p>` : ''}
+${registroFalhou ? `<p class="erro">${esc(REGISTRO_FALHOU)}</p>` : ''}
 ${rows.length ? `<table><thead><tr><th>Título</th><th>Slug</th><th>Prévia enviada</th><th>Estado</th></tr></thead><tbody>${rows.join('')}</tbody></table>`
     : '<p>Nenhum rascunho no momento.</p>'}
 <p>Só você vê estas páginas. Os rascunhos não estão publicados: a aprovação dispara no GitHub a publicação da versão aprovada, que confere o conteúdo e abre o PR, e o estado dela aparece nesta lista. A linha "publicado no site" aparece só para manter os derivados de um artigo já publicado agrupados abaixo dele.</p>
@@ -540,6 +568,7 @@ async function notify(env: DraftEnv, deps: DraftDeps, m: Manifest, approval: { a
   try {
     const res = await deps.fetch('https://api.resend.com/emails', {
       method: 'POST',
+      signal: AbortSignal.timeout(deps.mailTimeoutMs ?? 5000),
       headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, 'content-type': 'application/json' },
       body: JSON.stringify({
         from: env.DRAFT_NOTIFY_FROM,
@@ -550,8 +579,8 @@ async function notify(env: DraftEnv, deps: DraftDeps, m: Manifest, approval: { a
       }),
     });
     return res.ok ? '' : `Resend respondeu ${res.status}`;
-  } catch {
-    return 'falha de rede';
+  } catch (e) {
+    return e instanceof Error && e.name === 'TimeoutError' ? 'tempo esgotado' : 'falha de rede';
   }
 }
 
@@ -565,8 +594,19 @@ async function formOf(req: Request, env: DraftEnv): Promise<URLSearchParams | Re
   return new URLSearchParams(raw);
 }
 
-const seeOther = (msg: string) => new Response(null, { status: 303, headers: { location: `/admin/rascunhos?msg=${msg}`,
-  ...headers('text/plain; charset=utf-8', ADMIN_CSP) } });
+const seeOther = (msg: string, registroFalhou = false) => new Response(null, { status: 303, headers: {
+  location: `/admin/rascunhos?msg=${msg}${registroFalhou ? '&registro=falhou' : ''}`, ...headers('text/plain; charset=utf-8', ADMIN_CSP) } });
+
+/** Grava o resultado do disparo na linha da aprovação; false se o D1 falhou (o painel avisa, em vez de calar). */
+async function gravaDisparo(env: DraftEnv, deps: DraftDeps, id: number, dispatchError: string): Promise<boolean> {
+  try {
+    await env.DB.prepare('UPDATE draft_approvals SET dispatched_at = ?, dispatch_error = ? WHERE id = ?')
+      .bind(dispatchError ? '' : new Date(deps.now()).toISOString(), dispatchError, id).run();
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 async function approve(req: Request, env: DraftEnv, deps: DraftDeps, slug: string, email: string): Promise<Response> {
   const form = await formOf(req, env);
@@ -593,16 +633,17 @@ async function approve(req: Request, env: DraftEnv, deps: DraftDeps, slug: strin
   }
   // Aprovação já gravada. O disparo (#82) e o aviso por email são melhor esforço, com o resultado na própria linha:
   // o motivo de um disparo falho aparece na lista na hora, com o botão "Disparar de novo".
+  // O resultado do disparo é gravado antes do email: um aviso lento ou falho não apaga o registro (r1, Astra e Kimi P2).
   const dispatchError = await dispatch(env, deps, m);
-  const dispatchedAt = dispatchError ? '' : new Date(deps.now()).toISOString();
+  const gravou = await gravaDisparo(env, deps, id, dispatchError);
   const err = await notify(env, deps, m, { at, by: email }, dispatchError);
   try {
-    await env.DB.prepare('UPDATE draft_approvals SET notified_at = ?, notify_error = ?, dispatched_at = ?, dispatch_error = ? WHERE id = ?')
-      .bind(err ? '' : new Date(deps.now()).toISOString(), err, dispatchedAt, dispatchError, id).run();
+    await env.DB.prepare('UPDATE draft_approvals SET notified_at = ?, notify_error = ? WHERE id = ?')
+      .bind(err ? '' : new Date(deps.now()).toISOString(), err, id).run();
   } catch {
-    // A aprovação continua valendo; só o registro do disparo e do aviso falhou (a lista mostra "publicação não disparada").
+    // A aprovação continua valendo; só o registro do aviso falhou.
   }
-  return seeOther(dispatchError ? (err ? 'aprovado-sem-disparo-nem-aviso' : 'aprovado-sem-disparo') : (err ? 'aprovado-sem-aviso' : 'aprovado'));
+  return seeOther(dispatchError ? (err ? 'aprovado-sem-disparo-nem-aviso' : 'aprovado-sem-disparo') : (err ? 'aprovado-sem-aviso' : 'aprovado'), !gravou);
 }
 
 /** "Disparar de novo" (#82): só para a versão atual, e só se ela está aprovada. O publicar.yml é idempotente, então
@@ -620,13 +661,9 @@ async function redispatch(req: Request, env: DraftEnv, deps: DraftDeps, slug: st
   const st = state(await approvals(env.DB, slug), m);
   if (!st.approved) return text(409, 'esta versão não está aprovada. Nada foi disparado.');
   const dispatchError = await dispatch(env, deps, m);
-  try {
-    await env.DB.prepare('UPDATE draft_approvals SET dispatched_at = ?, dispatch_error = ? WHERE id = ?')
-      .bind(dispatchError ? '' : new Date(deps.now()).toISOString(), dispatchError, st.approved.id).run();
-  } catch {
-    // O disparo já foi feito (ou falhou); só o registro faltou. Um PR aberto aparece na lista mesmo assim.
-  }
-  return seeOther(dispatchError ? 'disparo-falhou' : 'disparado');
+  // Registro falho não é calado (r1, Kimi P2): a mensagem avisa que a lista pode estar mostrando o estado anterior.
+  const gravou = await gravaDisparo(env, deps, st.approved.id, dispatchError);
+  return seeOther(dispatchError ? 'disparo-falhou' : 'disparado', !gravou);
 }
 
 interface Mensagem {
@@ -643,13 +680,16 @@ const MESSAGES: Record<string, Mensagem> = {
   'disparo-falhou': { texto: 'O disparo da publicação falhou de novo. O motivo está na linha do rascunho.', erro: true },
 };
 
+const REGISTRO_FALHOU = 'O resultado do disparo não foi gravado no painel, então a linha do rascunho pode mostrar o estado anterior. '
+  + 'Confira no GitHub; disparar de novo é seguro.';
+
 /** Rotas de /admin/rascunhos, já autenticadas pelo chamador. null = não é rota de rascunho. */
 export async function handleDrafts(req: Request, url: URL, env: DraftEnv, deps: DraftDeps, email: string): Promise<Response | null> {
   const path = url.pathname;
   if (path === '/admin/rascunhos' || path === '/admin/rascunhos/') {
     if (req.method !== 'GET') return text(405, 'método não permitido');
     const k = url.searchParams.get('msg') ?? '';
-    return listPage(env, deps, Object.hasOwn(MESSAGES, k) ? MESSAGES[k] : undefined);
+    return listPage(env, deps, Object.hasOwn(MESSAGES, k) ? MESSAGES[k] : undefined, url.searchParams.get('registro') === 'falhou');
   }
   const m = path.match(/^\/admin\/rascunhos\/([^/]+)(\/(.*))?$/);
   if (!m) return null;
