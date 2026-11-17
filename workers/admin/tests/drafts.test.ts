@@ -1493,7 +1493,8 @@ test('R10 (r6, Astra P2): reenviar o mesmo conteúdo renova o uploaded_at, mas a
 });
 
 // ------------------------------------------------------------------ #82, fatia 5: botão "Remover rascunho"
-const POST_HTML = '<!DOCTYPE html><html><head><title>Como construí o Sales Coach | Guilherme Favaron</title></head><body></body></html>';
+const POST_HTML = '<!DOCTYPE html><html><head><title>Como construí o Sales Coach | Guilherme Favaron</title>'
+  + '<link rel="canonical" href="https://guifav.dev/blog/sales-coach/"></head><body></body></html>';
 
 /** Artigo aprovado na versão vigente, com uma versão anterior e a fonte no bucket, mais um derivado e um rascunho cujo
  * slug começa igual ("sales-coach-2"), para provar que só o prefixo "sales-coach/" sai. */
@@ -1556,7 +1557,14 @@ test('R11: remover recusa sem as confirmações, e nada sai', async () => {
     ['sem confirmo', (c) => c.remover({ versao: c.d.version }), 400, /confirmo/],
     ['origem de fora', (c) => c.remover(undefined, undefined, { origin: 'https://exemplo.com' }), 403, /origem/],
     ['versão vista diferente', (c) => c.remover({ versao: SHA('9'), confirmar: 'sim' }), 409, /mudou/],
-    ['derivado', (c) => c.remover({ versao: c.d.version, confirmar: 'sim' }, 'sales-coach-short'), 400, /derivado/],
+    // r3 (Kimi P2): derivado com versão própria, aprovação, PR mergeado e post no ar; só a regra do derivado o segura.
+    ['derivado', async (c) => {
+      const der = (await readManifest(c.s.bucket, 'sales-coach-short'))!;
+      c.s.db.raw.prepare(`INSERT INTO draft_approvals (slug, title, html_sha256, source_sha256, approved_at, approved_by)
+        VALUES ('sales-coach-short', 't', ?, ?, '2026-11-13T19:10:00.000Z', ?)`).run(der.html_sha256, der.source_sha256, GUI);
+      (c.s.ghOpts.pulls as unknown[]).push(pr(14, 'closed', '2026-11-13T19:30:00Z', publishBranch(der)));
+      return c.remover({ versao: der.version, confirmar: 'sim' }, 'sales-coach-short');
+    }, 400, /derivado/],
     ['sem aprovação', async (c) => { c.s.db.raw.prepare('DELETE FROM draft_approvals').run(); return c.remover(); }, 409, /não está aprovada/],
     ['PR aberto', (c) => { c.s.ghOpts.pulls = [pr(12, 'open', null, c.ramo)]; return c.remover(); }, 409, /não está mergeado/],
     ['PR fechado sem merge', (c) => { c.s.ghOpts.pulls = [pr(12, 'closed', null, c.ramo)]; return c.remover(); }, 409, /não está mergeado/],
@@ -1572,13 +1580,31 @@ test('R11: remover recusa sem as confirmações, e nada sai', async () => {
     assert.equal(r.status, status, nome);
     assert.match(await r.text(), msg, nome);
     assert.equal(chavesDe(c.s, 'sales-coach').length, antes, nome);
+    assert.ok(chavesDe(c.s, 'sales-coach-short').length > 0, `${nome}: derivado intacto`);
     assert.equal(c.s.bucket.deletes.length, 0, nome);
   }
-  for (const site of [404, 301, 500, 'erro', 'pendente'] as const) {
+  // r3 (Astra P1): só a página do post de fato confirma; qualquer outro 200 não basta, nem para o botão aparecer.
+  const semCanonical = '<!DOCTYPE html><html><head><title>Como construí o Sales Coach</title></head><body></body></html>';
+  const outroCanonical = semCanonical.replace('</head>', '<link rel="canonical" href="https://guifav.dev/blog/outro/"></head>');
+  for (const site of [404, 301, 500, 'erro', 'pendente', semCanonical, outroCanonical, ''] as const) {
     const c = await cenarioPublicado({ site: { 'sales-coach': site } });
     const r = await c.remover();
-    assert.equal(r.status, 409, `site ${site}`);
-    assert.equal(c.s.bucket.deletes.length, 0, `site ${site}`);
+    assert.equal(r.status, 409, `site ${JSON.stringify(site).slice(0, 40)}`);
+    assert.equal(c.s.bucket.deletes.length, 0, `site ${JSON.stringify(site).slice(0, 40)}`);
+    assert.doesNotMatch(linhaDe(await (await c.s.req('/admin/rascunhos')).text(), 'sales-coach'), /Remover rascunho/);
+  }
+  // 200 com o mesmo texto da página, mas sem ser HTML (JSON, texto puro, sem content-type): não confirma.
+  for (const tipo of ['application/json', 'text/plain', null]) {
+    const c = await cenarioPublicado();
+    const fetchOriginal = c.s.deps.fetch;
+    c.s.deps.fetch = (async (i: string | URL | Request, init?: RequestInit) => {
+      if (!String(i).startsWith('https://guifav.dev/blog/')) return fetchOriginal(i, init);
+      const r = new Response(new TextEncoder().encode(POST_HTML), { status: 200 });
+      if (tipo) r.headers.set('content-type', tipo);
+      return r;
+    }) as typeof fetch;
+    assert.equal((await c.remover()).status, 409, `tipo ${tipo}`);
+    assert.equal(c.s.bucket.deletes.length, 0, `tipo ${tipo}`);
   }
   const t = await cenarioPublicado({ token: '' });
   assert.equal((await t.remover()).status, 503, 'sem token');
@@ -1628,8 +1654,9 @@ test('R11: rascunho com mais objetos que uma página sai inteiro; mais de 1000 s
     s.bucket.pagina = 3;
     s.deps.remocaoMaxPaginas = 2;
     const antes = chavesDe(s, 'sales-coach').length;
-    assert.equal(destino(await remover()), '/admin/rascunhos?msg=remocao-falhou');
+    assert.equal(destino(await remover()), '/admin/rascunhos?msg=remocao-grande', 'r3 (Astra P2): limite não é falha no meio');
     assert.equal(chavesDe(s, 'sales-coach').length, antes, 'nada sai');
+    assert.match(await (await s.req('/admin/rascunhos?msg=remocao-grande')).text(), /Nada foi removido, e repetir não resolve/);
   }
 });
 

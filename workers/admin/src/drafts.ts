@@ -228,6 +228,9 @@ interface Publicado {
   slug: string;
   title: string;
   url: string;
+  // #82, fatia 5 (r3, Astra P1): a resposta é a página do post de fato, HTML com o canonical exato desta URL. Só isso
+  // autoriza o botão "Remover rascunho"; qualquer 200 (um JSON de erro, um corpo vazio) não basta.
+  confirmado: boolean;
 }
 
 /** Até `limite` bytes do corpo, lidos aos poucos; o resto é cancelado sem ser baixado (r1, Astra e Kimi P2). */
@@ -274,7 +277,8 @@ async function publicado(env: DraftEnv, deps: DraftDeps, slug: string): Promise<
     const head = await inicioDoCorpo(res, 65536);
     const m = head.match(/<title>([^<]{1,300})<\/title>/i);
     const title = m ? m[1].replace(/&(amp|lt|gt|quot|#39|#x27);/g, (e) => ENTIDADES[e]).replace(/\s*\|\s*Guilherme Favaron\s*$/, '').trim() : '';
-    return { slug, title: title || slug, url };
+    const html = (res.headers.get('content-type') ?? '').toLowerCase().startsWith('text/html');
+    return { slug, title: title || slug, url, confirmado: html && head.includes(`<link rel="canonical" href="${url}">`) };
   } catch {
     return null;
   }
@@ -454,7 +458,7 @@ async function publicacao(env: DraftEnv, deps: DraftDeps, m: Manifest, a: Approv
     const link = `<a href="${GITHUB_WEB}/pull/${n}">#${n}</a>`;
     if (mergeado(pr)) {
       const post = await publicado(env, deps, m.slug);
-      if (post) return { html: `publicado em ${esc((pr.merged_at as string).slice(0, 10))}: <a href="${esc(post.url)}">ver o post</a>`, redisparar: false, remover: true };
+      if (post) return { html: `publicado em ${esc((pr.merged_at as string).slice(0, 10))}: <a href="${esc(post.url)}">ver o post</a>`, redisparar: false, remover: post.confirmado };
       return { html: `PR ${link} mergeado, aguardando o deploy do site`, redisparar: false };
     }
     if (pr.state !== 'open') return { html: `PR ${link} fechado sem merge`, redisparar: false };
@@ -514,6 +518,7 @@ function estadoDaExecucao(run: Record<string, unknown>, desdeD1: string, now: nu
 
 // #82, fatia 5: até 20 páginas (20.000 objetos) por rascunho; histórico maior que isso fica inteiro, para remover à mão.
 export const REMOCAO_MAX_PAGINAS = 20;
+class HistoricoGrande extends Error {}
 
 /** Prefixos <slug>/ do bucket, no máximo MAX_DRAFTS, como a lista os enxerga. */
 async function slugsDoBucket(env: DraftEnv): Promise<string[]> {
@@ -546,8 +551,8 @@ async function apagarRascunho(bucket: R2Like, m: Manifest, maxPaginas: number): 
   let cursor: string | undefined;
   let paginas = 0;
   do {
-    // Histórico grande demais fica inteiro: nada foi apagado ainda.
-    if (++paginas > maxPaginas) throw new Error(`o rascunho tem mais de ${maxPaginas * 1000} objetos; nada foi removido`);
+    // Histórico grande demais fica inteiro: nada foi apagado ainda, e repetir não resolve (r3, Astra P2).
+    if (++paginas > maxPaginas) throw new HistoricoGrande(`o rascunho tem mais de ${maxPaginas * 1000} objetos; nada foi removido`);
     const page = await bucket.list({ prefix: `${slug}/`, cursor, limit: 1000 });
     objs.push(...page.objects);
     cursor = page.truncated ? page.cursor : undefined;
@@ -830,12 +835,14 @@ async function removerRascunho(req: Request, env: DraftEnv, deps: DraftDeps, slu
   const pr = await prDaVersao(env, deps, m);
   if (pr === undefined) return text(503, 'o GitHub não respondeu. Nada foi removido; tente de novo.');
   if (!pr || !mergeado(pr)) return text(409, 'o PR desta versão não está mergeado. Nada foi removido.');
-  if (!(await publicado(env, deps, slug))) return text(409, 'o post ainda não responde no site. Nada foi removido.');
+  if (!(await publicado(env, deps, slug))?.confirmado) {
+    return text(409, 'o post não foi confirmado no site (página do post com o endereço dele). Nada foi removido.');
+  }
   try {
     return seeOther((await apagarRascunho(env.DRAFTS, m, deps.remocaoMaxPaginas ?? REMOCAO_MAX_PAGINAS)) ? 'removido' : 'remocao-mudou', false);
   } catch (e) {
     console.log(`remover ${slug}: ${e instanceof Error ? e.message : String(e)}`);
-    return seeOther('remocao-falhou', false);
+    return seeOther(e instanceof HistoricoGrande ? 'remocao-grande' : 'remocao-falhou', false);
   }
 }
 
@@ -853,6 +860,7 @@ const MESSAGES: Record<string, Mensagem> = {
   'disparo-falhou': { texto: 'O disparo da publicação falhou de novo. O motivo está na linha do rascunho.', erro: true },
   removido: { texto: 'Rascunho removido do R2. Os derivados continuam abaixo da linha "publicado no site".', erro: false },
   'remocao-mudou': { texto: 'Um envio novo chegou durante a remoção, e o rascunho novo ficou. Confira a lista.', erro: true },
+  'remocao-grande': { texto: 'O rascunho tem mais de 20.000 objetos e passa do que o painel remove de uma vez. Nada foi removido, e repetir não resolve: a remoção precisa ser feita à mão no R2.', erro: true },
   'remocao-falhou': { texto: 'A remoção parou no meio. O rascunho continua na lista, com "prévia incompleta"; use "Remover rascunho" de novo.', erro: true },
 };
 
