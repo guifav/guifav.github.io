@@ -308,6 +308,33 @@ class SourceTest(unittest.TestCase):
             self.assertEqual(D.fonte_sha256(o / "fonte", SLUG), D.source_sha256(self.md, self.imgs))
             self.assertIn("fonte", json.loads((o / "manifest.json").read_text(encoding="utf-8")))
 
+    def test_dry_run_refuses_an_output_folder_that_already_has_files(self):
+        # r1 (Astra P3): repetir a simulação no mesmo --out, depois de tirar uma imagem, deixava a imagem antiga em
+        # fonte/, e a pasta deixava de reproduzir o source_sha256 do manifesto. Agora a segunda simulação é recusada
+        # antes do build, sem tocar no que já está lá.
+        argv = lambda out: ["enviar", str(self.md), "--imagens", str(self.imgs), "--dry-run", "--out", out]  # noqa: E731
+        with tempfile.TemporaryDirectory() as t, \
+                mock.patch.object(D, "collect", return_value=D.Preview(SLUG, "x", b"<html>", {})), \
+                contextlib.redirect_stdout(io.StringIO()):
+            out = str(Path(t) / "out")
+            with mock.patch.object(D, "build", return_value=self.root):
+                self.assertEqual(D.main(argv(out)), 0)
+            (self.imgs / "a-728.webp").unlink()
+            antes = sorted(p.relative_to(out).as_posix() for p in Path(out).rglob("*"))
+            err = io.StringIO()
+            with mock.patch.object(D, "build", side_effect=AssertionError("não chega ao build")), contextlib.redirect_stderr(err):
+                self.assertEqual(D.main(argv(out)), 2)
+            self.assertIn("precisa estar vazia", err.getvalue())
+            self.assertEqual(sorted(p.relative_to(out).as_posix() for p in Path(out).rglob("*")), antes)
+            # Um arquivo no lugar da pasta também é recusado; pasta vazia ou inexistente segue valendo.
+            (Path(t) / "arquivo").write_text("x")
+            vazia = Path(t) / "vazia"
+            vazia.mkdir()
+            with mock.patch.object(D, "build", return_value=self.root), contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(D.main(argv(str(Path(t) / "arquivo"))), 2)
+                self.assertEqual(D.main(argv(str(vazia))), 0)
+                self.assertEqual(D.fonte_sha256(vazia / "fonte", SLUG), D.source_sha256(self.md, self.imgs))
+
     def test_derivado_cli(self):
         # #77: --derivado <rótulo> anda com --artigo, não anda com --linkedin, e o rótulo segue a regra do Worker.
         with tempfile.TemporaryDirectory() as t:

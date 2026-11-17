@@ -30,6 +30,9 @@ envio confere isso antes de mandar o primeiro objeto. Derivados (--linkedin, --d
 regra. Manifestos de antes do #82, sem "fonte", continuam válidos. O "remover" apaga o manifesto, a prévia e a fonte
 da versão atual, nessa ordem, e confere toda chave antes do primeiro delete.
 
+A simulação (--dry-run --out DIR) grava em DIR o que seria enviado, com a fonte em DIR/fonte/; DIR precisa estar vazia
+ou não existir.
+
 Credenciais: CLOUDFLARE_API_TOKEN e CLOUDFLARE_ACCOUNT_ID no ambiente (env da KVM), usadas pelo wrangler.
 """
 from __future__ import annotations
@@ -371,6 +374,10 @@ def cmd_enviar(a: argparse.Namespace) -> int:
     if REPO in md.parents:
         raise DraftError("o rascunho fica fora do repo até a aprovação; mova o arquivo para fora de " + str(REPO))
     slug = slug_of(md)
+    # Saída da simulação só em pasta vazia: um arquivo de simulação anterior ficaria misturado com esta, e a fonte/
+    # dela deixaria de reproduzir o source_sha256 do manifesto (r1, Astra P3). Conferido antes do build.
+    if a.dry_run and a.out and Path(a.out).exists() and (not Path(a.out).is_dir() or any(Path(a.out).iterdir())):
+        raise DraftError(f"a pasta de saída da simulação precisa estar vazia ou não existir: {a.out}")
     with tempfile.TemporaryDirectory(prefix=f"rascunho-{slug}-") as tmp:
         work = Path(tmp)
         # A fonte é lida uma vez, para a cópia no formato de fonte/ (#82): o título, o build, o source_sha256 e os
