@@ -446,6 +446,21 @@ class PublicarWorkflowBehaviorTest(unittest.TestCase):
         self.assertIn("tem mais de um PR aberto", resumo)
         self.assertEqual(self.chamadas("pr", "create") + self.chamadas("workflow", "run"), [])
 
+    def test_pagina_cheia_de_prs_e_ambigua(self):
+        # Com 100 PRs ou mais do branch, a página pode esconder o aberto: recusa. Com 99 fechados, nada a fazer (r5, Astra P4).
+        fechados = [{"number": 300 + i, "head": self.branch, "state": "CLOSED", "url": f"https://github.com/guifav/guifav.github.io/pull/{300 + i}"}
+                    for i in range(100)]
+        self.limpar_chamadas(prs=fechados)
+        ok, resumo = self.rodar()
+        self.assertFalse(ok)
+        self.assertIn("PRs demais para conferir", resumo)
+        self.assertEqual(self.chamadas("pr", "create") + self.chamadas("workflow", "run"), [])
+        self.limpar_chamadas(prs=fechados[:99])
+        ok, resumo = self.rodar()
+        self.assertTrue(ok, f"{resumo}\nlog dos passos: {self.log}")
+        self.assertIn("(CLOSED). Nada a publicar de novo.", resumo)
+        self.assertEqual(self.chamadas("pr", "create") + self.chamadas("workflow", "run"), [])
+
     def test_pr_aberto_sem_aprovacao_valida_e_recusado(self):
         # A conferência do PR aberto passa pelo D1: sem a aprovação, o disparo de novo falha em vez de dar verde.
         self.assertTrue(self.rodar()[0])

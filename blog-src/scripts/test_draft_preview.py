@@ -658,7 +658,9 @@ class PublicarTest(unittest.TestCase):
     def test_recusa_derivado(self):
         for name, extra in (("linkedin", {"kind": "linkedin", "parent": "artigo"}),
                             ("derivado", {"kind": "derivado", "parent": "artigo", "rotulo": "Roteiro"}),
-                            ("parent sem kind", {"parent": "artigo"})):
+                            ("parent sem kind", {"parent": "artigo"}),
+                            # kind sozinho também recusa, sem depender de parent (r5, Astra P4).
+                            ("kind sem parent", {"kind": "linkedin"})):
             man = {**self.man, **extra}
             with self.subTest(name=name):
                 self.recusa(Nuvem([self.row], self.objetos(man)), "derivado")
