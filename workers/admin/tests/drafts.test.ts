@@ -160,7 +160,19 @@ function setup(opts: { mailStatus?: number; mailThrows?: boolean; mailPendente?:
       let lista = false;
       if (method === 'POST' && u.pathname === `${GH_BASE}/actions/workflows/publicar.yml/dispatches`) v = ghOpts.dispatch ?? 204;
       else if (method === 'GET' && u.pathname === `${GH_BASE}/pulls`) v = ghOpts.pulls ?? [];
-      else if (method === 'GET' && u.pathname === `${GH_BASE}/actions/workflows/publicar.yml/runs`) [v, lista] = [ghOpts.runs ?? [], true];
+      else if (method === 'GET' && u.pathname === `${GH_BASE}/actions/workflows/publicar.yml/runs`) {
+        // O filtro created do GitHub (>=X ou X..Y), aplicado às execuções com created_at (r2: a janela precisa valer no falso).
+        v = ghOpts.runs ?? [];
+        const c = u.searchParams.get('created');
+        if (Array.isArray(v) && c) {
+          const [de, ate] = c.startsWith('>=') ? [c.slice(2), ''] : c.split('..');
+          v = v.filter((x) => {
+            const t = (x as { created_at?: string }).created_at;
+            return !t || (Date.parse(t) >= Date.parse(de) && (!ate || Date.parse(t) <= Date.parse(ate)));
+          });
+        }
+        lista = true;
+      }
       else if (method === 'GET' && u.pathname === `${GH_BASE}/actions/runs`) [v, lista] = [ghOpts.ci ?? [], true];
       else {
         other.push(url);
@@ -1044,6 +1056,14 @@ test('R10: estados da publicação, calculados do D1 e do GitHub, com no máximo
     'PR aberto, CI verde depois de uma falha substituída no mesmo workflow (r1, Astra P2)': { gh: { pulls: [pr(12, 'open', null, ramo)],
       ci: [exec(9, 'Pages', 'completed', 'success', 100), exec(3, 'Pages', 'completed', 'failure', 100), exec(4, 'Outro', 'completed', 'success', 200)] },
       esperado: new RegExp(`^PR aberto ${prLink}, CI verde$`), botao: false, leituras: 2 },
+    'PR aberto, reexecução de uma execução antiga, rodando (r2, Astra P2)': { gh: { pulls: [pr(12, 'open', null, ramo)],
+      ci: [{ ...exec(20, 'Pages', 'completed', 'success', 100), run_started_at: '2026-11-13T20:10:00Z' },
+        { ...exec(10, 'Pages', 'in_progress', null, 100), run_started_at: '2026-11-13T20:30:00Z' }] },
+      esperado: new RegExp(`^PR aberto ${prLink}, CI rodando$`), botao: false, leituras: 2 },
+    'PR aberto, reexecução de uma execução antiga que falhou': { gh: { pulls: [pr(12, 'open', null, ramo)],
+      ci: [{ ...exec(20, 'Pages', 'completed', 'success', 100), run_started_at: '2026-11-13T20:10:00Z' },
+        { ...exec(10, 'Pages', 'completed', 'failure', 100), run_started_at: '2026-11-13T20:30:00Z' }] },
+      esperado: new RegExp(`^PR aberto ${prLink}, CI vermelha$`), botao: false, leituras: 2 },
     'PR aberto, CI vermelha quando a execução mais nova do workflow falhou': { gh: { pulls: [pr(12, 'open', null, ramo)],
       ci: [exec(3, 'Pages', 'completed', 'success', 100), exec(9, 'Pages', 'completed', 'failure', 100)] },
       esperado: new RegExp(`^PR aberto ${prLink}, CI vermelha$`), botao: false, leituras: 2 },
@@ -1097,7 +1117,7 @@ test('R10: as consultas usam o branch da versão, a janela do disparo e o head d
   assert.equal(pulls.query.state, 'all');
   assert.equal(runs.path, `${GH_BASE}/actions/workflows/publicar.yml/runs`);
   assert.equal(runs.query.event, 'workflow_dispatch');
-  assert.equal(runs.query.created, '2026-11-13T19:55:00Z..2026-11-13T21:00:00Z', 'de cinco minutos antes do disparo até uma hora depois');
+  assert.equal(runs.query.created, '>=2026-11-13T19:55:00Z', 'de cinco minutos antes do disparo em diante (r2: disparo manual posterior)');
   assert.equal(runs.query.per_page, '100');
   const t = setup({ gh: { pulls: [pr(12, 'open', null, `publica/sales-coach-${version.slice(0, 8)}`, 'c'.repeat(40))] } });
   await putDraft(t.bucket);
@@ -1135,7 +1155,7 @@ test('R10: a execução certa é a do slug e da versão inteira; slug vizinho, o
   assert.doesNotMatch(linha, /#3[01]/);
 });
 
-test('R10: aprovação sem disparo registrado (anterior a esta fatia) mostra "publicação não disparada" com o botão e uma leitura só', async () => {
+test('R10: aprovação sem disparo registrado (anterior a esta fatia) mostra "publicação não disparada" com o botão; disparo manual depois aparece', async () => {
   const s = setup();
   const d = await putDraft(s.bucket);
   s.db.raw.prepare(`INSERT INTO draft_approvals (slug, title, html_sha256, source_sha256, approved_at, approved_by)
@@ -1143,8 +1163,34 @@ test('R10: aprovação sem disparo registrado (anterior a esta fatia) mostra "pu
   const linha = linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach');
   assert.match(linha, /aprovado em 2026-11-12 10:00 UTC<br>publicação não disparada<form/);
   assert.match(linha, /Disparar de novo/);
-  assert.equal(leituras(s).length, 1);
+  assert.equal(leituras(s).length, 2, 'PR do branch e execuções desde a aprovação');
+  assert.equal(leituras(s)[1].query.created, '>=2026-11-12T09:55:00Z', 'sem disparo gravado, a janela começa na aprovação');
   assert.equal(disparos(s).length, 0, 'abrir a lista nunca dispara nada');
+  // Disparo manual (gh workflow run), que não passa pelo D1: a execução aparece com o link.
+  s.ghOpts.runs = [{ ...exec(41, `Publica sales-coach (${d.version})`, 'in_progress'), created_at: '2026-11-13T19:50:00Z' }];
+  const manual = linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach');
+  assert.match(manual, /preparando o PR \(disparado há 10 min\): <a href="https:\/\/github\.com\/guifav\/guifav\.github\.io\/actions\/runs\/41">/);
+  assert.doesNotMatch(manual, /Disparar de novo/);
+});
+
+test('R10 (r2, Astra P2): disparo manual horas depois do disparo gravado aparece, com o tempo contado da execução', async () => {
+  const s = setup();
+  const { version } = await putDraft(s.bucket);
+  await s.approve('sales-coach', { confirmar: 'sim', versao: version });
+  s.avancar(125);
+  // Execução do disparo da aprovação, recusada, e um disparo manual duas horas depois, rodando. A mais recente vale.
+  s.ghOpts.runs = [
+    { ...exec(52, `Publica sales-coach (${version})`, 'in_progress'), created_at: '2026-11-13T22:00:00Z' },
+    { ...exec(51, `Publica sales-coach (${version})`, 'completed', 'failure'), created_at: '2026-11-13T20:00:05Z' },
+    // Execução desta versão de antes da janela (aprovação anterior, por exemplo) não conta.
+    { ...exec(50, `Publica sales-coach (${version})`, 'completed', 'success'), created_at: '2026-11-13T19:00:00Z' },
+  ];
+  const linha = linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach');
+  assert.match(linha, /preparando o PR \(disparado há 5 min\): <a href="https:\/\/github\.com\/guifav\/guifav\.github\.io\/actions\/runs\/52">/);
+  s.ghOpts.runs = s.ghOpts.runs.slice(1);
+  assert.match(linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach'), /publicação recusada: <a href="[^"]*\/runs\/51">/);
+  s.ghOpts.runs = s.ghOpts.runs.slice(1);
+  assert.match(linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach'), /parado: nenhuma execução encontrada \(disparado há 2 h\)/);
 });
 
 test('R10: disparo com motivo gravado, mas o PR da versão existe (o GitHub aceitou depois do prazo): vale o PR', async () => {
