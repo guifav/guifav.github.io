@@ -692,6 +692,8 @@ class PublicarTest(unittest.TestCase):
         # Manifesto de antes do #82.
         sem = {k: v for k, v in self.man.items() if k != "fonte"}
         self.recusa(Nuvem([self.row], self.objetos(sem)), "não tem a fonte")
+        self.recusa(Nuvem([self.row], self.objetos({**self.man, "fonte": {}})), "não tem a fonte")
+        self.recusa(Nuvem([self.row], self.objetos({**self.man, "fonte": ["sales-coach.md"]})), "não tem a fonte")
         self.recusa(Nuvem([self.row], {f"{SLUG}/manifest.json": b"{nao e json"}), "ilegível")
         self.recusa(Nuvem([self.row], self.objetos({**self.man, "slug": "outro"})), "não é deste slug")
 
