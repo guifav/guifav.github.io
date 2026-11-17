@@ -23,9 +23,10 @@ O rascunho nunca entra no repo antes da aprovação. Na KVM:
 1. `python3 blog-src/scripts/draft_preview.py enviar <slug>.md --imagens <pasta>`: faz o build do blog numa cópia temporária com o rascunho e `DRAFT_PREVIEW=1` (sem GA4, sem Clarity, `noindex`), troca os caminhos dos arquivos do post para `/admin/rascunhos/<slug>/` e envia ao R2 a versão inteira em `<slug>/v/<versão>/` e, por último, o manifesto `<slug>/manifest.json`, que aponta para ela. A versão é o sha256 do HTML junto com o da fonte. Envio interrompido deixa o manifesto na versão anterior, inteira.
    A versão para a newsletter do LinkedIn vai com `--linkedin --artigo <slug-do-artigo>` (#73): o manifesto ganha `kind: "linkedin"` e `parent`, a prévia sai com uma barra "só leitura" e link para o artigo, sem formulário de aprovação.
    Qualquer outro artefato do mesmo artigo (roteiro de short, vídeo, carrossel) vai com `--derivado "<rótulo>" --artigo <slug-do-artigo>` (#77): o manifesto ganha `kind: "derivado"`, `parent` e `rotulo`, e o rótulo aparece na etiqueta da lista e na barra da prévia. Artefato novo não exige mudança de código. O rótulo tem de 1 a 40 caracteres, sem caractere de controle nem espaço nas pontas (a mesma regra no script e no Worker).
+   A fonte do rascunho (o Markdown e as imagens) vai junto, em `<slug>/v/<versão>/fonte/` (`<slug>.md` e `img/...`), e o manifesto ganha o campo `fonte`, com o caminho e o sha256 de cada arquivo (#82). O conteúdo de `fonte/` é exatamente o que gerou o `source_sha256` da versão, e o script confere isso antes de enviar. O Worker só serve o que está em `files`, então a fonte nunca sai pelo painel. Derivados levam a fonte pela mesma regra; manifestos antigos, sem `fonte`, continuam válidos.
 2. O Gui abre `guifav.dev/admin/rascunhos`, lê e aprova.
 3. `python3 blog-src/scripts/draft_preview.py status <slug>.md --imagens <pasta>` confirma no D1 que a fonte atual é a aprovada. Só então o Roger abre o PR de publicação, com o mesmo Markdown e as mesmas imagens.
-4. Depois do merge, `python3 blog-src/scripts/draft_preview.py remover <slug>` tira a prévia do R2.
+4. Depois do merge, `python3 blog-src/scripts/draft_preview.py remover <slug>` tira do R2 o manifesto, a prévia e a fonte da versão atual.
 
 ## Acesso
 
