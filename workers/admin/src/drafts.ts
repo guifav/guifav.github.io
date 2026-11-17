@@ -204,9 +204,11 @@ async function approvals(db: D1Like, slug: string): Promise<Approval[]> {
 
 /** Estado da versão atual: aprovada só se a aprovação é do mesmo HTML E da mesma fonte (r1: imagem trocada com o
  * mesmo HTML não herda a aprovação). */
-function state(list: Approval[], m: Manifest): { approved: Approval | null; stale: boolean } {
-  const approved = list.find((a) => a.html_sha256 === m.html_sha256 && a.source_sha256 === m.source_sha256) ?? null;
-  return { approved, stale: !approved && list.length > 0 };
+function state(list: Approval[], m: Manifest): { approved: Approval | null; stale: boolean; firstApprovedAt: string } {
+  const desta = list.filter((a) => a.html_sha256 === m.html_sha256 && a.source_sha256 === m.source_sha256);
+  // list vem do id mais novo ao mais velho: a primeira é a aprovação vigente, a última é a mais antiga desta versão (#82).
+  const approved = desta[0] ?? null;
+  return { approved, stale: !approved && list.length > 0, firstApprovedAt: desta.at(-1)?.approved_at ?? '' };
 }
 
 const PAGE_STYLE = `body{font:15px/1.45 system-ui,sans-serif;margin:1.5rem;color:#111}table{border-collapse:collapse;width:100%}
@@ -399,7 +401,7 @@ async function ciDoPr(env: DraftEnv, deps: DraftDeps, sha: string): Promise<stri
 
 /** Estado calculado na hora, do D1 e do GitHub: uma chamada (PR do branch da versão) e, no máximo, uma segunda (CI do
  * PR aberto ou execução do publicar.yml). PR mergeado consulta o site, como a linha "publicado no site" do #80. */
-async function publicacao(env: DraftEnv, deps: DraftDeps, m: Manifest, a: Approval): Promise<Publicacao> {
+async function publicacao(env: DraftEnv, deps: DraftDeps, m: Manifest, a: Approval, firstApprovedAt: string): Promise<Publicacao> {
   const falhou = { html: `disparo falhou (${esc(a.dispatch_error)})`, redisparar: true };
   if (!env.GITHUB_DISPATCH_TOKEN) return a.dispatch_error ? falhou : { html: 'estado indisponível (painel sem o token do GitHub)', redisparar: false };
   const branch = publishBranch(m);
@@ -421,16 +423,17 @@ async function publicacao(env: DraftEnv, deps: DraftDeps, m: Manifest, a: Approv
     const sha = isObj(pr.head) && typeof pr.head.sha === 'string' && /^[0-9a-f]{40}$/.test(pr.head.sha) ? pr.head.sha : '';
     return { html: `PR aberto ${link}, ${sha ? await ciDoPr(env, deps, sha) : 'CI indisponível'}`, redisparar: false };
   }
-  // Execuções do publicar.yml desde o envio desta versão ao R2 (uploaded_at do manifesto), 5 min antes contra relógio
-  // adiantado, e sem limite depois. Nenhuma execução desta versão existe antes dela, então nenhuma fica de fora: nem
-  // um disparo manual posterior (r2, Astra P2), nem uma execução antiga reexecutada depois de um novo disparo (r4) ou
-  // de uma segunda aprovação da mesma versão (r5), nem um disparo manual de antes da aprovação reexecutado depois
-  // (r5, Astra P2). Sem data válida no manifesto, a janela começa na aprovação. Vale a execução com a tentativa mais
-  // recente (r3, Astra P2). Sem todas as execuções da janela numa página, não dá para garantir qual é a vigente:
-  // "estado indisponível", ou o motivo gravado (r4, Astra P2).
+  // Execuções do publicar.yml desde o que vier primeiro entre o envio desta versão ao R2 (uploaded_at do manifesto) e a
+  // primeira aprovação dela, 5 min antes contra relógio adiantado, e sem limite depois. Assim nada da versão fica de
+  // fora: nem um disparo manual posterior (r2, Astra P2), nem uma execução antiga reexecutada depois de um novo
+  // disparo (r4), de uma segunda aprovação (r5) ou de um reenvio do mesmo conteúdo, que renova o uploaded_at sem mudar
+  // a versão (r6, Astra P2), nem um disparo manual de antes da aprovação reexecutado depois (r5). Limite conhecido,
+  // registrado no README: um disparo manual de antes da aprovação, seguido de um reenvio do mesmo conteúdo e de uma
+  // reexecução, fica fora da janela. Vale a execução com a tentativa mais recente (r3, Astra P2). Sem todas as
+  // execuções da janela numa página, não dá para garantir qual é a vigente: "estado indisponível", ou o motivo
+  // gravado (r4, Astra P2).
   const desdeD1 = a.dispatched_at || a.approved_at;
-  const envio = Date.parse(m.uploaded_at);
-  const t = Number.isFinite(envio) ? envio : Date.parse(a.approved_at);
+  const t = Math.min(...[m.uploaded_at, firstApprovedAt || a.approved_at].map((d) => Date.parse(d)).filter(Number.isFinite));
   const iso = (ms: number) => `${new Date(ms).toISOString().slice(0, 19)}Z`;
   const created = Number.isFinite(t) ? `&created=${encodeURIComponent(`>=${iso(t - 5 * 60000)}`)}` : '';
   const r = await githubGet(env, deps, `/actions/workflows/${PUBLISH_WORKFLOW}/runs?event=workflow_dispatch&per_page=100${created}`);
@@ -508,7 +511,7 @@ async function listPage(env: DraftEnv, deps: DraftDeps, msg: Mensagem | undefine
   const pubs = new Map<string, Publicacao>();
   await Promise.all(drafts.map(async (m) => {
     const a = states.get(m.slug)?.approved;
-    if (m.kind === 'blog' && a) pubs.set(m.slug, await publicacao(env, deps, m, a));
+    if (m.kind === 'blog' && a) pubs.set(m.slug, await publicacao(env, deps, m, a, states.get(m.slug)!.firstApprovedAt));
   }));
   const rows: string[] = [];
   for (const m of drafts) {

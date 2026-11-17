@@ -1168,7 +1168,7 @@ test('R10: aprovação sem disparo registrado (anterior a esta fatia) mostra "pu
   assert.match(linha, /aprovado em 2026-11-12 10:00 UTC<br>publicação não disparada<form/);
   assert.match(linha, /Disparar de novo/);
   assert.equal(leituras(s).length, 2, 'PR do branch e execuções desde a aprovação');
-  assert.equal(leituras(s)[1].query.created, '>=2026-11-13T18:55:00Z', 'a janela começa no envio da versão');
+  assert.equal(leituras(s)[1].query.created, '>=2026-11-12T09:55:00Z', 'a janela começa no que vier primeiro: aqui, a aprovação');
   assert.equal(disparos(s).length, 0, 'abrir a lista nunca dispara nada');
   // Disparo manual (gh workflow run), que não passa pelo D1: a execução aparece com o link.
   s.ghOpts.runs = [{ ...exec(41, `Publica sales-coach (${d.version})`, 'in_progress'), created_at: '2026-11-13T19:50:00Z' }];
@@ -1426,6 +1426,27 @@ test('R10 (r5, Astra P2): segunda aprovação da mesma versão e disparo manual 
 test('R10 (r5): manifesto sem data válida de envio: a janela começa na aprovação', async () => {
   const s = setup();
   const { version } = await putDraft(s.bucket, 'sales-coach', { manifest: { uploaded_at: 'ontem' } });
+  await s.approve('sales-coach', { confirmar: 'sim', versao: version });
+  s.gh.length = 0;
+  await s.req('/admin/rascunhos');
+  assert.equal(leituras(s)[1].query.created, '>=2026-11-13T19:55:00Z');
+});
+
+test('R10 (r6, Astra P2): reenviar o mesmo conteúdo renova o uploaded_at, mas a janela continua na primeira aprovação da versão', async () => {
+  const s = setup();
+  const { version } = await putDraft(s.bucket); // enviada às 19h
+  await s.approve('sales-coach', { confirmar: 'sim', versao: version }); // aprovada e disparada às 20h
+  s.avancar(20);
+  // Reenvio do mesmo HTML e da mesma fonte às 20h20: a versão não muda, o uploaded_at sim.
+  const again = await putDraft(s.bucket, 'sales-coach', { manifest: { uploaded_at: '2026-11-13T20:20:00.000Z' } });
+  assert.equal(again.version, version);
+  s.avancar(10);
+  s.ghOpts.runs = [{ ...exec(30, `Publica sales-coach (${version})`, 'in_progress'), created_at: '2026-11-13T20:00:02Z', run_started_at: '2026-11-13T20:29:00Z' }];
+  s.gh.length = 0;
+  assert.match(linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach'), /preparando o PR \(disparado há 1 min\): <a href="[^"]*\/runs\/30">/);
+  assert.equal(leituras(s)[1].query.created, '>=2026-11-13T19:55:00Z', 'a primeira aprovação (20h) vem antes do reenvio (20h20)');
+  // Com duas aprovações da versão, vale a mais antiga.
+  s.avancar(5);
   await s.approve('sales-coach', { confirmar: 'sim', versao: version });
   s.gh.length = 0;
   await s.req('/admin/rascunhos');
