@@ -4,13 +4,14 @@
 //   GET  /admin/rascunhos/<slug>/<arquivo>  imagens e vídeo do rascunho (só os do manifesto)
 //   POST /admin/rascunhos/<slug>/aprovar    grava a aprovação da versão exata que foi vista, dispara a publicação e avisa o Roger
 //   POST /admin/rascunhos/<slug>/disparar   dispara de novo a publicação da versão aprovada (#82)
+//   POST /admin/rascunhos/<slug>/remover    remove do R2 o rascunho do artigo já publicado (#82, fatia 5)
 // Cada envio é uma versão imutável em <slug>/v/<versão>/, e o manifesto <slug>/manifest.json (gravado por último)
 // aponta para ela. A versão é o sha256 do HTML junto com o da fonte (Markdown + imagens): a aprovação vale para
 // as duas coisas, e um envio interrompido nunca mistura o HTML de uma versão com a fonte de outra.
 // A prévia é gerada e enviada ao R2 privado pelo blog-src/scripts/draft_preview.py, na KVM. O rascunho nunca
 // entra no repo antes da aprovação. A aprovação dispara o workflow publicar.yml (#82), que baixa a fonte da versão,
 // confere o hash contra a aprovação no D1 e abre o PR de publicação; a lista lê o estado direto do GitHub. Depois do
-// merge, com o post no ar, o cron tira o rascunho do artigo do R2 (limparPublicados, fatia 5).
+// merge, com o post no ar, a lista mostra o botão "Remover rascunho", que tira o rascunho do artigo do R2 (fatia 5).
 import type { D1Like } from './sync.ts';
 
 export interface R2Body {
@@ -26,7 +27,7 @@ export interface R2Like {
     truncated: boolean;
     cursor?: string;
   }>;
-  // #82, fatia 5: o cron apaga o rascunho do artigo publicado (o binding do R2 aceita até 1000 chaves por chamada).
+  // #82, fatia 5: o botão "Remover rascunho" apaga o rascunho do artigo publicado (até 1000 chaves por chamada).
   delete(keys: string | string[]): Promise<void>;
 }
 
@@ -50,11 +51,9 @@ export interface DraftDeps {
   githubTimeoutMs?: number;
   // #82 (r1, Astra e Kimi P2): prazo do aviso por email ao Resend. Os testes encurtam; em produção, 5 s.
   mailTimeoutMs?: number;
-  // #82, fatia 5 (r1, Astra e Kimi P2): orçamento da remoção dos rascunhos publicados, numa execução do cron só dela.
-  // Os testes encurtam; em produção, LIMPEZA_MAX_MS, LIMPEZA_MAX_OPS e LIMPEZA_MAX_PAGINAS.
-  limpezaMaxMs?: number;
-  limpezaMaxOps?: number;
-  limpezaMaxPaginas?: number;
+  // #82, fatia 5: páginas de listagem que a remoção de um rascunho publicado aceita. Os testes encurtam; em produção,
+  // REMOCAO_MAX_PAGINAS.
+  remocaoMaxPaginas?: number;
 }
 
 export interface Manifest {
@@ -383,6 +382,8 @@ function ha(desde: string, now: number): string {
 interface Publicacao {
   html: string;
   redisparar: boolean;
+  // #82, fatia 5: PR da versão mergeado e post no ar; a lista mostra o botão "Remover rascunho".
+  remover?: boolean;
 }
 
 /** CI do head do PR: as execuções de Actions daquele commit (o publicar.yml dispara o pages.yml no branch). */
@@ -420,8 +421,8 @@ async function ciDoPr(env: DraftEnv, deps: DraftDeps, sha: string): Promise<stri
 }
 
 /** PR do branch da versão contra a main; null se não existe, undefined se o GitHub não respondeu uma lista. Só esse PR
- * conta: o mesmo branch retargetado para outra base não publica (r4, Kimi P3). Usado pelo estado na lista e pelo cron
- * que remove o rascunho publicado (fatia 5), para os dois decidirem pelo mesmo PR. */
+ * conta: o mesmo branch retargetado para outra base não publica (r4, Kimi P3). Usado pelo estado na lista e pela
+ * remoção do rascunho publicado (fatia 5), para os dois decidirem pelo mesmo PR. */
 async function prDaVersao(env: DraftEnv, deps: DraftDeps, m: Manifest): Promise<Record<string, unknown> | null | undefined> {
   const branch = publishBranch(m);
   const pulls = await githubGet(env, deps, `/pulls?state=all&per_page=5&base=main&head=${encodeURIComponent(`guifav:${branch}`)}`);
@@ -431,10 +432,13 @@ async function prDaVersao(env: DraftEnv, deps: DraftDeps, m: Manifest): Promise<
 }
 
 /** PR mergeado de fato: fechado e com merged_at numa data ISO válida. Resposta incoerente ou malformada do GitHub não
- * conta como merge, porque o cron apaga dados com base nisso (r1, Astra e Kimi P2). */
+ * conta como merge, porque a remoção do rascunho depende disso (r1, Astra e Kimi P2). */
 export function mergeado(pr: Record<string, unknown>): boolean {
-  return pr.state === 'closed' && typeof pr.merged_at === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(pr.merged_at)
-    && Number.isFinite(Date.parse(pr.merged_at));
+  if (pr.state !== 'closed' || typeof pr.merged_at !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(pr.merged_at)) return false;
+  // Data impossível (30 de fevereiro, por exemplo) o Date normaliza para outro dia: só vale se a volta der o mesmo texto
+  // (r2, Astra P2).
+  const t = Date.parse(pr.merged_at);
+  return Number.isFinite(t) && new Date(t).toISOString().replace('.000Z', 'Z') === pr.merged_at;
 }
 
 /** Estado calculado na hora, do D1 e do GitHub: uma chamada (PR do branch da versão) e, no máximo, uma segunda (CI do
@@ -450,7 +454,7 @@ async function publicacao(env: DraftEnv, deps: DraftDeps, m: Manifest, a: Approv
     const link = `<a href="${GITHUB_WEB}/pull/${n}">#${n}</a>`;
     if (mergeado(pr)) {
       const post = await publicado(env, deps, m.slug);
-      if (post) return { html: `publicado em ${esc((pr.merged_at as string).slice(0, 10))}: <a href="${esc(post.url)}">ver o post</a>`, redisparar: false };
+      if (post) return { html: `publicado em ${esc((pr.merged_at as string).slice(0, 10))}: <a href="${esc(post.url)}">ver o post</a>`, redisparar: false, remover: true };
       return { html: `PR ${link} mergeado, aguardando o deploy do site`, redisparar: false };
     }
     if (pr.state !== 'open') return { html: `PR ${link} fechado sem merge`, redisparar: false };
@@ -508,33 +512,8 @@ function estadoDaExecucao(run: Record<string, unknown>, desdeD1: string, now: nu
   return { html: `execução interrompida${como}: ${exec}`, redisparar: true };
 }
 
-// #82, fatia 5 (r1, Astra e Kimi P2): a remoção roda numa execução do cron só dela (index.ts), com orçamento próprio,
-// bem abaixo dos 15 min e dos 10.000 subrequests de uma execução.
-export const LIMPEZA_MAX_MS = 10 * 60 * 1000;
-export const LIMPEZA_MAX_OPS = 2000;
-export const LIMPEZA_MAX_PAGINAS = 20; // até 20.000 objetos por rascunho numa execução
-
-/** Prazo e contagem de chamadas (R2, D1, GitHub, site) de uma execução da remoção. gastar(n) reserva n chamadas e diz se
- * cabem dentro do prazo e do limite; gastar(0) só confere o prazo. */
-interface Orcamento {
-  gastar(n: number): boolean;
-  restante(): number;
-  maxPaginas: number;
-}
-function orcamento(deps: DraftDeps): Orcamento {
-  const ate = deps.now() + (deps.limpezaMaxMs ?? LIMPEZA_MAX_MS);
-  const max = deps.limpezaMaxOps ?? LIMPEZA_MAX_OPS;
-  let usadas = 0;
-  return {
-    gastar(n) {
-      if (deps.now() > ate || usadas + n > max) return false;
-      usadas += n;
-      return true;
-    },
-    restante: () => max - usadas,
-    maxPaginas: deps.limpezaMaxPaginas ?? LIMPEZA_MAX_PAGINAS,
-  };
-}
+// #82, fatia 5: até 20 páginas (20.000 objetos) por rascunho; histórico maior que isso fica inteiro, para remover à mão.
+export const REMOCAO_MAX_PAGINAS = 20;
 
 /** Prefixos <slug>/ do bucket, no máximo MAX_DRAFTS, como a lista os enxerga. */
 async function slugsDoBucket(env: DraftEnv): Promise<string[]> {
@@ -548,25 +527,27 @@ async function slugsDoBucket(env: DraftEnv): Promise<string[]> {
   return prefixes.slice(0, MAX_DRAFTS).map((p) => p.replace(/\/$/, ''));
 }
 
-/** Remove o rascunho publicado da versão `m` e devolve se removeu. Seguro contra um envio que aconteça durante o cron
- * (r1, Codex P1) e retomável se falhar no meio (r1, Codex P2):
+/** Remove o rascunho publicado da versão `m` e devolve se removeu. Reduz o risco de um envio que aconteça durante a
+ * remoção (r1, Codex P1) e é retomável se falhar no meio (r1, Codex P2):
  * - lista tudo em <slug>/ antes de apagar (apagar enquanto pagina pode pular objetos); o "/" do fim garante que o slug
  *   "x" não leva junto o "x-linkedin/";
  * - relê o manifesto antes de apagar qualquer coisa: se ele não aponta mais para `m.version`, chegou um envio novo e nada
  *   sai;
  * - apaga a pasta da versão aprovada e as pastas de outras versões só se todos os objetos delas foram gravados antes do
  *   manifesto vigente (relógio do R2 nos dois lados): um envio em andamento grava as versões depois dele e fica;
- * - o manifesto sai por último, e só se ainda aponta para `m.version`. Se algo falhar antes, ele continua, e o próximo
- *   cron tenta de novo. Fica uma janela entre a última releitura e a remoção do manifesto em que um envio novo pode
- *   perder o manifesto; os objetos dele ficam, e reenviar o recupera. Registrado no README. */
-async function apagarRascunho(bucket: R2Like, m: Manifest, orc: Orcamento): Promise<boolean> {
+ * - o manifesto sai por último, e só se ainda aponta para `m.version`. Se algo falhar antes, ele continua, a lista mostra
+ *   "prévia incompleta" e o botão tenta de novo.
+ * O R2 não tem remoção condicional, então um envio exatamente durante a remoção ainda pode perder arquivos (r2, Astra e
+ * Roger P1). Por isso a remoção é um botão, e não um cron: ela só acontece quando o Gui clica, e ele não reenvia o
+ * rascunho de um artigo já publicado ao mesmo tempo. Registrado no README. */
+async function apagarRascunho(bucket: R2Like, m: Manifest, maxPaginas: number): Promise<boolean> {
   const slug = m.slug;
   const objs: { key: string; uploaded?: Date }[] = [];
   let cursor: string | undefined;
   let paginas = 0;
   do {
-    // Rascunho com histórico grande demais para uma execução fica inteiro (nada foi apagado ainda) e vai para o log.
-    if (++paginas > orc.maxPaginas || !orc.gastar(1)) throw new Error(`listagem de ${slug} passou do orçamento`);
+    // Histórico grande demais fica inteiro: nada foi apagado ainda.
+    if (++paginas > maxPaginas) throw new Error(`o rascunho tem mais de ${maxPaginas * 1000} objetos; nada foi removido`);
     const page = await bucket.list({ prefix: `${slug}/`, cursor, limit: 1000 });
     objs.push(...page.objects);
     cursor = page.truncated ? page.cursor : undefined;
@@ -586,57 +567,25 @@ async function apagarRascunho(bucket: R2Like, m: Manifest, orc: Orcamento): Prom
     const antiga = limite !== undefined && v !== '' && lista.every((o) => o.uploaded !== undefined && o.uploaded.getTime() < limite);
     if (v === m.version || antiga) keys.push(...lista.map((o) => o.key));
   }
-  // Releitura, lotes, releitura e manifesto: se não cabem, nada sai nesta execução.
-  if (!orc.gastar(Math.ceil(keys.length / 1000) + 3)) throw new Error(`remoção de ${slug} passou do orçamento`);
   for (let i = 0; i < keys.length; i += 1000) await bucket.delete(keys.slice(i, i + 1000));
   if (!(await aindaEsta())) return false;
   await bucket.delete(manifestKey);
   return true;
 }
 
-/** #82, fatia 5, no cron: remove do R2 o rascunho do artigo cuja versão vigente está aprovada e publicada, ou seja, o PR
- * do branch dessa versão está mergeado na main e o post responde 200 no site. Mergeado sozinho não garante o deploy,
- * por isso o site. Só artigos: os derivados ficam e passam a aparecer abaixo da linha "publicado no site" (#80). Um
- * rascunho reenviado depois do merge tem outra versão, sem aprovação, e não sai, nem durante a remoção (apagarRascunho).
- * A falha num rascunho não impede os outros; nada é apagado sem as duas confirmações. Devolve os slugs removidos. */
-export async function limparPublicados(env: DraftEnv, deps: DraftDeps): Promise<string[]> {
-  if (!env.GITHUB_DISPATCH_TOKEN) return [];
-  const orc = orcamento(deps);
-  const removidos: string[] = [];
-  const slugs = await slugsDoBucket(env);
-  orc.gastar(Math.ceil(slugs.length / 1000) || 1);
-  for (const slug of slugs) {
-    // Cada rascunho custa até 4 leituras antes de decidir (manifesto, D1, GitHub, site). Sem orçamento ou prazo para
-    // isso, para aqui; o que faltou fica para a hora seguinte.
-    if (!orc.gastar(0) || orc.restante() < 4) {
-      console.log(`limparPublicados: orçamento esgotado antes de ${slug}; o resto fica para a próxima execução`);
-      break;
-    }
-    try {
-      if (!orc.gastar(1)) break;
-      const m = await readManifest(env.DRAFTS, slug);
-      if (!m || m.kind !== 'blog') continue;
-      if (!orc.gastar(1)) break;
-      if (!state(await approvals(env.DB, slug), m).approved) continue;
-      if (!orc.gastar(1)) break;
-      const pr = await prDaVersao(env, deps, m);
-      if (!pr || !mergeado(pr)) continue;
-      if (!orc.gastar(1)) break;
-      if (!(await publicado(env, deps, slug))) continue;
-      if (await apagarRascunho(env.DRAFTS, m, orc)) removidos.push(slug);
-    } catch (e) {
-      console.log(`limparPublicados: ${slug} ficou, ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }
-  return removidos;
-}
-
 async function listPage(env: DraftEnv, deps: DraftDeps, msg: Mensagem | undefined, registroFalhou: boolean): Promise<Response> {
   const drafts: Manifest[] = [];
+  // #82, fatia 5: artigo aprovado cuja prévia sumiu e o manifesto ficou é uma remoção interrompida; ele continua na
+  // lista, sem link para a prévia, para o botão terminar a remoção (r2, Astra P2). Sem aprovação, a prévia que não
+  // confere continua escondida, como antes (#73).
+  const incompletos = new Set<string>();
   for (const slug of await slugsDoBucket(env)) {
     const m = await readManifest(env.DRAFTS, slug);
     if (!m) continue;
-    if (!(await versionHtml(env, m))) continue;
+    if (!(await versionHtml(env, m))) {
+      if (m.kind !== 'blog' || !state(await approvals(env.DB, slug), m).approved) continue;
+      incompletos.add(slug);
+    }
     drafts.push(m);
   }
   // #73 e #77: cada derivado (LinkedIn e os demais) vai logo abaixo do artigo dele. #80: se o rascunho do artigo já saiu
@@ -670,15 +619,22 @@ async function listPage(env: DraftEnv, deps: DraftDeps, msg: Mensagem | undefine
     }
     const st = states.get(m.slug)!;
     const pub = pubs.get(m.slug);
+    const incompleto = incompletos.has(m.slug);
+    const remover = pub?.remover
+      ? `<form method="post" action="/admin/rascunhos/${m.slug}/remover" style="margin:.25rem 0 0">`
+        + `<input type="hidden" name="versao" value="${m.version}"><label><input type="checkbox" name="confirmar" value="sim" required> confirmo</label> `
+        + `<button>Remover rascunho</button></form>`
+      : '';
     const label = st.approved && pub
-      ? `aprovado em ${esc(st.approved.approved_at.slice(0, 16).replace('T', ' '))} UTC<br>${pub.html}${pub.redisparar
+      ? `aprovado em ${esc(st.approved.approved_at.slice(0, 16).replace('T', ' '))} UTC<br>${pub.html}${incompleto ? '<br>prévia incompleta (remoção interrompida?)' : ''}${pub.redisparar
         ? `<form method="post" action="/admin/rascunhos/${m.slug}/disparar" style="margin:.25rem 0 0">`
           + `<input type="hidden" name="versao" value="${m.version}"><button>Disparar de novo</button></form>`
-        : ''}`
+        : ''}${remover}`
       : st.stale
-        ? 'aguardando aprovação (a versão mudou depois da última aprovação)'
-        : 'aguardando aprovação';
-    rows.push(`<tr><td><a href="/admin/rascunhos/${m.slug}/">${esc(m.title)}</a></td><td>${esc(m.slug)}</td>
+          ? 'aguardando aprovação (a versão mudou depois da última aprovação)'
+          : 'aguardando aprovação';
+    const titulo = incompleto ? esc(m.title) : `<a href="/admin/rascunhos/${m.slug}/">${esc(m.title)}</a>`;
+    rows.push(`<tr><td>${titulo}</td><td>${esc(m.slug)}</td>
 <td>${when(m)}</td><td>${label}</td></tr>`);
     for (const c of children.get(m.slug) ?? []) rows.push(childRow(c, false));
   }
@@ -856,6 +812,33 @@ async function redispatch(req: Request, env: DraftEnv, deps: DraftDeps, slug: st
   return seeOther(dispatchError ? 'disparo-falhou' : 'disparado', !gravou);
 }
 
+/** "Remover rascunho" (#82, fatia 5): só artigo, só a versão vista, aprovada, com o PR dela mergeado e o post no ar. As
+ * mesmas confirmações da lista são refeitas aqui, na hora do clique; derivados nunca saem. */
+async function removerRascunho(req: Request, env: DraftEnv, deps: DraftDeps, slug: string): Promise<Response> {
+  const form = await formOf(req, env);
+  if (form instanceof Response) return form;
+  if (form.get('confirmar') !== 'sim') return text(400, 'marque "confirmo" para remover. Nada foi removido.');
+  const seen = form.get('versao') ?? '';
+  const m = await readManifest(env.DRAFTS, slug);
+  if (!m) return text(404, 'rascunho não encontrado');
+  if (m.kind !== 'blog') return text(400, `${m.rotulo ?? 'Este rascunho'} é derivado e fica no painel. Nada foi removido.`);
+  if (!SHA_RE.test(seen) || seen !== m.version) {
+    return text(409, 'o rascunho mudou depois que você abriu a página; recarregue a lista. Nada foi removido.');
+  }
+  if (!state(await approvals(env.DB, slug), m).approved) return text(409, 'esta versão não está aprovada. Nada foi removido.');
+  if (!env.GITHUB_DISPATCH_TOKEN) return text(503, 'o painel está sem o token do GitHub. Nada foi removido.');
+  const pr = await prDaVersao(env, deps, m);
+  if (pr === undefined) return text(503, 'o GitHub não respondeu. Nada foi removido; tente de novo.');
+  if (!pr || !mergeado(pr)) return text(409, 'o PR desta versão não está mergeado. Nada foi removido.');
+  if (!(await publicado(env, deps, slug))) return text(409, 'o post ainda não responde no site. Nada foi removido.');
+  try {
+    return seeOther((await apagarRascunho(env.DRAFTS, m, deps.remocaoMaxPaginas ?? REMOCAO_MAX_PAGINAS)) ? 'removido' : 'remocao-mudou', false);
+  } catch (e) {
+    console.log(`remover ${slug}: ${e instanceof Error ? e.message : String(e)}`);
+    return seeOther('remocao-falhou', false);
+  }
+}
+
 interface Mensagem {
   texto: string;
   erro: boolean;
@@ -868,6 +851,9 @@ const MESSAGES: Record<string, Mensagem> = {
   'aprovado-sem-disparo-nem-aviso': { texto: 'Aprovado e gravado, mas o disparo da publicação e o aviso por email ao Roger falharam. O motivo do disparo está na linha do rascunho; use "Disparar de novo".', erro: true },
   disparado: { texto: 'Publicação disparada de novo no GitHub.', erro: false },
   'disparo-falhou': { texto: 'O disparo da publicação falhou de novo. O motivo está na linha do rascunho.', erro: true },
+  removido: { texto: 'Rascunho removido do R2. Os derivados continuam abaixo da linha "publicado no site".', erro: false },
+  'remocao-mudou': { texto: 'Um envio novo chegou durante a remoção, e o rascunho novo ficou. Confira a lista.', erro: true },
+  'remocao-falhou': { texto: 'A remoção parou no meio. O rascunho continua na lista, com "prévia incompleta"; use "Remover rascunho" de novo.', erro: true },
 };
 
 const REGISTRO_FALHOU = 'O resultado do disparo não foi gravado no painel, então a linha do rascunho pode mostrar o estado anterior. '
@@ -896,5 +882,6 @@ export async function handleDrafts(req: Request, url: URL, env: DraftEnv, deps: 
   if (rest === '') return req.method === 'GET' ? preview(env, deps, slug) : text(405, 'método não permitido');
   if (rest === 'aprovar') return req.method === 'POST' ? approve(req, env, deps, slug, email) : text(405, 'método não permitido');
   if (rest === 'disparar') return req.method === 'POST' ? redispatch(req, env, deps, slug) : text(405, 'método não permitido');
+  if (rest === 'remover') return req.method === 'POST' ? removerRascunho(req, env, deps, slug) : text(405, 'método não permitido');
   return req.method === 'GET' ? asset(env, slug, rest) : text(405, 'método não permitido');
 }

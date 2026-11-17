@@ -6,7 +6,7 @@
 //   /admin/rascunhos...      rascunhos privados do blog, aprovação e disparo da publicação (src/drafts.ts, issues #62 e #82)
 // Qualquer outro caminho que a rota pegue (ex.: /administrar) segue para o site no GitHub Pages.
 import { accessEmail } from './access.ts';
-import { handleDrafts, limparPublicados, type DraftDeps, type R2Like } from './drafts.ts';
+import { handleDrafts, type DraftDeps, type R2Like } from './drafts.ts';
 import { AUDIT_PROPERTY, prop, resend, syncSegment, SyncError, topicSubscription, type D1Like, type SyncDeps } from './sync.ts';
 
 export interface Env {
@@ -24,7 +24,7 @@ export interface Env {
   GITHUB_DISPATCH_TOKEN: string; // segredo: token fino só deste repositório, só com Actions (disparo da publicação, #82)
 }
 
-export type Deps = SyncDeps & Pick<DraftDeps, 'siteTimeoutMs' | 'githubTimeoutMs' | 'mailTimeoutMs' | 'limpezaMaxMs' | 'limpezaMaxOps' | 'limpezaMaxPaginas'> & { origin: (req: Request) => Promise<Response> };
+export type Deps = SyncDeps & Pick<DraftDeps, 'siteTimeoutMs' | 'githubTimeoutMs' | 'mailTimeoutMs' | 'remocaoMaxPaginas'> & { origin: (req: Request) => Promise<Response> };
 
 export const PAGE_SIZE = 100;
 
@@ -230,23 +230,9 @@ const deps = (): Deps => ({
   origin: (req) => fetch(req),
 });
 
-/** Dois horários do cron, em execuções separadas, cada uma com os próprios 15 min e 10.000 subrequests (r1, Astra e
- * Kimi P2): no minuto 17, a cópia dos assinantes; no 47, a remoção dos rascunhos de artigos já publicados (#82,
- * fatia 5). Assim uma nunca consome o tempo nem a cota da outra. */
-export const CRON_COPIA = '17 * * * *';
-export const CRON_LIMPEZA = '47 * * * *';
-export async function agendado(cron: string, env: Env, d: Deps): Promise<unknown> {
-  if (cron === CRON_LIMPEZA) {
-    const removidos = await limparPublicados(env, d);
-    if (removidos.length) console.log(`rascunhos publicados removidos: ${removidos.join(', ')}`);
-    return removidos;
-  }
-  return syncSegment(env, d);
-}
-
 export default {
   fetch: (req: Request, env: Env) => handle(req, env, deps()),
-  scheduled: async (c: { cron: string }, env: Env, ctx: { waitUntil(p: Promise<unknown>): void }) => {
-    ctx.waitUntil(agendado(c.cron, env, deps()));
+  scheduled: async (_c: unknown, env: Env, ctx: { waitUntil(p: Promise<unknown>): void }) => {
+    ctx.waitUntil(syncSegment(env, deps()));
   },
 };

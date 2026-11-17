@@ -41,11 +41,11 @@ já existe na main ou se a fonte tem um arquivo que a barreira 2 não aceita em 
 Manifestos de antes do #82, sem o campo fonte, continuam válidos para o painel, mas não
 publicam: o rascunho precisa ser reenviado.
 
-Depois da publicação, o cron do Worker do painel tira do R2 o rascunho do artigo (o
-manifesto, todas as versões e a fonte) quando duas coisas valem para a versão vigente: o PR
-do branch dela está mergeado na main e o post responde 200 no site. Os derivados ficam e
-passam a aparecer abaixo da linha "publicado no site". Um rascunho reenviado depois do
-merge é outra versão, sem aprovação, e não sai.
+Depois da publicação, com o PR da versão mergeado e o post respondendo 200 no site, o painel
+mostra o botão "Remover rascunho", que tira do R2 o rascunho do artigo (o manifesto, todas
+as versões e a fonte). Os derivados ficam e passam a aparecer abaixo da linha "publicado no
+site". A remoção é manual porque o R2 não tem remoção condicional: um envio do mesmo slug
+durante a remoção poderia se perder.
 
 ## Barreiras
 
