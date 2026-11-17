@@ -79,10 +79,14 @@ jobs:
         run: |
           recusa() { printf '%s\n' "$1" > "$RUNNER_TEMP/motivo.txt"; exit 1; }
           # O head qualificado pelo dono deste repositório: PR de fork com branch de mesmo nome não aparece, e não há
-          # limite de resultados antes do filtro (r2, Kimi P3).
-          pr=$(gh api --method GET "repos/$GITHUB_REPOSITORY/pulls" -f head="$GITHUB_REPOSITORY_OWNER:$BRANCH" -f state=all \
-            --jq '.[0] // empty | "\(.number) \(if .state == "open" then "OPEN" elif .merged_at then "MERGED" else "CLOSED" end) \(.base.ref) \(.html_url)"') \
+          # limite de resultados antes do filtro (r2, Kimi P3). Um PR aberto vale antes de qualquer fechado, mesmo que
+          # um fechado seja mais novo (r4, Kimi P2); mais de um aberto, ou a página cheia, é ambíguo e recusa.
+          pr=$(gh api --method GET "repos/$GITHUB_REPOSITORY/pulls" -f head="$GITHUB_REPOSITORY_OWNER:$BRANCH" -f state=all -f per_page=100 \
+            --jq 'if length >= 100 or (map(select(.state == "open")) | length) > 1 then "AMBIGUO"
+                  else (map(select(.state == "open")) + map(select(.state != "open"))) | .[0] // empty
+                    | "\(.number) \(if .state == "open" then "OPEN" elif .merged_at then "MERGED" else "CLOSED" end) \(.base.ref) \(.html_url)" end') \
             || recusa "Não consegui consultar no GitHub os PRs do branch $BRANCH."
+          [ "$pr" != AMBIGUO ] || recusa "O branch $BRANCH tem mais de um PR aberto, ou PRs demais para conferir; confira à mão."
           if [ -n "$pr" ]; then
             read -r _ estado base url <<< "$pr"
             echo "url=$url" >> "$GITHUB_OUTPUT"

@@ -86,7 +86,7 @@ if a[:1] == ["api"] and a[a.index("--method") + 1] == "GET" and a[3].endswith("/
     dono, _, branch = campos["head"].partition(":")
     out = jq([{"number": x["number"], "html_url": x["url"], "state": "open" if x["state"] == "OPEN" else "closed",
                "merged_at": "2026-11-16T21:00:00Z" if x["state"] == "MERGED" else None, "base": {"ref": x.get("base", "main")}}
-              for x in st["prs"] if x["head"] == branch and x.get("owner", "guifav") == dono])
+              for x in reversed(st["prs"]) if x["head"] == branch and x.get("owner", "guifav") == dono])  # mais novo primeiro, como a API
 elif a[:2] == ["run", "list"]:
     # Cada execução guardada é [branch, sha]; sha None vale para qualquer commit (o gh real sem --commit).
     out = jq([{"databaseId": 1} for b, c in st["runs"] if b == opt("--branch") and (opt("--commit") is None or c in (None, opt("--commit")))])
@@ -422,6 +422,28 @@ class PublicarWorkflowBehaviorTest(unittest.TestCase):
         ok, resumo = self.rodar()
         self.assertFalse(ok)
         self.assertIn("tem base outra, não main", resumo)
+        self.assertEqual(self.chamadas("pr", "create") + self.chamadas("workflow", "run"), [])
+
+    def test_pr_aberto_mais_antigo_vale_antes_de_um_fechado_mais_novo(self):
+        # A API devolve o mais novo primeiro; um PR fechado mais novo (com outra base) não esconde o PR aberto da versão,
+        # que é conferido de novo (r4, Kimi P2). Dois abertos: ambíguo, recusa.
+        self.assertTrue(self.rodar()[0])
+        md = f"blog-src/src/content/posts/{SLUG}.md"
+        self.empurrar_no_branch(lambda c: (c / md).write_bytes(MD + b"injetado depois do PR\n"))
+        st = self.estado()
+        st["prs"].append({"number": 200, "head": self.branch, "state": "CLOSED", "base": "outra", "url": "https://github.com/guifav/guifav.github.io/pull/200"})
+        self.estado(st)
+        self.limpar_chamadas(runs=[])
+        ok, resumo = self.rodar()
+        self.assertFalse(ok)
+        self.assertIn("o conteúdo dele não é o da versão conferida", resumo)
+        self.assertEqual(self.chamadas("workflow", "run"), [])
+        st = self.estado()
+        st["prs"][-1]["state"], st["calls"] = "OPEN", []
+        self.estado(st)
+        ok, resumo = self.rodar()
+        self.assertFalse(ok)
+        self.assertIn("tem mais de um PR aberto", resumo)
         self.assertEqual(self.chamadas("pr", "create") + self.chamadas("workflow", "run"), [])
 
     def test_pr_aberto_sem_aprovacao_valida_e_recusado(self):
