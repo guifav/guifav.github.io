@@ -1120,7 +1120,7 @@ test('R10: as consultas usam o branch da versão, a janela do disparo e o head d
   assert.equal(pulls.query.base, 'main');
   assert.equal(runs.path, `${GH_BASE}/actions/workflows/publicar.yml/runs`);
   assert.equal(runs.query.event, 'workflow_dispatch');
-  assert.equal(runs.query.created, '>=2026-11-13T19:55:00Z', 'de cinco minutos antes do disparo em diante (r2: disparo manual posterior)');
+  assert.equal(runs.query.created, '>=2026-11-13T18:55:00Z', 'de cinco minutos antes do envio da versão em diante (r5)');
   assert.equal(runs.query.per_page, '100');
   const t = setup({ gh: { pulls: [pr(12, 'open', null, `publica/sales-coach-${version.slice(0, 8)}`, 'c'.repeat(40))] } });
   await putDraft(t.bucket);
@@ -1168,7 +1168,7 @@ test('R10: aprovação sem disparo registrado (anterior a esta fatia) mostra "pu
   assert.match(linha, /aprovado em 2026-11-12 10:00 UTC<br>publicação não disparada<form/);
   assert.match(linha, /Disparar de novo/);
   assert.equal(leituras(s).length, 2, 'PR do branch e execuções desde a aprovação');
-  assert.equal(leituras(s)[1].query.created, '>=2026-11-12T09:55:00Z', 'sem disparo gravado, a janela começa na aprovação');
+  assert.equal(leituras(s)[1].query.created, '>=2026-11-13T18:55:00Z', 'a janela começa no envio da versão');
   assert.equal(disparos(s).length, 0, 'abrir a lista nunca dispara nada');
   // Disparo manual (gh workflow run), que não passa pelo D1: a execução aparece com o link.
   s.ghOpts.runs = [{ ...exec(41, `Publica sales-coach (${d.version})`, 'in_progress'), created_at: '2026-11-13T19:50:00Z' }];
@@ -1186,8 +1186,8 @@ test('R10 (r2, Astra P2): disparo manual horas depois do disparo gravado aparece
   s.ghOpts.runs = [
     { ...exec(52, `Publica sales-coach (${version})`, 'in_progress'), created_at: '2026-11-13T22:00:00Z' },
     { ...exec(51, `Publica sales-coach (${version})`, 'completed', 'failure'), created_at: '2026-11-13T20:00:05Z' },
-    // Execução desta versão de antes da janela (aprovação anterior, por exemplo) não conta.
-    { ...exec(50, `Publica sales-coach (${version})`, 'completed', 'success'), created_at: '2026-11-13T19:00:00Z' },
+    // Execução de antes do envio da versão (fora da janela) não conta.
+    { ...exec(50, `Publica sales-coach (${version})`, 'completed', 'success'), created_at: '2026-11-13T18:00:00Z' },
   ];
   const linha = linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach');
   assert.match(linha, /preparando o PR \(disparado há 5 min\): <a href="https:\/\/github\.com\/guifav\/guifav\.github\.io\/actions\/runs\/52">/);
@@ -1336,7 +1336,7 @@ test('R10 (r3, Astra P2): com motivo de disparo gravado, uma execução manual p
   const linha = linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach');
   assert.match(linha, /publicação recusada: <a href="[^"]*\/runs\/61">ver a execução<\/a>; o último disparo pelo painel falhou \(GitHub respondeu 500: falhou\)/);
   assert.match(linha, /Disparar de novo/);
-  assert.equal(leituras(s)[1].query.created, '>=2026-11-13T19:55:00Z', 'sem disparo gravado, a janela começa na aprovação');
+  assert.equal(leituras(s)[1].query.created, '>=2026-11-13T18:55:00Z', 'a janela começa no envio da versão');
   // Sem execução, ou com as execuções indisponíveis ou numa página incompleta: o motivo gravado, com o botão.
   for (const runs of [[], 500, 'erro'] as const) {
     s.ghOpts.runs = runs as GhOpts['runs'];
@@ -1383,7 +1383,7 @@ test('R10 (r4, Astra P2): execução antiga reexecutada depois de um novo dispar
   s.gh.length = 0;
   const linha = linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach');
   assert.match(linha, /preparando o PR \(disparado há 1 min\): <a href="[^"]*\/runs\/30">/);
-  assert.equal(leituras(s)[1].query.created, '>=2026-11-13T19:55:00Z', 'a janela começa na aprovação, não no último disparo');
+  assert.equal(leituras(s)[1].query.created, '>=2026-11-13T18:55:00Z', 'a janela começa no envio da versão, não no último disparo');
 });
 
 test('R10 (r4, Kimi P3): só vale o PR do branch da versão contra a main; o mesmo branch com outra base é ignorado', async () => {
@@ -1397,4 +1397,37 @@ test('R10 (r4, Kimi P3): só vale o PR do branch da versão contra a main; o mes
   assert.match(linha, /PR aberto <a href="[^"]*\/pull\/41">#41<\/a>, CI verde/);
   s.ghOpts.pulls = [pr(40, 'closed', '2026-11-14T10:00:00Z', ramo, 'b'.repeat(40), 'outra-base')];
   assert.match(linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach'), /preparando o PR/);
+});
+
+test('R10 (r5, Astra P2): segunda aprovação da mesma versão e disparo manual de antes da aprovação, reexecutados depois, continuam na janela', async () => {
+  const s = setup();
+  const { version } = await putDraft(s.bucket); // enviada às 19h
+  // Disparo manual às 19h30, antes da aprovação: recusado, e reexecutado às 20h29, depois de duas aprovações.
+  await s.approve('sales-coach', { confirmar: 'sim', versao: version });
+  s.avancar(10);
+  // Segunda aprovação da mesma versão, de outra aba, às 20h10.
+  assert.equal((await s.approve('sales-coach', { confirmar: 'sim', versao: version })).headers.get('location'), '/admin/rascunhos?msg=aprovado');
+  assert.equal(s.rows().length, 2);
+  s.avancar(20);
+  s.ghOpts.runs = [
+    { ...exec(31, `Publica sales-coach (${version})`, 'completed', 'failure'), created_at: '2026-11-13T20:10:02Z' },
+    { ...exec(30, `Publica sales-coach (${version})`, 'in_progress'), created_at: '2026-11-13T20:00:02Z', run_started_at: '2026-11-13T20:29:00Z' },
+  ];
+  s.gh.length = 0;
+  assert.match(linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach'), /preparando o PR \(disparado há 1 min\): <a href="[^"]*\/runs\/30">/);
+  assert.equal(leituras(s)[1].query.created, '>=2026-11-13T18:55:00Z');
+  s.ghOpts.runs = [
+    { ...exec(31, `Publica sales-coach (${version})`, 'completed', 'failure'), created_at: '2026-11-13T20:10:02Z' },
+    { ...exec(29, `Publica sales-coach (${version})`, 'in_progress'), created_at: '2026-11-13T19:30:00Z', run_started_at: '2026-11-13T20:29:00Z' },
+  ];
+  assert.match(linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach'), /preparando o PR \(disparado há 1 min\): <a href="[^"]*\/runs\/29">/);
+});
+
+test('R10 (r5): manifesto sem data válida de envio: a janela começa na aprovação', async () => {
+  const s = setup();
+  const { version } = await putDraft(s.bucket, 'sales-coach', { manifest: { uploaded_at: 'ontem' } });
+  await s.approve('sales-coach', { confirmar: 'sim', versao: version });
+  s.gh.length = 0;
+  await s.req('/admin/rascunhos');
+  assert.equal(leituras(s)[1].query.created, '>=2026-11-13T19:55:00Z');
 });

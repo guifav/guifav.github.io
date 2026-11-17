@@ -421,13 +421,16 @@ async function publicacao(env: DraftEnv, deps: DraftDeps, m: Manifest, a: Approv
     const sha = isObj(pr.head) && typeof pr.head.sha === 'string' && /^[0-9a-f]{40}$/.test(pr.head.sha) ? pr.head.sha : '';
     return { html: `PR aberto ${link}, ${sha ? await ciDoPr(env, deps, sha) : 'CI indisponível'}`, redisparar: false };
   }
-  // Execuções do publicar.yml desde a aprovação, 5 min antes contra relógio adiantado, e sem limite depois. Toda
-  // execução desta versão vem depois da aprovação, então nenhuma fica de fora: nem um disparo manual posterior (r2,
-  // Astra P2), nem uma execução antiga reexecutada depois de um novo disparo pelo painel (r4, Astra P2). Vale a
-  // execução com a tentativa mais recente (r3, Astra P2). Sem todas as execuções da janela numa página, não dá para
-  // garantir qual é a vigente: "estado indisponível", ou o motivo gravado (r4, Astra P2).
+  // Execuções do publicar.yml desde o envio desta versão ao R2 (uploaded_at do manifesto), 5 min antes contra relógio
+  // adiantado, e sem limite depois. Nenhuma execução desta versão existe antes dela, então nenhuma fica de fora: nem
+  // um disparo manual posterior (r2, Astra P2), nem uma execução antiga reexecutada depois de um novo disparo (r4) ou
+  // de uma segunda aprovação da mesma versão (r5), nem um disparo manual de antes da aprovação reexecutado depois
+  // (r5, Astra P2). Sem data válida no manifesto, a janela começa na aprovação. Vale a execução com a tentativa mais
+  // recente (r3, Astra P2). Sem todas as execuções da janela numa página, não dá para garantir qual é a vigente:
+  // "estado indisponível", ou o motivo gravado (r4, Astra P2).
   const desdeD1 = a.dispatched_at || a.approved_at;
-  const t = Date.parse(a.approved_at);
+  const envio = Date.parse(m.uploaded_at);
+  const t = Number.isFinite(envio) ? envio : Date.parse(a.approved_at);
   const iso = (ms: number) => `${new Date(ms).toISOString().slice(0, 19)}Z`;
   const created = Number.isFinite(t) ? `&created=${encodeURIComponent(`>=${iso(t - 5 * 60000)}`)}` : '';
   const r = await githubGet(env, deps, `/actions/workflows/${PUBLISH_WORKFLOW}/runs?event=workflow_dispatch&per_page=100${created}`);
