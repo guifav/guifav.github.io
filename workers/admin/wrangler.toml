@@ -5,6 +5,8 @@
 #   ALLOWED_EMAILS   emails que podem usar o painel, separados por vírgula (o do Gui)
 #   DRAFT_NOTIFY_FROM remetente do aviso de rascunho aprovado (issue #62), num domínio verificado no Resend
 #   DRAFT_NOTIFY_TO   quem recebe esse aviso (o Roger)
+#   GITHUB_DISPATCH_TOKEN token fino da conta guifav, só no repositório guifav.github.io, só com Actions: write
+#                     (dispara o publicar.yml na aprovação e lê o estado da publicação, issue #82)
 name = "blog-admin"
 main = "src/index.ts"
 compatibility_date = "2026-11-01"

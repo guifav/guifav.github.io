@@ -9,10 +9,11 @@ Painel de assinantes da newsletter em `guifav.dev/admin` (issue #40). Só o Gui 
 | `POST /admin/unsubscribe` | Descadastra só da newsletter: grava a auditoria `admin_unsubscribed_at` no contato e o tira do tópico "Expert Insights, de Guilherme Favaron" (`TOPIC_ID`), sem tocar no status global da conta, então a pessoa continua recebendo os outros envios. Só mostra sucesso se a releitura no Resend mostrar o mesmo contato fora do tópico e com esta auditoria, e só então atualiza a cópia. Se a cópia falhar depois disso, a página diz que o Resend já descadastrou e a próxima sincronização corrige. Exige a caixa "confirmo" e `Origin` igual ao do site. |
 | cron `17 * * * *` | Copia o segmento do Resend para o D1 `blog-admin`, com dois GET por contato, o contato e os tópicos dele (a listagem do Resend não traz propriedades nem tópicos); descadastrado é quem saiu do tópico da newsletter ou da conta inteira, a 4 req/s para toda chamada, contados de início a início (a latência da API não se soma à espera). A duração de cada execução fica em `last_sync_ms` (`meta`); a primeira execução com tópicos, com espera depois de cada resposta, levou cerca de 10 min para 647 contatos. Respeita o `Retry-After` inteiro; se ele passar de 60 s, desiste e deixa para a hora seguinte. Para antes de 12 min (a chamada em andamento é cancelada pelo tempo restante, e nada é gravado se o prazo passar) ou 9.000 chamadas (o cron tem 15 min e 10.000 subrequests no plano pago): com a taxa de 4 req/s, isso comporta cerca de 1.400 contatos (duas chamadas por contato, cerca de 5,5 min para 646). A listagem só vale com término explícito (`has_more=false`); resposta sem lista ou cursor que não avança é erro. As linhas antigas só saem depois que todas as novas foram gravadas, na mesma transação dos metadados: uma falha no meio não apaga nada e fica registrada no painel, sem email. Um descadastro gravado pelo painel durante a leitura não é desfeito pela cópia: o painel incrementa `rev` no D1, o cron tira as revisões antes de qualquer GET, e o status local vence só se a revisão mudou (ordem por contador, sem comparar relógios). Fora disso vale sempre o Resend. Execuções sobrepostas: a que começou por último é a dona (`sync_owner` em `meta`), e toda escrita, a limpeza e o registro de erro ficam condicionados a isso. Uma execução antiga que termine depois não grava nada e falha como "substituída". O prazo é conferido também antes de cada lote e da publicação. |
 
-| `GET /admin/rascunhos` | Rascunhos do blog (issue #62): título, slug, data da prévia e estado (aguardando aprovação, aprovado em ..., ou versão mudou depois da aprovação). Os derivados de um artigo aparecem logo abaixo dele, marcados com a etiqueta e "só leitura": a versão LinkedIn (#73) e qualquer outro artefato do mesmo artigo enviado com rótulo (#77), como "Roteiro do short". Depois que o artigo é publicado e o rascunho dele sai do R2, os derivados continuam agrupados abaixo de uma linha "publicado no site", com o título e o link do post (#80): o painel consulta `/blog/<slug>/` no site, uma vez por artigo pai, e lê o título do `<title>`. Sem rascunho e sem post no ar (404, redirecionamento, erro ou tempo esgotado), o derivado aparece sozinho com "artigo não encontrado". |
+| `GET /admin/rascunhos` | Rascunhos do blog (issue #62): título, slug, data da prévia e estado (aguardando aprovação, aprovado em ..., ou versão mudou depois da aprovação). Nos artigos aprovados, o estado da publicação, lido do GitHub na hora (#82, ver "Publicação pelo GitHub" abaixo). Os derivados de um artigo aparecem logo abaixo dele, marcados com a etiqueta e "só leitura": a versão LinkedIn (#73) e qualquer outro artefato do mesmo artigo enviado com rótulo (#77), como "Roteiro do short". Depois que o artigo é publicado e o rascunho dele sai do R2, os derivados continuam agrupados abaixo de uma linha "publicado no site", com o título e o link do post (#80): o painel consulta `/blog/<slug>/` no site, uma vez por artigo pai, e lê o título do `<title>`. Sem rascunho e sem post no ar (404, redirecionamento, erro ou tempo esgotado), o derivado aparece sozinho com "artigo não encontrado". |
 | `GET /admin/rascunhos/<slug>/` | Prévia do post como vai sair, com uma barra no topo e o botão "Aprovar publicação". Vem do bucket R2 privado `blog-rascunhos` (sem domínio público), com `Cache-Control: private, no-store`, `noindex` e CSP própria. |
 | `GET /admin/rascunhos/<slug>/<arquivo>` | Imagens e vídeo do rascunho: só os listados no manifesto, lidos da versão para a qual ele aponta. |
-| `POST /admin/rascunhos/<slug>/aprovar` | Derivado (LinkedIn ou com rótulo): 400, nada é gravado (só leitura). Artigo: grava em `draft_approvals` (D1) a aprovação da versão exata que foi vista: o HTML (`html_sha256`) e a fonte (`source_sha256`, Markdown e imagens) juntos, quem e quando. Trocar só uma imagem, com o mesmo HTML, já é versão nova. Se a versão mudou depois que a página abriu, responde 409 e não grava nada. Depois avisa o Roger por email; falha no aviso fica registrada na própria linha (`notify_error`) e a aprovação continua valendo. Exige "confirmo" e `Origin` do site. |
+| `POST /admin/rascunhos/<slug>/aprovar` | Derivado (LinkedIn ou com rótulo): 400, nada é gravado (só leitura). Artigo: grava em `draft_approvals` (D1) a aprovação da versão exata que foi vista: o HTML (`html_sha256`) e a fonte (`source_sha256`, Markdown e imagens) juntos, quem e quando. Trocar só uma imagem, com o mesmo HTML, já é versão nova. Se a versão mudou depois que a página abriu, responde 409 e não grava nada. Depois dispara a publicação no GitHub (#82) e avisa o Roger por email do resultado; o resultado do disparo (`dispatched_at` ou `dispatch_error`) e o do aviso (`notify_error`) ficam na própria linha, e a aprovação continua valendo mesmo se os dois falharem. Exige "confirmo" e `Origin` do site. |
+| `POST /admin/rascunhos/<slug>/disparar` | "Disparar de novo" (#82): repete o disparo da publicação da versão atual, só se ela está aprovada, e grava o novo resultado na linha da aprovação. Não manda email. Derivado: 400. Versão mudada ou não aprovada: 409. Nada é disparado nesses casos. Exige `Origin` do site, como as outras ações. |
 
 Qualquer outro caminho que a rota `guifav.dev/admin*` pegue (ex.: `/administrar`) segue para o GitHub Pages.
 
@@ -24,8 +25,40 @@ O rascunho nunca entra no repo antes da aprovação. Na KVM:
    A versão para a newsletter do LinkedIn vai com `--linkedin --artigo <slug-do-artigo>` (#73): o manifesto ganha `kind: "linkedin"` e `parent`, a prévia sai com uma barra "só leitura" e link para o artigo, sem formulário de aprovação.
    Qualquer outro artefato do mesmo artigo (roteiro de short, vídeo, carrossel) vai com `--derivado "<rótulo>" --artigo <slug-do-artigo>` (#77): o manifesto ganha `kind: "derivado"`, `parent` e `rotulo`, e o rótulo aparece na etiqueta da lista e na barra da prévia. Artefato novo não exige mudança de código. O rótulo tem de 1 a 40 caracteres, sem caractere de controle nem espaço nas pontas (a mesma regra no script e no Worker).
 2. O Gui abre `guifav.dev/admin/rascunhos`, lê e aprova.
-3. `python3 blog-src/scripts/draft_preview.py status <slug>.md --imagens <pasta>` confirma no D1 que a fonte atual é a aprovada. Só então o Roger abre o PR de publicação, com o mesmo Markdown e as mesmas imagens.
+3. A aprovação dispara o workflow `publicar.yml` (#82): ele baixa a fonte da versão aprovada do R2, confere o hash contra a aprovação no D1 e abre o PR de publicação, com o mesmo Markdown e as mesmas imagens. O Roger recebe o email de aviso e coordena a revisão do PR, como antes.
 4. Depois do merge, `python3 blog-src/scripts/draft_preview.py remover <slug>` tira a prévia do R2.
+
+### Publicação pelo GitHub (issue #82)
+
+Contrato com o `.github/workflows/publicar.yml`:
+
+- gatilho `workflow_dispatch` na `main`, com os inputs `slug` e `versao` (a versão inteira, 64 hex);
+- o `run-name` traz o slug e os 8 primeiros caracteres da versão, para o painel achar a execução;
+- o PR sai do branch `publica/<slug>-<versão8>`, aberto pelo `github-actions[bot]`;
+- a workflow é idempotente: se o branch ou o PR da versão já existe, termina sem erro. Por isso o "Disparar de novo" é seguro.
+
+Na aprovação, o Worker chama `POST /repos/guifav/guifav.github.io/actions/workflows/publicar.yml/dispatches` com o segredo `GITHUB_DISPATCH_TOKEN`, com prazo de 5 s. Resposta 2xx grava `dispatched_at`. Qualquer outra coisa grava o motivo em `dispatch_error` ("GitHub respondeu 422: ...", "falha de rede", "tempo esgotado" ou "disparo sem configuração", quando falta o token) e mostra o botão "Disparar de novo" na lista. O email ao Roger diz "publicação disparada" ou "disparo falhou", com o motivo; ele não é mais o gatilho.
+
+A lista calcula o estado de cada artigo aprovado na hora de abrir, do D1 e do GitHub, com o mesmo token. São no máximo duas leituras do GitHub por artigo aprovado, feitas em paralelo, cada uma com prazo de 5 s e corpo limitado a 1 MiB. Rascunho não aprovado, ou com a versão mudada depois da aprovação, não consulta o GitHub.
+
+| Estado na lista | De onde vem | Na tela |
+| --- | --- | --- |
+| aguardando aprovação | D1 | link para a prévia, que tem o botão de aprovar |
+| disparo falhou (motivo) | `dispatch_error`, sem PR da versão | botão "Disparar de novo" |
+| publicação não disparada | aprovação sem `dispatched_at` nem motivo (anterior ao #82, ou registro que falhou) | botão "Disparar de novo" |
+| preparando o PR (disparado há N min) | `dispatched_at`, sem PR; execução na fila ou rodando, ou ainda não visível | link para a execução, quando ela já aparece |
+| parado: nenhuma execução encontrada | `dispatched_at` há mais de 15 min, sem PR nem execução | botão "Disparar de novo" |
+| publicação recusada | execução terminou com falha (hash que não bate, slug já publicado; o motivo fica no resumo da execução) | link para a execução |
+| execução terminou sem abrir o PR, ou interrompida | execução com sucesso sem PR, ou cancelada | link para a execução e botão "Disparar de novo" |
+| PR aberto #N, CI verde, vermelha, rodando ou pendente | PR do branch da versão e as execuções de Actions do head dele | link para o PR |
+| PR #N mergeado, aguardando o deploy do site | PR mergeado, `/blog/<slug>/` ainda não responde 200 | link para o PR |
+| PR #N fechado sem merge | PR fechado | link para o PR |
+| publicado em (data) | PR mergeado e `/blog/<slug>/` respondendo 200 | link para o post |
+| estado indisponível | GitHub fora do ar, prazo esgotado ou resposta inválida | nada; o resto da lista continua |
+
+Leituras: `GET /pulls?head=guifav:publica/<slug>-<versão8>&state=all`, sempre; depois, só uma destas: `GET /actions/runs?head_sha=<head do PR>` (PR aberto), `GET /actions/workflows/publicar.yml/runs?event=workflow_dispatch&created=>=<disparo menos 5 min>` (sem PR) ou a consulta ao post no site (PR mergeado, a mesma do #80). A execução certa é a mais recente cujo `run-name` traz o slug inteiro (sem casar com um slug vizinho, como `mcp` dentro de `mcp-aberto`) e os 8 caracteres da versão. Com um motivo de disparo gravado e o GitHub fora do ar, a lista mostra o motivo e o botão, não "estado indisponível". Com um motivo gravado e o PR da versão existente (o GitHub aceitou o disparo depois do prazo), vale o PR.
+
+O token é fino, da conta `guifav`, só neste repositório, com `Actions: write` (disparar e ler execuções). PRs e execuções deste repositório público são lidos com a leitura de repositórios públicos que todo token fino tem. Ele expira (até um ano): a falha aparece na lista, como "disparo falhou (GitHub respondeu 401 ...)", no primeiro clique depois da expiração.
 
 ## Acesso
 
@@ -43,17 +76,17 @@ O rascunho nunca entra no repo antes da aprovação. Na KVM:
 npm test
 ```
 
-Node 22.18 ou mais novo. O D1 dos testes é SQLite de verdade (`node:sqlite`), com a migração do repo. O Resend falso devolve as propriedades no formato documentado (`{value, type}`). Os JWTs são assinados com RSA.
+Node 22.18 ou mais novo; a CI usa a versão do `blog-src/.nvmrc`. O D1 dos testes é SQLite de verdade (`node:sqlite`), com as migrações do repo. O Resend falso devolve as propriedades no formato documentado (`{value, type}`). O GitHub falso cobre cada estado da tabela acima, o disparo aceito, recusado, sem rede e sem resposta até o prazo. Os JWTs são assinados com RSA.
 
 ## Deploy
 
 O deploy é manual, depois do merge. O proxy da Cloudflare em `guifav.dev` já está ligado (2026-11-11), e a aplicação do Access e o D1 já existem.
 
 1. **Chave do Resend dedicada:** `POST /api-keys` com `full_access`, nome `blog-admin`, gravada direto num arquivo 0600 em `/root/.hermes/credentials/`.
-2. **Tabelas:** `npx wrangler@4 d1 migrations apply blog-admin --remote`.
+2. **Tabelas:** `npx wrangler@4 d1 migrations apply blog-admin --remote` (inclui a `0003_draft_dispatch.sql` do #82, com as colunas `dispatched_at` e `dispatch_error`).
    **Bucket dos rascunhos (issue #62):** `npx wrangler@4 r2 bucket create blog-rascunhos`, sem domínio público nem acesso `r2.dev`.
 3. **Publicação:** `npx wrangler@4 deploy`.
-4. **Segredos:** `RESEND_API_KEY`, `ALLOWED_EMAILS`, `DRAFT_NOTIFY_FROM` (remetente num domínio verificado no Resend) e `DRAFT_NOTIFY_TO` (o Roger), de uma vez (`npx wrangler@4 secret bulk`, lendo JSON pela entrada padrão).
+4. **Segredos:** `RESEND_API_KEY`, `ALLOWED_EMAILS`, `DRAFT_NOTIFY_FROM` (remetente num domínio verificado no Resend), `DRAFT_NOTIFY_TO` (o Roger) e `GITHUB_DISPATCH_TOKEN` (#82, token fino descrito acima), de uma vez (`npx wrangler@4 secret bulk`, lendo JSON pela entrada padrão). O disparo só funciona depois que o `publicar.yml` existe na `main`; antes disso, a aprovação grava "GitHub respondeu 404" e a lista mostra o botão "Disparar de novo".
 5. **Primeira cópia:** rodar o cron uma vez pelo painel da Cloudflare, ou esperar o minuto 17, e conferir `last_sync_count` no D1.
 6. **Conferência:**
    - sem login, `/admin` vai para o Access;

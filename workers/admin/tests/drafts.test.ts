@@ -95,16 +95,38 @@ async function putDraft(b: ReturnType<typeof r2>, slug = 'sales-coach', opts: { 
 const kp = (await crypto.subtle.generateKey({ name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, true, ['sign', 'verify'])) as CryptoKeyPair;
 const jwk = { ...(await crypto.subtle.exportKey('jwk', kp.publicKey)), kid: 'k1' };
 const b64u = (b: ArrayBuffer | string) => Buffer.from(typeof b === 'string' ? b : new Uint8Array(b)).toString('base64url');
-async function jwt(email = GUI) {
+async function jwt(email = GUI, agora = NOW) {
   const h = b64u(JSON.stringify({ alg: 'RS256', kid: 'k1', typ: 'JWT' }));
-  const p = b64u(JSON.stringify({ iss: `https://${TEAM}`, aud: [AUD], email, exp: NOW / 1000 + 3600, iat: NOW / 1000 }));
+  const p = b64u(JSON.stringify({ iss: `https://${TEAM}`, aud: [AUD], email, exp: agora / 1000 + 3600, iat: agora / 1000 }));
   const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', kp.privateKey, new TextEncoder().encode(`${h}.${p}`));
   return `${h}.${p}.${b64u(sig)}`;
 }
 
 type Mail = { url: string; body: Record<string, unknown>; auth: string | null };
 
-function setup(opts: { mailStatus?: number; mailThrows?: boolean; failSql?: RegExp; notify?: boolean; site?: Record<string, string | number | 'erro' | 'pendente' | 'corpo-pendente' | 'gigante'> } = {}) {
+// #82: GitHub falso. Cada rota responde com um valor: número (status HTTP), 'erro' (rede caída), 'pendente' (sem
+// resposta até o prazo), 'corpo-pendente' (200 cujo corpo nunca termina), { status, body } (corpo cru) ou a lista
+// de PRs (pulls) e de execuções (runs do publicar.yml, ci das execuções do head do PR).
+type GhValor = number | 'erro' | 'pendente' | 'corpo-pendente' | { status: number; body: string };
+type GhOpts = { dispatch?: GhValor; pulls?: GhValor | unknown[]; runs?: GhValor | unknown[]; ci?: GhValor | unknown[] };
+type GhCall = { method: string; path: string; query: Record<string, string>; body: unknown; auth: string | null; ua: string | null;
+  accept: string | null; version: string | null };
+const GH_BASE = '/repos/guifav/guifav.github.io';
+
+/** Fetch falso que só termina pelo aborto do prazo. O timer de AbortSignal.timeout não segura o processo do Node
+ * (unref), e a partir do Node 22.23 o prazo do node:test também não: sem o timer comum, o laço de eventos esvazia
+ * antes do aborto e o teste sai como cancelado. Ele dura mais que o timeout do teste, então, sem o prazo no fetch,
+ * o teste continua falhando por timeout. */
+function segurarAteAbortar(signal: AbortSignal) {
+  const segura = setTimeout(() => {}, 10_000);
+  signal.addEventListener('abort', () => clearTimeout(segura), { once: true });
+}
+
+function setup(opts: { mailStatus?: number; mailThrows?: boolean; failSql?: RegExp; notify?: boolean; site?: Record<string, string | number | 'erro' | 'pendente' | 'corpo-pendente' | 'gigante'>;
+  gh?: GhOpts; token?: string } = {}) {
+  const ghOpts: GhOpts = { ...(opts.gh ?? {}) };
+  const gh: GhCall[] = [];
+  const relogio = { t: NOW };
   // r1 (Astra e Kimi P2): quantos pedaços do corpo o painel puxou e se cancelou o resto.
   const corpo = { puxados: 0, cancelado: false };
   const mails: Mail[] = [];
@@ -119,6 +141,39 @@ function setup(opts: { mailStatus?: number; mailThrows?: boolean; failSql?: RegE
       mails.push({ url, body: JSON.parse(String(init?.body)), auth: new Headers(init?.headers).get('authorization') });
       return Response.json({ id: 'e1' }, { status: opts.mailStatus ?? 200 });
     }
+    if (url.startsWith('https://api.github.com/')) {
+      const u = new URL(url);
+      const h = new Headers(init?.headers);
+      const method = init?.method ?? 'GET';
+      gh.push({ method, path: u.pathname, query: Object.fromEntries(u.searchParams), body: init?.body ? JSON.parse(String(init.body)) : undefined,
+        auth: h.get('authorization'), ua: h.get('user-agent'), accept: h.get('accept'), version: h.get('x-github-api-version') });
+      assert.ok(init?.signal, 'chamada ao GitHub com prazo');
+      let v: GhValor | unknown[];
+      let lista = false;
+      if (method === 'POST' && u.pathname === `${GH_BASE}/actions/workflows/publicar.yml/dispatches`) v = ghOpts.dispatch ?? 204;
+      else if (method === 'GET' && u.pathname === `${GH_BASE}/pulls`) v = ghOpts.pulls ?? [];
+      else if (method === 'GET' && u.pathname === `${GH_BASE}/actions/workflows/publicar.yml/runs`) [v, lista] = [ghOpts.runs ?? [], true];
+      else if (method === 'GET' && u.pathname === `${GH_BASE}/actions/runs`) [v, lista] = [ghOpts.ci ?? [], true];
+      else {
+        other.push(url);
+        return Response.json({ message: 'rota inesperada' }, { status: 500 });
+      }
+      const abortou = () => new DOMException('prazo', 'TimeoutError');
+      if (v === 'erro') throw new TypeError('network');
+      if (v === 'pendente' || v === 'corpo-pendente') segurarAteAbortar(init!.signal!);
+      if (v === 'pendente') return new Promise<Response>((_, rej) => init!.signal!.addEventListener('abort', () => rej(abortou())));
+      if (v === 'corpo-pendente') {
+        return new Response(new ReadableStream<Uint8Array>({
+          start(c) {
+            c.enqueue(new TextEncoder().encode('['));
+            init!.signal!.addEventListener('abort', () => c.error(abortou()));
+          },
+        }), { status: 200 });
+      }
+      if (typeof v === 'number') return v === 204 ? new Response(null, { status: 204 }) : Response.json({ message: 'falhou' }, { status: v });
+      if (Array.isArray(v)) return Response.json(lista ? { total_count: v.length, workflow_runs: v } : v);
+      return new Response(v.body, { status: v.status });
+    }
     const post = url.match(/^https:\/\/guifav\.dev\/blog\/([^/]+)\/$/);
     if (post) {
       site.push(url);
@@ -128,14 +183,7 @@ function setup(opts: { mailStatus?: number; mailThrows?: boolean; failSql?: RegE
       if (v === 'erro') throw new TypeError('network');
       // r1 (P3): sem resposta até o prazo, ou resposta 200 cujo corpo nunca termina; só o aborto encerra.
       const abortou = () => new DOMException('prazo', 'TimeoutError');
-      // O timer de AbortSignal.timeout não segura o processo do Node (unref), e a partir do Node 22.23
-      // o prazo do node:test também não: sem este timer comum, o laço de eventos esvazia antes do aborto
-      // e o teste sai como cancelado. Ele dura mais que o timeout do teste, então, sem o prazo no fetch,
-      // o teste continua falhando por timeout.
-      if (v === 'pendente' || v === 'corpo-pendente') {
-        const segura = setTimeout(() => {}, 10_000);
-        init!.signal!.addEventListener('abort', () => clearTimeout(segura), { once: true });
-      }
+      if (v === 'pendente' || v === 'corpo-pendente') segurarAteAbortar(init!.signal!);
       if (v === 'pendente') {
         return new Promise<Response>((_, rej) => init!.signal!.addEventListener('abort', () => rej(abortou())));
       }
@@ -173,19 +221,22 @@ function setup(opts: { mailStatus?: number; mailThrows?: boolean; failSql?: RegE
   const bucket = r2();
   const env: Env = { DB: db, RESEND_API_KEY: 're_test', SEGMENT_ID: 's', TOPIC_ID: 't', ACCESS_TEAM_DOMAIN: TEAM, ACCESS_AUD: AUD,
     ALLOWED_EMAILS: GUI, SITE_ORIGIN: ORIGIN, DRAFTS: bucket,
-    DRAFT_NOTIFY_FROM: opts.notify === false ? '' : 'Painel <painel@guifav.dev>', DRAFT_NOTIFY_TO: opts.notify === false ? '' : 'roger@exemplo.com' };
-  const deps: Deps = { fetch: fetchFn as typeof fetch, now: () => NOW, sleep: async () => {}, origin: async () => new Response('pages'), siteTimeoutMs: 50 };
+    DRAFT_NOTIFY_FROM: opts.notify === false ? '' : 'Painel <painel@guifav.dev>', DRAFT_NOTIFY_TO: opts.notify === false ? '' : 'roger@exemplo.com',
+    GITHUB_DISPATCH_TOKEN: opts.token ?? 'gh-teste' };
+  const deps: Deps = { fetch: fetchFn as typeof fetch, now: () => relogio.t, sleep: async () => {}, origin: async () => new Response('pages'),
+    siteTimeoutMs: 50, githubTimeoutMs: 50 };
   const req = async (path: string, init: { method?: string; body?: string; headers?: Record<string, string>; token?: string | null } = {}) => {
     resetCertsCache();
     const h: Record<string, string> = { ...(init.headers ?? {}) };
-    if (init.token !== null) h['cf-access-jwt-assertion'] = init.token ?? (await jwt());
+    if (init.token !== null) h['cf-access-jwt-assertion'] = init.token ?? (await jwt(GUI, relogio.t));
     return handle(new Request(`https://guifav.dev${path}`, { method: init.method ?? 'GET', body: init.body, headers: h }), env, deps);
   };
   const approve = async (slug: string, form: Record<string, string>, headers: Record<string, string> = {}) =>
     req(`/admin/rascunhos/${slug}/aprovar`, { method: 'POST', body: new URLSearchParams(form).toString(),
       headers: { origin: ORIGIN, 'content-type': 'application/x-www-form-urlencoded', ...headers } });
   const rows = () => JSON.parse(JSON.stringify(db.raw.prepare('SELECT * FROM draft_approvals ORDER BY id').all())) as Record<string, string>[];
-  return { env, deps, db, bucket, mails, other, site, corpo, req, approve, rows };
+  const avancar = (min: number) => { relogio.t += min * 60000; };
+  return { env, deps, db, bucket, mails, other, site, corpo, req, approve, rows, gh, ghOpts, avancar };
 }
 
 // ------------------------------------------------------------------ R1: acesso
@@ -359,21 +410,24 @@ test('R5: aprovação grava a versão vista, avisa o Roger e a prévia e a lista
   const rows = s.rows();
   assert.equal(rows.length, 1);
   assert.deepEqual({ ...rows[0], id: undefined }, { id: undefined, slug: 'sales-coach', title: 'Como construí o Sales Coach', html_sha256: hash,
-    source_sha256: SHA('a'), approved_at: '2026-11-13T20:00:00.000Z', approved_by: GUI, notified_at: '2026-11-13T20:00:00.000Z', notify_error: '' });
+    source_sha256: SHA('a'), approved_at: '2026-11-13T20:00:00.000Z', approved_by: GUI, notified_at: '2026-11-13T20:00:00.000Z', notify_error: '',
+    dispatched_at: '2026-11-13T20:00:00.000Z', dispatch_error: '' });
   assert.equal(s.mails.length, 1);
   assert.deepEqual(s.mails[0].body.to, ['roger@exemplo.com']);
   assert.equal(s.mails[0].body.from, 'Painel <painel@guifav.dev>');
-  assert.equal(s.mails[0].body.subject, 'Rascunho aprovado: Como construí o Sales Coach');
+  assert.equal(s.mails[0].body.subject, 'Rascunho aprovado, publicação disparada: Como construí o Sales Coach');
   assert.match(String(s.mails[0].body.text), new RegExp(`Versão aprovada: ${version}`));
   assert.match(String(s.mails[0].body.text), new RegExp(`HTML aprovado \\(sha256\\): ${hash}`));
   assert.match(String(s.mails[0].body.text), new RegExp(`Fonte aprovada \\(sha256\\): ${SHA('a')}`));
   assert.equal(s.mails[0].auth, 'Bearer re_test');
   const prev = await (await s.req('/admin/rascunhos/sales-coach/')).text();
-  assert.match(prev, /Aprovado em 2026-11-13 20:00 UTC/);
+  assert.match(prev, /Aprovado em 2026-11-13 20:00 UTC\. O estado da publicação está na lista de rascunhos\./);
+  assert.doesNotMatch(prev, /Roger publica/);
   assert.doesNotMatch(prev, /name="confirmar"/);
   const list = await (await s.req('/admin/rascunhos?msg=aprovado')).text();
   assert.match(list, /aprovado em 2026-11-13 20:00 UTC/);
-  assert.match(list, /O Roger foi avisado por email/);
+  assert.match(list, /A publicação foi disparada no GitHub e o Roger foi avisado por email/);
+  assert.doesNotMatch(list, /Roger publica/);
 });
 
 test('R5: sem confirmação, outra origem, formato errado, grande demais, hash velho, slug desconhecido ou GET: nada é gravado nem enviado', async () => {
@@ -397,6 +451,7 @@ test('R5: sem confirmação, outra origem, formato errado, grande demais, hash v
   for (const [name, p, status] of cases) assert.equal((await p).status, status, name);
   assert.deepEqual(s.rows(), []);
   assert.deepEqual(s.mails, []);
+  assert.deepEqual(s.gh, []);
 });
 
 test('R5: versão nova depois da aprovação volta a pedir aprovação, e a nova aprovação vale só para ela', async () => {
@@ -472,6 +527,7 @@ test('R5: falha do D1 ao gravar a aprovação: 502 e nenhum email', async () => 
   assert.equal(r.status, 502);
   assert.match(await r.text(), /Nada foi aprovado/);
   assert.deepEqual(s.mails, []);
+  assert.deepEqual(s.gh, [], 'aprovação não gravada não dispara nada');
 });
 
 test('R5: falha ao registrar o aviso não desfaz a aprovação', async () => {
@@ -734,9 +790,353 @@ test('R9 (r1, Astra e Kimi P2): página enorme é lida só até 64 KiB e o resto
 
 test('R6: wrangler.toml liga o bucket privado e a migração cria a tabela de aprovações', () => {
   assert.match(TOML, /\[\[r2_buckets\]\]\nbinding = "DRAFTS"\nbucket_name = "blog-rascunhos"/);
-  assert.doesNotMatch(TOML, /DRAFT_NOTIFY_(FROM|TO)\s*=/); // segredos, não variáveis do repo
+  assert.doesNotMatch(TOML, /(DRAFT_NOTIFY_(FROM|TO)|GITHUB_DISPATCH_TOKEN)\s*=/); // segredos, não variáveis do repo
+  assert.match(TOML, /^#\s+GITHUB_DISPATCH_TOKEN\s/m, 'o segredo do disparo está na lista de segredos do wrangler.toml');
+  const disparo = readFileSync(new URL('../migrations/0003_draft_dispatch.sql', import.meta.url), 'utf-8');
+  for (const col of ['dispatched_at', 'dispatch_error']) {
+    assert.match(disparo, new RegExp(`ALTER TABLE draft_approvals ADD COLUMN ${col} TEXT NOT NULL DEFAULT ''`), col);
+  }
   const sql = readFileSync(new URL('../migrations/0002_draft_approvals.sql', import.meta.url), 'utf-8');
   for (const col of ['slug', 'title', 'html_sha256', 'source_sha256', 'approved_at', 'approved_by', 'notified_at', 'notify_error']) {
     assert.match(sql, new RegExp(`\\b${col} TEXT NOT NULL`), col);
   }
+});
+
+// ------------------------------------------------------------------ R10: publicação disparada no GitHub (issue #82, fatia 4)
+const linhaDe = (body: string, slug: string) => body.split('<tr').find((r) => r.includes(`href="/admin/rascunhos/${slug}/"`)) ?? '';
+const disparos = (s: ReturnType<typeof setup>) => s.gh.filter((c) => c.method === 'POST');
+const leituras = (s: ReturnType<typeof setup>) => s.gh.filter((c) => c.method === 'GET');
+const pr = (n: number, state: 'open' | 'closed', merged_at: string | null, ref: string, sha = 'b'.repeat(40)) => ({ number: n, state, merged_at, head: { ref, sha } });
+const exec = (id: number, display_title: string, status: string, conclusion: string | null = null) => ({ id, display_title, status, conclusion });
+
+test('R10: aprovar dispara o publicar.yml na main com slug e versão, grava o disparo e o email avisa que a publicação foi disparada', async () => {
+  const s = setup();
+  const { version } = await putDraft(s.bucket);
+  const r = await s.approve('sales-coach', { confirmar: 'sim', versao: version });
+  assert.equal(r.headers.get('location'), '/admin/rascunhos?msg=aprovado');
+  const [d] = disparos(s);
+  assert.equal(disparos(s).length, 1);
+  assert.equal(d.path, `${GH_BASE}/actions/workflows/publicar.yml/dispatches`);
+  assert.deepEqual(d.body, { ref: 'main', inputs: { slug: 'sales-coach', versao: version } });
+  assert.equal(d.auth, 'Bearer gh-teste');
+  assert.equal(d.accept, 'application/vnd.github+json');
+  assert.equal(d.version, '2022-11-28');
+  assert.ok(d.ua, 'User-Agent, exigido pela API do GitHub');
+  const [row] = s.rows();
+  assert.equal(row.dispatched_at, '2026-11-13T20:00:00.000Z');
+  assert.equal(row.dispatch_error, '');
+  const texto = String(s.mails[0].body.text);
+  assert.match(texto, /A publicação foi disparada no GitHub \(publicar\.yml\)/);
+  assert.ok(texto.includes(`publica/sales-coach-${version.slice(0, 8)}`), 'email com o branch da versão');
+  assert.doesNotMatch(texto, /gh-teste/, 'o token nunca vai no email');
+  // A lista mostra o estado logo depois do redirecionamento: disparado, sem execução ainda.
+  const list = await (await s.req('/admin/rascunhos?msg=aprovado')).text();
+  assert.match(list, /<p class="ok">Aprovado\. A publicação foi disparada no GitHub/);
+  assert.match(linhaDe(list, 'sales-coach'), /aprovado em 2026-11-13 20:00 UTC<br>preparando o PR \(disparado há menos de 1 min\)/);
+  assert.doesNotMatch(list, /Roger publica/);
+});
+
+test('R10: disparo recusado pelo GitHub: motivo gravado e mostrado na hora, escapado, com o botão "Disparar de novo"; o email avisa a falha', async () => {
+  const s = setup({ gh: { dispatch: { status: 422, body: JSON.stringify({ message: 'Workflow <b> não\n aceita disparo' }) } } });
+  const { version } = await putDraft(s.bucket);
+  const r = await s.approve('sales-coach', { confirmar: 'sim', versao: version });
+  assert.equal(r.status, 303, 'a aprovação continua valendo');
+  assert.equal(r.headers.get('location'), '/admin/rascunhos?msg=aprovado-sem-disparo');
+  const [row] = s.rows();
+  assert.equal(row.dispatch_error, 'GitHub respondeu 422: Workflow <b> não aceita disparo');
+  assert.equal(row.dispatched_at, '');
+  assert.equal(row.notify_error, '');
+  assert.equal(s.mails[0].body.subject, 'Rascunho aprovado, disparo falhou: Como construí o Sales Coach');
+  assert.match(String(s.mails[0].body.text), /O disparo da publicação no GitHub falhou \(GitHub respondeu 422: Workflow <b> não aceita disparo\)/);
+  const list = await (await s.req('/admin/rascunhos?msg=aprovado-sem-disparo')).text();
+  assert.match(list, /<p class="erro">Aprovado e gravado, mas o disparo da publicação falhou/);
+  const linha = linhaDe(list, 'sales-coach');
+  assert.match(linha, /disparo falhou \(GitHub respondeu 422: Workflow &lt;b&gt; não aceita disparo\)/);
+  assert.ok(linha.includes(`<form method="post" action="/admin/rascunhos/sales-coach/disparar"`), 'botão Disparar de novo');
+  assert.ok(linha.includes(`<input type="hidden" name="versao" value="${version}"><button>Disparar de novo</button>`));
+  // Com o GitHub fora do ar na hora da lista, o motivo do disparo continua visível, com o botão.
+  s.ghOpts.pulls = 503;
+  const fora = linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach');
+  assert.match(fora, /disparo falhou \(GitHub respondeu 422/);
+  assert.match(fora, /Disparar de novo/);
+  // Corpo que não é JSON: fica só o status.
+  const t = setup({ gh: { dispatch: { status: 401, body: '<html>nao json</html>' } } });
+  const v2 = (await putDraft(t.bucket)).version;
+  await t.approve('sales-coach', { confirmar: 'sim', versao: v2 });
+  assert.equal(t.rows()[0].dispatch_error, 'GitHub respondeu 401');
+});
+
+test('R10: rede caída e prazo esgotado no disparo ficam gravados como motivo, sem travar a aprovação', { timeout: 3000 }, async () => {
+  for (const [v, why] of [['erro', 'falha de rede'], ['pendente', 'tempo esgotado']] as const) {
+    const s = setup({ gh: { dispatch: v } });
+    const { version } = await putDraft(s.bucket);
+    const r = await s.approve('sales-coach', { confirmar: 'sim', versao: version });
+    assert.equal(r.headers.get('location'), '/admin/rascunhos?msg=aprovado-sem-disparo', v);
+    assert.equal(s.rows()[0].dispatch_error, why, v);
+    assert.equal(s.mails.length, 1, `${v}: o email sai mesmo assim`);
+    assert.match(linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach'), new RegExp(`disparo falhou \\(${why}\\)`), v);
+  }
+});
+
+test('R10: disparo e email falhando juntos: mensagem própria, os dois motivos gravados', async () => {
+  const s = setup({ gh: { dispatch: 500 }, mailStatus: 500 });
+  const { version } = await putDraft(s.bucket);
+  const r = await s.approve('sales-coach', { confirmar: 'sim', versao: version });
+  assert.equal(r.headers.get('location'), '/admin/rascunhos?msg=aprovado-sem-disparo-nem-aviso');
+  assert.deepEqual([s.rows()[0].dispatch_error, s.rows()[0].notify_error], ['GitHub respondeu 500: falhou', 'Resend respondeu 500']);
+  assert.match(await (await s.req('/admin/rascunhos?msg=aprovado-sem-disparo-nem-aviso')).text(), /<p class="erro">.*o disparo da publicação e o aviso por email ao Roger falharam/);
+});
+
+test('R10: sem o token, nada vai ao GitHub: "disparo sem configuração" fica gravado e aparece na lista', async () => {
+  const s = setup({ token: '' });
+  const { version } = await putDraft(s.bucket);
+  await s.approve('sales-coach', { confirmar: 'sim', versao: version });
+  assert.equal(s.rows()[0].dispatch_error, 'disparo sem configuração');
+  const linha = linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach');
+  assert.match(linha, /disparo falhou \(disparo sem configuração\)/);
+  assert.deepEqual(s.gh, []);
+});
+
+test('R10: derivado (LinkedIn ou com rótulo) não dispara nada, nem na aprovação nem no "Disparar de novo"', async () => {
+  const s = setup();
+  await putDraft(s.bucket, 'sales-coach');
+  const li = await putDraft(s.bucket, 'sales-coach-linkedin', { manifest: LI });
+  const rs = await putDraft(s.bucket, 'sales-coach-short', { manifest: RS });
+  for (const [slug, v] of [['sales-coach-linkedin', li.version], ['sales-coach-short', rs.version]] as const) {
+    assert.equal((await s.approve(slug, { confirmar: 'sim', versao: v })).status, 400, slug);
+    const r = await s.req(`/admin/rascunhos/${slug}/disparar`, { method: 'POST', body: `versao=${v}`,
+      headers: { origin: ORIGIN, 'content-type': 'application/x-www-form-urlencoded' } });
+    assert.equal(r.status, 400, `${slug}: disparar`);
+    assert.match(await r.text(), /Nada foi disparado/);
+  }
+  assert.deepEqual(s.gh, []);
+  assert.deepEqual(s.rows(), []);
+});
+
+const disparar = (s: ReturnType<typeof setup>, slug: string, form: Record<string, string>, headers: Record<string, string> = {}) =>
+  s.req(`/admin/rascunhos/${slug}/disparar`, { method: 'POST', body: new URLSearchParams(form).toString(),
+    headers: { origin: ORIGIN, 'content-type': 'application/x-www-form-urlencoded', ...headers } });
+
+test('R10: "Disparar de novo" repete o disparo da versão aprovada, limpa o motivo e não manda outro email; nova falha atualiza o motivo', async () => {
+  const s = setup({ gh: { dispatch: 500 } });
+  const { version } = await putDraft(s.bucket);
+  await s.approve('sales-coach', { confirmar: 'sim', versao: version });
+  assert.equal(s.rows()[0].dispatch_error, 'GitHub respondeu 500: falhou');
+  s.ghOpts.dispatch = 204;
+  s.avancar(2);
+  const r = await disparar(s, 'sales-coach', { versao: version });
+  assert.equal(r.status, 303);
+  assert.equal(r.headers.get('location'), '/admin/rascunhos?msg=disparado');
+  assert.equal(disparos(s).length, 2);
+  assert.deepEqual(disparos(s)[1].body, { ref: 'main', inputs: { slug: 'sales-coach', versao: version } });
+  assert.deepEqual([s.rows()[0].dispatch_error, s.rows()[0].dispatched_at], ['', '2026-11-13T20:02:00.000Z']);
+  assert.equal(s.rows().length, 1, 'o disparo de novo não cria outra aprovação');
+  assert.equal(s.mails.length, 1, 'sem email no disparo de novo');
+  const list = await (await s.req('/admin/rascunhos?msg=disparado')).text();
+  assert.match(list, /<p class="ok">Publicação disparada de novo no GitHub\.<\/p>/);
+  assert.match(linhaDe(list, 'sales-coach'), /preparando o PR/);
+  assert.doesNotMatch(linhaDe(list, 'sales-coach'), /Disparar de novo/);
+  s.ghOpts.dispatch = 'erro';
+  const f = await disparar(s, 'sales-coach', { versao: version });
+  assert.equal(f.headers.get('location'), '/admin/rascunhos?msg=disparo-falhou');
+  assert.deepEqual([s.rows()[0].dispatch_error, s.rows()[0].dispatched_at], ['falha de rede', '']);
+  assert.match(await (await s.req('/admin/rascunhos?msg=disparo-falhou')).text(), /<p class="erro">O disparo da publicação falhou de novo/);
+});
+
+test('R10: "Disparar de novo" é protegido como as outras ações POST: nada é disparado nem gravado fora da versão aprovada', async () => {
+  const s = setup({ gh: { dispatch: 500 } });
+  const { version, htmlSha } = await putDraft(s.bucket);
+  await s.approve('sales-coach', { confirmar: 'sim', versao: version });
+  await putDraft(s.bucket, 'outro-post', { title: 'Sem aprovação' });
+  const outro = (await readManifest(s.bucket, 'outro-post'))!.version;
+  const antes = JSON.stringify(s.rows());
+  const n = s.gh.length;
+  const cases: [string, Promise<Response>, number][] = [
+    ['outra origem', disparar(s, 'sales-coach', { versao: version }, { origin: 'https://evil.example' }), 403],
+    ['sem origem', s.req('/admin/rascunhos/sales-coach/disparar', { method: 'POST', body: `versao=${version}`,
+      headers: { 'content-type': 'application/x-www-form-urlencoded' } }), 403],
+    ['sem login', s.req('/admin/rascunhos/sales-coach/disparar', { method: 'POST', token: null, body: `versao=${version}`,
+      headers: { origin: ORIGIN, 'content-type': 'application/x-www-form-urlencoded' } }), 403],
+    ['json', disparar(s, 'sales-coach', { versao: version }, { 'content-type': 'application/json' }), 415],
+    ['grande', disparar(s, 'sales-coach', { versao: version, x: 'a'.repeat(3000) }), 413],
+    ['versão velha', disparar(s, 'sales-coach', { versao: SHA('b') }), 409],
+    ['hash do HTML', disparar(s, 'sales-coach', { versao: htmlSha }), 409],
+    ['sem versão', disparar(s, 'sales-coach', {}), 409],
+    ['versão não aprovada', disparar(s, 'outro-post', { versao: outro }), 409],
+    ['slug desconhecido', disparar(s, 'nao-existe', { versao: version }), 404],
+    ['GET', s.req('/admin/rascunhos/sales-coach/disparar'), 405],
+  ];
+  for (const [name, p, status] of cases) assert.equal((await p).status, status, name);
+  assert.equal(s.gh.length, n, 'nenhuma chamada ao GitHub');
+  assert.equal(JSON.stringify(s.rows()), antes);
+  // Versão nova depois da aprovação: a aprovação antiga não serve para disparar a nova.
+  const nova = (await putDraft(s.bucket, 'sales-coach', { title: 'Versão nova' })).version;
+  assert.equal((await disparar(s, 'sales-coach', { versao: nova })).status, 409);
+  assert.equal(s.gh.length, n);
+  // Mensagem desconhecida (até nome de propriedade herdada) não aparece nem quebra a lista.
+  const lista = await s.req('/admin/rascunhos?msg=__proto__');
+  assert.equal(lista.status, 200);
+  assert.doesNotMatch(await lista.text(), /<p class="(ok|erro)">/);
+});
+
+test('R10: estados da publicação, calculados do D1 e do GitHub, com no máximo duas leituras do GitHub por rascunho aprovado', async () => {
+  type Caso = { gh?: GhOpts; site?: Record<string, string | number>; min?: number; esperado: RegExp; botao: boolean; leituras: number; site_consultas?: number };
+  const v = await versionId(await sha256Hex(HTML('Como construí o Sales Coach')), SHA('a'));
+  const v8 = v.slice(0, 8);
+  const ramo = `publica/sales-coach-${v8}`;
+  const RUN = `Publica sales-coach (${v8})`;
+  const execLink = '<a href="https://github.com/guifav/guifav.github.io/actions/runs/77">ver a execução</a>';
+  const prLink = '<a href="https://github.com/guifav/guifav.github.io/pull/12">#12</a>';
+  const casos: Record<string, Caso> = {
+    'preparando, execução ainda não visível': { min: 3, esperado: /^preparando o PR \(disparado há 3 min\)$/, botao: false, leituras: 2 },
+    'preparando, execução rodando': { min: 3, gh: { runs: [exec(77, RUN, 'in_progress')] },
+      esperado: new RegExp(`^preparando o PR \\(disparado há 3 min\\): ${execLink}$`), botao: false, leituras: 2 },
+    'preparando, execução na fila': { min: 1, gh: { runs: [exec(77, RUN, 'queued')] }, esperado: /^preparando o PR \(disparado há 1 min\): <a/, botao: false, leituras: 2 },
+    'parado: nenhuma execução depois de 15 min': { min: 20, esperado: /^parado: nenhuma execução encontrada \(disparado há 20 min\)$/, botao: true, leituras: 2 },
+    'parado há horas': { min: 125, esperado: /^parado: nenhuma execução encontrada \(disparado há 2 h\)$/, botao: true, leituras: 2 },
+    'publicação recusada': { min: 4, gh: { runs: [exec(77, RUN, 'completed', 'failure')] }, esperado: new RegExp(`^publicação recusada: ${execLink}$`), botao: false, leituras: 2 },
+    'execução sem PR': { min: 4, gh: { runs: [exec(77, RUN, 'completed', 'success')] }, esperado: new RegExp(`^execução terminou sem abrir o PR: ${execLink}$`), botao: true, leituras: 2 },
+    'execução cancelada': { min: 4, gh: { runs: [exec(77, RUN, 'completed', 'cancelled')] }, esperado: new RegExp(`^execução interrompida \\(cancelled\\): ${execLink}$`), botao: true, leituras: 2 },
+    'PR aberto, CI verde': { gh: { pulls: [pr(12, 'open', null, ramo)], ci: [exec(1, 'Pages', 'completed', 'success'), exec(2, 'x', 'completed', 'skipped')] },
+      esperado: new RegExp(`^PR aberto ${prLink}, CI verde$`), botao: false, leituras: 2 },
+    'PR aberto, CI vermelha': { gh: { pulls: [pr(12, 'open', null, ramo)], ci: [exec(1, 'Pages', 'completed', 'success'), exec(2, 'Pages', 'completed', 'failure')] },
+      esperado: new RegExp(`^PR aberto ${prLink}, CI vermelha$`), botao: false, leituras: 2 },
+    'PR aberto, CI rodando': { gh: { pulls: [pr(12, 'open', null, ramo)], ci: [exec(1, 'Pages', 'completed', 'success'), exec(2, 'Pages', 'in_progress')] },
+      esperado: new RegExp(`^PR aberto ${prLink}, CI rodando$`), botao: false, leituras: 2 },
+    'PR aberto, CI ainda não começou': { gh: { pulls: [pr(12, 'open', null, ramo)] }, esperado: new RegExp(`^PR aberto ${prLink}, CI pendente$`), botao: false, leituras: 2 },
+    'PR aberto, CI indisponível': { gh: { pulls: [pr(12, 'open', null, ramo)], ci: 502 }, esperado: new RegExp(`^PR aberto ${prLink}, CI indisponível$`), botao: false, leituras: 2 },
+    'PR aberto, CI responde lixo': { gh: { pulls: [pr(12, 'open', null, ramo)], ci: { status: 200, body: '{"total_count": 1}' } },
+      esperado: new RegExp(`^PR aberto ${prLink}, CI indisponível$`), botao: false, leituras: 2 },
+    'publicado: PR mergeado e post no ar': { gh: { pulls: [pr(12, 'closed', '2026-11-14T10:00:00Z', ramo)] }, site: { 'sales-coach': pagina('Coach') },
+      esperado: /^publicado em 2026-11-14: <a href="https:\/\/guifav\.dev\/blog\/sales-coach\/">ver o post<\/a>$/, botao: false, leituras: 1, site_consultas: 1 },
+    'PR mergeado, deploy ainda não terminou': { gh: { pulls: [pr(12, 'closed', '2026-11-14T10:00:00Z', ramo)] },
+      esperado: new RegExp(`^PR ${prLink} mergeado, aguardando o deploy do site$`), botao: false, leituras: 1, site_consultas: 1 },
+    'PR fechado sem merge': { gh: { pulls: [pr(12, 'closed', null, ramo)] }, esperado: new RegExp(`^PR ${prLink} fechado sem merge$`), botao: false, leituras: 1 },
+    'GitHub fora do ar (500)': { gh: { pulls: 500 }, esperado: /^estado indisponível$/, botao: false, leituras: 1 },
+    'GitHub fora do ar (rede)': { gh: { pulls: 'erro' }, esperado: /^estado indisponível$/, botao: false, leituras: 1 },
+    'GitHub responde lixo': { gh: { pulls: { status: 200, body: '{"nao": "lista"}' } }, esperado: /^estado indisponível$/, botao: false, leituras: 1 },
+    'execuções indisponíveis': { min: 3, gh: { runs: 500 }, esperado: /^estado indisponível$/, botao: false, leituras: 2 },
+  };
+  for (const [nome, c] of Object.entries(casos)) {
+    const s = setup({ gh: c.gh, site: c.site });
+    const { version } = await putDraft(s.bucket);
+    assert.equal(version, v);
+    await s.approve('sales-coach', { confirmar: 'sim', versao: version });
+    s.avancar(c.min ?? 0);
+    s.gh.length = 0;
+    const r = await s.req('/admin/rascunhos');
+    assert.equal(r.status, 200, nome);
+    const linha = linhaDe(await r.text(), 'sales-coach');
+    const estado = linha.match(/aprovado em 2026-11-13 20:00 UTC<br>(.*?)(?:<form|<\/td>)/)?.[1] ?? '';
+    assert.match(estado, c.esperado, `${nome}: ${estado}`);
+    assert.equal(/Disparar de novo/.test(linha), c.botao, `${nome}: botão`);
+    assert.equal(leituras(s).length, c.leituras, `${nome}: leituras do GitHub`);
+    assert.ok(leituras(s).every((x) => x.auth === 'Bearer gh-teste' && x.ua), `${nome}: token e User-Agent`);
+    assert.equal(s.site.length, c.site_consultas ?? 0, `${nome}: consultas ao site`);
+  }
+});
+
+test('R10: as consultas usam o branch da versão, a janela do disparo e o head do PR', async () => {
+  const s = setup({ gh: { runs: [] } });
+  const { version } = await putDraft(s.bucket);
+  await s.approve('sales-coach', { confirmar: 'sim', versao: version });
+  s.avancar(3);
+  s.gh.length = 0;
+  await s.req('/admin/rascunhos');
+  const [pulls, runs] = leituras(s);
+  assert.equal(pulls.path, `${GH_BASE}/pulls`);
+  assert.equal(pulls.query.head, `guifav:publica/sales-coach-${version.slice(0, 8)}`);
+  assert.equal(pulls.query.state, 'all');
+  assert.equal(runs.path, `${GH_BASE}/actions/workflows/publicar.yml/runs`);
+  assert.equal(runs.query.event, 'workflow_dispatch');
+  assert.equal(runs.query.created, '>=2026-11-13T19:55:00Z', 'cinco minutos antes do disparo, contra relógio adiantado');
+  const t = setup({ gh: { pulls: [pr(12, 'open', null, `publica/sales-coach-${version.slice(0, 8)}`, 'c'.repeat(40))] } });
+  await putDraft(t.bucket);
+  await t.approve('sales-coach', { confirmar: 'sim', versao: version });
+  t.gh.length = 0;
+  await t.req('/admin/rascunhos');
+  assert.equal(leituras(t)[1].path, `${GH_BASE}/actions/runs`);
+  assert.equal(leituras(t)[1].query.head_sha, 'c'.repeat(40));
+});
+
+test('R10: a execução certa é a do slug e da versão; slug vizinho, outra versão e PR de outro branch não contam', async () => {
+  const s = setup();
+  const { version } = await putDraft(s.bucket);
+  const v8 = version.slice(0, 8);
+  s.ghOpts.pulls = [pr(30, 'open', null, 'publica/sales-coach-2-00000000'), pr(31, 'open', null, `publica/sales-${v8}`)];
+  s.ghOpts.runs = [
+    exec(1, `Publica sales-coach-2 (${v8})`, 'completed', 'failure'),
+    exec(2, `Publica sales (${v8})`, 'completed', 'failure'),
+    exec(3, `Publica sales-coach (${v8}0)`, 'completed', 'failure'),
+    exec(4, 'Publica sales-coach (deadbeef)', 'completed', 'failure'),
+    exec(5, `publica/sales-coach-${v8}`, 'in_progress'),
+    exec(6, `Publica sales-coach (${v8})`, 'completed', 'failure'),
+  ];
+  await s.approve('sales-coach', { confirmar: 'sim', versao: version });
+  s.avancar(2);
+  const linha = linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach');
+  assert.match(linha, /preparando o PR \(disparado há 2 min\): <a href="https:\/\/github\.com\/guifav\/guifav\.github\.io\/actions\/runs\/5">/);
+  assert.doesNotMatch(linha, /#3[01]/);
+});
+
+test('R10: aprovação sem disparo registrado (anterior a esta fatia) mostra "publicação não disparada" com o botão e uma leitura só', async () => {
+  const s = setup();
+  const d = await putDraft(s.bucket);
+  s.db.raw.prepare(`INSERT INTO draft_approvals (slug, title, html_sha256, source_sha256, approved_at, approved_by)
+    VALUES ('sales-coach', 't', ?, ?, '2026-11-12T10:00:00.000Z', ?)`).run(d.htmlSha, d.source, GUI);
+  const linha = linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach');
+  assert.match(linha, /aprovado em 2026-11-12 10:00 UTC<br>publicação não disparada<form/);
+  assert.match(linha, /Disparar de novo/);
+  assert.equal(leituras(s).length, 1);
+  assert.equal(disparos(s).length, 0, 'abrir a lista nunca dispara nada');
+});
+
+test('R10: disparo com motivo gravado, mas o PR da versão existe (o GitHub aceitou depois do prazo): vale o PR', async () => {
+  const s = setup({ gh: { dispatch: 'erro' } });
+  const { version } = await putDraft(s.bucket);
+  await s.approve('sales-coach', { confirmar: 'sim', versao: version });
+  s.ghOpts.pulls = [pr(12, 'open', null, `publica/sales-coach-${version.slice(0, 8)}`)];
+  s.ghOpts.ci = [exec(1, 'Pages', 'completed', 'success')];
+  const linha = linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach');
+  assert.match(linha, /PR aberto <a href="https:\/\/github\.com\/guifav\/guifav\.github\.io\/pull\/12">#12<\/a>, CI verde/);
+  assert.doesNotMatch(linha, /disparo falhou|Disparar de novo/);
+});
+
+test('R10: rascunho não aprovado, ou com a versão mudada depois da aprovação, não consulta o GitHub', async () => {
+  const s = setup();
+  const a = await putDraft(s.bucket);
+  await putDraft(s.bucket, 'outro-post');
+  await s.approve('sales-coach', { confirmar: 'sim', versao: a.version });
+  await putDraft(s.bucket, 'sales-coach', { title: 'Versão nova' });
+  s.gh.length = 0;
+  const body = await (await s.req('/admin/rascunhos')).text();
+  assert.match(linhaDe(body, 'sales-coach'), /a versão mudou depois da última aprovação/);
+  assert.match(linhaDe(body, 'outro-post'), /<td>aguardando aprovação<\/td>/);
+  assert.deepEqual(s.gh, []);
+});
+
+// timeout do teste: sem o prazo nas leituras do GitHub, a lista nunca termina, e o teste falha em vez de travar a suíte.
+test('R10: prazo esgotado na leitura do GitHub (resposta ou corpo) mostra "estado indisponível" sem travar a lista', { timeout: 3000 }, async () => {
+  for (const v of ['pendente', 'corpo-pendente'] as const) {
+    const s = setup();
+    const { version } = await putDraft(s.bucket);
+    await s.approve('sales-coach', { confirmar: 'sim', versao: version });
+    await putDraft(s.bucket, 'outro-post', { title: 'Outro' });
+    s.ghOpts.pulls = v;
+    const r = await s.req('/admin/rascunhos');
+    assert.equal(r.status, 200, v);
+    const body = await r.text();
+    assert.match(linhaDe(body, 'sales-coach'), /<br>estado indisponível<\/td>/, v);
+    assert.match(linhaDe(body, 'outro-post'), /aguardando aprovação/, `${v}: o resto da lista continua`);
+  }
+});
+
+test('R10: sem o token, a lista não consulta o GitHub e diz por quê', async () => {
+  const s = setup({ token: '' });
+  const d = await putDraft(s.bucket);
+  s.db.raw.prepare(`INSERT INTO draft_approvals (slug, title, html_sha256, source_sha256, approved_at, approved_by, dispatched_at)
+    VALUES ('sales-coach', 't', ?, ?, '2026-11-12T10:00:00.000Z', ?, '2026-11-12T10:00:01.000Z')`).run(d.htmlSha, d.source, GUI);
+  const linha = linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach');
+  assert.match(linha, /estado indisponível \(painel sem o token do GitHub\)/);
+  assert.deepEqual(s.gh, []);
 });
