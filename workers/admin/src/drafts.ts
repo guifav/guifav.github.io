@@ -386,19 +386,28 @@ async function ciDoPr(env: DraftEnv, deps: DraftDeps, sha: string): Promise<stri
   // mesmo commit não deixa a CI vermelha (r1, Astra P2). Recente pela última tentativa: reexecutar mantém o id da
   // execução, mas renova o run_started_at, e a API devolve o estado dessa tentativa (r2, Astra P2). Sem data, o id
   // desempata.
-  // Execução parada em "aprovação necessária" (action_required) não rodou: o PR aberto pelo bot gera uma pelo evento de
-  // PR, que o GitHub segura, ao lado da que o publicar.yml dispara. Ela não entra na conta (teste de ponta a ponta, #82).
+  // Execução parada em "aprovação necessária" (action_required) não rodou. O PR aberto pelo bot gera uma pelo evento de
+  // PR, que o GitHub segura, ao lado da que o publicar.yml dispara no mesmo workflow: aí ela não conta (teste de ponta a
+  // ponta, #82, PR #87). Workflow que só tem execução esperando aprovação nunca rodou, e a CI fica pendente, sem verde
+  // emprestado de outro workflow (r1, Kimi P2).
   const vigente = new Map<string, Record<string, unknown>>();
+  const soEsperando = new Set<string>();
   for (const x of r.workflow_runs) {
-    if (!isObj(x) || !isId(x.id) || x.conclusion === 'action_required') continue;
+    if (!isObj(x) || !isId(x.id)) continue;
     const wf = isId(x.workflow_id) ? `id:${x.workflow_id}` : `nome:${String(x.name ?? '')}`;
+    if (x.conclusion === 'action_required') {
+      soEsperando.add(wf);
+      continue;
+    }
     const atual = vigente.get(wf);
     vigente.set(wf, atual ? maisRecente(x, atual) : x);
   }
+  for (const wf of vigente.keys()) soEsperando.delete(wf);
   const runs = [...vigente.values()];
   if (!runs.length) return 'CI pendente';
   if (runs.some((x) => x.status !== 'completed')) return 'CI rodando';
-  return runs.every((x) => x.conclusion === 'success' || x.conclusion === 'skipped' || x.conclusion === 'neutral') ? 'CI verde' : 'CI vermelha';
+  if (runs.some((x) => !(x.conclusion === 'success' || x.conclusion === 'skipped' || x.conclusion === 'neutral'))) return 'CI vermelha';
+  return soEsperando.size ? 'CI pendente' : 'CI verde';
 }
 
 /** Estado calculado na hora, do D1 e do GitHub: uma chamada (PR do branch da versão) e, no máximo, uma segunda (CI do

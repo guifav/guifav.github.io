@@ -1076,6 +1076,13 @@ test('R10: estados da publicação, calculados do D1 e do GitHub, com no máximo
     'PR aberto, só a execução esperando aprovação: CI pendente': { gh: { pulls: [pr(12, 'open', null, ramo)],
       ci: [exec(39, 'Pages', 'completed', 'action_required', 100)] },
       esperado: new RegExp(`^PR aberto ${prLink}, CI pendente$`), botao: false, leituras: 2 },
+    // r1 (Kimi P2): workflow que só tem execução esperando aprovação nunca rodou; o verde de outro workflow não cobre.
+    'PR aberto, outro workflow só esperando aprovação: CI pendente': { gh: { pulls: [pr(12, 'open', null, ramo)],
+      ci: [exec(36, 'Pages', 'completed', 'success', 100), exec(39, 'Testes', 'completed', 'action_required', 200)] },
+      esperado: new RegExp(`^PR aberto ${prLink}, CI pendente$`), botao: false, leituras: 2 },
+    'PR aberto, falha em um workflow e outro esperando aprovação: CI vermelha': { gh: { pulls: [pr(12, 'open', null, ramo)],
+      ci: [exec(36, 'Pages', 'completed', 'failure', 100), exec(39, 'Testes', 'completed', 'action_required', 200)] },
+      esperado: new RegExp(`^PR aberto ${prLink}, CI vermelha$`), botao: false, leituras: 2 },
     'PR aberto, página incompleta de execuções da CI (r1, Astra P2)': { gh: { pulls: [pr(12, 'open', null, ramo)], ci: [exec(1, 'Pages', 'completed', 'success')], total: 150 },
       esperado: new RegExp(`^PR aberto ${prLink}, CI indisponível$`), botao: false, leituras: 2 },
     'execução fora da primeira página (r1, Astra P2)': { min: 40, gh: { runs: [exec(5, `Publica outro-post (${SHA('0')})`, 'completed', 'success')], total: 150 },
