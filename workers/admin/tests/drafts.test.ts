@@ -853,7 +853,8 @@ test('R6: wrangler.toml liga o bucket privado e a migração cria a tabela de ap
 const linhaDe = (body: string, slug: string) => body.split('<tr').find((r) => r.includes(`href="/admin/rascunhos/${slug}/"`)) ?? '';
 const disparos = (s: ReturnType<typeof setup>) => s.gh.filter((c) => c.method === 'POST');
 const leituras = (s: ReturnType<typeof setup>) => s.gh.filter((c) => c.method === 'GET');
-const pr = (n: number, state: 'open' | 'closed', merged_at: string | null, ref: string, sha = 'b'.repeat(40)) => ({ number: n, state, merged_at, head: { ref, sha } });
+const pr = (n: number, state: 'open' | 'closed', merged_at: string | null, ref: string, sha = 'b'.repeat(40), base = 'main') =>
+  ({ number: n, state, merged_at, head: { ref, sha }, base: { ref: base } });
 const exec = (id: number, display_title: string, status: string, conclusion: string | null = null, workflow_id?: number) =>
   ({ id, display_title, status, conclusion, ...(workflow_id ? { workflow_id } : {}) });
 
@@ -1116,6 +1117,7 @@ test('R10: as consultas usam o branch da versão, a janela do disparo e o head d
   assert.equal(pulls.path, `${GH_BASE}/pulls`);
   assert.equal(pulls.query.head, `guifav:publica/sales-coach-${version.slice(0, 8)}`);
   assert.equal(pulls.query.state, 'all');
+  assert.equal(pulls.query.base, 'main');
   assert.equal(runs.path, `${GH_BASE}/actions/workflows/publicar.yml/runs`);
   assert.equal(runs.query.event, 'workflow_dispatch');
   assert.equal(runs.query.created, '>=2026-11-13T19:55:00Z', 'de cinco minutos antes do disparo em diante (r2: disparo manual posterior)');
@@ -1382,4 +1384,17 @@ test('R10 (r4, Astra P2): execução antiga reexecutada depois de um novo dispar
   const linha = linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach');
   assert.match(linha, /preparando o PR \(disparado há 1 min\): <a href="[^"]*\/runs\/30">/);
   assert.equal(leituras(s)[1].query.created, '>=2026-11-13T19:55:00Z', 'a janela começa na aprovação, não no último disparo');
+});
+
+test('R10 (r4, Kimi P3): só vale o PR do branch da versão contra a main; o mesmo branch com outra base é ignorado', async () => {
+  const s = setup();
+  const { version } = await putDraft(s.bucket);
+  const ramo = `publica/sales-coach-${version.slice(0, 8)}`;
+  await s.approve('sales-coach', { confirmar: 'sim', versao: version });
+  s.ghOpts.pulls = [pr(40, 'closed', '2026-11-14T10:00:00Z', ramo, 'b'.repeat(40), 'outra-base'), pr(41, 'open', null, ramo)];
+  s.ghOpts.ci = [exec(1, 'Pages', 'completed', 'success')];
+  const linha = linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach');
+  assert.match(linha, /PR aberto <a href="[^"]*\/pull\/41">#41<\/a>, CI verde/);
+  s.ghOpts.pulls = [pr(40, 'closed', '2026-11-14T10:00:00Z', ramo, 'b'.repeat(40), 'outra-base')];
+  assert.match(linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach'), /preparando o PR/);
 });

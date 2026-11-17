@@ -403,10 +403,12 @@ async function publicacao(env: DraftEnv, deps: DraftDeps, m: Manifest, a: Approv
   const falhou = { html: `disparo falhou (${esc(a.dispatch_error)})`, redisparar: true };
   if (!env.GITHUB_DISPATCH_TOKEN) return a.dispatch_error ? falhou : { html: 'estado indisponível (painel sem o token do GitHub)', redisparar: false };
   const branch = publishBranch(m);
-  const pulls = await githubGet(env, deps, `/pulls?state=all&per_page=5&head=${encodeURIComponent(`guifav:${branch}`)}`);
+  // Só o PR do branch da versão contra a main: o mesmo branch retargetado para outra base não publica (r4, Kimi P3).
+  const pulls = await githubGet(env, deps, `/pulls?state=all&per_page=5&base=main&head=${encodeURIComponent(`guifav:${branch}`)}`);
   // GitHub fora do ar: o motivo de um disparo falho continua visível (e com o botão); sem ele, "estado indisponível".
   if (!Array.isArray(pulls)) return a.dispatch_error ? falhou : { html: 'estado indisponível', redisparar: false };
-  const pr = pulls.find((p): p is Record<string, unknown> => isObj(p) && isId(p.number) && isObj(p.head) && p.head.ref === branch);
+  const pr = pulls.find((p): p is Record<string, unknown> => isObj(p) && isId(p.number) && isObj(p.head) && p.head.ref === branch
+    && isObj(p.base) && p.base.ref === 'main');
   if (pr) {
     const n = pr.number as number;
     const link = `<a href="${GITHUB_WEB}/pull/${n}">#${n}</a>`;
