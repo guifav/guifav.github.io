@@ -565,5 +565,331 @@ class UploadTest(unittest.TestCase):
             D.approvals("x'; DROP TABLE draft_approvals; --", run=Fake())
 
 
+class Nuvem:
+    """D1 e R2 falsos para o publicar: aprovações e objetos do bucket, com o registro do que foi lido."""
+
+    def __init__(self, rows, objetos):
+        self.rows, self.objetos = rows, objetos
+        self.consultas, self.baixados = [], []
+
+    def aprovacoes(self, slug):
+        self.consultas.append(slug)
+        return self.rows
+
+    def baixar(self, key, work):
+        self.baixados.append(key)
+        if key not in self.objetos:
+            raise D.DraftError(f"não consegui baixar {key} do R2: NoSuchKey")
+        return self.objetos[key]
+
+
+IMGS = {"01-capa.webp": b"capa", "fig/02-grafico-728.png": b"grafico", "03-anim.gif": b"anim"}
+
+
+class PublicarTest(unittest.TestCase):
+    """#82, fatia 3: a versão aprovada vira os arquivos do post, e nada é gravado se uma conferência falhar."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        root = Path(self.tmp.name)
+        self.blog = root / "repo" / "blog-src"
+        (self.blog / "src" / "content" / "posts").mkdir(parents=True)
+        (self.blog / "src" / "content" / "posts" / "outro-post.md").write_bytes(b"outro")
+        (self.blog / "public" / "img" / "outro-post").mkdir(parents=True)
+        self.work = root / "work"
+        self.fonte, self.source = fonte_de(imgs=IMGS)
+        self.man = D.manifest(D.Preview(SLUG, "Sales Coach", b"<html>aprovado</html>", {}), self.source, self.fonte)
+        self.v = self.man["version"]
+        self.row = {"id": 7, "html_sha256": self.man["html_sha256"], "source_sha256": self.source, "approved_at": "2026-11-16T18:12:10.333Z"}
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def objetos(self, man=None, fonte=None, versao=None):
+        man = self.man if man is None else man
+        fonte = self.fonte if fonte is None else fonte
+        out = {f"{SLUG}/manifest.json": json.dumps(man).encode()}
+        out.update({f"{SLUG}/v/{versao or man['version']}/fonte/{k}": b for k, b in fonte.items()})
+        return out
+
+    def arvore(self):
+        return sorted(p.relative_to(self.blog).as_posix() for p in self.blog.rglob("*") if p.is_file())
+
+    def recusa(self, nuvem, padrao, slug=SLUG, versao=None):
+        antes = self.arvore()
+        with self.assertRaisesRegex(D.DraftError, padrao):
+            D.publicar(slug, self.v if versao is None else versao, nuvem, self.blog, self.work)
+        self.assertEqual(self.arvore(), antes, "nada é gravado numa recusa")
+
+    def test_caso_feliz_grava_o_markdown_e_as_imagens_nos_caminhos_do_blog(self):
+        nuvem = Nuvem([{"id": 3, "html_sha256": "0" * 64, "source_sha256": "1" * 64, "approved_at": "x"}, self.row], self.objetos())
+        p = D.publicar(SLUG, self.v, nuvem, self.blog, self.work)
+        self.assertEqual(self.arvore(), sorted([
+            "src/content/posts/outro-post.md", f"src/content/posts/{SLUG}.md", f"public/img/{SLUG}/01-capa.webp",
+            f"public/img/{SLUG}/fig/02-grafico-728.png", f"public/img/{SLUG}/03-anim.gif"]))
+        self.assertEqual((self.blog / "src" / "content" / "posts" / f"{SLUG}.md").read_bytes(), MD)
+        for rel, data in IMGS.items():
+            self.assertEqual((self.blog / "public" / "img" / SLUG / rel).read_bytes(), data)
+        self.assertEqual((p.slug, p.versao, p.title, p.source_sha256, p.html_sha256), (SLUG, self.v, "Sales Coach", self.source, self.man["html_sha256"]))
+        self.assertEqual(p.aprovacao, {"id": 7, "approved_at": "2026-11-16T18:12:10.333Z"})
+        self.assertEqual(p.arquivos[0], (f"blog-src/src/content/posts/{SLUG}.md", hashlib.sha256(MD).hexdigest()))
+        self.assertEqual(sorted(c for c, _ in p.arquivos[1:]), sorted(f"blog-src/public/img/{SLUG}/{k}" for k in IMGS))
+        self.assertEqual(nuvem.consultas, [SLUG])
+        self.assertEqual(sorted(nuvem.baixados), sorted(self.objetos()))
+        corpo = D.corpo_pr(p)
+        for trecho in (self.v, self.source, self.man["html_sha256"], "linha `7`", "2026-11-16T18:12:10.333Z",
+                       f"| `blog-src/public/img/{SLUG}/fig/02-grafico-728.png` | `{hashlib.sha256(b'grafico').hexdigest()}` |"):
+            self.assertIn(trecho, corpo)
+
+    def test_corpo_do_pr_nao_menciona_ninguem_pelo_titulo(self):
+        p = D.Publicacao(SLUG, self.v, "Com `@alguem`\nquebra", {"id": 1, "approved_at": "a"}, "h" * 64, "s" * 64, [])
+        corpo = D.corpo_pr(p)
+        self.assertIn("`Com '@alguem' quebra`", corpo)
+        self.assertNotIn("\nquebra", corpo)
+
+    def test_recusa_sem_aprovacao_da_versao(self):
+        outra = {**self.row, "source_sha256": "2" * 64}
+        for name, rows in (("nenhuma", []), ("outra versão do slug", [outra]), ("linha malformada", [{"id": 1}, "x", None])):
+            nuvem = Nuvem(rows, self.objetos())
+            with self.subTest(name=name):
+                self.recusa(nuvem, "nenhuma aprovação")
+                self.assertEqual(nuvem.baixados, [], "sem aprovação nada é baixado")
+
+    def test_recusa_derivado(self):
+        for name, extra in (("linkedin", {"kind": "linkedin", "parent": "artigo"}),
+                            ("derivado", {"kind": "derivado", "parent": "artigo", "rotulo": "Roteiro"}),
+                            ("parent sem kind", {"parent": "artigo"}),
+                            # kind sozinho também recusa, sem depender de parent (r5, Astra P4).
+                            ("kind sem parent", {"kind": "linkedin"})):
+            man = {**self.man, **extra}
+            with self.subTest(name=name):
+                self.recusa(Nuvem([self.row], self.objetos(man)), "derivado")
+
+    def test_recusa_hash_de_arquivo_divergente(self):
+        # O R2 devolve bytes que não são os do manifesto.
+        trocado = {**self.fonte, "img/01-capa.webp": b"outra capa"}
+        self.recusa(Nuvem([self.row], self.objetos(fonte=trocado, versao=self.v)), "sha256 de img/01-capa.webp")
+        # Arquivo listado no manifesto que não está no bucket.
+        sem = {k: b for k, b in self.fonte.items() if k != "img/03-anim.gif"}
+        self.recusa(Nuvem([self.row], self.objetos(fonte=sem, versao=self.v)), "NoSuchKey")
+
+    def test_recusa_source_sha256_divergente(self):
+        # Manifesto e bucket coerentes entre si, com um Markdown trocado depois da aprovação: cada arquivo bate com o
+        # manifesto, e só o source_sha256 recalculado mostra que não é a fonte aprovada.
+        trocado = {**self.fonte, f"{SLUG}.md": MD + b"frase nova\n"}
+        man = {**self.man, "fonte": {k: hashlib.sha256(b).hexdigest() for k, b in trocado.items()}}
+        self.recusa(Nuvem([self.row], self.objetos(man, trocado)), "source_sha256")
+        # Imagem a menos no manifesto e no bucket: também muda o hash da fonte.
+        menos = {k: b for k, b in self.fonte.items() if k != "img/03-anim.gif"}
+        man = {**self.man, "fonte": {k: hashlib.sha256(b).hexdigest() for k, b in menos.items()}}
+        self.recusa(Nuvem([self.row], self.objetos(man, menos)), "source_sha256")
+
+    def test_recusa_manifesto_de_outra_versao_ou_sem_fonte(self):
+        # Versão nova enviada depois da aprovação: o manifesto atual não é o aprovado.
+        novo, novo_source = fonte_de(md=MD + b"x", imgs=IMGS)
+        man = D.manifest(D.Preview(SLUG, "Sales Coach", b"<html>novo</html>", {}), novo_source, novo)
+        self.recusa(Nuvem([self.row], self.objetos(man, novo)), "versão atual do rascunho")
+        # Manifesto que mente a versão, com HTML de outra.
+        self.recusa(Nuvem([self.row], self.objetos({**self.man, "html_sha256": "3" * 64})), "HTML e a fonte da aprovação")
+        # Manifesto de antes do #82.
+        sem = {k: v for k, v in self.man.items() if k != "fonte"}
+        self.recusa(Nuvem([self.row], self.objetos(sem)), "não tem a fonte")
+        self.recusa(Nuvem([self.row], self.objetos({**self.man, "fonte": {}})), "não tem a fonte")
+        self.recusa(Nuvem([self.row], self.objetos({**self.man, "fonte": ["sales-coach.md"]})), "não tem a fonte")
+        self.recusa(Nuvem([self.row], {f"{SLUG}/manifest.json": b"{nao e json"}), "ilegível")
+        self.recusa(Nuvem([self.row], self.objetos({**self.man, "slug": "outro"})), "não é deste slug")
+
+    def test_recusa_slug_ja_publicado_antes_de_consultar_a_nuvem(self):
+        (self.blog / "src" / "content" / "posts" / f"{SLUG}.md").write_bytes(b"publicado")
+        nuvem = Nuvem([self.row], self.objetos())
+        self.recusa(nuvem, "já está publicado")
+        self.assertEqual((nuvem.consultas, nuvem.baixados), ([], []))
+        (self.blog / "src" / "content" / "posts" / f"{SLUG}.md").unlink()
+        (self.blog / "public" / "img" / SLUG).mkdir()
+        self.recusa(nuvem, "public/img/sales-coach")
+        self.assertEqual((nuvem.consultas, nuvem.baixados), ([], []))
+
+    def test_recusa_entradas_invalidas_antes_de_consultar_a_nuvem(self):
+        nuvem = Nuvem([self.row], self.objetos())
+        for slug, versao in (("Sales-Coach", self.v), ("sales-coach\n", self.v), ("$(touch x)", self.v), ("../x", self.v), ("", self.v),
+                             (SLUG, self.v[:63]), (SLUG, self.v.upper()), (SLUG, self.v + "\n"), (SLUG, "$(id)" + self.v[5:])):
+            with self.subTest(slug=slug, versao=versao):
+                self.recusa(nuvem, "inválid", slug=slug, versao=versao)
+        self.assertEqual((nuvem.consultas, nuvem.baixados), ([], []))
+
+    def test_recusa_caminho_malicioso_na_fonte_antes_de_baixar_a_fonte(self):
+        sha = "4" * 64
+        for rel, padrao in (("../outro-post.md", "caminho inválido"), ("img/../../src/pages/index.astro", "caminho inválido"),
+                            ("/etc/passwd", "caminho inválido"), ("img/a.webp\n", "caminho inválido"), ("outro.md", "caminho inválido"),
+                            ("img/x.html", "caminho inválido"), ("fonte/sales-coach.md", "caminho inválido"),
+                            ("img/a.svg", "barreira 2"), ("img/.oculto.webp", "caminho inválido")):
+            man = {**self.man, "fonte": {**self.man["fonte"], rel: sha}}
+            nuvem = Nuvem([self.row], self.objetos(man))
+            with self.subTest(rel=rel):
+                self.recusa(nuvem, padrao)
+                self.assertEqual(nuvem.baixados, [f"{SLUG}/manifest.json"], "só o manifesto foi baixado")
+        man = {**self.man, "fonte": {**self.man["fonte"], "img/a.webp": "nao-hex"}}
+        self.recusa(Nuvem([self.row], self.objetos(man)), "sha256 inválido")
+
+    def test_recusa_link_simbolico_no_caminho_do_destino(self):
+        # Um link no caminho desviaria a gravação: para fora do repo (public/img) ou para outra pasta dele
+        # (src/content/posts -> ../pages, r1, Astra P3). Nada é gravado em nenhum dos dois casos.
+        import shutil
+        fora = Path(self.tmp.name) / "fora"
+        fora.mkdir()
+        shutil.rmtree(self.blog / "public" / "img")
+        (self.blog / "public" / "img").symlink_to(fora)
+        self.recusa(Nuvem([self.row], self.objetos()), "link simbólico no caminho do destino: blog-src/public/img")
+        self.assertEqual(list(fora.iterdir()), [])
+        (self.blog / "public" / "img").unlink()
+        (self.blog / "public" / "img").mkdir()
+        pages = self.blog / "src" / "pages"
+        pages.mkdir()
+        shutil.rmtree(self.blog / "src" / "content" / "posts")
+        (self.blog / "src" / "content" / "posts").symlink_to("../pages")
+        self.recusa(Nuvem([self.row], self.objetos()), "link simbólico no caminho do destino: blog-src/src/content/posts")
+        self.assertEqual(list(pages.iterdir()), [])
+
+    def test_cli_publicar_grava_os_arquivos_do_pr(self):
+        saida = Path(self.tmp.name) / "pr"
+        nuvem = Nuvem([self.row], self.objetos())
+        with mock.patch.object(D, "BLOG_SRC", self.blog), mock.patch.object(D, "Cloudflare", lambda env: nuvem), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(D.main(["publicar", SLUG, "--versao", self.v, "--saida", str(saida)]), 0)
+        self.assertEqual((saida / "titulo.txt").read_text(encoding="utf-8"), "Sales Coach\n")
+        self.assertIn(self.source, (saida / "corpo.md").read_text(encoding="utf-8"))
+        self.assertEqual(sorted((saida / "arquivos.txt").read_text(encoding="utf-8").splitlines()),
+                         sorted([f"blog-src/src/content/posts/{SLUG}.md", *[f"blog-src/public/img/{SLUG}/{k}" for k in IMGS]]))
+        # Saída com arquivo de antes: recusa, sem tocar no blog.
+        err = io.StringIO()
+        with mock.patch.object(D, "BLOG_SRC", self.blog), mock.patch.object(D, "Cloudflare", side_effect=AssertionError("não chega")), \
+                contextlib.redirect_stderr(err):
+            self.assertEqual(D.main(["publicar", SLUG, "--versao", self.v, "--saida", str(saida)]), 2)
+        self.assertIn("vazia", err.getvalue())
+
+
+class CloudflareTest(unittest.TestCase):
+    """O transporte real do publicar: o D1 pela API REST, com o slug como parâmetro, e o R2 pela API S3. Os segredos
+    vão só em cabeçalho ou ambiente, nunca em argumento nem em mensagem de erro."""
+    ENV = {"CLOUDFLARE_ACCOUNT_ID": "a" * 32, "CF_PUBLICAR_API_TOKEN": "tok-SEGREDO-d1", "R2_ACCESS_KEY_ID": "id-SEGREDO-r2",
+           "R2_SECRET_ACCESS_KEY": "chave-SEGREDO-r2", "PATH": "/usr/bin", "AWS_PROFILE": "outro"}
+
+    def test_faltando_segredo_diz_so_o_nome(self):
+        with self.assertRaisesRegex(D.DraftError, "faltam no ambiente: CF_PUBLICAR_API_TOKEN, R2_SECRET_ACCESS_KEY$"):
+            D.Cloudflare({**self.ENV, "CF_PUBLICAR_API_TOKEN": "", "R2_SECRET_ACCESS_KEY": ""})
+        with self.assertRaisesRegex(D.DraftError, "CLOUDFLARE_ACCOUNT_ID"):
+            D.Cloudflare({**self.ENV, "CLOUDFLARE_ACCOUNT_ID": "conta/../x"})
+
+    def test_d1_pela_api_rest_com_parametro(self):
+        pedidos = []
+
+        class Resp(io.BytesIO):
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def http(req, timeout):
+            pedidos.append(req)
+            return Resp(json.dumps({"success": True, "result": [{"results": [{"id": 1}], "success": True}]}).encode())
+        cf = D.Cloudflare(self.ENV, http=http)
+        self.assertEqual(cf.aprovacoes("x'; DROP TABLE draft_approvals; --"), [{"id": 1}])
+        req = pedidos[0]
+        self.assertEqual(req.full_url, f"https://api.cloudflare.com/client/v4/accounts/{'a' * 32}/d1/database/{D.D1_ID}/query")
+        self.assertEqual(req.get_method(), "POST")
+        self.assertEqual(req.get_header("Authorization"), "Bearer tok-SEGREDO-d1")
+        body = json.loads(req.data)
+        self.assertEqual(body["params"], ["x'; DROP TABLE draft_approvals; --"])
+        self.assertNotIn("DROP", body["sql"])
+        self.assertIn("WHERE slug = ?", body["sql"])
+
+    def test_d1_com_erro_nao_vaza_o_token(self):
+        import urllib.error
+
+        def recusa(req, timeout):
+            raise urllib.error.HTTPError(req.full_url, 403, "Forbidden", {}, io.BytesIO(b'{"errors":[{"message":"Authentication error"}]}'))
+
+        def lixo(req, timeout):
+            return contextlib.nullcontext(io.BytesIO(b'{"success": false}'))
+
+        def falhou_com_linhas(req, timeout):
+            # success false vale mesmo com linhas na resposta: nada de aprovação tirada de uma consulta que falhou.
+            return contextlib.nullcontext(io.BytesIO(b'{"success": false, "result": [{"results": [{"id": 1}]}]}'))
+        def sem_rede(req, timeout):
+            raise urllib.error.URLError(f"falha ao abrir {req.full_url}")
+        for http, padrao in ((recusa, "respondeu 403"), (lixo, "fora do formato"), (falhou_com_linhas, "fora do formato"),
+                             (sem_rede, r"falha ao consultar as aprovações no D1 \(URLError\)")):
+            with self.subTest(padrao=padrao), self.assertRaisesRegex(D.DraftError, padrao) as ctx:
+                D.Cloudflare(self.ENV, http=http).aprovacoes(SLUG)
+            # Nem o token nem o id da conta, que está na URL da consulta (r3, Kimi P4).
+            self.assertNotIn("SEGREDO", str(ctx.exception))
+            self.assertNotIn("a" * 32, str(ctx.exception))
+
+    def test_r2_pela_api_s3_com_as_chaves_no_ambiente(self):
+        chamadas = []
+
+        def run(args, **kw):
+            chamadas.append((args, kw))
+            Path(args[-1]).write_bytes(b"conteudo")
+            return subprocess.CompletedProcess(args, 0, b"{}", b"")
+        with tempfile.TemporaryDirectory() as t:
+            self.assertEqual(D.Cloudflare(self.ENV, run=run).baixar("sales-coach/manifest.json", Path(t)), b"conteudo")
+            self.assertEqual(list(Path(t).iterdir()), [], "o arquivo temporário sai")
+        args, kw = chamadas[0]
+        self.assertEqual(args[:7], ["aws", "s3api", "get-object", "--bucket", "blog-rascunhos", "--key", "sales-coach/manifest.json"])
+        self.assertEqual(len(args), 8)
+        # Nenhum dos quatro segredos em argumento, nem o id da conta, que vai no endpoint (r1, Astra P2).
+        for segredo in ("a" * 32, "SEGREDO"):
+            self.assertNotIn(segredo, " ".join(args))
+        env = kw["env"]
+        self.assertEqual(env["AWS_ENDPOINT_URL_S3"], f"https://{'a' * 32}.r2.cloudflarestorage.com")
+        self.assertEqual((env["AWS_ACCESS_KEY_ID"], env["AWS_SECRET_ACCESS_KEY"]), ("id-SEGREDO-r2", "chave-SEGREDO-r2"))
+        self.assertNotIn("CF_PUBLICAR_API_TOKEN", env)
+        self.assertNotIn("AWS_PROFILE", env, "credencial de outro perfil não entra")
+        # Do erro do aws CLI só sai o código do S3: o texto dele pode trazer o endpoint (com o id da conta) ou outra
+        # coisa que vai para o log e o resumo da execução (r1, Astra P2).
+        conta = "a" * 32
+        for stderr, padrao in (
+                (f"An error occurred (NoSuchKey) when calling GetObject at https://{conta}.r2.cloudflarestorage.com key id-SEGREDO-r2".encode(),
+                 "o R2 respondeu NoSuchKey$"),
+                (f"Could not connect to the endpoint URL: \"https://{conta}.r2.cloudflarestorage.com/blog-rascunhos/x\"".encode(),
+                 "o aws CLI saiu com 255, sem código de erro do S3$")):
+            with self.subTest(padrao=padrao), tempfile.TemporaryDirectory() as t, self.assertRaisesRegex(D.DraftError, padrao) as ctx:
+                D.Cloudflare(self.ENV, run=Fake(rc=255, stderr=stderr)).baixar("sales-coach/manifest.json", Path(t))
+            self.assertNotIn("SEGREDO", str(ctx.exception))
+            self.assertNotIn(conta, str(ctx.exception))
+
+    def test_d1_id_e_o_do_wrangler_toml(self):
+        toml = (D.ADMIN_WORKER / "wrangler.toml").read_text(encoding="utf-8")
+        self.assertIn(f'database_id = "{D.D1_ID}"', toml)
+
+
+class PublicarWorkflowTest(unittest.TestCase):
+    """O publicar.yml cumpre o contrato com o painel (fatia 4) e nunca põe uma entrada direto no shell."""
+
+    def setUp(self):
+        self.yml = (D.REPO / ".github" / "workflows" / "publicar.yml").read_text(encoding="utf-8")
+
+    def test_entradas_so_por_variavel_de_ambiente(self):
+        linhas = [ln.split(":")[0].strip() for ln in self.yml.splitlines() if re.search(r"\$\{\{\s*(?:inputs|github\.event)\b", ln)]
+        self.assertEqual(sorted(linhas), ["SLUG", "VERSAO", "group", "run-name"], "inputs só no run-name, na concurrency e no env do job")
+
+    def test_contrato_com_o_painel(self):
+        y = self.yml
+        self.assertRegex(y, r"(?m)^on:\n  workflow_dispatch:\n    inputs:\n      slug:\n(?:        .*\n)+      versao:\n")
+        self.assertIn("run-name: Publica ${{ inputs.slug }} (${{ inputs.versao }})", y)
+        self.assertIn('echo "BRANCH=publica/$SLUG-${VERSAO:0:8}" >> "$GITHUB_ENV"', y)
+        for perm in ("contents: write", "pull-requests: write", "actions: write"):
+            self.assertIn(f"\n  {perm}\n", y)
+        self.assertIn("[[ \"$SLUG\" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]", y)
+        self.assertIn("[[ \"$VERSAO\" =~ ^[0-9a-f]{64}$ ]]", y)
+        self.assertIn("[ \"$GITHUB_REF\" = refs/heads/main ]", y)
+        self.assertIn('gh workflow run pages.yml --ref "$BRANCH"', y)
+        self.assertIn('draft_preview.py publicar "$SLUG" --versao "$VERSAO"', y)
+        # Segredos só no passo que confere e grava.
+        self.assertEqual(y.count("${{ secrets."), 4)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

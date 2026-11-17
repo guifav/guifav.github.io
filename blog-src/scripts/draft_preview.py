@@ -3,6 +3,7 @@
     python3 blog-src/scripts/draft_preview.py enviar <rascunho.md> [--imagens DIR] [--dry-run --out DIR]
     python3 blog-src/scripts/draft_preview.py status <rascunho.md> [--imagens DIR]
     python3 blog-src/scripts/draft_preview.py remover <slug>
+    python3 blog-src/scripts/draft_preview.py publicar <slug> --versao <versão> --saida DIR   (só no publicar.yml)
 
 O rascunho nunca entra no repo antes da aprovação do Gui: o Markdown e as imagens ficam fora dele (ex.:
 /root/.roger/inbox/blog/rascunhos/). O "enviar":
@@ -33,7 +34,19 @@ da versão atual, nessa ordem, e confere toda chave antes do primeiro delete.
 A simulação (--dry-run --out DIR) grava em DIR o que seria enviado, com a fonte em DIR/fonte/; DIR precisa estar vazia
 ou não existir.
 
-Credenciais: CLOUDFLARE_API_TOKEN e CLOUDFLARE_ACCOUNT_ID no ambiente (env da KVM), usadas pelo wrangler.
+O "publicar" (#82, fatia 3) é o passo central do .github/workflows/publicar.yml, que roda num checkout da main quando
+o painel aprova um artigo. Ele recusa, antes de gravar qualquer arquivo, se: o slug ou a versão não têm o formato; o
+post já existe na main; o D1 não tem aprovação cujo HTML e fonte deem exatamente essa versão; o manifesto atual do R2
+não é dessa versão, é de um derivado ou não tem fonte; algum caminho da fonte sai de <slug>.md e img/, ou é uma
+extensão que a barreira 2 do CONTRATO-DE-CONTEUDO.md não aceita em public/ (SVG, por exemplo); o sha256 de algum
+arquivo baixado não bate com o manifesto; ou o fonte_sha256 da fonte baixada não é o source_sha256 da aprovação.
+Passando tudo, grava o Markdown em src/content/posts/<slug>.md e as imagens em public/img/<slug>/, como o enviar
+monta a prévia, e escreve em DIR o título, o corpo do PR (com a evidência) e a lista dos arquivos gravados. Quem abre
+o branch publica/<slug>-<versão8> e o PR é a workflow.
+
+Credenciais: CLOUDFLARE_API_TOKEN e CLOUDFLARE_ACCOUNT_ID no ambiente (env da KVM), usadas pelo wrangler. O
+"publicar" não usa o wrangler: lê o D1 pela API REST (CLOUDFLARE_ACCOUNT_ID e CF_PUBLICAR_API_TOKEN) e o R2 pela API
+S3 com o aws CLI (R2_ACCESS_KEY_ID e R2_SECRET_ACCESS_KEY), os segredos do publicar.yml, todos só de leitura.
 """
 from __future__ import annotations
 
@@ -443,6 +456,247 @@ def cmd_remover(a: argparse.Namespace) -> int:
     return 0
 
 
+# Publicação (#82, fatia 3): o .github/workflows/publicar.yml chama "publicar <slug> --versao <v>" num checkout da main.
+# Nada aqui confia nas entradas: a versão só publica se o D1 tem uma aprovação cujo HTML e fonte dão exatamente essa
+# versão, se o manifesto atual do R2 é dessa versão e de um artigo, e se cada arquivo baixado bate com o manifesto e,
+# juntos, com o source_sha256 da aprovação. O hash é o mesmo fonte_sha256 do envio.
+VERSION_RE = re.compile(r"[0-9a-f]{64}")
+ACCOUNT_RE = re.compile(r"[0-9a-f]{32}")
+D1_ID = "f54f10dc-960e-468a-aca1-2c74c4c6dc4d"  # database_id do blog-admin em workers/admin/wrangler.toml (teste confere)
+# Barreira 2 do CONTRATO-DE-CONTEUDO.md: só esta mídia entra em public/. TYPES aceita .svg na prévia; a publicação não.
+PUBLIC_EXT = {".webp", ".png", ".jpg", ".jpeg", ".gif", ".avif", ".mp4", ".webm"}
+SEGREDOS = ("CLOUDFLARE_ACCOUNT_ID", "CF_PUBLICAR_API_TOKEN", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY")
+APROVACOES_SQL = "SELECT id, html_sha256, source_sha256, approved_at FROM draft_approvals WHERE slug = ? ORDER BY id"
+
+
+class Cloudflare:
+    """Leitura do D1 pela API REST e do R2 pela API S3 (aws s3api), com as credenciais do publicar.yml. O token e as
+    chaves só vão em cabeçalho ou variável de ambiente, nunca em argumento de comando nem em mensagem de erro."""
+
+    def __init__(self, env: dict, run=subprocess.run, http=None):
+        faltam = [k for k in SEGREDOS if not env.get(k)]
+        if faltam:
+            raise DraftError("faltam no ambiente: " + ", ".join(faltam))
+        if not ACCOUNT_RE.fullmatch(env["CLOUDFLARE_ACCOUNT_ID"]):
+            raise DraftError("CLOUDFLARE_ACCOUNT_ID não tem o formato de um id de conta (32 hex)")
+        self.conta = env["CLOUDFLARE_ACCOUNT_ID"]
+        self._token = env["CF_PUBLICAR_API_TOKEN"]
+        self._aws_env = {k: v for k, v in env.items() if not k.startswith("AWS_") and k not in SEGREDOS}
+        # O endpoint leva o id da conta: vai pelo ambiente (AWS_ENDPOINT_URL_S3, aws CLI 2.13+), não por argumento (r1, Astra P2).
+        self._aws_env.update({"AWS_ACCESS_KEY_ID": env["R2_ACCESS_KEY_ID"], "AWS_SECRET_ACCESS_KEY": env["R2_SECRET_ACCESS_KEY"],
+                              "AWS_ENDPOINT_URL_S3": f"https://{self.conta}.r2.cloudflarestorage.com", "AWS_DEFAULT_REGION": "auto", "AWS_CONFIG_FILE": os.devnull, "AWS_SHARED_CREDENTIALS_FILE": os.devnull,
+                              "AWS_REQUEST_CHECKSUM_CALCULATION": "when_required", "AWS_RESPONSE_CHECKSUM_VALIDATION": "when_required"})
+        self.run = run
+        if http is None:
+            import urllib.request
+            http = urllib.request.urlopen
+        self.http = http
+
+    def aprovacoes(self, slug: str) -> list:
+        import urllib.error
+        import urllib.request
+        req = urllib.request.Request(
+            f"https://api.cloudflare.com/client/v4/accounts/{self.conta}/d1/database/{D1_ID}/query", method="POST",
+            data=json.dumps({"sql": APROVACOES_SQL, "params": [slug]}).encode(),
+            headers={"Authorization": f"Bearer {self._token}", "Content-Type": "application/json", "User-Agent": "guifav-publicar"})
+        try:
+            with self.http(req, timeout=30) as r:
+                body = json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            raise DraftError(f"o D1 respondeu {e.code} à consulta das aprovações") from None
+        except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
+            raise DraftError(f"falha ao consultar as aprovações no D1 ({type(e).__name__})") from None
+        try:
+            if body.get("success") is not True:
+                raise ValueError
+            rows = body["result"][0]["results"]
+            if not isinstance(rows, list):
+                raise ValueError
+        except (AttributeError, KeyError, IndexError, TypeError, ValueError):
+            raise DraftError("resposta do D1 fora do formato esperado") from None
+        return rows
+
+    def baixar(self, key: str, work: Path) -> bytes:
+        work.mkdir(parents=True, exist_ok=True)
+        fd, nome = tempfile.mkstemp(dir=work)
+        os.close(fd)
+        dest = Path(nome)
+        r = self.run(["aws", "s3api", "get-object", "--bucket", BUCKET, "--key", key, str(dest)],
+                     capture_output=True, env=self._aws_env)
+        if r.returncode != 0:
+            # Só o código de erro do S3 sai daqui: o texto do aws CLI pode trazer o endpoint, com o id da conta, e vai
+            # para o log e o resumo da execução (r1, Astra P2).
+            err = r.stderr.decode(errors="replace") if isinstance(r.stderr, bytes) else str(r.stderr)
+            codigo = re.search(r"An error occurred \(([A-Za-z0-9]{1,64})\)", err)
+            motivo = f"o R2 respondeu {codigo.group(1)}" if codigo else f"o aws CLI saiu com {r.returncode}, sem código de erro do S3"
+            raise DraftError(f"não consegui baixar {key} do R2: {motivo}")
+        try:
+            return dest.read_bytes()
+        finally:
+            dest.unlink()
+
+
+@dataclass
+class Publicacao:
+    slug: str
+    versao: str
+    title: str
+    aprovacao: dict
+    html_sha256: str
+    source_sha256: str
+    arquivos: list[tuple[str, str]]  # (caminho no repo, sha256), na ordem em que foram gravados
+
+
+def publicar(slug: str, versao: str, nuvem, blog_src: Path, work: Path) -> Publicacao:
+    """Confere a versão aprovada e grava o Markdown e as imagens nos caminhos do blog. Recusa (DraftError) antes de
+    gravar o primeiro arquivo se qualquer conferência falhar."""
+    if not isinstance(slug, str) or not SLUG_RE.fullmatch(slug):
+        raise DraftError(f"slug inválido: {slug!r}")
+    if not isinstance(versao, str) or not VERSION_RE.fullmatch(versao):
+        raise DraftError(f"versão inválida (64 caracteres hexadecimais minúsculos): {versao!r}")
+    md_dest = blog_src / "src" / "content" / "posts" / f"{slug}.md"
+    img_dest = blog_src / "public" / "img" / slug
+    if os.path.lexists(md_dest):
+        raise DraftError(f"o slug {slug!r} já está publicado na main ({md_dest.relative_to(blog_src.parent)})")
+    if os.path.lexists(img_dest):
+        raise DraftError(f"já existe {img_dest.relative_to(blog_src.parent)} na main, sem o post; nada foi gravado")
+
+    # 1. Aprovação no D1: a versão é recalculada do HTML e da fonte de cada linha, como o painel faz.
+    rows = nuvem.aprovacoes(slug)
+    aprovadas = [r for r in rows if isinstance(r, dict) and isinstance(r.get("html_sha256"), str)
+                 and isinstance(r.get("source_sha256"), str) and version_id(r["html_sha256"], r["source_sha256"]) == versao]
+    if not aprovadas:
+        raise DraftError(f"nenhuma aprovação no painel para {slug} na versão {versao}: nada a publicar")
+    aprovacao = aprovadas[-1]
+
+    # 2. Manifesto atual: tem de ser desta versão e de um artigo. Derivado não publica.
+    try:
+        man = json.loads(nuvem.baixar(f"{slug}/manifest.json", work / "r2"))
+    except ValueError:
+        raise DraftError("manifesto do rascunho ilegível") from None
+    if not isinstance(man, dict) or man.get("slug") != slug:
+        raise DraftError("manifesto do rascunho não é deste slug")
+    if man.get("kind", "blog") != "blog" or "parent" in man:
+        raise DraftError(f"{slug} é um derivado ({man.get('kind')!r}, artigo {man.get('parent')!r}); derivados não publicam")
+    if man.get("version") != versao:
+        raise DraftError(f"a versão atual do rascunho é {str(man.get('version'))[:8]}..., não a {versao[:8]}... aprovada; "
+                         "aprove a versão atual no painel")
+    if (man.get("html_sha256"), man.get("source_sha256")) != (aprovacao["html_sha256"], aprovacao["source_sha256"]):
+        raise DraftError("o manifesto não tem o HTML e a fonte da aprovação")
+    fonte_sha = man.get("fonte")
+    if not isinstance(fonte_sha, dict) or not fonte_sha:
+        raise DraftError("o manifesto não tem a fonte (enviado antes do #82); reenvie o rascunho e aprove de novo")
+
+    # 3. Caminhos conferidos antes do primeiro download; cada arquivo conferido contra o sha256 do manifesto.
+    for rel, sha in fonte_sha.items():
+        if not isinstance(rel, str) or not FILE_RE.fullmatch(rel) or not (
+                rel == f"{slug}.md" or (rel.startswith("img/") and Path(rel).suffix.lower() in TYPES)):
+            raise DraftError(f"caminho inválido na fonte: {rel!r}")
+        if rel != f"{slug}.md" and Path(rel).suffix.lower() not in PUBLIC_EXT:
+            raise DraftError(f"{rel!r} não pode ir para public/ (barreira 2 do CONTRATO-DE-CONTEUDO.md: só "
+                             f"{', '.join(sorted(PUBLIC_EXT))})")
+        if not isinstance(sha, str) or not VERSION_RE.fullmatch(sha):
+            raise DraftError(f"sha256 inválido no manifesto para {rel!r}")
+    fonte: dict[str, bytes] = {}
+    for rel, sha in sorted(fonte_sha.items()):
+        data = nuvem.baixar(f"{slug}/v/{versao}/fonte/{rel}", work / "r2")
+        if hashlib.sha256(data).hexdigest() != sha:
+            raise DraftError(f"o sha256 de {rel} baixado do R2 não confere com o manifesto")
+        fonte[rel] = data
+    fonte_valida(fonte, slug)
+
+    # 4. A fonte inteira, numa pasta no formato de fonte/, dá o source_sha256 da aprovação.
+    work.mkdir(parents=True, exist_ok=True)
+    pasta = Path(tempfile.mkdtemp(prefix="fonte-", dir=work))  # sempre nova: nada de uma execução anterior entra no hash
+    for rel, data in fonte.items():
+        (pasta / rel).parent.mkdir(parents=True, exist_ok=True)
+        (pasta / rel).write_bytes(data)
+    if set(fonte_files(pasta, slug)) != set(fonte):
+        raise DraftError("a fonte baixada tem arquivos que o hash não cobre")
+    source = fonte_sha256(pasta, slug)
+    if source != aprovacao["source_sha256"]:
+        raise DraftError(f"a fonte baixada dá source_sha256 {source}, e a aprovação é de {aprovacao['source_sha256']}")
+    try:
+        title = frontmatter_title(fonte[f"{slug}.md"].decode("utf-8"))
+    except UnicodeDecodeError:
+        raise DraftError(f"{slug}.md não é UTF-8") from None
+
+    # 5. Gravação: só arquivos novos, dentro de posts/<slug>.md e public/img/<slug>/.
+    plano = [(md_dest, fonte[f"{slug}.md"])]
+    plano += [(img_dest / rel.removeprefix("img/"), data) for rel, data in sorted(fonte.items()) if rel != f"{slug}.md"]
+    # Os caminhos já são do post por construção (FILE_RE não deixa ..); o que ainda desviaria a gravação é um link
+    # simbólico no caminho, para fora do repo ou para outra pasta dele, como src/content/posts -> ../pages (r1, Astra P3).
+    # Nenhuma pasta existente do repo até o destino pode ser link.
+    repo = blog_src.parent
+    for dest, _ in plano:
+        for p in [dest.parent, *dest.parent.parents]:
+            if p == repo:
+                break
+            if p.is_symlink():
+                raise DraftError(f"link simbólico no caminho do destino: {p.relative_to(repo)}; nada foi gravado")
+        else:
+            raise DraftError(f"destino fora do repositório: {dest}")
+    arquivos = []
+    for dest, data in plano:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        with open(dest, "xb") as f:
+            f.write(data)
+        arquivos.append((dest.relative_to(blog_src.parent).as_posix(), hashlib.sha256(data).hexdigest()))
+    return Publicacao(slug, versao, title, {"id": aprovacao.get("id"), "approved_at": aprovacao.get("approved_at")},
+                      man["html_sha256"], source, arquivos)
+
+
+def _linha(v: object) -> str:
+    """Texto de uma linha só, sem caractere de controle, para título de PR e de commit."""
+    return re.sub(r"[\x00-\x1f\x7f-\x9f]+", " ", str(v)).strip()
+
+
+def corpo_pr(p: Publicacao) -> str:
+    # O título vai em código: um @ nele não menciona ninguém num PR público.
+    titulo = _linha(p.title).replace("`", "'")
+    linhas = [
+        f"Publica o artigo `{titulo}`, exatamente na versão aprovada pelo Gui no painel privado. PR aberto pela "
+        "workflow `publicar.yml`, sem agente no meio e sem edição depois da aprovação.",
+        "",
+        "## Aprovação e integridade",
+        "",
+        f"- Slug: `{p.slug}`.",
+        f"- Versão aprovada: `{p.versao}`.",
+        f"- Aprovação no D1 `blog-admin`: linha `{_linha(p.aprovacao.get('id'))}`, em `{_linha(p.aprovacao.get('approved_at'))}`.",
+        f"- HTML aprovado (sha256): `{p.html_sha256}`.",
+        f"- Fonte aprovada (sha256): `{p.source_sha256}`. A workflow baixou a fonte da versão do R2, conferiu cada arquivo "
+        "contra o sha256 do manifesto e recalculou o hash da fonte com o `fonte_sha256` do `draft_preview.py`: bate com "
+        "o da aprovação.",
+        "",
+        "## Arquivos",
+        "",
+        "| Arquivo | sha256 |",
+        "| --- | --- |",
+        *[f"| `{caminho}` | `{sha}` |" for caminho, sha in p.arquivos],
+        "",
+        "## Depois do merge",
+        "",
+        f"Conferir o post no ar e remover do R2 só o rascunho do artigo (`draft_preview.py remover {p.slug}`). "
+        "Os derivados continuam no painel.",
+    ]
+    return "\n".join(linhas) + "\n"
+
+
+def cmd_publicar(a: argparse.Namespace) -> int:
+    saida = Path(a.saida)
+    if saida.exists() and (not saida.is_dir() or any(saida.iterdir())):
+        raise DraftError(f"a pasta de saída precisa estar vazia ou não existir: {saida}")
+    nuvem = Cloudflare(dict(os.environ))
+    with tempfile.TemporaryDirectory(prefix="publicar-") as tmp:
+        p = publicar(a.slug, a.versao, nuvem, BLOG_SRC, Path(tmp))
+    saida.mkdir(parents=True, exist_ok=True)
+    (saida / "titulo.txt").write_text(_linha(p.title)[:200] + "\n", encoding="utf-8")
+    (saida / "corpo.md").write_text(corpo_pr(p), encoding="utf-8")
+    (saida / "arquivos.txt").write_text("".join(c + "\n" for c, _ in p.arquivos), encoding="utf-8")
+    print(f"publicação conferida: {p.slug} na versão {p.versao[:8]}, {len(p.arquivos)} arquivos gravados; source_sha256 {p.source_sha256}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=(__doc__ or "").split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -460,9 +714,13 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--imagens")
     r = sub.add_parser("remover", help="tira a prévia do R2 depois da publicação")
     r.add_argument("slug")
+    pb = sub.add_parser("publicar", help="confere a versão aprovada e grava o post nos caminhos do blog (publicar.yml, #82)")
+    pb.add_argument("slug")
+    pb.add_argument("--versao", required=True, help="versão aprovada, 64 hex")
+    pb.add_argument("--saida", required=True, help="pasta vazia para titulo.txt, corpo.md e arquivos.txt do PR")
     a = ap.parse_args(argv)
     try:
-        return {"enviar": cmd_enviar, "status": cmd_status, "remover": cmd_remover}[a.cmd](a)
+        return {"enviar": cmd_enviar, "status": cmd_status, "remover": cmd_remover, "publicar": cmd_publicar}[a.cmd](a)
     except DraftError as err:
         print(f"ERRO: {err}", file=sys.stderr)
         return 2

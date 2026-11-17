@@ -30,9 +30,16 @@ blog-src/scripts/draft_preview.py envia guarda duas coisas em <slug>/v/<versão>
 
 A fonte é exatamente o que gerou o source_sha256 da versão, e é esse hash que a aprovação
 grava no D1. Um post que chega a src/content/posts/ vindo de um rascunho tem de ser o da
-fonte aprovada, com o hash conferido. Até a publicação automática da #82 entrar, quem
-publica confere com o status do script; depois, a Action de publicação confere sozinha.
-Manifestos de antes do #82, sem o campo fonte, continuam válidos para o painel.
+fonte aprovada, com o hash conferido. Quem faz isso é a workflow .github/workflows/publicar.yml
+(#82), disparada com o slug e a versão: pelo draft_preview.py publicar, ela confere no D1
+que a versão foi aprovada e é de um artigo, baixa a fonte da versão, confere o sha256 de
+cada arquivo e o source_sha256, grava o Markdown em src/content/posts/<slug>.md e as
+imagens em public/img/<slug>/ e abre o PR do branch publica/<slug>-<versão8>, com a
+evidência no corpo. Ela recusa antes de gravar se qualquer conferência falhar, se o post
+já existe na main ou se a fonte tem um arquivo que a barreira 2 não aceita em public/
+(SVG, por exemplo). O PR passa pelo mesmo gate de qualquer outro; a workflow não mergeia.
+Manifestos de antes do #82, sem o campo fonte, continuam válidos para o painel, mas não
+publicam: o rascunho precisa ser reenviado.
 
 ## Barreiras
 
