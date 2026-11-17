@@ -348,6 +348,17 @@ export function execucaoDa(m: Pick<Manifest, 'slug' | 'version'>, displayTitle: 
   return palavras.has(m.slug) && palavras.has(m.version);
 }
 
+/** Início da última tentativa de uma execução: reexecutar mantém o id, mas renova o run_started_at (r2 e r3, Astra P2).
+ * Sem data válida, 0 (o id desempata). */
+function quando(x: Record<string, unknown>): number {
+  const t = Date.parse(typeof x.run_started_at === 'string' ? x.run_started_at : typeof x.created_at === 'string' ? x.created_at : '');
+  return Number.isFinite(t) ? t : 0;
+}
+
+/** A execução mais recente pela última tentativa, com o id como desempate. */
+const maisRecente = (a: Record<string, unknown>, b: Record<string, unknown>) =>
+  quando(a) > quando(b) || (quando(a) === quando(b) && (a.id as number) > (b.id as number)) ? a : b;
+
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const isId = (v: unknown): v is number => Number.isSafeInteger(v) && (v as number) > 0;
 
@@ -373,16 +384,12 @@ async function ciDoPr(env: DraftEnv, deps: DraftDeps, sha: string): Promise<stri
   // mesmo commit não deixa a CI vermelha (r1, Astra P2). Recente pela última tentativa: reexecutar mantém o id da
   // execução, mas renova o run_started_at, e a API devolve o estado dessa tentativa (r2, Astra P2). Sem data, o id
   // desempata.
-  const quando = (x: Record<string, unknown>) => {
-    const t = Date.parse(typeof x.run_started_at === 'string' ? x.run_started_at : typeof x.created_at === 'string' ? x.created_at : '');
-    return Number.isFinite(t) ? t : 0;
-  };
   const vigente = new Map<string, Record<string, unknown>>();
   for (const x of r.workflow_runs) {
     if (!isObj(x) || !isId(x.id)) continue;
     const wf = isId(x.workflow_id) ? `id:${x.workflow_id}` : `nome:${String(x.name ?? '')}`;
     const atual = vigente.get(wf);
-    if (!atual || quando(x) > quando(atual) || (quando(x) === quando(atual) && (x.id as number) > (atual.id as number))) vigente.set(wf, x);
+    vigente.set(wf, atual ? maisRecente(x, atual) : x);
   }
   const runs = [...vigente.values()];
   if (!runs.length) return 'CI pendente';
@@ -412,21 +419,29 @@ async function publicacao(env: DraftEnv, deps: DraftDeps, m: Manifest, a: Approv
     const sha = isObj(pr.head) && typeof pr.head.sha === 'string' && /^[0-9a-f]{40}$/.test(pr.head.sha) ? pr.head.sha : '';
     return { html: `PR aberto ${link}, ${sha ? await ciDoPr(env, deps, sha) : 'CI indisponível'}`, redisparar: false };
   }
-  if (a.dispatch_error) return falhou;
   // Execuções do publicar.yml desde o último disparo gravado (ou, sem ele, desde a aprovação), 5 min antes contra
   // relógio adiantado, e sem limite depois: um disparo manual posterior (`gh workflow run`, que não passa pelo D1)
-  // também aparece (r2, Astra P2). A mais recente que casa vale. Página incompleta sem ela vira "estado indisponível".
+  // também aparece (r2, Astra P2), mesmo com um motivo de disparo gravado (r3, Astra P2). Vale a execução com a
+  // tentativa mais recente (r3, Astra P2). Página incompleta sem ela vira "estado indisponível" (ou o motivo gravado).
   const desdeD1 = a.dispatched_at || a.approved_at;
   const t = Date.parse(desdeD1);
   const iso = (ms: number) => `${new Date(ms).toISOString().slice(0, 19)}Z`;
   const created = Number.isFinite(t) ? `&created=${encodeURIComponent(`>=${iso(t - 5 * 60000)}`)}` : '';
   const r = await githubGet(env, deps, `/actions/workflows/${PUBLISH_WORKFLOW}/runs?event=workflow_dispatch&per_page=100${created}`);
-  if (!isObj(r) || !Array.isArray(r.workflow_runs)) return { html: 'estado indisponível', redisparar: false };
-  const run = r.workflow_runs.find((x): x is Record<string, unknown> => isObj(x) && isId(x.id) && execucaoDa(m, x.display_title));
+  if (!isObj(r) || !Array.isArray(r.workflow_runs)) return a.dispatch_error ? falhou : { html: 'estado indisponível', redisparar: false };
+  const run = r.workflow_runs.filter((x): x is Record<string, unknown> => isObj(x) && isId(x.id) && execucaoDa(m, x.display_title))
+    .reduce<Record<string, unknown> | undefined>((acc, x) => (acc ? maisRecente(x, acc) : x), undefined);
   if (!run && typeof r.total_count === 'number' && r.total_count > r.workflow_runs.length) {
     // Só a primeira página: sem a execução nela, não dá para afirmar que ela não existe.
-    return { html: 'estado indisponível', redisparar: false };
+    return a.dispatch_error ? falhou : { html: 'estado indisponível', redisparar: false };
   }
+  if (run && a.dispatch_error) {
+    // Execução visível (um disparo manual, por exemplo) e o último disparo pelo painel falhou: as duas coisas aparecem,
+    // e o botão continua, porque nada garante qual delas é a mais nova.
+    const st = estadoDaExecucao(run, desdeD1, deps.now());
+    return { html: `${st.html}; o último disparo pelo painel falhou (${esc(a.dispatch_error)})`, redisparar: true };
+  }
+  if (a.dispatch_error) return falhou;
   if (!run) {
     // Aprovação de antes desta fatia, ou registro do disparo que falhou depois do clique: nada indica disparo.
     if (!a.dispatched_at) return { html: 'publicação não disparada', redisparar: true };
@@ -435,8 +450,13 @@ async function publicacao(env: DraftEnv, deps: DraftDeps, m: Manifest, a: Approv
       ? { html: `preparando o PR (disparado ${desde})`, redisparar: false }
       : { html: `parado: nenhuma execução encontrada (disparado ${desde})`, redisparar: true };
   }
-  // O "há N min" vem da própria execução, que pode ser um disparo manual posterior ao gravado no D1.
-  const desde = ha(typeof run.created_at === 'string' && Number.isFinite(Date.parse(run.created_at)) ? run.created_at : desdeD1, deps.now());
+  return estadoDaExecucao(run, desdeD1, deps.now());
+}
+
+/** Estado a partir da execução do publicar.yml. O "há N min" vem da última tentativa dela, que pode ser um disparo
+ * manual ou uma reexecução posterior ao disparo gravado no D1. */
+function estadoDaExecucao(run: Record<string, unknown>, desdeD1: string, now: number): Publicacao {
+  const desde = ha(quando(run) ? new Date(quando(run)).toISOString() : desdeD1, now);
   const exec = `<a href="${GITHUB_WEB}/actions/runs/${run.id as number}">ver a execução</a>`;
   if (run.status !== 'completed') return { html: `preparando o PR (disparado ${desde}): ${exec}`, redisparar: false };
   if (run.conclusion === 'failure') return { html: `publicação recusada: ${exec}`, redisparar: false };

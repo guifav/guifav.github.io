@@ -1145,13 +1145,14 @@ test('R10: a execução certa é a do slug e da versão inteira; slug vizinho, o
     exec(4, `Publica sales-coach (${outra})`, 'completed', 'failure'),
     // Só a versão8 não basta: o contrato traz a versão inteira.
     exec(8, `Publica sales-coach (${v8})`, 'completed', 'failure'),
-    exec(5, `Publica sales-coach (${version})`, 'in_progress'),
-    exec(6, `Publica sales-coach (${version})`, 'completed', 'failure'),
+    { ...exec(5, `Publica sales-coach (${version})`, 'in_progress'), created_at: '2026-11-13T20:01:00Z' },
+    { ...exec(6, `Publica sales-coach (${version})`, 'completed', 'failure'), created_at: '2026-11-13T20:00:30Z' },
   ];
   await s.approve('sales-coach', { confirmar: 'sim', versao: version });
   s.avancar(2);
   const linha = linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach');
-  assert.match(linha, /preparando o PR \(disparado há 2 min\): <a href="https:\/\/github\.com\/guifav\/guifav\.github\.io\/actions\/runs\/5">/);
+  // O tempo conta da execução escolhida (criada às 20h01), não do disparo gravado.
+  assert.match(linha, /preparando o PR \(disparado há 1 min\): <a href="https:\/\/github\.com\/guifav\/guifav\.github\.io\/actions\/runs\/5">/);
   assert.doesNotMatch(linha, /#3[01]/);
 });
 
@@ -1322,4 +1323,44 @@ test('R10 (r2, Kimi P2): página cheia de 100 execuções no tamanho real da API
   const r = await u.req('/admin/rascunhos');
   assert.equal(r.status, 200);
   assert.match(linhaDe(await r.text(), 'sales-coach'), /<br>estado indisponível<\/td>/);
+});
+
+test('R10 (r3, Astra P2): com motivo de disparo gravado, uma execução manual posterior aparece, junto com o motivo e o botão', async () => {
+  const s = setup({ gh: { dispatch: 500 } });
+  const { version } = await putDraft(s.bucket);
+  await s.approve('sales-coach', { confirmar: 'sim', versao: version });
+  s.avancar(120);
+  s.ghOpts.runs = [{ ...exec(61, `Publica sales-coach (${version})`, 'completed', 'failure'), created_at: '2026-11-13T21:50:00Z' }];
+  const linha = linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach');
+  assert.match(linha, /publicação recusada: <a href="[^"]*\/runs\/61">ver a execução<\/a>; o último disparo pelo painel falhou \(GitHub respondeu 500: falhou\)/);
+  assert.match(linha, /Disparar de novo/);
+  assert.equal(leituras(s)[1].query.created, '>=2026-11-13T19:55:00Z', 'sem disparo gravado, a janela começa na aprovação');
+  // Sem execução, ou com as execuções indisponíveis ou numa página incompleta: o motivo gravado, com o botão.
+  for (const runs of [[], 500, 'erro'] as const) {
+    s.ghOpts.runs = runs as GhOpts['runs'];
+    assert.match(linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach'), /<br>disparo falhou \(GitHub respondeu 500: falhou\)<form/, String(runs));
+  }
+  s.ghOpts.runs = [exec(1, `Publica outro (${SHA('e')})`, 'completed', 'success')];
+  s.ghOpts.total = 150;
+  assert.match(linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach'), /<br>disparo falhou \(GitHub respondeu 500: falhou\)<form/, 'página incompleta');
+});
+
+test('R10 (r3, Astra P2): a execução de publicação vigente é a da tentativa mais recente, mesmo reexecutada e fora de ordem', async () => {
+  const s = setup();
+  const { version } = await putDraft(s.bucket);
+  await s.approve('sales-coach', { confirmar: 'sim', versao: version });
+  s.avancar(30);
+  // A 20 falhou às 20h10; a 10, criada antes, foi reexecutada às 20h29 e roda. A API devolve a 20 primeiro.
+  s.ghOpts.runs = [
+    { ...exec(20, `Publica sales-coach (${version})`, 'completed', 'failure'), created_at: '2026-11-13T20:05:00Z', run_started_at: '2026-11-13T20:10:00Z' },
+    { ...exec(10, `Publica sales-coach (${version})`, 'in_progress'), created_at: '2026-11-13T20:00:10Z', run_started_at: '2026-11-13T20:29:00Z' },
+  ];
+  const linha = linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach');
+  assert.match(linha, /preparando o PR \(disparado há 1 min\): <a href="[^"]*\/runs\/10">/);
+  // Sem a reexecução, vale a mais recente pela criação, mesmo que a API a devolva depois.
+  s.ghOpts.runs = [
+    { ...exec(10, `Publica sales-coach (${version})`, 'completed', 'failure'), created_at: '2026-11-13T20:00:10Z' },
+    { ...exec(20, `Publica sales-coach (${version})`, 'in_progress'), created_at: '2026-11-13T20:05:00Z' },
+  ];
+  assert.match(linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach'), /preparando o PR \(disparado há 25 min\): <a href="[^"]*\/runs\/20">/);
 });
