@@ -1071,8 +1071,9 @@ test('R10: estados da publicação, calculados do D1 e do GitHub, com no máximo
       esperado: new RegExp(`^PR aberto ${prLink}, CI indisponível$`), botao: false, leituras: 2 },
     'execução fora da primeira página (r1, Astra P2)': { min: 40, gh: { runs: [exec(5, `Publica outro-post (${SHA('0')})`, 'completed', 'success')], total: 150 },
       esperado: /^estado indisponível$/, botao: false, leituras: 2 },
-    'execução achada na primeira página, mesmo com mais páginas': { min: 3, gh: { runs: [exec(77, RUN, 'in_progress')], total: 150 },
-      esperado: new RegExp(`^preparando o PR \\(disparado há 3 min\\): ${execLink}$`), botao: false, leituras: 2 },
+    // r4 (Astra P2): achada numa página incompleta, pode não ser a tentativa vigente (a outra pode ter sido reexecutada).
+    'execução achada numa página incompleta': { min: 3, gh: { runs: [exec(77, RUN, 'in_progress')], total: 150 },
+      esperado: /^estado indisponível$/, botao: false, leituras: 2 },
     'PR aberto, CI responde lixo': { gh: { pulls: [pr(12, 'open', null, ramo)], ci: { status: 200, body: '{"total_count": 1}' } },
       esperado: new RegExp(`^PR aberto ${prLink}, CI indisponível$`), botao: false, leituras: 2 },
     'publicado: PR mergeado e post no ar': { gh: { pulls: [pr(12, 'closed', '2026-11-14T10:00:00Z', ramo)] }, site: { 'sales-coach': pagina('Coach') },
@@ -1305,8 +1306,7 @@ test('R10 (r2, Kimi P2): página cheia de 100 execuções no tamanho real da API
   await s.approve('sales-coach', { confirmar: 'sim', versao: version });
   s.avancar(3);
   const outras = Array.from({ length: 99 }, (_, i) => pesada(exec(1000 + i, `Publica outro-${i} (${SHA('e')})`, 'completed', 'success')));
-  s.ghOpts.runs = [pesada(exec(77, `Publica sales-coach (${version})`, 'in_progress')), ...outras];
-  s.ghOpts.total = 150;
+  s.ghOpts.runs = [pesada(exec(77, `Publica sales-coach (${version})`, 'in_progress')), ...outras]; // página cheia e completa
   assert.ok(JSON.stringify(s.ghOpts.runs).length > 1.2e6, 'página acima de 1,2 MB');
   assert.match(linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach'), /preparando o PR \(disparado há 3 min\): <a href="[^"]*\/runs\/77">/);
   // CI: 100 execuções pesadas do head, todas verdes.
@@ -1363,4 +1363,23 @@ test('R10 (r3, Astra P2): a execução de publicação vigente é a da tentativa
     { ...exec(20, `Publica sales-coach (${version})`, 'in_progress'), created_at: '2026-11-13T20:05:00Z' },
   ];
   assert.match(linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach'), /preparando o PR \(disparado há 25 min\): <a href="[^"]*\/runs\/20">/);
+});
+
+test('R10 (r4, Astra P2): execução antiga reexecutada depois de um novo disparo pelo painel continua na janela e vale', async () => {
+  const s = setup();
+  const { version } = await putDraft(s.bucket);
+  await s.approve('sales-coach', { confirmar: 'sim', versao: version });
+  s.avancar(10);
+  assert.equal((await disparar(s, 'sales-coach', { versao: version })).headers.get('location'), '/admin/rascunhos?msg=disparado');
+  assert.equal(s.rows()[0].dispatched_at, '2026-11-13T20:10:00.000Z');
+  s.avancar(20);
+  // A (do disparo da aprovação) foi cancelada e reexecutada às 20h29; B (do novo disparo, 20h10) falhou.
+  s.ghOpts.runs = [
+    { ...exec(31, `Publica sales-coach (${version})`, 'completed', 'failure'), created_at: '2026-11-13T20:10:02Z', run_started_at: '2026-11-13T20:10:05Z' },
+    { ...exec(30, `Publica sales-coach (${version})`, 'in_progress'), created_at: '2026-11-13T20:00:02Z', run_started_at: '2026-11-13T20:29:00Z' },
+  ];
+  s.gh.length = 0;
+  const linha = linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach');
+  assert.match(linha, /preparando o PR \(disparado há 1 min\): <a href="[^"]*\/runs\/30">/);
+  assert.equal(leituras(s)[1].query.created, '>=2026-11-13T19:55:00Z', 'a janela começa na aprovação, não no último disparo');
 });

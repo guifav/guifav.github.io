@@ -419,20 +419,21 @@ async function publicacao(env: DraftEnv, deps: DraftDeps, m: Manifest, a: Approv
     const sha = isObj(pr.head) && typeof pr.head.sha === 'string' && /^[0-9a-f]{40}$/.test(pr.head.sha) ? pr.head.sha : '';
     return { html: `PR aberto ${link}, ${sha ? await ciDoPr(env, deps, sha) : 'CI indisponível'}`, redisparar: false };
   }
-  // Execuções do publicar.yml desde o último disparo gravado (ou, sem ele, desde a aprovação), 5 min antes contra
-  // relógio adiantado, e sem limite depois: um disparo manual posterior (`gh workflow run`, que não passa pelo D1)
-  // também aparece (r2, Astra P2), mesmo com um motivo de disparo gravado (r3, Astra P2). Vale a execução com a
-  // tentativa mais recente (r3, Astra P2). Página incompleta sem ela vira "estado indisponível" (ou o motivo gravado).
+  // Execuções do publicar.yml desde a aprovação, 5 min antes contra relógio adiantado, e sem limite depois. Toda
+  // execução desta versão vem depois da aprovação, então nenhuma fica de fora: nem um disparo manual posterior (r2,
+  // Astra P2), nem uma execução antiga reexecutada depois de um novo disparo pelo painel (r4, Astra P2). Vale a
+  // execução com a tentativa mais recente (r3, Astra P2). Sem todas as execuções da janela numa página, não dá para
+  // garantir qual é a vigente: "estado indisponível", ou o motivo gravado (r4, Astra P2).
   const desdeD1 = a.dispatched_at || a.approved_at;
-  const t = Date.parse(desdeD1);
+  const t = Date.parse(a.approved_at);
   const iso = (ms: number) => `${new Date(ms).toISOString().slice(0, 19)}Z`;
   const created = Number.isFinite(t) ? `&created=${encodeURIComponent(`>=${iso(t - 5 * 60000)}`)}` : '';
   const r = await githubGet(env, deps, `/actions/workflows/${PUBLISH_WORKFLOW}/runs?event=workflow_dispatch&per_page=100${created}`);
   if (!isObj(r) || !Array.isArray(r.workflow_runs)) return a.dispatch_error ? falhou : { html: 'estado indisponível', redisparar: false };
   const run = r.workflow_runs.filter((x): x is Record<string, unknown> => isObj(x) && isId(x.id) && execucaoDa(m, x.display_title))
     .reduce<Record<string, unknown> | undefined>((acc, x) => (acc ? maisRecente(x, acc) : x), undefined);
-  if (!run && typeof r.total_count === 'number' && r.total_count > r.workflow_runs.length) {
-    // Só a primeira página: sem a execução nela, não dá para afirmar que ela não existe.
+  if (typeof r.total_count === 'number' && r.total_count > r.workflow_runs.length) {
+    // Só a primeira página: não dá para afirmar que a execução não existe, nem que a achada é a vigente.
     return a.dispatch_error ? falhou : { html: 'estado indisponível', redisparar: false };
   }
   if (run && a.dispatch_error) {
