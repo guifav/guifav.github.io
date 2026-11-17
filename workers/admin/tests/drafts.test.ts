@@ -1295,3 +1295,31 @@ test('R10 (r1, Kimi P2): falha do D1 ao gravar o disparo, na aprovação ou no "
   assert.equal(t.mails.length, 1);
   assert.equal(t.rows()[0].dispatched_at, '');
 });
+
+test('R10 (r2, Kimi P2): página cheia de 100 execuções no tamanho real da API (uns 12,5 KB cada) é lida; corpo gigante não', async () => {
+  // Campos de verdade da API ocupam uns 12,5 KB por execução; o lastro simula esse peso.
+  const pesada = (x: Record<string, unknown>) => ({ ...x, head_commit: { message: 'x'.repeat(12_500) } });
+  const s = setup();
+  const { version } = await putDraft(s.bucket);
+  await s.approve('sales-coach', { confirmar: 'sim', versao: version });
+  s.avancar(3);
+  const outras = Array.from({ length: 99 }, (_, i) => pesada(exec(1000 + i, `Publica outro-${i} (${SHA('e')})`, 'completed', 'success')));
+  s.ghOpts.runs = [pesada(exec(77, `Publica sales-coach (${version})`, 'in_progress')), ...outras];
+  s.ghOpts.total = 150;
+  assert.ok(JSON.stringify(s.ghOpts.runs).length > 1.2e6, 'página acima de 1,2 MB');
+  assert.match(linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach'), /preparando o PR \(disparado há 3 min\): <a href="[^"]*\/runs\/77">/);
+  // CI: 100 execuções pesadas do head, todas verdes.
+  const t = setup({ gh: { pulls: [pr(12, 'open', null, `publica/sales-coach-${version.slice(0, 8)}`)],
+    ci: Array.from({ length: 100 }, (_, i) => pesada(exec(2000 + i, `wf-${i}`, 'completed', 'success', 3000 + i))) } });
+  await putDraft(t.bucket);
+  await t.approve('sales-coach', { confirmar: 'sim', versao: version });
+  assert.match(linhaDe(await (await t.req('/admin/rascunhos')).text(), 'sales-coach'), /PR aberto <a [^>]*>#12<\/a>, CI verde/);
+  // Corpo acima do teto (5 MiB): cortado, não é JSON, estado indisponível, sem quebrar a lista.
+  const u = setup();
+  await putDraft(u.bucket);
+  await u.approve('sales-coach', { confirmar: 'sim', versao: version });
+  u.ghOpts.pulls = { status: 200, body: JSON.stringify([{ lastro: 'x'.repeat(5 << 20) }]) };
+  const r = await u.req('/admin/rascunhos');
+  assert.equal(r.status, 200);
+  assert.match(linhaDe(await r.text(), 'sales-coach'), /<br>estado indisponível<\/td>/);
+});

@@ -40,7 +40,7 @@ Contrato com o `.github/workflows/publicar.yml`:
 
 Na aprovação, o Worker chama `POST /repos/guifav/guifav.github.io/actions/workflows/publicar.yml/dispatches` com o segredo `GITHUB_DISPATCH_TOKEN`, com prazo de 5 s. Resposta 2xx grava `dispatched_at`. Qualquer outra coisa grava o motivo em `dispatch_error` ("GitHub respondeu 422: ...", "falha de rede", "tempo esgotado" ou "disparo sem configuração", quando falta o token) e mostra o botão "Disparar de novo" na lista. O resultado do disparo é gravado antes do email. O email ao Roger diz "publicação disparada" ou "disparo falhou", com o motivo, tem prazo de 5 s e não é mais o gatilho. Se o D1 falhar ao gravar o resultado do disparo, na aprovação ou no "Disparar de novo", a tela avisa que a linha pode mostrar o estado anterior.
 
-A lista calcula o estado de cada artigo aprovado na hora de abrir, do D1 e do GitHub, com o mesmo token. São no máximo duas leituras do GitHub por artigo aprovado, feitas em paralelo, cada uma com prazo de 5 s e corpo limitado a 1 MiB. Rascunho não aprovado, ou com a versão mudada depois da aprovação, não consulta o GitHub.
+A lista calcula o estado de cada artigo aprovado na hora de abrir, do D1 e do GitHub, com o mesmo token. São no máximo duas leituras do GitHub por artigo aprovado, feitas em paralelo, cada uma com prazo de 5 s e corpo limitado a 4 MiB (a página de 100 execuções da API passa de 1,2 MB). Rascunho não aprovado, ou com a versão mudada depois da aprovação, não consulta o GitHub.
 
 | Estado na lista | De onde vem | Na tela |
 | --- | --- | --- |

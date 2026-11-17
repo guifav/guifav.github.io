@@ -319,7 +319,11 @@ async function dispatch(env: DraftEnv, deps: DraftDeps, m: Manifest): Promise<st
   }
 }
 
-/** GET na API do GitHub com prazo e corpo limitado a 1 MiB; null em qualquer falha (rede, prazo, status, JSON). */
+// Teto do corpo de uma leitura do GitHub. Uma execução de Actions pesa uns 12,5 KB no JSON da API, então a página de
+// 100 execuções passa de 1,2 MB (medido na API real, r2, Kimi P2); 4 MiB dá folga de três vezes.
+const GITHUB_MAX_BODY = 4 << 20;
+
+/** GET na API do GitHub com prazo e corpo limitado (GITHUB_MAX_BODY); null em qualquer falha (rede, prazo, status, JSON). */
 async function githubGet(env: DraftEnv, deps: DraftDeps, path: string): Promise<unknown> {
   try {
     const res = await deps.fetch(`${GITHUB_API}${path}`, { headers: githubHeaders(env), signal: AbortSignal.timeout(deps.githubTimeoutMs ?? 5000) });
@@ -327,7 +331,7 @@ async function githubGet(env: DraftEnv, deps: DraftDeps, path: string): Promise<
       res.body?.cancel().catch(() => {});
       return null;
     }
-    return JSON.parse(await inicioDoCorpo(res, 1 << 20)); // corpo maior que o limite chega cortado e não é JSON válido
+    return JSON.parse(await inicioDoCorpo(res, GITHUB_MAX_BODY)); // corpo maior que o limite chega cortado e não é JSON válido
   } catch {
     return null;
   }
