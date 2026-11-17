@@ -82,9 +82,27 @@ class NormalizeTest(unittest.TestCase):
 
 
 class RulesTest(unittest.TestCase):
+    # Referência fixa dos slugs já publicados (scripts/posts_publicados.txt). Post novo não exige editar nada;
+    # post removido exige tirá-lo da lista, porque cada slug sustenta uma URL pública e, nos do Substack, um
+    # redirecionamento.
+    PUBLICADOS = Path(__file__).resolve().parent / "posts_publicados.txt"
+
     def test_corpus_is_real(self):
-        self.assertEqual(len(R.slugs()), 234)
-        self.assertNotIn("politica-de-privacidade", R.slugs())
+        s = R.slugs()
+        ref = [l.strip() for l in self.PUBLICADOS.read_text(encoding="utf-8").splitlines()
+               if l.strip() and not l.startswith("#")]
+        self.assertGreaterEqual(len(ref), 234)
+        self.assertEqual(len(set(ref)), len(ref))
+        self.assertEqual(sorted(set(ref) - set(s)), [])
+        # Contagem independente do glob do módulo: o que o Astro publica (pattern '*.md' direto na pasta, em
+        # blog-src/src/content.config.ts). Pega glob quebrado e arquivo que o site não publicaria.
+        publicados = sorted(n[:-3] for n in os.listdir(R.POSTS)
+                            if n.endswith(".md") and (R.POSTS / n).is_file())
+        self.assertEqual(s, publicados)
+        self.assertEqual(len(set(s)), len(s))
+        for slug in s:
+            self.assertRegex(slug, r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+        self.assertNotIn("politica-de-privacidade", s)
 
     def test_simulation_matches_the_plan_for_every_post_and_page(self):
         bad = [(h, p, R.simulate(h, p), oracle(R.normalize(p))) for p in corpus() for h in R.HOSTS
@@ -360,7 +378,7 @@ class JobsTest(unittest.TestCase):
             self.assertTrue(any(m == "HEAD" and u.startswith(f"https://{h}/post/") for (u, m) in urls))
             self.assertTrue(any(u.startswith(f"https://{h.upper()}/") for (u, m) in urls))
         self.assertEqual(sum(1 for j in todo if j.method == "GET" and j.url.startswith("https://") and "?" not in j.url
-                             and urlsplit(j.url).netloc in (APEX, WWW)), (234 * 6 + len(self.SPECIAL)) * 2)
+                             and urlsplit(j.url).netloc in (APEX, WWW)), (len(R.slugs()) * 6 + len(self.SPECIAL)) * 2)
         self.assertFalse(any(j.allow_404 for j in todo))
 
     def test_quick_is_a_sample_but_keeps_every_form(self):

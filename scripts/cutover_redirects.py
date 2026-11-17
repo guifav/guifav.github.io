@@ -17,7 +17,7 @@ Uma fonte só para as regras de Single Redirects da Cloudflare, com três usos:
 
     python3 scripts/cutover_redirects.py verify [--urls ARQUIVO] [--allow-404 ARQUIVO] [--quick]
         Confere no ar: 301 de um salto, Location exata e destino 200 sem novo redirect. A matriz cobre, nos dois
-        hosts, os 233 posts em /p/ e /post/ (com e sem barra, /comments e /comments/), as páginas especiais (com e
+        hosts, todos os posts em /p/ e /post/ (com e sem barra, /comments e /comments/), as páginas especiais (com e
         sem barra) e, para uma amostra de cada forma de caminho, query string, http:// e HEAD, além do host em caixa
         alta. --urls acrescenta URLs antigas (por exemplo, as páginas do Search Console), conferidas nos dois hosts.
         Destino 404 reprova, salvo para as URLs listadas em --allow-404 (erros de digitação conhecidos, guardados
