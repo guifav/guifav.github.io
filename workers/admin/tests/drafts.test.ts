@@ -410,6 +410,31 @@ test('R4: arquivo do manifesto sai com o tipo do manifesto; fora do manifesto, i
   assert.equal((await s.req('/admin/rascunhos/sales-coach/img/../manifest.json')).status, 404);
 });
 
+test('R4 (#82): a fonte do rascunho (campo fonte, em v/<versão>/fonte/) nunca é servida; o manifesto com fonte continua válido', async () => {
+  const s = setup();
+  const fonte = { 'sales-coach.md': SHA('1'), 'img/a-728.webp': SHA('2') };
+  const d = await putDraft(s.bucket, 'sales-coach', { manifest: { fonte } });
+  s.bucket.store.set(`sales-coach/v/${d.version}/fonte/sales-coach.md`, enc('FONTE-MARKDOWN'));
+  s.bucket.store.set(`sales-coach/v/${d.version}/fonte/img/a-728.webp`, enc('FONTE-IMAGEM'));
+  // O manifesto é aceito como antes, e a fonte não entra no que o Worker conhece (files).
+  const m = (await readManifest(s.bucket, 'sales-coach'))!;
+  assert.ok(m, 'manifesto com fonte é válido');
+  assert.equal('fonte' in m, false);
+  assert.deepEqual(Object.keys(m.files), ['index.html', 'img/sales-coach/a-728.webp']);
+  // Lista e prévia seguem iguais; a imagem da prévia continua servida.
+  assert.match(await (await s.req('/admin/rascunhos')).text(), /sales-coach/);
+  assert.equal((await s.req('/admin/rascunhos/sales-coach/')).status, 200);
+  assert.equal((await s.req('/admin/rascunhos/sales-coach/img/sales-coach/a-728.webp')).status, 200);
+  const before = s.bucket.gets.length;
+  for (const p of ['fonte/sales-coach.md', 'fonte/img/a-728.webp', 'sales-coach.md', 'img/a-728.webp', `v/${d.version}/fonte/sales-coach.md`]) {
+    const r = await s.req(`/admin/rascunhos/sales-coach/${p}`);
+    assert.equal(r.status, 404, p);
+    assert.doesNotMatch(await r.text(), /FONTE-/, p);
+  }
+  // Nenhum objeto da fonte foi sequer lido do R2.
+  assert.deepEqual(s.bucket.gets.slice(before).filter((k) => k.includes('/fonte/')), []);
+});
+
 // ------------------------------------------------------------------ R5: aprovação
 test('R5: aprovação grava a versão vista, avisa o Roger e a prévia e a lista passam a mostrar aprovado', async () => {
   const s = setup();
