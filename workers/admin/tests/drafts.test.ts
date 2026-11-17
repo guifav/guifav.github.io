@@ -38,7 +38,15 @@ function d1(falha: { sql?: RegExp } = {}): D1Like & { raw: DatabaseSync } {
 
 // ------------------------------------------------------------------ R2 falso
 function r2() {
-  const store = new Map<string, Uint8Array>();
+  // Cada gravação ganha um instante crescente, como o uploaded do R2: o que foi gravado depois tem instante maior.
+  const gravadoEm = new Map<string, number>();
+  let relogioR2 = NOW;
+  const store = new (class extends Map<string, Uint8Array> {
+    set(k: string, v: Uint8Array) {
+      gravadoEm.set(k, relogioR2++);
+      return super.set(k, v);
+    }
+  })();
   const body = (b: Uint8Array) => ({
     arrayBuffer: async () => b.slice().buffer,
     text: async () => new TextDecoder().decode(b),
@@ -67,7 +75,8 @@ function r2() {
         const ini = cursor ? Number(cursor) : 0;
         const fim = ini + Math.min(limit, bucket.pagina);
         const truncated = fim < keys.length;
-        return { objects: keys.slice(ini, fim).map((key) => ({ key })), delimitedPrefixes: [], truncated, ...(truncated ? { cursor: String(fim) } : {}) };
+        return { objects: keys.slice(ini, fim).map((key) => ({ key, uploaded: new Date(gravadoEm.get(key) ?? 0) })), delimitedPrefixes: [], truncated,
+          ...(truncated ? { cursor: String(fim) } : {}) };
       }
       const pre = new Set<string>();
       const objects: { key: string }[] = [];
@@ -1508,7 +1517,7 @@ test('R11: rascunho do artigo com o PR da versão mergeado e o post no ar sai in
   assert.ok(chavesDe(s, 'sales-coach').length >= 5, 'manifesto, duas versões e a fonte');
   assert.deepEqual(await limparPublicados(s.env, s.deps), ['sales-coach']);
   assert.deepEqual(chavesDe(s, 'sales-coach'), [], 'manifesto, versões anteriores e fonte');
-  assert.deepEqual(s.bucket.deletes[0], ['sales-coach/manifest.json'], 'o manifesto sai primeiro');
+  assert.deepEqual(s.bucket.deletes.at(-1), ['sales-coach/manifest.json'], 'o manifesto sai por último (r1, Codex P2)');
   assert.ok(chavesDe(s, 'sales-coach-short').length > 0, 'derivado continua');
   assert.ok(chavesDe(s, 'sales-coach-2').length > 0, 'slug que só começa igual continua');
   assert.equal(s.rows().length, 1, 'a aprovação continua no D1');
@@ -1537,6 +1546,85 @@ test('R11: mais de 1000 objetos saem em lotes de até 1000 chaves', async () => 
   assert.deepEqual(await limparPublicados(s.env, s.deps), ['sales-coach']);
   assert.deepEqual(chavesDe(s, 'sales-coach'), []);
   assert.ok(s.bucket.deletes.every((l) => l.length <= 1000));
+});
+
+test('R11 (r1, Codex P1): envio novo durante a remoção não é apagado', async () => {
+  // O envio chega enquanto o cron consulta o site: versão nova inteira e manifesto novo. Nada do slug sai.
+  {
+    const { s } = await cenarioPublicado();
+    const fetchOriginal = s.deps.fetch;
+    let nova: Draft | undefined;
+    s.deps.fetch = (async (i: string | URL | Request, init?: RequestInit) => {
+      if (String(i).startsWith('https://guifav.dev/blog/') && !nova) nova = await putDraft(s.bucket, 'sales-coach', { title: 'Correção' });
+      return fetchOriginal(i, init);
+    }) as typeof fetch;
+    assert.deepEqual(await limparPublicados(s.env, s.deps), []);
+    assert.equal(s.bucket.deletes.length, 0, 'manifesto mudou antes da remoção: nada sai');
+    assert.equal((await readManifest(s.bucket, 'sales-coach'))?.version, nova!.version);
+  }
+  // O envio está no meio: objetos da versão nova já gravados, manifesto ainda o antigo. A versão aprovada e as
+  // anteriores saem; a nova, gravada depois do manifesto vigente, fica inteira.
+  {
+    const { s, d } = await cenarioPublicado();
+    const fetchOriginal = s.deps.fetch;
+    let nova: Draft | undefined;
+    s.deps.fetch = (async (i: string | URL | Request, init?: RequestInit) => {
+      if (String(i).startsWith('https://guifav.dev/blog/') && !nova) nova = await putDraft(s.bucket, 'sales-coach', { title: 'Em andamento', skipManifest: true });
+      return fetchOriginal(i, init);
+    }) as typeof fetch;
+    assert.deepEqual(await limparPublicados(s.env, s.deps), ['sales-coach']);
+    const restam = chavesDe(s, 'sales-coach');
+    assert.ok(restam.length > 0 && restam.every((k) => k.startsWith(`sales-coach/v/${nova!.version}/`)), 'só a versão em andamento fica');
+    assert.ok(!restam.some((k) => k.includes(d.version)));
+  }
+  // Reenvio em andamento de um conteúdo igual ao de uma versão antiga: a pasta dela fica com objetos de antes e de
+  // depois do manifesto vigente, e não sai.
+  {
+    const { s } = await cenarioPublicado();
+    const vigente = (await readManifest(s.bucket, 'sales-coach'))!.version;
+    const antiga = [...s.bucket.store.keys()].find((k) => k.startsWith('sales-coach/v/') && k.endsWith('/index.html') && !k.includes(vigente))!;
+    const pastaAntiga = antiga.replace(/index\.html$/, '');
+    const fetchOriginal = s.deps.fetch;
+    let regravou = false;
+    s.deps.fetch = (async (i: string | URL | Request, init?: RequestInit) => {
+      if (String(i).startsWith('https://guifav.dev/blog/') && !regravou) {
+        regravou = true;
+        s.bucket.store.set(antiga, s.bucket.store.get(antiga)!);
+      }
+      return fetchOriginal(i, init);
+    }) as typeof fetch;
+    assert.deepEqual(await limparPublicados(s.env, s.deps), ['sales-coach']);
+    assert.ok(chavesDe(s, 'sales-coach').length > 0 && chavesDe(s, 'sales-coach').every((k) => k.startsWith(pastaAntiga)), 'a pasta regravada fica inteira');
+    assert.equal(chavesDe(s, 'sales-coach').length, 2, 'index.html e a imagem da versão antiga');
+  }
+  // O envio troca o manifesto entre a remoção das versões e a do manifesto: o manifesto novo fica.
+  {
+    const { s } = await cenarioPublicado();
+    const deleteOriginal = s.bucket.delete.bind(s.bucket);
+    let nova: Draft | undefined;
+    s.bucket.delete = async (keys: string | string[]) => {
+      await deleteOriginal(keys);
+      if (!nova) nova = await putDraft(s.bucket, 'sales-coach', { title: 'Chegou no fim' });
+    };
+    assert.deepEqual(await limparPublicados(s.env, s.deps), []);
+    assert.equal((await readManifest(s.bucket, 'sales-coach'))?.version, nova!.version, 'manifesto novo continua');
+  }
+});
+
+test('R11 (r1, Codex P2): remoção que falha no meio é retomada no cron seguinte', async () => {
+  const { s, d } = await cenarioPublicado();
+  for (let i = 0; i < 5; i++) s.bucket.store.set(`sales-coach/v/${d.version}/img/sales-coach/extra-${i}.webp`, enc('x'));
+  s.bucket.pagina = 3;
+  const deleteOriginal = s.bucket.delete.bind(s.bucket);
+  let falhas = 1;
+  s.bucket.delete = async (keys: string | string[]) => {
+    if (Array.isArray(keys) && falhas-- > 0) throw new Error('R2 indisponível');
+    return deleteOriginal(keys);
+  };
+  assert.deepEqual(await limparPublicados(s.env, s.deps), [], 'primeira tentativa falha');
+  assert.ok(await readManifest(s.bucket, 'sales-coach'), 'o manifesto continua para a próxima tentativa');
+  assert.deepEqual(await limparPublicados(s.env, s.deps), ['sales-coach'], 'o cron seguinte termina');
+  assert.deepEqual(chavesDe(s, 'sales-coach'), []);
 });
 
 test('R11: sem as duas confirmações, nada sai (PR aberto, fechado sem merge, de outra base, post fora do ar, GitHub fora)', async () => {

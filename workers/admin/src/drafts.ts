@@ -20,7 +20,8 @@ export interface R2Body {
 export interface R2Like {
   get(key: string): Promise<R2Body | null>;
   list(opts: { prefix?: string; delimiter?: string; cursor?: string; limit?: number }): Promise<{
-    objects: { key: string }[];
+    // uploaded: quando o R2 gravou o objeto (relógio do R2). A fatia 5 usa para não apagar um envio em andamento.
+    objects: { key: string; uploaded?: Date }[];
     delimitedPrefixes: string[];
     truncated: boolean;
     cursor?: string;
@@ -507,26 +508,52 @@ async function slugsDoBucket(env: DraftEnv): Promise<string[]> {
   return prefixes.slice(0, MAX_DRAFTS).map((p) => p.replace(/\/$/, ''));
 }
 
-/** Apaga tudo em <slug>/: o manifesto primeiro (sem ele, o painel já não mostra nem serve nada do rascunho), depois as
- * versões, inclusive as anteriores e a fonte. O "/" do fim garante que o slug "x" não leva junto o "x-linkedin/". A lista
- * inteira vem antes de qualquer remoção das versões: apagar enquanto pagina pode pular objetos, conforme o cursor. */
-async function apagarRascunho(bucket: R2Like, slug: string): Promise<void> {
-  await bucket.delete(`${slug}/manifest.json`);
-  const keys: string[] = [];
+/** Remove o rascunho publicado da versão `m` e devolve se removeu. Seguro contra um envio que aconteça durante o cron
+ * (r1, Codex P1) e retomável se falhar no meio (r1, Codex P2):
+ * - lista tudo em <slug>/ antes de apagar (apagar enquanto pagina pode pular objetos); o "/" do fim garante que o slug
+ *   "x" não leva junto o "x-linkedin/";
+ * - relê o manifesto antes de apagar qualquer coisa: se ele não aponta mais para `m.version`, chegou um envio novo e nada
+ *   sai;
+ * - apaga a pasta da versão aprovada e as pastas de outras versões só se todos os objetos delas foram gravados antes do
+ *   manifesto vigente (relógio do R2 nos dois lados): um envio em andamento grava as versões depois dele e fica;
+ * - o manifesto sai por último, e só se ainda aponta para `m.version`. Se algo falhar antes, ele continua, e o próximo
+ *   cron tenta de novo. Fica uma janela entre a última releitura e a remoção do manifesto em que um envio novo pode
+ *   perder o manifesto; os objetos dele ficam, e reenviar o recupera. Registrado no README. */
+async function apagarRascunho(bucket: R2Like, m: Manifest): Promise<boolean> {
+  const slug = m.slug;
+  const objs: { key: string; uploaded?: Date }[] = [];
   let cursor: string | undefined;
   do {
     const page = await bucket.list({ prefix: `${slug}/`, cursor, limit: 1000 });
-    keys.push(...page.objects.map((o) => o.key));
+    objs.push(...page.objects);
     cursor = page.truncated ? page.cursor : undefined;
   } while (cursor);
+  const aindaEsta = async () => (await readManifest(bucket, slug))?.version === m.version;
+  if (!(await aindaEsta())) return false;
+  const manifestKey = `${slug}/manifest.json`;
+  const limite = objs.find((o) => o.key === manifestKey)?.uploaded?.getTime();
+  const pastas = new Map<string, { key: string; uploaded?: Date }[]>();
+  for (const o of objs) {
+    if (o.key === manifestKey) continue;
+    const v = o.key.slice(slug.length + 1).match(/^v\/([^/]+)\//)?.[1] ?? '';
+    pastas.set(v, [...(pastas.get(v) ?? []), o]);
+  }
+  const keys: string[] = [];
+  for (const [v, lista] of pastas) {
+    const antiga = limite !== undefined && v !== '' && lista.every((o) => o.uploaded !== undefined && o.uploaded.getTime() < limite);
+    if (v === m.version || antiga) keys.push(...lista.map((o) => o.key));
+  }
   for (let i = 0; i < keys.length; i += 1000) await bucket.delete(keys.slice(i, i + 1000));
+  if (!(await aindaEsta())) return false;
+  await bucket.delete(manifestKey);
+  return true;
 }
 
 /** #82, fatia 5, no cron: remove do R2 o rascunho do artigo cuja versão vigente está aprovada e publicada, ou seja, o PR
  * do branch dessa versão está mergeado na main e o post responde 200 no site. Mergeado sozinho não garante o deploy,
  * por isso o site. Só artigos: os derivados ficam e passam a aparecer abaixo da linha "publicado no site" (#80). Um
- * rascunho reenviado depois do merge tem outra versão, sem aprovação, e não sai. A falha num rascunho não impede os
- * outros; nada é apagado sem as duas confirmações. Devolve os slugs removidos. */
+ * rascunho reenviado depois do merge tem outra versão, sem aprovação, e não sai, nem durante a remoção (apagarRascunho).
+ * A falha num rascunho não impede os outros; nada é apagado sem as duas confirmações. Devolve os slugs removidos. */
 export async function limparPublicados(env: DraftEnv, deps: DraftDeps): Promise<string[]> {
   if (!env.GITHUB_DISPATCH_TOKEN) return [];
   const removidos: string[] = [];
@@ -538,8 +565,7 @@ export async function limparPublicados(env: DraftEnv, deps: DraftDeps): Promise<
       const pr = await prDaVersao(env, deps, m);
       if (!pr || typeof pr.merged_at !== 'string' || !pr.merged_at) continue;
       if (!(await publicado(env, deps, slug))) continue;
-      await apagarRascunho(env.DRAFTS, slug);
-      removidos.push(slug);
+      if (await apagarRascunho(env.DRAFTS, m)) removidos.push(slug);
     } catch (e) {
       console.log(`limparPublicados: ${slug} ficou, ${e instanceof Error ? e.message : String(e)}`);
     }
