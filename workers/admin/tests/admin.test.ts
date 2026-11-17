@@ -258,7 +258,7 @@ test('G1: caminhos fora de /admin seguem para o site sem exigir login', async ()
 
 test('G1: o wrangler.toml prende o Worker só ao caminho /admin e com cron de hora em hora', () => {
   assert.match(TOML, /routes = \[\{ pattern = "guifav\.dev\/admin\*", zone_name = "guifav\.dev" \}\]/);
-  assert.match(TOML, /crons = \["17 \* \* \* \*"\]/);
+  assert.match(TOML, /crons = \["17 \* \* \* \*", "47 \* \* \* \*"\]/);
   assert.doesNotMatch(TOML, /RESEND_API_KEY\s*=|ALLOWED_EMAILS\s*=|@/);
 });
 

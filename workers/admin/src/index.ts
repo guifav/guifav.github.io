@@ -24,7 +24,7 @@ export interface Env {
   GITHUB_DISPATCH_TOKEN: string; // segredo: token fino só deste repositório, só com Actions (disparo da publicação, #82)
 }
 
-export type Deps = SyncDeps & Pick<DraftDeps, 'siteTimeoutMs' | 'githubTimeoutMs' | 'mailTimeoutMs'> & { origin: (req: Request) => Promise<Response> };
+export type Deps = SyncDeps & Pick<DraftDeps, 'siteTimeoutMs' | 'githubTimeoutMs' | 'mailTimeoutMs' | 'limpezaMaxMs' | 'limpezaMaxOps' | 'limpezaMaxPaginas'> & { origin: (req: Request) => Promise<Response> };
 
 export const PAGE_SIZE = 100;
 
@@ -230,19 +230,23 @@ const deps = (): Deps => ({
   origin: (req) => fetch(req),
 });
 
-/** O cron das 17: a cópia dos assinantes e, separada dela, a remoção dos rascunhos de artigos já publicados (#82, fatia
- * 5). Uma não espera a outra, e a falha de uma não derruba a outra. */
-export async function agendado(env: Env, d: Deps): Promise<PromiseSettledResult<unknown>[]> {
-  const r = await Promise.allSettled([syncSegment(env, d), limparPublicados(env, d)]);
-  if (r[0].status === 'rejected') console.log(`cópia de assinantes falhou: ${String(r[0].reason)}`);
-  if (r[1].status === 'rejected') console.log(`remoção de rascunhos publicados falhou: ${String(r[1].reason)}`);
-  else if ((r[1].value as string[]).length) console.log(`rascunhos publicados removidos: ${(r[1].value as string[]).join(', ')}`);
-  return r;
+/** Dois horários do cron, em execuções separadas, cada uma com os próprios 15 min e 10.000 subrequests (r1, Astra e
+ * Kimi P2): no minuto 17, a cópia dos assinantes; no 47, a remoção dos rascunhos de artigos já publicados (#82,
+ * fatia 5). Assim uma nunca consome o tempo nem a cota da outra. */
+export const CRON_COPIA = '17 * * * *';
+export const CRON_LIMPEZA = '47 * * * *';
+export async function agendado(cron: string, env: Env, d: Deps): Promise<unknown> {
+  if (cron === CRON_LIMPEZA) {
+    const removidos = await limparPublicados(env, d);
+    if (removidos.length) console.log(`rascunhos publicados removidos: ${removidos.join(', ')}`);
+    return removidos;
+  }
+  return syncSegment(env, d);
 }
 
 export default {
   fetch: (req: Request, env: Env) => handle(req, env, deps()),
-  scheduled: async (_c: unknown, env: Env, ctx: { waitUntil(p: Promise<unknown>): void }) => {
-    ctx.waitUntil(agendado(env, deps()));
+  scheduled: async (c: { cron: string }, env: Env, ctx: { waitUntil(p: Promise<unknown>): void }) => {
+    ctx.waitUntil(agendado(c.cron, env, deps()));
   },
 };

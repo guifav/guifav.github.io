@@ -50,6 +50,11 @@ export interface DraftDeps {
   githubTimeoutMs?: number;
   // #82 (r1, Astra e Kimi P2): prazo do aviso por email ao Resend. Os testes encurtam; em produção, 5 s.
   mailTimeoutMs?: number;
+  // #82, fatia 5 (r1, Astra e Kimi P2): orçamento da remoção dos rascunhos publicados, numa execução do cron só dela.
+  // Os testes encurtam; em produção, LIMPEZA_MAX_MS, LIMPEZA_MAX_OPS e LIMPEZA_MAX_PAGINAS.
+  limpezaMaxMs?: number;
+  limpezaMaxOps?: number;
+  limpezaMaxPaginas?: number;
 }
 
 export interface Manifest {
@@ -425,6 +430,13 @@ async function prDaVersao(env: DraftEnv, deps: DraftDeps, m: Manifest): Promise<
     && isObj(p.base) && p.base.ref === 'main') ?? null;
 }
 
+/** PR mergeado de fato: fechado e com merged_at numa data ISO válida. Resposta incoerente ou malformada do GitHub não
+ * conta como merge, porque o cron apaga dados com base nisso (r1, Astra e Kimi P2). */
+export function mergeado(pr: Record<string, unknown>): boolean {
+  return pr.state === 'closed' && typeof pr.merged_at === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(pr.merged_at)
+    && Number.isFinite(Date.parse(pr.merged_at));
+}
+
 /** Estado calculado na hora, do D1 e do GitHub: uma chamada (PR do branch da versão) e, no máximo, uma segunda (CI do
  * PR aberto ou execução do publicar.yml). PR mergeado consulta o site, como a linha "publicado no site" do #80. */
 async function publicacao(env: DraftEnv, deps: DraftDeps, m: Manifest, a: Approval, firstApprovedAt: string): Promise<Publicacao> {
@@ -436,9 +448,9 @@ async function publicacao(env: DraftEnv, deps: DraftDeps, m: Manifest, a: Approv
   if (pr) {
     const n = pr.number as number;
     const link = `<a href="${GITHUB_WEB}/pull/${n}">#${n}</a>`;
-    if (typeof pr.merged_at === 'string' && pr.merged_at) {
+    if (mergeado(pr)) {
       const post = await publicado(env, deps, m.slug);
-      if (post) return { html: `publicado em ${esc(pr.merged_at.slice(0, 10))}: <a href="${esc(post.url)}">ver o post</a>`, redisparar: false };
+      if (post) return { html: `publicado em ${esc((pr.merged_at as string).slice(0, 10))}: <a href="${esc(post.url)}">ver o post</a>`, redisparar: false };
       return { html: `PR ${link} mergeado, aguardando o deploy do site`, redisparar: false };
     }
     if (pr.state !== 'open') return { html: `PR ${link} fechado sem merge`, redisparar: false };
@@ -496,6 +508,34 @@ function estadoDaExecucao(run: Record<string, unknown>, desdeD1: string, now: nu
   return { html: `execução interrompida${como}: ${exec}`, redisparar: true };
 }
 
+// #82, fatia 5 (r1, Astra e Kimi P2): a remoção roda numa execução do cron só dela (index.ts), com orçamento próprio,
+// bem abaixo dos 15 min e dos 10.000 subrequests de uma execução.
+export const LIMPEZA_MAX_MS = 10 * 60 * 1000;
+export const LIMPEZA_MAX_OPS = 2000;
+export const LIMPEZA_MAX_PAGINAS = 20; // até 20.000 objetos por rascunho numa execução
+
+/** Prazo e contagem de chamadas (R2, D1, GitHub, site) de uma execução da remoção. gastar(n) reserva n chamadas e diz se
+ * cabem dentro do prazo e do limite; gastar(0) só confere o prazo. */
+interface Orcamento {
+  gastar(n: number): boolean;
+  restante(): number;
+  maxPaginas: number;
+}
+function orcamento(deps: DraftDeps): Orcamento {
+  const ate = deps.now() + (deps.limpezaMaxMs ?? LIMPEZA_MAX_MS);
+  const max = deps.limpezaMaxOps ?? LIMPEZA_MAX_OPS;
+  let usadas = 0;
+  return {
+    gastar(n) {
+      if (deps.now() > ate || usadas + n > max) return false;
+      usadas += n;
+      return true;
+    },
+    restante: () => max - usadas,
+    maxPaginas: deps.limpezaMaxPaginas ?? LIMPEZA_MAX_PAGINAS,
+  };
+}
+
 /** Prefixos <slug>/ do bucket, no máximo MAX_DRAFTS, como a lista os enxerga. */
 async function slugsDoBucket(env: DraftEnv): Promise<string[]> {
   const prefixes: string[] = [];
@@ -519,11 +559,14 @@ async function slugsDoBucket(env: DraftEnv): Promise<string[]> {
  * - o manifesto sai por último, e só se ainda aponta para `m.version`. Se algo falhar antes, ele continua, e o próximo
  *   cron tenta de novo. Fica uma janela entre a última releitura e a remoção do manifesto em que um envio novo pode
  *   perder o manifesto; os objetos dele ficam, e reenviar o recupera. Registrado no README. */
-async function apagarRascunho(bucket: R2Like, m: Manifest): Promise<boolean> {
+async function apagarRascunho(bucket: R2Like, m: Manifest, orc: Orcamento): Promise<boolean> {
   const slug = m.slug;
   const objs: { key: string; uploaded?: Date }[] = [];
   let cursor: string | undefined;
+  let paginas = 0;
   do {
+    // Rascunho com histórico grande demais para uma execução fica inteiro (nada foi apagado ainda) e vai para o log.
+    if (++paginas > orc.maxPaginas || !orc.gastar(1)) throw new Error(`listagem de ${slug} passou do orçamento`);
     const page = await bucket.list({ prefix: `${slug}/`, cursor, limit: 1000 });
     objs.push(...page.objects);
     cursor = page.truncated ? page.cursor : undefined;
@@ -543,6 +586,8 @@ async function apagarRascunho(bucket: R2Like, m: Manifest): Promise<boolean> {
     const antiga = limite !== undefined && v !== '' && lista.every((o) => o.uploaded !== undefined && o.uploaded.getTime() < limite);
     if (v === m.version || antiga) keys.push(...lista.map((o) => o.key));
   }
+  // Releitura, lotes, releitura e manifesto: se não cabem, nada sai nesta execução.
+  if (!orc.gastar(Math.ceil(keys.length / 1000) + 3)) throw new Error(`remoção de ${slug} passou do orçamento`);
   for (let i = 0; i < keys.length; i += 1000) await bucket.delete(keys.slice(i, i + 1000));
   if (!(await aindaEsta())) return false;
   await bucket.delete(manifestKey);
@@ -556,16 +601,29 @@ async function apagarRascunho(bucket: R2Like, m: Manifest): Promise<boolean> {
  * A falha num rascunho não impede os outros; nada é apagado sem as duas confirmações. Devolve os slugs removidos. */
 export async function limparPublicados(env: DraftEnv, deps: DraftDeps): Promise<string[]> {
   if (!env.GITHUB_DISPATCH_TOKEN) return [];
+  const orc = orcamento(deps);
   const removidos: string[] = [];
-  for (const slug of await slugsDoBucket(env)) {
+  const slugs = await slugsDoBucket(env);
+  orc.gastar(Math.ceil(slugs.length / 1000) || 1);
+  for (const slug of slugs) {
+    // Cada rascunho custa até 4 leituras antes de decidir (manifesto, D1, GitHub, site). Sem orçamento ou prazo para
+    // isso, para aqui; o que faltou fica para a hora seguinte.
+    if (!orc.gastar(0) || orc.restante() < 4) {
+      console.log(`limparPublicados: orçamento esgotado antes de ${slug}; o resto fica para a próxima execução`);
+      break;
+    }
     try {
+      if (!orc.gastar(1)) break;
       const m = await readManifest(env.DRAFTS, slug);
       if (!m || m.kind !== 'blog') continue;
+      if (!orc.gastar(1)) break;
       if (!state(await approvals(env.DB, slug), m).approved) continue;
+      if (!orc.gastar(1)) break;
       const pr = await prDaVersao(env, deps, m);
-      if (!pr || typeof pr.merged_at !== 'string' || !pr.merged_at) continue;
+      if (!pr || !mergeado(pr)) continue;
+      if (!orc.gastar(1)) break;
       if (!(await publicado(env, deps, slug))) continue;
-      if (await apagarRascunho(env.DRAFTS, m)) removidos.push(slug);
+      if (await apagarRascunho(env.DRAFTS, m, orc)) removidos.push(slug);
     } catch (e) {
       console.log(`limparPublicados: ${slug} ficou, ${e instanceof Error ? e.message : String(e)}`);
     }

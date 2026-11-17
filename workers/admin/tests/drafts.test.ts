@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { agendado, handle, type Env, type Deps } from '../src/index.ts';
+import { agendado, CRON_COPIA, CRON_LIMPEZA, handle, type Env, type Deps } from '../src/index.ts';
 import { execucaoDa, limparPublicados, PREVIEW_CSP, publishBranch, readManifest, sha256Hex, versionId, type R2Like } from '../src/drafts.ts';
 import type { D1Like, D1Stmt } from '../src/sync.ts';
 import { resetCertsCache } from '../src/access.ts';
@@ -1689,17 +1689,81 @@ test('R11: a falha num rascunho não impede a remoção de outro', async () => {
   assert.ok(chavesDe(s, 'a-quebrado').length > 0);
 });
 
-test('R11: no cron, a cópia de assinantes e a remoção correm separadas; a falha de uma não impede a outra', async () => {
-  // A cópia de assinantes falha (o Resend falso só conhece /emails); a remoção acontece.
+test('R11 (r1, Astra e Kimi P2): cópia e remoção em horários do cron separados, cada uma na sua execução', async () => {
+  assert.match(TOML, /crons = \["17 \* \* \* \*", "47 \* \* \* \*"\]/);
+  assert.equal(CRON_COPIA, '17 * * * *');
+  assert.equal(CRON_LIMPEZA, '47 * * * *');
+  // No 47, só a remoção: nenhuma chamada ao Resend.
   const { s } = await cenarioPublicado();
-  const r = await agendado(s.env, s.deps);
-  assert.equal(r[0].status, 'rejected', 'cópia de assinantes falhou');
-  assert.equal(r[1].status, 'fulfilled');
-  assert.deepEqual((r[1] as PromiseFulfilledResult<unknown>).value, ['sales-coach']);
-  // A remoção falha por inteiro (bucket fora do ar); a cópia de assinantes roda do mesmo jeito.
+  assert.deepEqual(await agendado(CRON_LIMPEZA, s.env, s.deps), ['sales-coach']);
+  assert.ok(!s.other.some((u) => u.startsWith('https://api.resend.com/')), 'a remoção não chama o Resend');
+  // No 17, só a cópia: nada sai do R2, nenhuma consulta ao GitHub nem ao site.
   const c = await cenarioPublicado();
-  c.s.bucket.list = async () => { throw new Error('R2 indisponível'); };
-  const r2b = await agendado(c.s.env, c.s.deps);
-  assert.equal(r2b[1].status, 'rejected');
-  assert.ok(c.s.other.some((u) => u.startsWith('https://api.resend.com/')), 'a cópia de assinantes chamou o Resend');
+  await agendado(CRON_COPIA, c.s.env, c.s.deps).catch(() => {});
+  assert.ok(c.s.other.some((u) => u.startsWith('https://api.resend.com/')), 'a cópia chamou o Resend');
+  assert.equal(c.s.bucket.deletes.length, 0);
+  assert.equal(leituras(c.s).length, 0);
+  assert.equal(c.s.site.length, 0);
+});
+
+test('R11 (r1, Astra e Kimi P2): resposta do GitHub incoerente ou com data inválida não conta como merge', async () => {
+  const ruins: [string, Record<string, unknown>][] = [
+    ['aberto com merged_at', { state: 'open', merged_at: '2026-11-13T19:30:00Z' }],
+    ['sem state', { state: undefined, merged_at: '2026-11-13T19:30:00Z' }],
+    ['merged_at que não é data', { state: 'closed', merged_at: 'não é uma data' }],
+    ['merged_at com espaço', { state: 'closed', merged_at: '2026-11-13 19:30:00Z' }],
+    ['merged_at impossível', { state: 'closed', merged_at: '2026-13-45T99:99:99Z' }],
+    ['merged_at numérico', { state: 'closed', merged_at: 1763062200 }],
+  ];
+  for (const [nome, campos] of ruins) {
+    const c = await cenarioPublicado();
+    c.s.ghOpts.pulls = [{ ...pr(12, 'closed', '2026-11-13T19:30:00Z', c.ramo), ...campos }];
+    assert.deepEqual(await limparPublicados(c.s.env, c.s.deps), [], nome);
+    assert.equal(c.s.bucket.deletes.length, 0, nome);
+    assert.equal(c.s.site.length, 0, `${nome}: sem merge, nem consulta o site`);
+  }
+});
+
+test('R11 (r1, Astra e Kimi P2): a remoção para no prazo e no limite de chamadas, e o resto fica para a próxima execução', async () => {
+  // Dois artigos publicados; o relógio anda 6 min a cada consulta ao GitHub e o prazo é de 10 min: só o primeiro sai.
+  {
+    const { s } = await cenarioPublicado({ site: { 'sales-coach': POST_HTML, 'outro-post': POST_HTML } });
+    const d2 = await putDraft(s.bucket, 'outro-post', { title: 'Outro' });
+    s.db.raw.prepare(`INSERT INTO draft_approvals (slug, title, html_sha256, source_sha256, approved_at, approved_by)
+      VALUES ('outro-post', 't', ?, ?, '2026-11-13T19:10:00.000Z', ?)`).run(d2.htmlSha, d2.source, GUI);
+    (s.ghOpts.pulls as unknown[]).push(pr(13, 'closed', '2026-11-13T19:30:00Z', publishBranch({ slug: 'outro-post', version: d2.version })));
+    const fetchOriginal = s.deps.fetch;
+    s.deps.fetch = (async (i: string | URL | Request, init?: RequestInit) => {
+      if (String(i).startsWith('https://api.github.com/')) s.avancar(6);
+      return fetchOriginal(i, init);
+    }) as typeof fetch;
+    s.deps.limpezaMaxMs = 10 * 60000;
+    const removidos = await limparPublicados(s.env, s.deps);
+    assert.equal(removidos.length, 1, `só um sai no prazo: ${removidos}`);
+    s.deps.fetch = fetchOriginal;
+    assert.equal((await limparPublicados(s.env, s.deps)).length, 1, 'a próxima execução tira o outro');
+  }
+  // Limite de chamadas, só com o artigo no bucket: listagem (1), manifesto, D1, GitHub e site (4), listagem do
+  // rascunho (1) e remoção (releitura, um lote, releitura e manifesto: 4) somam 10. Com 9, as leituras cabem e a
+  // remoção não; nada sai. Com 10, sai.
+  for (const [limite, esperado] of [[9, []], [10, ['sales-coach']]] as const) {
+    const { s } = await cenarioPublicado();
+    for (const k of [...s.bucket.store.keys()]) if (!k.startsWith('sales-coach/')) s.bucket.store.delete(k);
+    s.deps.limpezaMaxOps = limite;
+    assert.deepEqual(await limparPublicados(s.env, s.deps), esperado, `limite ${limite}`);
+    if (!esperado.length) {
+      assert.equal(s.bucket.deletes.length, 0);
+      assert.ok(await readManifest(s.bucket, 'sales-coach'));
+    }
+  }
+  // Histórico maior que o limite de páginas: nada sai, e o rascunho continua inteiro.
+  {
+    const { s, d } = await cenarioPublicado();
+    for (let i = 0; i < 9; i++) s.bucket.store.set(`sales-coach/v/${d.version}/img/sales-coach/extra-${i}.webp`, enc('x'));
+    s.bucket.pagina = 3;
+    s.deps.limpezaMaxPaginas = 2;
+    const antes = chavesDe(s, 'sales-coach').length;
+    assert.deepEqual(await limparPublicados(s.env, s.deps), []);
+    assert.equal(chavesDe(s, 'sales-coach').length, antes);
+  }
 });

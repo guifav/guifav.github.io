@@ -676,7 +676,7 @@ def corpo_pr(p: Publicacao) -> str:
         "",
         "## Depois do merge",
         "",
-        "O cron do painel (minuto 17 de cada hora) tira do R2 o rascunho do artigo depois que este PR estiver "
+        "O cron do painel (minuto 47 de cada hora) tira do R2 o rascunho do artigo depois que este PR estiver "
         "mergeado e o post responder no site. Os derivados continuam no painel.",
     ]
     return "\n".join(linhas) + "\n"

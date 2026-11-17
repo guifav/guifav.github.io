@@ -15,7 +15,7 @@ workers_dev = false
 routes = [{ pattern = "guifav.dev/admin*", zone_name = "guifav.dev" }]
 
 [triggers]
-crons = ["17 * * * *"]
+crons = ["17 * * * *", "47 * * * *"]
 
 [vars]
 # Segmento "IA Aplicada" do Resend (o mesmo do Worker de inscrição).
