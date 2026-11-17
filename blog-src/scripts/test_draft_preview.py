@@ -466,6 +466,10 @@ class UploadTest(unittest.TestCase):
             "a menos": (D.manifest(p, source, fonte), {f"{SLUG}.md": MD}),
             # Manifesto coerente com a fonte, mas com o source_sha256 de outra fonte (versão recalculada junto).
             "source de outra fonte": (D.manifest(p, outra_source, fonte), fonte),
+            # Bytes que reproduzem o source_sha256, mas o campo fonte do manifesto mente: a publicação conferiria
+            # cada arquivo contra ele e recusaria. Só a conferência arquivo a arquivo pega estes dois.
+            "sha256 errado no manifesto": ({**(m := D.manifest(p, source, fonte)), "fonte": {**m["fonte"], f"{SLUG}.md": "0" * 64}}, fonte),
+            "arquivo a mais no manifesto": ({**m, "fonte": {**m["fonte"], "img/b.webp": "0" * 64}}, fonte),
         }
         for name, (man, f) in cases.items():
             fake = Fake()
