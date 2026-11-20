@@ -1847,18 +1847,23 @@ test('R12 (PR #90): o botão de aprovar trava e avisa "Aprovando, aguarde..." as
 });
 
 test('R13 (#92): tituloNaLista tira do título do derivado o rótulo repetido, e só ele', () => {
-  assert.equal(tituloNaLista('Roteiro do short: quem garante a resposta da IA?', 'Roteiro do short'), 'quem garante a resposta da IA?');
-  assert.equal(tituloNaLista('Roteiro do vídeo: o que vem depois do transformer', 'Roteiro do vídeo (YouTube)'), 'o que vem depois do transformer');
-  assert.equal(tituloNaLista('ROTEIRO DO VÍDEO (YouTube): x', 'Roteiro do vídeo (YouTube)'), 'x');
+  assert.equal(tituloNaLista('Roteiro do short: quem garante a resposta da IA?', 'Roteiro do short'), 'Quem garante a resposta da IA?');
+  assert.equal(tituloNaLista('Roteiro do vídeo: o que vem depois do transformer', 'Roteiro do vídeo (YouTube)'), 'O que vem depois do transformer');
+  assert.equal(tituloNaLista('ROTEIRO DO VÍDEO (YouTube): x', 'Roteiro do vídeo (YouTube)'), 'X');
   assert.equal(tituloNaLista('Quem garante a resposta da IA', 'LinkedIn'), 'Quem garante a resposta da IA');
   assert.equal(tituloNaLista('Carrossel: dados', 'Roteiro do short'), 'Carrossel: dados', 'outro começo fica');
   assert.equal(tituloNaLista('Roteiro do short:', 'Roteiro do short'), 'Roteiro do short:', 'sem nada depois, fica inteiro');
   assert.equal(tituloNaLista('Roteiro do short sobre X: Y', 'Roteiro do short'), 'Roteiro do short sobre X: Y', 'prefixo maior que o rótulo fica');
   assert.equal(tituloNaLista('Roteiro: x', null), 'Roteiro: x');
   // r1, Kimi P1: rótulo com dois-pontos.
-  assert.equal(tituloNaLista('IA: roteiro: três erros', 'IA: roteiro'), 'três erros');
-  assert.equal(tituloNaLista('IA: roteiro: três erros', 'IA: roteiro (YouTube)'), 'três erros');
-  assert.equal(tituloNaLista('IA: roteiro (YouTube): x', 'IA: roteiro (YouTube)'), 'x');
+  assert.equal(tituloNaLista('IA: roteiro: três erros', 'IA: roteiro'), 'Três erros');
+  assert.equal(tituloNaLista('IA: roteiro: três erros', 'IA: roteiro (YouTube)'), 'Três erros');
+  assert.equal(tituloNaLista('IA: roteiro (YouTube): x', 'IA: roteiro (YouTube)'), 'X');
+  // Primeira letra maiúscula: acento, já maiúscula, número e caractere fora do BMP.
+  assert.equal(tituloNaLista('Roteiro do short: é agora', 'Roteiro do short'), 'É agora');
+  assert.equal(tituloNaLista('Roteiro do short: IA na mesa', 'Roteiro do short'), 'IA na mesa');
+  assert.equal(tituloNaLista('Roteiro do short: 3 erros', 'Roteiro do short'), '3 erros');
+  assert.equal(tituloNaLista('Roteiro do short: \u{10428}x', 'Roteiro do short'), '\u{10400}x');
   assert.equal(tituloNaLista('IA: outra coisa', 'IA: roteiro'), 'IA: outra coisa');
   assert.equal(tituloNaLista('IA: roteiro', 'IA: roteiro'), 'IA: roteiro', 'só o rótulo, sem resto, fica inteiro');
 });
@@ -1871,7 +1876,7 @@ test('R13 (#92): a lista não tem coluna Slug e mostra o título do derivado sem
   assert.match(body, /<thead><tr><th>Título<\/th><th>Prévia enviada<\/th><th>Estado<\/th><\/tr><\/thead>/);
   assert.doesNotMatch(body, /<td>sales-coach(-short)?<\/td>/, 'o slug não aparece como célula');
   const linha = linhaDe(body, 'sales-coach-short');
-  assert.match(linha, /<span class="tag">Roteiro do short<\/span><a href="\/admin\/rascunhos\/sales-coach-short\/">vender &lt;mais&gt;<\/a><\/td><td>/);
+  assert.match(linha, /<span class="tag">Roteiro do short<\/span><a href="\/admin\/rascunhos\/sales-coach-short\/">Vender &lt;mais&gt;<\/a><\/td><td>/);
   for (const r of body.split('<tr').slice(1)) assert.equal((r.match(/<t[dh]>/g) ?? []).length, 3, `três células: ${r.slice(0, 80)}`);
   const previa = await (await s.req('/admin/rascunhos/sales-coach-short/')).text();
   assert.match(previa, /Roteiro do short: vender &lt;mais&gt;|Roteiro do short: vender <mais>/);
