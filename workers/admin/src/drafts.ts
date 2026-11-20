@@ -235,7 +235,12 @@ export function tituloNaLista(title: string, rotulo: string | null): string {
   for (const prefixo of [rotulo.trim(), rotulo.replace(/\s*\([^()]*\)$/, '').trim()]) {
     if (!prefixo || minusculo(title.slice(0, prefixo.length)) !== minusculo(prefixo)) continue;
     const resto = /^\s*:\s*([\s\S]*)$/.exec(title.slice(prefixo.length))?.[1].trim();
-    if (resto) return resto;
+    // A continuação depois dos dois-pontos costuma vir em minúscula ("Roteiro do short: quem garante..."); na lista ela
+    // vira o título e ganha a primeira letra maiúscula. Por ponto de código, para não partir um caractere fora do BMP.
+    if (resto) {
+      const [primeira = '', ...demais] = resto;
+      return primeira.toLocaleUpperCase('pt-BR') + demais.join('');
+    }
   }
   return title;
 }
