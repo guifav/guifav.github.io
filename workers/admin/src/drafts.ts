@@ -221,6 +221,7 @@ function state(list: Approval[], m: Manifest): { approved: Approval | null; stal
 
 const PAGE_STYLE = `body{font:15px/1.45 system-ui,sans-serif;margin:1.5rem;color:#111}table{border-collapse:collapse;width:100%}
 th,td{border-bottom:1px solid #ddd;padding:.35rem .5rem;text-align:left;vertical-align:top}.ok{color:#060}.erro{color:#a00}
+.aviso{font-weight:600;padding:.6rem .8rem;border:2px solid;border-radius:4px;background:#fff}
 tr.linkedin td,tr.derivado td{background:#f6f8fb}tr.publicado td{color:#060}tr.linkedin td:first-child,tr.derivado td:first-child{padding-left:1.75rem}.tag{font-size:12px;border:1px solid #0a66c2;color:#0a66c2;border-radius:4px;padding:0 .3rem;margin-right:.35rem}`;
 
 /** Artigo já publicado no site, usado como pai dos derivados depois que o rascunho dele sai do R2 (#80). */
@@ -670,8 +671,8 @@ async function listPage(env: DraftEnv, deps: DraftDeps, msg: Mensagem | undefine
   const body = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow"><title>Rascunhos | Insights</title><style>${PAGE_STYLE}</style></head><body>
 <p><a href="/admin">Assinantes</a> · Rascunhos</p><h1>Rascunhos do blog</h1>
-${msg ? `<p class="${msg.erro ? 'erro' : 'ok'}">${esc(msg.texto)}</p>` : ''}
-${registroFalhou ? `<p class="erro">${esc(REGISTRO_FALHOU)}</p>` : ''}
+${msg ? `<p class="aviso ${msg.erro ? 'erro' : 'ok'}" role="status">${esc(msg.texto)}</p>` : ''}
+${registroFalhou ? `<p class="aviso erro" role="status">${esc(REGISTRO_FALHOU)}</p>` : ''}
 ${rows.length ? `<table><thead><tr><th>Título</th><th>Slug</th><th>Prévia enviada</th><th>Estado</th></tr></thead><tbody>${rows.join('')}</tbody></table>`
     : '<p>Nenhum rascunho no momento.</p>'}
 <p>Só você vê estas páginas. Os rascunhos não estão publicados: a aprovação dispara no GitHub a publicação da versão aprovada, que confere o conteúdo e abre o PR, e o estado dela aparece nesta lista. A linha "publicado no site" aparece só para manter os derivados de um artigo já publicado agrupados abaixo dele.</p>
@@ -685,7 +686,9 @@ function approvalBar(m: Manifest, st: { approved: Approval | null; stale: boolea
   const status = st.approved
     ? `Aprovado em ${esc(st.approved.approved_at.slice(0, 16).replace('T', ' '))} UTC. O estado da publicação está na lista de rascunhos.`
     : `${st.stale ? 'A versão mudou depois da última aprovação. ' : ''}Aguardando a sua aprovação.`;
-  const form = st.approved ? '' : `<form method="post" action="/admin/rascunhos/${m.slug}/aprovar" style="margin:0;display:flex;gap:.5rem;align-items:center">
+  // O clique leva alguns segundos (aprovação, disparo no GitHub e aviso por email) antes de a lista abrir: sem retorno,
+  // o Gui clicou de novo (PR #90). O botão trava e diz que está aprovando assim que o formulário sai.
+  const form = st.approved ? '' : `<form method="post" action="/admin/rascunhos/${m.slug}/aprovar" style="margin:0;display:flex;gap:.5rem;align-items:center" onsubmit="var b=this.querySelector('button');b.disabled=true;b.textContent='Aprovando, aguarde...'">
 <input type="hidden" name="versao" value="${m.version}"><label style="color:#fff"><input type="checkbox" name="confirmar" value="sim" required> confirmo</label>
 <button style="font:inherit;padding:.25rem .75rem">Aprovar publicação</button></form>`;
   return `<div id="rascunho-barra" style="${box}"><strong>Rascunho privado</strong><span>${status}</span>${form}
@@ -795,9 +798,15 @@ async function approve(req: Request, env: DraftEnv, deps: DraftDeps, slug: strin
   const at = new Date(deps.now()).toISOString();
   let id: number;
   try {
+    // Versão já aprovada não ganha outra linha nem outro disparo: um clique duplo gravou duas aprovações e disparou a
+    // publicação duas vezes (PR #90). Uma só instrução, conferência e gravação juntas, para dois pedidos simultâneos
+    // não passarem os dois; sem linha de volta, a versão já estava aprovada. Republicar é o "Disparar de novo".
     const row = await env.DB.prepare(`INSERT INTO draft_approvals (slug, title, html_sha256, source_sha256, approved_at, approved_by)
-      VALUES (?, ?, ?, ?, ?, ?) RETURNING id`).bind(slug, m.title, m.html_sha256, m.source_sha256, at, email).first<{ id: number }>();
-    if (!row) throw new Error('sem id');
+      SELECT ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (
+        SELECT 1 FROM draft_approvals WHERE slug = ? AND html_sha256 = ? AND source_sha256 = ?)
+      RETURNING id`).bind(slug, m.title, m.html_sha256, m.source_sha256, at, email, slug, m.html_sha256, m.source_sha256)
+      .first<{ id: number }>();
+    if (!row) return seeOther('ja-aprovado', false);
     id = row.id;
   } catch {
     return text(502, 'Não foi possível gravar a aprovação. Nada foi aprovado; tente de novo.');
@@ -877,6 +886,7 @@ const MESSAGES: Record<string, Mensagem> = {
   'aprovado-sem-disparo': { texto: 'Aprovado e gravado, mas o disparo da publicação falhou. O motivo está na linha do rascunho; use "Disparar de novo".', erro: true },
   'aprovado-sem-disparo-nem-aviso': { texto: 'Aprovado e gravado, mas o disparo da publicação e o aviso por email ao Roger falharam. O motivo do disparo está na linha do rascunho; use "Disparar de novo".', erro: true },
   disparado: { texto: 'Publicação disparada de novo no GitHub.', erro: false },
+  'ja-aprovado': { texto: 'Esta versão já estava aprovada; nada foi gravado nem disparado de novo. O estado está na linha do rascunho.', erro: false },
   'disparo-falhou': { texto: 'O disparo da publicação falhou de novo. O motivo está na linha do rascunho.', erro: true },
   removido: { texto: 'Rascunho removido do R2. Os derivados continuam abaixo da linha "publicado no site".', erro: false },
   'remocao-mudou': { texto: 'Um envio novo chegou durante a remoção, e o rascunho novo ficou. Confira a lista.', erro: true },
