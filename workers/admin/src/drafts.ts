@@ -222,7 +222,23 @@ function state(list: Approval[], m: Manifest): { approved: Approval | null; stal
 const PAGE_STYLE = `body{font:15px/1.45 system-ui,sans-serif;margin:1.5rem;color:#111}table{border-collapse:collapse;width:100%}
 th,td{border-bottom:1px solid #ddd;padding:.35rem .5rem;text-align:left;vertical-align:top}.ok{color:#060}.erro{color:#a00}
 .aviso{font-weight:600;padding:.6rem .8rem;border:2px solid;border-radius:4px;background:#fff}
-tr.linkedin td,tr.derivado td{background:#f6f8fb}tr.publicado td{color:#060}tr.linkedin td:first-child,tr.derivado td:first-child{padding-left:1.75rem}.tag{font-size:12px;border:1px solid #0a66c2;color:#0a66c2;border-radius:4px;padding:0 .3rem;margin-right:.35rem}`;
+tr.linkedin td,tr.derivado td{background:#f6f8fb}tr.linkedin td:first-child,tr.derivado td:first-child{padding-left:1.75rem}.tag{font-size:12px;border:1px solid #0a66c2;color:#0a66c2;border-radius:4px;padding:0 .3rem;margin-right:.35rem}`;
+
+/** Título do derivado na lista, sem repetir a etiqueta (#92): "Roteiro do short: X" com rótulo "Roteiro do short", ou
+ * "Roteiro do vídeo: X" com rótulo "Roteiro do vídeo (YouTube)", vira "X". Sem esse começo, ou sem nada depois dos
+ * dois-pontos, o título fica inteiro. A prévia continua com o título inteiro. */
+export function tituloNaLista(title: string, rotulo: string | null): string {
+  if (!rotulo) return title;
+  // O rótulo pode ter dois-pontos ("IA: roteiro"): o separador é o primeiro ":" depois do prefixo, nunca o primeiro do
+  // título (r1, Kimi P1). Vale o rótulo inteiro e, sem o parêntese final, a base dele.
+  const minusculo = (v: string) => v.toLocaleLowerCase('pt-BR');
+  for (const prefixo of [rotulo.trim(), rotulo.replace(/\s*\([^()]*\)$/, '').trim()]) {
+    if (!prefixo || minusculo(title.slice(0, prefixo.length)) !== minusculo(prefixo)) continue;
+    const resto = /^\s*:\s*([\s\S]*)$/.exec(title.slice(prefixo.length))?.[1].trim();
+    if (resto) return resto;
+  }
+  return title;
+}
 
 /** Artigo já publicado no site, usado como pai dos derivados depois que o rascunho dele sai do R2 (#80). */
 interface Publicado {
@@ -409,6 +425,8 @@ interface Publicacao {
   redisparar: boolean;
   // #82, fatia 5: PR da versão mergeado e post no ar; a lista mostra o botão "Remover rascunho".
   remover?: boolean;
+  // #92: post no ar; a lista mostra só "publicado em ...", sem o "aprovado em", como a linha do artigo sem rascunho.
+  publicado?: boolean;
 }
 
 /** CI do head do PR: as execuções de Actions daquele commit (o publicar.yml dispara o pages.yml no branch). */
@@ -467,7 +485,7 @@ export function mergeado(pr: Record<string, unknown>): boolean {
 }
 
 /** Estado calculado na hora, do D1 e do GitHub: uma chamada (PR do branch da versão) e, no máximo, uma segunda (CI do
- * PR aberto ou execução do publicar.yml). PR mergeado consulta o site, como a linha "publicado no site" do #80. */
+ * PR aberto ou execução do publicar.yml). PR mergeado consulta o site, como a linha do artigo publicado sem rascunho (#80). */
 async function publicacao(env: DraftEnv, deps: DraftDeps, m: Manifest, a: Approval, firstApprovedAt: string): Promise<Publicacao> {
   const falhou = { html: `disparo falhou (${esc(a.dispatch_error)})`, redisparar: true };
   if (!env.GITHUB_DISPATCH_TOKEN) return a.dispatch_error ? falhou : { html: 'estado indisponível (painel sem o token do GitHub)', redisparar: false };
@@ -479,7 +497,7 @@ async function publicacao(env: DraftEnv, deps: DraftDeps, m: Manifest, a: Approv
     const link = `<a href="${GITHUB_WEB}/pull/${n}">#${n}</a>`;
     if (mergeado(pr)) {
       const post = await publicado(env, deps, m.slug);
-      if (post) return { html: `publicado em ${esc((pr.merged_at as string).slice(0, 10))}: <a href="${esc(post.url)}">ver o post</a>`, redisparar: false, remover: post.confirmado };
+      if (post) return { html: `publicado em ${esc((pr.merged_at as string).slice(0, 10))}: <a href="${esc(post.url)}">ver o post</a>`, redisparar: false, remover: post.confirmado, publicado: true };
       return { html: `PR ${link} mergeado, aguardando o deploy do site`, redisparar: false };
     }
     if (pr.state !== 'open') return { html: `PR ${link} fechado sem merge`, redisparar: false };
@@ -615,7 +633,7 @@ async function listPage(env: DraftEnv, deps: DraftDeps, msg: Mensagem | undefine
     drafts.push(m);
   }
   // #73 e #77: cada derivado (LinkedIn e os demais) vai logo abaixo do artigo dele. #80: se o rascunho do artigo já saiu
-  // do R2 e o post está no site, os derivados ficam abaixo de uma linha "publicado no site"; sem nenhum dos dois, o
+  // do R2 e o post está no site, os derivados ficam abaixo de uma linha "publicado: ver o post" (#92); sem nenhum dos dois, o
   // derivado aparece sozinho. Uma consulta ao site por artigo pai.
   const blogs = new Set(drafts.filter((m) => m.kind === 'blog').map((m) => m.slug));
   const semRascunho = [...new Set(drafts.filter((m) => m.kind !== 'blog' && m.parent && !blogs.has(m.parent)).map((m) => m.parent as string))];
@@ -626,9 +644,11 @@ async function listPage(env: DraftEnv, deps: DraftDeps, msg: Mensagem | undefine
     if (m.kind !== 'blog' && m.parent && (blogs.has(m.parent) || noSite.has(m.parent))) children.set(m.parent, [...(children.get(m.parent) ?? []), m]);
   }
   const when = (m: Manifest) => `${esc(m.uploaded_at.slice(0, 16).replace('T', ' '))} UTC`;
+  // #92: sem a coluna Slug; o título não repete a etiqueta e o estado do derivado fica vazio (a prévia diz que é só
+  // leitura), salvo quando o artigo dele não foi encontrado.
   const childRow = (m: Manifest, orphan: boolean) => `<tr class="${m.kind}"><td><span class="tag">${esc(m.rotulo ?? '')}</span>`
-    + `<a href="/admin/rascunhos/${m.slug}/">${esc(m.title)}</a></td><td>${esc(m.slug)}</td><td>${when(m)}</td>`
-    + `<td>só leitura${orphan ? ' (artigo não encontrado)' : ''}</td></tr>`;
+    + `<a href="/admin/rascunhos/${m.slug}/">${esc(tituloNaLista(m.title, m.rotulo))}</a></td><td>${when(m)}</td>`
+    + `<td>${orphan ? 'artigo não encontrado' : ''}</td></tr>`;
   // #82: o estado da publicação de cada artigo aprovado vem do GitHub, em paralelo; os não aprovados não consultam nada.
   const states = new Map<string, ReturnType<typeof state>>();
   for (const m of drafts) if (m.kind === 'blog') states.set(m.slug, state(await approvals(env.DB, m.slug), m));
@@ -651,8 +671,10 @@ async function listPage(env: DraftEnv, deps: DraftDeps, msg: Mensagem | undefine
         + `<input type="hidden" name="versao" value="${m.version}"><label><input type="checkbox" name="confirmar" value="sim" required> confirmo</label> `
         + `<button>Remover rascunho</button></form>`
       : '';
+    // #92: publicado, o "aprovado em" sai e a linha diz só "publicado em ...", como a do artigo sem rascunho.
+    const aprovadoEm = st.approved && !pub?.publicado ? `aprovado em ${esc(st.approved.approved_at.slice(0, 16).replace('T', ' '))} UTC<br>` : '';
     const label = st.approved && pub
-      ? `aprovado em ${esc(st.approved.approved_at.slice(0, 16).replace('T', ' '))} UTC<br>${pub.html}${incompleto ? '<br>prévia incompleta (remoção interrompida?)' : ''}${pub.redisparar
+      ? `${aprovadoEm}${pub.html}${incompleto ? '<br>prévia incompleta (remoção interrompida?)' : ''}${pub.redisparar
         ? `<form method="post" action="/admin/rascunhos/${m.slug}/disparar" style="margin:.25rem 0 0">`
           + `<input type="hidden" name="versao" value="${m.version}"><button>Disparar de novo</button></form>`
         : ''}${remover}`
@@ -660,12 +682,11 @@ async function listPage(env: DraftEnv, deps: DraftDeps, msg: Mensagem | undefine
           ? 'aguardando aprovação (a versão mudou depois da última aprovação)'
           : 'aguardando aprovação';
     const titulo = incompleto ? esc(m.title) : `<a href="/admin/rascunhos/${m.slug}/">${esc(m.title)}</a>`;
-    rows.push(`<tr><td>${titulo}</td><td>${esc(m.slug)}</td>
-<td>${when(m)}</td><td>${label}</td></tr>`);
+    rows.push(`<tr><td>${titulo}</td><td>${when(m)}</td><td>${label}</td></tr>`);
     for (const c of children.get(m.slug) ?? []) rows.push(childRow(c, false));
   }
   for (const p of noSite.values()) {
-    rows.push(`<tr class="publicado"><td><a href="${esc(p.url)}">${esc(p.title)}</a></td><td>${esc(p.slug)}</td><td></td><td>publicado no site</td></tr>`);
+    rows.push(`<tr class="publicado"><td><a href="${esc(p.url)}">${esc(p.title)}</a></td><td></td><td>publicado: <a href="${esc(p.url)}">ver o post</a></td></tr>`);
     for (const c of children.get(p.slug) ?? []) rows.push(childRow(c, false));
   }
   const body = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -673,9 +694,9 @@ async function listPage(env: DraftEnv, deps: DraftDeps, msg: Mensagem | undefine
 <p><a href="/admin">Assinantes</a> · Rascunhos</p><h1>Rascunhos do blog</h1>
 ${msg ? `<p class="aviso ${msg.erro ? 'erro' : 'ok'}" role="status">${esc(msg.texto)}</p>` : ''}
 ${registroFalhou ? `<p class="aviso erro" role="status">${esc(REGISTRO_FALHOU)}</p>` : ''}
-${rows.length ? `<table><thead><tr><th>Título</th><th>Slug</th><th>Prévia enviada</th><th>Estado</th></tr></thead><tbody>${rows.join('')}</tbody></table>`
+${rows.length ? `<table><thead><tr><th>Título</th><th>Prévia enviada</th><th>Estado</th></tr></thead><tbody>${rows.join('')}</tbody></table>`
     : '<p>Nenhum rascunho no momento.</p>'}
-<p>Só você vê estas páginas. Os rascunhos não estão publicados: a aprovação dispara no GitHub a publicação da versão aprovada, que confere o conteúdo e abre o PR, e o estado dela aparece nesta lista. A linha "publicado no site" aparece só para manter os derivados de um artigo já publicado agrupados abaixo dele.</p>
+<p>Só você vê estas páginas. Os rascunhos não estão publicados: a aprovação dispara no GitHub a publicação da versão aprovada, que confere o conteúdo e abre o PR, e o estado dela aparece nesta lista. Os derivados de cada artigo (LinkedIn, roteiros) ficam logo abaixo dele, também depois da publicação.</p>
 </body></html>`;
   return new Response(body, { status: 200, headers: headers('text/html; charset=utf-8', ADMIN_CSP) });
 }
@@ -888,7 +909,7 @@ const MESSAGES: Record<string, Mensagem> = {
   disparado: { texto: 'Publicação disparada de novo no GitHub.', erro: false },
   'ja-aprovado': { texto: 'Esta versão já estava aprovada; nada foi gravado nem disparado de novo. O estado está na linha do rascunho.', erro: false },
   'disparo-falhou': { texto: 'O disparo da publicação falhou de novo. O motivo está na linha do rascunho.', erro: true },
-  removido: { texto: 'Rascunho removido do R2. Os derivados continuam abaixo da linha "publicado no site".', erro: false },
+  removido: { texto: 'Rascunho removido do R2. O post continua no site, e os derivados, se houver, continuam no painel abaixo dele.', erro: false },
   'remocao-mudou': { texto: 'Um envio novo chegou durante a remoção, e o rascunho novo ficou. Confira a lista.', erro: true },
   'remocao-grande': { texto: 'O rascunho tem mais de 20.000 objetos e passa do que o painel remove de uma vez. Nada foi removido, e repetir não resolve: a remoção precisa ser feita à mão no R2.', erro: true },
   'remocao-falhou': { texto: 'A remoção parou no meio. O rascunho continua na lista, com "prévia incompleta"; use "Remover rascunho" de novo.', erro: true },
