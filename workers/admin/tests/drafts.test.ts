@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { handle, type Env, type Deps } from '../src/index.ts';
-import { canonicais, execucaoDa, mergeado, PREVIEW_CSP, publishBranch, readManifest, sha256Hex, versionId, type R2Like } from '../src/drafts.ts';
+import { canonicais, execucaoDa, mergeado, PREVIEW_CSP, publishBranch, readManifest, sha256Hex, tituloNaLista, versionId, type R2Like } from '../src/drafts.ts';
 import type { D1Like, D1Stmt } from '../src/sync.ts';
 import { resetCertsCache } from '../src/access.ts';
 
@@ -642,7 +642,7 @@ test('R7: readManifest aceita kind blog (padrão) e linkedin com parent; recusa 
   }
 });
 
-test('R7: a lista põe o LinkedIn logo abaixo do artigo, só leitura; LinkedIn sem artigo aparece sozinho', async () => {
+test('R7: a lista põe o LinkedIn logo abaixo do artigo, com o estado vazio; LinkedIn sem artigo aparece sozinho', async () => {
   const s = setup();
   await putDraft(s.bucket, 'aaa-outro', { title: 'Outro artigo' });
   await putDraft(s.bucket, 'sales-coach');
@@ -655,7 +655,7 @@ test('R7: a lista põe o LinkedIn logo abaixo do artigo, só leitura; LinkedIn s
   const li = idx(/href="\/admin\/rascunhos\/sales-coach-linkedin\/"/);
   assert.ok(blog >= 0 && li === blog + 1, `LinkedIn logo depois do artigo: ${blog} ${li}`);
   assert.match(rows[li], /LinkedIn/);
-  assert.match(rows[li], /só leitura/);
+  assert.match(rows[li], /<td><\/td><\/tr>/, 'estado vazio: a prévia é que diz só leitura (#92)');
   assert.doesNotMatch(rows[li], /aguardando aprovação/);
   assert.match(rows[li], /class="linkedin"/);
   const solto = idx(/solto-linkedin/);
@@ -757,7 +757,7 @@ test('R8: LinkedIn e derivados ficam todos abaixo do artigo, com o rótulo escap
   assert.deepEqual([at('sales-coach-linkedin'), at('sales-coach-short'), at('sales-coach-video')].sort(), [blog + 1, blog + 2, blog + 3]);
   assert.match(rows[at('sales-coach-short')], /<span class="tag">Roteiro do short<\/span>/);
   assert.match(rows[at('sales-coach-short')], /class="derivado"/);
-  assert.match(rows[at('sales-coach-short')], /só leitura/);
+  assert.match(rows[at('sales-coach-short')], /<td><\/td><\/tr>/);
   assert.match(rows[at('sales-coach-video')], /Vídeo &lt;b&gt; &amp; &quot;x&quot;/);
   assert.doesNotMatch(body, /Vídeo <b>/);
   assert.match(rows[at('sales-coach-linkedin')], /class="linkedin"/);
@@ -784,7 +784,7 @@ test('R8: a prévia do derivado é só leitura, com o rótulo na barra; aprovar 
 // ------------------------------------------------------------------ R9: derivados de artigo já publicado (issue #80)
 const pagina = (title: string) => `<!doctype html><html><head><title>${title}</title></head><body>post</body></html>`;
 
-test('R9: rascunho do artigo fora do R2 e post no site: linha "publicado no site" com os derivados abaixo, título escapado', async () => {
+test('R9: rascunho do artigo fora do R2 e post no site: linha "publicado: ver o post" com os derivados abaixo, título escapado', async () => {
   const s = setup({ site: { 'sales-coach': pagina('Coach &amp; vendas &lt;b&gt; | Guilherme Favaron') } });
   await putDraft(s.bucket, 'aaa-outro', { title: 'Outro artigo' });
   await putDraft(s.bucket, 'sales-coach-linkedin', { title: 'No LinkedIn', manifest: LI });
@@ -795,12 +795,13 @@ test('R9: rascunho do artigo fora do R2 e post no site: linha "publicado no site
   const pai = at(/class="publicado"/);
   assert.ok(pai >= 0, 'linha do artigo publicado');
   assert.match(rows[pai], /<a href="https:\/\/guifav\.dev\/blog\/sales-coach\/">Coach &amp; vendas &lt;b&gt;<\/a>/);
-  assert.match(rows[pai], /publicado no site/);
+  assert.match(rows[pai], /<td>publicado: <a href="https:\/\/guifav\.dev\/blog\/sales-coach\/">ver o post<\/a><\/td>/);
+  assert.doesNotMatch(body, /publicado no site|tr\.publicado td\{color/, 'sem o verde nem o texto antigo (#92)');
   assert.doesNotMatch(rows[pai], /Guilherme Favaron/);
   assert.deepEqual([at(/sales-coach-linkedin/), at(/sales-coach-short/)].sort(), [pai + 1, pai + 2]);
   assert.doesNotMatch(body, /artigo não encontrado/);
   assert.deepEqual(s.site, ['https://guifav.dev/blog/sales-coach/'], 'uma consulta ao site por artigo pai');
-  assert.match(body, /publicado no site” aparece só|linha "publicado no site" aparece só/);
+  assert.match(body, /Os derivados de cada artigo \(LinkedIn, roteiros\) ficam logo abaixo dele, também depois da publicação\./);
 });
 
 test('R9: pai que não é rascunho nem post no ar continua sozinho, sem quebrar a lista (404, redirecionamento, erro de rede)', async () => {
@@ -1138,8 +1139,12 @@ test('R10: estados da publicação, calculados do D1 e do GitHub, com no máximo
     const r = await s.req('/admin/rascunhos');
     assert.equal(r.status, 200, nome);
     const linha = linhaDe(await r.text(), 'sales-coach');
-    const estado = linha.match(/aprovado em 2026-11-13 20:00 UTC<br>(.*?)(?:<form|<\/td>)/)?.[1] ?? '';
+    const cel = linha.slice(linha.lastIndexOf('<td>') + 4);
+    const aprovadoEm = 'aprovado em 2026-11-13 20:00 UTC<br>';
+    const estado = (cel.startsWith(aprovadoEm) ? cel.slice(aprovadoEm.length) : cel).match(/^(.*?)(?:<form|<\/td>)/)?.[1] ?? '';
     assert.match(estado, c.esperado, `${nome}: ${estado}`);
+    // #92: publicado, a linha diz só "publicado em ..."; antes disso, o "aprovado em" vem primeiro.
+    assert.equal(cel.startsWith(aprovadoEm), !/^publicado em /.test(estado), `${nome}: aprovado em`);
     assert.equal(/Disparar de novo/.test(linha), c.botao, `${nome}: botão`);
     assert.equal(leituras(s).length, c.leituras, `${nome}: leituras do GitHub`);
     assert.ok(leituras(s).every((x) => x.auth === 'Bearer gh-teste' && x.ua), `${nome}: token e User-Agent`);
@@ -1560,7 +1565,7 @@ test('R11: remover tira o rascunho do artigo inteiro do R2; derivado e slug pare
   const lista = await (await s.req('/admin/rascunhos?msg=removido')).text();
   assert.match(lista, /Rascunho removido do R2/);
   assert.match(lista, /<tr class="publicado">/);
-  assert.match(linhaDe(lista, 'sales-coach-short'), /só leitura<\/td>/);
+  assert.match(linhaDe(lista, 'sales-coach-short'), /<td><\/td><\/tr>/);
 });
 
 test('R11: remover recusa sem as confirmações, e nada sai', async () => {
@@ -1778,11 +1783,11 @@ test('R11 (r1, Codex P2; r2, Astra P2): remoção que para no meio fica na lista
   assert.ok(await readManifest(s.bucket, 'sales-coach'), 'o manifesto continua');
   const lista = await (await s.req('/admin/rascunhos?msg=remocao-falhou')).text();
   assert.match(lista, /A remoção parou no meio/);
-  const linha = lista.split('<tr').find((r) => r.includes('<td>sales-coach</td>')) ?? '';
+  const linha = lista.split('<tr').find((r) => r.includes('action="/admin/rascunhos/sales-coach/remover"')) ?? '';
   assert.match(linha, /prévia incompleta/);
   assert.match(linha, /Remover rascunho/);
   assert.doesNotMatch(linha, /href="\/admin\/rascunhos\/sales-coach\/"/, 'sem link para a prévia que não existe mais');
-  assert.match(linhaDe(lista, 'sales-coach-short'), /só leitura<\/td>/, 'o derivado continua abaixo dele');
+  assert.match(linhaDe(lista, 'sales-coach-short'), /<td><\/td><\/tr>/, 'o derivado continua abaixo dele');
   s.bucket.delete = deleteOriginal;
   assert.equal(destino(await remover()), '/admin/rascunhos?msg=removido');
   assert.deepEqual(chavesDe(s, 'sales-coach'), []);
@@ -1839,4 +1844,29 @@ test('R12 (PR #90): o botão de aprovar trava e avisa "Aprovando, aguarde..." as
   const list = await (await s.req('/admin/rascunhos?msg=aprovado')).text();
   assert.match(list, /<p class="aviso ok" role="status">Aprovado\./);
   assert.match(list, /\.aviso\{font-weight:600;padding:/);
+});
+
+test('R13 (#92): tituloNaLista tira do título do derivado o rótulo repetido, e só ele', () => {
+  assert.equal(tituloNaLista('Roteiro do short: quem garante a resposta da IA?', 'Roteiro do short'), 'quem garante a resposta da IA?');
+  assert.equal(tituloNaLista('Roteiro do vídeo: o que vem depois do transformer', 'Roteiro do vídeo (YouTube)'), 'o que vem depois do transformer');
+  assert.equal(tituloNaLista('ROTEIRO DO VÍDEO (YouTube): x', 'Roteiro do vídeo (YouTube)'), 'x');
+  assert.equal(tituloNaLista('Quem garante a resposta da IA', 'LinkedIn'), 'Quem garante a resposta da IA');
+  assert.equal(tituloNaLista('Carrossel: dados', 'Roteiro do short'), 'Carrossel: dados', 'outro começo fica');
+  assert.equal(tituloNaLista('Roteiro do short:', 'Roteiro do short'), 'Roteiro do short:', 'sem nada depois, fica inteiro');
+  assert.equal(tituloNaLista('Roteiro do short sobre X: Y', 'Roteiro do short'), 'Roteiro do short sobre X: Y', 'prefixo maior que o rótulo fica');
+  assert.equal(tituloNaLista('Roteiro: x', null), 'Roteiro: x');
+});
+
+test('R13 (#92): a lista não tem coluna Slug e mostra o título do derivado sem o rótulo; a prévia mantém o título inteiro', async () => {
+  const s = setup();
+  await putDraft(s.bucket, 'sales-coach');
+  await putDraft(s.bucket, 'sales-coach-short', { title: 'Roteiro do short: vender <mais>', manifest: RS });
+  const body = await (await s.req('/admin/rascunhos')).text();
+  assert.match(body, /<thead><tr><th>Título<\/th><th>Prévia enviada<\/th><th>Estado<\/th><\/tr><\/thead>/);
+  assert.doesNotMatch(body, /<td>sales-coach(-short)?<\/td>/, 'o slug não aparece como célula');
+  const linha = linhaDe(body, 'sales-coach-short');
+  assert.match(linha, /<span class="tag">Roteiro do short<\/span><a href="\/admin\/rascunhos\/sales-coach-short\/">vender &lt;mais&gt;<\/a><\/td><td>/);
+  for (const r of body.split('<tr').slice(1)) assert.equal((r.match(/<t[dh]>/g) ?? []).length, 3, `três células: ${r.slice(0, 80)}`);
+  const previa = await (await s.req('/admin/rascunhos/sales-coach-short/')).text();
+  assert.match(previa, /Roteiro do short: vender &lt;mais&gt;|Roteiro do short: vender <mais>/);
 });

@@ -44,7 +44,7 @@ publicam: o rascunho precisa ser reenviado.
 Depois da publicação, com o PR da versão mergeado e o post no ar (o endereço responde 200
 com HTML cujo elemento canonical aponta para ele), o painel mostra o botão "Remover
 rascunho", que tira do R2 o rascunho do artigo (o manifesto, todas as versões e a fonte). Os
-derivados ficam e passam a aparecer abaixo da linha "publicado no site". A remoção é manual
+derivados ficam e continuam abaixo da linha do artigo, que passa a dizer "publicado: ver o post". A remoção é manual
 porque o R2 não tem remoção condicional: um envio do mesmo slug durante a remoção poderia se
 perder.
 
