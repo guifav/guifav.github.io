@@ -229,12 +229,15 @@ tr.linkedin td,tr.derivado td{background:#f6f8fb}tr.linkedin td:first-child,tr.d
  * dois-pontos, o título fica inteiro. A prévia continua com o título inteiro. */
 export function tituloNaLista(title: string, rotulo: string | null): string {
   if (!rotulo) return title;
-  const i = title.indexOf(':');
-  if (i <= 0) return title;
-  const antes = title.slice(0, i).trim().toLocaleLowerCase('pt-BR');
-  const resto = title.slice(i + 1).trim();
-  const base = rotulo.replace(/\s*\([^()]*\)$/, '').trim().toLocaleLowerCase('pt-BR');
-  return resto && (antes === rotulo.trim().toLocaleLowerCase('pt-BR') || antes === base) ? resto : title;
+  // O rótulo pode ter dois-pontos ("IA: roteiro"): o separador é o primeiro ":" depois do prefixo, nunca o primeiro do
+  // título (r1, Kimi P1). Vale o rótulo inteiro e, sem o parêntese final, a base dele.
+  const minusculo = (v: string) => v.toLocaleLowerCase('pt-BR');
+  for (const prefixo of [rotulo.trim(), rotulo.replace(/\s*\([^()]*\)$/, '').trim()]) {
+    if (!prefixo || minusculo(title.slice(0, prefixo.length)) !== minusculo(prefixo)) continue;
+    const resto = /^\s*:\s*([\s\S]*)$/.exec(title.slice(prefixo.length))?.[1].trim();
+    if (resto) return resto;
+  }
+  return title;
 }
 
 /** Artigo já publicado no site, usado como pai dos derivados depois que o rascunho dele sai do R2 (#80). */
@@ -906,7 +909,7 @@ const MESSAGES: Record<string, Mensagem> = {
   disparado: { texto: 'Publicação disparada de novo no GitHub.', erro: false },
   'ja-aprovado': { texto: 'Esta versão já estava aprovada; nada foi gravado nem disparado de novo. O estado está na linha do rascunho.', erro: false },
   'disparo-falhou': { texto: 'O disparo da publicação falhou de novo. O motivo está na linha do rascunho.', erro: true },
-  removido: { texto: 'Rascunho removido do R2. O artigo continua na lista como publicado, com os derivados abaixo dele.', erro: false },
+  removido: { texto: 'Rascunho removido do R2. O post continua no site, e os derivados, se houver, continuam no painel abaixo dele.', erro: false },
   'remocao-mudou': { texto: 'Um envio novo chegou durante a remoção, e o rascunho novo ficou. Confira a lista.', erro: true },
   'remocao-grande': { texto: 'O rascunho tem mais de 20.000 objetos e passa do que o painel remove de uma vez. Nada foi removido, e repetir não resolve: a remoção precisa ser feita à mão no R2.', erro: true },
   'remocao-falhou': { texto: 'A remoção parou no meio. O rascunho continua na lista, com "prévia incompleta"; use "Remover rascunho" de novo.', erro: true },

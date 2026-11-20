@@ -1855,6 +1855,12 @@ test('R13 (#92): tituloNaLista tira do título do derivado o rótulo repetido, e
   assert.equal(tituloNaLista('Roteiro do short:', 'Roteiro do short'), 'Roteiro do short:', 'sem nada depois, fica inteiro');
   assert.equal(tituloNaLista('Roteiro do short sobre X: Y', 'Roteiro do short'), 'Roteiro do short sobre X: Y', 'prefixo maior que o rótulo fica');
   assert.equal(tituloNaLista('Roteiro: x', null), 'Roteiro: x');
+  // r1, Kimi P1: rótulo com dois-pontos.
+  assert.equal(tituloNaLista('IA: roteiro: três erros', 'IA: roteiro'), 'três erros');
+  assert.equal(tituloNaLista('IA: roteiro: três erros', 'IA: roteiro (YouTube)'), 'três erros');
+  assert.equal(tituloNaLista('IA: roteiro (YouTube): x', 'IA: roteiro (YouTube)'), 'x');
+  assert.equal(tituloNaLista('IA: outra coisa', 'IA: roteiro'), 'IA: outra coisa');
+  assert.equal(tituloNaLista('IA: roteiro', 'IA: roteiro'), 'IA: roteiro', 'só o rótulo, sem resto, fica inteiro');
 });
 
 test('R13 (#92): a lista não tem coluna Slug e mostra o título do derivado sem o rótulo; a prévia mantém o título inteiro', async () => {
@@ -1869,4 +1875,12 @@ test('R13 (#92): a lista não tem coluna Slug e mostra o título do derivado sem
   for (const r of body.split('<tr').slice(1)) assert.equal((r.match(/<t[dh]>/g) ?? []).length, 3, `três células: ${r.slice(0, 80)}`);
   const previa = await (await s.req('/admin/rascunhos/sales-coach-short/')).text();
   assert.match(previa, /Roteiro do short: vender &lt;mais&gt;|Roteiro do short: vender <mais>/);
+});
+
+test('R13 (#92, r1 Astra P2): a mensagem de remoção não promete linha que não existe quando o artigo não tem derivados', async () => {
+  const s = setup();
+  const body = await (await s.req('/admin/rascunhos?msg=removido')).text();
+  assert.match(body, /Nenhum rascunho no momento/);
+  assert.match(body, /Rascunho removido do R2\. O post continua no site, e os derivados, se houver, continuam no painel abaixo dele\./);
+  assert.doesNotMatch(body, /continua na lista/);
 });
