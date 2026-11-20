@@ -906,7 +906,7 @@ test('R10: aprovar dispara o publicar.yml na main com slug e versão, grava o di
   assert.doesNotMatch(texto, /gh-teste/, 'o token nunca vai no email');
   // A lista mostra o estado logo depois do redirecionamento: disparado, sem execução ainda.
   const list = await (await s.req('/admin/rascunhos?msg=aprovado')).text();
-  assert.match(list, /<p class="ok">Aprovado\. A publicação foi disparada no GitHub/);
+  assert.match(list, /<p class="aviso ok" role="status">Aprovado\. A publicação foi disparada no GitHub/);
   assert.match(linhaDe(list, 'sales-coach'), /aprovado em 2026-11-13 20:00 UTC<br>preparando o PR \(disparado há menos de 1 min\)/);
   assert.doesNotMatch(list, /Roger publica/);
 });
@@ -924,7 +924,7 @@ test('R10: disparo recusado pelo GitHub: motivo gravado e mostrado na hora, esca
   assert.equal(s.mails[0].body.subject, 'Rascunho aprovado, disparo falhou: Como construí o Sales Coach');
   assert.match(String(s.mails[0].body.text), /O disparo da publicação no GitHub falhou \(GitHub respondeu 422: Workflow <b> não aceita disparo\)/);
   const list = await (await s.req('/admin/rascunhos?msg=aprovado-sem-disparo')).text();
-  assert.match(list, /<p class="erro">Aprovado e gravado, mas o disparo da publicação falhou/);
+  assert.match(list, /<p class="aviso erro" role="status">Aprovado e gravado, mas o disparo da publicação falhou/);
   const linha = linhaDe(list, 'sales-coach');
   assert.match(linha, /disparo falhou \(GitHub respondeu 422: Workflow &lt;b&gt; não aceita disparo\)/);
   assert.ok(linha.includes(`<form method="post" action="/admin/rascunhos/sales-coach/disparar"`), 'botão Disparar de novo');
@@ -959,7 +959,7 @@ test('R10: disparo e email falhando juntos: mensagem própria, os dois motivos g
   const r = await s.approve('sales-coach', { confirmar: 'sim', versao: version });
   assert.equal(r.headers.get('location'), '/admin/rascunhos?msg=aprovado-sem-disparo-nem-aviso');
   assert.deepEqual([s.rows()[0].dispatch_error, s.rows()[0].notify_error], ['GitHub respondeu 500: falhou', 'Resend respondeu 500']);
-  assert.match(await (await s.req('/admin/rascunhos?msg=aprovado-sem-disparo-nem-aviso')).text(), /<p class="erro">.*o disparo da publicação e o aviso por email ao Roger falharam/);
+  assert.match(await (await s.req('/admin/rascunhos?msg=aprovado-sem-disparo-nem-aviso')).text(), /<p class="aviso erro" role="status">.*o disparo da publicação e o aviso por email ao Roger falharam/);
 });
 
 test('R10: sem o token, nada vai ao GitHub: "disparo sem configuração" fica gravado e aparece na lista', async () => {
@@ -1008,14 +1008,14 @@ test('R10: "Disparar de novo" repete o disparo da versão aprovada, limpa o moti
   assert.equal(s.rows().length, 1, 'o disparo de novo não cria outra aprovação');
   assert.equal(s.mails.length, 1, 'sem email no disparo de novo');
   const list = await (await s.req('/admin/rascunhos?msg=disparado')).text();
-  assert.match(list, /<p class="ok">Publicação disparada de novo no GitHub\.<\/p>/);
+  assert.match(list, /<p class="aviso ok" role="status">Publicação disparada de novo no GitHub\.<\/p>/);
   assert.match(linhaDe(list, 'sales-coach'), /preparando o PR/);
   assert.doesNotMatch(linhaDe(list, 'sales-coach'), /Disparar de novo/);
   s.ghOpts.dispatch = 'erro';
   const f = await disparar(s, 'sales-coach', { versao: version });
   assert.equal(f.headers.get('location'), '/admin/rascunhos?msg=disparo-falhou');
   assert.deepEqual([s.rows()[0].dispatch_error, s.rows()[0].dispatched_at], ['falha de rede', '']);
-  assert.match(await (await s.req('/admin/rascunhos?msg=disparo-falhou')).text(), /<p class="erro">O disparo da publicação falhou de novo/);
+  assert.match(await (await s.req('/admin/rascunhos?msg=disparo-falhou')).text(), /<p class="aviso erro" role="status">O disparo da publicação falhou de novo/);
 });
 
 test('R10: "Disparar de novo" é protegido como as outras ações POST: nada é disparado nem gravado fora da versão aprovada', async () => {
@@ -1329,7 +1329,7 @@ test('R10 (r1, Kimi P2): falha do D1 ao gravar o disparo, na aprovação ou no "
   assert.equal(disparos(s).length, 2, 'o disparo foi feito');
   assert.equal(s.rows()[0].dispatch_error, 'GitHub respondeu 500: falhou', 'o registro antigo ficou');
   const list = await (await s.req('/admin/rascunhos?msg=disparado&registro=falhou')).text();
-  assert.match(list, /<p class="erro">O resultado do disparo não foi gravado no painel, então a linha do rascunho pode mostrar o estado anterior\./);
+  assert.match(list, /<p class="aviso erro" role="status">O resultado do disparo não foi gravado no painel, então a linha do rascunho pode mostrar o estado anterior\./);
   assert.doesNotMatch(await (await s.req('/admin/rascunhos?msg=disparado')).text(), /não foi gravado no painel/);
   // Na aprovação: o disparo vai, o registro dele falha, o email sai e a tela avisa.
   const t = setup({ failSql: /SET dispatched_at/ });
@@ -1446,8 +1446,12 @@ test('R10 (r5, Astra P2): segunda aprovação da mesma versão e disparo manual 
   // Disparo manual às 19h30, antes da aprovação: recusado, e reexecutado às 20h29, depois de duas aprovações.
   await s.approve('sales-coach', { confirmar: 'sim', versao: version });
   s.avancar(10);
-  // Segunda aprovação da mesma versão, de outra aba, às 20h10.
-  assert.equal((await s.approve('sales-coach', { confirmar: 'sim', versao: version })).headers.get('location'), '/admin/rascunhos?msg=aprovado');
+  // Segunda aprovação da mesma versão às 20h10. Desde o PR #90 a rota não grava outra linha para a mesma versão, mas o
+  // D1 de produção tem aprovações duplicadas de antes disso, e a janela tem de continuar certa com elas.
+  assert.equal((await s.approve('sales-coach', { confirmar: 'sim', versao: version })).headers.get('location'), '/admin/rascunhos?msg=ja-aprovado');
+  const r0 = s.rows()[0];
+  s.db.raw.prepare(`INSERT INTO draft_approvals (slug, title, html_sha256, source_sha256, approved_at, approved_by, dispatched_at)
+    VALUES ('sales-coach', 't', ?, ?, '2026-11-13T20:10:00.000Z', ?, '2026-11-13T20:10:02.000Z')`).run(r0.html_sha256, r0.source_sha256, GUI);
   assert.equal(s.rows().length, 2);
   s.avancar(20);
   s.ghOpts.runs = [
@@ -1780,4 +1784,53 @@ test('R11 (r1, Codex P2; r2, Astra P2): remoção que para no meio fica na lista
 
 test('R11: o cron só faz a cópia dos assinantes; a remoção não é automática', () => {
   assert.match(TOML, /crons = \["17 \* \* \* \*"\]/);
+});
+
+// ------------------------------------------------------------------ aprovação dupla e retorno do clique (PR #90)
+test('R12 (PR #90): aprovar de novo a mesma versão não grava, não dispara nem avisa; a mensagem diz que já estava aprovada', async () => {
+  const s = setup();
+  const { version } = await putDraft(s.bucket);
+  const r1 = await s.approve('sales-coach', { confirmar: 'sim', versao: version });
+  assert.equal(r1.headers.get('location'), '/admin/rascunhos?msg=aprovado');
+  const r2 = await s.approve('sales-coach', { confirmar: 'sim', versao: version });
+  assert.equal(r2.status, 303);
+  assert.equal(r2.headers.get('location'), '/admin/rascunhos?msg=ja-aprovado');
+  assert.equal(s.rows().length, 1, 'uma linha só');
+  assert.equal(disparos(s).length, 1, 'um disparo só');
+  assert.equal(s.mails.length, 1, 'um aviso só');
+  assert.match(await (await s.req('/admin/rascunhos?msg=ja-aprovado')).text(), /<p class="aviso ok" role="status">Esta versão já estava aprovada/);
+});
+
+test('R12 (PR #90): dois cliques simultâneos gravam uma aprovação e disparam uma vez', async () => {
+  const s = setup();
+  const { version } = await putDraft(s.bucket);
+  const rs = await Promise.all([1, 2, 3].map(() => s.approve('sales-coach', { confirmar: 'sim', versao: version })));
+  assert.deepEqual(rs.map((r) => r.headers.get('location')).sort(),
+    ['/admin/rascunhos?msg=aprovado', '/admin/rascunhos?msg=ja-aprovado', '/admin/rascunhos?msg=ja-aprovado']);
+  assert.equal(s.rows().length, 1);
+  assert.equal(disparos(s).length, 1);
+});
+
+test('R12 (PR #90): versão nova do mesmo rascunho continua aprovável depois da anterior', async () => {
+  const s = setup();
+  const a = await putDraft(s.bucket);
+  assert.equal((await s.approve('sales-coach', { confirmar: 'sim', versao: a.version })).headers.get('location'), '/admin/rascunhos?msg=aprovado');
+  const b = await putDraft(s.bucket, 'sales-coach', { title: 'Correção' });
+  assert.equal((await s.approve('sales-coach', { confirmar: 'sim', versao: b.version })).headers.get('location'), '/admin/rascunhos?msg=aprovado');
+  assert.equal(s.rows().length, 2);
+  // Outro slug com o mesmo conteúdo também é outra aprovação.
+  const c = await putDraft(s.bucket, 'outro', { title: 'Correção', source: b.source, html: b.html });
+  assert.equal((await s.approve('outro', { confirmar: 'sim', versao: c.version })).headers.get('location'), '/admin/rascunhos?msg=aprovado');
+  assert.equal(s.rows().length, 3);
+});
+
+test('R12 (PR #90): o botão de aprovar trava e avisa "Aprovando, aguarde..." assim que o formulário sai; a mensagem da lista vem destacada', async () => {
+  const s = setup();
+  await putDraft(s.bucket);
+  const prev = await (await s.req('/admin/rascunhos/sales-coach/')).text();
+  assert.match(prev, /<form method="post" action="\/admin\/rascunhos\/sales-coach\/aprovar"[^>]*onsubmit="var b=this\.querySelector\('button'\);b\.disabled=true;b\.textContent='Aprovando, aguarde\.\.\.'">/);
+  assert.match(PREVIEW_CSP, /script-src 'self' 'unsafe-inline'/, 'a prévia aceita o script do botão');
+  const list = await (await s.req('/admin/rascunhos?msg=aprovado')).text();
+  assert.match(list, /<p class="aviso ok" role="status">Aprovado\./);
+  assert.match(list, /\.aviso\{font-weight:600;padding:/);
 });
