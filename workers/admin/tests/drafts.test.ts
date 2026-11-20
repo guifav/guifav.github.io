@@ -1490,9 +1490,15 @@ test('R10 (r6, Astra P2): reenviar o mesmo conteúdo renova o uploaded_at, mas a
   s.gh.length = 0;
   assert.match(linhaDe(await (await s.req('/admin/rascunhos')).text(), 'sales-coach'), /preparando o PR \(disparado há 1 min\): <a href="[^"]*\/runs\/30">/);
   assert.equal(leituras(s)[1].query.created, '>=2026-11-13T19:55:00Z', 'a primeira aprovação (20h) vem antes do reenvio (20h20)');
-  // Com duas aprovações da versão, vale a mais antiga.
+  // Com duas aprovações da versão, vale a mais antiga. Desde o PR #91 a rota não grava a segunda (r1, Astra e Kimi P2);
+  // ela é inserida direto, como as duplicadas que o D1 de produção já tem, e com data depois do reenvio, para que
+  // trocar a mais antiga pela mais nova mude a janela.
   s.avancar(5);
-  await s.approve('sales-coach', { confirmar: 'sim', versao: version });
+  assert.equal((await s.approve('sales-coach', { confirmar: 'sim', versao: version })).headers.get('location'), '/admin/rascunhos?msg=ja-aprovado');
+  const r0 = s.rows()[0];
+  s.db.raw.prepare(`INSERT INTO draft_approvals (slug, title, html_sha256, source_sha256, approved_at, approved_by, dispatched_at)
+    VALUES ('sales-coach', 't', ?, ?, '2026-11-13T20:35:00.000Z', ?, '2026-11-13T20:35:02.000Z')`).run(r0.html_sha256, r0.source_sha256, GUI);
+  assert.equal(s.rows().length, 2);
   s.gh.length = 0;
   await s.req('/admin/rascunhos');
   assert.equal(leituras(s)[1].query.created, '>=2026-11-13T19:55:00Z');
