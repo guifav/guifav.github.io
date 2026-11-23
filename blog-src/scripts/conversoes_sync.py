@@ -124,12 +124,20 @@ def iso_ms(value: str) -> str:
     v = re.sub(r"([+-]\d\d)$", r"\1:00", v.replace("Z", "+00:00"))
     try:
         d = datetime.fromisoformat(v)
-    except ValueError:
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=timezone.utc)
+        d = d.astimezone(timezone.utc)  # pode estourar o ano 1 ou 9999 ao trocar de fuso (OverflowError)
+    except (ValueError, OverflowError):
         return ""
-    if d.tzinfo is None:
-        d = d.replace(tzinfo=timezone.utc)
-    d = d.astimezone(timezone.utc)
+    return stamp(d)
+
+
+def stamp(d: datetime) -> str:
     return d.strftime("%Y-%m-%dT%H:%M:%S.") + f"{d.microsecond // 1000:03d}Z"
+
+
+def _now() -> datetime:  # relógio do synced_at (substituível nos testes)
+    return datetime.now(timezone.utc)
 
 
 def parse_row(r: dict) -> dict | None:
@@ -172,7 +180,7 @@ def parse_row(r: dict) -> dict | None:
         return {"id": r["id"], "email": r["email"], "action": action, "verified": verified == 1, "material": material,
                 "file": r.get("file"), "request_id": r.get("request_id"), "ga": r.get("ga_client_id"), "when": when,
                 "interests": interests}
-    except (ValueError, TypeError, AttributeError):
+    except (ValueError, TypeError, AttributeError, OverflowError):
         return None
 
 
@@ -382,7 +390,7 @@ def run(c: TS.Clients, *, apply: bool = False, out=None) -> Counter:
     # 3) Escritas, só com --apply: esquema, depois cada email (Pessoa, Conversões, marca no D1).
     if apply and plan:
         ensure_schema(c, meta, labels)
-        now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        now = stamp(_now())
         for email, target, patch, new, rs in plan:
             if target is None:
                 data = c.twenty("POST", "/rest/people", {"emails": {"primaryEmail": email, "additionalEmails": []}, **patch},

@@ -260,7 +260,7 @@ class SyncTest(unittest.TestCase):
                              "interesses": ["CUSTO_IA"], "ocorreuEm": "2026-11-24T10:00:00.000Z", "eventoId": hexid(1),
                              "pedidoId": hexid(99), "gaClientId": "123.456", "pessoaId": p["id"]})
         self.assertEqual(f.pending(), [])
-        self.assertIsNotNone(f.row(1)["synced_at"])
+        self.assertRegex(f.row(1)["synced_at"], r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$")
         self.assertEqual((counts["pessoas_a_criar"], counts["conversoes_a_criar"], counts["linhas_marcadas"]), (1, 1, 1))
 
     def test_second_run_is_a_no_op_and_two_requests_make_two_conversions(self):
@@ -506,6 +506,29 @@ class SyncTest(unittest.TestCase):
         self.assertEqual(S.iso_ms("2026-11-11T07:00:00.250-03:00"), "2026-11-11T10:00:00.250Z")
         self.assertEqual((S.iso_ms(""), S.iso_ms("lixo")), ("", ""))
 
+    def test_synced_at_keeps_milliseconds(self):
+        # r2 (Kimi P1): a marca no D1 também tem milissegundos (invariante 10).
+        from datetime import datetime, timezone
+        f = Fake()
+        f.add(1, "a@x.com")
+        real = S._now
+        S._now = lambda: datetime(2026, 11, 24, 12, 0, 0, 123456, tzinfo=timezone.utc)
+        try:
+            run(f, apply=True)
+        finally:
+            S._now = real
+        self.assertEqual(f.row(1)["synced_at"], "2026-11-24T12:00:00.123Z")
+
+    def test_date_overflow_is_an_invalid_row_not_a_crash(self):
+        # r2 (Astra P2, Kimi P2): um fuso que leva a data para fora do ano 1..9999 é linha inválida; a válida segue.
+        for bad in ("9999-12-31T23:59:59.999-01:00", "0001-01-01T00:00:00.000+01:00"):
+            f = Fake()
+            f.add(1, "a@x.com", when=bad)
+            f.add(2, "b@x.com")
+            counts, _ = run(f, apply=True)
+            self.assertEqual((counts["linha_invalida"], f.pending(), list(conv_by_event(f))), (1, [hexid(1)], [hexid(2)]), bad)
+            self.assertEqual(S.iso_ms(bad), "")
+
     def test_fresh_crm_with_failing_reads_gets_no_schema(self):
         # r1 (Astra P2): com o esquema por criar, uma falha em qualquer leitura do Twenty não deixa escrita nenhuma.
         def people_broken(method, path, data):
@@ -520,6 +543,15 @@ class SyncTest(unittest.TestCase):
                 run(f, apply=True)
             self.assertEqual((f.twenty_writes(), f.d1_writes(), f.conv_obj, sorted(f.person_fields)),
                              ([], [], None, ["company", "emails", "name"]), why)
+        # r2 (Astra P2): objeto existente com campos por criar e a listagem das Conversões falhando: nada é criado.
+        f = Fake(people=[person("p1", "a@x.com")], schema=True,
+                 listing=lambda q: (200, {"data": {}, "pageInfo": {"hasNextPage": False}}))
+        del f.conv_fields["gaClientId"], f.person_fields["siteGaClientId"]
+        f.add(1, "a@x.com", ga="1.2")
+        with self.assertRaisesRegex(S.SyncError, "listagem de siteConversions inválida"):
+            run(f, apply=True)
+        self.assertEqual((f.twenty_writes(), f.d1_writes()), ([], []))
+        self.assertNotIn("gaClientId", f.conv_fields)
 
     def test_many_rows_are_marked_in_chunks(self):
         f = Fake(people=[person("p1", "a@x.com")])
@@ -693,6 +725,26 @@ class CliTest(unittest.TestCase):
         self.assertEqual((rc, f.pending()), (0, []))
         rc, _ = self.cli(f, "--apply")  # e solta o lock no fim de cada execução
         self.assertEqual(rc, 0)
+
+    def test_lock_is_held_until_the_last_write(self):
+        # r2 (Astra P2): o lock vale do começo ao fim, inclusive na última escrita de cada modo (a marca no D1 do sync e
+        # o DELETE no D1 do --forget, a janela em que um sync concorrente deixaria Conversão órfã).
+        seen = []
+
+        def probe(method, path, data):
+            if path.endswith("/query") and data["sql"].split()[0] in ("UPDATE", "DELETE"):
+                with open(self.lock, "a") as other:
+                    try:
+                        fcntl.flock(other, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        seen.append((data["sql"].split()[0], "livre"))
+                    except BlockingIOError:
+                        seen.append((data["sql"].split()[0], "preso"))
+            return None
+        f = Fake(people=[person("p1", "a@x.com")], fail=probe)
+        f.add(1, "a@x.com")
+        self.assertEqual(self.cli(f, "--apply")[0], 0)
+        self.assertEqual(self.cli(f, "--forget", "--apply", stdin="a@x.com\n")[0], 0)
+        self.assertEqual(seen, [("UPDATE", "preso"), ("DELETE", "preso")])
 
     def test_twenty_sync_d1_without_params_keeps_the_old_payload(self):
         seen = []
