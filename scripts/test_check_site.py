@@ -931,7 +931,7 @@ class ClaritySourcesTest(unittest.TestCase):
         return (self.REPO / rel).read_text(encoding="utf-8")
 
     def test_root_pages(self):
-        for rel in ("index.html", "portfolio/index.html"):
+        for rel in ("index.html", "portfolio/index.html", *sorted(C.MATERIAL_PAGES)):
             with self.subTest(rel=rel):
                 t = self.read(rel)
                 self.assertIn(C.GA4_TAG, t)
@@ -946,6 +946,8 @@ class ClaritySourcesTest(unittest.TestCase):
 
     def test_forms_masked(self):
         self.assertIn('action="https://insights.guifav.dev/subscribe" data-clarity-mask="true"', self.read("index.html"))
+        for m in C.MATERIALS:
+            self.assertIn('data-ga-client-id data-clarity-mask="true"', self.read(f"{m}/index.html"))
         self.assertIn('data-clarity-mask="true"', self.read("blog-src/src/components/SubscribeForm.astro"))
 
     def test_privacy_mentions_clarity(self):
@@ -1130,6 +1132,22 @@ class TrackingTest(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertTrue(any("data-ga-event" in p for p in self.check(self.doc(body), rel=rel)), name)
 
+    def test_material_form_carries_ga_client_id(self):
+        # Issue #99: o formulário de material leva data-ga-client-id e o campo oculto ga_cid, uma vez.
+        rel = "planilha-custos-ia/index.html"
+        form = ('<form id="receber" {attr}method="post" action="https://insights.guifav.dev/material">'
+                '<input type="hidden" name="material" value="planilha-custos-ia">{cid}</form>')
+        cid = '<input type="hidden" name="ga_cid" value="">'
+        self.assertEqual(self.check(self.doc(form.format(attr="data-ga-client-id ", cid=cid)), rel=rel), [])
+        for name, body in {
+            "sem atributo": form.format(attr="", cid=cid),
+            "sem campo": form.format(attr="data-ga-client-id ", cid=""),
+            "campo duas vezes": form.format(attr="data-ga-client-id ", cid=cid * 2),
+            "sem formulário": "",
+        }.items():
+            with self.subTest(name=name):
+                self.assertTrue(any("formulário de material" in p for p in self.check(self.doc(body), rel=rel)), name)
+
     def test_generate_lead_only_on_material_sent_pages_with_the_folder_id(self):
         # Issue #99: generate_lead na página de enviado de cada material, com data-material-id igual ao da pasta.
         lead = lambda m: f'<header data-ga-event="generate_lead" data-material-id="{m}">x</header>'
@@ -1218,6 +1236,7 @@ class GaHostGuardTest(unittest.TestCase):
         root = Path(__file__).resolve().parent.parent
         for rel, config in (("index.html", "gtag('config','G-K7Y87QNCX8'"),
                             ("portfolio/index.html", "gtag('config','G-K7Y87QNCX8'"),
+                            *((p, "gtag('config','G-K7Y87QNCX8'") for p in sorted(C.MATERIAL_PAGES)),
                             ("blog-src/src/layouts/Base.astro", "gtag('config', GA4_ID")):
             with self.subTest(rel=rel):
                 t = (root / rel).read_text(encoding="utf-8")
@@ -1314,7 +1333,7 @@ class ConsentSourcesTest(unittest.TestCase):
     def test_consent_js_same_version_everywhere(self):
         src = re.search(r"CONSENT_SRC = '([^']+)'", self.read("blog-src/src/consts.ts")).group(1)
         self.assertRegex(src, r"^/assets/consent\.js\?v=\d{12}$")
-        for rel in ("index.html", "portfolio/index.html"):
+        for rel in ("index.html", "portfolio/index.html", *sorted(C.MATERIAL_PAGES)):
             with self.subTest(rel=rel):
                 self.assertEqual(self.read(rel).count(f'<script src="{src}"></script>'), 1)
         self.assertEqual(self.read("blog-src/src/layouts/Base.astro").count(
@@ -1360,7 +1379,7 @@ class TrackingSourcesTest(unittest.TestCase):
         self.assertTrue(m)
         src = m.group(1)
         self.assertTrue(src.startswith(C.TRACK_PATH + "?v="))
-        for rel in ("index.html", "portfolio/index.html"):
+        for rel in ("index.html", "portfolio/index.html", *sorted(C.MATERIAL_PAGES)):
             with self.subTest(rel=rel):
                 t = self.read(rel)
                 self.assertEqual(t.count(f'<script src="{src}"></script>'), 1)

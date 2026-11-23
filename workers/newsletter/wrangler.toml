@@ -19,8 +19,9 @@ type = "Data"
 globs = ["**/*.xlsx", "**/*.pdf"]
 fallthrough = false
 
-# D1 do painel (`workers/admin`, dono do esquema e das migrações): aqui só se gravam as conversões do site e a
-# contagem de pedidos de material (issue #97). A migração 0004 precisa estar aplicada antes do deploy deste Worker.
+# D1 do painel (`workers/admin`, dono do esquema e das migrações): aqui só se gravam as conversões do site, com o pedido
+# e o download de material por pessoa (issues #97 e #99). As migrações 0004 e 0005 precisam estar aplicadas antes do
+# deploy deste Worker.
 [[d1_databases]]
 binding = "DB"
 database_name = "blog-admin"

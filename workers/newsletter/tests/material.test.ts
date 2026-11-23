@@ -20,7 +20,7 @@ const tomlVar = (k: string) => {
 
 type Call = { url: string; method: string; body: any };
 
-function setup(opts: { turnstile?: unknown; rlEmail?: boolean; rlIp?: boolean; emailStatus?: number; now?: number; d1Falha?: RegExp; d1Pendura?: RegExp; d1Porta?: Promise<void>; semGa4?: boolean; ga4Status?: number | 'throw' } = {}) {
+function setup(opts: { turnstile?: unknown; rlEmail?: boolean; rlIp?: boolean; emailStatus?: number; now?: number; d1Falha?: RegExp; d1Pendura?: RegExp; d1Porta?: Promise<void>; semGa4?: boolean; ga4Status?: number | 'throw'; ga4Pendura?: boolean; ga4Porta?: Promise<void> } = {}) {
   const calls: Call[] = [];
   const rl: string[] = [];
   const db = d1(opts.d1Falha, undefined, opts.d1Pendura, opts.d1Porta);
@@ -40,6 +40,8 @@ function setup(opts: { turnstile?: unknown; rlEmail?: boolean; rlIp?: boolean; e
     if (url.startsWith('https://www.google-analytics.com/mp/collect?')) {
       // A exceção cita a URL, com o segredo, como faria um erro real de rede: o log não pode repeti-la.
       if (opts.ga4Status === 'throw') throw new TypeError(`fetch failed: ${url}`);
+      if (opts.ga4Pendura) return new Promise<Response>(() => {}); // GA4 que nunca responde
+      if (opts.ga4Porta) await opts.ga4Porta; // GA4 que só responde quando o teste libera
       return new Response(null, { status: opts.ga4Status ?? 204 });
     }
     return new Response('inesperado', { status: 500 });
@@ -208,7 +210,7 @@ test('C1: o clique no link grava a conversão com email, material e interesses; 
     id: idEsperado('material_download', sig(q)), email: 'leitor@exemplo.com', action: 'material_download',
     material: 'mapa-decisao-ia', interests: JSON.stringify([INTERESSES.ARQUITETURA_IA, INTERESSES.CUSTO_IA]),
     occurred_at: new Date(NOW).toISOString(), synced_at: null, verified: 1, ga_client_id: null,
-    request_id: pedidoEsperado('mapa-decisao-ia', 'leitor@exemplo.com', q),
+    request_id: pedidoEsperado('mapa-decisao-ia', 'leitor@exemplo.com', q), file: 'mapa-decisao-pdf',
   });
   assert.ok(!JSON.stringify(c).includes(sig(q)), 'o D1 nunca guarda a assinatura do link');
 });
@@ -230,7 +232,7 @@ test('C2: o pedido grava material_request com o email não comprovado, os intere
   assert.deepEqual(await s.rows('conversions'), [{
     id: pedidoEsperado('planilha-custos-ia', 'leitor@exemplo.com', q), email: 'leitor@exemplo.com', action: 'material_request',
     material: 'planilha-custos-ia', interests: JSON.stringify([INTERESSES.CUSTO_IA]), occurred_at: new Date(NOW).toISOString(),
-    synced_at: null, verified: 0, ga_client_id: '1234567890.1700000000', request_id: null,
+    synced_at: null, verified: 0, ga_client_id: '1234567890.1700000000', request_id: null, file: null,
   }]);
   assert.equal((await s.rows('sqlite_master')).filter((t) => t.name === 'material_requests').length, 0, 'a contagem sem email saiu (0005)');
 });
@@ -392,6 +394,7 @@ test('G1: o download manda material_download ao GA4 com o client_id do pedido e 
   const downloads = c.filter((x) => x.action === 'material_download');
   assert.equal(downloads.length, 2);
   assert.ok(downloads.every((d) => d.request_id === pedido.id && d.verified === 1), 'os dois arquivos apontam para o mesmo pedido');
+  assert.deepEqual(downloads.map((d) => d.file).sort(), ['conta-custo-por-pergunta', 'mapa-decisao-pdf'], 'cada download guarda o arquivo');
   const g = ga4(s.calls);
   assert.equal(g.length, 2);
   const u = new URL(g[0].url);
@@ -450,4 +453,21 @@ test('M10: o rodapé do email do material avisa que o pedido fica registrado e c
     assert.match(t, /contact@guifav\.dev/);
     assert.doesNotMatch(t, /nada mais será enviado/);
   }
+});
+
+test('G5: o envio ao GA4 fica dentro do waitUntil: GA4 travado não segura o download, e o trabalho só termina com ele', async () => {
+  const limite = <T>(p: Promise<T>) => Promise.race([p, new Promise<never>((_, no) => setTimeout(() => no(new Error('a resposta esperou o GA4')), 1000))]);
+  const travado = setup({ ga4Pendura: true });
+  const r = await limite(travado.run(baixar(await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', NOW, SECRET))));
+  assert.equal(await r.text(), 'conteudo:planilha-custos-ia');
+  let libera!: () => void;
+  const s = setup({ ga4Porta: new Promise<void>((ok) => (libera = ok)) });
+  await s.run(baixar(await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', NOW, SECRET)));
+  let terminou = false;
+  const fim = s.settle().then(() => (terminou = true));
+  await new Promise((ok) => setTimeout(ok, 50));
+  assert.equal(terminou, false, 'o waitUntil ainda segura o envio ao GA4');
+  libera();
+  await fim;
+  assert.equal(ga4(s.calls).length, 1);
 });

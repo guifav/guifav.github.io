@@ -266,7 +266,7 @@ async function download(url: URL, env: Env, deps: Deps): Promise<Response> {
     const reqId = await requestId(material.id, ok.email, Number(url.searchParams.get('x')));
     await recordConversion(env.DB, { id: await conversionId('material_download', url.searchParams.get('s') ?? ''),
       acao: 'material_download', email: ok.email, material: material.id, interesses: material.interesses, nowMs, verified: true,
-      requestId: reqId });
+      requestId: reqId, file });
     const clientId = await requestClientId(env.DB, reqId);
     await sendDownloadEvent({ measurementId: env.GA4_MEASUREMENT_ID, apiSecret: env.GA4_API_SECRET }, deps.fetch,
       { clientId, material: material.id, file, nowMs });

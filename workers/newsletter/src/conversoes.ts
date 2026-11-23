@@ -53,14 +53,16 @@ export async function recordConversion(
     verified: boolean;
     gaClientId?: string | null;
     requestId?: string | null;
+    /** No download: o id do arquivo baixado. */
+    file?: string | null;
   },
 ): Promise<void> {
   try {
     await db
       .prepare(`INSERT OR IGNORE INTO conversions
-        (id, email, action, material, interests, occurred_at, verified, ga_client_id, request_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        (id, email, action, material, interests, occurred_at, verified, ga_client_id, request_id, file) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .bind(c.id, c.email, c.acao, c.material, JSON.stringify(c.interesses), new Date(c.nowMs).toISOString(),
-        c.verified ? 1 : 0, c.gaClientId ?? null, c.requestId ?? null)
+        c.verified ? 1 : 0, c.gaClientId ?? null, c.requestId ?? null, c.file ?? null)
       .run();
   } catch (e) {
     console.error(`conversão não gravada (${c.acao}): ${motivo(e)}`);

@@ -918,6 +918,15 @@ def check_tracking(rel: str, html: str) -> list[str]:
         problems.append(f"{rel}: data-ga-event {t.ga_events}, esperado {expected}")
     elif lead and t.ga_materials != [lead]:
         problems.append(f"{rel}: generate_lead com data-material-id {t.ga_materials}, esperado [{lead!r}]")
+    # Formulário de material (issue #99): data-ga-client-id e o campo oculto ga_cid, que o track.js preenche no envio.
+    if any(rel == f"{m}/index.html" for m in MATERIALS):
+        forms = [f for f in re.findall(r"<form\b[^>]*>.*?</form>", html, flags=re.S | re.I)
+                 if 'action="https://insights.guifav.dev/material"' in f]
+        if len(forms) != 1:
+            problems.append(f"{rel}: esperado um formulário de material, achados {len(forms)}")
+        elif not re.match(r"<form\b[^>]*\sdata-ga-client-id[\s>=]", forms[0]) or \
+                forms[0].count('<input type="hidden" name="ga_cid" value="">') != 1:
+            problems.append(f"{rel}: formulário de material sem data-ga-client-id ou sem o campo oculto ga_cid")
     return problems
 
 
