@@ -9,6 +9,11 @@
 // - language_change e theme_change, mais as propriedades do usuário site_language e site_theme,
 //   gravadas ao abrir a página e a cada troca.
 // - sign_up (method expert-insights) na página com data-ga-event="sign_up", uma vez por sessão.
+// - generate_lead (material_id) na página de enviado de um material, com data-ga-event="generate_lead" e
+//   data-material-id, uma vez por sessão e por material (issue #99).
+// - Formulário com data-ga-client-id: no envio, o campo oculto ga_cid recebe o client_id do cookie _ga, só com
+//   o consentimento aceito (consent-v1, a mesma regra do snippet do GA4); sem ele, o campo vai vazio. O Worker
+//   guarda esse id com o pedido e manda o evento de download com ele, ligando pedido e download no GA4 (#99).
 //
 // Carregado depois do site.js (ou do script de tema do blog): o ouvinte fica no document e roda
 // depois do handler do próprio botão, então já lê o idioma e o tema novos.
@@ -20,6 +25,8 @@
   var HOST_LABELS = { 'github.com': 'github', 'linkedin.com': 'linkedin', 'huggingface.co': 'huggingface', 'youtube.com': 'youtube' };
   var PATH_LABELS = { '/': 'inicio', '/blog/assinar/': 'expert-insights', '/blog/privacidade/': 'cookies' };
   var SIGNUP_KEY = 'ga_sign_up_sent';
+  var LEAD_KEY = 'ga_generate_lead_sent:';
+  var CONSENT_TTL = 31536e6;
 
   function send() {
     if (typeof window.gtag === 'function') window.gtag.apply(window, arguments);
@@ -91,9 +98,44 @@
     if (b) onToggle(b);
   }
 
+  function consentGranted() {
+    try {
+      var c = JSON.parse(window.localStorage.getItem('consent-v1') || 'null');
+      var age = c && typeof c.t === 'number' ? Date.now() - c.t : -1;
+      return Boolean(c && c.v === 'granted' && age >= 0 && age < CONSENT_TTL);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // _ga = GA1.<n>.<aleatório>.<epoch>; o client_id do GA4 são os dois últimos números.
+  function gaClientId() {
+    var m = (d.cookie || '').match(/(?:^|;\s*)_ga=GA\d+\.\d+\.(\d{1,20}\.\d{1,20})(?:;|$)/);
+    return m ? m[1] : '';
+  }
+
+  // Captura: roda antes de qualquer outro ouvinte de envio, e o valor já sai no POST.
+  d.addEventListener('submit', function (e) {
+    var t = e.target;
+    var f = t && typeof t.closest === 'function' ? t.closest('form[data-ga-client-id]') : null;
+    var input = f && typeof f.querySelector === 'function' ? f.querySelector('input[name="ga_cid"]') : null;
+    if (input) input.value = consentGranted() ? gaClientId() : '';
+  }, true);
+
   d.addEventListener('click', handle);
   // Clique do meio abre o link em outra aba sem disparar click.
   d.addEventListener('auxclick', function (e) { if (e.button === 1) handle(e); });
+
+  var lead = d.querySelector('[data-ga-event="generate_lead"]');
+  var materialId = lead ? lead.getAttribute('data-material-id') || '' : '';
+  if (/^[a-z0-9-]{1,64}$/.test(materialId)) {
+    var leadSeen = false;
+    try { leadSeen = window.sessionStorage.getItem(LEAD_KEY + materialId) === '1'; } catch (e) { /* sem storage: envia */ }
+    if (!leadSeen) {
+      send('event', 'generate_lead', { material_id: materialId });
+      try { window.sessionStorage.setItem(LEAD_KEY + materialId, '1'); } catch (e) { /* sem storage: só não lembra */ }
+    }
+  }
 
   if (d.querySelector('[data-ga-event="sign_up"]')) {
     var seen = false;

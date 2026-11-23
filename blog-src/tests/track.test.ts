@@ -44,6 +44,9 @@ class El {
     for (let e: El | null = this; e; e = e.parent) if (e.matches(sel)) return e;
     return null;
   }
+  querySelector(sel: string): El | null {
+    return walk(this).slice(1).find((e) => e.matches(sel)) ?? null;
+  }
 }
 
 function matchOne(el: El, s: string): boolean {
@@ -90,6 +93,9 @@ interface Opts {
   gtag?: boolean;
   signup?: boolean;
   storage?: Storage | typeof Blocked;
+  lead?: string; // data-material-id da página de enviado (issue #99)
+  cookie?: string;
+  local?: Storage | typeof Blocked;
 }
 
 function setup(opts: Opts = {}) {
@@ -100,11 +106,13 @@ function setup(opts: Opts = {}) {
   const main = new El('main', {}, body);
   const footer = new El('footer', {}, body);
   if (opts.signup) new El('article', { 'data-ga-event': 'sign_up' }, main);
+  if (opts.lead !== undefined) new El('header', { 'data-ga-event': 'generate_lead', 'data-material-id': opts.lead }, main);
   // Ouvintes do document com a fase: captura roda antes do alvo; borbulha, depois dele e dos ancestrais.
   const listeners: Record<string, { fn: (e: unknown) => void; capture: boolean }[]> = {};
   const document = {
     documentElement: html,
     body,
+    cookie: opts.cookie ?? '',
     baseURI: 'https://guifav.dev/portfolio/',
     addEventListener(type: string, fn: (e: unknown) => void, opt?: boolean | { capture?: boolean }) {
       const capture = typeof opt === 'boolean' ? opt : Boolean(opt?.capture);
@@ -122,6 +130,9 @@ function setup(opts: Opts = {}) {
     URL,
     location: { href: 'https://guifav.dev/portfolio/', origin: 'https://guifav.dev', host: 'guifav.dev' },
     sessionStorage: opts.storage ?? new Storage(),
+    localStorage: opts.local ?? new Storage(),
+    Date,
+    JSON,
   };
   ctx.window = ctx;
   // Cópia por JSON: os objetos nascem em outro realm (vm), e o deepStrictEqual compara protótipos.
@@ -348,8 +359,70 @@ test('alvo sem closest (documento, nó de texto) é ignorado', () => {
   assert.deepEqual(s.calls, []);
 });
 
-test('registra só os ouvintes de click e auxclick, na borbulha (depois do handler do botão)', () => {
+test('registra click e auxclick na borbulha (depois do handler do botão) e submit na captura (antes do envio)', () => {
   const l = setup().listeners;
-  assert.deepEqual(Object.keys(l).sort(), ['auxclick', 'click']);
-  assert.deepEqual(Object.values(l).flat().map((x) => x.capture), [false, false]);
+  assert.deepEqual(Object.keys(l).sort(), ['auxclick', 'click', 'submit']);
+  assert.deepEqual([l.click, l.auxclick, l.submit].map((x) => x.map((y) => y.capture)), [[false], [false], [true]]);
+});
+
+// ---------------------------------------------------------------- Materiais (issue #99)
+
+test('generate_lead na página de enviado, uma vez por sessão e por material', () => {
+  const storage = new Storage();
+  const first = setup({ lead: 'planilha-custos-ia', storage });
+  assert.deepEqual(events(first.calls), [['event', 'generate_lead', { material_id: 'planilha-custos-ia' }]]);
+  assert.deepEqual(events(setup({ lead: 'planilha-custos-ia', storage }).calls), []);
+  // Outro material na mesma sessão conta de novo.
+  assert.deepEqual(events(setup({ lead: 'mapa-decisao-ia', storage }).calls), [['event', 'generate_lead', { material_id: 'mapa-decisao-ia' }]]);
+});
+
+test('generate_lead: sem sessionStorage envia mesmo assim; id fora do formato não envia', () => {
+  assert.equal(events(setup({ lead: 'planilha-custos-ia', storage: Blocked }).calls).length, 1);
+  for (const bad of ['', 'Planilha', '../x', 'a'.repeat(65)]) assert.deepEqual(events(setup({ lead: bad }).calls), [], bad);
+});
+
+function formSetup(opts: Opts & { marked?: boolean } = {}) {
+  const s = setup(opts);
+  const form = new El('form', opts.marked === false ? {} : { 'data-ga-client-id': '' }, s.main);
+  const input = new El('input', { type: 'hidden', name: 'ga_cid' }, form) as El & { value?: string };
+  input.value = 'antigo';
+  const button = new El('button', { type: 'submit' }, form);
+  return { ...s, form, input, button };
+}
+const aceito = (t = Date.now() - 1000) => {
+  const st = new Storage();
+  st.setItem('consent-v1', JSON.stringify({ v: 'granted', t }));
+  return st;
+};
+const GA = '_gcl=x; _ga=GA1.1.1234567890.1700000000; outro=1';
+
+test('ga_cid: com o consentimento aceito, o envio preenche o client_id do cookie _ga', () => {
+  const s = formSetup({ cookie: GA, local: aceito() });
+  s.fire('submit', s.form);
+  assert.equal(s.input.value, '1234567890.1700000000');
+  assert.equal(s.listeners.submit.every((l) => l.capture), true, 'ouvinte de envio na captura');
+});
+
+test('ga_cid: sem consentimento, consentimento negado ou vencido, cookie ausente ou malformado, vai vazio', () => {
+  const negado = new Storage();
+  negado.setItem('consent-v1', JSON.stringify({ v: 'denied', t: Date.now() }));
+  const casos: [string, Opts][] = [
+    ['sem escolha', { cookie: GA }],
+    ['negado', { cookie: GA, local: negado }],
+    ['vencido', { cookie: GA, local: aceito(Date.now() - 366 * 864e5) }],
+    ['sem localStorage', { cookie: GA, local: Blocked }],
+    ['sem cookie', { cookie: 'outro=1', local: aceito() }],
+    ['malformado', { cookie: '_ga=GA1.1.abc.123', local: aceito() }],
+  ];
+  for (const [nome, o] of casos) {
+    const s = formSetup(o);
+    s.fire('submit', s.form);
+    assert.equal(s.input.value, '', nome);
+  }
+});
+
+test('ga_cid: formulário sem data-ga-client-id não é tocado', () => {
+  const s = formSetup({ cookie: GA, local: aceito(), marked: false });
+  s.fire('submit', s.form);
+  assert.equal(s.input.value, 'antigo');
 });

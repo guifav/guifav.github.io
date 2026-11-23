@@ -28,6 +28,10 @@
     .form-error{display:none;max-width:560px;padding:12px 14px;margin:0 0 16px;border:1px solid var(--hl);border-radius:8px;font-size:14px}.form-error:target{display:block}
   </style>
   <script async defer src="https://challenges.cloudflare.com/turnstile/v0/api.js"></script>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-K7Y87QNCX8"></script>
+  <script>window['ga-disable-G-K7Y87QNCX8']=location.hostname.replace(/\.$/,'')!=='guifav.dev';window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('consent','default',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',analytics_storage:'denied'});gtag('set','ads_data_redaction',true);window.guifavConsent=function(){try{var c=JSON.parse(localStorage.getItem('consent-v1')||'null');return c&&c.v==='granted'&&typeof c.t==='number'&&Date.now()-c.t>=0&&Date.now()-c.t<31536e6?'granted':null}catch(e){return null}}();if(window.guifavConsent==='granted')gtag('consent','update',{ad_storage:'granted',ad_user_data:'granted',ad_personalization:'granted',analytics_storage:'granted'});gtag('js',new Date());gtag('config','G-K7Y87QNCX8',{content_group:'materiais'});</script>
+  <!-- Microsoft Clarity (mapas de calor e gravações de sessão; campos de formulário mascarados), só depois do aceite dos cookies (#68) -->
+  <script>window.guifavClarity=function(){if(window.clarity)return;(function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);})(window,document,"clarity","script","zcs8f7r329");};if(window.guifavConsent==='granted')window.guifavClarity();</script>
   <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -52,8 +56,9 @@
       <p class="subtitle" data-i18n="sub">Quanto custa responder perguntas sobre os dados da sua empresa com IA: API, assinatura por usuário, GPU própria ou plataforma pronta, em mil, 10 mil e 100 mil consultas por mês. Você troca as premissas e a planilha refaz a conta.</p>
       <p id="erro-verificacao" class="form-error" data-i18n="f_err">A verificação antirrobô não passou. Tente de novo.</p>
       <p id="link-expirado" class="form-error" data-i18n="f_exp">Esse link de download expirou ou não é válido. Peça um novo abaixo: ele chega em alguns segundos.</p>
-      <form id="receber" class="material-form" data-site-form data-clarity-mask="true" method="post" action="https://insights.guifav.dev/material">
+      <form id="receber" class="material-form" data-site-form data-ga-client-id data-clarity-mask="true" method="post" action="https://insights.guifav.dev/material">
         <input type="hidden" name="material" value="planilha-custos-ia">
+        <input type="hidden" name="ga_cid" value="">
         <label for="material-email" data-i18n="f_label">Seu email, para receber o link de download</label>
         <div class="material-row">
           <input id="material-email" type="email" name="email" required autocomplete="email" maxlength="254" placeholder="voce@exemplo.com">
@@ -61,10 +66,10 @@
         </div>
         <label class="material-check"><input type="checkbox" name="insights" value="sim"><span data-i18n="f_insights">Receber também os Expert Insights, os meus artigos por email. A inscrição só vale depois que você confirma pelo link.</span></label>
         <div class="cf-turnstile" data-sitekey="0x4AAAAAAF8raRhCn4ciudgW" data-language="pt-br"></div>
-        <p class="material-note"><span data-i18n="f_note">O link chega no seu email e vale por 7 dias. Quando você baixa a planilha, registro o seu email, a data e os temas dela, para entender o que interessa a quem me acompanha e, quando fizer sentido, falar com você sobre o assunto. Para sair desse registro, escreva para contact@guifav.dev.</span> <a href="/blog/privacidade/#materiais" data-i18n="f_priv">Como seus dados são usados</a>.</p>
+        <p class="material-note"><span data-i18n="f_note">O link chega no seu email e vale por 7 dias. Quando você pede a planilha, registro o seu email, a data e os temas dela, e também se você baixou o arquivo, para entender o que interessa a quem me acompanha e, quando fizer sentido, falar com você sobre o assunto. Para sair desse registro, escreva para contact@guifav.dev.</span> <a href="/blog/privacidade/#materiais" data-i18n="f_priv">Como seus dados são usados</a>.</p>
       </form>
       <div class="hero-cta">
-        <a class="btn" href="mailto:contact@guifav.dev?subject=Revisar%20conta%20do%20projeto%20IA" data-i18n="cta">Revisar a conta do seu projeto comigo</a>
+        <a class="btn" href="mailto:contact@guifav.dev?subject=Revisar%20conta%20do%20projeto%20IA" data-cta-location="hero" data-i18n="cta">Revisar a conta do seu projeto comigo</a>
       </div>
       <p class="section-intro" data-i18n="open">Abre no Excel e no Google Sheets (Arquivo &gt; Importar). Versão 1.0, preços conferidos em 22/11/2026.</p>
     </header>
@@ -111,7 +116,7 @@
       </div>
     </section>
 
-    <footer><p><a href="/" data-i18n="ft_home">Início</a> &middot; <a href="https://github.com/guifav" target="_blank" rel="noopener">GitHub</a> &middot; <a href="https://linkedin.com/in/guilhermefavaron" target="_blank" rel="noopener">LinkedIn</a> &middot; <a href="https://www.youtube.com/@guifav" target="_blank" rel="noopener">YouTube</a> &middot; <a href="mailto:contact@guifav.dev" data-i18n="nav_contact">Contato</a> &middot; <a href="/blog/assinar/">Expert Insights</a></p></footer>
+    <footer><p><a href="/" data-i18n="ft_home">Início</a> &middot; <a href="https://github.com/guifav" target="_blank" rel="noopener">GitHub</a> &middot; <a href="https://linkedin.com/in/guilhermefavaron" target="_blank" rel="noopener">LinkedIn</a> &middot; <a href="https://www.youtube.com/@guifav" target="_blank" rel="noopener">YouTube</a> &middot; <a href="mailto:contact@guifav.dev" data-i18n="nav_contact">Contato</a> &middot; <a href="/blog/assinar/">Expert Insights</a> &middot; <a href="/blog/privacidade/#cookies" data-consent-open>Cookies</a></p></footer>
   </div>
   <script type="application/json" id="i18n-en">{
       "nav_portfolio": "Portfolio",
@@ -127,7 +132,7 @@
       "f_exp": "This download link has expired or is not valid. Request a new one below: it arrives in a few seconds.",
       "f_label": "Your email, to receive the download link",
       "f_insights": "Also receive Expert Insights, my articles by email. The subscription only takes effect after you confirm through the link.",
-      "f_note": "The link arrives in your email and is valid for 7 days. When you download the spreadsheet, I record your email, the date and its topics, to understand what interests the people who follow my work and, when it makes sense, to talk to you about the subject. To be removed from this record, write to contact@guifav.dev.",
+      "f_note": "The link arrives in your email and is valid for 7 days. When you request the spreadsheet, I record your email, the date and its topics, and whether you downloaded the file, to understand what interests the people who follow my work and, when it makes sense, to talk to you about the subject. To be removed from this record, write to contact@guifav.dev.",
       "f_priv": "How your data is used",
       "cta": "Review your project's numbers with me",
       "open": "Opens in Excel and Google Sheets (File > Import). Version 1.0, prices checked on Nov 22, 2026. The spreadsheet is in Portuguese.",
@@ -167,5 +172,7 @@
       "ft_home": "Home"
   }</script>
   <script src="/assets/site.js?v=202611072213"></script>
+  <script src="/assets/track.js?v=202611231900"></script>
+  <script src="/assets/consent.js?v=202611140300"></script>
 </body>
 </html>

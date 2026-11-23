@@ -812,11 +812,13 @@ class TitleAndGroupTest(unittest.TestCase):
                        ("blog/inscricao-confirmada/index.html", "expert-insights"),
                        ("blog/inscricao-invalida/index.html", "expert-insights"),
                        ("blog/o-exame-virou-conspiracao/index.html", "insights-artigo"),
+                       ("planilha-custos-ia/index.html", "materiais"), ("mapa-decisao-ia/enviado/index.html", "materiais"),
+                       ("planilha-custos-ia/x/index.html", None),
                        ("llm-ranking/index.html", None), ("blog/pagina/x/index.html", None),
                        ("blog/a/b/index.html", None)):
             with self.subTest(rel=rel):
                 self.assertEqual(E(rel), g)
-        self.assertEqual(set(C.CONTENT_GROUPS), {"home", "portfolio", "insights-lista", "insights-artigo", "expert-insights"})
+        self.assertEqual(set(C.CONTENT_GROUPS), {"home", "portfolio", "insights-lista", "insights-artigo", "expert-insights", "materiais"})
 
     def test_group_literal_and_define_vars(self):
         title = "<title>Guilherme Favaron | Builder e CTO</title>"
@@ -1362,8 +1364,8 @@ class TrackingSourcesTest(unittest.TestCase):
 
     def test_privacy_mentions_events(self):
         t = self.read("blog-src/src/pages/privacidade.astro")
-        self.assertIn("alguns cliques: contato, agendamento, links do rodapé, troca de idioma e de tema e a "
-                      "confirmação da inscrição (sem o email)", t)
+        self.assertIn("alguns cliques: contato, agendamento, links do rodapé, troca de idioma e de tema, a "
+                      "confirmação da inscrição e o pedido e o download de materiais (sem o email)", t)
 
     def test_privacy_discloses_google_ads(self):
         # #64: GA4 vinculado ao Google Ads com publicidade personalizada (Gui, 13/11/2026). A política diz o recurso,

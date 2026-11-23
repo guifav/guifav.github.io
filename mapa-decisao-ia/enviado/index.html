@@ -6,6 +6,10 @@
   <meta name="robots" content="noindex">
   <title>Links enviados | Guilherme Favaron</title>
   <link rel="stylesheet" href="/assets/site.css?v=202611140300">
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-K7Y87QNCX8"></script>
+  <script>window['ga-disable-G-K7Y87QNCX8']=location.hostname.replace(/\.$/,'')!=='guifav.dev';window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('consent','default',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',analytics_storage:'denied'});gtag('set','ads_data_redaction',true);window.guifavConsent=function(){try{var c=JSON.parse(localStorage.getItem('consent-v1')||'null');return c&&c.v==='granted'&&typeof c.t==='number'&&Date.now()-c.t>=0&&Date.now()-c.t<31536e6?'granted':null}catch(e){return null}}();if(window.guifavConsent==='granted')gtag('consent','update',{ad_storage:'granted',ad_user_data:'granted',ad_personalization:'granted',analytics_storage:'granted'});gtag('js',new Date());gtag('config','G-K7Y87QNCX8',{content_group:'materiais'});</script>
+  <!-- Microsoft Clarity (mapas de calor e gravações de sessão; campos de formulário mascarados), só depois do aceite dos cookies (#68) -->
+  <script>window.guifavClarity=function(){if(window.clarity)return;(function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);})(window,document,"clarity","script","zcs8f7r329");};if(window.guifavConsent==='granted')window.guifavClarity();</script>
   <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -22,17 +26,20 @@
         <button id="theme-toggle" class="nav-btn" aria-label="Toggle theme">&#9790;</button>
       </div>
     </nav>
-    <header class="hero">
+    <header class="hero" data-ga-event="generate_lead" data-material-id="mapa-decisao-ia">
       <div class="eyebrow" data-i18n="eyebrow">Mapa de decisão: RAG, Text-to-SQL ou contexto longo</div>
       <h1 data-i18n="h1">Enviamos os links para o seu email</h1>
       <p class="subtitle" data-i18n="sub">O email sai de insights@guifav.dev e os links valem por 7 dias. Se o email não chegar em alguns minutos, confira a caixa de spam ou peça de novo.</p>
       <div class="hero-cta">
         <a class="btn" href="/mapa-decisao-ia/" data-i18n="back">Voltar para a página</a>
-        <a class="btn" href="https://calendar.app.google/VyG67Nq5p6zsstAt8" target="_blank" rel="noopener" data-i18n="cta">Agende um horário</a>
+        <a class="btn" href="https://calendar.app.google/VyG67Nq5p6zsstAt8" target="_blank" rel="noopener" data-cta-location="hero" data-i18n="cta">Agende um horário</a>
       </div>
     </header>
+    <footer><p><a href="/" data-i18n="ft_home">Início</a> &middot; <a href="https://github.com/guifav" target="_blank" rel="noopener">GitHub</a> &middot; <a href="https://linkedin.com/in/guilhermefavaron" target="_blank" rel="noopener">LinkedIn</a> &middot; <a href="https://www.youtube.com/@guifav" target="_blank" rel="noopener">YouTube</a> &middot; <a href="mailto:contact@guifav.dev" data-i18n="nav_contact">Contato</a> &middot; <a href="/blog/assinar/">Expert Insights</a> &middot; <a href="/blog/privacidade/#cookies" data-consent-open>Cookies</a></p></footer>
   </div>
   <script type="application/json" id="i18n-en">{
+      "nav_contact": "Contact",
+      "ft_home": "Home",
       "nav_portfolio": "Portfolio",
       "nav_blog": "Insights",
       "nav_schedule": "Schedule a chat",
@@ -43,5 +50,7 @@
       "cta": "Schedule a chat"
   }</script>
   <script src="/assets/site.js?v=202611072213"></script>
+  <script src="/assets/track.js?v=202611231900"></script>
+  <script src="/assets/consent.js?v=202611140300"></script>
 </body>
 </html>
