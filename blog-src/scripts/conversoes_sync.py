@@ -14,6 +14,8 @@ No Twenty, criados se faltarem (metadata API):
 Regras:
 - Correspondência por email, no principal e nos adicionais, sem diferença de caixa (a mesma do twenty_sync.py). Mais de
   uma Pessoa com o email: a conversão vai para a mais antiga (createdAt, depois id), e a contagem mostra o caso.
+- Datas com milissegundos do começo ao fim (o Worker grava `toISOString()`): ordenar, comparar e gravar no segundo cheio
+  trocaria a Pessoa mais antiga e o client_id mais recente quando dois eventos caem no mesmo segundo.
 - Pessoa nova só nasce de uma ação com o email comprovado (download ou confirmação da newsletter), só com o email.
 - Pedido sem clique (`material_request`, `verified = 0`) só vira Conversão se o email já estiver numa Pessoa (decisão do
   Gui na #97, 2026-11-23). Sem Pessoa, a linha fica pendente no D1: se o email chegar ao CRM depois (pelo download, pela
@@ -22,13 +24,19 @@ Regras:
   a linha é marcada com `synced_at` depois que a Pessoa e as Conversões do email foram gravadas.
 - siteInteresses só ganha valores, nunca perde: uma tag tirada à mão volta se a pessoa tiver uma conversão nova com o tema.
   Um interesse novo no catálogo vira opção nova das duas multi-seleções, com o rótulo do catálogo.
-- Linha malformada (ação, email, datas, interesses ou ids fora do formato) não é gravada nem marcada, e é contada em
-  `linha_invalida` (o wrapper alerta).
+- Linha malformada (ação, email, datas, interesses ou ids fora do formato que o Worker grava; o email com a mesma regra
+  do `normalizeEmail` do Worker) não é gravada nem marcada, e é contada em `linha_invalida` (o wrapper alerta).
 - Lê e valida tudo (D1, metadados, Pessoas e Conversões) antes de qualquer escrita. A saída tem só contagens, nunca emails.
 
 Remoção (direito do titular), --forget: lê UM email da entrada padrão (fora do histórico do shell e da lista de
-processos), apaga as linhas dele no D1 primeiro (para o sync não recriar nada) e depois as Conversões dele no Twenty. A
-Pessoa e os campos site* dela ficam como estão (decisão do Gui, 2026-11-23). Simulação sem --apply.
+processos). As linhas do email no D1 são o diário da remoção: apaga no Twenty as Conversões cujos eventoId são os ids
+dessas linhas, relê o Twenty para provar que nenhuma sobrou e só então apaga as linhas no D1. Uma queda no meio deixa o
+D1 intacto, e repetir o comando conclui, mesmo que o email da Pessoa tenha mudado no CRM. A Pessoa e os campos site*
+dela ficam como estão (decisão do Gui, 2026-11-23). Simulação sem --apply.
+
+Sync e --forget nunca rodam juntos: os dois pegam o mesmo lock (arquivo em CONVERSOES_SYNC_LOCK, padrão
+/tmp/guifav-conversoes-sync.lock). Sem ele, o sync poderia criar no Twenty uma Conversão de uma linha pendente entre a
+limpeza do Twenty e a do D1, e essa Conversão ficaria sem linha no D1 que a ligasse ao email.
 
 Rodar na KVM (todas as credenciais vêm do ambiente):
     CLOUDFLARE_API_TOKEN=... CLOUDFLARE_ACCOUNT_ID=... D1_DATABASE_ID=... TWENTY_API_KEY=... \\
@@ -38,6 +46,7 @@ Rodar na KVM (todas as credenciais vêm do ambiente):
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
 import re
@@ -85,17 +94,42 @@ PERSON_FIELDS = OrderedDict([
 MULTI = {"interesses", "siteInteresses"}
 
 HEX64 = re.compile(r"[0-9a-f]{64}")
-EMAIL = re.compile(r"[^\s@A-Z]+@[^\s@A-Z]+\.[^\s@A-Z]+")  # o Worker grava em minúsculas
+# A mesma regra do normalizeEmail de workers/newsletter/src/index.ts (minúsculas, local até 64, rótulos de domínio sem
+# hífen nas pontas, total até 254). Classes só ASCII: o \d e o \w do Python aceitam dígitos e letras Unicode.
+_LABEL = r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+EMAIL = re.compile(r"[a-z0-9.!#$%&*+/=?^_`{|}~-]{1,64}@" + _LABEL + r"(?:\." + _LABEL + r")+")
+MAX_EMAIL = 254
 SLUG = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 INTEREST = re.compile(r"[A-Z][A-Z0-9_]{0,62}")
-GA_CID = re.compile(r"\d{1,20}\.\d{1,20}")
+GA_CID = re.compile(r"[0-9]{1,20}\.[0-9]{1,20}")  # o parseGaClientId de workers/newsletter/src/ga4.ts
 MAX_LABEL = 120
 MARK_CHUNK = 50  # ids por UPDATE no D1 (limite de 100 parâmetros por consulta)
 FORGET_MARK = "conversões apagadas"
+LOCK_DEFAULT = "/tmp/guifav-conversoes-sync.lock"
 
 
 def _full(rx: re.Pattern, v) -> bool:
     return isinstance(v, str) and rx.fullmatch(v) is not None
+
+
+def valid_email(v) -> bool:
+    return _full(EMAIL, v) and len(v) <= MAX_EMAIL
+
+
+def iso_ms(value: str) -> str:
+    """Data em ISO UTC com milissegundos ('2026-11-24T10:00:00.900Z'); '' se inválida. Mesmas entradas do TS.iso."""
+    v = (value or "").strip().replace(" ", "T", 1)
+    if not v:
+        return ""
+    v = re.sub(r"([+-]\d\d)$", r"\1:00", v.replace("Z", "+00:00"))
+    try:
+        d = datetime.fromisoformat(v)
+    except ValueError:
+        return ""
+    if d.tzinfo is None:
+        d = d.replace(tzinfo=timezone.utc)
+    d = d.astimezone(timezone.utc)
+    return d.strftime("%Y-%m-%dT%H:%M:%S.") + f"{d.microsecond // 1000:03d}Z"
 
 
 def parse_row(r: dict) -> dict | None:
@@ -106,7 +140,7 @@ def parse_row(r: dict) -> dict | None:
             return None
         if (action == "material_request") != (verified == 0):
             return None  # só o pedido é não comprovado
-        if not _full(HEX64, r.get("id")) or not _full(EMAIL, r.get("email")):
+        if not _full(HEX64, r.get("id")) or not valid_email(r.get("email")):
             return None
         material = r.get("material")
         if action == "newsletter_confirm":
@@ -121,7 +155,7 @@ def parse_row(r: dict) -> dict | None:
             return None
         if r.get("request_id") is not None and action != "material_download":
             return None
-        when = TS.iso(r.get("occurred_at") or "")
+        when = iso_ms(r.get("occurred_at") or "")
         if not when:
             return None
         raw = json.loads(r.get("interests") or "")
@@ -190,7 +224,7 @@ def list_records(c: TS.Clients, plural: str) -> list[dict]:
 
 def people_by_email(people: list[dict]) -> dict[str, list[dict]]:
     idx: dict[str, list[dict]] = {}
-    for p in sorted(people, key=lambda p: (TS.iso(p.get("createdAt") or "") or "9999", p["id"])):
+    for p in sorted(people, key=lambda p: (iso_ms(p.get("createdAt") or "") or "9999", p["id"])):
         for e in TS._emails(p):
             idx.setdefault(e, []).append(p)
     return idx
@@ -205,7 +239,7 @@ def person_patch(p: dict | None, rows: list[dict]) -> dict:
     cur_int = list((p or {}).get("siteInteresses") or [])
     merged = cur_int + [i for r in rows for i in r["interests"] if i not in cur_int]
     merged = list(OrderedDict.fromkeys(merged))
-    cur_last = TS.iso((p or {}).get("siteUltimaConversao") or "")
+    cur_last = iso_ms((p or {}).get("siteUltimaConversao") or "")
     last = max([cur_last] + [r["when"] for r in rows])
     proven = bool((p or {}).get("siteEmailComprovado")) or any(r["verified"] for r in rows)
     want = {"siteInteresses": merged, "siteUltimaConversao": last, "siteEmailComprovado": proven}
@@ -222,7 +256,7 @@ def person_patch(p: dict | None, rows: list[dict]) -> dict:
     for k, v in want.items():
         have = p.get(k)
         if k == "siteUltimaConversao":
-            have = TS.iso(have or "") or None
+            have = iso_ms(have or "") or None
         if k == "siteEmailComprovado":
             have = bool(have)
         if have != v:
@@ -371,32 +405,25 @@ def run(c: TS.Clients, *, apply: bool = False, out=None) -> Counter:
 
 
 def forget(c: TS.Clients, email: str, *, apply: bool = False, out=None) -> Counter:
-    """Apaga as conversões de um email: primeiro no D1 (o sync não recria), depois no Twenty. A Pessoa fica."""
+    """Apaga as conversões de um email: as do Twenty pelos ids do D1, depois as linhas do D1. A Pessoa fica."""
     out = out or sys.stdout
     email = email.strip().lower()
-    if not _full(EMAIL, email):
+    if not valid_email(email):
         raise SyncError("email inválido na entrada")
     counts: Counter = Counter()
+    # As linhas do D1 são o diário: enquanto existirem, os ids delas acham as Conversões no Twenty, qualquer que seja o
+    # email atual da Pessoa no CRM.
     ids = {r["id"] for r in c.d1("SELECT id FROM conversions WHERE email = ?", [email])}
     meta = read_metadata(c)
     persons = people_by_email(TS.list_people(c)).get(email) or []
-    pids = {p["id"] for p in persons}
-    convs = []
-    if meta["conv_id"]:
-        records = list_records(c, PLURAL)
-        # Da Pessoa, só as Conversões que não têm mais linha no D1: sobras de uma remoção interrompida depois do DELETE
-        # no D1. As de outro email da mesma Pessoa continuam no D1 e ficam.
-        linked = [x["eventoId"] for x in records if x.get("pessoaId") in pids and x.get("eventoId") and x["eventoId"] not in ids]
-        alive: set[str] = set()
-        for i in range(0, len(linked), MARK_CHUNK):
-            part = linked[i:i + MARK_CHUNK]
-            alive |= {r["id"] for r in c.d1(f"SELECT id FROM conversions WHERE id IN ({','.join('?' * len(part))})", part)}
-        convs = [x for x in records if x.get("eventoId") and (x["eventoId"] in ids or (x.get("pessoaId") in pids and x["eventoId"] not in alive))]
-    counts["d1_linhas"], counts["conversoes_no_crm"], counts["pessoas_mantidas"] = len(ids), len(convs), len(pids)
+    convs = [x for x in list_records(c, PLURAL) if x.get("eventoId") in ids] if meta["conv_id"] else []
+    counts["d1_linhas"], counts["conversoes_no_crm"], counts["pessoas_mantidas"] = len(ids), len(convs), len(persons)
     if apply:
-        c.d1("DELETE FROM conversions WHERE email = ?", [email])
         for x in convs:
             c.twenty("DELETE", f"/rest/{PLURAL}/{urllib.parse.quote(x['id'])}", op="apagar conversão")
+        if meta["conv_id"] and any(x.get("eventoId") in ids for x in list_records(c, PLURAL)):
+            raise SyncError("ainda há Conversões do email no Twenty; o D1 ficou intacto, rode de novo")
+        c.d1("DELETE FROM conversions WHERE email = ?", [email])
         if c.d1("SELECT count(*) AS n FROM conversions WHERE email = ?", [email])[0]["n"] != 0:
             raise SyncError("o D1 ainda tem linhas do email depois da remoção")
     _report(counts, out, FORGET_MARK if apply else "simulação: nada foi apagado (use --apply)")
@@ -418,7 +445,13 @@ def main(argv=None, transport=TS._transport, sleep=time.sleep, stdin=None) -> in
     if not all(env.values()):
         print("ERRO: faltam variáveis de ambiente: " + ", ".join(k for k, v in env.items() if not v), file=sys.stderr)
         return 2
+    lock = None
     try:
+        lock = open(os.environ.get("CONVERSOES_SYNC_LOCK") or LOCK_DEFAULT, "a")
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise SyncError("outra execução do sync ou do --forget em andamento") from None
         c = TS.Clients(env, transport, sleep)
         if a.forget:
             lines = [x for x in (stdin or sys.stdin).read().splitlines() if x.strip()]
@@ -433,6 +466,9 @@ def main(argv=None, transport=TS._transport, sleep=time.sleep, stdin=None) -> in
     except Exception as e:  # noqa: BLE001
         print(f"ERRO: falha inesperada ({type(e).__name__})", file=sys.stderr)
         return 1
+    finally:
+        if lock is not None:
+            lock.close()  # fechar o arquivo solta o lock
     return 0
 
 

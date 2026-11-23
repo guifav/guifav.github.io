@@ -5,6 +5,8 @@ servidor: devolve cópias, recusa eventoId repetido (campo único, 400 como no T
 """
 import contextlib
 import copy
+import fcntl
+import tempfile
 import io
 import json
 import os
@@ -388,6 +390,18 @@ class SyncTest(unittest.TestCase):
             "ga_client_id fora do formato": dict(ga="abc"),
             "request_id fora do formato": dict(request_id="xyz"),
             "arquivo no pedido": dict(action="material_request", file="planilha-custos-ia"),
+            # r1 (Astra P1, Kimi P2): o email segue o normalizeEmail do Worker e os dígitos do client_id são só ASCII.
+            "email com NUL": dict(email="a\x00b@x.com"),
+            "email com letra Unicode": dict(email="ä@x.com"),
+            "domínio com hífen na ponta": dict(email="a@-x.com"),
+            "domínio com rótulo vazio": dict(email="a@x..com"),
+            "parte local com 65": dict(email="a" * 65 + "@x.com"),
+            "email com mais de 254": dict(email="a@" + ".".join(["b" * 60] * 5) + ".com"),  # 310
+            "ga_client_id com dígitos Unicode": dict(action="material_request", ga="\u0661.\u0662"),
+            # r1 (Astra P2): id fora do formato.
+            "id não hex": dict(n="z" * 64),
+            "id hex em maiúsculas": dict(n="A" * 64),
+            "id curto": dict(n="a" * 63),
         }
         for i, (why, kw) in enumerate(bad.items(), start=10):
             kw = {"email": "a@x.com", **kw}
@@ -401,14 +415,15 @@ class SyncTest(unittest.TestCase):
             if why == "arquivo no pedido":
                 f.add(i, email, action="material_request", file="planilha-custos-ia")
                 continue
-            f.add(i, email, **kw)
+            f.add(kw.pop("n", i), email, **kw)
         f.add(1, "ok@x.com", action="newsletter_confirm", material=None, interests=(EXPERT,))
+        f.add(2, "a" * 64 + "@" + "b" * 63 + ".com", action="newsletter_confirm", material=None, interests=(EXPERT,))  # no limite: vale
         counts, _ = run(f, apply=True)
         self.assertEqual(counts["linha_invalida"], len(bad))
-        self.assertEqual(list(conv_by_event(f)), [hexid(1)])
+        self.assertEqual(sorted(conv_by_event(f)), [hexid(1), hexid(2)])
         self.assertEqual(len(f.pending()), len(bad))
-        self.assertEqual(list(f.people.values())[0]["emails"]["primaryEmail"], "ok@x.com")
-        (c,) = f.convs.values()
+        self.assertEqual(sorted(p["emails"]["primaryEmail"][:2] for p in f.people.values()), ["aa", "ok"])
+        c = conv_by_event(f)[hexid(1)]
         self.assertEqual((c["acao"], c["material"], c["name"]), ("NEWSLETTER_CONFIRM", None, "Inscrição confirmada"))
 
     def test_only_invalid_rows_reads_nothing_from_twenty(self):
@@ -471,6 +486,41 @@ class SyncTest(unittest.TestCase):
         self.assertEqual(len(lists), 3)
         self.assertEqual(f.pending(), [])
 
+    def test_milliseconds_decide_oldest_person_and_newest_client_id(self):
+        # r1 (Astra P1, Kimi P1): o Worker grava toISOString(); no mesmo segundo, quem decide é o milissegundo.
+        f = Fake(people=[person("p-a", "a@x.com", created="2026-01-01T00:00:00.900Z"),
+                         person("p-z", "z@x.com", extra=["a@x.com", "b@x.com"], created="2026-01-01T00:00:00.100Z")])
+        f.add("f" * 64, "a@x.com", action="material_request", ga="111.111", when="2026-11-24T10:00:00.100Z")
+        f.add("0" * 64, "b@x.com", action="material_request", ga="999.999", when="2026-11-24T10:00:00.900Z")
+        run(f, apply=True)
+        self.assertEqual({c["pessoaId"] for c in f.convs.values()}, {"p-z"})  # a mais antiga, por 800 ms
+        p = f.people["p-z"]
+        self.assertEqual((p["siteGaClientId"], p["siteUltimaConversao"]), ("999.999", "2026-11-24T10:00:00.900Z"))
+        self.assertEqual(sorted(c["ocorreuEm"] for c in f.convs.values()), ["2026-11-24T10:00:00.100Z", "2026-11-24T10:00:00.900Z"])
+        # entre rodadas: uma conversão 1 ms mais antiga que a última conhecida não troca o client_id
+        f.add(3, "a@x.com", action="material_request", ga="555.555", when="2026-11-24T10:00:00.899Z")
+        run(f, apply=True)
+        self.assertEqual((f.people["p-z"]["siteGaClientId"], f.people["p-z"]["siteUltimaConversao"]),
+                         ("999.999", "2026-11-24T10:00:00.900Z"))
+        self.assertEqual(S.iso_ms("2026-11-11 10:00:00+00"), "2026-11-11T10:00:00.000Z")
+        self.assertEqual(S.iso_ms("2026-11-11T07:00:00.250-03:00"), "2026-11-11T10:00:00.250Z")
+        self.assertEqual((S.iso_ms(""), S.iso_ms("lixo")), ("", ""))
+
+    def test_fresh_crm_with_failing_reads_gets_no_schema(self):
+        # r1 (Astra P2): com o esquema por criar, uma falha em qualquer leitura do Twenty não deixa escrita nenhuma.
+        def people_broken(method, path, data):
+            return (200, {"data": {}}) if method == "GET" and path == "/rest/people" else None
+
+        def meta_broken(method, path, data):
+            return (500, {"errors": [{"message": "x"}]}) if path == "/metadata" else None
+        for why, fail in (("pessoas", people_broken), ("metadados", meta_broken)):
+            f = Fake(fail=fail)
+            f.add(1, "a@x.com")
+            with self.assertRaises(S.SyncError, msg=why):
+                run(f, apply=True)
+            self.assertEqual((f.twenty_writes(), f.d1_writes(), f.conv_obj, sorted(f.person_fields)),
+                             ([], [], None, ["company", "emails", "name"]), why)
+
     def test_many_rows_are_marked_in_chunks(self):
         f = Fake(people=[person("p1", "a@x.com")])
         for i in range(120):
@@ -509,17 +559,20 @@ class ForgetTest(unittest.TestCase):
         self.assertEqual(f.db.execute("SELECT count(*) FROM conversions WHERE email = 'a@x.com'").fetchone()[0], 0)
         self.assertEqual(f.people["p1"], before)  # Pessoa e campos site* como estavam
         self.assertNotIn("DELETE", [m for m, p, d, _ in f.calls if p.startswith("/rest/people")])
-        # a ordem: D1 antes do Twenty
+        # a ordem (r1): o Twenty pelos ids do D1, a releitura e só então o D1
         seq = [("d1" if p.endswith("/query") else "tw") for m, p, d, _ in f.calls
                if (p.endswith("/query") and d["sql"].startswith("DELETE")) or m == "DELETE"]
-        self.assertEqual(seq[0], "d1")
+        self.assertEqual(seq, ["tw", "tw", "d1"])
         self.assertIn(FORGET := S.FORGET_MARK, out)
         self.assertTrue(FORGET)
         counts, _ = run(f, apply=True)
         self.assertEqual(counts["conversoes_a_criar"], 0)  # o sync seguinte não recria
 
-    def test_interrupted_forget_is_finished_by_a_rerun(self):
+    def test_twenty_failure_keeps_d1_and_a_rerun_finishes_even_after_the_email_changed(self):
+        # r1 (Astra P1): o D1 é o diário da remoção; uma queda no Twenty deixa o D1 intacto, e a nova tentativa acha as
+        # Conversões pelos ids, mesmo com o email da Pessoa trocado no CRM.
         f = self.setup()
+        f.people["p1"]["emails"] = {"primaryEmail": "novo@x.com", "additionalEmails": ["b@x.com"]}
         state = {"armed": True}
 
         def fail(method, path, data):
@@ -530,11 +583,27 @@ class ForgetTest(unittest.TestCase):
         f.fail = fail
         with self.assertRaises(S.SyncError):
             forget(f, "a@x.com", apply=True)
-        self.assertEqual(f.db.execute("SELECT count(*) FROM conversions WHERE email = 'a@x.com'").fetchone()[0], 0)
-        self.assertEqual(len(f.convs), 4)  # D1 já limpo, Twenty não
-        counts, _ = forget(f, "a@x.com", apply=True)
-        self.assertEqual(counts["conversoes_no_crm"], 2)
+        self.assertEqual(f.db.execute("SELECT count(*) FROM conversions WHERE email = 'a@x.com'").fetchone()[0], 2)
+        self.assertEqual(f.d1_writes(), [s for s in f.d1_writes() if s.startswith("UPDATE")])  # nenhum DELETE no D1
+        counts, out = forget(f, "a@x.com", apply=True)
+        self.assertEqual((counts["d1_linhas"], counts["conversoes_no_crm"], counts["pessoas_mantidas"]), (2, 2, 0))
         self.assertEqual(sorted(conv_by_event(f)), [hexid(3), hexid(4)])
+        self.assertEqual(f.db.execute("SELECT count(*) FROM conversions WHERE email = 'a@x.com'").fetchone()[0], 0)
+        self.assertIn(S.FORGET_MARK, out)
+
+    def test_leftover_conversion_in_twenty_keeps_the_d1(self):
+        # Um DELETE que responde 200 sem apagar: a releitura acha a sobra, o D1 fica e nada é dado como concluído.
+        f = self.setup()
+        real = f._twenty
+
+        def no_op_delete(method, u, data):
+            if method == "DELETE":
+                return 200, {"data": {}}
+            return real(method, u, data)
+        f._twenty = no_op_delete
+        with self.assertRaisesRegex(S.SyncError, "o D1 ficou intacto"):
+            forget(f, "a@x.com", apply=True)
+        self.assertEqual(f.db.execute("SELECT count(*) FROM conversions WHERE email = 'a@x.com'").fetchone()[0], 2)
 
     def test_invalid_email_is_refused(self):
         f = self.setup()
@@ -545,10 +614,16 @@ class ForgetTest(unittest.TestCase):
 
 
 class CliTest(unittest.TestCase):
+    def setUp(self):
+        fd, self.lock = tempfile.mkstemp(prefix="conversoes-lock-")
+        os.close(fd)
+        self.addCleanup(os.unlink, self.lock)
+
     def cli(self, fake, *args, stdin=None):
         out, err = io.StringIO(), io.StringIO()
-        old = {k: os.environ.get(k) for k in ENV}
+        old = {k: os.environ.get(k) for k in [*ENV, "CONVERSOES_SYNC_LOCK"]}
         os.environ.update(ENV)
+        os.environ["CONVERSOES_SYNC_LOCK"] = self.lock
         try:
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
                 rc = S.main(list(args), transport=fake, sleep=lambda s: None, stdin=io.StringIO(stdin) if stdin is not None else None)
@@ -602,6 +677,22 @@ class CliTest(unittest.TestCase):
         self.assertNotIn("segredo", text.lower())
         self.assertEqual(f.pending(), [])
         self.assertEqual(f.db.execute("SELECT count(*) FROM conversions").fetchone()[0], 0)
+
+    def test_sync_and_forget_never_run_together(self):
+        # r1: o lock compartilhado impede o sync de criar uma Conversão entre a limpeza do Twenty e a do D1.
+        f = Fake(people=[person("p1", "a@x.com")])
+        f.add(1, "a@x.com")
+        with open(self.lock, "a") as held:
+            fcntl.flock(held, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            for args, stdin in ((("--apply",), None), (("--forget", "--apply"), "a@x.com\n")):
+                rc, text = self.cli(f, *args, stdin=stdin)
+                self.assertEqual(rc, 1)
+                self.assertIn("em andamento", text)
+            self.assertEqual(f.calls, [])
+        rc, _ = self.cli(f, "--apply")  # lock solto: roda
+        self.assertEqual((rc, f.pending()), (0, []))
+        rc, _ = self.cli(f, "--apply")  # e solta o lock no fim de cada execução
+        self.assertEqual(rc, 0)
 
     def test_twenty_sync_d1_without_params_keeps_the_old_payload(self):
         seen = []
