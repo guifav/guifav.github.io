@@ -1428,12 +1428,20 @@ class TrackingSourcesTest(unittest.TestCase):
         for must in ("O registro vai também para o meu CRM",
                      "o download cria lá um contato só com o seu email, se ele ainda não existir",
                      "o pedido sem download só entra no CRM se o seu email já for um contato",
-                     "apago os pedidos e downloads, no Cloudflare e no CRM, e também o contato, se você pedir",
+                     "apago os pedidos e downloads, no Cloudflare e no CRM. O contato continua no CRM com o resumo que veio "
+                     "deles (os temas de interesse, a data da última ação, se o email foi comprovado e o identificador do "
+                     "Google Analytics), e só é apagado, com esse resumo, se você pedir.",
+                     # r1 (Astra P2): a data da página mudou; o início do registro é o deploy do Worker, não a versão.
+                     "Pedidos e downloads feitos antes das 17h31 de 23 de novembro de 2026 (horário de Brasília) não foram "
+                     "registrados.",
                      "que guardo com o pedido, também no CRM,",
                      '<h2 id="quem-processa">Quem processa</h2>', 'href="#quem-processa"',
                      "o CRM onde ficam os inscritos da lista e o registro dos pedidos e downloads de materiais e das "
                      "confirmações de inscrição"):
             self.assertIn(must, t)
+        # r1 (Kimi P1): a remoção não apaga o contato nem o resumo dele; a frase antiga prometia mais do que o código faz.
+        self.assertNotIn("e também o contato, se você pedir", t)
+        self.assertNotIn("anteriores a esta versão da página", t)
 
 
 if __name__ == "__main__":
