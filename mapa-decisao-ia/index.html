@@ -50,19 +50,19 @@
       <div class="eyebrow" data-i18n="eyebrow">Material do vídeo · canal @guifav</div>
       <h1 data-i18n="h1">Mapa de decisão: RAG, Text-to-SQL ou contexto longo</h1>
       <p class="subtitle" data-i18n="sub">As perguntas que eu faço antes de escolher a arquitetura de IA sobre os dados de uma empresa, a matriz com o que cada uma acerta e onde falha, a conta do custo por pergunta e os testes que eu rodo antes de aprovar um projeto.</p>
-      <p class="section-intro" data-i18n="dl_what">Você recebe por email o link do mapa (PDF, 4 páginas) e da planilha da conta do custo por pergunta (.xlsx).</p>
+      <p class="section-intro" data-i18n="dl_what">Você recebe por email os links do mapa (PDF, 4 páginas) e da planilha da conta do custo por pergunta (.xlsx).</p>
       <p id="erro-verificacao" class="form-error" data-i18n="f_err">A verificação antirrobô não passou. Tente de novo.</p>
       <p id="link-expirado" class="form-error" data-i18n="f_exp">Esse link de download expirou ou não é válido. Peça um novo abaixo: ele chega em alguns segundos.</p>
       <form id="receber" class="material-form" data-site-form data-clarity-mask="true" method="post" action="https://insights.guifav.dev/material">
         <input type="hidden" name="material" value="mapa-decisao-ia">
-        <label for="material-email" data-i18n="f_label">Seu email, para receber o link de download</label>
+        <label for="material-email" data-i18n="f_label">Seu email, para receber os links de download</label>
         <div class="material-row">
           <input id="material-email" type="email" name="email" required autocomplete="email" maxlength="254" placeholder="voce@exemplo.com">
           <button type="submit" data-i18n="f_btn">Receber o mapa</button>
         </div>
-        <label class="material-check"><input type="checkbox" name="insights" value="sim"><span data-i18n="f_insights">Quero receber também os Expert Insights, os meus artigos por email. A inscrição só vale depois que você confirma pelo link.</span></label>
+        <label class="material-check"><input type="checkbox" name="insights" value="sim"><span data-i18n="f_insights">Receber também os Expert Insights, os meus artigos por email. A inscrição só vale depois que você confirma pelo link.</span></label>
         <div class="cf-turnstile" data-sitekey="0x4AAAAAAF8raRhCn4ciudgW" data-language="pt-br"></div>
-        <p class="material-note" data-i18n="f_note">O link chega no seu email e vale por 7 dias. O email serve só para mandar o link, a menos que você marque a caixa e confirme a inscrição. <a href="/blog/privacidade/#materiais">Como seus dados são usados</a>.</p>
+        <p class="material-note"><span data-i18n="f_note">Os links chegam no seu email e valem por 7 dias. O email serve só para mandar os links, a menos que você marque a caixa e confirme a inscrição.</span> <a href="/blog/privacidade/#materiais" data-i18n="f_priv">Como seus dados são usados</a>.</p>
       </form>
       <p class="section-intro" data-i18n="ver">Versão de 23/11/2026, preços da Anthropic lidos em 22/11/2026.</p>
     </header>
@@ -97,13 +97,14 @@
       "eyebrow": "Video companion · @guifav channel",
       "h1": "Decision map: RAG, Text-to-SQL or long context",
       "sub": "The questions I ask before choosing an AI architecture over a company's data, the matrix of what each one gets right and where it fails, the cost-per-question math and the tests I run before signing off on a project.",
-      "dl_what": "You get by email the link to the map (PDF, 4 pages) and to the cost-per-question sheet (.xlsx).",
+      "dl_what": "You receive the links to the map (PDF, 4 pages) and the cost-per-question sheet (.xlsx) by email.",
       "f_btn": "Get the map",
       "f_err": "The anti-bot check did not pass. Please try again.",
       "f_exp": "This download link has expired or is not valid. Request a new one below: it arrives in a few seconds.",
-      "f_label": "Your email, to receive the download link",
-      "f_insights": "I also want Expert Insights, my articles by email. The subscription only counts after you confirm through the link.",
-      "f_note": "The link arrives in your email and is valid for 7 days. Your email is only used to send the link, unless you tick the box and confirm the subscription. <a href=\"/blog/privacidade/#materiais\">How your data is used</a>.",
+      "f_label": "Your email, to receive the download links",
+      "f_insights": "Also receive Expert Insights, my articles by email. The subscription only takes effect after you confirm through the link.",
+      "f_note": "The links arrive in your email and are valid for 7 days. Your email is only used to send the links, unless you tick the box and confirm the subscription.",
+      "f_priv": "How your data is used",
       "ver": "Version of Nov 23, 2026, Anthropic prices read on Nov 22, 2026. The material is in Portuguese.",
       "s1": "What is in the map",
       "c1_t": "1. Four triage questions",

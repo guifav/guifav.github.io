@@ -12,12 +12,13 @@ export function materialEmail(
   links: Array<{ rotulo: string; url: string }>,
   confirmLink: string | null,
 ): { subject: string; html: string; text: string } {
-  const subject = `Seu link: ${titulo}`;
+  const plural = links.length > 1;
+  const subject = `${plural ? 'Seus links' : 'Seu link'}: ${titulo}`;
   const text = [
     'Olá,',
     '',
-    `Aqui está o link para baixar o material que você pediu no guifav.dev: ${titulo}.`,
-    'O link vale por 7 dias.',
+    `Aqui ${plural ? 'estão os links' : 'está o link'} para baixar o material que você pediu no guifav.dev: ${titulo}.`,
+    `${plural ? 'Os links valem' : 'O link vale'} por 7 dias.`,
     '',
     ...links.flatMap((l) => [`${l.rotulo}: ${l.url}`]),
     '',
@@ -38,7 +39,7 @@ export function materialEmail(
 <body style="margin:0;padding:24px;background:#f6f6f4;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1a1a1a">
 <div style="max-width:520px;margin:0 auto;background:#ffffff;border-radius:12px;padding:32px">
 <p style="margin:0 0 16px;font-size:16px;line-height:1.5">Olá,</p>
-<p style="margin:0 0 16px;font-size:16px;line-height:1.5">Aqui está o link para baixar o material que você pediu no guifav.dev: <strong>${esc(titulo)}</strong>. O link vale por 7 dias.</p>
+<p style="margin:0 0 16px;font-size:16px;line-height:1.5">Aqui ${plural ? 'estão os links' : 'está o link'} para baixar o material que você pediu no guifav.dev: <strong>${esc(titulo)}</strong>. ${plural ? 'Os links valem' : 'O link vale'} por 7 dias.</p>
 ${botoes}
 ${insights}
 <p style="margin:24px 0 0;font-size:14px;line-height:1.5;color:#555555">Este email foi enviado para <strong>${esc(email)}</strong> porque alguém pediu o material com este endereço. Se não foi você, ignore: nada mais será enviado.</p>

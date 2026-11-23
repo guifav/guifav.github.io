@@ -92,7 +92,9 @@ test('M3: o mapa de decisão manda um link por arquivo', async () => {
   const s = setup();
   const r = await s.run(pedir({ ...ok, material: 'mapa-decisao-ia' }));
   assert.equal(loc(r), 'https://guifav.dev/mapa-decisao-ia/enviado/');
-  const l = links(emails(s.calls)[0].body.html);
+  const b = emails(s.calls)[0].body;
+  assert.equal(b.subject, 'Seus links: Mapa de decisão: RAG, Text-to-SQL ou contexto longo');
+  const l = links(b.html);
   assert.deepEqual(l.map((u) => new URL(u).searchParams.get('f')), ['mapa-decisao-pdf', 'conta-custo-por-pergunta']);
 });
 
@@ -129,6 +131,8 @@ test('M7: link válido entrega o arquivo como anexo, sem cache', async () => {
   assert.equal(r.headers.get('content-type'), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   assert.equal(r.headers.get('content-disposition'), 'attachment; filename="planilha-custos-ia.xlsx"');
   assert.equal(r.headers.get('cache-control'), 'private, no-store');
+  assert.equal(r.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(r.headers.get('referrer-policy'), 'no-referrer');
   assert.equal(await r.text(), 'conteudo:planilha-custos-ia');
 });
 
