@@ -444,15 +444,19 @@ class SyncTest(unittest.TestCase):
         self.assertEqual((f.twenty_writes(), f.d1_writes()), ([], []))
 
     def test_invalid_or_endless_conversion_listing_writes_nothing(self):
-        cases = {
-            "sem lista": lambda q: (200, {"data": {}, "pageInfo": {"hasNextPage": False}}),
-            "sem pageInfo": lambda q: (200, {"data": {"siteConversions": []}}),
-            "cursor repetido": lambda q: (200, {"data": {"siteConversions": []}, "pageInfo": {"hasNextPage": True, "endCursor": "c"}}),
+        cases = {  # o motivo esperado de cada recusa: um mutante que troca uma guarda pela outra também cai
+            "sem lista": (lambda q: (200, {"data": {}, "pageInfo": {"hasNextPage": False}}), "listagem de siteConversions inválida"),
+            "sem pageInfo": (lambda q: (200, {"data": {"siteConversions": []}}), "listagem de siteConversions inválida"),
+            "cursor repetido": (lambda q: (200, {"data": {"siteConversions": []}, "pageInfo": {"hasNextPage": True, "endCursor": "c"}}),
+                                "sem progresso"),
+            "sem fim": (lambda q: (200, {"data": {"siteConversions": []},
+                                         "pageInfo": {"hasNextPage": True, "endCursor": q.get("starting_after", "") + "x"}}),
+                        "paginação sem fim"),
         }
-        for why, listing in cases.items():
+        for why, (listing, reason) in cases.items():
             f = Fake(people=[person("p1", "a@x.com")], schema=True, listing=listing)
             f.add(1, "a@x.com")
-            with self.assertRaises(S.SyncError, msg=why):
+            with self.assertRaisesRegex(S.SyncError, reason, msg=why):
                 run(f, apply=True)
             self.assertEqual((f.twenty_writes(), f.d1_writes()), ([], []), why)
 
