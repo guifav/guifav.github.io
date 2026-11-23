@@ -920,7 +920,8 @@ def check_tracking(rel: str, html: str) -> list[str]:
         problems.append(f"{rel}: generate_lead com data-material-id {t.ga_materials}, esperado [{lead!r}]")
     # Formulário de material (issue #99): data-ga-client-id e o campo oculto ga_cid, que o track.js preenche no envio.
     if any(rel == f"{m}/index.html" for m in MATERIALS):
-        forms = [f for f in re.findall(r"<form\b[^>]*>.*?</form>", html, flags=re.S | re.I)
+        # Só HTML visível: formulário ou campo dentro de comentário não conta.
+        forms = [f for f in re.findall(r"<form\b[^>]*>.*?</form>", _visible_html(html), flags=re.S | re.I)
                  if 'action="https://insights.guifav.dev/material"' in f]
         if len(forms) != 1:
             problems.append(f"{rel}: esperado um formulário de material, achados {len(forms)}")

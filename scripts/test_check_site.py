@@ -1144,6 +1144,8 @@ class TrackingTest(unittest.TestCase):
             "sem campo": form.format(attr="data-ga-client-id ", cid=""),
             "campo duas vezes": form.format(attr="data-ga-client-id ", cid=cid * 2),
             "sem formulário": "",
+            "formulário comentado": "<!-- " + form.format(attr="data-ga-client-id ", cid=cid) + " -->",
+            "campo comentado": form.format(attr="data-ga-client-id ", cid="<!-- " + cid + " -->"),
         }.items():
             with self.subTest(name=name):
                 self.assertTrue(any("formulário de material" in p for p in self.check(self.doc(body), rel=rel)), name)
