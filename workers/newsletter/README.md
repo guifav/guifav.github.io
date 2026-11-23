@@ -6,6 +6,10 @@ Inscrição da newsletter do blog guifav.dev (issue #21, parte A). Recebe o form
 | --- | --- |
 | `POST /subscribe` | Confere a origem, aplica o limite por IP, confere o Turnstile, valida o email, aplica o limite por endereço e manda o email com o link assinado. Responde sempre com 303 para `/blog/inscricao-enviada/`, exceto com Turnstile reprovado (`/blog/assinar/#erro-verificacao`). |
 | `GET /confirm` | Valida o link (HMAC-SHA256, 48 h), cria ou reativa o contato no segmento, grava a propriedade `site_confirmed_at` e redireciona para `/blog/inscricao-confirmada/`. Link inválido ou expirado: `/blog/inscricao-invalida/`. |
+| `POST /material` | Formulário das páginas de material do canal @guifav (`/planilha-custos-ia/`, `/mapa-decisao-ia/`). Confere a origem, o limite por IP, o Turnstile, o email e o limite por endereço (chave `material:<email>`), e manda pelo Resend, de `MATERIAL_FROM`, um email com um link assinado por arquivo (7 dias) e, só se a caixa `insights=sim` veio marcada, o link de confirmação da lista. Não cria contato. Responde 303 para `/<material>/enviado/`, exceto com Turnstile reprovado (`/<material>/#erro-verificacao`). |
+| `GET /material/download` | Confere o link (HMAC-SHA256 com prefixo `m1` e o id do arquivo: nunca vale como confirmação, e o link de um arquivo não abre outro) e devolve o arquivo como anexo, sem cache. Link inválido ou expirado: `/<material>/#link-expirado`. |
+
+Os materiais ficam em `materiais/` e entram no Worker como módulos de dados (`[[rules]]` no `wrangler.toml`, ligados em `src/worker.ts`); o site não tem cópia pública deles. O catálogo (id, título, arquivos) está em `src/materiais.ts`. Para trocar um arquivo, substitua-o em `materiais/` e faça o deploy. O registro de quem pediu cada material é o log de envios do Resend, com as tags `material` e `insights`.
 
 `site_confirmed_at` registra o opt-in pelo site. A sincronização com o export do Substack (`blog-src/scripts/import_subscribers.py --sync`) nunca descadastra quem tem esse campo.
 
