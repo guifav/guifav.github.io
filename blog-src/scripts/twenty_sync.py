@@ -89,12 +89,13 @@ class Clients:
         self.env, self.t, self.sleep, self.now = env, transport, sleep, now
         self._last = None
 
-    def d1(self, sql: str) -> list[dict]:
+    def d1(self, sql: str, params: list | None = None) -> list[dict]:
         e = self.env
         url = (f"https://api.cloudflare.com/client/v4/accounts/{e['CLOUDFLARE_ACCOUNT_ID']}/d1/database/"
                f"{e['D1_DATABASE_ID']}/query")
+        payload = {"sql": sql} if params is None else {"sql": sql, "params": params}  # valores sempre por parâmetro
         st, data = self.t("POST", url, {"Authorization": f"Bearer {e['CLOUDFLARE_API_TOKEN']}", "Content-Type": "application/json",
-                                        "User-Agent": "guifav-twenty-sync"}, json.dumps({"sql": sql}))
+                                        "User-Agent": "guifav-twenty-sync"}, json.dumps(payload))
         if st != 200 or not data.get("success"):
             raise SyncError(f"D1 respondeu {st}")
         res = data.get("result") or []

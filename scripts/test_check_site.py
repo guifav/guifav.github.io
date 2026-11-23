@@ -1419,7 +1419,29 @@ class TrackingSourcesTest(unittest.TestCase):
                      "https://adssettings.google.com/", "https://tools.google.com/dlpage/gaoptout",
                      "https://policies.google.com/technologies/partner-sites"):
             self.assertIn(must, t)
-        self.assertIn("Atualizada em 23 de novembro de 2026.", t)  # #68: seção Cookies; 23/11: seção Materiais para baixar
+        self.assertIn("Atualizada em 24 de novembro de 2026.", t)  # #68: seção Cookies; 23/11: Materiais para baixar; 24/11: registro no CRM (#97)
+
+    def test_privacy_says_material_record_goes_to_the_crm(self):
+        # #97 fase 2: o registro dos materiais vai ao Twenty. O download cria o contato; o pedido sem download só entra
+        # se o email já for contato; a remoção apaga pedidos e downloads nos dois lugares e o contato só a pedido.
+        t = self.read("blog-src/src/pages/privacidade.astro")
+        for must in ("O registro vai também para o meu CRM",
+                     "o download cria lá um contato só com o seu email, se ele ainda não existir",
+                     "o pedido sem download só entra no CRM se o seu email já for um contato",
+                     "apago os pedidos e downloads, no Cloudflare e no CRM. O contato continua no CRM com o resumo que veio "
+                     "deles (os temas de interesse, a data da última ação, se o email foi comprovado e o identificador do "
+                     "Google Analytics), e só é apagado, com esse resumo, se você pedir.",
+                     # r1 (Astra P2): a data da página mudou; o início do registro é o deploy do Worker, não a versão.
+                     "Pedidos e downloads feitos antes das 17h31 de 23 de novembro de 2026 (horário de Brasília) não foram "
+                     "registrados.",
+                     "que guardo com o pedido, também no CRM,",
+                     '<h2 id="quem-processa">Quem processa</h2>', 'href="#quem-processa"',
+                     "o CRM onde ficam os inscritos da lista e o registro dos pedidos e downloads de materiais e das "
+                     "confirmações de inscrição"):
+            self.assertIn(must, t)
+        # r1 (Kimi P1): a remoção não apaga o contato nem o resumo dele; a frase antiga prometia mais do que o código faz.
+        self.assertNotIn("e também o contato, se você pedir", t)
+        self.assertNotIn("anteriores a esta versão da página", t)
 
 
 if __name__ == "__main__":
