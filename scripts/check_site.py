@@ -539,7 +539,10 @@ SITE_NAME = "Guilherme Favaron"
 TITLE_SEP = " | "
 TITLE_EXEMPT_PREFIXES = ("portfolio/mockups/",)
 # Grupos de conteúdo do GA4 (content_group), um por tipo de página; espelha CONTENT_GROUPS do consts.ts do blog.
-CONTENT_GROUPS = ("home", "portfolio", "insights-lista", "insights-artigo", "expert-insights")
+CONTENT_GROUPS = ("home", "portfolio", "insights-lista", "insights-artigo", "expert-insights", "materiais")
+# Páginas dos materiais do canal (issue #99): o formulário e a página de enviado de cada material do catálogo do Worker.
+MATERIALS = ("planilha-custos-ia", "mapa-decisao-ia")
+MATERIAL_PAGES = {f"{m}/{p}index.html" for m in MATERIALS for p in ("", "enviado/")}
 EXPERT_INSIGHTS_PAGES = {f"blog/{p}/index.html" for p in
                          ("assinar", "inscricao-enviada", "inscricao-confirmada", "inscricao-invalida", "privacidade")}
 
@@ -553,6 +556,8 @@ def expected_content_group(rel: str) -> str | None:
         return "insights-lista"
     if rel in EXPERT_INSIGHTS_PAGES:
         return "expert-insights"
+    if rel in MATERIAL_PAGES:
+        return "materiais"
     if re.fullmatch(r"blog/[a-z0-9][a-z0-9-]*/index\.html", rel):
         return "insights-artigo"
     return None
@@ -748,6 +753,7 @@ class _Tracking(HTMLParser):
         self.divs: list[bool] = []  # pilha de <div>: True para o div.post-body
         self.ctas: list[tuple[str, str, str | None]] = []
         self.ga_events: list[str] = []
+        self.ga_materials: list[str | None] = []  # data-material-id de cada marcador (generate_lead, issue #99)
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self.handle_starttag(tag, attrs)
@@ -762,6 +768,7 @@ class _Tracking(HTMLParser):
             self.divs.append("post-body" in (a.get("class") or "").split())
         if "data-ga-event" in a:
             self.ga_events.append(a["data-ga-event"] or "")
+            self.ga_materials.append(a.get("data-material-id"))
         if tag == "a" and a.get("href"):
             ev = cta_event(a["href"] or "")
             if ev:
@@ -904,9 +911,23 @@ def check_tracking(rel: str, html: str) -> list[str]:
                 problems.append(f"{rel}: {ev} com data-cta-location={loc!r} repetido na página")
             else:
                 seen.add((ev, loc))
-    expected = ["sign_up"] if rel == SIGNUP_PAGE else []
+    # generate_lead na página de enviado de cada material, com o id do material igual ao da pasta (issue #99).
+    lead = next((m for m in MATERIALS if rel == f"{m}/enviado/index.html"), None)
+    expected = ["sign_up"] if rel == SIGNUP_PAGE else ["generate_lead"] if lead else []
     if t.ga_events != expected:
         problems.append(f"{rel}: data-ga-event {t.ga_events}, esperado {expected}")
+    elif lead and t.ga_materials != [lead]:
+        problems.append(f"{rel}: generate_lead com data-material-id {t.ga_materials}, esperado [{lead!r}]")
+    # Formulário de material (issue #99): data-ga-client-id e o campo oculto ga_cid, que o track.js preenche no envio.
+    if any(rel == f"{m}/index.html" for m in MATERIALS):
+        # Só HTML visível: formulário ou campo dentro de comentário não conta.
+        forms = [f for f in re.findall(r"<form\b[^>]*>.*?</form>", _visible_html(html), flags=re.S | re.I)
+                 if 'action="https://insights.guifav.dev/material"' in f]
+        if len(forms) != 1:
+            problems.append(f"{rel}: esperado um formulário de material, achados {len(forms)}")
+        elif not re.match(r"<form\b[^>]*\sdata-ga-client-id[\s>=]", forms[0]) or \
+                forms[0].count('<input type="hidden" name="ga_cid" value="">') != 1:
+            problems.append(f"{rel}: formulário de material sem data-ga-client-id ou sem o campo oculto ga_cid")
     return problems
 
 

@@ -25,7 +25,7 @@ export function materialEmail(
     ...(confirmLink
       ? ['Você também pediu para receber os Expert Insights, os artigos de Guilherme Favaron por email. Para confirmar, abra o link abaixo. Ele vale por 48 horas.', '', confirmLink, '']
       : []),
-    `Este email foi enviado para ${email} porque alguém pediu o material com este endereço. Se não foi você, ignore: nada mais será enviado.`,
+    `Este email foi enviado para ${email} porque alguém pediu o material com este endereço, e o pedido fica registrado. Se não foi você, escreva para contact@guifav.dev que eu apago o registro.`,
   ].join('\n');
   const botoes = links
     .map((l) => `<p style="margin:0 0 12px"><a href="${esc(l.url)}" style="display:inline-block;background:#1a1a1a;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:8px;font-size:16px">${esc(l.rotulo)}</a></p>`)
@@ -42,7 +42,7 @@ export function materialEmail(
 <p style="margin:0 0 16px;font-size:16px;line-height:1.5">Aqui ${plural ? 'estão os links' : 'está o link'} para baixar o material que você pediu no guifav.dev: <strong>${esc(titulo)}</strong>. ${plural ? 'Os links valem' : 'O link vale'} por 7 dias.</p>
 ${botoes}
 ${insights}
-<p style="margin:24px 0 0;font-size:14px;line-height:1.5;color:#555555">Este email foi enviado para <strong>${esc(email)}</strong> porque alguém pediu o material com este endereço. Se não foi você, ignore: nada mais será enviado.</p>
+<p style="margin:24px 0 0;font-size:14px;line-height:1.5;color:#555555">Este email foi enviado para <strong>${esc(email)}</strong> porque alguém pediu o material com este endereço, e o pedido fica registrado. Se não foi você, escreva para <a href="mailto:contact@guifav.dev" style="color:inherit">contact@guifav.dev</a> que eu apago o registro.</p>
 </div>
 </body></html>`;
   return { subject, html, text };

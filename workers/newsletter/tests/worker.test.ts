@@ -37,7 +37,7 @@ type Opts = {
   topic?: 'opt_in' | 'opt_out'; // estado do contato existente no tópico
   throwOn?: string;
   badJsonOn?: string;
-  d1Falha?: RegExp; d1Pendura?: RegExp; d1Porta?: Promise<void>;
+  d1Falha?: RegExp; d1Pendura?: RegExp; d1Porta?: Promise<void>; semGa4?: boolean; ga4Status?: number | 'throw';
 };
 
 function setup(opts: Opts = {}) {
@@ -65,6 +65,7 @@ function setup(opts: Opts = {}) {
       if (opts.turnstile instanceof Error) throw opts.turnstile;
       return Response.json(opts.turnstile ?? { success: true, hostname: 'guifav.dev' });
     }
+    if (url.startsWith('https://www.google-analytics.com/mp/collect?')) return new Response(null, { status: 204 });
     if (url === 'https://api.resend.com/emails') {
       return opts.emailStatus ? new Response('falha', { status: opts.emailStatus }) : Response.json({ id: 'email-1' });
     }
@@ -135,6 +136,8 @@ function setup(opts: Opts = {}) {
     RL_EMAIL: { limit: async ({ key }) => (rl.push('email:' + key), { success: opts.rlEmail ?? true }) },
     RL_IP: { limit: async ({ key }) => (rl.push('ip:' + key), { success: opts.rlIp ?? true }) },
     DB: db,
+    GA4_MEASUREMENT_ID: tomlVar('GA4_MEASUREMENT_ID'),
+    GA4_API_SECRET: opts.semGa4 ? undefined : 'mp_teste_segredo',
   };
   let clock = NOW;
   const run = (req: Request) => handle(req, env, { fetch: fetchFn as typeof fetch, now: () => clock, waitUntil });
@@ -359,7 +362,7 @@ test('A7: corpo grande demais é recusado', async () => {
 test('A8: wrangler.toml sem segredos e com os nomes dos segredos documentados', () => {
   const toml = readFileSync(new URL('../wrangler.toml', import.meta.url), 'utf-8');
   assert.doesNotMatch(toml, /re_[A-Za-z0-9]{8,}|0x[0-9A-Fa-f]{20,}|RESEND_API_KEY\s*=|TURNSTILE_SECRET\s*=|CONFIRM_SECRET\s*=/);
-  for (const k of ['RESEND_API_KEY', 'TURNSTILE_SECRET', 'CONFIRM_SECRET']) assert.match(toml, new RegExp(`#.*${k}`));
+  for (const k of ['RESEND_API_KEY', 'TURNSTILE_SECRET', 'CONFIRM_SECRET', 'GA4_API_SECRET']) assert.match(toml, new RegExp(`#.*${k}`));
 });
 
 test('A8: segredo de confirmação curto demais derruba o Worker em vez de assinar fraco', async () => {
@@ -501,7 +504,7 @@ test('A8: nenhum arquivo do Worker atribui segredo, com chave TOML entre aspas o
   };
   walk(root);
   assert.ok(files.some((f) => f.endsWith('wrangler.toml')));
-  const secret = /^\s*["']?(RESEND_API_KEY|TURNSTILE_SECRET|CONFIRM_SECRET)["']?\s*[=:]\s*["'][^"']+/m;
+  const secret = /^\s*["']?(RESEND_API_KEY|TURNSTILE_SECRET|CONFIRM_SECRET|GA4_API_SECRET)["']?\s*[=:]\s*["'][^"']+/m;
   for (const f of files) {
     const t = readFileSync(f, 'utf-8');
     assert.doesNotMatch(t, secret, f);
@@ -611,7 +614,7 @@ test('C7: /confirm concluído grava uma conversão newsletter_confirm; o mesmo l
   assert.deepEqual(c[0], {
     id: createHash('sha256').update(`newsletter_confirm\n${new URLSearchParams(q).get('s')}`).digest('hex'), email: 'leitor@exemplo.com',
     action: 'newsletter_confirm', material: null, interests: JSON.stringify([{ id: 'EXPERT_INSIGHTS', rotulo: 'Expert Insights' }]),
-    occurred_at: new Date(NOW).toISOString(), synced_at: null,
+    occurred_at: new Date(NOW).toISOString(), synced_at: null, verified: 1, ga_client_id: null, request_id: null, file: null,
   });
   assert.ok(!JSON.stringify(c).includes(new URLSearchParams(q).get('s')!), 'o D1 nunca guarda a assinatura do link');
 });

@@ -812,11 +812,13 @@ class TitleAndGroupTest(unittest.TestCase):
                        ("blog/inscricao-confirmada/index.html", "expert-insights"),
                        ("blog/inscricao-invalida/index.html", "expert-insights"),
                        ("blog/o-exame-virou-conspiracao/index.html", "insights-artigo"),
+                       ("planilha-custos-ia/index.html", "materiais"), ("mapa-decisao-ia/enviado/index.html", "materiais"),
+                       ("planilha-custos-ia/x/index.html", None),
                        ("llm-ranking/index.html", None), ("blog/pagina/x/index.html", None),
                        ("blog/a/b/index.html", None)):
             with self.subTest(rel=rel):
                 self.assertEqual(E(rel), g)
-        self.assertEqual(set(C.CONTENT_GROUPS), {"home", "portfolio", "insights-lista", "insights-artigo", "expert-insights"})
+        self.assertEqual(set(C.CONTENT_GROUPS), {"home", "portfolio", "insights-lista", "insights-artigo", "expert-insights", "materiais"})
 
     def test_group_literal_and_define_vars(self):
         title = "<title>Guilherme Favaron | Builder e CTO</title>"
@@ -929,7 +931,7 @@ class ClaritySourcesTest(unittest.TestCase):
         return (self.REPO / rel).read_text(encoding="utf-8")
 
     def test_root_pages(self):
-        for rel in ("index.html", "portfolio/index.html"):
+        for rel in ("index.html", "portfolio/index.html", *sorted(C.MATERIAL_PAGES)):
             with self.subTest(rel=rel):
                 t = self.read(rel)
                 self.assertIn(C.GA4_TAG, t)
@@ -944,6 +946,8 @@ class ClaritySourcesTest(unittest.TestCase):
 
     def test_forms_masked(self):
         self.assertIn('action="https://insights.guifav.dev/subscribe" data-clarity-mask="true"', self.read("index.html"))
+        for m in C.MATERIALS:
+            self.assertIn('data-ga-client-id data-clarity-mask="true"', self.read(f"{m}/index.html"))
         self.assertIn('data-clarity-mask="true"', self.read("blog-src/src/components/SubscribeForm.astro"))
 
     def test_privacy_mentions_clarity(self):
@@ -1128,6 +1132,42 @@ class TrackingTest(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertTrue(any("data-ga-event" in p for p in self.check(self.doc(body), rel=rel)), name)
 
+    def test_material_form_carries_ga_client_id(self):
+        # Issue #99: o formulário de material leva data-ga-client-id e o campo oculto ga_cid, uma vez.
+        rel = "planilha-custos-ia/index.html"
+        form = ('<form id="receber" {attr}method="post" action="https://insights.guifav.dev/material">'
+                '<input type="hidden" name="material" value="planilha-custos-ia">{cid}</form>')
+        cid = '<input type="hidden" name="ga_cid" value="">'
+        self.assertEqual(self.check(self.doc(form.format(attr="data-ga-client-id ", cid=cid)), rel=rel), [])
+        for name, body in {
+            "sem atributo": form.format(attr="", cid=cid),
+            "sem campo": form.format(attr="data-ga-client-id ", cid=""),
+            "campo duas vezes": form.format(attr="data-ga-client-id ", cid=cid * 2),
+            "sem formulário": "",
+            "formulário comentado": "<!-- " + form.format(attr="data-ga-client-id ", cid=cid) + " -->",
+            "campo comentado": form.format(attr="data-ga-client-id ", cid="<!-- " + cid + " -->"),
+        }.items():
+            with self.subTest(name=name):
+                self.assertTrue(any("formulário de material" in p for p in self.check(self.doc(body), rel=rel)), name)
+
+    def test_generate_lead_only_on_material_sent_pages_with_the_folder_id(self):
+        # Issue #99: generate_lead na página de enviado de cada material, com data-material-id igual ao da pasta.
+        lead = lambda m: f'<header data-ga-event="generate_lead" data-material-id="{m}">x</header>'
+        for m in C.MATERIALS:
+            self.assertEqual(self.check(self.doc(lead(m)), rel=f"{m}/enviado/index.html"), [], m)
+        enviado = "planilha-custos-ia/enviado/index.html"
+        for name, (rel, body) in {
+            "falta": (enviado, ""),
+            "duas vezes": (enviado, lead("planilha-custos-ia") * 2),
+            "outro material": (enviado, lead("mapa-decisao-ia")),
+            "sem id": (enviado, '<header data-ga-event="generate_lead">x</header>'),
+            "fora do enviado": ("planilha-custos-ia/index.html", lead("planilha-custos-ia")),
+            "home": ("index.html", lead("planilha-custos-ia")),
+        }.items():
+            with self.subTest(name=name):
+                self.assertTrue(any("data-ga-event" in p or "generate_lead" in p
+                                    for p in self.check(self.doc(body), rel=rel)), name)
+
 
 class GaHostGuardTest(unittest.TestCase):
     """#66: fora de guifav.dev o gtag.js não envia nada (prévias locais entravam como visita)."""
@@ -1198,6 +1238,7 @@ class GaHostGuardTest(unittest.TestCase):
         root = Path(__file__).resolve().parent.parent
         for rel, config in (("index.html", "gtag('config','G-K7Y87QNCX8'"),
                             ("portfolio/index.html", "gtag('config','G-K7Y87QNCX8'"),
+                            *((p, "gtag('config','G-K7Y87QNCX8'") for p in sorted(C.MATERIAL_PAGES)),
                             ("blog-src/src/layouts/Base.astro", "gtag('config', GA4_ID")):
             with self.subTest(rel=rel):
                 t = (root / rel).read_text(encoding="utf-8")
@@ -1294,7 +1335,7 @@ class ConsentSourcesTest(unittest.TestCase):
     def test_consent_js_same_version_everywhere(self):
         src = re.search(r"CONSENT_SRC = '([^']+)'", self.read("blog-src/src/consts.ts")).group(1)
         self.assertRegex(src, r"^/assets/consent\.js\?v=\d{12}$")
-        for rel in ("index.html", "portfolio/index.html"):
+        for rel in ("index.html", "portfolio/index.html", *sorted(C.MATERIAL_PAGES)):
             with self.subTest(rel=rel):
                 self.assertEqual(self.read(rel).count(f'<script src="{src}"></script>'), 1)
         self.assertEqual(self.read("blog-src/src/layouts/Base.astro").count(
@@ -1340,7 +1381,7 @@ class TrackingSourcesTest(unittest.TestCase):
         self.assertTrue(m)
         src = m.group(1)
         self.assertTrue(src.startswith(C.TRACK_PATH + "?v="))
-        for rel in ("index.html", "portfolio/index.html"):
+        for rel in ("index.html", "portfolio/index.html", *sorted(C.MATERIAL_PAGES)):
             with self.subTest(rel=rel):
                 t = self.read(rel)
                 self.assertEqual(t.count(f'<script src="{src}"></script>'), 1)
@@ -1362,8 +1403,8 @@ class TrackingSourcesTest(unittest.TestCase):
 
     def test_privacy_mentions_events(self):
         t = self.read("blog-src/src/pages/privacidade.astro")
-        self.assertIn("alguns cliques: contato, agendamento, links do rodapé, troca de idioma e de tema e a "
-                      "confirmação da inscrição (sem o email)", t)
+        self.assertIn("alguns cliques: contato, agendamento, links do rodapé, troca de idioma e de tema, a "
+                      "confirmação da inscrição e o pedido e o download de materiais (sem o email)", t)
 
     def test_privacy_discloses_google_ads(self):
         # #64: GA4 vinculado ao Google Ads com publicidade personalizada (Gui, 13/11/2026). A política diz o recurso,
