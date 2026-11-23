@@ -6,6 +6,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { handle, contactPath, normalizeEmail, type Env } from '../src/index.ts';
 import { signLink, verifyLink } from '../src/token.ts';
 import { confirmationEmail } from '../src/email.ts';
+import { conversionId } from '../src/conversoes.ts';
+import { d1, rows, capturaErros } from './d1.ts';
 
 const NOW = Date.UTC(2026, 10, 11, 12, 0, 0);
 const SECRET = 'segredo-de-teste-com-tamanho-suficiente-0123456789';
@@ -35,10 +37,12 @@ type Opts = {
   topic?: 'opt_in' | 'opt_out'; // estado do contato existente no tópico
   throwOn?: string;
   badJsonOn?: string;
+  d1Falha?: RegExp;
 };
 
 function setup(opts: Opts = {}) {
   const calls: Call[] = [];
+  const db = d1(opts.d1Falha);
   // Estado do contato no Resend, para provar o efeito e não só as chamadas.
   const exists = Boolean(opts.contact && opts.contact !== 'none');
   const state = { exists, unsubscribed: opts.contact === 'unsubscribed', topic: opts.topic ?? 'opt_in',
@@ -126,9 +130,10 @@ function setup(opts: Opts = {}) {
     TURNSTILE_HOSTNAME: tomlVar('TURNSTILE_HOSTNAME'),
     RL_EMAIL: { limit: async ({ key }) => (rl.push('email:' + key), { success: opts.rlEmail ?? true }) },
     RL_IP: { limit: async ({ key }) => (rl.push('ip:' + key), { success: opts.rlIp ?? true }) },
+    DB: db,
   };
   const run = (req: Request) => handle(req, env, { fetch: fetchFn as typeof fetch, now: () => NOW });
-  return { env, run, calls, rl, state };
+  return { env, run, calls, rl, state, db: db.raw };
 }
 
 function subscribe(fields: Record<string, string>, headers: Record<string, string> = {}) {
@@ -582,4 +587,48 @@ test('nome da lista: Expert Insights, de Guilherme Favaron, sem "newsletter" nem
     assert.doesNotMatch(body, /newsletter/i);
     assert.doesNotMatch(body, /IA Aplicada/);
   }
+});
+
+// ---------------------------------------------------------------- Conversões (issue #97)
+
+const confirmar = async (q: string) => new Request(`https://insights.guifav.dev/confirm?${q}`);
+
+test('C7: /confirm concluído grava uma conversão newsletter_confirm; o mesmo link aberto de novo não duplica', async () => {
+  const s = setup({ contact: 'none' });
+  const q = await signLink('leitor@exemplo.com', NOW, SECRET);
+  assert.equal(loc(await s.run(await confirmar(q))), 'https://guifav.dev/blog/inscricao-confirmada/');
+  assert.equal(loc(await s.run(await confirmar(q))), 'https://guifav.dev/blog/inscricao-confirmada/');
+  const c = rows(s.db, 'conversions');
+  assert.equal(c.length, 1);
+  assert.deepEqual(c[0], {
+    id: await conversionId('newsletter_confirm', new URLSearchParams(q).get('s')!), email: 'leitor@exemplo.com',
+    action: 'newsletter_confirm', material: '', interests: JSON.stringify([{ id: 'EXPERT_INSIGHTS', rotulo: 'Expert Insights' }]),
+    occurred_at: new Date(NOW).toISOString(), synced_at: '',
+  });
+});
+
+test('C7: confirmação que falha (502) ou link inválido não grava conversão', async () => {
+  const falha = setup({ createStatus: 500 });
+  assert.equal((await falha.run(await confirmar(await signLink('leitor@exemplo.com', NOW, SECRET)))).status, 502);
+  assert.equal(rows(falha.db, 'conversions').length, 0);
+  const invalido = setup({ contact: 'none' });
+  await invalido.run(await confirmar('e=x&x=1&s=y'));
+  assert.equal(rows(invalido.db, 'conversions').length, 0);
+});
+
+test('C7: D1 fora do ar não derruba a confirmação, e o log não leva o email', async () => {
+  const s = setup({ contact: 'none', d1Falha: /conversions/ });
+  let r: Response | undefined;
+  const erros = await capturaErros(async () => { r = await s.run(await confirmar(await signLink('leitor@exemplo.com', NOW, SECRET))); });
+  assert.equal(loc(r!), 'https://guifav.dev/blog/inscricao-confirmada/');
+  assert.equal(erros.length, 1);
+  assert.match(erros[0], /^conversão não gravada \(newsletter_confirm\)/);
+  assert.ok(!erros.join('\n').includes('leitor@exemplo.com'));
+});
+
+test('C8: o wrangler.toml liga o mesmo D1 do painel, com o binding DB', () => {
+  const admin = readFileSync(new URL('../../admin/wrangler.toml', import.meta.url), 'utf-8');
+  const bloco = (t: string) => t.match(/\[\[d1_databases\]\]\nbinding = "DB"\ndatabase_name = "([^"]+)"\ndatabase_id = "([^"]+)"/)?.slice(1);
+  assert.ok(bloco(TOML), 'binding DB ausente do wrangler.toml do newsletter');
+  assert.deepEqual(bloco(TOML), bloco(admin));
 });

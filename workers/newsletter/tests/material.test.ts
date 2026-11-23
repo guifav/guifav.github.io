@@ -5,7 +5,9 @@ import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
 import { handle, type Env } from '../src/index.ts';
 import { signLink, signMaterialLink, MATERIAL_TTL_MS } from '../src/token.ts';
-import { MATERIAIS } from '../src/materiais.ts';
+import { MATERIAIS, INTERESSES } from '../src/materiais.ts';
+import { conversionId } from '../src/conversoes.ts';
+import { d1, rows, capturaErros } from './d1.ts';
 
 const NOW = Date.UTC(2026, 10, 23, 12, 0, 0);
 const SECRET = 'segredo-de-teste-com-tamanho-suficiente-0123456789';
@@ -18,9 +20,10 @@ const tomlVar = (k: string) => {
 
 type Call = { url: string; method: string; body: any };
 
-function setup(opts: { turnstile?: unknown; rlEmail?: boolean; rlIp?: boolean; emailStatus?: number; now?: number } = {}) {
+function setup(opts: { turnstile?: unknown; rlEmail?: boolean; rlIp?: boolean; emailStatus?: number; now?: number; d1Falha?: RegExp } = {}) {
   const calls: Call[] = [];
   const rl: string[] = [];
+  const db = d1(opts.d1Falha);
   const fetchFn = async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
     const method = init?.method ?? 'GET';
@@ -39,11 +42,12 @@ function setup(opts: { turnstile?: unknown; rlEmail?: boolean; rlIp?: boolean; e
     WORKER_URL: tomlVar('WORKER_URL'), TURNSTILE_HOSTNAME: tomlVar('TURNSTILE_HOSTNAME'),
     RL_EMAIL: { limit: async ({ key }) => (rl.push('email:' + key), { success: opts.rlEmail ?? true }) },
     RL_IP: { limit: async ({ key }) => (rl.push('ip:' + key), { success: opts.rlIp ?? true }) },
+    DB: db,
   };
   const bytes: Record<string, ArrayBuffer> = Object.fromEntries(
     MATERIAIS.flatMap((m) => m.arquivos).map((a) => [a.id, new TextEncoder().encode(`conteudo:${a.id}`).buffer as ArrayBuffer]));
   const run = (req: Request) => handle(req, env, { fetch: fetchFn as typeof fetch, now: () => opts.now ?? NOW, file: async (id) => bytes[id] ?? null });
-  return { run, calls, rl, env };
+  return { run, calls, rl, env, db: db.raw };
 }
 
 const pedir = (fields: Record<string, string>, headers: Record<string, string> = {}) =>
@@ -163,5 +167,101 @@ test('M9: o deploy leva os arquivos de todos os materiais do catálogo', () => {
     assert.ok(worker.includes(`'${a.id}':`), `worker.ts não liga o arquivo ${a.id}`);
     assert.ok(worker.includes(`../materiais/${a.nome}`), `worker.ts não importa ${a.nome}`);
     assert.ok(existsSync(new URL(`../materiais/${a.nome}`, import.meta.url)), `materiais/${a.nome} ausente`);
+  }
+});
+
+// ---------------------------------------------------------------- Conversões (issue #97)
+
+const sig = (q: string) => new URLSearchParams(q).get('s')!;
+
+test('C1: o clique no link grava a conversão com email, material e interesses; o mesmo link aberto de novo não duplica', async () => {
+  const s = setup();
+  const q = await signMaterialLink('mapa-decisao-pdf', 'leitor@exemplo.com', NOW, SECRET);
+  const erros = await capturaErros(async () => {
+    assert.equal((await s.run(baixar(q))).status, 200);
+    assert.equal((await s.run(baixar(q))).status, 200);
+  });
+  assert.deepEqual(erros, [], 'o segundo clique é ignorado em silêncio, não vira erro de chave duplicada');
+  const c = rows(s.db, 'conversions');
+  assert.equal(c.length, 1);
+  assert.deepEqual(c[0], {
+    id: await conversionId('material_download', sig(q)), email: 'leitor@exemplo.com', action: 'material_download',
+    material: 'mapa-decisao-ia', interests: JSON.stringify([INTERESSES.ARQUITETURA_IA, INTERESSES.CUSTO_IA]),
+    occurred_at: new Date(NOW).toISOString(), synced_at: '',
+  });
+});
+
+test('C1: dois pedidos do mesmo material em dias diferentes viram duas conversões da mesma pessoa', async () => {
+  const s = setup();
+  const dia = 24 * 3600e3;
+  await s.run(baixar(await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', NOW - 3 * dia, SECRET)));
+  await s.run(baixar(await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', NOW - dia, SECRET)));
+  const c = rows(s.db, 'conversions');
+  assert.equal(c.length, 2);
+  assert.deepEqual(c.map((x) => [x.email, x.material]), [['leitor@exemplo.com', 'planilha-custos-ia'], ['leitor@exemplo.com', 'planilha-custos-ia']]);
+});
+
+test('C2: o pedido sem clique só soma na contagem do dia, sem email em lugar nenhum do D1', async () => {
+  const s = setup();
+  await s.run(pedir(ok));
+  await s.run(pedir({ ...ok, email: 'outra@exemplo.com' }));
+  await s.run(pedir({ ...ok, material: 'mapa-decisao-ia' }));
+  assert.equal(rows(s.db, 'conversions').length, 0);
+  assert.deepEqual(rows(s.db, 'material_requests'), [
+    { material: 'planilha-custos-ia', day: '2026-11-23', count: 2 },
+    { material: 'mapa-decisao-ia', day: '2026-11-23', count: 1 },
+  ]);
+  const tudo = JSON.stringify(['conversions', 'material_requests'].map((t) => rows(s.db, t)));
+  assert.ok(!tudo.includes('@'));
+});
+
+test('C2: pedido barrado (Turnstile, limite, email inválido) não conta', async () => {
+  for (const o of [{ turnstile: { success: false } }, { rlEmail: false }, { rlIp: false }, { fields: { ...ok, email: 'sem-arroba' } }] as any[]) {
+    const s = setup(o);
+    await s.run(pedir(o.fields ?? ok));
+    assert.equal(rows(s.db, 'material_requests').length, 0, JSON.stringify(o));
+  }
+});
+
+test('C3: D1 fora do ar não impede o download nem o email do pedido, e o log não leva o email', async () => {
+  const s = setup({ d1Falha: /conversions|material_requests/ });
+  let r: Response | undefined;
+  const erros = await capturaErros(async () => {
+    r = await s.run(baixar(await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', NOW, SECRET)));
+    await s.run(pedir(ok));
+  });
+  assert.equal(r!.status, 200);
+  assert.equal(await r!.text(), 'conteudo:planilha-custos-ia');
+  assert.equal(emails(s.calls).length, 1);
+  assert.equal(erros.length, 2);
+  assert.match(erros[0], /^conversão não gravada \(material_download\): D1_ERROR/);
+  assert.match(erros[1], /^contagem do pedido não gravada: D1_ERROR/);
+  assert.ok(!erros.join('\n').includes('leitor@exemplo.com'));
+});
+
+test('C4: link inválido, expirado ou arquivo indisponível não gravam conversão', async () => {
+  const q = await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', NOW, SECRET);
+  const expirado = setup({ now: NOW + MATERIAL_TTL_MS + 60e3 });
+  await expirado.run(baixar(q));
+  assert.equal(rows(expirado.db, 'conversions').length, 0);
+  const adulterado = setup();
+  await adulterado.run(baixar(q.replace('f=planilha-custos-ia', 'f=mapa-decisao-pdf')));
+  assert.equal(rows(adulterado.db, 'conversions').length, 0);
+  // Arquivo que some do deploy: 500 e nenhuma conversão.
+  const s = setup();
+  const r = await handle(baixar(q), s.env, { fetch: fetch, now: () => NOW, file: async () => null });
+  assert.equal(r.status, 500);
+  assert.equal(rows(s.db, 'conversions').length, 0);
+});
+
+test('C5: todo material declara ao menos um interesse do catálogo, com id no formato das opções do Twenty', () => {
+  const ids = new Set(Object.values(INTERESSES).map((i) => i.id));
+  for (const [k, i] of Object.entries(INTERESSES)) {
+    assert.equal(i.id, k);
+    assert.match(i.id, /^[A-Z][A-Z0-9_]*$/);
+  }
+  for (const m of MATERIAIS) {
+    assert.ok(m.interesses.length > 0, `${m.id} sem interesse`);
+    for (const i of m.interesses) assert.ok(ids.has(i.id), `${m.id}: interesse ${i.id} fora do catálogo`);
   }
 });

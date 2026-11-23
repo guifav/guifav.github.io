@@ -5,17 +5,22 @@ Inscrição da newsletter do blog guifav.dev (issue #21, parte A). Recebe o form
 | Rota | O que faz |
 | --- | --- |
 | `POST /subscribe` | Confere a origem, aplica o limite por IP, confere o Turnstile, valida o email, aplica o limite por endereço e manda o email com o link assinado. Responde sempre com 303 para `/blog/inscricao-enviada/`, exceto com Turnstile reprovado (`/blog/assinar/#erro-verificacao`). |
-| `GET /confirm` | Valida o link (HMAC-SHA256, 48 h), cria ou reativa o contato no segmento, grava a propriedade `site_confirmed_at` e redireciona para `/blog/inscricao-confirmada/`. Link inválido ou expirado: `/blog/inscricao-invalida/`. |
-| `POST /material` | Formulário das páginas de material do canal @guifav (`/planilha-custos-ia/`, `/mapa-decisao-ia/`). Confere a origem, o limite por IP, o Turnstile, o email e o limite por endereço (chave `material:<email>`), e manda pelo Resend, de `MATERIAL_FROM`, um email com um link assinado por arquivo (7 dias) e, só se a caixa `insights=sim` veio marcada, o link de confirmação da lista. Não cria contato. Responde 303 para `/<material>/enviado/`, exceto com Turnstile reprovado (`/<material>/#erro-verificacao`). |
-| `GET /material/download` | Confere o link (HMAC-SHA256 com prefixo `m1` e o id do arquivo: nunca vale como confirmação, e o link de um arquivo não abre outro) e devolve o arquivo como anexo, sem cache. Link inválido ou expirado: `/<material>/#link-expirado`. |
+| `GET /confirm` | Valida o link (HMAC-SHA256, 48 h), cria ou reativa o contato no segmento, grava a propriedade `site_confirmed_at` e a conversão `newsletter_confirm` (issue #97) e redireciona para `/blog/inscricao-confirmada/`. Link inválido ou expirado: `/blog/inscricao-invalida/`. |
+| `POST /material` | Formulário das páginas de material do canal @guifav (`/planilha-custos-ia/`, `/mapa-decisao-ia/`). Confere a origem, o limite por IP, o Turnstile, o email e o limite por endereço (chave `material:<email>`), soma 1 em `material_requests` (material e dia, sem email) e manda pelo Resend, de `MATERIAL_FROM`, um email com um link assinado por arquivo (7 dias) e, só se a caixa `insights=sim` veio marcada, o link de confirmação da lista. Não cria contato. Responde 303 para `/<material>/enviado/`, exceto com Turnstile reprovado (`/<material>/#erro-verificacao`). |
+| `GET /material/download` | Confere o link (HMAC-SHA256 com prefixo `m1` e o id do arquivo: nunca vale como confirmação, e o link de um arquivo não abre outro) grava a conversão `material_download` (issue #97) e devolve o arquivo como anexo, sem cache. Link inválido ou expirado: `/<material>/#link-expirado`. |
 
-Os materiais ficam em `materiais/` e entram no Worker como módulos de dados (`[[rules]]` no `wrangler.toml`, ligados em `src/worker.ts`); o site não tem cópia pública deles. O catálogo (id, título, arquivos) está em `src/materiais.ts`. Para trocar um arquivo, substitua-o em `materiais/` e faça o deploy. O registro de quem pediu cada material é o log de envios do Resend, com as tags `material` e `insights`.
+Os materiais ficam em `materiais/` e entram no Worker como módulos de dados (`[[rules]]` no `wrangler.toml`, ligados em `src/worker.ts`); o site não tem cópia pública deles. O catálogo (id, título, arquivos, interesses) está em `src/materiais.ts`. Para trocar um arquivo, substitua-o em `materiais/` e faça o deploy. O registro de quem pediu cada material é o log de envios do Resend, com as tags `material` e `insights`.
 
 `site_confirmed_at` registra o opt-in pelo site. A sincronização com o export do Substack (`blog-src/scripts/import_subscribers.py --sync`) nunca descadastra quem tem esse campo.
 
 Os limites (cerca de 5 pedidos por IP e 1 email por endereço a cada 60 s, no `wrangler.toml`) usam o rate limit nativo do Workers, que é aproximado e conta separado em cada localidade do Cloudflare. Junto com o Turnstile, eles contêm abuso, mas não são um teto global garantido.
 
-Não há banco: o link carrega o email e a validade, e a assinatura prova a origem.
+O link carrega o email e a validade, e a assinatura prova a origem. O único estado é o D1 `blog-admin` (binding `DB`, esquema nas migrações do painel), com as conversões do site (issue #97):
+
+- `conversions`: uma linha por ação com email comprovado pelo link assinado (`material_download`, `newsletter_confirm`), com o material, os interesses do catálogo naquele momento e a data. O `id` é o SHA-256 da ação com a assinatura do link: abrir de novo o mesmo link não duplica, e um pedido novo gera outra linha. `synced_at` fica vazio até a fase 2 da #97 levar a linha ao Twenty.
+- `material_requests`: pedidos por material e por dia, sem email. O pedido sem clique não comprova o endereço, então só a contagem fica.
+- A gravação é de melhor esforço: se o D1 falhar, o arquivo é entregue e a confirmação conclui do mesmo jeito, e o log registra a falha sem o email.
+- Um verificador de links do provedor de email que abra o link de download conta como clique. O email só vai ao endereço digitado, então a conversão ainda é dessa caixa de entrada; o risco aceito é alguém digitar o email de outra pessoa e o verificador dela abrir o link.
 
 ## Testes
 
@@ -28,6 +33,8 @@ Node 22.18 ou mais novo (TypeScript direto pelo `node --test`). Os testes rodam 
 ## Deploy
 
 O deploy é manual, depois do merge, e não está no CI. O DNS de `guifav.dev` só muda com ok do Gui.
+
+**Conversões (issue #97):** antes do `wrangler deploy` deste Worker, aplique a migração `0004_conversions.sql` no D1, a partir de `workers/admin/`: `npx wrangler@4 d1 migrations apply blog-admin --remote`. Sem as tabelas, o Worker funciona, mas cada download e confirmação gera um erro no log e nenhuma conversão é gravada. Depois do deploy, baixe um material com um endereço legível e confira a linha com `npx wrangler@4 d1 execute blog-admin --remote --command "SELECT action, material, occurred_at FROM conversions ORDER BY occurred_at DESC LIMIT 1"`; apague a linha de teste em seguida.
 
 1. **Segmento** "IA Aplicada" no Resend. Copie o id para `SEGMENT_ID` no `wrangler.toml`. Com `SEGMENT_ID` vazio, o Worker responde 500 e não cadastra ninguém.
    **Tópico** "Expert Insights, de Guilherme Favaron" no Resend (antes "IA Aplicada", renomeado em #55) (privado, `default_subscription` opt_in), com o id em `TOPIC_ID`. O descadastro da newsletter vale só para o tópico, e não para todos os broadcasts da conta. Quem confirma de novo pelo site volta ao tópico: o `POST /contacts` leva `topics` com `opt_in`. Para um email que já existe, esse POST é upsert (201, mesmo id) e aplica status global, segmento, propriedades e tópico, conforme sondado na API em 2026-11-12. O caminho de reserva (reativar, tópico, segmento) só roda se a API recusar o POST com 409 ou 422. Com `TOPIC_ID` vazio, o Worker responde 500.
