@@ -27,10 +27,16 @@ Regras:
 - Linha malformada (ação, email, datas, interesses ou ids fora do formato que o Worker grava; o email com a mesma regra
   do `normalizeEmail` do Worker) não é gravada nem marcada, e é contada em `linha_invalida` (o wrapper alerta).
 - Lê e valida tudo (D1, metadados, Pessoas e Conversões) antes de qualquer escrita. A saída tem só contagens, nunca emails.
+- Lixeira do Twenty: a listagem padrão da REST esconde registros apagados pela interface, mas os campos únicos (eventoId
+  e o email principal da Pessoa) continuam valendo para eles. Por isso Pessoas e Conversões são lidas com a lixeira.
+  Conversão na lixeira conta como já existente (não é recriada; a linha é marcada). Email cuja única Pessoa está na
+  lixeira não ganha Pessoa nova nem Conversão: a linha fica pendente e conta em `pessoa_na_lixeira` (o wrapper alerta),
+  porque restaurar ou apagar de vez essa Pessoa é decisão humana.
 
 Remoção (direito do titular), --forget: lê UM email da entrada padrão (fora do histórico do shell e da lista de
-processos). As linhas do email no D1 são o diário da remoção: apaga no Twenty as Conversões cujos eventoId são os ids
-dessas linhas, relê o Twenty para provar que nenhuma sobrou e só então apaga as linhas no D1. Uma queda no meio deixa o
+processos). As linhas do email no D1 são o diário da remoção: apaga no Twenty (de vez, inclusive as que estão na
+lixeira) as Conversões cujos eventoId são os ids dessas linhas, relê o Twenty com a lixeira para provar que nenhuma
+sobrou e só então apaga as linhas no D1. Uma queda no meio deixa o
 D1 intacto, e repetir o comando conclui, mesmo que o email da Pessoa tenha mudado no CRM. A Pessoa e os campos site*
 dela ficam como estão (decisão do Gui, 2026-11-23). Simulação sem --apply.
 
@@ -105,6 +111,8 @@ GA_CID = re.compile(r"[0-9]{1,20}\.[0-9]{1,20}")  # o parseGaClientId de workers
 MAX_LABEL = 120
 MARK_CHUNK = 50  # ids por UPDATE no D1 (limite de 100 parâmetros por consulta)
 FORGET_MARK = "conversões apagadas"
+# Filtro da REST do Twenty que devolve ativos e lixeira juntos (conferido ao vivo na 2.32 com uma sonda descartável).
+WITH_TRASH = "or(deletedAt[is]:NULL,deletedAt[is]:NOT_NULL)"
 LOCK_DEFAULT = "/tmp/guifav-conversoes-sync.lock"
 
 
@@ -214,10 +222,11 @@ def read_metadata(c: TS.Clients) -> dict:
 
 
 def list_records(c: TS.Clients, plural: str) -> list[dict]:
-    """Listagem REST completa (mesmo contrato de paginação do twenty_sync.list_people)."""
+    """Listagem REST completa, com a lixeira (mesmo contrato de paginação do twenty_sync.list_people)."""
     out, cursor = [], ""
     for _ in range(TS.MAX_PAGES):
-        q = f"?limit={TS.PAGE}" + (f"&starting_after={urllib.parse.quote(cursor)}" if cursor else "")
+        q = (f"?limit={TS.PAGE}&filter={urllib.parse.quote(WITH_TRASH)}"
+             + (f"&starting_after={urllib.parse.quote(cursor)}" if cursor else ""))
         data = c.twenty("GET", f"/rest/{plural}{q}", op=f"listar {plural}")
         page = (data.get("data") or {}).get(plural)
         info = data.get("pageInfo")
@@ -234,11 +243,18 @@ def list_records(c: TS.Clients, plural: str) -> list[dict]:
 
 
 def people_by_email(people: list[dict]) -> dict[str, list[dict]]:
+    """Pessoas ativas por email, da mais antiga para a mais nova. As da lixeira ficam de fora (veja trashed_emails)."""
     idx: dict[str, list[dict]] = {}
     for p in sorted(people, key=lambda p: (iso_ms(p.get("createdAt") or "") or "9999", p["id"])):
+        if p.get("deletedAt"):
+            continue
         for e in TS._emails(p):
             idx.setdefault(e, []).append(p)
     return idx
+
+
+def trashed_emails(people: list[dict]) -> set[str]:
+    return {e for p in people if p.get("deletedAt") for e in TS._emails(p)}
 
 
 def _option_values(field: dict | None) -> list[str]:
@@ -340,17 +356,19 @@ def run(c: TS.Clients, *, apply: bool = False, out=None) -> Counter:
         else:
             rows.append(p)
     counts["pendentes_lidas"] = len(raw)
-    for k in ("linha_invalida", "pedido_sem_pessoa", "email_em_mais_de_uma_pessoa", "pessoas_a_criar", "pessoas_a_atualizar",
-              "conversoes_a_criar", "conversoes_ja_no_crm", "linhas_a_marcar"):
+    for k in ("linha_invalida", "pedido_sem_pessoa", "pessoa_na_lixeira", "email_em_mais_de_uma_pessoa", "pessoas_a_criar",
+              "pessoas_a_atualizar", "conversoes_a_criar", "conversoes_ja_no_crm", "conversoes_na_lixeira", "linhas_a_marcar"):
         counts[k] += 0  # sempre visíveis na saída
     if not rows:
         _report(counts, out, "nada pendente" if not raw else "só linhas inválidas; nada foi gravado")
         return counts
     meta = read_metadata(c)
-    people = TS.list_people(c)
+    people = list_records(c, "people")
     existing = list_records(c, PLURAL) if meta["conv_id"] else []
     known = {x.get("eventoId") for x in existing if x.get("eventoId")}
+    trashed_conv = {x.get("eventoId") for x in existing if x.get("eventoId") and x.get("deletedAt")}
     idx = people_by_email(people)
+    trashed = trashed_emails(people)
 
     # 2) Plano. Agrupa por Pessoa (dois emails da mesma Pessoa viram uma gravação só, calculada sobre todas as linhas
     # dela) e, para quem ainda não está no CRM, por email.
@@ -360,6 +378,9 @@ def run(c: TS.Clients, *, apply: bool = False, out=None) -> Counter:
     groups: OrderedDict[tuple, dict] = OrderedDict()
     for email, rs in by_email.items():
         persons = idx.get(email) or []
+        if not persons and email in trashed:
+            counts["pessoa_na_lixeira"] += len(rs)  # fica pendente: restaurar ou apagar de vez é decisão humana
+            continue
         if not persons and not any(r["verified"] for r in rs):
             counts["pedido_sem_pessoa"] += len(rs)  # fica pendente: só vira Conversão quando o email estiver no CRM
             continue
@@ -378,6 +399,7 @@ def run(c: TS.Clients, *, apply: bool = False, out=None) -> Counter:
         counts["pessoas_a_criar" if target is None else "pessoas_a_atualizar"] += 1 if (target is None or patch) else 0
         counts["conversoes_a_criar"] += len(new)
         counts["conversoes_ja_no_crm"] += len(rs) - len(new)
+        counts["conversoes_na_lixeira"] += sum(r["id"] in trashed_conv for r in rs)
         counts["linhas_a_marcar"] += len(rs)
         for r in rs:
             for i, lbl in r["interests"].items():
@@ -426,7 +448,7 @@ def forget(c: TS.Clients, email: str, *, apply: bool = False, out=None) -> Count
     # email atual da Pessoa no CRM.
     ids = {r["id"] for r in c.d1("SELECT id FROM conversions WHERE email = ?", [email])}
     meta = read_metadata(c)
-    persons = people_by_email(TS.list_people(c)).get(email) or []
+    persons = people_by_email(list_records(c, "people")).get(email) or []
     convs = [x for x in list_records(c, PLURAL) if x.get("eventoId") in ids] if meta["conv_id"] else []
     counts["d1_linhas"], counts["conversoes_no_crm"], counts["pessoas_mantidas"] = len(ids), len(convs), len(persons)
     if apply:

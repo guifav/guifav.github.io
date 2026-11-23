@@ -154,12 +154,20 @@ class Fake:
                     return self.listing(q)
             store, key = (self.people, "people") if u.path == "/rest/people" else (self.convs, "siteConversions")
             items = sorted(store.values(), key=lambda p: p["id"])
+            # Como o Twenty 2.32 (sonda ao vivo): sem filtro, a lixeira some da listagem; o filtro WITH_TRASH traz tudo.
+            if q.get("filter") is None:
+                items = [p for p in items if not p.get("deletedAt")]
+            elif q["filter"] != S.WITH_TRASH:
+                return 400, {"messages": ["filtro inesperado"]}
             if "starting_after" in q:
                 items = [p for p in items if p["id"] > q["starting_after"]]
             n = int(q["limit"])
             page = items[:n]
             return 200, {"data": {key: page}, "pageInfo": {"hasNextPage": len(items) > n, "endCursor": page[-1]["id"] if page else None}}
         if u.path == "/rest/people" and method == "POST":
+            # emails é campo único no Twenty, inclusive contra a lixeira
+            if any((p.get("emails") or {}).get("primaryEmail") == data["emails"]["primaryEmail"] for p in self.people.values()):
+                return 400, {"statusCode": 400, "error": "BadRequestException", "messages": ["A duplicate entry was detected"]}
             self.n += 1
             pid = f"new-{self.n:04d}"
             for k in data:
@@ -570,6 +578,37 @@ class SyncTest(unittest.TestCase):
         self.assertEqual((f.twenty_writes(), f.d1_writes()), ([], []))
         self.assertNotIn("gaClientId", f.conv_fields)
 
+    def test_trashed_conversion_is_not_recreated_and_the_row_is_marked(self):
+        # shadow review (P1 no d991fa2, 13c90f4 e 17008a6): a Conversão na lixeira some da listagem padrão, mas o eventoId
+        # único continua valendo; recriar dá 400 e travaria o sync.
+        f = Fake(people=[person("p1", "a@x.com")], schema=True)
+        f.convs["c-lixo"] = {"id": "c-lixo", "eventoId": hexid(1), "pessoaId": "p1", "deletedAt": "2026-11-24T00:00:00.000Z"}
+        f.add(1, "a@x.com")
+        f.add(2, "a@x.com", when="2026-11-24T11:00:00.000Z")
+        counts, _ = run(f, apply=True)
+        self.assertEqual((counts["conversoes_na_lixeira"], counts["conversoes_ja_no_crm"], counts["conversoes_a_criar"]), (1, 1, 1))
+        self.assertEqual(f.pending(), [])
+        self.assertEqual(sorted(c["eventoId"] for c in f.convs.values()), [hexid(1), hexid(2)])
+        self.assertTrue(f.convs["c-lixo"]["deletedAt"])  # continua na lixeira: o sync não restaura
+
+    def test_person_in_trash_holds_only_that_email(self):
+        # Pessoa na lixeira: o email principal continua único, então criar outra daria 400 e travaria o lote inteiro.
+        # A linha fica pendente e conta em pessoa_na_lixeira; o resto do lote segue.
+        f = Fake(people=[person("p1", "a@x.com", deletedAt="2026-11-24T00:00:00.000Z")])
+        f.add(1, "a@x.com")
+        f.add(2, "b@x.com")
+        counts, _ = run(f, apply=True)
+        self.assertEqual((counts["pessoa_na_lixeira"], f.pending()), (1, [hexid(1)]))
+        self.assertEqual(sorted(p["emails"]["primaryEmail"] for p in f.people.values()), ["a@x.com", "b@x.com"])
+        self.assertEqual([c["eventoId"] for c in f.convs.values()], [hexid(2)])
+        self.assertNotIn("siteInteresses", f.people["p1"])
+        # uma Pessoa ativa com o mesmo email ganha a conversão, mesmo havendo outra na lixeira
+        g = Fake(people=[person("p1", "a@x.com", deletedAt="2026-11-24T00:00:00.000Z", created="2025-01-01T00:00:00.000Z"),
+                         person("p2", "z@x.com", extra=["a@x.com"], created="2026-01-01T00:00:00.000Z")])
+        g.add(1, "a@x.com")
+        counts, _ = run(g, apply=True)
+        self.assertEqual((counts["pessoa_na_lixeira"], [c["pessoaId"] for c in g.convs.values()]), (0, ["p2"]))
+
     def test_many_rows_are_marked_in_chunks(self):
         f = Fake(people=[person("p1", "a@x.com")])
         for i in range(120):
@@ -653,6 +692,16 @@ class ForgetTest(unittest.TestCase):
         with self.assertRaisesRegex(S.SyncError, "o D1 ficou intacto"):
             forget(f, "a@x.com", apply=True)
         self.assertEqual(f.db.execute("SELECT count(*) FROM conversions WHERE email = 'a@x.com'").fetchone()[0], 2)
+
+    def test_forget_removes_conversions_in_the_trash_for_good(self):
+        # shadow review: a Conversão que alguém mandou para a lixeira também sai, de vez, antes do D1.
+        f = self.setup()
+        trashed = next(c for c in f.convs.values() if c["eventoId"] == hexid(1))
+        trashed["deletedAt"] = "2026-11-24T00:00:00.000Z"
+        counts, _ = forget(f, "a@x.com", apply=True)
+        self.assertEqual(counts["conversoes_no_crm"], 2)
+        self.assertEqual(sorted(conv_by_event(f)), [hexid(3), hexid(4)])
+        self.assertEqual(f.db.execute("SELECT count(*) FROM conversions WHERE email = 'a@x.com'").fetchone()[0], 0)
 
     def test_invalid_email_is_refused(self):
         f = self.setup()
