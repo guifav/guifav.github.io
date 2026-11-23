@@ -3,9 +3,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
-import { handle, type Env } from '../src/index.ts';
+import { handle, entrypoint, type Env } from '../src/index.ts';
 import { signLink, signMaterialLink, MATERIAL_TTL_MS } from '../src/token.ts';
-import { MATERIAIS } from '../src/materiais.ts';
+import { MATERIAIS, INTERESSES } from '../src/materiais.ts';
+import { createHash } from 'node:crypto';
+import { d1, rows, capturaErros, variantes } from './d1.ts';
 
 const NOW = Date.UTC(2026, 10, 23, 12, 0, 0);
 const SECRET = 'segredo-de-teste-com-tamanho-suficiente-0123456789';
@@ -18,9 +20,14 @@ const tomlVar = (k: string) => {
 
 type Call = { url: string; method: string; body: any };
 
-function setup(opts: { turnstile?: unknown; rlEmail?: boolean; rlIp?: boolean; emailStatus?: number; now?: number } = {}) {
+function setup(opts: { turnstile?: unknown; rlEmail?: boolean; rlIp?: boolean; emailStatus?: number; now?: number; d1Falha?: RegExp; d1Pendura?: RegExp; d1Porta?: Promise<void> } = {}) {
   const calls: Call[] = [];
   const rl: string[] = [];
+  const db = d1(opts.d1Falha, undefined, opts.d1Pendura, opts.d1Porta);
+  const pending: Promise<unknown>[] = [];
+  const waitUntil = (p: Promise<unknown>) => void pending.push(p);
+  // Espera o trabalho feito depois da resposta (o que o Cloudflare faria com ctx.waitUntil).
+  const settle = () => Promise.all(pending);
   const fetchFn = async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
     const method = init?.method ?? 'GET';
@@ -39,11 +46,14 @@ function setup(opts: { turnstile?: unknown; rlEmail?: boolean; rlIp?: boolean; e
     WORKER_URL: tomlVar('WORKER_URL'), TURNSTILE_HOSTNAME: tomlVar('TURNSTILE_HOSTNAME'),
     RL_EMAIL: { limit: async ({ key }) => (rl.push('email:' + key), { success: opts.rlEmail ?? true }) },
     RL_IP: { limit: async ({ key }) => (rl.push('ip:' + key), { success: opts.rlIp ?? true }) },
+    DB: db,
   };
   const bytes: Record<string, ArrayBuffer> = Object.fromEntries(
     MATERIAIS.flatMap((m) => m.arquivos).map((a) => [a.id, new TextEncoder().encode(`conteudo:${a.id}`).buffer as ArrayBuffer]));
-  const run = (req: Request) => handle(req, env, { fetch: fetchFn as typeof fetch, now: () => opts.now ?? NOW, file: async (id) => bytes[id] ?? null });
-  return { run, calls, rl, env };
+  let clock = opts.now ?? NOW;
+  const run = (req: Request) => handle(req, env, { fetch: fetchFn as typeof fetch, now: () => clock, file: async (id) => bytes[id] ?? null, waitUntil });
+  const avanca = (ms: number) => void (clock += ms);
+  return { run, calls, rl, env, db: db.raw, settle, pendentes: () => pending.length, avanca, rows: async (t: string) => (await settle(), rows(db.raw, t)), waitUntil };
 }
 
 const pedir = (fields: Record<string, string>, headers: Record<string, string> = {}) =>
@@ -164,4 +174,185 @@ test('M9: o deploy leva os arquivos de todos os materiais do catálogo', () => {
     assert.ok(worker.includes(`../materiais/${a.nome}`), `worker.ts não importa ${a.nome}`);
     assert.ok(existsSync(new URL(`../materiais/${a.nome}`, import.meta.url)), `materiais/${a.nome} ausente`);
   }
+});
+
+// ---------------------------------------------------------------- Conversões (issue #97)
+
+const sig = (q: string) => new URLSearchParams(q).get('s')!;
+// Valor esperado calculado à parte (node:crypto), sem a função testada.
+const idEsperado = (acao: string, s: string) => createHash('sha256').update(`${acao}\n${s}`).digest('hex');
+
+test('C1: o clique no link grava a conversão com email, material e interesses; o mesmo link aberto de novo não duplica', async () => {
+  const s = setup();
+  const q = await signMaterialLink('mapa-decisao-pdf', 'leitor@exemplo.com', NOW, SECRET);
+  const erros = await capturaErros(async () => {
+    assert.equal((await s.run(baixar(q))).status, 200);
+    await s.settle();
+    s.avanca(3600e3); // segundo clique uma hora depois: a primeira ocorrência fica como está
+    assert.equal((await s.run(baixar(q))).status, 200);
+    await s.settle();
+  });
+  assert.deepEqual(erros, [], 'o segundo clique é ignorado em silêncio, não vira erro de chave duplicada');
+  const c = await s.rows('conversions');
+  assert.equal(c.length, 1);
+  assert.deepEqual(c[0], {
+    id: idEsperado('material_download', sig(q)), email: 'leitor@exemplo.com', action: 'material_download',
+    material: 'mapa-decisao-ia', interests: JSON.stringify([INTERESSES.ARQUITETURA_IA, INTERESSES.CUSTO_IA]),
+    occurred_at: new Date(NOW).toISOString(), synced_at: null,
+  });
+  assert.ok(!JSON.stringify(c).includes(sig(q)), 'o D1 nunca guarda a assinatura do link');
+});
+
+test('C1: dois pedidos do mesmo material em dias diferentes viram duas conversões da mesma pessoa', async () => {
+  const s = setup();
+  const dia = 24 * 3600e3;
+  await s.run(baixar(await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', NOW - 3 * dia, SECRET)));
+  await s.run(baixar(await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', NOW - dia, SECRET)));
+  const c = await s.rows('conversions');
+  assert.equal(c.length, 2);
+  assert.deepEqual(c.map((x) => [x.email, x.material]), [['leitor@exemplo.com', 'planilha-custos-ia'], ['leitor@exemplo.com', 'planilha-custos-ia']]);
+});
+
+test('C2: o pedido sem clique só soma na contagem do dia, sem email em lugar nenhum do D1', async () => {
+  const s = setup();
+  await s.run(pedir(ok));
+  await s.run(pedir({ ...ok, email: 'outra@exemplo.com' }));
+  await s.run(pedir({ ...ok, material: 'mapa-decisao-ia' }));
+  assert.equal((await s.rows('conversions')).length, 0);
+  assert.deepEqual(await s.rows('material_requests'), [
+    { material: 'planilha-custos-ia', day: '2026-11-23', count: 2 },
+    { material: 'mapa-decisao-ia', day: '2026-11-23', count: 1 },
+  ]);
+  const tudo = JSON.stringify([await s.rows('conversions'), await s.rows('material_requests')]);
+  assert.ok(!tudo.includes('@'));
+});
+
+test('C2: pedido barrado (Turnstile, limite, email inválido) não conta', async () => {
+  for (const o of [{ turnstile: { success: false } }, { rlEmail: false }, { rlIp: false }, { fields: { ...ok, email: 'sem-arroba' } }] as any[]) {
+    const s = setup(o);
+    await s.run(pedir(o.fields ?? ok));
+    assert.equal((await s.rows('material_requests')).length, 0, JSON.stringify(o));
+  }
+});
+
+test('C3: D1 fora do ar não impede o download nem o email do pedido, e o log não leva o email', async () => {
+  const s = setup({ d1Falha: /conversions|material_requests/ });
+  let r: Response | undefined;
+  const erros = await capturaErros(async () => {
+    r = await s.run(baixar(await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', NOW, SECRET)));
+    await s.run(pedir(ok));
+    await s.settle();
+  });
+  assert.equal(r!.status, 200);
+  assert.equal(await r!.text(), 'conteudo:planilha-custos-ia');
+  assert.equal(emails(s.calls).length, 1);
+  assert.equal(erros.length, 2);
+  // O erro do D1 falso cita o email; o log troca por <email>.
+  assert.deepEqual(erros.sort(), [
+    'contagem do pedido não gravada: D1_ERROR: UNIQUE constraint failed for <email>',
+    'conversão não gravada (material_download): D1_ERROR: UNIQUE constraint failed for <email>',
+  ]);
+  assert.ok(!erros.join('\n').includes('exemplo.com'));
+});
+
+test('C4: link inválido, expirado ou arquivo indisponível não gravam conversão', async () => {
+  const q = await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', NOW, SECRET);
+  const expirado = setup({ now: NOW + MATERIAL_TTL_MS + 60e3 });
+  await expirado.run(baixar(q));
+  assert.equal((await expirado.rows('conversions')).length, 0);
+  const adulterado = setup();
+  await adulterado.run(baixar(q.replace('f=planilha-custos-ia', 'f=mapa-decisao-pdf')));
+  assert.equal((await adulterado.rows('conversions')).length, 0);
+  // Arquivo que some do deploy: 500 e nenhuma conversão.
+  const s = setup();
+  const r = await handle(baixar(q), s.env, { fetch: fetch, now: () => NOW, file: async () => null, waitUntil: s.waitUntil });
+  await s.settle();
+  assert.equal(r.status, 500);
+  assert.equal((await s.rows('conversions')).length, 0);
+});
+
+test('C5: todo material declara ao menos um interesse do catálogo, com id no formato das opções do Twenty', () => {
+  const ids = new Set(Object.values(INTERESSES).map((i) => i.id));
+  for (const [k, i] of Object.entries(INTERESSES)) {
+    assert.equal(i.id, k);
+    assert.match(i.id, /^[A-Z][A-Z0-9_]*$/);
+  }
+  for (const m of MATERIAIS) {
+    assert.ok(m.interesses.length > 0, `${m.id} sem interesse`);
+    for (const i of m.interesses) assert.ok(ids.has(i.id), `${m.id}: interesse ${i.id} fora do catálogo`);
+  }
+});
+
+test('C6: a assinatura só vale na forma canônica; as variantes com os mesmos bytes não entregam nem gravam', async () => {
+  const s = setup();
+  const q = await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', NOW, SECRET);
+  for (const v of variantes(sig(q))) {
+    const r = await s.run(baixar(q.replace(`s=${sig(q)}`, `s=${v}`)));
+    assert.equal(loc(r), 'https://guifav.dev/planilha-custos-ia/#link-expirado', v);
+  }
+  assert.equal((await s.rows('conversions')).length, 0);
+  assert.equal((await s.run(baixar(q))).status, 200);
+  assert.equal((await s.rows('conversions')).length, 1);
+});
+
+test('C3: D1 que não responde não segura a resposta do pedido nem do download (a gravação vai por waitUntil)', async () => {
+  const s = setup({ d1Pendura: /conversions|material_requests/ });
+  const limite = <T>(p: Promise<T>) => Promise.race([p, new Promise<never>((_, no) => setTimeout(() => no(new Error('a resposta esperou o D1')), 1000))]);
+  const r1 = await limite(s.run(pedir(ok)));
+  assert.equal(loc(r1), 'https://guifav.dev/planilha-custos-ia/enviado/');
+  assert.equal(emails(s.calls).length, 1);
+  const r2 = await limite(s.run(baixar(await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', NOW, SECRET))));
+  assert.equal(await r2.text(), 'conteudo:planilha-custos-ia');
+});
+
+test('C1: o id é um SHA-256 em hexadecimal, diferente da assinatura', async () => {
+  const s = setup();
+  const q = await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', NOW, SECRET);
+  await s.run(baixar(q));
+  const [c] = await s.rows('conversions');
+  assert.match(c.id, /^[0-9a-f]{64}$/);
+  assert.notEqual(c.id, sig(q));
+});
+
+test('C9: a contagem do pedido e a conversão do download passam por waitUntil e só gravam quando ele as completa', async () => {
+  let libera!: () => void;
+  const s = setup({ d1Porta: new Promise<void>((ok) => (libera = ok)) });
+  await s.run(pedir(ok));
+  await s.run(baixar(await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', NOW, SECRET)));
+  // Sem waitUntil, o Cloudflare pode cancelar a gravação depois da resposta: as duas precisam estar registradas nele.
+  assert.equal(s.pendentes(), 2);
+  assert.equal(s.db.prepare('SELECT count(*) AS n FROM conversions').get()!.n, 0);
+  libera();
+  assert.deepEqual((await s.rows('material_requests')).map((r) => r.count), [1]);
+  assert.equal((await s.rows('conversions')).length, 1);
+});
+
+test('C10: o entrypoint do deploy repassa o ctx.waitUntil do pedido e o arquivo do material', async () => {
+  const worker = readFileSync(new URL('../src/worker.ts', import.meta.url), 'utf-8');
+  assert.match(worker, /^export default entrypoint\(async \(id\) => ARQUIVOS\[id\] \?\? null\);$/m);
+  const s = setup();
+  const ctx: Promise<unknown>[] = [];
+  // Relógio real: o entrypoint usa Date.now.
+  const q = await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', Date.now(), SECRET);
+  const r = await entrypoint(async (id) => new TextEncoder().encode(`real:${id}`).buffer as ArrayBuffer)
+    .fetch(baixar(q), s.env, { waitUntil: (p) => void ctx.push(p) });
+  assert.equal(await r.text(), 'real:planilha-custos-ia');
+  assert.equal(ctx.length, 1, 'a gravação da conversão foi entregue ao ctx.waitUntil');
+  await Promise.all(ctx);
+  assert.equal(s.db.prepare('SELECT count(*) AS n FROM conversions').get()!.n, 1);
+});
+
+test('C11: contrato do mesmo segundo: pedidos a +100 ms e +900 ms dão o mesmo link e uma conversão; no segundo seguinte, outro link', async () => {
+  const s = setup();
+  const linkDo = (i: number) => links(emails(s.calls)[i].body.html)[0];
+  s.avanca(100);
+  await s.run(pedir(ok));
+  s.avanca(800);
+  await s.run(pedir(ok));
+  assert.equal(linkDo(0), linkDo(1), 'mesmo segundo, mesmos bytes, mesmo link');
+  s.avanca(200);
+  await s.run(pedir(ok));
+  assert.notEqual(linkDo(2), linkDo(0), 'outro segundo, outro link');
+  for (const i of [0, 1, 2]) await s.run(new Request(linkDo(i)));
+  assert.equal((await s.rows('conversions')).length, 2);
 });

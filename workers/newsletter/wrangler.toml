@@ -17,6 +17,13 @@ type = "Data"
 globs = ["**/*.xlsx", "**/*.pdf"]
 fallthrough = false
 
+# D1 do painel (`workers/admin`, dono do esquema e das migrações): aqui só se gravam as conversões do site e a
+# contagem de pedidos de material (issue #97). A migração 0004 precisa estar aplicada antes do deploy deste Worker.
+[[d1_databases]]
+binding = "DB"
+database_name = "blog-admin"
+database_id = "f54f10dc-960e-468a-aca1-2c74c4c6dc4d"
+
 [vars]
 FROM = "Guilherme Favaron | Expert Insights <insights@guifav.dev>"
 # Remetente do email com o link dos materiais do canal (planilha, mapa de decisão), no mesmo domínio verificado.

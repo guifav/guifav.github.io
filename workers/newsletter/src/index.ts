@@ -2,11 +2,12 @@
 //   POST /subscribe          formulário do blog: Turnstile, validação e email de confirmação
 //   GET  /confirm            link assinado do email: cria o contato no segmento do Resend
 //   POST /material           formulário das páginas de material: Turnstile, validação e email com o link
-//   GET  /material/download  link assinado do email (7 dias): entrega o arquivo
+//   GET  /material/download  link assinado do email (7 dias): entrega o arquivo e grava a conversão (issue #97)
 // As garantias A1 a A9 estão no PR e em tests/worker.test.ts; as dos materiais, em tests/material.test.ts.
 import { signLink, verifyLink, signMaterialLink, verifyMaterialLink, MIN_SECRET } from './token.ts';
 import { confirmationEmail, materialEmail } from './email.ts';
-import { material, arquivo } from './materiais.ts';
+import { material, arquivo, INTERESSES } from './materiais.ts';
+import { recordConversion, countRequest, type D1Like } from './conversoes.ts';
 
 export interface RateLimit {
   limit(o: { key: string }): Promise<{ success: boolean }>;
@@ -27,6 +28,8 @@ export interface Env {
   TURNSTILE_HOSTNAME: string;
   RL_EMAIL: RateLimit;
   RL_IP: RateLimit;
+  /** D1 `blog-admin`: conversões do site e contagem de pedidos de material (issue #97). */
+  DB: D1Like;
 }
 
 export interface Deps {
@@ -34,6 +37,11 @@ export interface Deps {
   now: () => number;
   /** Bytes de um arquivo de material pelo id, ou null. O src/worker.ts liga aos módulos de dados. */
   file?: (id: string) => Promise<ArrayBuffer | null>;
+  /**
+   * Trabalho depois da resposta (ctx.waitUntil no Cloudflare). As gravações de conversão vão por aqui: um D1 lento ou
+   * fora do ar nunca atrasa nem impede o download, o email do pedido ou a confirmação (issue #97).
+   */
+  waitUntil: (p: Promise<unknown>) => void;
 }
 
 const MAX_BODY = 8192;
@@ -114,11 +122,18 @@ async function confirm(url: URL, env: Env, deps: Deps): Promise<Response> {
   const email = await verifyLink(url.searchParams, env.CONFIRM_SECRET, deps.now());
   if (!email) return redirect(`${env.BLOG_URL}/inscricao-invalida/`);
   // Falha de rede ou resposta que não é JSON também é falha temporária (A5): 502, nunca exceção.
+  let res: Response;
   try {
-    return await enroll(email, env, deps);
+    res = await enroll(email, env, deps);
   } catch {
     return plain(502, 'falha temporária; tente o link de novo em alguns minutos');
   }
+  // Só a inscrição concluída vira conversão; o mesmo link aberto de novo não duplica (id pela assinatura).
+  if (res.headers.get('location') === `${env.BLOG_URL}/inscricao-confirmada/`) {
+    deps.waitUntil(recordConversion(env.DB, { acao: 'newsletter_confirm', assinatura: url.searchParams.get('s') ?? '', email, material: null,
+      interesses: [INTERESSES.EXPERT_INSIGHTS], nowMs: deps.now() }));
+  }
+  return res;
 }
 
 // Páginas de 100 (o máximo do Resend); o teto evita laço sem fim se a API repetir o cursor.
@@ -203,6 +218,7 @@ async function requestMaterial(req: Request, env: Env, deps: Deps): Promise<Resp
   if (!(await env.RL_EMAIL.limit({ key: `material:${email}` })).success) return sent;
 
   const now = deps.now();
+  deps.waitUntil(countRequest(env.DB, m.id, now));
   const links = await Promise.all(m.arquivos.map(async (a) => ({
     rotulo: a.rotulo,
     url: `${env.WORKER_URL}/material/download?${await signMaterialLink(a.id, email, now, env.CONFIRM_SECRET)}`,
@@ -231,6 +247,9 @@ async function download(url: URL, env: Env, deps: Deps): Promise<Response> {
   if (!ok || !found) return expired;
   const bytes = deps.file ? await deps.file(found.arquivo.id) : null;
   if (!bytes) return plain(500, 'arquivo indisponível');
+  // O clique no link prova o email: é aqui, e não no pedido, que nasce a conversão (issue #97).
+  deps.waitUntil(recordConversion(env.DB, { acao: 'material_download', assinatura: url.searchParams.get('s') ?? '', email: ok.email,
+    material: found.material.id, interesses: found.material.interesses, nowMs: deps.now() }));
   return new Response(bytes, {
     status: 200,
     headers: {
@@ -259,6 +278,19 @@ export async function handle(req: Request, env: Env, deps: Deps): Promise<Respon
   return url.pathname === '/subscribe' ? subscribe(req, env, deps) : confirm(url, env, deps);
 }
 
-export default {
-  fetch: (req: Request, env: Env) => handle(req, env, { fetch: (i, init) => fetch(i, init), now: Date.now }),
-};
+export interface Ctx {
+  waitUntil(p: Promise<unknown>): void;
+}
+
+/**
+ * O objeto exportado ao Cloudflare: liga o handle ao fetch, ao relógio, ao ctx.waitUntil do pedido e, no deploy, aos
+ * arquivos dos materiais. Os dois entrypoints (este arquivo e o src/worker.ts) usam esta fábrica, que os testes exercitam.
+ */
+export function entrypoint(file?: Deps['file']) {
+  return {
+    fetch: (req: Request, env: Env, ctx: Ctx) =>
+      handle(req, env, { fetch: (i, init) => fetch(i, init), now: Date.now, file, waitUntil: (p) => ctx.waitUntil(p) }),
+  };
+}
+
+export default entrypoint();

@@ -6,6 +6,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { handle, contactPath, normalizeEmail, type Env } from '../src/index.ts';
 import { signLink, verifyLink } from '../src/token.ts';
 import { confirmationEmail } from '../src/email.ts';
+import { createHash } from 'node:crypto';
+import { d1, rows, capturaErros, variantes } from './d1.ts';
 
 const NOW = Date.UTC(2026, 10, 11, 12, 0, 0);
 const SECRET = 'segredo-de-teste-com-tamanho-suficiente-0123456789';
@@ -35,10 +37,16 @@ type Opts = {
   topic?: 'opt_in' | 'opt_out'; // estado do contato existente no tópico
   throwOn?: string;
   badJsonOn?: string;
+  d1Falha?: RegExp; d1Pendura?: RegExp; d1Porta?: Promise<void>;
 };
 
 function setup(opts: Opts = {}) {
   const calls: Call[] = [];
+  const db = d1(opts.d1Falha, undefined, opts.d1Pendura, opts.d1Porta);
+  const pending: Promise<unknown>[] = [];
+  const waitUntil = (p: Promise<unknown>) => void pending.push(p);
+  // Espera o trabalho feito depois da resposta (o que o Cloudflare faria com ctx.waitUntil).
+  const settle = () => Promise.all(pending);
   // Estado do contato no Resend, para provar o efeito e não só as chamadas.
   const exists = Boolean(opts.contact && opts.contact !== 'none');
   const state = { exists, unsubscribed: opts.contact === 'unsubscribed', topic: opts.topic ?? 'opt_in',
@@ -126,9 +134,12 @@ function setup(opts: Opts = {}) {
     TURNSTILE_HOSTNAME: tomlVar('TURNSTILE_HOSTNAME'),
     RL_EMAIL: { limit: async ({ key }) => (rl.push('email:' + key), { success: opts.rlEmail ?? true }) },
     RL_IP: { limit: async ({ key }) => (rl.push('ip:' + key), { success: opts.rlIp ?? true }) },
+    DB: db,
   };
-  const run = (req: Request) => handle(req, env, { fetch: fetchFn as typeof fetch, now: () => NOW });
-  return { env, run, calls, rl, state };
+  let clock = NOW;
+  const run = (req: Request) => handle(req, env, { fetch: fetchFn as typeof fetch, now: () => clock, waitUntil });
+  const avanca = (ms: number) => void (clock += ms);
+  return { env, run, calls, rl, state, db: db.raw, settle, pendentes: () => pending.length, avanca, rows: async (t: string) => (await settle(), rows(db.raw, t)) };
 }
 
 function subscribe(fields: Record<string, string>, headers: Record<string, string> = {}) {
@@ -582,4 +593,81 @@ test('nome da lista: Expert Insights, de Guilherme Favaron, sem "newsletter" nem
     assert.doesNotMatch(body, /newsletter/i);
     assert.doesNotMatch(body, /IA Aplicada/);
   }
+});
+
+// ---------------------------------------------------------------- Conversões (issue #97)
+
+const confirmar = async (q: string) => new Request(`https://insights.guifav.dev/confirm?${q}`);
+
+test('C7: /confirm concluído grava uma conversão newsletter_confirm; o mesmo link aberto de novo não duplica', async () => {
+  const s = setup({ contact: 'none' });
+  const q = await signLink('leitor@exemplo.com', NOW, SECRET);
+  assert.equal(loc(await s.run(await confirmar(q))), 'https://guifav.dev/blog/inscricao-confirmada/');
+  await s.settle();
+  s.avanca(3600e3); // segundo clique uma hora depois, ainda dentro das 48 h: a primeira ocorrência fica como está
+  assert.equal(loc(await s.run(await confirmar(q))), 'https://guifav.dev/blog/inscricao-confirmada/');
+  const c = await s.rows('conversions');
+  assert.equal(c.length, 1);
+  assert.deepEqual(c[0], {
+    id: createHash('sha256').update(`newsletter_confirm\n${new URLSearchParams(q).get('s')}`).digest('hex'), email: 'leitor@exemplo.com',
+    action: 'newsletter_confirm', material: null, interests: JSON.stringify([{ id: 'EXPERT_INSIGHTS', rotulo: 'Expert Insights' }]),
+    occurred_at: new Date(NOW).toISOString(), synced_at: null,
+  });
+  assert.ok(!JSON.stringify(c).includes(new URLSearchParams(q).get('s')!), 'o D1 nunca guarda a assinatura do link');
+});
+
+test('C7: o link de confirmação só vale com a assinatura canônica; as variantes não confirmam nem gravam', async () => {
+  const s = setup({ contact: 'none' });
+  const q = await signLink('leitor@exemplo.com', NOW, SECRET);
+  const sg = new URLSearchParams(q).get('s')!;
+  for (const v of variantes(sg)) {
+    assert.equal(loc(await s.run(await confirmar(q.replace(`s=${sg}`, `s=${v}`)))), 'https://guifav.dev/blog/inscricao-invalida/', v);
+  }
+  assert.equal((await s.rows('conversions')).length, 0);
+  assert.equal(s.calls.filter((c) => c.url.startsWith('https://api.resend.com/contacts')).length, 0);
+});
+
+test('C7: confirmação que falha (502) ou link inválido não grava conversão', async () => {
+  const falha = setup({ createStatus: 500 });
+  assert.equal((await falha.run(await confirmar(await signLink('leitor@exemplo.com', NOW, SECRET)))).status, 502);
+  assert.equal((await falha.rows('conversions')).length, 0);
+  const invalido = setup({ contact: 'none' });
+  await invalido.run(await confirmar('e=x&x=1&s=y'));
+  assert.equal((await invalido.rows('conversions')).length, 0);
+});
+
+test('C7: D1 fora do ar não derruba a confirmação, e o log não leva o email', async () => {
+  const s = setup({ contact: 'none', d1Falha: /conversions/ });
+  let r: Response | undefined;
+  const erros = await capturaErros(async () => {
+    r = await s.run(await confirmar(await signLink('leitor@exemplo.com', NOW, SECRET)));
+    await s.settle();
+  });
+  assert.equal(loc(r!), 'https://guifav.dev/blog/inscricao-confirmada/');
+  assert.equal(erros.length, 1);
+  assert.equal(erros[0], 'conversão não gravada (newsletter_confirm): D1_ERROR: UNIQUE constraint failed for <email>');
+  assert.ok(!erros.join('\n').includes('exemplo.com'));
+});
+
+test('C8: o wrangler.toml liga o mesmo D1 do painel, com o binding DB', () => {
+  const admin = readFileSync(new URL('../../admin/wrangler.toml', import.meta.url), 'utf-8');
+  const bloco = (t: string) => t.match(/\[\[d1_databases\]\]\nbinding = "DB"\ndatabase_name = "([^"]+)"\ndatabase_id = "([^"]+)"/)?.slice(1);
+  assert.ok(bloco(TOML), 'binding DB ausente do wrangler.toml do newsletter');
+  assert.deepEqual(bloco(TOML), bloco(admin));
+});
+
+test('C7: D1 que não responde não segura a confirmação (a gravação vai por waitUntil)', async () => {
+  const s = setup({ contact: 'none', d1Pendura: /conversions/ });
+  const r = await Promise.race([s.run(await confirmar(await signLink('leitor@exemplo.com', NOW, SECRET))),
+    new Promise<never>((_, no) => setTimeout(() => no(new Error('a confirmação esperou o D1')), 1000))]);
+  assert.equal(loc(r), 'https://guifav.dev/blog/inscricao-confirmada/');
+});
+
+test('C9: a conversão da confirmação passa por waitUntil e só grava quando ele a completa', async () => {
+  let libera!: () => void;
+  const s = setup({ contact: 'none', d1Porta: new Promise<void>((ok) => (libera = ok)) });
+  assert.equal(loc(await s.run(await confirmar(await signLink('leitor@exemplo.com', NOW, SECRET)))), 'https://guifav.dev/blog/inscricao-confirmada/');
+  assert.equal(s.pendentes(), 1);
+  libera();
+  assert.equal((await s.rows('conversions')).length, 1);
 });
