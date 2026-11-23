@@ -1130,6 +1130,24 @@ class TrackingTest(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertTrue(any("data-ga-event" in p for p in self.check(self.doc(body), rel=rel)), name)
 
+    def test_generate_lead_only_on_material_sent_pages_with_the_folder_id(self):
+        # Issue #99: generate_lead na página de enviado de cada material, com data-material-id igual ao da pasta.
+        lead = lambda m: f'<header data-ga-event="generate_lead" data-material-id="{m}">x</header>'
+        for m in C.MATERIALS:
+            self.assertEqual(self.check(self.doc(lead(m)), rel=f"{m}/enviado/index.html"), [], m)
+        enviado = "planilha-custos-ia/enviado/index.html"
+        for name, (rel, body) in {
+            "falta": (enviado, ""),
+            "duas vezes": (enviado, lead("planilha-custos-ia") * 2),
+            "outro material": (enviado, lead("mapa-decisao-ia")),
+            "sem id": (enviado, '<header data-ga-event="generate_lead">x</header>'),
+            "fora do enviado": ("planilha-custos-ia/index.html", lead("planilha-custos-ia")),
+            "home": ("index.html", lead("planilha-custos-ia")),
+        }.items():
+            with self.subTest(name=name):
+                self.assertTrue(any("data-ga-event" in p or "generate_lead" in p
+                                    for p in self.check(self.doc(body), rel=rel)), name)
+
 
 class GaHostGuardTest(unittest.TestCase):
     """#66: fora de guifav.dev o gtag.js não envia nada (prévias locais entravam como visita)."""

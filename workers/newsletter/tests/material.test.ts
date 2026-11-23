@@ -38,7 +38,8 @@ function setup(opts: { turnstile?: unknown; rlEmail?: boolean; rlIp?: boolean; e
     if (url.includes('turnstile')) return Response.json(opts.turnstile ?? { success: true, hostname: 'guifav.dev' });
     if (url === 'https://api.resend.com/emails') return opts.emailStatus ? new Response('x', { status: opts.emailStatus }) : Response.json({ id: 'e1' });
     if (url.startsWith('https://www.google-analytics.com/mp/collect?')) {
-      if (opts.ga4Status === 'throw') throw new TypeError('rede fora');
+      // A exceção cita a URL, com o segredo, como faria um erro real de rede: o log não pode repeti-la.
+      if (opts.ga4Status === 'throw') throw new TypeError(`fetch failed: ${url}`);
       return new Response(null, { status: opts.ga4Status ?? 204 });
     }
     return new Response('inesperado', { status: 500 });

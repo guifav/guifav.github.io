@@ -410,6 +410,7 @@ test('ga_cid: sem consentimento, consentimento negado ou vencido, cookie ausente
     ['sem escolha', { cookie: GA }],
     ['negado', { cookie: GA, local: negado }],
     ['vencido', { cookie: GA, local: aceito(Date.now() - 366 * 864e5) }],
+    ['data futura', { cookie: GA, local: aceito(Date.now() + 864e5) }],
     ['sem localStorage', { cookie: GA, local: Blocked }],
     ['sem cookie', { cookie: 'outro=1', local: aceito() }],
     ['malformado', { cookie: '_ga=GA1.1.abc.123', local: aceito() }],
