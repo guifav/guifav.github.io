@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
-import { handle, type Env } from '../src/index.ts';
+import { handle, entrypoint, type Env } from '../src/index.ts';
 import { signLink, signMaterialLink, MATERIAL_TTL_MS } from '../src/token.ts';
 import { MATERIAIS, INTERESSES } from '../src/materiais.ts';
 import { createHash } from 'node:crypto';
@@ -325,4 +325,34 @@ test('C9: a contagem do pedido e a conversão do download passam por waitUntil e
   libera();
   assert.deepEqual((await s.rows('material_requests')).map((r) => r.count), [1]);
   assert.equal((await s.rows('conversions')).length, 1);
+});
+
+test('C10: o entrypoint do deploy repassa o ctx.waitUntil do pedido e o arquivo do material', async () => {
+  const worker = readFileSync(new URL('../src/worker.ts', import.meta.url), 'utf-8');
+  assert.match(worker, /^export default entrypoint\(async \(id\) => ARQUIVOS\[id\] \?\? null\);$/m);
+  const s = setup();
+  const ctx: Promise<unknown>[] = [];
+  // Relógio real: o entrypoint usa Date.now.
+  const q = await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', Date.now(), SECRET);
+  const r = await entrypoint(async (id) => new TextEncoder().encode(`real:${id}`).buffer as ArrayBuffer)
+    .fetch(baixar(q), s.env, { waitUntil: (p) => void ctx.push(p) });
+  assert.equal(await r.text(), 'real:planilha-custos-ia');
+  assert.equal(ctx.length, 1, 'a gravação da conversão foi entregue ao ctx.waitUntil');
+  await Promise.all(ctx);
+  assert.equal(s.db.prepare('SELECT count(*) AS n FROM conversions').get()!.n, 1);
+});
+
+test('C11: contrato do mesmo segundo: pedidos a +100 ms e +900 ms dão o mesmo link e uma conversão; no segundo seguinte, outro link', async () => {
+  const s = setup();
+  const linkDo = (i: number) => links(emails(s.calls)[i].body.html)[0];
+  s.avanca(100);
+  await s.run(pedir(ok));
+  s.avanca(800);
+  await s.run(pedir(ok));
+  assert.equal(linkDo(0), linkDo(1), 'mesmo segundo, mesmos bytes, mesmo link');
+  s.avanca(200);
+  await s.run(pedir(ok));
+  assert.notEqual(linkDo(2), linkDo(0), 'outro segundo, outro link');
+  for (const i of [0, 1, 2]) await s.run(new Request(linkDo(i)));
+  assert.equal((await s.rows('conversions')).length, 2);
 });

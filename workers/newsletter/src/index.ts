@@ -278,7 +278,19 @@ export async function handle(req: Request, env: Env, deps: Deps): Promise<Respon
   return url.pathname === '/subscribe' ? subscribe(req, env, deps) : confirm(url, env, deps);
 }
 
-export default {
-  fetch: (req: Request, env: Env, ctx: { waitUntil(p: Promise<unknown>): void }) =>
-    handle(req, env, { fetch: (i, init) => fetch(i, init), now: Date.now, waitUntil: (p) => ctx.waitUntil(p) }),
-};
+export interface Ctx {
+  waitUntil(p: Promise<unknown>): void;
+}
+
+/**
+ * O objeto exportado ao Cloudflare: liga o handle ao fetch, ao relógio, ao ctx.waitUntil do pedido e, no deploy, aos
+ * arquivos dos materiais. Os dois entrypoints (este arquivo e o src/worker.ts) usam esta fábrica, que os testes exercitam.
+ */
+export function entrypoint(file?: Deps['file']) {
+  return {
+    fetch: (req: Request, env: Env, ctx: Ctx) =>
+      handle(req, env, { fetch: (i, init) => fetch(i, init), now: Date.now, file, waitUntil: (p) => ctx.waitUntil(p) }),
+  };
+}
+
+export default entrypoint();
