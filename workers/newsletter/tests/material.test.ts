@@ -50,8 +50,10 @@ function setup(opts: { turnstile?: unknown; rlEmail?: boolean; rlIp?: boolean; e
   };
   const bytes: Record<string, ArrayBuffer> = Object.fromEntries(
     MATERIAIS.flatMap((m) => m.arquivos).map((a) => [a.id, new TextEncoder().encode(`conteudo:${a.id}`).buffer as ArrayBuffer]));
-  const run = (req: Request) => handle(req, env, { fetch: fetchFn as typeof fetch, now: () => opts.now ?? NOW, file: async (id) => bytes[id] ?? null, waitUntil });
-  return { run, calls, rl, env, db: db.raw, settle, rows: async (t: string) => (await settle(), rows(db.raw, t)), waitUntil };
+  let clock = opts.now ?? NOW;
+  const run = (req: Request) => handle(req, env, { fetch: fetchFn as typeof fetch, now: () => clock, file: async (id) => bytes[id] ?? null, waitUntil });
+  const avanca = (ms: number) => void (clock += ms);
+  return { run, calls, rl, env, db: db.raw, settle, avanca, rows: async (t: string) => (await settle(), rows(db.raw, t)), waitUntil };
 }
 
 const pedir = (fields: Record<string, string>, headers: Record<string, string> = {}) =>
@@ -185,6 +187,8 @@ test('C1: o clique no link grava a conversão com email, material e interesses; 
   const q = await signMaterialLink('mapa-decisao-pdf', 'leitor@exemplo.com', NOW, SECRET);
   const erros = await capturaErros(async () => {
     assert.equal((await s.run(baixar(q))).status, 200);
+    await s.settle();
+    s.avanca(3600e3); // segundo clique uma hora depois: a primeira ocorrência fica como está
     assert.equal((await s.run(baixar(q))).status, 200);
     await s.settle();
   });

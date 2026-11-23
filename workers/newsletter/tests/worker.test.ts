@@ -136,8 +136,10 @@ function setup(opts: Opts = {}) {
     RL_IP: { limit: async ({ key }) => (rl.push('ip:' + key), { success: opts.rlIp ?? true }) },
     DB: db,
   };
-  const run = (req: Request) => handle(req, env, { fetch: fetchFn as typeof fetch, now: () => NOW, waitUntil });
-  return { env, run, calls, rl, state, db: db.raw, settle, rows: async (t: string) => (await settle(), rows(db.raw, t)) };
+  let clock = NOW;
+  const run = (req: Request) => handle(req, env, { fetch: fetchFn as typeof fetch, now: () => clock, waitUntil });
+  const avanca = (ms: number) => void (clock += ms);
+  return { env, run, calls, rl, state, db: db.raw, settle, avanca, rows: async (t: string) => (await settle(), rows(db.raw, t)) };
 }
 
 function subscribe(fields: Record<string, string>, headers: Record<string, string> = {}) {
@@ -601,6 +603,8 @@ test('C7: /confirm concluído grava uma conversão newsletter_confirm; o mesmo l
   const s = setup({ contact: 'none' });
   const q = await signLink('leitor@exemplo.com', NOW, SECRET);
   assert.equal(loc(await s.run(await confirmar(q))), 'https://guifav.dev/blog/inscricao-confirmada/');
+  await s.settle();
+  s.avanca(3600e3); // segundo clique uma hora depois, ainda dentro das 48 h: a primeira ocorrência fica como está
   assert.equal(loc(await s.run(await confirmar(q))), 'https://guifav.dev/blog/inscricao-confirmada/');
   const c = await s.rows('conversions');
   assert.equal(c.length, 1);
