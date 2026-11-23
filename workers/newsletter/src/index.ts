@@ -37,6 +37,11 @@ export interface Deps {
   now: () => number;
   /** Bytes de um arquivo de material pelo id, ou null. O src/worker.ts liga aos módulos de dados. */
   file?: (id: string) => Promise<ArrayBuffer | null>;
+  /**
+   * Trabalho depois da resposta (ctx.waitUntil no Cloudflare). As gravações de conversão vão por aqui: um D1 lento ou
+   * fora do ar nunca atrasa nem impede o download, o email do pedido ou a confirmação (issue #97).
+   */
+  waitUntil: (p: Promise<unknown>) => void;
 }
 
 const MAX_BODY = 8192;
@@ -125,8 +130,8 @@ async function confirm(url: URL, env: Env, deps: Deps): Promise<Response> {
   }
   // Só a inscrição concluída vira conversão; o mesmo link aberto de novo não duplica (id pela assinatura).
   if (res.headers.get('location') === `${env.BLOG_URL}/inscricao-confirmada/`) {
-    await recordConversion(env.DB, { acao: 'newsletter_confirm', assinatura: url.searchParams.get('s') ?? '', email, material: '',
-      interesses: [INTERESSES.EXPERT_INSIGHTS], nowMs: deps.now() });
+    deps.waitUntil(recordConversion(env.DB, { acao: 'newsletter_confirm', assinatura: url.searchParams.get('s') ?? '', email, material: '',
+      interesses: [INTERESSES.EXPERT_INSIGHTS], nowMs: deps.now() }));
   }
   return res;
 }
@@ -213,7 +218,7 @@ async function requestMaterial(req: Request, env: Env, deps: Deps): Promise<Resp
   if (!(await env.RL_EMAIL.limit({ key: `material:${email}` })).success) return sent;
 
   const now = deps.now();
-  await countRequest(env.DB, m.id, now);
+  deps.waitUntil(countRequest(env.DB, m.id, now));
   const links = await Promise.all(m.arquivos.map(async (a) => ({
     rotulo: a.rotulo,
     url: `${env.WORKER_URL}/material/download?${await signMaterialLink(a.id, email, now, env.CONFIRM_SECRET)}`,
@@ -243,8 +248,8 @@ async function download(url: URL, env: Env, deps: Deps): Promise<Response> {
   const bytes = deps.file ? await deps.file(found.arquivo.id) : null;
   if (!bytes) return plain(500, 'arquivo indisponível');
   // O clique no link prova o email: é aqui, e não no pedido, que nasce a conversão (issue #97).
-  await recordConversion(env.DB, { acao: 'material_download', assinatura: url.searchParams.get('s') ?? '', email: ok.email,
-    material: found.material.id, interesses: found.material.interesses, nowMs: deps.now() });
+  deps.waitUntil(recordConversion(env.DB, { acao: 'material_download', assinatura: url.searchParams.get('s') ?? '', email: ok.email,
+    material: found.material.id, interesses: found.material.interesses, nowMs: deps.now() }));
   return new Response(bytes, {
     status: 200,
     headers: {
@@ -274,5 +279,6 @@ export async function handle(req: Request, env: Env, deps: Deps): Promise<Respon
 }
 
 export default {
-  fetch: (req: Request, env: Env) => handle(req, env, { fetch: (i, init) => fetch(i, init), now: Date.now }),
+  fetch: (req: Request, env: Env, ctx: { waitUntil(p: Promise<unknown>): void }) =>
+    handle(req, env, { fetch: (i, init) => fetch(i, init), now: Date.now, waitUntil: (p) => ctx.waitUntil(p) }),
 };

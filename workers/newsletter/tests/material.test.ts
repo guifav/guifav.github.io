@@ -20,10 +20,14 @@ const tomlVar = (k: string) => {
 
 type Call = { url: string; method: string; body: any };
 
-function setup(opts: { turnstile?: unknown; rlEmail?: boolean; rlIp?: boolean; emailStatus?: number; now?: number; d1Falha?: RegExp } = {}) {
+function setup(opts: { turnstile?: unknown; rlEmail?: boolean; rlIp?: boolean; emailStatus?: number; now?: number; d1Falha?: RegExp; d1Pendura?: RegExp } = {}) {
   const calls: Call[] = [];
   const rl: string[] = [];
-  const db = d1(opts.d1Falha);
+  const db = d1(opts.d1Falha, undefined, opts.d1Pendura);
+  const pending: Promise<unknown>[] = [];
+  const waitUntil = (p: Promise<unknown>) => void pending.push(p);
+  // Espera o trabalho feito depois da resposta (o que o Cloudflare faria com ctx.waitUntil).
+  const settle = () => Promise.all(pending);
   const fetchFn = async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
     const method = init?.method ?? 'GET';
@@ -46,8 +50,8 @@ function setup(opts: { turnstile?: unknown; rlEmail?: boolean; rlIp?: boolean; e
   };
   const bytes: Record<string, ArrayBuffer> = Object.fromEntries(
     MATERIAIS.flatMap((m) => m.arquivos).map((a) => [a.id, new TextEncoder().encode(`conteudo:${a.id}`).buffer as ArrayBuffer]));
-  const run = (req: Request) => handle(req, env, { fetch: fetchFn as typeof fetch, now: () => opts.now ?? NOW, file: async (id) => bytes[id] ?? null });
-  return { run, calls, rl, env, db: db.raw };
+  const run = (req: Request) => handle(req, env, { fetch: fetchFn as typeof fetch, now: () => opts.now ?? NOW, file: async (id) => bytes[id] ?? null, waitUntil });
+  return { run, calls, rl, env, db: db.raw, settle, rows: async (t: string) => (await settle(), rows(db.raw, t)), waitUntil };
 }
 
 const pedir = (fields: Record<string, string>, headers: Record<string, string> = {}) =>
@@ -182,14 +186,15 @@ test('C1: o clique no link grava a conversão com email, material e interesses; 
   const erros = await capturaErros(async () => {
     assert.equal((await s.run(baixar(q))).status, 200);
     assert.equal((await s.run(baixar(q))).status, 200);
+    await s.settle();
   });
   assert.deepEqual(erros, [], 'o segundo clique é ignorado em silêncio, não vira erro de chave duplicada');
-  const c = rows(s.db, 'conversions');
+  const c = await s.rows('conversions');
   assert.equal(c.length, 1);
   assert.deepEqual(c[0], {
     id: idEsperado('material_download', sig(q)), email: 'leitor@exemplo.com', action: 'material_download',
     material: 'mapa-decisao-ia', interests: JSON.stringify([INTERESSES.ARQUITETURA_IA, INTERESSES.CUSTO_IA]),
-    occurred_at: new Date(NOW).toISOString(), synced_at: '',
+    occurred_at: new Date(NOW).toISOString(), synced_at: null,
   });
   assert.ok(!JSON.stringify(c).includes(sig(q)), 'o D1 nunca guarda a assinatura do link');
 });
@@ -199,7 +204,7 @@ test('C1: dois pedidos do mesmo material em dias diferentes viram duas conversõ
   const dia = 24 * 3600e3;
   await s.run(baixar(await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', NOW - 3 * dia, SECRET)));
   await s.run(baixar(await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', NOW - dia, SECRET)));
-  const c = rows(s.db, 'conversions');
+  const c = await s.rows('conversions');
   assert.equal(c.length, 2);
   assert.deepEqual(c.map((x) => [x.email, x.material]), [['leitor@exemplo.com', 'planilha-custos-ia'], ['leitor@exemplo.com', 'planilha-custos-ia']]);
 });
@@ -209,12 +214,12 @@ test('C2: o pedido sem clique só soma na contagem do dia, sem email em lugar ne
   await s.run(pedir(ok));
   await s.run(pedir({ ...ok, email: 'outra@exemplo.com' }));
   await s.run(pedir({ ...ok, material: 'mapa-decisao-ia' }));
-  assert.equal(rows(s.db, 'conversions').length, 0);
-  assert.deepEqual(rows(s.db, 'material_requests'), [
+  assert.equal((await s.rows('conversions')).length, 0);
+  assert.deepEqual(await s.rows('material_requests'), [
     { material: 'planilha-custos-ia', day: '2026-11-23', count: 2 },
     { material: 'mapa-decisao-ia', day: '2026-11-23', count: 1 },
   ]);
-  const tudo = JSON.stringify(['conversions', 'material_requests'].map((t) => rows(s.db, t)));
+  const tudo = JSON.stringify([await s.rows('conversions'), await s.rows('material_requests')]);
   assert.ok(!tudo.includes('@'));
 });
 
@@ -222,7 +227,7 @@ test('C2: pedido barrado (Turnstile, limite, email inválido) não conta', async
   for (const o of [{ turnstile: { success: false } }, { rlEmail: false }, { rlIp: false }, { fields: { ...ok, email: 'sem-arroba' } }] as any[]) {
     const s = setup(o);
     await s.run(pedir(o.fields ?? ok));
-    assert.equal(rows(s.db, 'material_requests').length, 0, JSON.stringify(o));
+    assert.equal((await s.rows('material_requests')).length, 0, JSON.stringify(o));
   }
 });
 
@@ -232,14 +237,17 @@ test('C3: D1 fora do ar não impede o download nem o email do pedido, e o log n�
   const erros = await capturaErros(async () => {
     r = await s.run(baixar(await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', NOW, SECRET)));
     await s.run(pedir(ok));
+    await s.settle();
   });
   assert.equal(r!.status, 200);
   assert.equal(await r!.text(), 'conteudo:planilha-custos-ia');
   assert.equal(emails(s.calls).length, 1);
   assert.equal(erros.length, 2);
   // O erro do D1 falso cita o email; o log troca por <email>.
-  assert.equal(erros[0], 'conversão não gravada (material_download): D1_ERROR: UNIQUE constraint failed for <email>');
-  assert.equal(erros[1], 'contagem do pedido não gravada: D1_ERROR: UNIQUE constraint failed for <email>');
+  assert.deepEqual(erros.sort(), [
+    'contagem do pedido não gravada: D1_ERROR: UNIQUE constraint failed for <email>',
+    'conversão não gravada (material_download): D1_ERROR: UNIQUE constraint failed for <email>',
+  ]);
   assert.ok(!erros.join('\n').includes('exemplo.com'));
 });
 
@@ -247,15 +255,16 @@ test('C4: link inválido, expirado ou arquivo indisponível não gravam convers�
   const q = await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', NOW, SECRET);
   const expirado = setup({ now: NOW + MATERIAL_TTL_MS + 60e3 });
   await expirado.run(baixar(q));
-  assert.equal(rows(expirado.db, 'conversions').length, 0);
+  assert.equal((await expirado.rows('conversions')).length, 0);
   const adulterado = setup();
   await adulterado.run(baixar(q.replace('f=planilha-custos-ia', 'f=mapa-decisao-pdf')));
-  assert.equal(rows(adulterado.db, 'conversions').length, 0);
+  assert.equal((await adulterado.rows('conversions')).length, 0);
   // Arquivo que some do deploy: 500 e nenhuma conversão.
   const s = setup();
-  const r = await handle(baixar(q), s.env, { fetch: fetch, now: () => NOW, file: async () => null });
+  const r = await handle(baixar(q), s.env, { fetch: fetch, now: () => NOW, file: async () => null, waitUntil: s.waitUntil });
+  await s.settle();
   assert.equal(r.status, 500);
-  assert.equal(rows(s.db, 'conversions').length, 0);
+  assert.equal((await s.rows('conversions')).length, 0);
 });
 
 test('C5: todo material declara ao menos um interesse do catálogo, com id no formato das opções do Twenty', () => {
@@ -277,7 +286,26 @@ test('C6: a assinatura só vale na forma canônica; as variantes com os mesmos b
     const r = await s.run(baixar(q.replace(`s=${sig(q)}`, `s=${v}`)));
     assert.equal(loc(r), 'https://guifav.dev/planilha-custos-ia/#link-expirado', v);
   }
-  assert.equal(rows(s.db, 'conversions').length, 0);
+  assert.equal((await s.rows('conversions')).length, 0);
   assert.equal((await s.run(baixar(q))).status, 200);
-  assert.equal(rows(s.db, 'conversions').length, 1);
+  assert.equal((await s.rows('conversions')).length, 1);
+});
+
+test('C3: D1 que não responde não segura a resposta do pedido nem do download (a gravação vai por waitUntil)', async () => {
+  const s = setup({ d1Pendura: /conversions|material_requests/ });
+  const limite = <T>(p: Promise<T>) => Promise.race([p, new Promise<never>((_, no) => setTimeout(() => no(new Error('a resposta esperou o D1')), 1000))]);
+  const r1 = await limite(s.run(pedir(ok)));
+  assert.equal(loc(r1), 'https://guifav.dev/planilha-custos-ia/enviado/');
+  assert.equal(emails(s.calls).length, 1);
+  const r2 = await limite(s.run(baixar(await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', NOW, SECRET))));
+  assert.equal(await r2.text(), 'conteudo:planilha-custos-ia');
+});
+
+test('C1: o id é um SHA-256 em hexadecimal, diferente da assinatura', async () => {
+  const s = setup();
+  const q = await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', NOW, SECRET);
+  await s.run(baixar(q));
+  const [c] = await s.rows('conversions');
+  assert.match(c.id, /^[0-9a-f]{64}$/);
+  assert.notEqual(c.id, sig(q));
 });

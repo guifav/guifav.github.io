@@ -1,6 +1,7 @@
 // Conversões do site (issue #97, fase 1): o que a pessoa fez com o email comprovado por um link assinado, gravado no
-// D1 `blog-admin` para a fase 2 levar ao Twenty. Gravação de melhor esforço: a falha vai para o log, sem o email, e
-// nunca impede a entrega do arquivo nem a confirmação da inscrição.
+// D1 `blog-admin` para a fase 2 levar ao Twenty. Gravação de melhor esforço, depois da resposta (deps.waitUntil): a
+// falha vai para o log, sem o email, e nunca atrasa nem impede a entrega do arquivo nem a confirmação da inscrição.
+// As funções daqui nunca rejeitam.
 import type { Interesse } from './materiais.ts';
 
 export interface D1Stmt {

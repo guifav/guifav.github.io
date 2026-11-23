@@ -13,6 +13,7 @@ const ARQUIVOS: Record<string, ArrayBuffer> = {
 };
 
 export default {
-  fetch: (req: Request, env: Env) =>
-    handle(req, env, { fetch: (i, init) => fetch(i, init), now: Date.now, file: async (id) => ARQUIVOS[id] ?? null }),
+  fetch: (req: Request, env: Env, ctx: { waitUntil(p: Promise<unknown>): void }) =>
+    handle(req, env, { fetch: (i, init) => fetch(i, init), now: Date.now, file: async (id) => ARQUIVOS[id] ?? null,
+      waitUntil: (p) => ctx.waitUntil(p) }),
 };

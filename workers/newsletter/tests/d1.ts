@@ -5,13 +5,14 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import type { D1Like, D1Stmt } from '../src/conversoes.ts';
 
-export function d1(falha?: RegExp, mensagem = 'D1_ERROR: UNIQUE constraint failed for leitor@exemplo.com'): D1Like & { raw: DatabaseSync } {
+export function d1(falha?: RegExp, mensagem = 'D1_ERROR: UNIQUE constraint failed for leitor@exemplo.com', pendura?: RegExp): D1Like & { raw: DatabaseSync } {
   const db = new DatabaseSync(':memory:');
   const dir = new URL('../../admin/migrations/', import.meta.url);
   for (const f of readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()) db.exec(readFileSync(new URL(f, dir), 'utf-8'));
   const stmt = (sql: string, args: unknown[] = []): D1Stmt => ({
     bind: (...v: unknown[]) => stmt(sql, v),
     run: async () => {
+      if (pendura?.test(sql)) return new Promise(() => {}); // D1 que nunca responde
       if (falha?.test(sql)) throw new Error(mensagem);
       return db.prepare(sql).run(...(args as never[]));
     },

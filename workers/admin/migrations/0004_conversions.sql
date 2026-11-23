@@ -1,5 +1,5 @@
 -- Conversões do site (issue #97, fase 1). Quem grava é o Worker `blog-newsletter`, pelo mesmo D1; o painel só é dono
--- do esquema. A fase 2 leva as linhas com synced_at vazio ao Twenty (crm.guifav.dev) e marca synced_at.
+-- do esquema. A fase 2 leva as linhas com synced_at nulo ao Twenty (crm.guifav.dev) e marca synced_at.
 CREATE TABLE IF NOT EXISTS conversions (
   id TEXT PRIMARY KEY,               -- SHA-256 da ação com a assinatura do link: clicar de novo no mesmo link não duplica
   email TEXT NOT NULL,               -- email comprovado pelo link assinado (minúsculas)
@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS conversions (
   material TEXT NOT NULL DEFAULT '', -- id do material (vazio em newsletter_confirm)
   interests TEXT NOT NULL,           -- JSON: [{"id": "CUSTO_IA", "rotulo": "Custo de IA"}], como estava no catálogo na hora da ação
   occurred_at TEXT NOT NULL,         -- ISO UTC
-  synced_at TEXT NOT NULL DEFAULT '' -- quando a fase 2 gravou no Twenty; vazio até lá
+  synced_at TEXT                     -- quando a fase 2 gravou no Twenty (ISO UTC); nulo até lá
 );
 CREATE INDEX IF NOT EXISTS conversions_email ON conversions (email);
 CREATE INDEX IF NOT EXISTS conversions_pending ON conversions (synced_at);
