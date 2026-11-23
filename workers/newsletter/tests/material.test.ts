@@ -20,7 +20,7 @@ const tomlVar = (k: string) => {
 
 type Call = { url: string; method: string; body: any };
 
-function setup(opts: { turnstile?: unknown; rlEmail?: boolean; rlIp?: boolean; emailStatus?: number; now?: number; d1Falha?: RegExp; d1Pendura?: RegExp; d1Porta?: Promise<void> } = {}) {
+function setup(opts: { turnstile?: unknown; rlEmail?: boolean; rlIp?: boolean; emailStatus?: number; now?: number; d1Falha?: RegExp; d1Pendura?: RegExp; d1Porta?: Promise<void>; semGa4?: boolean; ga4Status?: number | 'throw' } = {}) {
   const calls: Call[] = [];
   const rl: string[] = [];
   const db = d1(opts.d1Falha, undefined, opts.d1Pendura, opts.d1Porta);
@@ -37,6 +37,10 @@ function setup(opts: { turnstile?: unknown; rlEmail?: boolean; rlIp?: boolean; e
     calls.push({ url, method, body });
     if (url.includes('turnstile')) return Response.json(opts.turnstile ?? { success: true, hostname: 'guifav.dev' });
     if (url === 'https://api.resend.com/emails') return opts.emailStatus ? new Response('x', { status: opts.emailStatus }) : Response.json({ id: 'e1' });
+    if (url.startsWith('https://www.google-analytics.com/mp/collect?')) {
+      if (opts.ga4Status === 'throw') throw new TypeError('rede fora');
+      return new Response(null, { status: opts.ga4Status ?? 204 });
+    }
     return new Response('inesperado', { status: 500 });
   };
   const env: Env = {
@@ -47,6 +51,8 @@ function setup(opts: { turnstile?: unknown; rlEmail?: boolean; rlIp?: boolean; e
     RL_EMAIL: { limit: async ({ key }) => (rl.push('email:' + key), { success: opts.rlEmail ?? true }) },
     RL_IP: { limit: async ({ key }) => (rl.push('ip:' + key), { success: opts.rlIp ?? true }) },
     DB: db,
+    GA4_MEASUREMENT_ID: tomlVar('GA4_MEASUREMENT_ID'),
+    GA4_API_SECRET: opts.semGa4 ? undefined : 'mp_teste_segredo',
   };
   const bytes: Record<string, ArrayBuffer> = Object.fromEntries(
     MATERIAIS.flatMap((m) => m.arquivos).map((a) => [a.id, new TextEncoder().encode(`conteudo:${a.id}`).buffer as ArrayBuffer]));
@@ -181,6 +187,8 @@ test('M9: o deploy leva os arquivos de todos os materiais do catálogo', () => {
 const sig = (q: string) => new URLSearchParams(q).get('s')!;
 // Valor esperado calculado à parte (node:crypto), sem a função testada.
 const idEsperado = (acao: string, s: string) => createHash('sha256').update(`${acao}\n${s}`).digest('hex');
+const pedidoEsperado = (material: string, email: string, q: string) =>
+  createHash('sha256').update(`material_request\n${material}\n${email}\n${new URLSearchParams(q).get('x')}`).digest('hex');
 
 test('C1: o clique no link grava a conversão com email, material e interesses; o mesmo link aberto de novo não duplica', async () => {
   const s = setup();
@@ -198,7 +206,8 @@ test('C1: o clique no link grava a conversão com email, material e interesses; 
   assert.deepEqual(c[0], {
     id: idEsperado('material_download', sig(q)), email: 'leitor@exemplo.com', action: 'material_download',
     material: 'mapa-decisao-ia', interests: JSON.stringify([INTERESSES.ARQUITETURA_IA, INTERESSES.CUSTO_IA]),
-    occurred_at: new Date(NOW).toISOString(), synced_at: null,
+    occurred_at: new Date(NOW).toISOString(), synced_at: null, verified: 1, ga_client_id: null,
+    request_id: pedidoEsperado('mapa-decisao-ia', 'leitor@exemplo.com', q),
   });
   assert.ok(!JSON.stringify(c).includes(sig(q)), 'o D1 nunca guarda a assinatura do link');
 });
@@ -213,30 +222,38 @@ test('C1: dois pedidos do mesmo material em dias diferentes viram duas conversõ
   assert.deepEqual(c.map((x) => [x.email, x.material]), [['leitor@exemplo.com', 'planilha-custos-ia'], ['leitor@exemplo.com', 'planilha-custos-ia']]);
 });
 
-test('C2: o pedido sem clique só soma na contagem do dia, sem email em lugar nenhum do D1', async () => {
+test('C2: o pedido grava material_request com o email não comprovado, os interesses e o client_id do GA4 (#99)', async () => {
   const s = setup();
-  await s.run(pedir(ok));
-  await s.run(pedir({ ...ok, email: 'outra@exemplo.com' }));
-  await s.run(pedir({ ...ok, material: 'mapa-decisao-ia' }));
-  assert.equal((await s.rows('conversions')).length, 0);
-  assert.deepEqual(await s.rows('material_requests'), [
-    { material: 'planilha-custos-ia', day: '2026-11-23', count: 2 },
-    { material: 'mapa-decisao-ia', day: '2026-11-23', count: 1 },
-  ]);
-  const tudo = JSON.stringify([await s.rows('conversions'), await s.rows('material_requests')]);
-  assert.ok(!tudo.includes('@'));
+  await s.run(pedir({ ...ok, ga_cid: ' 1234567890.1700000000 ' }));
+  const q = new URL(links(emails(s.calls)[0].body.html)[0]).search.slice(1);
+  assert.deepEqual(await s.rows('conversions'), [{
+    id: pedidoEsperado('planilha-custos-ia', 'leitor@exemplo.com', q), email: 'leitor@exemplo.com', action: 'material_request',
+    material: 'planilha-custos-ia', interests: JSON.stringify([INTERESSES.CUSTO_IA]), occurred_at: new Date(NOW).toISOString(),
+    synced_at: null, verified: 0, ga_client_id: '1234567890.1700000000', request_id: null,
+  }]);
+  assert.equal((await s.rows('sqlite_master')).filter((t) => t.name === 'material_requests').length, 0, 'a contagem sem email saiu (0005)');
 });
 
-test('C2: pedido barrado (Turnstile, limite, email inválido) não conta', async () => {
+test('C2: ga_cid fora do formato não é gravado; sem ele, o pedido grava client_id nulo', async () => {
+  for (const v of [undefined, '', 'GA1.1.123.456', '123', '1.2.3', 'abc.def', `${'1'.repeat(21)}.1`, '<email@x.com>']) {
+    const s = setup();
+    await s.run(pedir(v === undefined ? ok : { ...ok, ga_cid: v }));
+    const [c] = await s.rows('conversions');
+    assert.equal(c.ga_client_id, null, String(v));
+    assert.equal(c.verified, 0);
+  }
+});
+
+test('C2: pedido barrado (Turnstile, limite, email inválido) não grava nada', async () => {
   for (const o of [{ turnstile: { success: false } }, { rlEmail: false }, { rlIp: false }, { fields: { ...ok, email: 'sem-arroba' } }] as any[]) {
     const s = setup(o);
     await s.run(pedir(o.fields ?? ok));
-    assert.equal((await s.rows('material_requests')).length, 0, JSON.stringify(o));
+    assert.equal((await s.rows('conversions')).length, 0, JSON.stringify(o));
   }
 });
 
 test('C3: D1 fora do ar não impede o download nem o email do pedido, e o log não leva o email', async () => {
-  const s = setup({ d1Falha: /conversions|material_requests/ });
+  const s = setup({ d1Falha: /conversions/ });
   let r: Response | undefined;
   const erros = await capturaErros(async () => {
     r = await s.run(baixar(await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', NOW, SECRET)));
@@ -246,11 +263,11 @@ test('C3: D1 fora do ar não impede o download nem o email do pedido, e o log n�
   assert.equal(r!.status, 200);
   assert.equal(await r!.text(), 'conteudo:planilha-custos-ia');
   assert.equal(emails(s.calls).length, 1);
-  assert.equal(erros.length, 2);
   // O erro do D1 falso cita o email; o log troca por <email>.
   assert.deepEqual(erros.sort(), [
-    'contagem do pedido não gravada: D1_ERROR: UNIQUE constraint failed for <email>',
+    'client_id do pedido não lido: D1_ERROR: UNIQUE constraint failed for <email>',
     'conversão não gravada (material_download): D1_ERROR: UNIQUE constraint failed for <email>',
+    'conversão não gravada (material_request): D1_ERROR: UNIQUE constraint failed for <email>',
   ]);
   assert.ok(!erros.join('\n').includes('exemplo.com'));
 });
@@ -314,7 +331,7 @@ test('C1: o id é um SHA-256 em hexadecimal, diferente da assinatura', async () 
   assert.notEqual(c.id, sig(q));
 });
 
-test('C9: a contagem do pedido e a conversão do download passam por waitUntil e só gravam quando ele as completa', async () => {
+test('C9: a conversão do pedido e a do download passam por waitUntil e só gravam quando ele as completa', async () => {
   let libera!: () => void;
   const s = setup({ d1Porta: new Promise<void>((ok) => (libera = ok)) });
   await s.run(pedir(ok));
@@ -323,8 +340,7 @@ test('C9: a contagem do pedido e a conversão do download passam por waitUntil e
   assert.equal(s.pendentes(), 2);
   assert.equal(s.db.prepare('SELECT count(*) AS n FROM conversions').get()!.n, 0);
   libera();
-  assert.deepEqual((await s.rows('material_requests')).map((r) => r.count), [1]);
-  assert.equal((await s.rows('conversions')).length, 1);
+  assert.deepEqual((await s.rows('conversions')).map((r) => r.action).sort(), ['material_download', 'material_request']);
 });
 
 test('C10: o entrypoint do deploy repassa o ctx.waitUntil do pedido e o arquivo do material', async () => {
@@ -354,5 +370,83 @@ test('C11: contrato do mesmo segundo: pedidos a +100 ms e +900 ms dão o mesmo l
   await s.run(pedir(ok));
   assert.notEqual(linkDo(2), linkDo(0), 'outro segundo, outro link');
   for (const i of [0, 1, 2]) await s.run(new Request(linkDo(i)));
-  assert.equal((await s.rows('conversions')).length, 2);
+  const c = await s.rows('conversions');
+  assert.equal(c.filter((x) => x.action === 'material_request').length, 2, 'dois pedidos: o do primeiro segundo e o do seguinte');
+  assert.equal(c.filter((x) => x.action === 'material_download').length, 2);
+});
+
+// ---------------------------------------------------------------- GA4 pelo Measurement Protocol (issue #99)
+
+const ga4 = (calls: Call[]) => calls.filter((c) => c.url.startsWith('https://www.google-analytics.com/mp/collect?'));
+
+test('G1: o download manda material_download ao GA4 com o client_id do pedido e o liga ao pedido no D1', async () => {
+  const s = setup();
+  await s.run(pedir({ ...ok, material: 'mapa-decisao-ia', ga_cid: '1234567890.1700000000' }));
+  const ls = links(emails(s.calls)[0].body.html);
+  await s.settle();
+  s.avanca(3600e3);
+  for (const l of ls) await s.run(new Request(l));
+  const c = await s.rows('conversions');
+  const pedido = c.find((x) => x.action === 'material_request')!;
+  const downloads = c.filter((x) => x.action === 'material_download');
+  assert.equal(downloads.length, 2);
+  assert.ok(downloads.every((d) => d.request_id === pedido.id && d.verified === 1), 'os dois arquivos apontam para o mesmo pedido');
+  const g = ga4(s.calls);
+  assert.equal(g.length, 2);
+  const u = new URL(g[0].url);
+  assert.deepEqual([u.searchParams.get('measurement_id'), u.searchParams.get('api_secret')], ['G-K7Y87QNCX8', 'mp_teste_segredo']);
+  assert.deepEqual(g.map((x) => x.body), ls.map((l) => ({
+    client_id: '1234567890.1700000000',
+    consent: { ad_user_data: 'DENIED', ad_personalization: 'DENIED' },
+    events: [{ name: 'material_download', params: { material_id: 'mapa-decisao-ia', file_id: new URL(l).searchParams.get('f'), engagement_time_msec: 1 } }],
+  })));
+  assert.ok(!JSON.stringify(g).includes('exemplo.com'), 'o GA4 nunca recebe o email');
+});
+
+test('G2: sem pedido no D1 ou pedido sem client_id, o evento vai com client_id aleatório (contagem anônima)', async () => {
+  const s = setup();
+  await s.run(pedir(ok)); // sem ga_cid: recusou os cookies
+  await s.run(new Request(links(emails(s.calls)[0].body.html)[0]));
+  await s.run(baixar(await signMaterialLink('planilha-custos-ia', 'outra@exemplo.com', NOW - 864e5, SECRET))); // sem pedido
+  await s.settle();
+  const ids = ga4(s.calls).map((x) => x.body.client_id);
+  assert.equal(ids.length, 2);
+  for (const id of ids) assert.match(id, /^\d{1,10}\.\d{10}$/);
+  assert.notEqual(ids[0], ids[1]);
+  assert.ok(!JSON.stringify(ga4(s.calls)).includes('exemplo.com'));
+});
+
+test('G3: GA4 fora do ar, com erro ou sem segredo não muda a entrega, e o log não leva segredo nem email', async () => {
+  for (const o of [{ ga4Status: 500 }, { ga4Status: 'throw' }, { semGa4: true }] as const) {
+    const s = setup(o);
+    let r: Response | undefined;
+    const erros = await capturaErros(async () => {
+      r = await s.run(baixar(await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', NOW, SECRET)));
+      await s.settle();
+    });
+    assert.equal(await r!.text(), 'conteudo:planilha-custos-ia', JSON.stringify(o));
+    assert.equal((await s.rows('conversions')).length, 1);
+    assert.equal(erros.length, 1, JSON.stringify(o));
+    assert.match(erros[0], /^evento do GA4 não enviado: /);
+    assert.ok(!/mp_teste_segredo|exemplo\.com|api_secret/.test(erros[0]), erros[0]);
+    if ('semGa4' in o) assert.equal(ga4(s.calls).length, 0);
+  }
+});
+
+test('G4: o GA4 do Worker é o mesmo do site, e o segredo do Measurement Protocol está documentado e fora do toml', () => {
+  const home = readFileSync(new URL('../../../index.html', import.meta.url), 'utf-8');
+  assert.ok(home.includes(`gtag/js?id=${tomlVar('GA4_MEASUREMENT_ID')}"`));
+  assert.match(TOML, /#\s+GA4_API_SECRET\s/);
+  assert.doesNotMatch(TOML, /^\s*GA4_API_SECRET\s*=/m);
+});
+
+test('M10: o rodapé do email do material avisa que o pedido fica registrado e como pedir a remoção (#99)', async () => {
+  const s = setup();
+  await s.run(pedir(ok));
+  const b = emails(s.calls)[0].body;
+  for (const t of [b.text, b.html]) {
+    assert.match(t, /o pedido fica registrado/);
+    assert.match(t, /contact@guifav\.dev/);
+    assert.doesNotMatch(t, /nada mais será enviado/);
+  }
 });

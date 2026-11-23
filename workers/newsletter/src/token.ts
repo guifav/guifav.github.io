@@ -42,8 +42,11 @@ export const MATERIAL_TTL_MS = 7 * 24 * 3600e3;
 const materialPayload = (file: string, email: string, exp: number) => enc.encode(`m1\n${file}\n${email}\n${exp}`);
 
 /** Query string do download: f (arquivo), e (email em base64url), x (expira em, segundos Unix), s (assinatura). */
+/** Validade (segundos Unix) dos links de um pedido feito em nowMs: a mesma em todos os arquivos dele. */
+export const materialExp = (nowMs: number) => Math.floor((nowMs + MATERIAL_TTL_MS) / 1000);
+
 export async function signMaterialLink(file: string, email: string, nowMs: number, secret: string): Promise<string> {
-  const exp = Math.floor((nowMs + MATERIAL_TTL_MS) / 1000);
+  const exp = materialExp(nowMs);
   const sig = new Uint8Array(await crypto.subtle.sign('HMAC', await hmacKey(secret), materialPayload(file, email, exp)));
   return new URLSearchParams({ f: file, e: b64url(enc.encode(email)), x: String(exp), s: b64url(sig) }).toString();
 }

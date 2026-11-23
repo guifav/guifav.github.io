@@ -4,10 +4,11 @@
 //   POST /material           formulário das páginas de material: Turnstile, validação e email com o link
 //   GET  /material/download  link assinado do email (7 dias): entrega o arquivo e grava a conversão (issue #97)
 // As garantias A1 a A9 estão no PR e em tests/worker.test.ts; as dos materiais, em tests/material.test.ts.
-import { signLink, verifyLink, signMaterialLink, verifyMaterialLink, MIN_SECRET } from './token.ts';
+import { signLink, verifyLink, signMaterialLink, verifyMaterialLink, materialExp, MIN_SECRET } from './token.ts';
 import { confirmationEmail, materialEmail } from './email.ts';
 import { material, arquivo, INTERESSES } from './materiais.ts';
-import { recordConversion, countRequest, type D1Like } from './conversoes.ts';
+import { recordConversion, conversionId, requestId, requestClientId, type D1Like } from './conversoes.ts';
+import { parseGaClientId, sendDownloadEvent } from './ga4.ts';
 
 export interface RateLimit {
   limit(o: { key: string }): Promise<{ success: boolean }>;
@@ -28,8 +29,12 @@ export interface Env {
   TURNSTILE_HOSTNAME: string;
   RL_EMAIL: RateLimit;
   RL_IP: RateLimit;
-  /** D1 `blog-admin`: conversões do site e contagem de pedidos de material (issue #97). */
+  /** D1 `blog-admin`: conversões do site (issues #97 e #99). */
   DB: D1Like;
+  /** GA4 do site, para o evento de download pelo Measurement Protocol (issue #99). */
+  GA4_MEASUREMENT_ID: string;
+  /** Segredo da API do Measurement Protocol (wrangler secret). Sem ele, o evento de download não é enviado. */
+  GA4_API_SECRET?: string;
 }
 
 export interface Deps {
@@ -130,8 +135,9 @@ async function confirm(url: URL, env: Env, deps: Deps): Promise<Response> {
   }
   // Só a inscrição concluída vira conversão; o mesmo link aberto de novo não duplica (id pela assinatura).
   if (res.headers.get('location') === `${env.BLOG_URL}/inscricao-confirmada/`) {
-    deps.waitUntil(recordConversion(env.DB, { acao: 'newsletter_confirm', assinatura: url.searchParams.get('s') ?? '', email, material: null,
-      interesses: [INTERESSES.EXPERT_INSIGHTS], nowMs: deps.now() }));
+    const nowMs = deps.now();
+    deps.waitUntil((async () => recordConversion(env.DB, { id: await conversionId('newsletter_confirm', url.searchParams.get('s') ?? ''),
+      acao: 'newsletter_confirm', email, material: null, interesses: [INTERESSES.EXPERT_INSIGHTS], nowMs, verified: true }))());
   }
   return res;
 }
@@ -218,7 +224,11 @@ async function requestMaterial(req: Request, env: Env, deps: Deps): Promise<Resp
   if (!(await env.RL_EMAIL.limit({ key: `material:${email}` })).success) return sent;
 
   const now = deps.now();
-  deps.waitUntil(countRequest(env.DB, m.id, now));
+  // O pedido entra no registro com o email ainda não comprovado (issue #99), e com o client_id do GA4 quando o navegador
+  // o mandou (só com os cookies aceitos). O id é o mesmo que o download recalcula a partir do link.
+  const gaClientId = parseGaClientId(form.get('ga_cid'));
+  deps.waitUntil((async () => recordConversion(env.DB, { id: await requestId(m.id, email, materialExp(now)), acao: 'material_request',
+    email, material: m.id, interesses: m.interesses, nowMs: now, verified: false, gaClientId }))());
   const links = await Promise.all(m.arquivos.map(async (a) => ({
     rotulo: a.rotulo,
     url: `${env.WORKER_URL}/material/download?${await signMaterialLink(a.id, email, now, env.CONFIRM_SECRET)}`,
@@ -247,9 +257,20 @@ async function download(url: URL, env: Env, deps: Deps): Promise<Response> {
   if (!ok || !found) return expired;
   const bytes = deps.file ? await deps.file(found.arquivo.id) : null;
   if (!bytes) return plain(500, 'arquivo indisponível');
-  // O clique no link prova o email: é aqui, e não no pedido, que nasce a conversão (issue #97).
-  deps.waitUntil(recordConversion(env.DB, { acao: 'material_download', assinatura: url.searchParams.get('s') ?? '', email: ok.email,
-    material: found.material.id, interesses: found.material.interesses, nowMs: deps.now() }));
+  // O clique no link prova o email (issue #97). A conversão aponta para o pedido que gerou o link, e o evento do GA4 sai
+  // com o client_id guardado nesse pedido, ligando pedido e download no GA4; sem ele, vai como contagem anônima (#99).
+  const nowMs = deps.now();
+  const material = found.material;
+  const file = found.arquivo.id;
+  deps.waitUntil((async () => {
+    const reqId = await requestId(material.id, ok.email, Number(url.searchParams.get('x')));
+    await recordConversion(env.DB, { id: await conversionId('material_download', url.searchParams.get('s') ?? ''),
+      acao: 'material_download', email: ok.email, material: material.id, interesses: material.interesses, nowMs, verified: true,
+      requestId: reqId });
+    const clientId = await requestClientId(env.DB, reqId);
+    await sendDownloadEvent({ measurementId: env.GA4_MEASUREMENT_ID, apiSecret: env.GA4_API_SECRET }, deps.fetch,
+      { clientId, material: material.id, file, nowMs });
+  })());
   return new Response(bytes, {
     status: 200,
     headers: {

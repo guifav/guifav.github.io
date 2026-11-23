@@ -18,6 +18,13 @@ export function d1(falha?: RegExp, mensagem = 'D1_ERROR: UNIQUE constraint faile
       if (falha?.test(sql)) throw new Error(mensagem);
       return db.prepare(sql).run(...(args as never[]));
     },
+    first: async <T>() => {
+      if (pendura?.test(sql)) return new Promise<T | null>(() => {});
+      if (porta) await porta;
+      if (falha?.test(sql)) throw new Error(mensagem);
+      const r = db.prepare(sql).get(...(args as never[]));
+      return (r ? JSON.parse(JSON.stringify(r)) : null) as T;
+    },
   });
   return { raw: db, prepare: (sql: string) => stmt(sql) };
 }
