@@ -1378,7 +1378,7 @@ class TrackingSourcesTest(unittest.TestCase):
                      "https://adssettings.google.com/", "https://tools.google.com/dlpage/gaoptout",
                      "https://policies.google.com/technologies/partner-sites"):
             self.assertIn(must, t)
-        self.assertIn("Atualizada em 14 de novembro de 2026.", t)  # #68: seção Cookies
+        self.assertIn("Atualizada em 23 de novembro de 2026.", t)  # #68: seção Cookies; 23/11: seção Materiais para baixar
 
 
 if __name__ == "__main__":
