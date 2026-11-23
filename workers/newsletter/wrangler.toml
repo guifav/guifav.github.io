@@ -5,13 +5,22 @@
 #   TURNSTILE_SECRET  chave secreta do widget do Turnstile de guifav.dev
 #   CONFIRM_SECRET    32 caracteres ou mais; assina o link de confirmação (openssl rand -base64 48)
 name = "blog-newsletter"
-main = "src/index.ts"
+main = "src/worker.ts"
 compatibility_date = "2026-11-01"
 workers_dev = false
 routes = [{ pattern = "insights.guifav.dev", custom_domain = true }]
 
+# Arquivos dos materiais (POST /material, GET /material/download): entram no Worker como módulos de dados,
+# sem cópia pública no site. Para atualizar, troque o arquivo em materiais/ e faça o deploy.
+[[rules]]
+type = "Data"
+globs = ["**/*.xlsx", "**/*.pdf"]
+fallthrough = false
+
 [vars]
 FROM = "Guilherme Favaron | Expert Insights <insights@guifav.dev>"
+# Remetente do email com o link dos materiais do canal (planilha, mapa de decisão), no mesmo domínio verificado.
+MATERIAL_FROM = "Guilherme Favaron <insights@guifav.dev>"
 REPLY_TO = "contact@guifav.dev"
 # Segmento "IA Aplicada" do Resend (criado em 2026-11-11). Vazio: o Worker responde 500 e não cadastra nada.
 SEGMENT_ID = "34c37605-670a-4c09-9dff-5e5a05c9e0fa"

@@ -116,6 +116,7 @@ function setup(opts: Opts = {}) {
     TURNSTILE_SECRET: 'ts_teste',
     CONFIRM_SECRET: SECRET,
     FROM: tomlVar('FROM'),
+    MATERIAL_FROM: tomlVar('MATERIAL_FROM'),
     REPLY_TO: tomlVar('REPLY_TO'),
     SEGMENT_ID: 'seg-1', // id usado pelos mocks; o real fica no wrangler.toml
     TOPIC_ID: 'topic-1',

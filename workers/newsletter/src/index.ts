@@ -1,9 +1,12 @@
-// Worker de inscrição da newsletter do blog (issue #21, parte A).
-//   POST /subscribe  formulário do blog: Turnstile, validação e email de confirmação
-//   GET  /confirm    link assinado do email: cria o contato no segmento do Resend
-// As garantias A1 a A9 estão no PR e em tests/worker.test.ts.
-import { signLink, verifyLink, MIN_SECRET } from './token.ts';
-import { confirmationEmail } from './email.ts';
+// Worker de inscrição da newsletter do blog (issue #21, parte A) e de entrega dos materiais do canal @guifav.
+//   POST /subscribe          formulário do blog: Turnstile, validação e email de confirmação
+//   GET  /confirm            link assinado do email: cria o contato no segmento do Resend
+//   POST /material           formulário das páginas de material: Turnstile, validação e email com o link
+//   GET  /material/download  link assinado do email (7 dias): entrega o arquivo
+// As garantias A1 a A9 estão no PR e em tests/worker.test.ts; as dos materiais, em tests/material.test.ts.
+import { signLink, verifyLink, signMaterialLink, verifyMaterialLink, MIN_SECRET } from './token.ts';
+import { confirmationEmail, materialEmail } from './email.ts';
+import { material, arquivo } from './materiais.ts';
 
 export interface RateLimit {
   limit(o: { key: string }): Promise<{ success: boolean }>;
@@ -14,6 +17,7 @@ export interface Env {
   TURNSTILE_SECRET: string;
   CONFIRM_SECRET: string;
   FROM: string;
+  MATERIAL_FROM: string;
   REPLY_TO: string;
   SEGMENT_ID: string;
   TOPIC_ID: string;
@@ -28,6 +32,8 @@ export interface Env {
 export interface Deps {
   fetch: typeof fetch;
   now: () => number;
+  /** Bytes de um arquivo de material pelo id, ou null. O src/worker.ts liga aos módulos de dados. */
+  file?: (id: string) => Promise<ArrayBuffer | null>;
 }
 
 const MAX_BODY = 8192;
@@ -175,8 +181,76 @@ async function enroll(email: string, env: Env, deps: Deps): Promise<Response> {
   return (await inSegment(id, env, deps, headers)) === true ? done : retry;
 }
 
+async function requestMaterial(req: Request, env: Env, deps: Deps): Promise<Response> {
+  if (req.headers.get('origin') !== env.SITE_ORIGIN) return plain(403, 'origem não permitida');
+  if (Number(req.headers.get('content-length') ?? 0) > MAX_BODY) return plain(413, 'pedido grande demais');
+  const raw = await req.text();
+  if (raw.length > MAX_BODY) return plain(413, 'pedido grande demais');
+  const form = new URLSearchParams(raw);
+  const m = material(form.get('material') ?? '');
+  if (!m) return plain(400, 'material desconhecido');
+  const page = `${env.SITE_ORIGIN}/${m.id}/`;
+  const sent = redirect(`${page}enviado/`);
+  const ip = req.headers.get('cf-connecting-ip') ?? 'desconhecido';
+
+  // Mesma ordem da inscrição: limite por IP, Turnstile e, daí em diante, resposta igual para qualquer caso.
+  if (!(await env.RL_IP.limit({ key: ip })).success) return sent;
+  const token = form.get('cf-turnstile-response');
+  if (!token || !(await turnstileOk(token, ip, env, deps))) return redirect(`${page}#erro-verificacao`);
+  const email = normalizeEmail(form.get('email') ?? '');
+  if (!email) return sent;
+  // Chave própria: pedir o material não gasta o limite da inscrição na newsletter, e vice-versa.
+  if (!(await env.RL_EMAIL.limit({ key: `material:${email}` })).success) return sent;
+
+  const now = deps.now();
+  const links = await Promise.all(m.arquivos.map(async (a) => ({
+    rotulo: a.rotulo,
+    url: `${env.WORKER_URL}/material/download?${await signMaterialLink(a.id, email, now, env.CONFIRM_SECRET)}`,
+  })));
+  // A inscrição nos Expert Insights só entra com a caixa marcada, e continua dependendo do clique de confirmação.
+  const confirmLink = form.get('insights') === 'sim' ? `${env.WORKER_URL}/confirm?${await signLink(email, now, env.CONFIRM_SECRET)}` : null;
+  const mail = materialEmail(email, m.titulo, links, confirmLink);
+  try {
+    const r = await deps.fetch(`${RESEND}/emails`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ from: env.MATERIAL_FROM, to: [email], reply_to: env.REPLY_TO, subject: mail.subject, html: mail.html,
+        text: mail.text, tags: [{ name: 'material', value: m.id }, { name: 'insights', value: confirmLink ? 'sim' : 'nao' }] }),
+    });
+    if (!r.ok) console.error(`envio do material falhou: HTTP ${r.status}`);
+  } catch (e) {
+    console.error(`envio do material falhou: ${(e as Error).message}`);
+  }
+  return sent;
+}
+
+async function download(url: URL, env: Env, deps: Deps): Promise<Response> {
+  const ok = await verifyMaterialLink(url.searchParams, env.CONFIRM_SECRET, deps.now());
+  const found = ok ? arquivo(ok.file) : arquivo(url.searchParams.get('f') ?? '');
+  const expired = redirect(found ? `${env.SITE_ORIGIN}/${found.material.id}/#link-expirado` : `${env.SITE_ORIGIN}/`);
+  if (!ok || !found) return expired;
+  const bytes = deps.file ? await deps.file(found.arquivo.id) : null;
+  if (!bytes) return plain(500, 'arquivo indisponível');
+  return new Response(bytes, {
+    status: 200,
+    headers: {
+      'content-type': found.arquivo.tipo,
+      'content-disposition': `attachment; filename="${found.arquivo.nome}"`,
+      'cache-control': 'private, no-store',
+      'x-content-type-options': 'nosniff',
+      'referrer-policy': 'no-referrer',
+    },
+  });
+}
+
 export async function handle(req: Request, env: Env, deps: Deps): Promise<Response> {
   const url = new URL(req.url);
+  if (url.pathname === '/material' || url.pathname === '/material/download') {
+    if (url.pathname === '/material' && req.method !== 'POST') return plain(405, 'método não permitido', { allow: 'POST' });
+    if (url.pathname === '/material/download' && req.method !== 'GET') return plain(405, 'método não permitido', { allow: 'GET' });
+    if (!configured(env) || !env.MATERIAL_FROM) return plain(500, 'Worker sem configuração');
+    return url.pathname === '/material' ? requestMaterial(req, env, deps) : download(url, env, deps);
+  }
   if (url.pathname !== '/subscribe' && url.pathname !== '/confirm') return plain(404, 'não encontrado');
   if (url.pathname === '/subscribe' && req.method !== 'POST') return plain(405, 'método não permitido', { allow: 'POST' });
   // Só GET: um HEAD (pré-busca de link, verificador de email) não pode cadastrar ninguém (A1, A7).
