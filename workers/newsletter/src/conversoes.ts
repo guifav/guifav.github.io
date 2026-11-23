@@ -19,9 +19,11 @@ const enc = new TextEncoder();
 const motivo = (e: unknown) => String((e as Error)?.message ?? e).replace(/[^\s@]+@[^\s@]+/g, '<email>').slice(0, 200);
 
 /**
- * Id da conversão: SHA-256 da ação com a assinatura do link. O mesmo link aberto de novo dá o mesmo id (uma conversão);
- * um pedido novo traz outra validade e, portanto, outra assinatura (outra conversão). Guardar o hash, e não a
- * assinatura, evita que o D1 tenha o que basta para refazer um link ainda válido.
+ * Id da conversão: SHA-256 da ação com a assinatura do link, já verificada e canônica (token.ts recusa as variantes).
+ * O mesmo link aberto de novo dá o mesmo id (uma conversão); um pedido novo traz outra validade e, portanto, outra
+ * assinatura (outra conversão). Dois pedidos do mesmo endereço no mesmo segundo produzem o mesmo link, com os mesmos
+ * bytes, e contam como uma conversão: a conversão é o clique num link. Guardar o hash, e não a assinatura, evita que o
+ * D1 tenha o que basta para refazer um link ainda válido.
  */
 export async function conversionId(acao: Acao, assinatura: string): Promise<string> {
   const h = new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(`${acao}\n${assinatura}`)));

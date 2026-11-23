@@ -6,8 +6,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { handle, contactPath, normalizeEmail, type Env } from '../src/index.ts';
 import { signLink, verifyLink } from '../src/token.ts';
 import { confirmationEmail } from '../src/email.ts';
-import { conversionId } from '../src/conversoes.ts';
-import { d1, rows, capturaErros } from './d1.ts';
+import { createHash } from 'node:crypto';
+import { d1, rows, capturaErros, variantes } from './d1.ts';
 
 const NOW = Date.UTC(2026, 10, 11, 12, 0, 0);
 const SECRET = 'segredo-de-teste-com-tamanho-suficiente-0123456789';
@@ -601,10 +601,22 @@ test('C7: /confirm concluído grava uma conversão newsletter_confirm; o mesmo l
   const c = rows(s.db, 'conversions');
   assert.equal(c.length, 1);
   assert.deepEqual(c[0], {
-    id: await conversionId('newsletter_confirm', new URLSearchParams(q).get('s')!), email: 'leitor@exemplo.com',
+    id: createHash('sha256').update(`newsletter_confirm\n${new URLSearchParams(q).get('s')}`).digest('hex'), email: 'leitor@exemplo.com',
     action: 'newsletter_confirm', material: '', interests: JSON.stringify([{ id: 'EXPERT_INSIGHTS', rotulo: 'Expert Insights' }]),
     occurred_at: new Date(NOW).toISOString(), synced_at: '',
   });
+  assert.ok(!JSON.stringify(c).includes(new URLSearchParams(q).get('s')!), 'o D1 nunca guarda a assinatura do link');
+});
+
+test('C7: o link de confirmação só vale com a assinatura canônica; as variantes não confirmam nem gravam', async () => {
+  const s = setup({ contact: 'none' });
+  const q = await signLink('leitor@exemplo.com', NOW, SECRET);
+  const sg = new URLSearchParams(q).get('s')!;
+  for (const v of variantes(sg)) {
+    assert.equal(loc(await s.run(await confirmar(q.replace(`s=${sg}`, `s=${v}`)))), 'https://guifav.dev/blog/inscricao-invalida/', v);
+  }
+  assert.equal(rows(s.db, 'conversions').length, 0);
+  assert.equal(s.calls.filter((c) => c.url.startsWith('https://api.resend.com/contacts')).length, 0);
 });
 
 test('C7: confirmação que falha (502) ou link inválido não grava conversão', async () => {
@@ -622,8 +634,8 @@ test('C7: D1 fora do ar não derruba a confirmação, e o log não leva o email'
   const erros = await capturaErros(async () => { r = await s.run(await confirmar(await signLink('leitor@exemplo.com', NOW, SECRET))); });
   assert.equal(loc(r!), 'https://guifav.dev/blog/inscricao-confirmada/');
   assert.equal(erros.length, 1);
-  assert.match(erros[0], /^conversão não gravada \(newsletter_confirm\)/);
-  assert.ok(!erros.join('\n').includes('leitor@exemplo.com'));
+  assert.equal(erros[0], 'conversão não gravada (newsletter_confirm): D1_ERROR: UNIQUE constraint failed for <email>');
+  assert.ok(!erros.join('\n').includes('exemplo.com'));
 });
 
 test('C8: o wrangler.toml liga o mesmo D1 do painel, com o binding DB', () => {

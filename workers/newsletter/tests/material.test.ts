@@ -6,8 +6,8 @@ import { readFileSync, existsSync } from 'node:fs';
 import { handle, type Env } from '../src/index.ts';
 import { signLink, signMaterialLink, MATERIAL_TTL_MS } from '../src/token.ts';
 import { MATERIAIS, INTERESSES } from '../src/materiais.ts';
-import { conversionId } from '../src/conversoes.ts';
-import { d1, rows, capturaErros } from './d1.ts';
+import { createHash } from 'node:crypto';
+import { d1, rows, capturaErros, variantes } from './d1.ts';
 
 const NOW = Date.UTC(2026, 10, 23, 12, 0, 0);
 const SECRET = 'segredo-de-teste-com-tamanho-suficiente-0123456789';
@@ -173,6 +173,8 @@ test('M9: o deploy leva os arquivos de todos os materiais do catálogo', () => {
 // ---------------------------------------------------------------- Conversões (issue #97)
 
 const sig = (q: string) => new URLSearchParams(q).get('s')!;
+// Valor esperado calculado à parte (node:crypto), sem a função testada.
+const idEsperado = (acao: string, s: string) => createHash('sha256').update(`${acao}\n${s}`).digest('hex');
 
 test('C1: o clique no link grava a conversão com email, material e interesses; o mesmo link aberto de novo não duplica', async () => {
   const s = setup();
@@ -185,10 +187,11 @@ test('C1: o clique no link grava a conversão com email, material e interesses; 
   const c = rows(s.db, 'conversions');
   assert.equal(c.length, 1);
   assert.deepEqual(c[0], {
-    id: await conversionId('material_download', sig(q)), email: 'leitor@exemplo.com', action: 'material_download',
+    id: idEsperado('material_download', sig(q)), email: 'leitor@exemplo.com', action: 'material_download',
     material: 'mapa-decisao-ia', interests: JSON.stringify([INTERESSES.ARQUITETURA_IA, INTERESSES.CUSTO_IA]),
     occurred_at: new Date(NOW).toISOString(), synced_at: '',
   });
+  assert.ok(!JSON.stringify(c).includes(sig(q)), 'o D1 nunca guarda a assinatura do link');
 });
 
 test('C1: dois pedidos do mesmo material em dias diferentes viram duas conversões da mesma pessoa', async () => {
@@ -234,9 +237,10 @@ test('C3: D1 fora do ar não impede o download nem o email do pedido, e o log n�
   assert.equal(await r!.text(), 'conteudo:planilha-custos-ia');
   assert.equal(emails(s.calls).length, 1);
   assert.equal(erros.length, 2);
-  assert.match(erros[0], /^conversão não gravada \(material_download\): D1_ERROR/);
-  assert.match(erros[1], /^contagem do pedido não gravada: D1_ERROR/);
-  assert.ok(!erros.join('\n').includes('leitor@exemplo.com'));
+  // O erro do D1 falso cita o email; o log troca por <email>.
+  assert.equal(erros[0], 'conversão não gravada (material_download): D1_ERROR: UNIQUE constraint failed for <email>');
+  assert.equal(erros[1], 'contagem do pedido não gravada: D1_ERROR: UNIQUE constraint failed for <email>');
+  assert.ok(!erros.join('\n').includes('exemplo.com'));
 });
 
 test('C4: link inválido, expirado ou arquivo indisponível não gravam conversão', async () => {
@@ -264,4 +268,16 @@ test('C5: todo material declara ao menos um interesse do catálogo, com id no fo
     assert.ok(m.interesses.length > 0, `${m.id} sem interesse`);
     for (const i of m.interesses) assert.ok(ids.has(i.id), `${m.id}: interesse ${i.id} fora do catálogo`);
   }
+});
+
+test('C6: a assinatura só vale na forma canônica; as variantes com os mesmos bytes não entregam nem gravam', async () => {
+  const s = setup();
+  const q = await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', NOW, SECRET);
+  for (const v of variantes(sig(q))) {
+    const r = await s.run(baixar(q.replace(`s=${sig(q)}`, `s=${v}`)));
+    assert.equal(loc(r), 'https://guifav.dev/planilha-custos-ia/#link-expirado', v);
+  }
+  assert.equal(rows(s.db, 'conversions').length, 0);
+  assert.equal((await s.run(baixar(q))).status, 200);
+  assert.equal(rows(s.db, 'conversions').length, 1);
 });

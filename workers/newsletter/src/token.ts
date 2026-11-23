@@ -59,7 +59,9 @@ export async function verifyMaterialLink(p: URLSearchParams, secret: string, now
   if (exp * 1000 < nowMs) return null;
   const eb = fromB64url(e);
   const sb = fromB64url(s);
-  if (!eb || !sb) return null;
+  // Só a forma canônica da assinatura vale: os bits de sobra do último caractere mudam a string sem mudar os bytes, e
+  // cada variante seria um link diferente para o mesmo pedido (e uma conversão a mais, issue #97).
+  if (!eb || !sb || b64url(sb) !== s) return null;
   let email: string;
   try {
     email = new TextDecoder('utf-8', { fatal: true }).decode(eb);
@@ -80,7 +82,9 @@ export async function verifyLink(p: URLSearchParams, secret: string, nowMs: numb
   if (exp * 1000 < nowMs) return null;
   const eb = fromB64url(e);
   const sb = fromB64url(s);
-  if (!eb || !sb) return null;
+  // Só a forma canônica da assinatura vale: os bits de sobra do último caractere mudam a string sem mudar os bytes, e
+  // cada variante seria um link diferente para o mesmo pedido (e uma conversão a mais, issue #97).
+  if (!eb || !sb || b64url(sb) !== s) return null;
   let email: string;
   try {
     email = new TextDecoder('utf-8', { fatal: true }).decode(eb);

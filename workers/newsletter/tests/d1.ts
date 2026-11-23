@@ -1,17 +1,18 @@
 // D1 falso em SQLite real (node:sqlite) com as migrações do painel (workers/admin/migrations), donas do esquema.
-// Mesmo desenho do D1 falso dos testes do painel. `falha` derruba as instruções cujo SQL casar com a expressão.
+// Mesmo desenho do D1 falso dos testes do painel. `falha` derruba as instruções cujo SQL casar com a expressão, com a
+// mensagem `mensagem` (por padrão, uma que cita um email, para provar que o log o remove).
 import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import type { D1Like, D1Stmt } from '../src/conversoes.ts';
 
-export function d1(falha?: RegExp): D1Like & { raw: DatabaseSync } {
+export function d1(falha?: RegExp, mensagem = 'D1_ERROR: UNIQUE constraint failed for leitor@exemplo.com'): D1Like & { raw: DatabaseSync } {
   const db = new DatabaseSync(':memory:');
   const dir = new URL('../../admin/migrations/', import.meta.url);
   for (const f of readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()) db.exec(readFileSync(new URL(f, dir), 'utf-8'));
   const stmt = (sql: string, args: unknown[] = []): D1Stmt => ({
     bind: (...v: unknown[]) => stmt(sql, v),
     run: async () => {
-      if (falha?.test(sql)) throw new Error('D1_ERROR: indisponível');
+      if (falha?.test(sql)) throw new Error(mensagem);
       return db.prepare(sql).run(...(args as never[]));
     },
   });
@@ -33,4 +34,11 @@ export async function capturaErros(fn: () => Promise<unknown>): Promise<string[]
     console.error = orig;
   }
   return out;
+}
+
+/** A mesma assinatura base64url com outros bits de sobra no último caractere: outra string, os mesmos bytes. */
+export function variantes(s: string): string[] {
+  const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+  const i = A.indexOf(s.at(-1)!);
+  return [1, 2, 3].map((d) => s.slice(0, -1) + A[(i & ~3) | ((i + d) & 3)]);
 }
