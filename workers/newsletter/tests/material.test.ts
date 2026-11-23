@@ -20,10 +20,10 @@ const tomlVar = (k: string) => {
 
 type Call = { url: string; method: string; body: any };
 
-function setup(opts: { turnstile?: unknown; rlEmail?: boolean; rlIp?: boolean; emailStatus?: number; now?: number; d1Falha?: RegExp; d1Pendura?: RegExp } = {}) {
+function setup(opts: { turnstile?: unknown; rlEmail?: boolean; rlIp?: boolean; emailStatus?: number; now?: number; d1Falha?: RegExp; d1Pendura?: RegExp; d1Porta?: Promise<void> } = {}) {
   const calls: Call[] = [];
   const rl: string[] = [];
-  const db = d1(opts.d1Falha, undefined, opts.d1Pendura);
+  const db = d1(opts.d1Falha, undefined, opts.d1Pendura, opts.d1Porta);
   const pending: Promise<unknown>[] = [];
   const waitUntil = (p: Promise<unknown>) => void pending.push(p);
   // Espera o trabalho feito depois da resposta (o que o Cloudflare faria com ctx.waitUntil).
@@ -53,7 +53,7 @@ function setup(opts: { turnstile?: unknown; rlEmail?: boolean; rlIp?: boolean; e
   let clock = opts.now ?? NOW;
   const run = (req: Request) => handle(req, env, { fetch: fetchFn as typeof fetch, now: () => clock, file: async (id) => bytes[id] ?? null, waitUntil });
   const avanca = (ms: number) => void (clock += ms);
-  return { run, calls, rl, env, db: db.raw, settle, avanca, rows: async (t: string) => (await settle(), rows(db.raw, t)), waitUntil };
+  return { run, calls, rl, env, db: db.raw, settle, pendentes: () => pending.length, avanca, rows: async (t: string) => (await settle(), rows(db.raw, t)), waitUntil };
 }
 
 const pedir = (fields: Record<string, string>, headers: Record<string, string> = {}) =>
@@ -312,4 +312,17 @@ test('C1: o id é um SHA-256 em hexadecimal, diferente da assinatura', async () 
   const [c] = await s.rows('conversions');
   assert.match(c.id, /^[0-9a-f]{64}$/);
   assert.notEqual(c.id, sig(q));
+});
+
+test('C9: a contagem do pedido e a conversão do download passam por waitUntil e só gravam quando ele as completa', async () => {
+  let libera!: () => void;
+  const s = setup({ d1Porta: new Promise<void>((ok) => (libera = ok)) });
+  await s.run(pedir(ok));
+  await s.run(baixar(await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', NOW, SECRET)));
+  // Sem waitUntil, o Cloudflare pode cancelar a gravação depois da resposta: as duas precisam estar registradas nele.
+  assert.equal(s.pendentes(), 2);
+  assert.equal(s.db.prepare('SELECT count(*) AS n FROM conversions').get()!.n, 0);
+  libera();
+  assert.deepEqual((await s.rows('material_requests')).map((r) => r.count), [1]);
+  assert.equal((await s.rows('conversions')).length, 1);
 });

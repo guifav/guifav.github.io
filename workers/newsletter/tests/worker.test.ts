@@ -37,12 +37,12 @@ type Opts = {
   topic?: 'opt_in' | 'opt_out'; // estado do contato existente no tópico
   throwOn?: string;
   badJsonOn?: string;
-  d1Falha?: RegExp; d1Pendura?: RegExp;
+  d1Falha?: RegExp; d1Pendura?: RegExp; d1Porta?: Promise<void>;
 };
 
 function setup(opts: Opts = {}) {
   const calls: Call[] = [];
-  const db = d1(opts.d1Falha, undefined, opts.d1Pendura);
+  const db = d1(opts.d1Falha, undefined, opts.d1Pendura, opts.d1Porta);
   const pending: Promise<unknown>[] = [];
   const waitUntil = (p: Promise<unknown>) => void pending.push(p);
   // Espera o trabalho feito depois da resposta (o que o Cloudflare faria com ctx.waitUntil).
@@ -139,7 +139,7 @@ function setup(opts: Opts = {}) {
   let clock = NOW;
   const run = (req: Request) => handle(req, env, { fetch: fetchFn as typeof fetch, now: () => clock, waitUntil });
   const avanca = (ms: number) => void (clock += ms);
-  return { env, run, calls, rl, state, db: db.raw, settle, avanca, rows: async (t: string) => (await settle(), rows(db.raw, t)) };
+  return { env, run, calls, rl, state, db: db.raw, settle, pendentes: () => pending.length, avanca, rows: async (t: string) => (await settle(), rows(db.raw, t)) };
 }
 
 function subscribe(fields: Record<string, string>, headers: Record<string, string> = {}) {
@@ -661,4 +661,13 @@ test('C7: D1 que não responde não segura a confirmação (a gravação vai por
   const r = await Promise.race([s.run(await confirmar(await signLink('leitor@exemplo.com', NOW, SECRET))),
     new Promise<never>((_, no) => setTimeout(() => no(new Error('a confirmação esperou o D1')), 1000))]);
   assert.equal(loc(r), 'https://guifav.dev/blog/inscricao-confirmada/');
+});
+
+test('C9: a conversão da confirmação passa por waitUntil e só grava quando ele a completa', async () => {
+  let libera!: () => void;
+  const s = setup({ contact: 'none', d1Porta: new Promise<void>((ok) => (libera = ok)) });
+  assert.equal(loc(await s.run(await confirmar(await signLink('leitor@exemplo.com', NOW, SECRET)))), 'https://guifav.dev/blog/inscricao-confirmada/');
+  assert.equal(s.pendentes(), 1);
+  libera();
+  assert.equal((await s.rows('conversions')).length, 1);
 });
