@@ -130,7 +130,7 @@ async function confirm(url: URL, env: Env, deps: Deps): Promise<Response> {
   }
   // Só a inscrição concluída vira conversão; o mesmo link aberto de novo não duplica (id pela assinatura).
   if (res.headers.get('location') === `${env.BLOG_URL}/inscricao-confirmada/`) {
-    deps.waitUntil(recordConversion(env.DB, { acao: 'newsletter_confirm', assinatura: url.searchParams.get('s') ?? '', email, material: '',
+    deps.waitUntil(recordConversion(env.DB, { acao: 'newsletter_confirm', assinatura: url.searchParams.get('s') ?? '', email, material: null,
       interesses: [INTERESSES.EXPERT_INSIGHTS], nowMs: deps.now() }));
   }
   return res;

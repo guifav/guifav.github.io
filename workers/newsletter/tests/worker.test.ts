@@ -606,7 +606,7 @@ test('C7: /confirm concluído grava uma conversão newsletter_confirm; o mesmo l
   assert.equal(c.length, 1);
   assert.deepEqual(c[0], {
     id: createHash('sha256').update(`newsletter_confirm\n${new URLSearchParams(q).get('s')}`).digest('hex'), email: 'leitor@exemplo.com',
-    action: 'newsletter_confirm', material: '', interests: JSON.stringify([{ id: 'EXPERT_INSIGHTS', rotulo: 'Expert Insights' }]),
+    action: 'newsletter_confirm', material: null, interests: JSON.stringify([{ id: 'EXPERT_INSIGHTS', rotulo: 'Expert Insights' }]),
     occurred_at: new Date(NOW).toISOString(), synced_at: null,
   });
   assert.ok(!JSON.stringify(c).includes(new URLSearchParams(q).get('s')!), 'o D1 nunca guarda a assinatura do link');

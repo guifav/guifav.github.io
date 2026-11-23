@@ -33,7 +33,7 @@ export async function conversionId(acao: Acao, assinatura: string): Promise<stri
 
 export async function recordConversion(
   db: D1Like,
-  c: { acao: Acao; assinatura: string; email: string; material: string; interesses: Interesse[]; nowMs: number },
+  c: { acao: Acao; assinatura: string; email: string; material: string | null; interesses: Interesse[]; nowMs: number },
 ): Promise<void> {
   try {
     const id = await conversionId(c.acao, c.assinatura);

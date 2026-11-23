@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS conversions (
   id TEXT PRIMARY KEY,               -- SHA-256 da ação com a assinatura do link: clicar de novo no mesmo link não duplica
   email TEXT NOT NULL,               -- email comprovado pelo link assinado (minúsculas)
   action TEXT NOT NULL,              -- material_download | newsletter_confirm
-  material TEXT NOT NULL DEFAULT '', -- id do material (vazio em newsletter_confirm)
+  material TEXT,                     -- id do material; nulo em newsletter_confirm
   interests TEXT NOT NULL,           -- JSON: [{"id": "CUSTO_IA", "rotulo": "Custo de IA"}], como estava no catálogo na hora da ação
   occurred_at TEXT NOT NULL,         -- ISO UTC
   synced_at TEXT                     -- quando a fase 2 gravou no Twenty (ISO UTC); nulo até lá
