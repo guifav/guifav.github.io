@@ -529,6 +529,23 @@ class SyncTest(unittest.TestCase):
             self.assertEqual((counts["linha_invalida"], f.pending(), list(conv_by_event(f))), (1, [hexid(1)], [hexid(2)]), bad)
             self.assertEqual(S.iso_ms(bad), "")
 
+    def test_years_below_1000_keep_four_digits_and_order(self):
+        # r3 (Astra P1, Kimi P2): ano com quatro algarismos, senão "2-..." > "10-..." > "2026-..." como texto.
+        self.assertEqual(S.iso_ms("0001-01-01T00:00:00.001Z"), "0001-01-01T00:00:00.001Z")
+        self.assertEqual(S.iso_ms("0999-12-31T23:59:59.999Z"), "0999-12-31T23:59:59.999Z")
+        f = Fake(people=[person("p1", "a@x.com", siteGaClientId="9.9", siteUltimaConversao="2026-11-24T10:00:00.000Z")])
+        f.add(1, "a@x.com", action="material_request", ga="2.2", when="0002-01-01T00:00:00.002Z")
+        f.add(2, "a@x.com", action="material_request", ga="10.10", when="0010-01-01T00:00:00.010Z")
+        run(f, apply=True)
+        p = f.people["p1"]
+        self.assertEqual((p["siteUltimaConversao"], p["siteGaClientId"]), ("2026-11-24T10:00:00.000Z", "9.9"))
+        self.assertEqual(sorted(c["ocorreuEm"] for c in f.convs.values()), ["0002-01-01T00:00:00.002Z", "0010-01-01T00:00:00.010Z"])
+        g = Fake(people=[person("p1", "a@x.com")])
+        g.add(1, "a@x.com", action="material_request", ga="2.2", when="0002-01-01T00:00:00.002Z")
+        g.add(2, "a@x.com", action="material_request", ga="10.10", when="0010-01-01T00:00:00.010Z")
+        run(g, apply=True)
+        self.assertEqual((g.people["p1"]["siteUltimaConversao"], g.people["p1"]["siteGaClientId"]), ("0010-01-01T00:00:00.010Z", "10.10"))
+
     def test_fresh_crm_with_failing_reads_gets_no_schema(self):
         # r1 (Astra P2): com o esquema por criar, uma falha em qualquer leitura do Twenty não deixa escrita nenhuma.
         def people_broken(method, path, data):

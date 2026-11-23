@@ -133,7 +133,10 @@ def iso_ms(value: str) -> str:
 
 
 def stamp(d: datetime) -> str:
-    return d.strftime("%Y-%m-%dT%H:%M:%S.") + f"{d.microsecond // 1000:03d}Z"
+    # Campos explícitos: o %Y do strftime no Linux não completa anos abaixo de 1000 com zeros ("999-..."), o que quebra
+    # o formato ISO e a comparação como texto.
+    return (f"{d.year:04d}-{d.month:02d}-{d.day:02d}T{d.hour:02d}:{d.minute:02d}:{d.second:02d}."
+            f"{d.microsecond // 1000:03d}Z")
 
 
 def _now() -> datetime:  # relógio do synced_at (substituível nos testes)
