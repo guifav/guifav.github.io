@@ -118,6 +118,11 @@ test('checkPostFiles: slug e index só em formato simples (o check_site.py lê e
   assert.ok(t('slug: a\nindex: false # comentário').some((p) => p.includes('index')));
   assert.ok(t('slug: a\nindex: no').some((p) => p.includes('index')));
   assert.ok(t('slug: a # x').length > 0);
+  assert.deepEqual(t('slug: a\ntopics: [agentes-de-ia]'), []);
+  assert.deepEqual(t('slug: a\ntopics: [agentes-de-ia, ia-sobre-dados-da-empresa]'), []);
+  for (const fm of ['topics:\n  - agentes-de-ia-em-producao', 'topics: [agentes-de-ia] # x', "topics: ['agentes-de-ia-em-producao']", 'topics: [a,b]', 'topics: [a]\ntopics: [b]']) {
+    assert.ok(t(`slug: a\n${fm}`).some((p) => p.includes('topics')), fm);
+  }
   assert.ok(t('slug: a\nslug: b').some((p) => p.includes('mais de uma')));
 });
 

@@ -25,7 +25,7 @@ export function frontmatterSlug(text: string): string | null {
 }
 
 /**
- * O check_site.py lê slug e index do frontmatter com um parser simples. Para os dois lerem o mesmo
+ * O check_site.py lê slug, index e topics do frontmatter com um parser simples. Para os dois lerem o mesmo
  * valor que o Astro, esses campos só aparecem uma vez e em formato simples, sem comentário.
  */
 function simpleScalarProblems(text: string): string[] {
@@ -36,6 +36,8 @@ function simpleScalarProblems(text: string): string[] {
   const rules: [string, RegExp][] = [
     ['slug', /^slug: (?:[a-z0-9-]+|"[a-z0-9-]+"|'[a-z0-9-]+')$/],
     ['index', /^index: (?:true|false)$/],
+    // O check_site.py lê topics para conferir o link do tema no bloco "Leia também" (#104).
+    ['topics', /^topics: \[[a-z0-9-]+(?:, [a-z0-9-]+)*\]$/],
   ];
   for (const [key, ok] of rules) {
     const found = lines.filter((l) => new RegExp(`^${key}\\s*:`).test(l));

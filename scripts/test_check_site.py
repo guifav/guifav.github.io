@@ -2,6 +2,8 @@
 
 Rodar: python3 scripts/test_check_site.py
 """
+import contextlib
+import io
 import json
 import os
 import shutil
@@ -828,7 +830,9 @@ class TitleAndGroupTest(unittest.TestCase):
                        ("planilha-custos-ia/index.html", "materiais"), ("mapa-decisao-ia/enviado/index.html", "materiais"),
                        ("planilha-custos-ia/x/index.html", None),
                        ("llm-ranking/index.html", None), ("blog/pagina/x/index.html", None),
-                       ("blog/a/b/index.html", None)):
+                       ("blog/a/b/index.html", None),
+                       ("blog/tema/ia-sobre-dados-da-empresa/index.html", "insights-lista"),
+                       ("blog/tema/a/b/index.html", None), ("blog/tema/Maiuscula/index.html", None)):
             with self.subTest(rel=rel):
                 self.assertEqual(E(rel), g)
         self.assertEqual(set(C.CONTENT_GROUPS), {"home", "portfolio", "insights-lista", "insights-artigo", "expert-insights", "materiais"})
@@ -1521,6 +1525,34 @@ class ToolsTest(unittest.TestCase):
                 self.assertEqual(self.missing(problems, "rodapé"), sorted(C.TOOLS_LINKS), problems)
                 self.assertEqual(self.missing(problems, "seção"), [], problems)
 
+    def test_links_in_template_or_hidden_do_not_count(self):
+        # Follow-up do PR #116: <template>, hidden no link e hidden num elemento acima não contam.
+        for name, wrap in {
+            "template": lambda x: f"<template>{x}</template>",
+            "hidden no link": lambda x: x.replace("<a ", "<a hidden "),
+            "hidden acima": lambda x: f"<div hidden><p>{x}</p></div>",
+            "hidden acima, com vazio dentro": lambda x: f'<div hidden><img src="/x.png">{x}<br></div>',
+        }.items():
+            with self.subTest(name=name):
+                problems = C.check_tools("blog/um-post/index.html", self.doc(footer=wrap(self.links())))
+                self.assertEqual(self.missing(problems, "rodapé"), sorted(C.TOOLS_LINKS), problems)
+                problems = C.check_tools("index.html", self.doc(wrap(self.links()), self.links()))
+                self.assertEqual(self.missing(problems, "seção"), sorted(C.TOOLS_LINKS), problems)
+
+    def test_links_after_a_closed_hidden_or_void_element_count(self):
+        footer = f'<div hidden>x</div><img src="/x.png"><br/><template><a href="/y/">y</a></template>{self.links()}'
+        self.assertEqual(C.check_tools("blog/um-post/index.html", self.doc(footer=footer)), [])
+
+    def test_nofollow_link_fails(self):
+        for rel in ("nofollow", "noopener nofollow", "NOFOLLOW"):
+            with self.subTest(rel=rel):
+                footer = self.links(C.TOOLS_LINKS[1:]) + f'<a href="{C.TOOLS_LINKS[0]}" rel="{rel}">x</a>'
+                problems = C.check_tools("blog/um-post/index.html", self.doc(footer=footer))
+                self.assertEqual(problems, [f"blog/um-post/index.html: rodapé com o link de Ferramentas e guias "
+                                            f"{C.TOOLS_LINKS[0]} em rel=nofollow"])
+        footer = self.links(C.TOOLS_LINKS[1:]) + f'<a href="{C.TOOLS_LINKS[0]}" rel="noopener">x</a>'
+        self.assertEqual(C.check_tools("blog/um-post/index.html", self.doc(footer=footer)), [])
+
     def test_section_and_footer_do_not_stand_in_for_each_other(self):
         # Link da seção não vale pelo rodapé...
         problems = C.check_tools("index.html", self.doc(self.links(), ""))
@@ -1540,6 +1572,105 @@ class ToolsTest(unittest.TestCase):
         self.assertEqual(C.check_tools("blog/um-post/index.html", self.doc(ga=False)), [])
         self.assertEqual(C.check_tools("portfolio/index.html", self.doc()), [])
         self.assertEqual(C.check_tools("mapa-decisao-ia/index.html", self.doc()), [])
+
+
+class RelatedTest(unittest.TestCase):
+    """Issue #104: o bloco "Leia também" em todo post indexável, com 3 posts e o link do tema, e em nenhum outro."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.site = Path(self.tmp.name) / "_site"
+        self.posts = Path(self.tmp.name) / "posts"
+        self.posts.mkdir()
+        for s in ("a", "b", "c", "d"):
+            self.post(s)
+        self.post("tem-tema", "topics: [agentes-de-ia, ia-sobre-dados-da-empresa]")
+        self.post("podcast", "type: podcast\nindex: false", block=None)
+        self.post("fora", "index: false", block=None)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def block(self, slugs=("a", "b", "c"), extra=""):
+        items = "".join(f'<li><a href="/blog/{s}/">{s}</a></li>' for s in slugs)
+        return f'<aside class="related" aria-label="Leia também"><h2>Leia também</h2><ul>{items}</ul>{extra}</aside>'
+
+    def post(self, slug, fm="", block=""):
+        (self.posts / f"{slug}.md").write_text(f"---\ntitle: x\nslug: {slug}\n{fm}\n---\ntexto\n", encoding="utf-8")
+        if block == "":
+            others = [s for s in ("a", "b", "c", "d") if s != slug][:3]
+            extra = '<p>Tema: <a href="/blog/tema/agentes-de-ia/">t</a></p>' if "topics" in fm else ""
+            block = self.block(others, extra)
+        self.page(slug, block or "")
+
+    def page(self, slug, body):
+        f = self.site / "blog" / slug / "index.html"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(page(f'<div class="post-body"><p>x</p></div>{body}'), encoding="utf-8")
+
+    def problems(self):
+        return C.check_related(self.site, self.posts)
+
+    def test_complete_passes(self):
+        self.assertEqual(self.problems(), [])
+
+    def test_indexable_post_without_block_fails(self):
+        self.page("a", "")
+        self.assertEqual(self.problems(), ["blog/a/index.html: post indexável precisa de um bloco Leia também, tem 0"])
+
+    def test_block_in_comment_or_with_other_class_does_not_count(self):
+        for body in (f"<!-- {self.block(('b', 'c', 'd'))} -->", self.block(("b", "c", "d")).replace('"related"', '"relacionados"')):
+            with self.subTest(body=body[:30]):
+                self.page("a", body)
+                self.assertEqual(self.problems(), ["blog/a/index.html: post indexável precisa de um bloco Leia também, tem 0"])
+
+    def test_two_blocks_fail(self):
+        self.page("a", self.block(("b", "c", "d")) * 2)
+        self.assertEqual(self.problems(), ["blog/a/index.html: post indexável precisa de um bloco Leia também, tem 2"])
+
+    def test_fewer_than_three_indexable_posts_fail(self):
+        for slugs, bad in ((("b", "c"), []), (("b", "c", "podcast"), ["podcast"]), (("b", "c", "a"), ["a"]),
+                           (("b", "c", "b"), [])):
+            with self.subTest(slugs=slugs):
+                self.page("a", self.block(slugs))
+                got = self.problems()
+                self.assertIn("blog/a/index.html: bloco Leia também com 2 posts indexáveis, o mínimo é 3", got)
+                for s in bad:
+                    self.assertIn(f"blog/a/index.html: bloco Leia também aponta para {s}, que é o próprio post ou está "
+                                  "fora do índice", got)
+
+    def test_post_with_topic_needs_the_main_topic_link(self):
+        self.page("tem-tema", self.block(("a", "b", "c")))
+        self.assertEqual(self.problems(), ["blog/tem-tema/index.html: bloco Leia também sem o link para o tema "
+                                           "agentes-de-ia"])
+        # O link do segundo tema não vale pelo do principal.
+        self.page("tem-tema", self.block(("a", "b", "c"), '<a href="/blog/tema/ia-sobre-dados-da-empresa/">t</a>'))
+        self.assertEqual(len(self.problems()), 1)
+
+    def test_podcast_and_noindex_post_without_block(self):
+        self.page("podcast", self.block())
+        self.page("fora", self.block())
+        self.assertEqual(self.problems(), [
+            "blog/fora/index.html: podcast ou post com index: false com o bloco Leia também",
+            "blog/podcast/index.html: podcast ou post com index: false com o bloco Leia também",
+        ])
+
+    def test_post_topics_reads_only_the_simple_format(self):
+        self.assertEqual(C.post_topics({"topics": "[a, b-c]"}), ["a", "b-c"])
+        for raw in ("", "a", "[a,b]", "[A]", "[]"):
+            self.assertEqual(C.post_topics({"topics": raw}), [], raw)
+
+
+class RelatedWiredTest(Base):
+    def test_main_runs_the_related_rule(self):
+        consts = Path(self.tmp.name) / "consts.ts"
+        consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
+        self.assertEqual(self.problems(pre_cutover=False), [])  # check() sozinho não tem a regra
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            code = C.main(["--site", str(self.site), "--posts", str(self.posts), "--consts", str(consts)])
+        self.assertEqual(code, 1)
+        self.assertIn("blog/um-post/index.html: post indexável precisa de um bloco Leia também, tem 0", err.getvalue())
 
 
 class ToolsWiredTest(Base):
@@ -1734,7 +1865,8 @@ class SeoTest(unittest.TestCase):
         from unittest import mock
         self.post(slug="antigo", date="2024-03-01", desc="curta")  # importado: só aviso, agrupado na CI
         # isola a regra da #103 das demais; o formato do aviso depende de GITHUB_ACTIONS, que a CI define
-        with mock.patch.object(C, "check", lambda *a, **k: []):
+        with mock.patch.object(C, "check", lambda *a, **k: []), \
+                mock.patch.object(C, "check_related", lambda *a, **k: []):  # bloco Leia também (#104)
             for gh, new_mark, group in (("", "AVISO: ", None), ("true", "::warning title=check_site (#103)::", "::group::")):
                 for desc, code in (("d" * 69, 1), ("d" * 165, 0), (self.OK_DESC, 0)):
                     with self.subTest(gh=gh, desc=len(desc)), mock.patch.dict(os.environ, {"GITHUB_ACTIONS": gh}):

@@ -555,7 +555,8 @@ def expected_content_group(rel: str) -> str | None:
         return "home"
     if rel == "portfolio/index.html":
         return "portfolio"
-    if rel == "blog/index.html" or re.fullmatch(r"blog/pagina/\d+/index\.html", rel):
+    if (rel == "blog/index.html" or re.fullmatch(r"blog/pagina/\d+/index\.html", rel)
+            or re.fullmatch(r"blog/tema/[a-z0-9][a-z0-9-]*/index\.html", rel)):
         return "insights-lista"
     if rel in EXPERT_INSIGHTS_PAGES:
         return "expert-insights"
@@ -965,27 +966,48 @@ TOOLS_LINKS = ("/mapa-decisao-ia/", "/planilha-custos-ia/",
 TOOLS_SECTION_ID = "ferramentas"
 
 
+# Elementos sem fechamento: não entram na pilha de abertos do _ToolsLinks.
+VOID_TAGS = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
+
+
 class _ToolsLinks(HTMLParser):
-    """hrefs dentro do <footer> e dentro da <section id="ferramentas"> (comentário não conta)."""
+    """hrefs dentro do <footer> e dentro da <section id="ferramentas">.
+
+    Não contam: link em comentário, dentro de <template> ou de elemento com hidden, ou com hidden no próprio <a>
+    (follow-up do PR #116). O rel de cada link fica guardado para a regra recusar nofollow.
+    """
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
-        self.stack: list[str | None] = []  # bloco aberto por <footer> ou pela seção; None nas demais <section>
+        # Pilha dos elementos abertos: (tag, bloco que ele abre ou None, se ele torna o conteúdo inerte).
+        self.stack: list[tuple[str, str | None, bool]] = []
         self.found: dict[str, list[str]] = {"footer": [], "section": []}
+        self.rels: dict[str, list[tuple[str, str]]] = {"footer": [], "section": []}
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+        if tag not in VOID_TAGS:
+            self.handle_endtag(tag)
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         a = dict(attrs)
-        if tag == "footer":
-            self.stack.append("footer")
-        elif tag == "section":
-            self.stack.append("section" if a.get("id") == TOOLS_SECTION_ID else None)
-        elif tag == "a" and a.get("href"):
-            for where in dict.fromkeys(w for w in self.stack if w):
-                self.found[where].append((a["href"] or "").strip())
+        inert = any(i for _, _, i in self.stack) or tag == "template" or "hidden" in a
+        if tag == "a" and a.get("href") and not inert:
+            for where in dict.fromkeys(w for _, w, _ in self.stack if w):
+                href = (a["href"] or "").strip()
+                self.found[where].append(href)
+                self.rels[where].append((href, (a.get("rel") or "").lower()))
+        if tag in VOID_TAGS:
+            return
+        block = "footer" if tag == "footer" else (
+            "section" if tag == "section" and a.get("id") == TOOLS_SECTION_ID else None)
+        self.stack.append((tag, block, tag == "template" or "hidden" in a))
 
     def handle_endtag(self, tag: str) -> None:
-        if tag in ("footer", "section") and self.stack:
-            self.stack.pop()
+        for i in range(len(self.stack) - 1, -1, -1):
+            if self.stack[i][0] == tag:
+                del self.stack[i:]
+                return
 
 
 def check_tools(rel: str, html: str) -> list[str]:
@@ -999,6 +1021,7 @@ def check_tools(rel: str, html: str) -> list[str]:
     if rel == "index.html":
         blocks[f'seção id="{TOOLS_SECTION_ID}"'] = p.found["section"]
     problems = []
+    rels = {"rodapé": p.rels["footer"], f'seção id="{TOOLS_SECTION_ID}"': p.rels["section"]}
     for name, hrefs in blocks.items():
         for href in TOOLS_LINKS:
             n = hrefs.count(href)
@@ -1006,6 +1029,86 @@ def check_tools(rel: str, html: str) -> list[str]:
                 problems.append(f"{rel}: {name} sem o link de Ferramentas e guias {href}")
             elif n > 1:
                 problems.append(f"{rel}: {name} com o link de Ferramentas e guias {href} {n} vezes")
+            if any(h == href and "nofollow" in r.split() for h, r in rels[name]):
+                problems.append(f"{rel}: {name} com o link de Ferramentas e guias {href} em rel=nofollow")
+    return problems
+
+
+# "Leia também" (issue #104): todo post indexável (fora os podcasts) leva o bloco <aside class="related"> com pelo
+# menos RELATED_MIN posts indexáveis e, quando o post tem tema, o link para a página do tema principal (o primeiro de
+# topics). Podcast e post com index: false ficam sem o bloco. Alarme de integridade do [slug].astro, como as regras de
+# cima; a lista e a ordem dos posts são do blog-src/src/lib/topics.ts, testadas lá.
+RELATED_CLASS = "related"
+RELATED_MIN = 3
+TOPIC_PREFIX = "/blog/tema/"
+
+
+class _RelatedBlocks(HTMLParser):
+    """Os <aside class="related"> da página, cada um com os hrefs dos seus links (comentário não conta)."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.depth = 0  # profundidade de <aside> dentro do bloco aberto; 0 fora dele
+        self.blocks: list[list[str]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        a = dict(attrs)
+        if tag == "aside":
+            if self.depth:
+                self.depth += 1
+            elif RELATED_CLASS in (a.get("class") or "").split():
+                self.depth = 1
+                self.blocks.append([])
+        elif tag == "a" and self.depth and (a.get("href") or "").strip():
+            self.blocks[-1].append((a["href"] or "").strip())
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "aside" and self.depth:
+            self.depth -= 1
+
+
+def post_topics(fm: dict[str, str]) -> list[str]:
+    """Os temas do frontmatter, no formato simples que o check-posts.ts exige: topics: [a, b]."""
+    m = re.fullmatch(r"\[([a-z0-9-]+(?:, [a-z0-9-]+)*)\]", fm.get("topics", ""))
+    return m.group(1).split(", ") if m else []
+
+
+def check_related(site: Path, posts: Path) -> list[str]:
+    """#104: o bloco "Leia também" em todo post indexável e em nenhum outro."""
+    listed: dict[str, list[str]] = {}
+    others: set[str] = set()
+    for md in sorted(posts.glob("*.md")):
+        fm = frontmatter(md.read_text(encoding="utf-8"))
+        slug = fm.get("slug") or md.stem
+        if fm.get("index") == "false" or fm.get("type") == "podcast":
+            others.add(slug)
+        else:
+            listed[slug] = post_topics(fm)
+    problems = []
+    for slug in sorted(listed.keys() | others):
+        f = site / "blog" / slug / "index.html"
+        if not f.is_file():
+            continue  # check() já acusa post sem página
+        p = _RelatedBlocks()
+        p.feed(f.read_text(encoding="utf-8"))
+        p.close()
+        rel = f.relative_to(site).as_posix()
+        if slug in others:
+            if p.blocks:
+                problems.append(f"{rel}: podcast ou post com index: false com o bloco Leia também")
+            continue
+        if len(p.blocks) != 1:
+            problems.append(f"{rel}: post indexável precisa de um bloco Leia também, tem {len(p.blocks)}")
+            continue
+        hrefs = p.blocks[0]
+        linked = {m.group(1) for h in hrefs if (m := re.fullmatch(r"/blog/([a-z0-9-]+)/", h))}
+        good = {s for s in linked if s in listed and s != slug}
+        if len(good) < RELATED_MIN:
+            problems.append(f"{rel}: bloco Leia também com {len(good)} posts indexáveis, o mínimo é {RELATED_MIN}")
+        for s in sorted(linked - good):
+            problems.append(f"{rel}: bloco Leia também aponta para {s}, que é o próprio post ou está fora do índice")
+        if listed[slug] and f"{TOPIC_PREFIX}{listed[slug][0]}/" not in hrefs:
+            problems.append(f"{rel}: bloco Leia também sem o link para o tema {listed[slug][0]}")
     return problems
 
 
@@ -1188,6 +1291,7 @@ def main(argv: list[str] | None = None) -> int:
     pre = read_pre_cutover(Path(args.consts))
     try:
         problems = check(Path(args.site), Path(args.posts), pre_cutover=pre)
+        problems += check_related(Path(args.site), Path(args.posts))
     except ResolverError as e:
         print(f"ERRO: resolvedor de URL indisponível, verificação não feita: {e}", file=sys.stderr)
         return 1
