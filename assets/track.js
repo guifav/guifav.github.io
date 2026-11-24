@@ -102,6 +102,9 @@
     return HOST_LABELS[host] || host;
   }
 
+  // Só chaves próprias: utm_source=constructor (que casa com o padrão) não pode achar nada do protótipo.
+  function own(obj, k) { return Object.prototype.hasOwnProperty.call(obj, k) ? obj[k] : null; }
+
   function pathOk(p) { return typeof p === 'string' && p.length <= 200 && PATH_RE.test(p); }
 
   function host(h) { return String(h || '').toLowerCase().replace(/\.$/, '').replace(/^www\./, ''); }
@@ -134,13 +137,13 @@
     var internal = ref !== '' && ref === host(selfHost);
     var refHit = ref && !internal ? matchHost(ref) : null;
     var src = o.utm_source;
-    var srcName = src ? (SOURCE_NAMES[src] || (matchHost(host(src)) || {}).fonte || null) : null;
+    var srcName = src ? (own(SOURCE_NAMES, src) || (matchHost(host(src)) || {}).fonte || null) : null;
     var paid = false;
     for (var i = 0; i < PAID_IDS.length; i++) if (params.has(PAID_IDS[i])) paid = true;
     if (o.utm_medium && PAID_MEDIUM.test(o.utm_medium)) paid = true;
     var mediumCanal = null;
     for (var j = 0; o.utm_medium && j < MEDIUM_CANAL.length; j++) if (MEDIUM_CANAL[j][0].test(o.utm_medium)) mediumCanal = MEDIUM_CANAL[j][1];
-    var srcCanal = src ? (SOURCE_NAMES[src] ? FONTE_CANAL[srcName] : (matchHost(host(src)) || {}).canal || null) : null;
+    var srcCanal = src ? (own(SOURCE_NAMES, src) ? own(FONTE_CANAL, srcName) : (matchHost(host(src)) || {}).canal || null) : null;
     if (paid) o.canal = 'pago';
     else if (mediumCanal) o.canal = mediumCanal;
     else if (srcCanal) o.canal = srcCanal;
@@ -155,7 +158,8 @@
 
   function validOrigin(o) {
     if (!o || typeof o !== 'object' || CANAIS.indexOf(o.canal) < 0) return null;
-    var fonte = o.canal === 'direto' || o.canal === 'desconhecida' ? null : (o.fonte in FONTE_CANAL ? o.fonte : null);
+    var fonte = o.canal === 'direto' || o.canal === 'desconhecida' || typeof o.fonte !== 'string' ? null
+      : (own(FONTE_CANAL, o.fonte) !== null ? o.fonte : null);
     var keep = function (rx, v) { return typeof v === 'string' && rx.test(v) ? v : null; };
     return { canal: o.canal, fonte: fonte, utm_source: keep(UTM_RE, o.utm_source), utm_medium: keep(UTM_RE, o.utm_medium),
       utm_campaign: keep(UTM_RE, o.utm_campaign), entrada: pathOk(o.entrada) ? o.entrada : null };

@@ -504,6 +504,10 @@ test('origem: UTM fora de [a-z0-9._-]{1,64} é recusado campo a campo; maiúscul
     assert.equal(o.utm_source, 'google', 'os outros campos ficam');
   }
   assert.equal(origemDe('', `${base}utm_campaign=${'x'.repeat(64)}`).utm_campaign, 'x'.repeat(64));
+  // Nomes do protótipo casam com o padrão, mas não são fonte da lista.
+  for (const nome of ['constructor', 'tostring', '__proto__', 'hasownproperty', 'valueof']) {
+    assert.deepEqual([origemDe('', `${base}utm_source=${nome}`).canal, origemDe('', `${base}utm_source=${nome}`).fonte], ['desconhecida', null], nome);
+  }
 });
 
 test('origem: nem a URL de onde a pessoa veio, nem o termo buscado, nem gclid ou query entram na origem', () => {
@@ -530,9 +534,12 @@ test('origem: gravada na primeira página da aba e nunca trocada pela navegaçã
   assert.equal(st.getItem('site_origin_v1'), primeira);
   assert.deepEqual(JSON.parse(JSON.stringify((s2.ctx.guifavOrigin as { current(): Origem }).current())),
     { canal: 'assistente', fonte: 'chatgpt', utm_source: 'chatgpt.com', utm_medium: null, utm_campaign: null, entrada: '/blog/agentes/' });
-  // Valor adulterado no storage não vale: a página o reclassifica.
+  // Valor adulterado no storage: só o que casa com as listas e os padrões fica; o resto vira nulo.
   const bad = new Storage();
   bad.setItem('site_origin_v1', JSON.stringify({ canal: 'busca', fonte: 'google', entrada: 'https://x.com/?q=termo', utm_source: 'A B' }));
+  const proto = new Storage();
+  proto.setItem('site_origin_v1', JSON.stringify({ canal: 'social', fonte: 'constructor' }));
+  assert.equal(JSON.parse(JSON.stringify((setup({ storage: proto }).ctx.guifavOrigin as { current(): Origem }).current())).fonte, null);
   const s3 = setup({ storage: bad, referrer: '', href: 'https://guifav.dev/' });
   assert.deepEqual(JSON.parse(JSON.stringify((s3.ctx.guifavOrigin as { current(): Origem }).current())),
     { canal: 'busca', fonte: 'google', ...SEM, entrada: null });
