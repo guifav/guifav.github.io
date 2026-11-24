@@ -430,6 +430,24 @@ class VerifyTest(unittest.TestCase):
                 self.assertEqual(rc, 1, out)
                 self.assertIn(u, out)
 
+    def test_destination_may_take_exactly_the_hop_the_site_redirects_list_plans(self):
+        # #106: /p/<absorvida> cai em guifav.dev/blog/<absorvida>/, que a lista do site_redirects.py leva à vencedora.
+        import site_redirects as SR
+        dup, win = SR.DUPLICATES[0]
+        mid, final = f"https://guifav.dev/blog/{dup}/", f"https://guifav.dev/blog/{win}/"
+        todo = [R.Job(f"https://{WWW}/p/{dup}")]
+        rc, out = self.run_verify(self.fetcher(dest={mid: (301, final)}), todo)
+        self.assertEqual(rc, 0, out)
+        for bad in ({mid: (301, final), final: (404, None)},           # vencedora fora do ar
+                    {mid: (301, "https://guifav.dev/blog/outro/")},    # salto diferente do previsto
+                    {mid: (302, final)}):                              # não é 301
+            with self.subTest(bad=bad):
+                rc, out = self.run_verify(self.fetcher(dest=bad), todo)
+                self.assertEqual(rc, 1, out)
+        rc, out = self.run_verify(self.fetcher(dest={"https://guifav.dev/blog/a/": (301, final)}),
+                                  [R.Job(f"https://{WWW}/p/a")])
+        self.assertEqual(rc, 1, out)  # post fora da lista não ganha salto extra
+
     def test_head_and_http_are_sent_as_such(self):
         seen = []
         todo = [R.Job(f"https://{WWW}/p/a", "HEAD"), R.Job(f"http://{APEX}/p/a")]
