@@ -44,10 +44,20 @@ Um markdown por post em `src/content/posts/<slug>.md`, direto na pasta e com o n
 | `spotify_url` | só em podcast | link https de episódio do Spotify (open.spotify.com ou Spotify for Creators); vira o player embutido |
 | `index` | não | padrão `true`; com `false`, a página sai com `noindex, follow` e fica fora do sitemap |
 | `newsletter` | não | padrão `false`; marca o post para o rascunho de envio (#21) |
-| `topics` | não | lista de temas da #104, sem repetição, dentre `ia-sobre-dados-da-empresa`, `custos-roi-e-escolha-de-modelo`, `agentes-de-ia-em-producao`, `implantacao-de-ia-legados-e-arquitetura` e `engenharia-de-software-com-ia` (`TOPIC_IDS` em `schema.ts`); o primeiro é o tema principal. Post fora do foco fica sem tema |
+| `topics` | não | lista de temas da #104, com pelo menos 1 tema quando presente (a lista vazia é recusada, tanto `topics: []` quanto `topics:` sem valor), sem repetição, dentre `ia-sobre-dados-da-empresa`, `custos-e-modelos-de-ia`, `agentes-de-ia`, `implantacao-de-ia` e `engenharia-de-software-com-ia` (`TOPIC_IDS` em `schema.ts`, congelados: o id é o endereço da página e não acompanha renomeação do título); o primeiro é o tema principal. Post fora do foco fica sem tema |
 | `summary` | não | resumo de 2 ou 3 frases para o topo do post (#108), até 500 caracteres; independente da `description`, que continua obrigatória |
 
 Imagens ficam em `public/img/<slug>/`, publicadas em `/blog/img/<slug>/`.
+
+## Temas e "Leia também" (#104)
+
+Os temas ficam em `src/lib/topics.ts`: nome, abertura, description, chamada da conversão e a **ordem de leitura** de cada um. Cada tema tem a página `/blog/tema/<id>/` (`src/pages/tema/[tema].astro`), no sitemap, e aparece na linha "Temas" da lista do blog e na migalha dos posts dele.
+
+- Para pôr um post num tema, acrescente `topics: [<id>]` no frontmatter **e** o post em `posts` do tema, na posição de leitura, com a pergunta que ele responde. O build falha se as duas listas divergirem, se um post fora do índice ou podcast tiver tema ou se um tema ficar com menos de 5 posts indexáveis (`topicProblems`).
+- Tema sem 5 posts fortes fica em `WAITING_TOPICS`: sem página, e nenhum post pode usá-lo. Hoje é o caso de `engenharia-de-software-com-ia`.
+- Todo post indexável tem o bloco de relacionados (3 posts). Com tema, o título é "Mais artigos sobre <tema>", com link para a página, e os posts são os seguintes na ordem de leitura do primeiro tema. Sem tema, o título é "Leia também" e os posts são os indexáveis mais próximos por data. Podcasts e posts com `index: false` ficam sem o bloco.
+- Contra a canibalização (agy, #104): do post para a página de tema, só a migalha e o título do bloco. Link no corpo do post com o texto exato de uma consulta-alvo vai para o post dono da consulta, nunca para a página de tema.
+- Os textos dos temas saem em nome do Gui: mudança neles passa pela aprovação dele no PR.
 
 ## HTML no corpo dos posts
 

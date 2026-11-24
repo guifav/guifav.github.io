@@ -7,6 +7,7 @@ updated: 2026-03-29T16:03:57.089Z
 slug: como-integrar-ia-nos-seus-sistemas-legados
 cover: img/como-integrar-ia-nos-seus-sistemas-legados/capa.jpg
 type: newsletter
+topics: [implantacao-de-ia]
 ---
 
 <figure>

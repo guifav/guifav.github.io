@@ -5,6 +5,7 @@ date: 2025-09-09T03:00:00.000Z
 slug: machine-learning-producao-modelos-empresariais-roi
 cover: img/machine-learning-producao-modelos-empresariais-roi/capa.jpg
 type: newsletter
+topics: [ia-sobre-dados-da-empresa]
 ---
 
 Quando uma empresa parceira me procurou com o desafio de transformar seus experimentos de machine learning em soluções que realmente impactassem o resultado financeiro, sabia que enfrentaríamos um dos maiores gargalos da implementação de IA empresarial. A organização havia investido dois anos desenvolvendo modelos preditivos sofisticados em ambiente de laboratório, mas nenhum havia chegado à produção de forma sustentável.

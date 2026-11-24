@@ -1,0 +1,19 @@
+---
+// Chamada de um tema (#104): texto corrido com links. O link externo (o agendamento) abre em outra aba e leva o
+// data-cta-location que o track.js manda no schedule_click; os links internos não levam atributo.
+import type { CtaPart } from '../lib/topics';
+
+interface Props {
+  parts: CtaPart[];
+  location: string;
+}
+
+const { parts, location } = Astro.props;
+---
+{parts.map((p) =>
+  typeof p === 'string' ? p : p.href.startsWith('https://') ? (
+    <a href={p.href} target="_blank" rel="noopener" data-cta-location={location}>{p.text}</a>
+  ) : (
+    <a href={p.href}>{p.text}</a>
+  ),
+)}

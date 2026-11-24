@@ -6,6 +6,7 @@ updated: 2024-12-02T11:31:19.782Z
 slug: rag-llm-ai-o-que-e
 cover: img/rag-llm-ai-o-que-e/capa.jpg
 type: newsletter
+topics: [ia-sobre-dados-da-empresa]
 ---
 
 <figure>

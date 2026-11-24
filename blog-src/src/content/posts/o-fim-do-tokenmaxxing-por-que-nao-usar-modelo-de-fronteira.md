@@ -7,6 +7,7 @@ updated: 2026-07-01T15:05:17.948Z
 slug: o-fim-do-tokenmaxxing-por-que-nao-usar-modelo-de-fronteira
 cover: img/o-fim-do-tokenmaxxing-por-que-nao-usar-modelo-de-fronteira/capa.jpg
 type: newsletter
+topics: [custos-e-modelos-de-ia]
 ---
 
 Há algumas semanas argumentei aqui que o código estava deixando de ser o ativo escasso, comoditizado pela mesma IA que o escreve ([O fim do código como ativo](/blog/o-fim-do-codigo-como-ativo-o-novo/)). Esta semana o mesmo movimento de comoditização apareceu uma camada acima, no próprio modelo de fronteira. Três fatos do dia 30 de junho contam a história quando lidos juntos, e foi o *radar de inteligência* que mantenho em código aberto ([radar de inteligência de mercado](/blog/radar-inteligencia-mercado-open-source/)) que os colocou na mesma mesa.

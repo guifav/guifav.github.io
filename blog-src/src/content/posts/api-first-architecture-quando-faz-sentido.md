@@ -7,6 +7,7 @@ updated: 2025-12-11T11:39:18.276Z
 slug: api-first-architecture-quando-faz-sentido
 cover: img/api-first-architecture-quando-faz-sentido/capa.jpg
 type: newsletter
+topics: [implantacao-de-ia]
 ---
 
 A Shopify processou mais de 200 bilhões de dólares em [vendas em 2023](https://www.shopify.com/news/shopify-announces-fourth-quarter-and-full-year-2023-financial-results). Não porque possui a melhor plataforma de e-commerce do mercado, mas porque construiu um ecossistema com mais de 8.000 aplicações de terceiros integradas via APIs. Cada lojista pode personalizar sua operação escolhendo entre milhares de soluções para pagamentos, logística, marketing e gestão de inventário. A empresa não desenvolveu essas funcionalidades internamente - ela criou as fundações arquiteturais para que outros construíssem sobre sua plataforma.

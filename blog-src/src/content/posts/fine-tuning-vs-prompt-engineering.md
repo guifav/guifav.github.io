@@ -7,6 +7,7 @@ updated: 2025-11-24T20:05:35.972Z
 slug: fine-tuning-vs-prompt-engineering
 cover: img/fine-tuning-vs-prompt-engineering/capa.jpg
 type: newsletter
+topics: [custos-e-modelos-de-ia]
 ---
 
 Durante o desenvolvimento de uma aplicação de análise de documentos financeiros para uma empresa parceira, enfrentei uma decisão crítica que muitos líderes técnicos conhecem bem: investir tempo e recursos em **fine-tuning** de um modelo específico ou focar em **[prompt engineering](/blog/engenharia-de-prompt-guia-completo/)** sofisticado para maximizar a performance de foundation models existentes.

@@ -7,6 +7,7 @@ updated: 2025-11-24T20:05:06.195Z
 slug: langchain-arquitetura-empresarial-producao
 cover: img/langchain-arquitetura-empresarial-producao/capa.jpg
 type: newsletter
+topics: [agentes-de-ia]
 ---
 
 ## Como Transformar Ideias de IA em Soluções Reais que Geram Valor

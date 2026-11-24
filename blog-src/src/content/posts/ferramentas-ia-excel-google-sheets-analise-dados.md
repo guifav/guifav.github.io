@@ -6,6 +6,7 @@ updated: 2024-12-02T11:31:30.256Z
 slug: ferramentas-ia-excel-google-sheets-analise-dados
 cover: img/ferramentas-ia-excel-google-sheets-analise-dados/capa.jpg
 type: newsletter
+topics: [ia-sobre-dados-da-empresa]
 ---
 
 Eficiência e a precisão são cruciais para o sucesso e muitos profissionais recorrem a ferramentas como o Excel e o Google Sheets para lidar com dados, realizar análises e automatizar tarefas. No entanto, com o avanço da inteligência artificial (IA), surgiram novas possibilidades para aprimorar ainda mais esses processos.

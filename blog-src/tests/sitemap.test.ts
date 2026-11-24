@@ -26,6 +26,16 @@ test('capa sem lastmod, posts indexáveis com o frontmatter, podcast fora, sem p
   });
 });
 
+test('páginas de tema (#104): depois da capa, antes dos posts, sem lastmod', () => {
+  const entries = sitemapEntries(SITE, BASE, POSTS, new Map(), ['ia-sobre-dados-da-empresa', 'agentes-de-ia']);
+  assert.deepEqual(entries.slice(0, 3), [
+    { loc: 'https://guifav.dev/blog/' },
+    { loc: 'https://guifav.dev/blog/tema/ia-sobre-dados-da-empresa/' },
+    { loc: 'https://guifav.dev/blog/tema/agentes-de-ia/' },
+  ]);
+  assert.equal(entries.length, 5);
+});
+
 test('edição sem updated: o commit depois do corte vira o lastmod do post (e só dele)', () => {
   const got = byLoc(new Map([['editado.md', '2026-11-20T10:00:00-03:00'], ['podcast.md', '2026-11-21T10:00:00-03:00']]));
   assert.equal(got['https://guifav.dev/blog/editado/'], '2026-11-20T13:00:00.000Z');

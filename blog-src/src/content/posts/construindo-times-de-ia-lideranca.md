@@ -7,6 +7,7 @@ updated: 2025-11-24T20:06:03.507Z
 slug: construindo-times-de-ia-lideranca
 cover: img/construindo-times-de-ia-lideranca/capa.jpg
 type: newsletter
+topics: [implantacao-de-ia]
 ---
 
 ## Contratação, Treinamento e Estrutura Organizacional Para Sucesso em Iniciativas de IA de Longo Prazo

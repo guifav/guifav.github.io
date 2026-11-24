@@ -6,6 +6,7 @@ updated: 2025-01-09T01:32:06.535Z
 slug: o-que-e-rag-llms-ia
 cover: img/o-que-e-rag-llms-ia/capa.jpg
 type: newsletter
+topics: [ia-sobre-dados-da-empresa]
 ---
 
 [Acesse a parte 2 deste artigo com o detalhamento teórico sobre o tema](/blog/guia-praticos-implementacao-rag-llms-ai/)

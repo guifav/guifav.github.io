@@ -5,6 +5,7 @@ date: 2024-11-13T03:00:00.000Z
 slug: arquitetura-sistemas-agentes-ia
 cover: img/arquitetura-sistemas-agentes-ia/capa.jpg
 type: newsletter
+topics: [agentes-de-ia]
 ---
 
 ## Introduzindo a era da Interação Agente-Computador

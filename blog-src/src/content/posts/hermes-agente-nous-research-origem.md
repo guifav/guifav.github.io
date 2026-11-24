@@ -7,6 +7,7 @@ updated: 2026-08-17T02:05:44.637Z
 slug: hermes-agente-nous-research-origem
 cover: img/hermes-agente-nous-research-origem/capa.jpg
 type: newsletter
+topics: [agentes-de-ia]
 ---
 
 <figure>

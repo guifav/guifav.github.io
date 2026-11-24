@@ -7,6 +7,7 @@ updated: 2025-12-08T08:06:41.825Z
 slug: seguranca-arquitetura-cyber-espionage-ia-gtg-1002
 cover: img/seguranca-arquitetura-cyber-espionage-ia-gtg-1002/capa.jpg
 type: newsletter
+topics: [implantacao-de-ia]
 ---
 
 Em novembro de 2025, a Anthropic divulgou a detecção e interrupção do que identificou como a [primeira campanha documentada de cyber espionage orquestrada por inteligência artificial](https://assets.anthropic.com/m/ec212e6566a0d47/original/Disrupting-the-first-reported-AI-orchestrated-cyber-espionage-campaign.pdf?utm_source=www.theneurondaily.com&utm_medium=newsletter&utm_campaign=the-first-truly-ai-powered-cyberattack&_bhlid=3660e8f78c6be1be4775e53f156b54cda9939119). O grupo GTG-1002, atribuído com alta confiança a patrocínio estatal chinês, demonstrou capacidade de executar operações de intrusão em larga escala onde IA autônoma conduziu 80-90% das atividades táticas, desde reconhecimento até exfiltração de dados, contra aproximadamente 30 organizações incluindo grandes corporações tecnológicas e agências governamentais.

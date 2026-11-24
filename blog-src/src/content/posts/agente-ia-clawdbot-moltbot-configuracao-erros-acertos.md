@@ -7,6 +7,7 @@ updated: 2026-01-28T10:11:17.061Z
 slug: agente-ia-clawdbot-moltbot-configuracao-erros-acertos
 cover: img/agente-ia-clawdbot-moltbot-configuracao-erros-acertos/capa.jpg
 type: newsletter
+topics: [agentes-de-ia]
 ---
 
 ## **O que é o Clawdbot (em breve Moltbot)**

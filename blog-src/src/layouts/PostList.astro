@@ -4,6 +4,7 @@ import Base from './Base.astro';
 import { BLOG_DESCRIPTION, BLOG_NAME, AUTHOR_NAME } from '../consts';
 import { formatDate, pagePath, postPath } from '../lib/blog';
 import type { Post } from '../lib/posts';
+import { TOPICS, topicPath } from '../lib/topics';
 
 interface Props {
   posts: Post[];
@@ -20,6 +21,12 @@ const title = page === 1 ? `${BLOG_NAME} | ${AUTHOR_NAME}` : `${BLOG_NAME}, pág
     <div class="eyebrow">{BLOG_NAME}</div>
     <h1>Artigos</h1>
     <p class="subtitle">{BLOG_DESCRIPTION}</p>
+    <nav class="topic-nav" aria-label="Temas">
+      <span class="topic-nav-label">Temas:</span>
+      <ul>
+        {TOPICS.map((t) => <li><a href={topicPath(base, t.id)}>{t.short}</a></li>)}
+      </ul>
+    </nav>
   </header>
   <ol class="post-list">
     {posts.map((p) => (

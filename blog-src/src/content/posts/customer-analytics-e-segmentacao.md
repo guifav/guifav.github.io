@@ -7,6 +7,7 @@ updated: 2025-11-24T20:06:46.382Z
 slug: customer-analytics-e-segmentacao
 cover: img/customer-analytics-e-segmentacao/capa.jpg
 type: newsletter
+topics: [ia-sobre-dados-da-empresa]
 ---
 
 Imagine o seguinte caso: uma empresa enfrentando 23% de taxa de churn anual e campanhas de marketing com apenas 2,3% de taxa de conversão apesar de investimento substancial em plataformas de dados de cliente. Rapidamente é possível identificar que o problema não é falta de dados sobre clientes - e sim a incapacidade de transformar esses dados em insights acionáveis que possam impulsionar experiências personalizadas e intervenções direcionadas.

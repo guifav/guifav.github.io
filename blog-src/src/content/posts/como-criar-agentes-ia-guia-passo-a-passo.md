@@ -5,6 +5,7 @@ date: 2024-09-22T03:00:00.000Z
 slug: como-criar-agentes-ia-guia-passo-a-passo
 cover: img/como-criar-agentes-ia-guia-passo-a-passo/capa.jpg
 type: newsletter
+topics: [agentes-de-ia]
 ---
 
 A criação de agentes de Inteligência Artificial (IA) é um processo complexo e multifacetado que requer planejamento cuidadoso, conhecimento técnico e uma abordagem sistemática. Este guia detalhado irá levá-lo através de cada etapa do processo, desde a concepção inicial até a implementação e otimização de seu agente de IA.

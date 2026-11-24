@@ -58,22 +58,26 @@ test('esquema mantém as regras de slug, capa e updated', () => {
 test('esquema: topics é opcional e só aceita os 5 temas da #104, sem repetição', () => {
   assert.deepEqual([...TOPIC_IDS], [
     'ia-sobre-dados-da-empresa',
-    'custos-roi-e-escolha-de-modelo',
-    'agentes-de-ia-em-producao',
-    'implantacao-de-ia-legados-e-arquitetura',
+    'custos-e-modelos-de-ia',
+    'agentes-de-ia',
+    'implantacao-de-ia',
     'engenharia-de-software-com-ia',
   ]);
   const sem = postSchema.safeParse(base);
   assert.ok(sem.success);
   assert.equal(sem.data.topics, undefined);
-  for (const topics of [['agentes-de-ia-em-producao'], ['ia-sobre-dados-da-empresa', 'custos-roi-e-escolha-de-modelo']]) {
+  // Cada um dos 5 temas sozinho e uma lista com dois (revisão do #124: um mutante que aceitava só os 3 primeiros
+  // sobrevivia ao teste antigo).
+  for (const topics of [...TOPIC_IDS.map((t) => [t]), ['ia-sobre-dados-da-empresa', 'custos-e-modelos-de-ia']]) {
     const r = postSchema.safeParse({ ...base, topics });
     assert.ok(r.success, JSON.stringify(topics));
     assert.deepEqual(r.data.topics, topics);
   }
-  for (const topics of [[], ['fundamentos'], ['Agentes-de-IA-em-producao'], 'agentes-de-ia-em-producao', ['agentes-de-ia-em-producao', 'agentes-de-ia-em-producao'], [null]]) {
+  for (const topics of [[], ['fundamentos'], ['agentes-de-ia-em-producao'], ['Agentes-de-IA'], 'agentes-de-ia', ['agentes-de-ia', 'agentes-de-ia'], [null], null]) {
     assert.equal(postSchema.safeParse({ ...base, topics }).success, false, JSON.stringify(topics));
   }
+  // topics: null (o YAML de "topics:" sem valor) é recusado; um .nullish() no esquema sobrevivia (revisão do #124).
+  assert.equal(postSchema.safeParse({ ...base, topics: null }).success, false);
 });
 
 test('esquema: summary é opcional, curto e independente da description', () => {
@@ -114,6 +118,11 @@ test('checkPostFiles: slug e index só em formato simples (o check_site.py lê e
   assert.ok(t('slug: a\nindex: false # comentário').some((p) => p.includes('index')));
   assert.ok(t('slug: a\nindex: no').some((p) => p.includes('index')));
   assert.ok(t('slug: a # x').length > 0);
+  assert.deepEqual(t('slug: a\ntopics: [agentes-de-ia]'), []);
+  assert.deepEqual(t('slug: a\ntopics: [agentes-de-ia, ia-sobre-dados-da-empresa]'), []);
+  for (const fm of ['topics:\n  - agentes-de-ia-em-producao', 'topics: [agentes-de-ia] # x', "topics: ['agentes-de-ia-em-producao']", 'topics: [a,b]', 'topics: [a]\ntopics: [b]']) {
+    assert.ok(t(`slug: a\n${fm}`).some((p) => p.includes('topics')), fm);
+  }
   assert.ok(t('slug: a\nslug: b').some((p) => p.includes('mais de uma')));
 });
 

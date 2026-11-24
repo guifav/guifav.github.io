@@ -7,6 +7,7 @@ updated: 2025-11-24T20:05:57.717Z
 slug: streaming-data-em-escala-arquiteturas
 cover: img/streaming-data-em-escala-arquiteturas/capa.jpg
 type: newsletter
+topics: [implantacao-de-ia]
 ---
 
 ## Arquiteturas Modernas Para Insights Instantâneos Que Impactam Decisões Críticas
