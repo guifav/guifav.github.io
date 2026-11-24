@@ -10,9 +10,10 @@ import {
   absoluteUrl,
   formatDate,
   spotifyEmbedUrl,
-  blogPostingLd,
+  postLdGraph,
   jsonLdScript,
 } from '../src/lib/blog.ts';
+import { AUTHOR_ID, AUTHOR_NAME, AUTHOR_URL, WEBSITE_ID } from '../src/consts.ts';
 
 test('robots: noindex antes do cutover, mesmo com index true', () => {
   assert.equal(robotsContent(true, true), 'noindex, follow');
@@ -95,32 +96,86 @@ test('spotifyEmbedUrl recusa o que não é episódio do Spotify', () => {
   }
 });
 
-test('blogPostingLd: autor aponta para a Person da home e dateModified cai para a data', () => {
-  const ld = blogPostingLd({
-    title: 'T',
-    description: 'D',
-    date: new Date('2026-01-01T00:00:00Z'),
-    url: 'https://guifav.dev/blog/t/',
-    authorId: 'https://guifav.dev/#person',
-  });
-  assert.equal(ld['@type'], 'BlogPosting');
-  assert.deepEqual(ld.author, { '@id': 'https://guifav.dev/#person' });
-  assert.equal(ld.dateModified, '2026-01-01T00:00:00.000Z');
-  assert.equal('image' in ld, false);
+const LD_INPUT = {
+  title: 'T',
+  description: 'D',
+  date: new Date('2026-01-01T00:00:00Z'),
+  url: 'https://guifav.dev/blog/t/',
+  author: { id: 'https://guifav.dev/#person', name: 'Guilherme Favaron', url: 'https://guifav.dev/' },
+  websiteId: 'https://guifav.dev/#website',
+  crumbs: [
+    { name: 'Guilherme Favaron', url: 'https://guifav.dev/' },
+    { name: 'Insights', url: 'https://guifav.dev/blog/' },
+  ],
+};
+
+function nodes(ld: Record<string, unknown>): Record<string, any>[] {
+  assert.equal(ld['@context'], 'https://schema.org');
+  assert.ok(Array.isArray(ld['@graph']));
+  return ld['@graph'] as Record<string, any>[];
+}
+
+function byType(ld: Record<string, unknown>, type: string): Record<string, any> {
+  const found = nodes(ld).filter((n) => n['@type'] === type);
+  assert.equal(found.length, 1, type);
+  return found[0];
+}
+
+test('postLdGraph (#105): @graph com BlogPosting, BreadcrumbList e Person, nessa ordem e sem outros nós', () => {
+  const ld = postLdGraph(LD_INPUT);
+  assert.deepEqual(Object.keys(ld), ['@context', '@graph']);
+  assert.deepEqual(nodes(ld).map((n) => n['@type']), ['BlogPosting', 'BreadcrumbList', 'Person']);
+  // os nós do @graph não repetem o @context
+  for (const n of nodes(ld)) assert.equal('@context' in n, false);
 });
 
-test('blogPostingLd usa updated quando existe', () => {
-  const ld = blogPostingLd({
-    title: 'T',
-    description: 'D',
-    date: new Date('2026-01-01T00:00:00Z'),
-    updated: new Date('2026-02-01T00:00:00Z'),
-    url: 'u',
-    image: 'https://guifav.dev/blog/img/x.webp',
-    authorId: 'a',
+test('postLdGraph: autor e publisher são a Person da home; isPartOf é o WebSite da home', () => {
+  const post = byType(postLdGraph(LD_INPUT), 'BlogPosting');
+  assert.deepEqual(post.author, { '@id': 'https://guifav.dev/#person' });
+  assert.deepEqual(post.publisher, { '@id': 'https://guifav.dev/#person' });
+  assert.deepEqual(post.isPartOf, { '@id': 'https://guifav.dev/#website' });
+  assert.equal(post.headline, 'T');
+  assert.equal(post.description, 'D');
+  assert.equal(post.url, 'https://guifav.dev/blog/t/');
+  assert.equal(post.mainEntityOfPage, 'https://guifav.dev/blog/t/');
+  assert.equal(post.inLanguage, 'pt-BR');
+  assert.equal(post.datePublished, '2026-01-01T00:00:00.000Z');
+  assert.equal(post.dateModified, '2026-01-01T00:00:00.000Z');
+  assert.equal('image' in post, false);
+});
+
+test('postLdGraph: nó Person mínimo, para o Google resolver author.name e author.url na própria página', () => {
+  assert.deepEqual(byType(postLdGraph(LD_INPUT), 'Person'), {
+    '@type': 'Person',
+    '@id': 'https://guifav.dev/#person',
+    name: 'Guilherme Favaron',
+    url: 'https://guifav.dev/',
   });
-  assert.equal(ld.dateModified, '2026-02-01T00:00:00.000Z');
-  assert.equal(ld.image, 'https://guifav.dev/blog/img/x.webp');
+});
+
+test('postLdGraph: BreadcrumbList Home > Blog > título, com posição e URL de cada nível', () => {
+  assert.deepEqual(byType(postLdGraph(LD_INPUT), 'BreadcrumbList').itemListElement, [
+    { '@type': 'ListItem', position: 1, name: 'Guilherme Favaron', item: 'https://guifav.dev/' },
+    { '@type': 'ListItem', position: 2, name: 'Insights', item: 'https://guifav.dev/blog/' },
+    { '@type': 'ListItem', position: 3, name: 'T', item: 'https://guifav.dev/blog/t/' },
+  ]);
+});
+
+test('postLdGraph usa updated e image quando existem', () => {
+  const post = byType(
+    postLdGraph({ ...LD_INPUT, updated: new Date('2026-02-01T00:00:00Z'), image: 'https://guifav.dev/blog/img/x.webp' }),
+    'BlogPosting',
+  );
+  assert.equal(post.dateModified, '2026-02-01T00:00:00.000Z');
+  assert.equal(post.datePublished, '2026-01-01T00:00:00.000Z');
+  assert.equal(post.image, 'https://guifav.dev/blog/img/x.webp');
+});
+
+test('constantes do JSON-LD (#105): os @id da home e a URL da Person', () => {
+  assert.equal(AUTHOR_ID, 'https://guifav.dev/#person');
+  assert.equal(WEBSITE_ID, 'https://guifav.dev/#website');
+  assert.equal(AUTHOR_URL, 'https://guifav.dev/');
+  assert.equal(AUTHOR_NAME, 'Guilherme Favaron');
 });
 
 test('jsonLdScript não deixa o conteúdo fechar a tag script', () => {

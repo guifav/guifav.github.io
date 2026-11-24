@@ -3,8 +3,8 @@
 import { render } from 'astro:content';
 import Base from '../layouts/Base.astro';
 import SubscribeForm from '../components/SubscribeForm.astro';
-import { AUTHOR_ID, AUTHOR_NAME, BLOG_NAME, EMAIL_LIST_NAME, NEWSLETTER_FORM_ENABLED } from '../consts';
-import { absoluteUrl, blogPostingLd, formatDate, postPath, spotifyEmbedUrl, withBase } from '../lib/blog';
+import { AUTHOR_ID, AUTHOR_NAME, AUTHOR_URL, BLOG_NAME, EMAIL_LIST_NAME, NEWSLETTER_FORM_ENABLED, WEBSITE_ID } from '../consts';
+import { absoluteUrl, formatDate, postLdGraph, postPath, spotifyEmbedUrl, withBase } from '../lib/blog';
 import { sortedPosts, type Post } from '../lib/posts';
 import CtaLine from '../components/CtaLine.astro';
 import { CTA_LOCATION_END, relatedPosts, topicById, topicPath, topicProblems } from '../lib/topics';
@@ -34,14 +34,21 @@ const coverUrl = coverPath ? absoluteUrl(site, coverPath) : undefined;
 const embed = d.spotify_url ? spotifyEmbedUrl(d.spotify_url) : null;
 const topic = d.topics?.[0] ? topicById(d.topics[0]) : undefined;
 const updatedShown = d.updated && formatDate(d.updated) !== formatDate(d.date);
-const ld = blogPostingLd({
+// JSON-LD (#105): BlogPosting, trilha Home > Blog > título (com os nomes que a página mostra no menu e na trilha)
+// e a Person mínima. O check_site falha se um post indexável sair sem esse @graph.
+const ld = postLdGraph({
   title: d.title,
   description: d.description,
   date: d.date,
   updated: d.updated,
   url,
   image: coverUrl,
-  authorId: AUTHOR_ID,
+  author: { id: AUTHOR_ID, name: AUTHOR_NAME, url: AUTHOR_URL },
+  websiteId: WEBSITE_ID,
+  crumbs: [
+    { name: AUTHOR_NAME, url: AUTHOR_URL },
+    { name: BLOG_NAME, url: absoluteUrl(site, base) },
+  ],
 });
 ---
 <Base title={d.title} contentGroup="insights-artigo" description={d.description} index={d.index} image={coverUrl} ogType="article" jsonLd={ld} turnstile={NEWSLETTER_FORM_ENABLED}>
