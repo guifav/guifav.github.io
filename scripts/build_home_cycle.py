@@ -3,11 +3,26 @@ diagrama e as chaves cy_* do dicionário EN. É a fonte do diagrama; não edite 
 
     python3 scripts/build_home_cycle.py           # reescreve o index.html
     python3 scripts/build_home_cycle.py --check   # falha se o index.html estiver diferente do que o gerador produz (CI)
+    python3 scripts/build_home_cycle.py --gif-page /tmp/ciclo.html   # página para o render do GIF (render_home_cycle_gif.mjs)
+
+Todas as animações do diagrama fecham em LOOP segundos (o GIF baixável repete sem emenda): ao mudar uma duração,
+mantenha-a divisora de LOOP e rode de novo o scripts/render_home_cycle_gif.mjs.
 """
+import argparse
+import hashlib
+import json
 import math
+import re
+import sys
+from pathlib import Path
 
 PERIOD = 15.0
 TOKENS = 3
+LOOP = PERIOD / TOKENS   # 5 s: o estado do diagrama inteiro se repete a cada LOOP
+GIF = '/assets/ciclo-dados-ia.gif'
+GIF_NAME = 'ciclo-de-dados-e-ia-guifav.gif'
+SRC = ('Fonte: guifav.dev', 'Source: guifav.dev')
+DL = ('Baixar GIF', 'Download GIF (in Portuguese)')
 
 # (chave, título, linhas) em PT e EN, no sentido horário a partir das fontes
 STAGES = [
@@ -50,7 +65,7 @@ def vcube(cx, cy, s):
     o = [f'<path class="i-vc-f" d="{hexa}"/><path class="i-vc-t" d="{top}"/>',
          f'<path class="i-vc-y" d="M{cx} {cy} V{cy + s} M{cx} {cy} L{cx - s} {cy - h} M{cx} {cy} L{cx + s} {cy - h}"/>']
     ox, oy = cx - 1, cy + 3
-    for dx, dy, dl, du in ((-6, -8, 0.0, 3.2), (7, -5, -0.9, 4.1), (5, 6, -1.7, 3.6), (-7, 3, -2.4, 4.6)):
+    for dx, dy, dl, du in ((-6, -8, 0.0, 2.5), (7, -5, -0.9, 1.25), (5, 6, -1.7, 2.5), (-7, 3, -2.4, 1.25)):
         o.append(f'<g class="i-vc-v" style="transform-origin:{ox}px {oy}px;animation-delay:{dl}s;animation-duration:{du}s">'
                  f'<line x1="{ox}" y1="{oy}" x2="{ox + dx}" y2="{oy + dy}"/><circle cx="{ox + dx}" cy="{oy + dy}" r="2"/></g>')
     o.append(f'<circle class="i-vc-o" cx="{ox}" cy="{oy}" r="1.6"/><path class="i-vc-e" d="{hexa}"/>')
@@ -202,6 +217,7 @@ def desktop():
     o.append(T('d-fb-t', fx, y1 + 92, 'cy_fb_t', FB_T))
     o.append(T('d-c', fx, y1 + 113, 'cy_fb_1', FB[0]))
     o.append(T('d-c', fx, y1 + 131, 'cy_fb_2', FB[1]))
+    o.append(T('d-src', W - 24, H - 14, 'cy_src', SRC, 'end'))
     o.append('</svg>')
     return ''.join(o)
 
@@ -218,7 +234,7 @@ def mobile():
     t.line((xl + r, yb)); t.arc((xl + r, yb - r), r, 90, 180)
     t.line((xl, yt + r)); t.arc((xl + r, yt + r), r, 180, 270)
     t.line((cxm, yt))
-    H = int(yb + 140)
+    H = int(yb + 166)
     centers = [(cxm, c) for c in cys]
     o = [f'<svg class="cy-m" viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="cy-t-m" aria-describedby="cy-x-m" focusable="false">',
          f'<title id="cy-t-m" data-i18n="cy_title">{TITLE[0]}</title><desc id="cy-x-m" data-i18n="cy_desc">{DESC[0]}</desc>']
@@ -234,13 +250,20 @@ def mobile():
     o.append(T('d-fb-t', W / 2, yb + 40, 'cy_fb_t', FB_T))
     for j, p in enumerate(FB_M):
         o.append(T('d-c', W / 2, yb + 64 + j * 21, f'cy_fbm_{j + 1}', p))
+    o.append(T('d-src', W / 2, yb + 140, 'cy_src', SRC))
     o.append('</svg>')
     return ''.join(o)
 
 CSS = f'''    .dflow{{margin:12px 0 32px}}
     @media(min-width:1000px){{.dflow{{width:min(1120px,calc(100vw - 48px));margin-left:calc(50% - min(560px,50vw - 24px))}}}}
-    .dflow-wrap{{border:1px solid var(--border);border-radius:18px;background:var(--bg-card);padding:20px 16px}}
-    .dflow svg{{display:block;width:100%;height:auto;font-family:inherit}}
+    .dflow-wrap{{position:relative;border:1px solid var(--border);border-radius:18px;background:var(--bg-card);padding:20px 16px}}
+    .dflow-dl{{position:absolute;top:14px;right:14px;z-index:1;display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border:1px solid var(--border);border-radius:999px;background:var(--bg);color:var(--text);font-size:13px;font-weight:600;text-decoration:none;opacity:0;transition:opacity .2s}}
+    .dflow-dl svg{{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}}
+    .dflow-wrap:hover .dflow-dl,.dflow-dl:focus-visible{{opacity:1}}
+    .dflow-dl:hover{{border-color:var(--hl)}}
+    @media(hover:none){{.dflow-dl{{opacity:1}}}}
+    .dflow .d-src{{font-size:11.5px;fill:var(--text-secondary);letter-spacing:.2px}}
+    .dflow-wrap > svg{{display:block;width:100%;height:auto;font-family:inherit}}
     .dflow .cy-m{{display:none}}
     @media(max-width:999px){{.dflow .cy-d{{display:none}}.dflow .cy-m{{display:block;max-width:440px;margin:0 auto}}.dflow-wrap{{padding:12px 6px}}}}
     .dflow .d-t{{font-size:15px;font-weight:650;fill:var(--text)}}
@@ -248,41 +271,42 @@ CSS = f'''    .dflow{{margin:12px 0 32px}}
     .dflow .cy-m .d-t{{font-size:18px}}
     .dflow .cy-m .d-c{{font-size:15px}}
     .dflow .cy-m .d-gov-t,.dflow .cy-m .d-fb-t{{font-size:15px}}
+    .dflow .cy-m .d-src{{font-size:13px}}
     .dflow .d-card{{fill:var(--bg);stroke:var(--border);stroke-width:1.2}}
     .dflow .d-glow{{fill:none;stroke:var(--hl);stroke-width:3;opacity:0;animation:d-glow {PERIOD / TOKENS:g}s ease-out infinite}}
     .dflow .d-ico-bg{{fill:var(--hl);fill-opacity:.1}}
     .dflow .d-trk{{fill:none;stroke:var(--border);stroke-width:2.4}}
-    .dflow .d-trk-run{{fill:none;stroke:var(--hl);stroke-width:2.4;stroke-linecap:round;stroke-dasharray:3 18;opacity:.9;animation:d-run 4s linear infinite}}
+    .dflow .d-trk-run{{fill:none;stroke:var(--hl);stroke-width:2.4;stroke-linecap:round;stroke-dasharray:3 18;opacity:.9;animation:d-run 5s linear infinite}}
     .dflow .d-chev{{fill:none;stroke:var(--hl);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}}
     .dflow .d-token{{fill:var(--hl);stroke:var(--bg-card);stroke-width:2.5}}
     .dflow .d-gov{{fill:var(--bg);stroke:var(--border);stroke-width:1.2}}
     .dflow .d-gov-o{{fill:none;stroke:var(--border);stroke-width:1;stroke-dasharray:1 7}}
-    .dflow .d-orbit{{fill:none;stroke:var(--hl);stroke-width:2.2;stroke-dasharray:2 19;stroke-linecap:round;opacity:.8;animation:d-run 6s linear infinite}}
+    .dflow .d-orbit{{fill:none;stroke:var(--hl);stroke-width:2.2;stroke-dasharray:2 19;stroke-linecap:round;opacity:.8;animation:d-run 5s linear infinite}}
     .dflow .d-gov-t{{font-size:13px;font-weight:800;letter-spacing:2.2px;fill:var(--text)}}
     .dflow .d-fb-t{{font-size:12.5px;font-weight:800;letter-spacing:2.2px;fill:var(--hl-text)}}
     .dflow .d-leader{{stroke:var(--hl);stroke-opacity:.6;stroke-width:1.2;stroke-dasharray:2 3}}
     .dflow .d-lock{{fill:none;stroke:var(--text-secondary);stroke-width:1.6;opacity:.7}}
-    .dflow .i-db-r{{fill:var(--bg);stroke:var(--text-secondary);stroke-width:1.3;animation:i-fill 1.5s ease-in-out infinite}}
+    .dflow .i-db-r{{fill:var(--bg);stroke:var(--text-secondary);stroke-width:1.3;animation:i-fill 1.25s ease-in-out infinite}}
     .dflow .i-db-top{{fill:var(--bg);stroke:var(--text-secondary);stroke-width:1.3}}
     .dflow .i-pipe-b{{fill:none;stroke:var(--text-secondary);stroke-width:1.4;opacity:.55}}
-    .dflow .i-pipe-r{{fill:none;stroke:var(--hl);stroke-width:2;stroke-linecap:round;stroke-dasharray:3 11;animation:d-run 1.6s linear infinite}}
+    .dflow .i-pipe-r{{fill:none;stroke:var(--hl);stroke-width:2;stroke-linecap:round;stroke-dasharray:3 11;animation:d-run 1.25s linear infinite}}
     .dflow .i-pipe-end{{fill:var(--hl)}}
     .dflow .i-vc-f{{fill:var(--bg-card);fill-opacity:.6}}
     .dflow .i-vc-t{{fill:var(--hl);fill-opacity:.14}}
     .dflow .i-vc-y{{fill:none;stroke:var(--text-secondary);stroke-width:1;stroke-opacity:.35;stroke-dasharray:2 2}}
     .dflow .i-vc-e{{fill:none;stroke:var(--text-secondary);stroke-width:1.3;stroke-linejoin:round}}
-    .dflow .i-vc-v{{transform-box:view-box;animation:i-swing 4s ease-in-out infinite alternate}}
+    .dflow .i-vc-v{{transform-box:view-box;animation:i-swing 2.5s ease-in-out infinite alternate}}
     .dflow .i-vc-v line{{stroke:var(--hl);stroke-width:1.6;stroke-linecap:round}}
     .dflow .i-vc-v circle{{fill:var(--hl)}}
     .dflow .i-vc-o{{fill:var(--text-secondary)}}
     .dflow .i-lock-b{{fill:var(--bg);stroke:var(--text-secondary);stroke-width:1.5}}
-    .dflow .i-lock-s{{fill:none;stroke:var(--text-secondary);stroke-width:1.5;animation:i-shackle 3s ease-in-out infinite}}
-    .dflow .i-lock-k{{fill:var(--hl);animation:d-live 3s ease-in-out infinite}}
+    .dflow .i-lock-s{{fill:none;stroke:var(--text-secondary);stroke-width:1.5;animation:i-shackle 2.5s ease-in-out infinite}}
+    .dflow .i-lock-k{{fill:var(--hl);animation:d-live 2.5s ease-in-out infinite}}
     .dflow .i-net-e{{stroke:var(--text-secondary);stroke-width:1;opacity:.45}}
-    .dflow .i-net-n{{fill:var(--hl);animation:d-live 1.4s ease-in-out infinite}}
-    .dflow .i-bar{{fill:var(--hl);transform-box:fill-box;transform-origin:50% 100%;animation:i-grow 3.4s ease-in-out infinite}}
+    .dflow .i-net-n{{fill:var(--hl);animation:d-live 1.25s ease-in-out infinite}}
+    .dflow .i-bar{{fill:var(--hl);transform-box:fill-box;transform-origin:50% 100%;animation:i-grow 2.5s ease-in-out infinite}}
     .dflow .i-chat{{fill:var(--bg);stroke:var(--text-secondary);stroke-width:1.3}}
-    .dflow .i-chat-d{{fill:var(--text-secondary);animation:d-live 1.2s ease-in-out infinite}}
+    .dflow .i-chat-d{{fill:var(--text-secondary);animation:d-live 1.25s ease-in-out infinite}}
     @keyframes d-run{{to{{stroke-dashoffset:-42}}}}
     @keyframes d-live{{0%,100%{{opacity:.3}}50%{{opacity:1}}}}
     @keyframes d-glow{{0%{{opacity:0}}6%{{opacity:.9}}30%,100%{{opacity:0}}}}
@@ -302,8 +326,6 @@ CSS = f'''    .dflow{{margin:12px 0 32px}}
 
 
 # ---------- aplicação no index.html ----------
-import json, re, sys
-from pathlib import Path
 
 FIG_RE = re.compile(r'(      <figure class="dflow">\n).*?(      </figure>\n)', re.S)
 CSS_RE = re.compile(r'    \.dflow\{margin:12px 0 32px\}\n.*?    @media\(prefers-reduced-motion:reduce\)\{\.dflow \*\{animation:none!important\}[^\n]*\n', re.S)
@@ -317,7 +339,11 @@ def render(html):
     d, m = desktop(), mobile()
     en('cy_title', TITLE[1])
     en('cy_desc', DESC[1])
-    fig = '      <figure class="dflow">\n        <div class="dflow-wrap">\n          ' + d + '\n          ' + m + '\n        </div>\n      </figure>\n'
+    en('cy_dl', DL[1])
+    dl = (f'<a class="dflow-dl" href="{GIF}" download="{GIF_NAME}">'
+          '<svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></svg>'
+          f'<span data-i18n="cy_dl">{DL[0]}</span></a>')
+    fig = '      <figure class="dflow">\n        <div class="dflow-wrap">\n          ' + dl + '\n          ' + d + '\n          ' + m + '\n        </div>\n      </figure>\n'
     for rx in (FIG_RE, CSS_RE, EN_RE):
         n = len(rx.findall(html))
         if n != 1:
@@ -336,13 +362,34 @@ def render(html):
         raise SystemExit(f'build_home_cycle: chaves cy_ sem par: {sorted(used ^ set(EN))}')
     return html
 
-HOME = Path(__file__).resolve().parent.parent / 'index.html'
+ROOT = Path(__file__).resolve().parent.parent
+HOME = ROOT / 'index.html'
+GIF_META = ROOT / 'scripts' / 'home_cycle_gif.json'  # fora do site: só o teste lê
+
+def gif_source():
+    """O que o GIF desenha: o SVG do desktop e o CSS. Se mudar, o GIF tem de ser gerado de novo."""
+    EN.clear()
+    return desktop() + CSS
+
+def gif_hash():
+    return hashlib.sha256(gif_source().encode('utf-8')).hexdigest()
+
+def gif_page():
+    """Página isolada (tema claro, 1000 x 750) que o render_home_cycle_gif.mjs fotografa quadro a quadro."""
+    site_css = (ROOT / 'assets' / 'site.css').read_text(encoding='utf-8')
+    return ('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><style>' + site_css + '\n' + CSS +
+            '    body{margin:0;background:var(--bg-card)}.dflow{margin:0;width:1000px}.dflow svg{width:1000px}</style></head>'
+            '<body data-theme="light"><figure class="dflow">' + desktop() + '</figure></body></html>')
 
 def main(argv, path=HOME):
-    import argparse
     ap = argparse.ArgumentParser(description='Gera o ciclo de dados e de IA da home.')
     ap.add_argument('--check', action='store_true', help='só confere; falha se o index.html estiver diferente do gerador')
+    ap.add_argument('--gif-page', metavar='ARQUIVO', help='escreve a página que o render do GIF fotografa e sai')
     args = ap.parse_args(argv)
+    if args.gif_page:
+        Path(args.gif_page).write_text(gif_page(), encoding='utf-8')
+        print(f'build_home_cycle: página do GIF em {args.gif_page} (hash {gif_hash()[:12]})')
+        return 0
     cur = path.read_text(encoding='utf-8')
     new = render(cur)
     if args.check:
