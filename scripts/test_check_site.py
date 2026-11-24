@@ -3301,6 +3301,10 @@ class SummaryTest(Base):
             "bloco literal": "summary: |-\n  Resposta literal.",
             "bloco indentado": "summary: >2-\n  Resposta com indicador numerico.",
             "aspas multilinha": 'summary:\n  "Resposta entre aspas\n  quebrada em duas linhas."',
+            "espaco antes de dois-pontos": 'summary : "Resposta com espaco antes do separador."',
+            "chave com aspas duplas": '"summary": "Resposta com chave entre aspas duplas."',
+            "chave com aspas simples": "'summary' : 'Resposta com chave entre aspas simples.'",
+            "aspas duplas escapadas": 'summary: "\\"Resposta\\" entre aspas escapadas."',
         }
         for name, fm_line in yaml_with.items():
             with self.subTest(case=name):

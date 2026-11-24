@@ -307,12 +307,34 @@ def frontmatter(text: str) -> dict[str, str]:
 
 
 def _yaml_scalar(raw: str) -> str:
-    """Valor escalar simples: entre aspas, ou sem aspas e sem o comentário ' #...'."""
+    """Valor escalar simples: entre aspas (com escapes \\" e ''), ou sem aspas e sem o comentário ' #...'."""
     raw = raw.strip()
-    if raw[:1] in ("'", '"'):
-        end = raw.find(raw[0], 1)
-        if end > 0:
-            return raw[1:end]
+    if raw[:1] == '"':
+        out: list[str] = []
+        i = 1
+        while i < len(raw):
+            ch = raw[i]
+            if ch == "\\" and i + 1 < len(raw):
+                out.append(raw[i + 1])
+                i += 2
+                continue
+            if ch == '"':
+                return "".join(out)
+            out.append(ch)
+            i += 1
+    elif raw[:1] == "'":
+        out = []
+        i = 1
+        while i < len(raw):
+            ch = raw[i]
+            if ch == "'":
+                if i + 1 < len(raw) and raw[i + 1] == "'":
+                    out.append("'")
+                    i += 2
+                    continue
+                return "".join(out)
+            out.append(ch)
+            i += 1
     return re.sub(r"\s+#.*$", "", raw).strip()
 
 
@@ -1178,14 +1200,14 @@ _YAML_BLOCK_INDICATOR = re.compile(r"^[>|](?:[+-]?\d?|\d[+-]?)(?:\s+#.*)?$")
 
 def _has_frontmatter_summary(text: str) -> bool:
     """True quando o frontmatter declara summary com valor não vazio, na mesma linha, na seguinte ou em bloco >/|."""
-    m = re.match(r"^---\r?\n(.*?)\r?\n---\r?\n", text, re.S)
+    m = re.match(r"^---\r?\n(.*?)\r?\n(?:---|\.\.\.)(?:\r?\n|$)", text, re.S)
     if not m:
         return False
     lines = m.group(1).splitlines()
     found: bool | None = None
     i = 0
     while i < len(lines):
-        km = re.match(r"^summary:\s*(.*)$", lines[i])
+        km = re.match(r"""^(?:summary|"summary"|'summary')[ \t]*:[ \t]*(.*)$""", lines[i])
         if not km:
             i += 1
             continue
