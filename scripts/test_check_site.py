@@ -959,7 +959,7 @@ class ClaritySourcesTest(unittest.TestCase):
         return (self.REPO / rel).read_text(encoding="utf-8")
 
     def test_root_pages(self):
-        for rel in ("index.html", "portfolio/index.html", *sorted(C.MATERIAL_PAGES)):
+        for rel in ("index.html", "portfolio/index.html", *sorted(C.MATERIAL_PAGES), C.LLM_RANKING_PAGE):
             with self.subTest(rel=rel):
                 t = self.read(rel)
                 self.assertIn(C.GA4_TAG, t)
@@ -1267,6 +1267,7 @@ class GaHostGuardTest(unittest.TestCase):
         for rel, config in (("index.html", "gtag('config','G-K7Y87QNCX8'"),
                             ("portfolio/index.html", "gtag('config','G-K7Y87QNCX8'"),
                             *((p, "gtag('config','G-K7Y87QNCX8'") for p in sorted(C.MATERIAL_PAGES)),
+                            (C.LLM_RANKING_PAGE, "gtag('config','G-K7Y87QNCX8'"),
                             ("blog-src/src/layouts/Base.astro", "gtag('config', GA4_ID")):
             with self.subTest(rel=rel):
                 t = (root / rel).read_text(encoding="utf-8")
@@ -1363,7 +1364,7 @@ class ConsentSourcesTest(unittest.TestCase):
     def test_consent_js_same_version_everywhere(self):
         src = re.search(r"CONSENT_SRC = '([^']+)'", self.read("blog-src/src/consts.ts")).group(1)
         self.assertRegex(src, r"^/assets/consent\.js\?v=\d{12}$")
-        for rel in ("index.html", "portfolio/index.html", *sorted(C.MATERIAL_PAGES)):
+        for rel in ("index.html", "portfolio/index.html", *sorted(C.MATERIAL_PAGES), C.LLM_RANKING_PAGE):
             with self.subTest(rel=rel):
                 self.assertEqual(self.read(rel).count(f'<script src="{src}"></script>'), 1)
         self.assertEqual(self.read("blog-src/src/layouts/Base.astro").count(
@@ -1409,7 +1410,7 @@ class TrackingSourcesTest(unittest.TestCase):
         self.assertTrue(m)
         src = m.group(1)
         self.assertTrue(src.startswith(C.TRACK_PATH + "?v="))
-        for rel in ("index.html", "portfolio/index.html", *sorted(C.MATERIAL_PAGES)):
+        for rel in ("index.html", "portfolio/index.html", *sorted(C.MATERIAL_PAGES), C.LLM_RANKING_PAGE):
             with self.subTest(rel=rel):
                 t = self.read(rel)
                 self.assertEqual(t.count(f'<script src="{src}"></script>'), 1)
@@ -2270,7 +2271,7 @@ class ContrastSiteTest(Base):
         self.assertIn("(e mais 1 página com as mesmas folhas)", probs[0])
 
     def test_pages_without_the_site_css_are_not_judged(self):
-        # Mockups do portfólio e o /llm-ranking/ têm paleta própria: a regra é sobre o CSS do site.
+        # Mockups do portfólio têm paleta própria: a regra é sobre o CSS do site.
         self.w("blog/um-post/index.html", page('<style>' + TOKENS_CSS + '.b{background:var(--hl);color:var(--hl)}</style>'))
         self.assertEqual(C.check_contrast(self.site), [])
         self.w("blog/um-post/index.html", page('<link rel="stylesheet" href="/assets/site.css">'
@@ -2369,6 +2370,21 @@ class LlmRankingTest(unittest.TestCase):
         html.write_text(t, encoding="utf-8")
         self.assertEqual(C.check_llm_ranking(self.site), [])
 
+    def test_nested_empty_cell_does_not_close_the_outer_one(self):
+        # r1 (agy P3): o </td> da tabela aninhada não fecha a célula de fora; a célula de fora tem o texto "c".
+        html = (self.site / "llm-ranking/index.html")
+        self.page()
+        t = html.read_text(encoding="utf-8").replace("<td><span>c0</span></td>", "<td><table><tbody><tr><td></td></tr></tbody></table>c</td>", 1)
+        html.write_text(t, encoding="utf-8")
+        self.assertEqual(C.check_llm_ranking(self.site), [])
+
+    def test_graph_that_is_not_a_list(self):
+        self.assertTrue(any("esperava um WebPage" in p for p in self.page(jsonld='{"@graph": null}')))
+        self.assertTrue(any("esperava um WebPage" in p for p in self.page(jsonld='{"@graph": 3}')))
+
+    def test_license_rel_is_case_insensitive(self):
+        self.assertEqual(self.page(license_rel="License"), [])
+
     def test_two_ranking_tables(self):
         self.assertTrue(any("achou 2" in p for p in self.page(extra='<table id="ranking"><tbody></tbody></table>')))
 
@@ -2394,10 +2410,25 @@ class LlmRankingTest(unittest.TestCase):
         self.assertTrue(any("marcador do template" in p for p in self.page(extra="<!--LLM:tabela-->")))
 
     def test_main_runs_the_rule(self):
-        src = Path(__file__).read_text(encoding="utf-8")
-        main = (Path(__file__).resolve().parent / "check_site.py").read_text(encoding="utf-8").split("def main(", 1)[1]
-        self.assertIn("problems += check_llm_ranking(Path(args.site))", main)
-        self.assertTrue(src)
+        from unittest import mock
+        consts = Path(self.tmp.name) / "consts.ts"
+        consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
+        err = io.StringIO()
+        with mock.patch.object(C, "check", lambda *a, **k: []), \
+                mock.patch.object(C, "check_related", lambda *a, **k: []), \
+                mock.patch.object(C, "check_contrast", lambda *a, **k: []), \
+                mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
+                contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            code = C.main(["--site", str(self.site), "--posts", str(self.site), "--consts", str(consts)])
+        self.assertEqual(code, 1)
+        self.assertIn("ERRO: llm-ranking/index.html: página não existe no _site", err.getvalue())
+        self.page()
+        with mock.patch.object(C, "check", lambda *a, **k: []), \
+                mock.patch.object(C, "check_related", lambda *a, **k: []), \
+                mock.patch.object(C, "check_contrast", lambda *a, **k: []), \
+                mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
+                contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(C.main(["--site", str(self.site), "--posts", str(self.site), "--consts", str(consts)]), 0)
 
 
 class ContrastSourcesTest(unittest.TestCase):

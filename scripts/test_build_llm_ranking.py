@@ -8,6 +8,7 @@ import io
 import json
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -71,8 +72,10 @@ class ValidarTest(unittest.TestCase):
     def test_rejects_wrong_top_level(self):
         s = snapshot(); s["extra"] = 1
         self.bad(s, "campos")
-        s = snapshot(); s["schema"] = 2
-        self.bad(s, "schema")
+        for v in (2, True, 1.0, "1"):
+            s = snapshot(); s["schema"] = v
+            with self.subTest(schema=v):
+                self.bad(s, "schema")
         s = snapshot(); s["fonte"] = {"dataset": B.DATASET, "config": "text"}
         self.bad(s, "fonte")
         self.bad([], "não é um objeto")
@@ -95,6 +98,7 @@ class ValidarTest(unittest.TestCase):
         casos = [
             (lambda m: m.update(posicao=7), "fora da ordem"),
             (lambda m: m.update(posicao=True), "fora da ordem"),
+            (lambda m: m.update(posicao=2.0), "fora da ordem"),
             (lambda m: m.update(modelo=" "), "sem nome"),
             (lambda m: m.update(modelo="modelo-001"), "repetido"),
             (lambda m: m.update(organizacao=None), "organização"),
@@ -235,6 +239,25 @@ class MudancasTest(unittest.TestCase):
         self.assertIn("Saiu da lista: modelo-050, que estava na 50ª posição.", itens)
         self.assertFalse(any("modelo-140" in t for t in itens))
 
+    def test_new_leader_from_outside_top10_is_said_once(self):
+        # r1 (Claude P3): o novo líder vindo de fora do top 10 não entra de novo como "Entrou no top 10".
+        antes = lista(120)
+        agora = copy.deepcopy(antes)
+        agora[29].update(pontuacao=1650.0, inferior=1645.0, superior=1655.0)
+        agora = renum(agora)
+        itens = B.mudancas(agora, antes)
+        self.assertEqual(itens[0], "Novo líder: modelo-030, no lugar de modelo-001.")
+        self.assertFalse(any(t.startswith("Entrou no top 10: modelo-030") for t in itens), itens)
+        # A subida além da margem é outro evento (o tamanho do salto) e continua no bloco.
+        self.assertIn("Subiu além da margem de erro: modelo-030, de 1.540 para 1.650 pontos (30ª para 1ª posição).", itens)
+
+    def test_top10_model_gone_from_the_list_is_said_once(self):
+        # r1 (agy P1, Claude P3): quem sai do top 10 direto para fora da lista aparece uma vez só.
+        antes = lista(120)
+        agora = renum([m for m in copy.deepcopy(antes) if m["modelo"] != "modelo-004"])
+        itens = [t for t in B.mudancas(agora, antes) if "modelo-004" in t]
+        self.assertEqual(itens, ["Saiu do top 10: modelo-004 (saiu da lista)."])
+
     def test_new_model_straight_into_top10_is_said_once(self):
         antes = lista(120)
         agora = renum(copy.deepcopy(antes) + [modelo(0, rating=1597.0, meia=0.5, nome="estreante")])
@@ -296,6 +319,26 @@ class BlocosTest(unittest.TestCase):
         self.assertEqual(first, '<tr><td data-valor="1">1</td><td data-valor="1">1 a 6</td><td>A&amp;B &lt;i&gt;</td>'
                                 '<td>não informada</td><td data-valor="1598.0">1.598 <span class="ic">(1.593 a 1.603)</span>'
                                 '</td><td data-valor="28856">28.856</td><td>Outra</td></tr>')
+
+    def test_organization_is_escaped_everywhere(self):
+        # r1 (Claude P2): a organização é texto livre da fonte e aparece em quatro blocos.
+        ms = lista(100)
+        ms[0].update(organizacao="A&B <i>", licenca="MIT")
+        esperado = "A&amp;B &lt;i&gt;"
+        self.assertIn(f"<td>{esperado}</td>", B.bloco_tabela(ms))
+        self.assertIn(f"da organização {esperado},", B.bloco_destaques(ms, date(2026, 11, 22)))
+        self.assertIn(f"<td>{esperado}</td>", B.bloco_abertos(ms))
+        self.assertIn(f"<tr><td>{esperado}</td>", B.bloco_organizacoes(ms))
+        for b in (B.bloco_tabela(ms), B.bloco_destaques(ms, date(2026, 11, 22)), B.bloco_abertos(ms),
+                  B.bloco_organizacoes(ms)):
+            self.assertNotIn("<i>", b)
+
+    def test_blank_organization(self):
+        # r1 (agy P2): organização vazia ou em branco não vira célula vazia nem linha "não informada" no recorte.
+        self.assertEqual(B._org({"organizacao": "  "}), "não informada")
+        self.assertEqual(B._org({"organizacao": " google "}), "google")
+        ms = [modelo(1, org=""), modelo(2, org="  "), modelo(3, org="a"), modelo(4, org=" a ")]
+        self.assertEqual([(o, m["posicao"], n) for o, m, n in B.organizacoes(ms)], [("a", 3, 2)])
 
     def test_faixa_cell(self):
         ms = [modelo(1, 1530, 10), modelo(2, 1520, 5)] + [modelo(i, 1400 - i) for i in range(3, 101)]
@@ -472,6 +515,61 @@ class BuildTest(unittest.TestCase):
         self.assertIn("100 modelos na tabela, dados de 2026-11-22", out.getvalue())
 
 
+SORTER_HARNESS = r"""
+const fs = require('fs'); const vm = require('vm');
+function el(text, attrs) {
+  attrs = Object.assign({}, attrs || {});
+  return {textContent: text, children: [], listeners: {},
+    getAttribute: k => (k in attrs ? attrs[k] : null), setAttribute: (k, v) => { attrs[k] = String(v); },
+    removeAttribute: k => { delete attrs[k]; }, appendChild(c) { this.children.push(c); },
+    addEventListener(t, f) { this.listeners[t] = f; }, attrs};
+}
+const linhas = [[1, 'beta', 10], [2, 'Alfa', 30], [3, 'gama', 30], [4, 'ágata', 5]].map(([p, n, v]) => {
+  const r = {cells: [el(String(p), {'data-valor': String(p)}), el(n), el(String(v), {'data-valor': String(v)})]};
+  r.id = p; return r;
+});
+const tbody = {rows: linhas.slice(), appendChild(r) { this.rows.splice(this.rows.indexOf(r), 1); this.rows.push(r); }};
+const ths = [el('Posição', {'data-ordem': 'num'}), el('Modelo', {'data-ordem': 'texto'}), el('Votos', {'data-ordem': 'num'})];
+const tabela = {tBodies: [tbody], tHead: {rows: [{cells: ths}]}};
+const document = {getElementById: id => (id === 'ranking' ? tabela : null), createElement: () => el('')};
+vm.runInNewContext(fs.readFileSync(process.argv[1], 'utf8'), {document});
+const out = [{ordem: tbody.rows.map(r => r.id), aria: ths.map(t => t.getAttribute('aria-sort'))}];
+for (const i of JSON.parse(process.argv[2])) {
+  ths[i].children[0].listeners.click();
+  out.push({ordem: tbody.rows.map(r => r.id), aria: ths.map(t => t.getAttribute('aria-sort'))});
+}
+out.push({botoes: ths.map(t => t.children.length && t.children[0].textContent + '|' + t.children[0].type)});
+console.log(JSON.stringify(out));
+"""
+
+
+class SorterTest(unittest.TestCase):
+    """O llm-ranking/ordenar.js num DOM mínimo, no node (r1, agy P2: o único JavaScript da página não tinha teste)."""
+
+    def run_clicks(self, clicks: list[int]):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("node ausente")
+        r = subprocess.run([node, "-e", SORTER_HARNESS, str(REPO / "llm-ranking/ordenar.js"), json.dumps(clicks)],
+                           capture_output=True, text=True, check=True)
+        return json.loads(r.stdout)
+
+    def test_sorting(self):
+        out = self.run_clicks([2, 2, 1, 1, 0, 0])
+        A, D = "ascending", "descending"
+        self.assertEqual(out[0], {"ordem": [1, 2, 3, 4], "aria": [A, None, None]})
+        # Votos: primeiro clique do maior para o menor; empate (30 e 30) desfeito pela posição da fonte.
+        self.assertEqual(out[1], {"ordem": [2, 3, 1, 4], "aria": [None, None, D]})
+        self.assertEqual(out[2], {"ordem": [4, 1, 2, 3], "aria": [None, None, A]})
+        # Modelo: texto em português, de A a Z, sem diferença de caixa nem acento.
+        self.assertEqual(out[3], {"ordem": [4, 2, 1, 3], "aria": [None, A, None]})
+        self.assertEqual(out[4], {"ordem": [3, 1, 2, 4], "aria": [None, D, None]})
+        # Posição: primeiro clique em ordem crescente.
+        self.assertEqual(out[5], {"ordem": [1, 2, 3, 4], "aria": [A, None, None]})
+        self.assertEqual(out[6], {"ordem": [4, 3, 2, 1], "aria": [D, None, None]})
+        self.assertEqual(out[7], {"botoes": ["Posição|button", "Modelo|button", "Votos|button"]})
+
+
 class TemplateTest(unittest.TestCase):
     """O template: navegação do site sem o botão PT/EN, sem os arquivos da versão antiga, com o ordenar.js."""
 
@@ -488,6 +586,12 @@ class TemplateTest(unittest.TestCase):
             self.assertNotIn(old, self.t)
         left = sorted(p.name for p in (REPO / "llm-ranking").iterdir())
         self.assertEqual(left, ["index.html", "ordenar.js"])
+
+    def test_explanation_of_the_range_is_true(self):
+        # r1 (agy e Claude P1): faixas que se cruzam não querem dizer intervalos que se sobrepõem.
+        self.assertNotIn("faixas que se cruzam estão dentro da margem", self.t)
+        self.assertIn("A faixa vai da melhor à pior posição compatível com os intervalos de 95%", self.t)
+        self.assertIn("quando os intervalos da coluna Pontuação se cruzam", self.t)
 
     def test_links_to_the_two_tools(self):
         self.assertIn('href="/mapa-decisao-ia/"', self.t)

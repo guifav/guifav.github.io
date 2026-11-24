@@ -122,6 +122,16 @@ class ColetarTest(unittest.TestCase):
         with self.assertRaises(S.SnapshotError):
             S.coletar(fonte(FakeServer(d)))
 
+    def test_bad_publish_date_in_latest_fails(self):
+        # r1 (agy P3): data ausente ou fora do formato vira SnapshotError, não exceção solta.
+        for v in (None, "22/11/2026", "2026-11-31"):
+            d = dataset()
+            for r in d["latest"]:
+                r["leaderboard_publish_date"] = v
+            with self.subTest(v=v):
+                with self.assertRaises(S.SnapshotError):
+                    S.coletar(fonte(FakeServer(d)))
+
     def test_unknown_license_is_caught_by_validation(self):
         d = dataset()
         d["latest"][0]["license"] = "Licença Nova"
@@ -134,7 +144,7 @@ class LinhaTest(unittest.TestCase):
     def test_votes(self):
         self.assertEqual(S.linha(row(1, "2026-11-22", votes=4255.0))["votos"], 4255)
         self.assertEqual(S.linha(row(1, "2026-11-22", votes=7))["votos"], 7)
-        for v in (4255.5, "10", None, True):
+        for v in (4255.5, "10", None, True, float("nan"), float("inf"), float("-inf")):
             with self.subTest(v=v):
                 with self.assertRaises(S.SnapshotError):
                     S.linha(row(1, "2026-11-22", votes=v))
@@ -167,11 +177,43 @@ class TransporteTest(unittest.TestCase):
         f.filtrar("latest", "x", "y", 0, 1)
         self.assertIn(120.0, f.dormiu)
 
-    def test_gives_up(self):
+    def test_gives_up_without_sleeping_after_the_last_attempt(self):
         f = fonte(FakeServer({}, [(429, b"", {})] * S.TENTATIVAS))
         with self.assertRaises(S.SnapshotError) as cm:
             f.filtrar("latest", "x", "y", 0, 1)
-        self.assertIn("depois de", str(cm.exception))
+        self.assertIn("depois de 5 tentativas (último status 429)", str(cm.exception))
+        self.assertEqual(f.dormiu, [10.0, S.PAUSA, 20.0, S.PAUSA, 30.0, S.PAUSA, 40.0, S.PAUSA])
+
+    def test_transport_failure_is_retried(self):
+        # r1 (agy P2, Claude P3): falha de rede volta como status 0 e entra na nova tentativa, como um 5xx.
+        f = fonte(FakeServer({}, [(0, b"", {}), self.ok()]))
+        self.assertEqual(f.filtrar("latest", "x", "y", 0, 1)["rows"], [])
+        self.assertEqual(f.dormiu, [10.0, S.PAUSA])
+
+    def test_http_get_maps_transport_errors_to_status_0(self):
+        import http.client
+        import urllib.error
+
+        def raising(exc):
+            def urlopen(req, timeout):
+                raise exc
+            return urlopen
+        for exc in (urllib.error.URLError("dns"), TimeoutError("lento"), ConnectionResetError("reset"),
+                    http.client.IncompleteRead(b"x"), http.client.RemoteDisconnected("fim")):
+            with self.subTest(exc=type(exc).__name__):
+                self.assertEqual(S.http_get("https://exemplo/", urlopen=raising(exc)), (0, b"", {}))
+
+    def test_http_get_keeps_the_http_status(self):
+        import urllib.error
+
+        class Broken(io.BytesIO):
+            def read(self, *a):
+                raise ConnectionResetError("no meio")
+
+        def urlopen(req, timeout):
+            raise urllib.error.HTTPError("https://exemplo/", 503, "x", {"Retry-After": "3"}, Broken())
+        status, body, headers = S.http_get("https://exemplo/", urlopen=urlopen)
+        self.assertEqual((status, body, headers.get("retry-after")), (503, b"", "3"))
 
     def test_other_status_fails_at_once(self):
         srv = FakeServer({}, [(404, b"", {}), self.ok()])
@@ -244,19 +286,53 @@ class GitTest(unittest.TestCase):
 
     def test_failures_stop_before_writing(self):
         def git(dados, *args):
-            return subprocess.CompletedProcess(args, 1 if args[0] == "pull" else 0, "", "sem rede")
+            return subprocess.CompletedProcess(args, 1 if args[0] == "fetch" else 0, "", "sem rede")
         with self.assertRaises(S.SnapshotError) as cm:
             S.gravar(self.dados, "a\n", "2026-11-22", git=git)
-        self.assertIn("git pull falhou: sem rede", str(cm.exception))
+        self.assertIn("git fetch falhou: sem rede", str(cm.exception))
         self.assertFalse((self.dados / S.ARQUIVO).exists())
 
-    def test_push_failure_is_an_error(self):
+    def falha(self, etapa: str):
+        """git de verdade, menos a etapa pedida, que falha."""
         def git(dados, *args):
-            return subprocess.CompletedProcess(args, 1 if args[0] == "push" else 0, "", "rejeitado")
+            if args[0] == etapa:
+                return subprocess.CompletedProcess(args, 1, "", "falhou de propósito")
+            return S._git(dados, *args)
+        return git
+
+    def origin_file(self):
+        r = subprocess.run(["git", "--git-dir", str(self.origin), "show", f"main:{S.ARQUIVO}"], capture_output=True,
+                           text=True)
+        return r.stdout if r.returncode == 0 else None
+
+    def test_push_failure_is_published_on_the_next_run(self):
+        # r1 (agy e Claude P1): o commit que ficou só local não pode fazer a rodada seguinte dizer "sem mudança".
         with self.assertRaises(S.SnapshotError) as cm:
-            S.gravar(self.dados, "a\n", "2026-11-22", git=lambda d, *a: git(d, *a) if a[0] in ("push", "pull")
-                     else S._git(d, *a))
+            S.gravar(self.dados, "a\n", "2026-11-22", git=self.falha("push"))
         self.assertIn("git push falhou", str(cm.exception))
+        self.assertIsNone(self.origin_file())
+        self.assertTrue(S.gravar(self.dados, "a\n", "2026-11-22"))
+        self.assertEqual(self.origin_file(), "a\n")
+        self.assertFalse(S.gravar(self.dados, "a\n", "2026-11-22"))
+
+    def test_commit_or_add_failure_is_published_on_the_next_run(self):
+        for etapa in ("commit", "add"):
+            with self.subTest(etapa=etapa):
+                texto = f"{etapa}\n"
+                with self.assertRaises(S.SnapshotError):
+                    S.gravar(self.dados, texto, "2026-11-22", git=self.falha(etapa))
+                self.assertNotEqual(self.origin_file(), texto)
+                self.assertTrue(S.gravar(self.dados, texto, "2026-11-22"))
+                self.assertEqual(self.origin_file(), texto)
+
+    def test_local_commit_ahead_is_discarded_and_remote_wins(self):
+        self.assertTrue(S.gravar(self.dados, "a\n", "2026-11-22"))
+        (self.dados / S.ARQUIVO).write_text("lixo\n")
+        self.sh("git", "-C", str(self.dados), "commit", "-qam", "commit local que não subiu")
+        (self.dados / "sobra.txt").write_text("x")
+        self.assertFalse(S.gravar(self.dados, "a\n", "2026-11-22"))
+        self.assertEqual((self.dados / S.ARQUIVO).read_text(), "a\n")
+        self.assertFalse((self.dados / "sobra.txt").exists())
 
 
 class MainTest(GitTest):

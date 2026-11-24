@@ -1750,7 +1750,7 @@ class _LlmRanking(HTMLParser):
                 self._tbody = False
         elif tag == "tbody" and self._depth == 1:
             self._tbody = False
-        elif tag == "td" and self._cell is not None:
+        elif tag == "td" and self._depth == 1 and self._cell is not None:
             self.rows[-1].append("".join(self._cell).strip())
             self._cell = None
         elif tag == "script" and self._script is not None:
@@ -1807,6 +1807,8 @@ def check_llm_ranking(site: Path) -> list[str]:
             problems.append(f"{rel}: JSON-LD inválido")
             continue
         nodes = doc.get("@graph", [doc]) if isinstance(doc, dict) else []
+        if not isinstance(nodes, list):
+            nodes = []
         modified += [n.get("dateModified") for n in nodes if isinstance(n, dict) and n.get("@type") == "WebPage"]
     if len(modified) != 1:
         problems.append(f"{rel}: esperava um WebPage no JSON-LD, achou {len(modified)}")
@@ -1815,7 +1817,7 @@ def check_llm_ranking(site: Path) -> list[str]:
     hrefs = [h for h, _ in p.links]
     if LLM_DATASET_URL not in hrefs:
         problems.append(f"{rel}: sem o link da fonte ({LLM_DATASET_URL}), exigido pela CC BY 4.0")
-    if not any(h.startswith(LLM_LICENSE_PREFIX) and "license" in r.split() for h, r in p.links):
+    if not any(h.startswith(LLM_LICENSE_PREFIX) and "license" in r.lower().split() for h, r in p.links):
         problems.append(f'{rel}: sem o link rel="license" da CC BY 4.0')
     return problems
 

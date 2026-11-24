@@ -117,7 +117,7 @@ def validar_linhas(linhas, onde: str, minimo: int = 1) -> None:
     for i, m in enumerate(linhas, 1):
         if not isinstance(m, dict) or set(m) != set(CAMPOS):
             raise RankingError(f"{onde}[{i}]: campos {sorted(m) if isinstance(m, dict) else m!r}, esperado {list(CAMPOS)}")
-        if m["posicao"] != i or isinstance(m["posicao"], bool):
+        if type(m["posicao"]) is not int or m["posicao"] != i:
             raise RankingError(f"{onde}[{i}]: posição {m['posicao']!r} fora da ordem 1..N")
         if not isinstance(m["modelo"], str) or not m["modelo"].strip():
             raise RankingError(f"{onde}[{i}]: modelo sem nome")
@@ -146,7 +146,7 @@ def validar(snap, hoje: date | None = None) -> dict:
     esperado = {"schema", "fonte", "publicacao", "modelos", "categorias", "anterior"}
     if set(snap) != esperado:
         raise RankingError(f"snapshot com campos {sorted(snap)}, esperado {sorted(esperado)}")
-    if snap["schema"] != SCHEMA:
+    if type(snap["schema"]) is not int or snap["schema"] != SCHEMA:
         raise RankingError(f"schema {snap['schema']!r}, esperado {SCHEMA}")
     if snap["fonte"] != {"dataset": DATASET, "config": CONFIG}:
         raise RankingError(f"fonte inesperada: {snap['fonte']!r}")
@@ -205,7 +205,9 @@ def na_margem_do_lider(modelos: list[dict]) -> int:
 def mudancas(atual: list[dict], antes: list[dict]) -> list[str]:
     """O que mudou desde a publicação anterior (parecer do Fable): novo líder; entradas e saídas do top 10; modelos
     novos e removidos dentro do top 100; subidas e quedas no top 100 só quando o intervalo de agora e o de antes não se
-    sobrepõem. No máximo MAX_MUDANCAS itens, nessa prioridade. O pareamento é pelo nome da fonte."""
+    sobrepõem. No máximo MAX_MUDANCAS itens, nessa prioridade. O pareamento é pelo nome da fonte. Cada modelo aparece
+    uma vez por evento: o novo líder vindo de fora do top 10 não conta de novo como entrada no top 10, e quem saiu do top
+    10 direto para fora da lista não conta de novo como saída da lista."""
     por_nome_antes = {m["modelo"]: m for m in antes}
     por_nome_agora = {m["modelo"]: m for m in atual}
     itens: list[str] = []
@@ -217,7 +219,7 @@ def mudancas(atual: list[dict], antes: list[dict]) -> list[str]:
     top10 = [m["modelo"] for m in atual[:TOP_DESTAQUE]]
     top10_antes = [m["modelo"] for m in antes[:TOP_DESTAQUE]]
     for n in top10:
-        if n not in top10_antes:
+        if n not in top10_antes and not (n == lider["modelo"] and lider["modelo"] != lider_antes["modelo"]):
             p = por_nome_antes.get(n)
             onde = f"vindo da {p['posicao']}ª posição" if p else "estreia na lista"
             itens.append(f"Entrou no top 10: {_m(por_nome_agora[n])}, {por_nome_agora[n]['posicao']}ª posição ({onde}).")
@@ -230,7 +232,7 @@ def mudancas(atual: list[dict], antes: list[dict]) -> list[str]:
         if m["modelo"] not in por_nome_antes and m["modelo"] not in top10:
             itens.append(f"Modelo novo: {_m(m)}, {m['posicao']}ª posição.")
     for m in antes[:TOP]:
-        if m["modelo"] not in por_nome_agora:
+        if m["modelo"] not in por_nome_agora and m["modelo"] not in top10_antes:
             itens.append(f"Saiu da lista: {_m(m)}, que estava na {m['posicao']}ª posição.")
     for m in atual[:TOP]:
         p = por_nome_antes.get(m["modelo"])
@@ -243,13 +245,17 @@ def mudancas(atual: list[dict], antes: list[dict]) -> list[str]:
 
 
 def organizacoes(modelos: list[dict]) -> list[tuple[str, dict, int]]:
-    """As TOP_ORGANIZACOES primeiras pela melhor posição: (organização, melhor modelo, modelos no top 100)."""
+    """As TOP_ORGANIZACOES primeiras pela melhor posição: (organização, melhor modelo, modelos no top 100). Modelo sem
+    organização informada na fonte não entra no recorte: juntar modelos sem relação numa linha "não informada" seria
+    inventar uma organização."""
     melhor: dict[str, dict] = {}
     for m in modelos:
-        melhor.setdefault(m["organizacao"], m)
+        if m["organizacao"].strip():
+            melhor.setdefault(m["organizacao"].strip(), m)
     contagem: dict[str, int] = {}
     for m in modelos[:TOP]:
-        contagem[m["organizacao"]] = contagem.get(m["organizacao"], 0) + 1
+        if m["organizacao"].strip():
+            contagem[m["organizacao"].strip()] = contagem.get(m["organizacao"].strip(), 0) + 1
     ordem = sorted(melhor.items(), key=lambda kv: kv[1]["posicao"])[:TOP_ORGANIZACOES]
     return [(org, m, contagem.get(org, 0)) for org, m in ordem]
 
@@ -267,7 +273,7 @@ def _m(m: dict) -> str:
 
 
 def _org(m: dict) -> str:
-    return escape(m["organizacao"]) if m["organizacao"] else "não informada"
+    return escape(m["organizacao"].strip()) if m["organizacao"].strip() else "não informada"
 
 
 def _lic(m: dict) -> str:

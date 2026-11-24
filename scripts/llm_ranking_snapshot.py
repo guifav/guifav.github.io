@@ -17,7 +17,9 @@ Uso:
 from __future__ import annotations
 
 import argparse
+import http.client
 import json
+import math
 import subprocess
 import sys
 import time
@@ -32,6 +34,7 @@ import build_llm_ranking as B  # noqa: E402
 
 API = "https://datasets-server.huggingface.co/filter"
 ARQUIVO = "arena-texto.json"
+RAMO = "main"
 PAGINA = 100
 UA = "guifav-llm-ranking/1.0 (+https://guifav.dev/llm-ranking/)"
 PAUSA = 1.0
@@ -42,13 +45,21 @@ class SnapshotError(Exception):
     """A fonte respondeu algo que não dá para usar, ou o git falhou."""
 
 
-def http_get(url: str) -> tuple[int, bytes, dict[str, str]]:
+def http_get(url: str, urlopen=urllib.request.urlopen) -> tuple[int, bytes, dict[str, str]]:
+    """GET com o status HTTP. Falha de transporte (rede, DNS, timeout, corpo truncado) volta como status 0, que o
+    Fonte.filtrar trata como erro transitório, igual a um 5xx."""
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
     try:
-        with urllib.request.urlopen(req, timeout=60) as r:
+        with urlopen(req, timeout=60) as r:
             return r.status, r.read(), {k.lower(): v for k, v in r.headers.items()}
     except urllib.error.HTTPError as e:
-        return e.code, e.read(), {k.lower(): v for k, v in e.headers.items()}
+        try:
+            body = e.read()
+        except (OSError, http.client.HTTPException):
+            body = b""
+        return e.code, body, {k.lower(): v for k, v in (e.headers or {}).items()}
+    except (OSError, http.client.HTTPException, ValueError):
+        return 0, b"", {}
 
 
 class Fonte:
@@ -73,12 +84,13 @@ class Fonte:
                 if not isinstance(data, dict) or not isinstance(data.get("rows"), list):
                     raise SnapshotError("datasets-server devolveu um envelope sem rows")
                 return data
-            if status == 429 or status >= 500:
-                espera = headers.get("retry-after", "")
-                self.sleep(min(float(espera), 120.0) if espera.replace(".", "", 1).isdigit() else 10.0 * (tentativa + 1))
+            if status == 0 or status == 429 or status >= 500:
+                if tentativa + 1 < TENTATIVAS:
+                    espera = headers.get("retry-after", "")
+                    self.sleep(min(float(espera), 120.0) if espera.replace(".", "", 1).isdigit() else 10.0 * (tentativa + 1))
                 continue
             raise SnapshotError(f"datasets-server respondeu HTTP {status}")
-        raise SnapshotError(f"datasets-server não respondeu depois de {TENTATIVAS} tentativas")
+        raise SnapshotError(f"datasets-server não respondeu depois de {TENTATIVAS} tentativas (último status {status})")
 
     def todas(self, split: str, where: str) -> list[dict]:
         rows: list[dict] = []
@@ -105,7 +117,8 @@ def linha(r) -> dict:
         raise SnapshotError(f"linha da fonte inválida: {r!r}")
     try:
         votos = r["vote_count"]
-        if not isinstance(votos, (int, float)) or isinstance(votos, bool) or votos != int(votos):
+        if (not isinstance(votos, (int, float)) or isinstance(votos, bool) or not math.isfinite(votos)
+                or votos != int(votos)):
             raise SnapshotError(f"votos não inteiros em {r.get('model_name')!r}: {votos!r}")
         return {"posicao": r["rank"], "modelo": r["model_name"], "organizacao": r["organization"],
                 "licenca": r["license"], "pontuacao": r["rating"], "inferior": r["rating_lower"],
@@ -124,6 +137,10 @@ def _uma_data(rows: list[dict], onde: str) -> str:
 def coletar(fonte: Fonte) -> dict:
     atual = fonte.todas("latest", "\"category\"='overall'")
     pub = _uma_data(atual, "latest/overall")
+    try:
+        B._dia(pub, "latest/overall: leaderboard_publish_date")
+    except B.RankingError as e:
+        raise SnapshotError(str(e)) from e
     categorias = {}
     for c in B.CATEGORIAS:
         data = fonte.filtrar("latest", f"\"category\"={_q(c)}", '"rank"', 0, B.TOP_CATEGORIA)
@@ -154,18 +171,23 @@ def _git(dados: Path, *args: str) -> subprocess.CompletedProcess:
 
 
 def gravar(dados: Path, texto: str, pub: str, git=_git) -> bool:
-    """Grava e publica o snapshot no repositório de dados. Devolve False se o conteúdo é o mesmo do commit atual."""
+    """Grava e publica o snapshot no repositório de dados. Devolve False se o conteúdo é o mesmo do remoto.
+
+    O clone da KVM só serve para gravar: antes de comparar, ele é alinhado ao remoto (fetch, reset --hard e clean).
+    Assim um commit que ficou só local (push que falhou) ou um arquivo que ficou fora do índice (add ou commit que
+    falhou) não fazem a rodada seguinte achar que nada mudou: ela compara com o que está publicado e grava de novo."""
     if not (dados / ".git").exists():
         raise SnapshotError(f"{dados} não é um clone do guifav/llm-ranking-data")
-    r = git(dados, "pull", "-q", "--ff-only")
-    if r.returncode != 0:
-        raise SnapshotError(f"git pull falhou: {r.stderr.strip()}")
+    for args in (("fetch", "-q", "origin", RAMO), ("reset", "-q", "--hard", f"origin/{RAMO}"), ("clean", "-fdq")):
+        r = git(dados, *args)
+        if r.returncode != 0:
+            raise SnapshotError(f"git {args[0]} falhou: {r.stderr.strip()}")
     alvo = dados / ARQUIVO
     if alvo.is_file() and alvo.read_text(encoding="utf-8") == texto:
         return False
     alvo.write_text(texto, encoding="utf-8")
     for args in (("add", ARQUIVO), ("commit", "-q", "-m", f"Arena, arena de texto: publicação de {pub}"),
-                 ("push", "-q", "origin", "HEAD")):
+                 ("push", "-q", "origin", f"HEAD:{RAMO}")):
         r = git(dados, *args)
         if r.returncode != 0:
             raise SnapshotError(f"git {args[0]} falhou: {r.stderr.strip()}")
