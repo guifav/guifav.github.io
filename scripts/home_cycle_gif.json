@@ -1,0 +1,11 @@
+{
+  "source_sha256": "ce11eaa579f17116e9ddbf5dfebdf5a1897f2fccfd4e93bf4e82840d34d14089",
+  "gif_sha256": "5eaaef745a78f1a2857a8fc5fd8f06466188b59e6fa21ee31574396a9b30bddc",
+  "width": 1000,
+  "height": 750,
+  "loop_seconds": 5,
+  "fps": 12,
+  "frames": 60,
+  "chromium": "159.0.8154.6",
+  "ffmpeg": "ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers"
+}

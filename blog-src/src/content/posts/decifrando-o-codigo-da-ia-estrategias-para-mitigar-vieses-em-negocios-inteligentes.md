@@ -218,7 +218,7 @@ Embora a verdadeira autoconsciência em IA ainda seja um conceito futurista, exi
 
 ## **7. Casos de Estudo: Sucessos e Fracassos da Aplicação de LLMs em Negócios**
 
-Para entender melhor o impacto prático dos LLMs no mundo dos negócios, vamos examinar alguns casos de estudo que ilustram tanto os sucessos quanto os desafios enfrentados na implementação dessas tecnologias. [São casos que detalho mais no meu livro. Aproveite que ainda está disponível para baixar gratuitamente](https://www.guilhermefavaron.com.br/livro-ia-guia-estrategico-empresarios-era-digital).
+Para entender melhor o impacto prático dos LLMs no mundo dos negócios, vamos examinar alguns casos de estudo que ilustram tanto os sucessos quanto os desafios enfrentados na implementação dessas tecnologias. [São casos que detalho mais no meu livro. Aproveite que ainda está disponível para baixar gratuitamente](/blog/livro-ia-inteligencia-artificial-portugues-gratuito/).
 
 ### **Caso de Sucesso 1: Atendimento ao Cliente Aprimorado**
 

@@ -266,7 +266,7 @@ function runInline(rel: string, stored: unknown) {
 }
 
 const MATERIAIS = ['planilha-custos-ia', 'mapa-decisao-ia'].flatMap((m) => [`${m}/index.html`, `${m}/enviado/index.html`]);
-for (const rel of ['index.html', 'portfolio/index.html', ...MATERIAIS, 'Base.astro']) {
+for (const rel of ['index.html', 'portfolio/index.html', 'consultoria/index.html', ...MATERIAIS, 'Base.astro']) {
   test(`${rel}: padrão negado antes do config; aceite válido vira update granted antes do config; vencido não`, () => {
     const names = (l: unknown[][]) => l.map((c) => `${c[0]}:${c[0] === 'consent' ? c[1] : ''}`);
     const none = runInline(rel, undefined);

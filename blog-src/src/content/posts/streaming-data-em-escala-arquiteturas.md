@@ -230,5 +230,3 @@ GARTNER. Principais previsões estratégicas a partir de 2024. Disponível em: *
 ***
 
 *Continue acompanhando para mais insights sobre implementações de data science que criam vantagens competitivas através de capacidades analíticas superiores.*
-
-Artigo originalmente publicado em [www<!---->.guilhermefavaron.com.br](/blog/)

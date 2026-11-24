@@ -11,7 +11,7 @@ type: newsletter
 
 Oi, bom tê-los de novo por aqui.
 
-Há algumas semanas eu publiquei o [Por onde eu começo?](/blog/por-onde-comecar-com-ia/), contando da [academia-ia](https://academia-ia.mindapps.ai/), a trilha gratuita de 30 dias pra quem sempre se prometeu entender IA e nunca passou do módulo três de curso nenhum. No meio daquele texto, quase como nota de rodapé, eu deixei um aviso:
+Há algumas semanas eu publiquei o [Por onde eu começo?](/blog/por-onde-comecar-com-ia/), contando da academia-ia, a trilha gratuita de 30 dias pra quem sempre se prometeu entender IA e nunca passou do módulo três de curso nenhum. No meio daquele texto, quase como nota de rodapé, eu deixei um aviso:
 
 *“Se você é engenheiro de ML procurando matemática de transformer, esse curso não é pra você.”*
 
@@ -109,7 +109,7 @@ Então é MIT. Sem cadastro, sem paywall, sem versão premium. E como é um repo
 
 Agora as duas portas estão abertas.
 
-Se você, ou alguém que você conhece, está no ponto de partida, sabe que IA importa mas não sabe nem o que perguntar, o caminho é a [academia-ia](https://academia-ia.mindapps.ai/): 30 dias, 10 minutos por dia, do zero ao uso consciente. O texto sobre ela está [aqui](/blog/por-onde-comecar-com-ia/).
+Se você, ou alguém que você conhece, está no ponto de partida, sabe que IA importa mas não sabe nem o que perguntar, o caminho é a academia-ia: 30 dias, 10 minutos por dia, do zero ao uso consciente. O texto sobre ela está [aqui](/blog/por-onde-comecar-com-ia/).
 
 Se você é a pessoa técnica que já constrói com IA mas decidiu que cansou de copiar, o caminho é o [math-statistics-for-ai](https://github.com/guifav/math-statistics-for-ai): 54 notebooks, da inclinação da reta ao drift em produção, no seu ritmo, pra sempre.
 
