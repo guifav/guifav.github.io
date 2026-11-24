@@ -1,7 +1,7 @@
 ---
 title: "Ferramentas de IA para RH: comparativo e o que sobreviveu"
-description: "Comparativo atualizado de 8 ferramentas de IA para RH: o que faz HireVue, Textio, Lattice, Leena AI, Paradox (Workday) e Talmundo, e como escolher."
-summary: "Das 8 ferramentas de IA para RH avaliadas na lista original, seis seguem ativas em recrutamento, avaliação de desempenho, atendimento interno e onboarding, enquanto duas foram descontinuadas ou incorporadas. Paradox passou para a Workday em outubro de 2025, Talla foi absorvida pela Bloomfire e o domínio da Attract AI mudou de área. A escolha depende do gargalo do processo, da integração com o ATS ou ERP atual e das regras de conformidade em contratação."
+description: "Comparativo atualizado de 8 ferramentas de IA para RH: o que fazem HireVue, Textio, Lattice, Leena AI, Paradox (Workday) e Talmundo, e como escolher."
+summary: "Das 8 ferramentas de IA para RH avaliadas na lista original, seis seguem ativas em recrutamento, avaliação de desempenho, atendimento interno e onboarding, enquanto duas deixaram de operar como produtos independentes. Paradox foi adquirida pela Workday em outubro de 2025, Talla foi incorporada à Bloomfire após combinação com a Seva e o domínio original da Attract AI hoje está à venda. A escolha depende do processo prioritário, da integração com o ATS ou HCM e da governança sobre decisões."
 date: 2024-09-13T03:00:00.000Z
 updated: 2026-11-24T18:00:00Z
 slug: top-8-ferramentas-ia-rh-2024
@@ -9,13 +9,13 @@ cover: img/top-8-ferramentas-ia-rh-2024/capa.jpg
 type: newsletter
 ---
 
-Em junho de 2024 publiquei aqui o [Framework ATLAS para implementação de IA nos processos corporativos](/blog/framework-atlas-para-implementacao-de-ia-nos-processos-corporativos/). Naquele texto defendi que comprar software antes de mapear o gargalo do processo gera licença parada e integração mal resolvida. Dois anos depois, revisitei esta lista original de oito ferramentas de IA para RH e o mercado confirmou essa consolidação. Algumas plataformas amadureceram em suítes corporativas, outras foram compradas por fornecedores maiores e uma deixou de operar como produto de recrutamento.
+Em junho de 2024 publiquei aqui o [Framework ATLAS para implementação de IA nos processos corporativos](/blog/framework-atlas-para-implementacao-de-ia-nos-processos-corporativos/). Naquele guia comparei os caminhos de desenvolvimento in-house e contratação de SaaS pronto, argumentando que a escolha só para em pé quando integra com os sistemas legados e endereça viés algorítmico e conformidade com a LGPD. Era o critério geral no papel. Quando revisitei esta lista original de oito ferramentas SaaS de IA para RH, encontrei um mercado bem mais consolidado: parte das plataformas amadureceu em suítes corporativas, uma foi comprada por um grande fornecedor de HCM e duas deixaram de operar como produtos independentes de RH.
 
-Esta revisão mantém as oito ferramentas da seleção original no mesmo endereço para mostrar o que continua de pé, o que mudou de dono e quais critérios uso quando um líder de RH ou de tecnologia precisa decidir onde investir.
+Esta revisão mantém as oito ferramentas da seleção original no mesmo endereço para registrar o que continua de pé e quais critérios uso quando um líder de RH ou de tecnologia precisa decidir onde investir.
 
 ## Quais ferramentas da lista continuam ativas e o que mudou?
 
-Seis das oito plataformas originais continuam operando em RH corporativo, embora duas façam parte de ecossistemas maiores após aquisições. A Paradox foi adquirida pela Workday em acordo concluído em outubro de 2025 por cerca de US$ 1 bilhão, e sua assistente Olivia passou a operar dentro da suíte de aquisição de talentos da Workday. A Talmundo já integrava o ecossistema europeu da Talentech desde 2019 e segue ativa como módulo de onboarding. Na outra ponta, a Talla foi absorvida pela Bloomfire em gestão de conhecimento e a Attract AI original saiu de cena no mercado de recrutamento, com o nome reutilizado por terceiros em ferramentas de geração de leads comerciais.
+Seis das oito plataformas originais continuam operando em RH corporativo. Entre elas, a principal mudança de controle após a publicação original ocorreu na Paradox, adquirida pela Workday em transação concluída em outubro de 2025, levando a assistente Olivia para dentro da suíte de aquisição de talentos da Workday. A Talmundo já integrava o grupo europeu Talentech (antiga HR Nordic, que a adquiriu em 2019) e segue ativa como módulo de onboarding. Na outra ponta, a Talla passou por combinação com a Seva e foi incorporada ao ecossistema da Bloomfire em gestão de conhecimento, enquanto o produto original da Attract AI saiu do ar e o domínio `attract.ai` redireciona hoje para venda de domínio.
 
 | Ferramenta | Foco principal | Situação atual | Para quem faz sentido |
 |---|---|---|---|
@@ -24,9 +24,9 @@ Seis das oito plataformas originais continuam operando em RH corporativo, embora
 | Lattice | Gestão de desempenho, OKRs, engajamento e remuneração com IA nativa | Ativa e independente | Times de RH que querem consolidar ciclos de pessoas numa plataforma única |
 | Leena AI | Assistente autônomo de atendimento interno para RH, TI e finanças | Ativa e independente | Empresas médias e grandes com alto volume de chamados repetitivos de colaboradores |
 | Paradox (Workday) | Recrutamento conversacional, agendamento e triagem por chat | Adquirida pela Workday (out/2025) | Empresas que já operam Workday ou contratam em escala operacional |
-| Talmundo (Talentech) | Onboarding estruturado e jornada inicial de colaboradores | Módulo da Talentech | Organizações com operação europeia ou multi-unidade focadas em retenção inicial |
-| Talla AI | Base de conhecimento corporativa e assistente interno | Incorporada à Bloomfire | Quem busca base de conhecimento deve avaliar a plataforma atual da Bloomfire |
-| Attract AI | Sourcing automatizado de candidatos | Produto original descontinuado | Avaliar alternativas ativas integradas ao ATS, como Phenom, Manatal ou módulos nativos |
+| Talmundo (Talentech) | Onboarding estruturado e jornada inicial de colaboradores | Módulo da Talentech desde 2019 | Organizações com operação europeia ou multi-unidade focadas em retenção inicial |
+| Talla AI | Base de conhecimento corporativa e assistente interno | Incorporada à Bloomfire (via Seva) | Quem busca base de conhecimento deve avaliar a plataforma atual da Bloomfire |
+| Attract AI | Sourcing automatizado de candidatos | Produto fora do ar (domínio à venda) | Avaliar alternativas ativas integradas ao ATS, como Phenom, Manatal ou módulos nativos |
 
 ## Como avaliar cada ferramenta na prática?
 
@@ -78,17 +78,17 @@ A [Paradox](https://www.paradox.ai/) ficou conhecida pela assistente Olivia, vol
 <img src="/blog/img/top-8-ferramentas-ia-rh-2024/aed5514bb8-1000.webp" srcset="/blog/img/top-8-ferramentas-ia-rh-2024/aed5514bb8-728.webp 728w, /blog/img/top-8-ferramentas-ia-rh-2024/aed5514bb8-1000.webp 1000w" sizes="(max-width: 760px) 100vw, 720px" width="1000" height="684" alt="Interface da plataforma Talmundo para onboarding de colaboradores" loading="lazy" decoding="async">
 </figure>
 
-A [Talmundo](https://talentech.com/) opera como módulo de onboarding dentro do portfólio da Talentech, que adquiriu a empresa em 2019. O foco é estruturar a jornada entre a assinatura da proposta e os primeiros meses do colaborador, com trilhas automatizadas, checagens de adaptação e coleta de feedback. Faz sentido em organizações que perdem pessoas nos primeiros noventa dias por falta de processo consistente entre RH e gestores.
+A [Talmundo](https://talentech.com/) opera como módulo de onboarding dentro do portfólio da Talentech, que adquiriu a empresa em 2019 (então sob a marca HR Nordic). O foco é estruturar a jornada entre a assinatura da proposta e os primeiros meses do colaborador, com trilhas automatizadas e checagens de adaptação junto aos gestores. Faz sentido em organizações que sofrem com turnover inicial por falta de processo consistente entre RH e liderança.
 
 ### O que aconteceu com Talla AI e Attract AI?
 
-A Talla, que apareceu na lista original como hub de conhecimento e assistente interno para times de RH e suporte, foi absorvida pela [Bloomfire](https://bloomfire.com/), que incorporou sua tecnologia de busca e resposta assistida por IA ao próprio produto de gestão de conhecimento. Quem procura essa categoria hoje deve avaliar a Bloomfire atual ou uma arquitetura própria sobre os documentos da empresa.
+A Talla, que apareceu na lista original como hub de conhecimento e assistente interno para times de RH e suporte, passou por combinação com a Seva e teve sua tecnologia incorporada pela [Bloomfire](https://bloomfire.com/) em gestão de conhecimento corporativo. Quem procura essa categoria hoje deve avaliar a Bloomfire atual ou construir uma arquitetura própria sobre os documentos internos.
 
-Já a Attract AI original encerrou sua atuação como plataforma independente de sourcing para recrutamento, e variações do nome passaram a apontar para serviços de geração de leads comerciais sem relação com RH. Mantive o registro aqui justamente para evitar que um comprador perca tempo testando um produto que mudou completamente de categoria.
+Já a Attract AI original saiu do ar como plataforma independente de sourcing para recrutamento, e o domínio `attract.ai` redireciona hoje para uma página de venda de domínio. Mantive o registro aqui para evitar que um comprador perca tempo procurando um produto descontinuado.
 
 ## O que conferir antes de contratar uma ferramenta de IA para RH?
 
-Quando apoio empresas na avaliação de fornecedores de IA, peço quatro verificações antes da assinatura do contrato. A primeira é a integração real com o ATS, o sistema de folha e o diretório de identidade que já estão em produção: ferramenta de RH que depende de exportação manual em CSV morre em poucos meses. A segunda é a camada de conformidade, incluindo base legal na LGPD, retenção de dados de candidatos, trilha de auditoria e regras sobre decisões automatizadas em seleção, que ganharam peso regulatório na Europa e nos Estados Unidos.
+Quando apoio empresas na avaliação de fornecedores de IA, peço quatro verificações antes da assinatura do contrato. A primeira é a integração real com o ATS, o sistema de folha e o diretório de identidade que já estão em produção: ferramenta de RH que depende de exportação manual em CSV vira rotina paralela e perde adesão do time. A segunda é a camada de conformidade, incluindo base legal na LGPD, retenção de dados de candidatos, trilha de auditoria e regras sobre decisões automatizadas em seleção, que ganharam peso regulatório na Europa e nos Estados Unidos.
 
 A terceira verificação é o modelo de custo total. Licenças por colaborador ativo escalam de forma diferente de cobranças por vaga, por entrevista ou por volume de chamadas de API. Antes de fechar um contrato anual, vale simular o cenário no artigo sobre [quanto custa manter IA generativa em produção](/blog/ia-generativa-em-producao-custos/) e comparar comprar pronto versus construir internamente usando a [planilha de custos de IA](/planilha-custos-ia/) e o [mapa de decisão de IA](/mapa-decisao-ia/). A quarta verificação é a qualidade dos dados internos: um assistente de políticas de RH só responde certo quando o manual de benefícios e os procedimentos internos estão atualizados e sem contradições.
 
@@ -98,7 +98,7 @@ Se a sua empresa está redesenhando a arquitetura de IA para áreas corporativas
 
 ### Vale mais contratar uma ferramenta pronta de IA ou ativar a IA do HCM que já usamos?
 
-Na maioria das empresas com mais de duzentas pessoas, começar pelos módulos nativos do HCM ou do ATS atual reduz atrito de integração, governança e adoção. Ferramentas especializadas como Textio, HireVue ou Leena AI compensam quando existe um gargalo específico que o fornecedor principal resolve mal, como triagem em altíssimo volume ou revisão sistemática de vieses em ciclos de avaliação.
+Em empresas que já operam um HCM ou ATS consolidado, começar pelos módulos nativos reduz atrito de integração e governança. Ferramentas especializadas como Textio, HireVue ou Leena AI compensam quando existe um gargalo específico que o fornecedor principal resolve mal, como triagem em altíssimo volume ou revisão sistemática de vieses em ciclos de avaliação.
 
 ### Como reduzir risco jurídico e de viés ao usar IA em recrutamento?
 
@@ -110,6 +110,6 @@ Atendimento interno de dúvidas recorrentes sobre políticas, férias e benefíc
 
 ### O que fazer se uma ferramenta da nossa lista for adquirida por um grande fornecedor?
 
-Aquisições como a da Paradox pela Workday trazem mais investimento para quem já usa o ecossistema do comprador, mas exigem atenção de quem integra com outros sistemas. Antes de renovar, peça clareza contratual sobre manutenção de APIs abertas, política de reajuste e portabilidade dos dados históricos.
+Aquisições como a da Paradox pela Workday trazem mais investimento para quem já usa o ecossistema do comprador, mas exigem atenção de quem integra com outros sistemas. Antes de renovar, peça clareza contratual sobre manutenção de APIs abertas e portabilidade dos dados históricos.
 
-No seu RH hoje, qual etapa consome mais horas do time sem melhorar a qualidade da decisão: triagem, atendimento interno, onboarding ou ciclos de desempenho?
+Quando reviso projetos de IA em RH, costumo perguntar antes de qualquer demonstração qual etapa consome mais horas do time sem melhorar a decisão: triagem, atendimento interno, onboarding ou ciclos de desempenho?

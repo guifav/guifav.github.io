@@ -16,7 +16,7 @@ Manter um site visível em respostas de IA exige cuidar de três camadas ao mesm
 
 ## O ChatGPT Search ainda depende só do índice do Bing?
 
-O Microsoft Bing continua sendo uma base documentada e central para o ChatGPT Search, especialmente em ambientes corporativos e no ecossistema da Microsoft com o Copilot, mas a arquitetura evoluiu para um modelo híbrido. Hoje a OpenAI opera o rastreador dedicado `OAI-SearchBot` para descobrir e atualizar páginas voltadas à busca em tempo real, além de combinar o índice do Bing com fontes adicionais de recuperação para consultas dinâmicas.
+O Microsoft Bing continua sendo uma base documentada de busca para o ChatGPT Search, ao mesmo tempo em que sustenta diretamente o Microsoft Copilot, mas a arquitetura da OpenAI evoluiu para um modelo híbrido. Hoje a OpenAI opera o rastreador dedicado `OAI-SearchBot` para descobrir e atualizar páginas voltadas à busca em tempo real, além de combinar o índice do Bing com fontes adicionais de recuperação para consultas dinâmicas.
 
 Para quem lidera SEO ou produto digital, essa mudança tem duas consequências diretas. Primeira: ignorar o Bing Webmaster Tools continua custando visibilidade tanto no Microsoft Copilot quanto em consultas do ChatGPT Search apoiadas na infraestrutura do Bing. Segunda: manter o site bem indexado no Google e acessível diretamente ao `OAI-SearchBot` virou pré-requisito para aparecer de forma consistente em citações de IA, inclusive nas respostas que combinam múltiplos provedores de busca.
 
@@ -28,7 +28,7 @@ Um dos erros técnicos mais comuns que vejo em auditorias é bloquear todos os b
 |---|---|---|---|
 | `OAI-SearchBot` | Rastreia e indexa páginas para o ChatGPT Search | Retira ou reduz drasticamente a elegibilidade para citações e links nas respostas | Liberar com `Allow: /` nas páginas públicas |
 | `GPTBot` | Coleta conteúdo público para treinamento de modelos futuros | Impede coleta para treino sem afetar a elegibilidade no ChatGPT Search | Decidir conforme política editorial e jurídica da empresa |
-| `ChatGPT-User` | Busca sob demanda quando um usuário pede para abrir uma URL específica | Impede leitura direta de páginas enviadas pelo usuário durante a conversa | Liberar se quiser que usuários consultem suas páginas via chat |
+| `ChatGPT-User` | Busca sob demanda quando um usuário pede para abrir uma URL específica | O `robots.txt` pode não se aplicar porque a ação parte de um usuário, e esse user-agent não controla a elegibilidade no ChatGPT Search | Para sair da busca, usar `OAI-SearchBot`; para bloquear acesso sob demanda, configurar regra no WAF |
 | `Bingbot` | Rastreia e indexa páginas para o Microsoft Bing e Microsoft Copilot | Tira o site do índice do Bing, do Copilot e das buscas apoiadas nele | Manter sempre liberado e monitorado no Bing Webmaster Tools |
 
 Se a empresa decide bloquear treinamento de modelos mantendo visibilidade nas respostas de busca com link, a configuração mínima no `robots.txt` separa os dois rastreadores de forma explícita:
@@ -44,13 +44,13 @@ User-agent: Bingbot
 Allow: /
 ```
 
-Vale conferir também o firewall da borda (WAF e CDN como Cloudflare, Akamai ou AWS WAF). Já vi sites com `robots.txt` impecável que ainda devolviam erro 403 ou 429 para `OAI-SearchBot` porque uma regra genérica de mitigação de bots barrava o tráfego antes de chegar à origem. A OpenAI publica os blocos de IP oficiais em JSON justamente para permitir validação nos logs do servidor sem abrir brecha para user-agents falsificados.
+Vale conferir também o firewall da borda (WAF e CDN como Cloudflare, Akamai ou AWS WAF). Já vi sites com `robots.txt` impecável que ainda devolviam erro 403 ou 429 para `OAI-SearchBot` porque uma regra genérica de mitigação de bots barrava o tráfego antes de chegar à origem. A OpenAI publica os blocos de IP oficiais em JSON para permitir validação nos logs do servidor sem abrir brecha para user-agents falsificados.
 
 ## Como fazer uma auditoria técnica no Bing Webmaster Tools e no IndexNow?
 
-A auditoria no Bing leva menos tempo do que parece e costuma revelar falhas simples que passam despercebidas quando o time só olha o Google Search Console. O ponto de partida é verificar a propriedade no [Bing Webmaster Tools](https://www.bing.com/webmasters/), processo que aceita importação direta das propriedades já verificadas no Google Search Console.
+Comece verificando a propriedade no [Bing Webmaster Tools](https://www.bing.com/webmasters/), que aceita importação direta das propriedades já validadas no Google Search Console.
 
-Depois da verificação, recomendo executar quatro conferências em sequência. Primeiro, compare as páginas que recebem tráfego orgânico relevante no Google com as URLs indexadas no Bing; qualquer página comercial ou guia pilar ausente no Bing merece inspeção imediata na ferramenta de URL Inspection. Segundo, verifique o sitemap XML enviado e confirme que páginas com `noindex` ou redirecionamentos 301 saíram do mapa. Terceiro, habilite o protocolo **IndexNow** no pipeline de publicação para avisar o Bing e demais buscadores compatíveis no momento exato em que uma página é criada, atualizada ou removida, reduzindo a latência entre a publicação e a descoberta por sistemas de resposta com IA. Quarto, acompanhe o relatório de **AI Performance** no Bing Webmaster Tools, que mostra volume de citações e consultas de grounding no Microsoft Copilot e nos resumos com IA.
+Depois da verificação, recomendo executar quatro conferências em sequência. Primeiro, compare as páginas que recebem tráfego orgânico relevante no Google com as URLs indexadas no Bing; qualquer página comercial ou guia pilar ausente no Bing merece inspeção imediata na ferramenta de URL Inspection. Segundo, verifique o sitemap XML enviado e confirme que páginas com `noindex` ou redirecionamentos 301 saíram do mapa. Terceiro, habilite o protocolo **IndexNow** no pipeline de publicação para avisar o Bing e demais buscadores compatíveis no momento exato em que uma página é criada, atualizada ou removida, reduzindo a latência entre a publicação e a descoberta por sistemas de resposta com IA. Quarto, acompanhe o relatório de **AI Performance** no Bing Webmaster Tools, lançado pela Microsoft em fevereiro de 2026 para mostrar volume de citações, páginas citadas e consultas de grounding no Microsoft Copilot e nos resumos com IA.
 
 ## O que precisa entrar no checklist técnico de SEO, AEO e GEO?
 
@@ -84,4 +84,4 @@ Um único artigo bem estruturado atende às três frentes quando entrega respost
 
 Segundo a documentação da OpenAI, alterações no `robots.txt` costumam levar cerca de 24 horas para se propagar pelos sistemas de rastreamento, embora o reflexo em reindexação de páginas específicas dependa da frequência de visita ao domínio.
 
-Você já conferiu nos logs do seu servidor se o `OAI-SearchBot` recebe resposta 200 ou está sendo barrado em silêncio pelo firewall da borda?
+Nas auditorias técnicas que faço, começo sempre pelos logs do servidor para ver se o `OAI-SearchBot` recebe resposta 200 ou é barrado em silêncio pelo firewall da borda. Esse teste já foi feito no seu domínio?
