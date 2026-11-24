@@ -2,15 +2,15 @@
 
 - Todo link interno (href, src, srcset, poster, inclusive URLs absolutas de guifav.dev) aponta para
   um arquivo publicado. Pega base errado no blog e links para pastas fora do site
-  (docs/, _next/, tools/).
+  (docs/, _next/, _mockups/).
 - Antes do cutover (PRE_CUTOVER_NOINDEX em blog-src/src/consts.ts): toda página do blog
   tem meta robots com noindex, e nenhuma página fora do blog aponta para ele.
 - rss.xml e sitemap.xml do blog são XML válido; o sitemap só lista páginas que existem e
   não lista posts com index: false nem as páginas da newsletter. Depois do cutover, esses
   posts e as páginas da newsletter continuam precisando de noindex.
 - Sob /blog/ só há .html, .xml e mídia da lista.
-- Ferramentas e guias (#104): a home (seção e rodapé) e o rodapé do blog levam os links das quatro ferramentas.
-- /llm-ranking/ (#113): a página sai com a tabela gerada no build, a data dos dados, o JSON-LD e a atribuição.
+- Ferramentas e guias (#104, #151): a home (seção e rodapé) e o rodapé do blog levam os links das ferramentas e do /tools/, e /tools/ lista as 4 ferramentas com CollectionPage.
+- /tools/llm-ranking/ (#113): a página sai com a tabela gerada no build, a data dos dados, o JSON-LD e a atribuição.
 - Alarme secundário de conteúdo ativo nas páginas do blog (ver blog-src/CONTRATO-DE-CONTEUDO.md:
   a barreira de segurança é a limpeza no render e a lista de extensões, não este verificador).
 
@@ -546,9 +546,11 @@ TITLE_EXEMPT_PREFIXES = ("portfolio/mockups/",)
 CONTENT_GROUPS = ("home", "portfolio", "insights-lista", "insights-artigo", "expert-insights", "materiais", "consultoria", "ferramentas", "legal")
 # Páginas dos materiais do canal (issue #99): o formulário e a página de enviado de cada material do catálogo do Worker.
 MATERIALS = ("planilha-custos-ia", "mapa-decisao-ia")
-MATERIAL_PAGES = {f"{m}/{p}index.html" for m in MATERIALS for p in ("", "enviado/")}
-# Ferramentas sem material para baixar (issue #113): grupo próprio, para não misturar com o funil dos materiais.
-LLM_RANKING_PAGE = "llm-ranking/index.html"
+MATERIAL_PAGES = {f"tools/{m}/{p}index.html" for m in MATERIALS for p in ("", "enviado/")}
+# Ferramentas sem material para baixar (issues #113 e #151): grupo próprio, para não misturar com o funil dos materiais.
+TOOLS_INDEX_PAGE = "tools/index.html"
+LLM_RANKING_PAGE = "tools/llm-ranking/index.html"
+TOOLS_PAGES = {TOOLS_INDEX_PAGE, LLM_RANKING_PAGE}
 # Páginas legais na raiz (#146): Política de privacidade e Termos de uso, públicas, indexáveis e no sitemap.
 LEGAL_PAGES = ("privacidade/index.html", "termos/index.html")
 LEGAL_SPECS = (
@@ -577,7 +579,7 @@ def expected_content_group(rel: str) -> str | None:
         return "expert-insights"
     if rel in MATERIAL_PAGES:
         return "materiais"
-    if rel == LLM_RANKING_PAGE:
+    if rel in TOOLS_PAGES:
         return "ferramentas"
     if re.fullmatch(r"blog/[a-z0-9][a-z0-9-]*/index\.html", rel):
         return "insights-artigo"
@@ -955,14 +957,14 @@ def check_tracking(rel: str, html: str) -> list[str]:
             else:
                 seen.add((ev, loc))
     # generate_lead na página de enviado de cada material, com o id do material igual ao da pasta (issue #99).
-    lead = next((m for m in MATERIALS if rel == f"{m}/enviado/index.html"), None)
+    lead = next((m for m in MATERIALS if rel == f"tools/{m}/enviado/index.html"), None)
     expected = ["sign_up"] if rel == SIGNUP_PAGE else ["generate_lead"] if lead else []
     if t.ga_events != expected:
         problems.append(f"{rel}: data-ga-event {t.ga_events}, esperado {expected}")
     elif lead and t.ga_materials != [lead]:
         problems.append(f"{rel}: generate_lead com data-material-id {t.ga_materials}, esperado [{lead!r}]")
     # Formulário de material (issue #99): data-ga-client-id e o campo oculto ga_cid, que o track.js preenche no envio.
-    if any(rel == f"{m}/index.html" for m in MATERIALS):
+    if any(rel == f"tools/{m}/index.html" for m in MATERIALS):
         # Só HTML visível: formulário ou campo dentro de comentário não conta.
         forms = [f for f in re.findall(r"<form\b[^>]*>.*?</form>", _visible_html(html), flags=re.S | re.I)
                  if 'action="https://insights.guifav.dev/material"' in f]
@@ -974,12 +976,17 @@ def check_tracking(rel: str, html: str) -> list[str]:
     return problems
 
 
-# "Ferramentas e guias" (issue #104, item 1): as ferramentas no caminho do rastreador e do leitor. A home leva os
-# quatro links na seção própria e no rodapé; toda página do blog, no rodapé (o mesmo da home, do Base.astro). Alarme
-# de integridade dos templates, como os de cima: só nas páginas com GA4, que são as que os templates geram.
-TOOLS_LINKS = ("/mapa-decisao-ia/", "/planilha-custos-ia/",
+# "Ferramentas e guias" (issues #104 e #151): as ferramentas no caminho do rastreador e do leitor. A home leva os
+# links na seção própria e no rodapé; toda página do blog, no rodapé (o mesmo da home, do Base.astro). A página
+# /tools/ lista as 4 ferramentas e traz CollectionPage com isPartOf para o WebSite da home. Alarme de integridade
+# dos templates, como os de cima: só nas páginas com GA4, que são as que os templates geram.
+TOOLS_INDEX_LINKS = ("/tools/mapa-decisao-ia/", "/tools/planilha-custos-ia/",
+                     "/tools/llm-ranking/",
+                     "/tools/seo-geo-aeo-framework/framework-seo-aeo.html")
+TOOLS_LINKS = ("/tools/", "/tools/mapa-decisao-ia/", "/tools/planilha-custos-ia/",
+               "/tools/llm-ranking/",
                "/blog/livro-ia-inteligencia-artificial-portugues-gratuito/",
-               "/seo-geo-aeo-framework/framework-seo-aeo.html")
+               "/tools/seo-geo-aeo-framework/framework-seo-aeo.html")
 TOOLS_SECTION_ID = "ferramentas"
 
 
@@ -988,7 +995,7 @@ VOID_TAGS = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link",
 
 
 class _ToolsLinks(HTMLParser):
-    """hrefs dentro do <footer> e dentro da <section id="ferramentas">.
+    """hrefs dentro do <footer>, da <section id="ferramentas"> e do <main>.
 
     Não contam: link em comentário, dentro de <template> ou de elemento com hidden, ou com hidden no próprio <a>
     (follow-up do PR #116). O rel de cada link fica guardado para a regra recusar nofollow.
@@ -998,8 +1005,8 @@ class _ToolsLinks(HTMLParser):
         super().__init__(convert_charrefs=True)
         # Pilha dos elementos abertos: (tag, bloco que ele abre ou None, se ele torna o conteúdo inerte).
         self.stack: list[tuple[str, str | None, bool]] = []
-        self.found: dict[str, list[str]] = {"footer": [], "section": []}
-        self.rels: dict[str, list[tuple[str, str]]] = {"footer": [], "section": []}
+        self.found: dict[str, list[str]] = {"footer": [], "section": [], "main": []}
+        self.rels: dict[str, list[tuple[str, str]]] = {"footer": [], "section": [], "main": []}
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self.handle_starttag(tag, attrs)
@@ -1017,7 +1024,8 @@ class _ToolsLinks(HTMLParser):
         if tag in VOID_TAGS:
             return
         block = "footer" if tag == "footer" else (
-            "section" if tag == "section" and a.get("id") == TOOLS_SECTION_ID else None)
+            "main" if tag == "main" else (
+                "section" if tag == "section" and a.get("id") == TOOLS_SECTION_ID else None))
         self.stack.append((tag, block, tag == "template" or "hidden" in a))
 
     def handle_endtag(self, tag: str) -> None:
@@ -1028,8 +1036,30 @@ class _ToolsLinks(HTMLParser):
 
 
 def check_tools(rel: str, html: str) -> list[str]:
-    """#104: os quatro links de TOOLS_LINKS, uma vez cada, no rodapé da home e do blog e na seção da home."""
-    if GA4_TAG not in html or not (rel == "index.html" or rel.startswith("blog/")):
+    """#104 e #151: TOOLS_LINKS no rodapé da home e do blog e na seção da home; /tools/ com as 4 ferramentas e CollectionPage."""
+    if GA4_TAG not in html:
+        return []
+    if rel == TOOLS_INDEX_PAGE:
+        p = _ToolsLinks()
+        p.feed(html)
+        p.close()
+        problems = []
+        for href in TOOLS_INDEX_LINKS:
+            n = p.found["main"].count(href)
+            if n == 0:
+                problems.append(f"{rel}: página de ferramentas sem o link {href}")
+            elif n > 1:
+                problems.append(f"{rel}: página de ferramentas com o link {href} {n} vezes")
+            if any(h == href and "nofollow" in r.split() for h, r in p.rels["main"]):
+                problems.append(f"{rel}: página de ferramentas com o link {href} em rel=nofollow")
+        website_id = SITE_ORIGIN + "/#website"
+        tools_url = SITE_ORIGIN + "/tools/"
+        if not any(n.get("@type") == "CollectionPage" and n.get("url") == tools_url
+                   and isinstance(n.get("isPartOf"), dict) and n["isPartOf"].get("@id") == website_id
+                   for n in _ld_nodes(html)):
+            problems.append(f"{rel}: sem JSON-LD CollectionPage com url {tools_url} e isPartOf {website_id}")
+        return problems
+    if not (rel == "index.html" or rel.startswith("blog/")):
         return []
     p = _ToolsLinks()
     p.feed(html)
@@ -2048,7 +2078,7 @@ def check_contrast(site: Path) -> list[str]:
     return problems
 
 
-# /llm-ranking/ (issue #113): a página é gerada no build (scripts/build_llm_ranking.py) a partir do snapshot da Arena.
+# /tools/llm-ranking/ (issue #113): a página é gerada no build (scripts/build_llm_ranking.py) a partir do snapshot da Arena.
 # O build já falha sem snapshot válido; esta regra é o alarme de que a página publicada saiu como deve: a tabela com
 # LLM_RANKING_ROWS linhas legíveis sem JavaScript, a data dos dados (que é o lastmod do sitemap), o JSON-LD com a mesma
 # data, a atribuição da CC BY 4.0 e nenhum marcador do template sobrando.
