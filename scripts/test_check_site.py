@@ -859,14 +859,15 @@ class TitleAndGroupTest(unittest.TestCase):
                        ("planilha-custos-ia/index.html", "materiais"), ("mapa-decisao-ia/enviado/index.html", "materiais"),
                        ("consultoria/index.html", "consultoria"), ("consultoria/x/index.html", None),
                        ("planilha-custos-ia/x/index.html", None),
-                       ("llm-ranking/index.html", None), ("blog/pagina/x/index.html", None),
+                       ("llm-ranking/index.html", "ferramentas"), ("llm-ranking/x/index.html", None),
+                       ("blog/pagina/x/index.html", None),
                        ("blog/a/b/index.html", None),
                        ("blog/tema/ia-sobre-dados-da-empresa/index.html", "insights-lista"),
                        ("blog/tema/a/b/index.html", None), ("blog/tema/Maiuscula/index.html", None)):
             with self.subTest(rel=rel):
                 self.assertEqual(E(rel), g)
         self.assertEqual(set(C.CONTENT_GROUPS), {"home", "portfolio", "insights-lista", "insights-artigo", "expert-insights",
-                                                 "materiais", "consultoria"})
+                                                 "materiais", "consultoria", "ferramentas"})
 
     def test_group_literal_and_define_vars(self):
         title = "<title>Guilherme Favaron | Builder e CTO</title>"
@@ -925,8 +926,14 @@ class TitleAndGroupTest(unittest.TestCase):
                 self.assertTrue(self.check("index.html", self.doc(title, self.GA + inert)))
 
     def test_ga_page_outside_the_map_is_flagged(self):
-        html = self.doc("<title>LLM Ranking | Guilherme Favaron</title>", self.GA + self.cfg(",{content_group:'home'}"))
-        self.assertTrue(any("sem grupo de conteúdo previsto" in p for p in self.check("llm-ranking/index.html", html)))
+        html = self.doc("<title>Ferramenta | Guilherme Favaron</title>", self.GA + self.cfg(",{content_group:'home'}"))
+        self.assertTrue(any("sem grupo de conteúdo previsto" in p for p in self.check("ferramenta-nova/index.html", html)))
+
+    def test_llm_ranking_is_ferramentas(self):
+        html = self.doc("<title>Ranking | Guilherme Favaron</title>", self.GA + self.cfg(",{content_group:'ferramentas'}"))
+        self.assertEqual(self.check("llm-ranking/index.html", html), [])
+        html = self.doc("<title>Ranking | Guilherme Favaron</title>", self.GA + self.cfg(",{content_group:'materiais'}"))
+        self.assertTrue(any("esperado ['ferramentas']" in p for p in self.check("llm-ranking/index.html", html)))
 
     def test_no_ga_no_group_needed(self):
         self.assertEqual(self.check("llm-ranking/index.html", self.doc("<title>LLM Ranking | Guilherme Favaron</title>")), [])
@@ -982,7 +989,7 @@ class ClaritySourcesTest(unittest.TestCase):
         return (self.REPO / rel).read_text(encoding="utf-8")
 
     def test_root_pages(self):
-        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES)):
+        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES), C.LLM_RANKING_PAGE):
             with self.subTest(rel=rel):
                 t = self.read(rel)
                 self.assertIn(C.GA4_TAG, t)
@@ -1292,6 +1299,7 @@ class GaHostGuardTest(unittest.TestCase):
                             ("portfolio/index.html", "gtag('config','G-K7Y87QNCX8'"),
                             (C.CONSULTING_PAGE, "gtag('config','G-K7Y87QNCX8'"),
                             *((p, "gtag('config','G-K7Y87QNCX8'") for p in sorted(C.MATERIAL_PAGES)),
+                            (C.LLM_RANKING_PAGE, "gtag('config','G-K7Y87QNCX8'"),
                             ("blog-src/src/layouts/Base.astro", "gtag('config', GA4_ID")):
             with self.subTest(rel=rel):
                 t = (root / rel).read_text(encoding="utf-8")
@@ -1388,7 +1396,7 @@ class ConsentSourcesTest(unittest.TestCase):
     def test_consent_js_same_version_everywhere(self):
         src = re.search(r"CONSENT_SRC = '([^']+)'", self.read("blog-src/src/consts.ts")).group(1)
         self.assertRegex(src, r"^/assets/consent\.js\?v=\d{12}$")
-        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES)):
+        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES), C.LLM_RANKING_PAGE):
             with self.subTest(rel=rel):
                 self.assertEqual(self.read(rel).count(f'<script src="{src}"></script>'), 1)
         self.assertEqual(self.read("blog-src/src/layouts/Base.astro").count(
@@ -1434,7 +1442,7 @@ class TrackingSourcesTest(unittest.TestCase):
         self.assertTrue(m)
         src = m.group(1)
         self.assertTrue(src.startswith(C.TRACK_PATH + "?v="))
-        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES)):
+        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES), C.LLM_RANKING_PAGE):
             with self.subTest(rel=rel):
                 t = self.read(rel)
                 self.assertEqual(t.count(f'<script src="{src}"></script>'), 1)
@@ -1971,7 +1979,8 @@ class SeoTest(unittest.TestCase):
                 mock.patch.object(C, "check_related", lambda *a, **k: []), \
                 mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
                 mock.patch.object(C, "check_home", lambda *a, **k: []), \
-                mock.patch.object(C, "check_post_ld", lambda *a, **k: []):  # Leia também (#104), JSON-LD (#105), /consultoria/ e home (#136)
+                mock.patch.object(C, "check_post_ld", lambda *a, **k: []), \
+                mock.patch.object(C, "check_llm_ranking", lambda *a, **k: []):  # Leia também (#104), JSON-LD (#105), /consultoria/ e home (#136), #113
             for gh, new_mark, group in (("", "AVISO: ", None), ("true", "::warning title=check_site (#103)::", "::group::")):
                 for desc, code in (("d" * 69, 1), ("d" * 165, 0), (self.OK_DESC, 0)):
                     with self.subTest(gh=gh, desc=len(desc)), mock.patch.dict(os.environ, {"GITHUB_ACTIONS": gh}):
@@ -2221,7 +2230,8 @@ class PostLdTest(unittest.TestCase):
                 mock.patch.object(C, "check_contrast", lambda *a, **k: []), \
                 mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
                 mock.patch.object(C, "check_home", lambda *a, **k: []), \
-                mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])):
+                mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
+                mock.patch.object(C, "check_llm_ranking", lambda *a, **k: []):  # #113 isolada; ver LlmRankingTest
             for head, code in (("", 1), (ld_script(post_graph()), 0)):
                 with self.subTest(code=code):
                     self.post(head)
@@ -2546,7 +2556,7 @@ class ContrastSiteTest(Base):
         self.assertIn("(e mais 1 página com as mesmas folhas)", probs[0])
 
     def test_pages_without_the_site_css_are_not_judged(self):
-        # Mockups do portfólio e o /llm-ranking/ têm paleta própria: a regra é sobre o CSS do site.
+        # Mockups do portfólio têm paleta própria: a regra é sobre o CSS do site.
         self.w("blog/um-post/index.html", page('<style>' + TOKENS_CSS + '.b{background:var(--hl);color:var(--hl)}</style>'))
         self.assertEqual(C.check_contrast(self.site), [])
         self.w("blog/um-post/index.html", page('<link rel="stylesheet" href="/assets/site.css">'
@@ -2582,6 +2592,184 @@ class ContrastSiteTest(Base):
             code = C.main(["--site", str(self.site), "--posts", str(self.posts), "--consts", str(consts)])
         self.assertEqual(code, 1)
         self.assertIn("404.html: contraste 1.00:1", err.getvalue())
+
+
+class LlmRankingTest(unittest.TestCase):
+    """#113: a regra que falha se o /llm-ranking/ sair sem a tabela, a data dos dados, o JSON-LD ou a atribuição."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.site = Path(self.tmp.name)
+        (self.site / "llm-ranking").mkdir()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def page(self, rows: int = 100, cells: int = 7, meta: str = '<meta name="dados-publicados-em" content="2026-11-22">',
+             modified: str = "2026-11-22", extra: str = "", attribution: bool = True, license_rel: str = "license",
+             first_pos: str = "1", jsonld: str | None = None) -> list[str]:
+        trs = []
+        for i in range(1, rows + 1):
+            pos = first_pos if i == 1 else str(i)
+            tds = [f"<td>{pos}</td>"] + [f"<td><span>c{j}</span></td>" for j in range(cells - 1)]
+            trs.append("<tr>" + "".join(tds) + "</tr>")
+        ld = jsonld if jsonld is not None else json.dumps({"@context": "https://schema.org", "@graph": [
+            {"@type": "WebPage", "dateModified": modified}, {"@type": "BreadcrumbList"}]})
+        att = (f'<a href="{C.LLM_DATASET_URL}">d</a> <a href="https://creativecommons.org/licenses/by/4.0/deed.pt-br" '
+               f'rel="{license_rel}">CC BY 4.0</a>') if attribution else ""
+        html = (f"<!DOCTYPE html><html><head>{meta}<script type=\"application/ld+json\">{ld}</script></head><body>"
+                f'<table id="ranking"><caption>x</caption><thead><tr><th>Posição</th></tr></thead><tbody>{"".join(trs)}'
+                f"</tbody></table><p>{att}</p>{extra}</body></html>")
+        (self.site / "llm-ranking/index.html").write_text(html, encoding="utf-8")
+        return C.check_llm_ranking(self.site)
+
+    def test_good_page(self):
+        self.assertEqual(self.page(), [])
+
+    def test_missing_page(self):
+        (self.site / "llm-ranking").rmdir()
+        self.assertEqual(C.check_llm_ranking(self.site), ["llm-ranking/index.html: página não existe no _site"])
+
+    def test_without_the_table(self):
+        (self.site / "llm-ranking/index.html").write_text(
+            '<html><head><meta name="dados-publicados-em" content="2026-11-22"></head><body></body></html>', encoding="utf-8")
+        self.assertTrue(any('esperava uma <table id="ranking">, achou 0' in p for p in C.check_llm_ranking(self.site)))
+
+    def test_rows_and_cells(self):
+        self.assertTrue(any("99 linhas" in p for p in self.page(rows=99)))
+        self.assertTrue(any("101 linhas" in p for p in self.page(rows=101)))
+        self.assertTrue(any("linha 1 da tabela com 6 células" in p for p in self.page(cells=6)))
+        self.assertTrue(any("com a posição '2'" in p for p in self.page(first_pos="2")))
+
+    def test_empty_cell(self):
+        probs = self.page(extra="")
+        self.assertEqual(probs, [])
+        html = (self.site / "llm-ranking/index.html").read_text(encoding="utf-8").replace("<td><span>c0</span></td>", "<td></td>", 1)
+        (self.site / "llm-ranking/index.html").write_text(html, encoding="utf-8")
+        self.assertTrue(any("célula vazia" in p for p in C.check_llm_ranking(self.site)))
+
+    def test_nested_table_rows_do_not_count(self):
+        html = (self.site / "llm-ranking/index.html")
+        self.page()
+        t = html.read_text(encoding="utf-8").replace("<td><span>c0</span></td>", "<td><table><tbody><tr><td>x</td></tr></tbody></table>c</td>", 1)
+        html.write_text(t, encoding="utf-8")
+        self.assertEqual(C.check_llm_ranking(self.site), [])
+
+    def test_nested_empty_cell_does_not_close_the_outer_one(self):
+        # r1 (agy P3): o </td> da tabela aninhada não fecha a célula de fora; a célula de fora tem o texto "c".
+        html = (self.site / "llm-ranking/index.html")
+        self.page()
+        t = html.read_text(encoding="utf-8").replace("<td><span>c0</span></td>", "<td><table><tbody><tr><td></td></tr></tbody></table>c</td>", 1)
+        html.write_text(t, encoding="utf-8")
+        self.assertEqual(C.check_llm_ranking(self.site), [])
+
+    def test_graph_that_is_not_a_list(self):
+        self.assertTrue(any("esperava um WebPage" in p for p in self.page(jsonld='{"@graph": null}')))
+        self.assertTrue(any("esperava um WebPage" in p for p in self.page(jsonld='{"@graph": 3}')))
+
+    def test_license_rel_is_case_insensitive(self):
+        self.assertEqual(self.page(license_rel="License"), [])
+
+    def test_two_ranking_tables(self):
+        self.assertTrue(any("achou 2" in p for p in self.page(extra='<table id="ranking"><tbody></tbody></table>')))
+
+    def test_data_meta(self):
+        self.assertTrue(any("achou 0" in p and "meta" in p for p in self.page(meta="")))
+        two = '<meta name="dados-publicados-em" content="2026-11-22">' * 2
+        self.assertTrue(any("achou 2" in p for p in self.page(meta=two)))
+        self.assertTrue(any("inválida" in p for p in self.page(meta='<meta name="dados-publicados-em" content="2026-13-01">')))
+        self.assertTrue(any("inválida" in p for p in self.page(meta='<meta name="dados-publicados-em" content="ontem">')))
+        self.assertTrue(any("fora do formato" in p for p in self.page(meta='<meta name="dados-publicados-em" content="2026-1-2">')))
+
+    def test_jsonld(self):
+        self.assertTrue(any("diferente da data dos dados" in p for p in self.page(modified="2026-11-19")))
+        self.assertTrue(any("esperava um WebPage" in p for p in self.page(jsonld='{"@type": "Dataset"}')))
+        self.assertTrue(any("JSON-LD inválido" in p for p in self.page(jsonld="{")))
+        self.assertEqual(self.page(jsonld='{"@type": "WebPage", "dateModified": "2026-11-22"}'), [])
+
+    def test_attribution(self):
+        self.assertTrue(any("link da fonte" in p for p in self.page(attribution=False)))
+        self.assertTrue(any('rel="license"' in p for p in self.page(license_rel="nofollow")))
+
+    def test_leftover_marker(self):
+        self.assertTrue(any("marcador do template" in p for p in self.page(extra="<!--LLM:tabela-->")))
+
+    def test_main_runs_the_rule(self):
+        from unittest import mock
+        consts = Path(self.tmp.name) / "consts.ts"
+        consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
+        err = io.StringIO()
+        with mock.patch.object(C, "check", lambda *a, **k: []), \
+                mock.patch.object(C, "check_related", lambda *a, **k: []), \
+                mock.patch.object(C, "check_contrast", lambda *a, **k: []), \
+                mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
+                mock.patch.object(C, "check_post_ld", lambda *a, **k: []), \
+                mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
+                mock.patch.object(C, "check_home", lambda *a, **k: []), \
+                contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            code = C.main(["--site", str(self.site), "--posts", str(self.site), "--consts", str(consts)])
+        self.assertEqual(code, 1)
+        self.assertIn("ERRO: llm-ranking/index.html: página não existe no _site", err.getvalue())
+        self.page()
+        with mock.patch.object(C, "check", lambda *a, **k: []), \
+                mock.patch.object(C, "check_related", lambda *a, **k: []), \
+                mock.patch.object(C, "check_contrast", lambda *a, **k: []), \
+                mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
+                mock.patch.object(C, "check_post_ld", lambda *a, **k: []), \
+                mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
+                mock.patch.object(C, "check_home", lambda *a, **k: []), \
+                contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(C.main(["--site", str(self.site), "--posts", str(self.site), "--consts", str(consts)]), 0)
+
+
+class NavSourcesTest(unittest.TestCase):
+    """#113 r4 (achado P1 do agy): toda página da raiz com o menu do site, e o layout do blog, levam a /consultoria/ no
+    menu e no rodapé, e o "Agende um horário" do menu vai para /consultoria/#como-contratar (#136). O merge de um PR que
+    traz página nova com o menu antigo quebra aqui, em vez de publicar a página fora do padrão."""
+
+    ROOT = Path(__file__).resolve().parent.parent
+
+    def sources(self) -> list[Path]:
+        entries = [l.strip() for l in (self.ROOT / "site-manifest.txt").read_text(encoding="utf-8").splitlines()
+                   if l.strip() and not l.startswith("#")]
+        files: list[Path] = []
+        for e in entries:
+            p = self.ROOT / e
+            if e.endswith("/"):
+                files += sorted(f for f in p.rglob("*.html") if "mockups" not in f.parts)
+            elif e.endswith(".html"):
+                files.append(p)
+        return [f for f in files if '<div class="nav-links">' in f.read_text(encoding="utf-8")] + \
+            [self.ROOT / "blog-src/src/layouts/Base.astro"]
+
+    def test_every_menu_has_consulting_and_the_schedule_cta_goes_there(self):
+        files = self.sources()
+        rels = {str(f.relative_to(self.ROOT)) for f in files}
+        for must in ("index.html", "404.html", "portfolio/index.html", "consultoria/index.html", "llm-ranking/index.html",
+                     "blog-src/src/layouts/Base.astro"):
+            self.assertIn(must, rels)
+        for f in files:
+            rel = str(f.relative_to(self.ROOT))
+            with self.subTest(rel=rel):
+                h = f.read_text(encoding="utf-8")
+                nav = re.search(r'<div class="nav-links">(.*?)</div>', h, re.S).group(1)
+                self.assertRegex(nav, r'<a href="/consultoria/"[ >]')
+                ctas = re.findall(r'<a\b[^>]*class="nav-cta"[^>]*>', nav)
+                self.assertEqual(len(ctas), 1, ctas)
+                self.assertIn('href="/consultoria/#como-contratar"', ctas[0])
+                self.assertNotIn("target=", ctas[0])
+                if rel != "consultoria/index.html":
+                    foot = re.search(r"<footer>(.*?)</footer>", h, re.S).group(1)
+                    self.assertIn('href="/consultoria/"', foot)
+
+    def test_root_pages_load_one_version_of_site_js(self):
+        # #113 r4 (P3 do agy e do Claude): o #142 mudou o site.js e subiu o ?v=; página que entra por merge com a versão
+        # antiga cria outra chave de cache para o mesmo script.
+        versions = {}
+        for f in self.sources()[:-1]:
+            for v in re.findall(r'src="/assets/site\.js\?v=([^"]+)"', f.read_text(encoding="utf-8")):
+                versions.setdefault(v, []).append(str(f.relative_to(self.ROOT)))
+        self.assertEqual(len(versions), 1, versions)
 
 
 class ContrastSourcesTest(unittest.TestCase):
@@ -2715,6 +2903,7 @@ class ConsultingTest(unittest.TestCase):
                 mock.patch.object(C, "check_home", lambda *a, **k: []), \
                 mock.patch.object(C, "check_post_ld", lambda *a, **k: []), \
                 mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
+                mock.patch.object(C, "check_llm_ranking", lambda *a, **k: []), \
                 contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
             code = C.main(["--site", str(site), "--posts", str(self.tmp.name), "--consts", str(consts)])
         self.assertEqual(code, 1)
@@ -2829,6 +3018,7 @@ class HomeHubTest(unittest.TestCase):
                 mock.patch.object(C, "check_contrast", lambda *a, **k: []), \
                 mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
                 mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
+                mock.patch.object(C, "check_llm_ranking", lambda *a, **k: []), \
                 contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
             code = C.main(["--site", str(self.site), "--posts", str(self.posts), "--consts", str(consts)])
         self.assertEqual(code, 1)

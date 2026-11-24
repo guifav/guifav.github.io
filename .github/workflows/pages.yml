@@ -63,6 +63,8 @@ jobs:
           python3 scripts/test_site_redirects.py
           python3 scripts/test_build_sitemaps.py
           python3 scripts/test_indexnow.py
+          python3 scripts/test_build_llm_ranking.py
+          python3 scripts/test_llm_ranking_snapshot.py
           python3 scripts/test_build_home_cycle.py
           python3 scripts/build_home_cycle.py --check
           python3 blog-src/scripts/test_newsletter_draft.py
@@ -74,6 +76,19 @@ jobs:
 
       - name: Montar _site (manifesto + blog) e verificar byte a byte
         run: python3 scripts/assemble_site.py
+
+      - name: Snapshot dos dados do /llm-ranking/ (repositório privado guifav/llm-ranking-data, #113)
+        # Chave de deploy só de leitura daquele repositório. A chave da fonte dos dados não passa pelo GitHub: o
+        # snapshot é gravado na KVM do Roger. Sem o snapshot, o build falha e nada é publicado.
+        uses: actions/checkout@v7
+        with:
+          repository: guifav/llm-ranking-data
+          ssh-key: ${{ secrets.LLM_RANKING_DATA_KEY }}
+          path: _dados/llm-ranking
+          persist-credentials: false
+
+      - name: Gerar o /llm-ranking/ a partir do snapshot (#113)
+        run: python3 scripts/build_llm_ranking.py --snapshot _dados/llm-ranking/arena-texto.json --site _site
 
       - name: Gerar o índice /sitemap.xml e o /sitemap-site.xml
         run: python3 scripts/build_sitemaps.py

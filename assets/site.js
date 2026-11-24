@@ -66,11 +66,14 @@
       if (a) a.setAttribute('href', src);
     });
   }
-  lt.addEventListener('click', function () {
-    applyLang(lang === 'pt' ? 'en' : 'pt');
-    store.set('lang', lang);
-  });
-  if (store.get('lang') === 'en') applyLang('en');
+  // Página só em português (o /llm-ranking/, #113) não tem o botão: nada de troca de idioma nela.
+  if (lt) {
+    lt.addEventListener('click', function () {
+      applyLang(lang === 'pt' ? 'en' : 'pt');
+      store.set('lang', lang);
+    });
+    if (store.get('lang') === 'en') applyLang('en');
+  }
 
   // Vitrine em carrossel: o projeto ativo fica no centro, de frente; os demais recolhem para os lados.
   var cf = document.getElementById('coverflow');

@@ -1,417 +1,121 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LLM Ranking: qual é o melhor LLM? | Guilherme Favaron</title>
-    <meta name="description" content="Ranking de 277 modelos de linguagem por categoria, tipo e empresa. Dados do LM Arena de 3 de dezembro de 2025, sem os modelos lançados depois dessa data.">
-    <link rel="canonical" href="https://guifav.dev/llm-ranking/">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="description" content="Os 100 modelos de IA mais bem colocados na arena de texto da LMArena, com margem de erro, votos e licença, atualizados a cada publicação da fonte."/>
+  <title>Ranking de LLMs (LMArena): os 100 melhores modelos de IA | Guilherme Favaron</title>
+  <meta name="author" content="Guilherme Favaron">
+  <meta property="og:title" content="Ranking de LLMs (LMArena): os 100 melhores modelos de IA | Guilherme Favaron">
+  <meta property="og:description" content="Os 100 modelos de IA mais bem colocados na arena de texto da LMArena, com margem de erro, votos e licença, atualizados a cada publicação da fonte.">
+  <meta property="og:url" content="https://guifav.dev/llm-ranking/"/>
+  <meta property="og:image" content="https://guifav.dev/og-image.png"/>
+  <meta property="og:image:width" content="1200"/>
+  <meta property="og:image:height" content="630"/>
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image"/>
+  <meta name="twitter:title" content="Ranking de LLMs (LMArena): os 100 melhores modelos de IA | Guilherme Favaron"/>
+  <meta name="twitter:description" content="Os 100 modelos de IA mais bem colocados na arena de texto da LMArena, com margem de erro, votos e licença, atualizados a cada publicação da fonte."/>
+  <meta name="twitter:image" content="https://guifav.dev/og-image.png"/>
+  <link rel="canonical" href="https://guifav.dev/llm-ranking/">
+  <!-- Gerado no build por scripts/build_llm_ranking.py a partir do snapshot da Arena (issue #113). -->
+  <!--LLM:meta-->
+  <!--LLM:jsonld-->
+  <link rel="stylesheet" href="/assets/site.css?v=202611232330">
+  <style>
+    .destaques{list-style:none;display:grid;gap:10px;max-width:760px;margin:0 0 28px}.destaques li{font-size:15px;line-height:1.65;color:var(--text-secondary)}.destaques strong{color:var(--text);font-weight:650}
+    .proximos{display:grid;gap:12px;max-width:760px}.proximos p{font-size:15px;color:var(--text-secondary);line-height:1.65}.proximos a{color:var(--hl-text);font-weight:600;text-decoration:none}.proximos a:hover{text-decoration:underline}
+    .tabela{overflow-x:auto;margin:0 0 16px}table.ranking,table.recorte{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
+    .ranking caption{text-align:left;font-size:13px;color:var(--text-secondary);padding:0 0 10px}
+    .ranking th,.ranking td,.recorte th,.recorte td{padding:8px 10px;border-bottom:1px solid var(--border);text-align:left;vertical-align:top}
+    .ranking thead th,.recorte thead th{font-size:12px;font-weight:650;text-transform:uppercase;letter-spacing:.6px;color:var(--text-secondary);white-space:nowrap}
+    .recorte tbody th{font-weight:600;color:var(--text)}.ic{color:var(--text-secondary);white-space:nowrap}
+    .ordenar{font:inherit;letter-spacing:inherit;text-transform:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}.ordenar:hover{color:var(--text)}
+    .mudancas ul{display:grid;gap:8px;padding-left:20px;max-width:760px}.mudancas li{font-size:15px;line-height:1.65;color:var(--text-secondary)}
+    .section-intro a{color:var(--hl-text);font-weight:600;text-decoration:none}.section-intro a:hover{text-decoration:underline}
+    section h2{font-size:24px;font-weight:750;letter-spacing:-.5px;margin-bottom:12px}
+    .atribuicao{font-size:13px;color:var(--text-secondary);line-height:1.7;max-width:860px}.atribuicao a{color:inherit;text-decoration:underline}
+  </style>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-K7Y87QNCX8"></script>
+    <script>window['ga-disable-G-K7Y87QNCX8']=location.hostname.replace(/\.$/,'')!=='guifav.dev';window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('consent','default',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',analytics_storage:'denied'});gtag('set','ads_data_redaction',true);window.guifavConsent=function(){try{var c=JSON.parse(localStorage.getItem('consent-v1')||'null');return c&&c.v==='granted'&&typeof c.t==='number'&&Date.now()-c.t>=0&&Date.now()-c.t<31536e6?'granted':null}catch(e){return null}}();if(window.guifavConsent==='granted')gtag('consent','update',{ad_storage:'granted',ad_user_data:'granted',ad_personalization:'granted',analytics_storage:'granted'});gtag('js',new Date());gtag('config','G-K7Y87QNCX8',{content_group:'ferramentas'});</script>
+    <!-- Microsoft Clarity (mapas de calor e gravações de sessão; campos de formulário mascarados), só depois do aceite dos cookies (#68) -->
+    <script>window.guifavClarity=function(){if(window.clarity)return;(function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);})(window,document,"clarity","script","zcs8f7r329");};if(window.guifavConsent==='granted')window.guifavClarity();</script>
   <link rel="icon" href="/favicon.ico" sizes="any">
   <link rel="icon" href="/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 </head>
 <body>
-    <button id="theme-toggle" aria-label="Alternar tema">
-        <svg id="theme-icon-sun" class="theme-icon" stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="12" cy="12" r="5"></circle>
-            <line x1="12" y1="1" x2="12" y2="3"></line>
-            <line x1="12" y1="21" x2="12" y2="23"></line>
-            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-            <line x1="1" y1="12" x2="3" y2="12"></line>
-            <line x1="21" y1="12" x2="23" y2="12"></line>
-            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-        </svg>
-        <svg id="theme-icon-moon" class="theme-icon hidden" stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
-            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-        </svg>
-    </button>
+  <div class="container">
+    <nav>
+      <a href="/" class="nav-name">Guilherme Favaron</a>
+      <div class="nav-links">
+        <a href="/portfolio/">Portfólio</a>
+        <a href="/consultoria/">Consultoria</a>
+        <a href="/blog/">Insights</a>
+        <a href="mailto:contact@guifav.dev" class="nav-hide-sm">Contato</a>
+        <a href="/consultoria/#como-contratar" class="nav-cta">Agende um horário</a>
+        <button id="theme-toggle" class="nav-btn" aria-label="Toggle theme">&#9790;</button>
+      </div>
+    </nav>
 
-    <div class="container">
-        <!-- Header -->
-        <header class="header">
-            <div class="header-content">
-                <h1>Ranking: Qual é o Melhor LLM?</h1>
-                <p class="subtitle">Análise de 277 modelos de linguagem</p>
-            </div>
-            <div class="header-actions">
-                <nav class="breadcrumb header-breadcrumb" aria-label="Breadcrumb">
-                    <a href="../index.html">Home</a>
-                    <span class="separator">/</span>
-                    <span aria-current="page">LLM Ranking</span>
-                </nav>
-            </div>
-        </header>
+    <header class="hero">
+      <div class="eyebrow">Ferramenta · atualizada a cada publicação da fonte</div>
+      <h1>Ranking de LLMs: a classificação da Arena (LMArena)</h1>
+      <p class="subtitle">Os 100 modelos mais bem colocados na arena de texto, com margem de erro, votos e licença. O ranking mede preferência humana em comparações às cegas; não mede custo nem desempenho na sua tarefa. Dados de <!--LLM:data-->; a fonte publica a cada 3 dias, aproximadamente.</p>
+      <!--LLM:destaques-->
+      <div class="proximos">
+        <p>Para decidir o que fazer com o modelo: o <a href="/mapa-decisao-ia/">mapa de decisão entre RAG, Text-to-SQL e contexto longo</a> mostra qual arquitetura a sua pergunta pede, e a <a href="/planilha-custos-ia/">planilha de custos de IA em produção</a> faz a conta do que ela custa por mês.</p>
+      </div>
+    </header>
 
-        <!-- Aviso provisório da data dos dados (#113, item 1). Atalho a remover na revitalização da #113,
-             que passa a gerar os dois valores de uma fonte só:
-             - a data dos dados está fixa em cinco lugares: a meta description, este aviso, o card
-               "Última Atualização", o rodapé e script.js (updateLastUpdate);
-             - o total de 277 modelos está fixo em quatro: a meta description, o subtítulo, o card
-               "Modelos Avaliados" e o parágrafo da Visão Geral. -->
-        <p class="data-notice" role="note">
-            Os dados são do LM Arena de <time datetime="2025-12-03">3 de dezembro de 2025</time>.
-            A página está em atualização e ainda não inclui os modelos lançados depois dessa data.
-        </p>
+    <!--LLM:mudancas-->
 
-        <!-- Stats Cards -->
-        <div class="stats-grid" id="statsCards">
-            <div class="stat-card">
-                <div class="stat-content">
-                    <div class="stat-value" id="totalModels">277</div>
-                    <div class="stat-label">Modelos Avaliados</div>
-                </div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-content">
-                    <div class="stat-value" id="topModel">-</div>
-                    <div class="stat-label">Melhor Overall</div>
-                </div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-content">
-                    <div class="stat-value" id="categoriesCount">-</div>
-                    <div class="stat-label">Categorias</div>
-                </div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-content">
-                    <div class="stat-value" id="lastUpdate">03/12/2025</div>
-                    <div class="stat-label">Última Atualização</div>
-                </div>
-            </div>
-        </div>
+    <section id="ranking-completo">
+      <h2>Os 100 primeiros</h2>
+      <p class="section-intro">Cada linha é uma variante como a fonte publica: o mesmo modelo aparece mais de uma vez quando tem níveis de esforço diferentes. A faixa vai da melhor à pior posição compatível com os intervalos de 95% (cálculo do guifav.dev). Dois modelos estão dentro da margem de erro um do outro quando os intervalos da coluna Pontuação se cruzam. A lista completa, com os <!--LLM:total--> modelos, está na <a href="https://arena.ai/leaderboard/text">página da Arena</a>.</p>
+      <div class="tabela">
+<!--LLM:tabela-->
+      </div>
+      <!--LLM:atribuicao-->
+    </section>
 
-        <!-- Navigation Tabs -->
-        <nav class="tabs">
-            <button class="tab active" data-tab="overview">Visão Geral</button>
-            <button class="tab" data-tab="rankings">Rankings</button>
-            <button class="tab" data-tab="comparison">Comparação</button>
-            <button class="tab" data-tab="categories">Por Categoria</button>
-            <button class="tab" data-tab="types">Por Tipo</button>
-            <button class="tab" data-tab="companies">Por Empresa</button>
-            <button class="tab" data-tab="analytics">Análises</button>
-        </nav>
+    <section id="pesos-abertos">
+      <h2>Os melhores de pesos abertos</h2>
+      <p class="section-intro">Modelos cuja licença permite baixar os pesos, com a licença como a fonte informa. Nem toda licença de pesos abertos é de código aberto: algumas restringem uso comercial.</p>
+      <div class="tabela">
+<!--LLM:abertos-->
+      </div>
+    </section>
 
-        <!-- Loading -->
-        <div class="loading" id="loading">
-            <div class="spinner"></div>
-            <p>Carregando dados...</p>
-        </div>
+    <section id="por-tarefa">
+      <h2>Por tipo de tarefa</h2>
+      <p class="section-intro">Os 3 primeiros de cada categoria da arena de texto, com a pontuação na categoria.</p>
+      <div class="tabela">
+<!--LLM:tarefas-->
+      </div>
+    </section>
 
-        <!-- Content Sections -->
-        <div class="content">
-            <!-- Overview Tab -->
-            <section id="overview-section" class="tab-content active">
-                <div class="section-header">
-                    <h2>Visão Geral do Ranking</h2>
-                    <p>Principais insights e estatísticas dos 277 modelos avaliados</p>
-                </div>
+    <section id="por-setor">
+      <h2>Por setor</h2>
+      <p class="section-intro">Os 3 primeiros nas conversas classificadas por setor.</p>
+      <div class="tabela">
+<!--LLM:setores-->
+      </div>
+    </section>
 
-                <div class="charts-grid">
-                    <div class="chart-container wide">
-                        <h3>Top 10 Modelos (Overview)</h3>
-                        <div class="table-responsive">
-                            <table id="top10OverviewTable" class="table-simple"></table>
-                        </div>
-                    </div>
-                    <div class="chart-container wide">
-                        <h3>Origem dos Modelos (País)</h3>
-                        <div id="worldMap"></div>
-                    </div>
-                </div>
+    <section id="por-organizacao">
+      <h2>Por organização</h2>
+      <p class="section-intro">As 10 organizações com o modelo mais bem colocado, e quantos modelos cada uma tem entre os 100 primeiros.</p>
+      <div class="tabela">
+<!--LLM:organizacoes-->
+      </div>
+    </section>
 
-                <div class="insights-grid">
-                    <div class="insight-card">
-                        <h4>Líder Absoluto</h4>
-                        <div class="leader-info" id="leaderInfo">Carregando...</div>
-                    </div>
-                    <div class="insight-card">
-                        <h4>Melhor em Coding</h4>
-                        <div class="leader-info" id="codingLeader">Carregando...</div>
-                    </div>
-                    <div class="insight-card">
-                        <h4>Melhor em Creative Writing</h4>
-                        <div class="leader-info" id="creativeLeader">Carregando...</div>
-                    </div>
-                    <div class="insight-card">
-                        <h4>Melhor em Math</h4>
-                        <div class="leader-info" id="mathLeader">Carregando...</div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Rankings Tab -->
-            <section id="rankings-section" class="tab-content">
-                <div class="section-header">
-                    <h2>Ranking Completo</h2>
-                    <div class="filters">
-                        <input type="text" id="searchInput" placeholder="🔍 Buscar modelo..." />
-                        <select id="categoryFilter">
-                            <option value="overall">Geral</option>
-                            <option value="expert">Especialista</option>
-                            <option value="hardPrompts">Prompts Difíceis</option>
-                            <option value="coding">Programação</option>
-                            <option value="math">Matemática</option>
-                            <option value="creativeWriting">Escrita Criativa</option>
-                            <option value="instructionFollowing">Seguir Instruções</option>
-                            <option value="longerQuery">Consulta Longa</option>
-                        </select>
-                        <select id="typeFilter">
-                            <option value="all">Todos os Tipos</option>
-                            <option value="image_edit">Edição de imagens</option>
-                            <option value="search">Busca de informações na internet</option>
-                            <option value="text">Geração de texto</option>
-                            <option value="t2i">Criação de imagens a partir de textos</option>
-                            <option value="t2v">Criação de vídeos a partir de textos</option>
-                            <option value="vision">Compreensão de vídeos enviados</option>
-                            <option value="webdev">Suporte a desenvolvedores</option>
-                        </select>
-                        <button id="exportBtn" class="btn-secondary">📥 Exportar CSV</button>
-                    </div>
-                </div>
-
-                <div class="table-container">
-                    <table id="rankingsTable">
-                        <thead>
-                            <tr>
-                                <th class="sortable" data-sort="overall">Overall</th>
-                                <th>Modelo</th>
-                                <th class="sortable" data-sort="expert">Expert</th>
-                                <th class="sortable" data-sort="hardPrompts">Hard Prompts</th>
-                                <th class="sortable" data-sort="coding">Coding</th>
-                                <th class="sortable" data-sort="math">Math</th>
-                                <th class="sortable" data-sort="creativeWriting">Creative</th>
-                                <th class="sortable" data-sort="instructionFollowing">Instructions</th>
-                                <th class="sortable" data-sort="longerQuery">Longer Query</th>
-                            </tr>
-                        </thead>
-                        <tbody id="rankingsTableBody">
-                            <!-- Populated by JavaScript -->
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-
-            <!-- Comparison Tab -->
-            <section id="comparison-section" class="tab-content">
-                <div class="section-header">
-                    <h2>Comparação de Modelos</h2>
-                    <p>Selecione até 5 modelos para comparar</p>
-                </div>
-
-                <div class="comparison-controls">
-                    <div class="model-selector">
-                        <input type="text" id="compareSearch" placeholder="Digite o nome do modelo..." />
-                        <div id="compareResults" class="autocomplete-results"></div>
-                    </div>
-                    <div id="selectedModels" class="selected-models"></div>
-                </div>
-
-                <div class="comparison-content">
-                    <canvas id="comparisonRadar"></canvas>
-                </div>
-
-                <div id="comparisonTable" class="comparison-table-container"></div>
-            </section>
-
-            <!-- Analytics Tab -->
-            <section id="analytics-section" class="tab-content">
-                <div class="section-header">
-                    <h2>Análises Avançadas</h2>
-                <p>Insights estatísticos e correlações entre categorias</p>
-                </div>
-
-                <div class="analytics-grid">
-                    <div class="chart-container">
-                        <div class="chart-header">
-                            <h3>Correlação entre Categorias</h3>
-                            <span class="info-tip" data-tip="Correlação das colunas de ranking por Spearman, adequada para dados de ordem.">ⓘ</span>
-                        </div>
-                        <canvas id="correlationChart"></canvas>
-                    </div>
-                    <div class="chart-container">
-                        <div class="chart-header">
-                            <h3>Performance por Faixa de Ranking</h3>
-                            <span class="info-tip" data-tip="Média normalizada (0–100) por faixa de ranking Overall, por parâmetro.">ⓘ</span>
-                        </div>
-                        <canvas id="performanceChart"></canvas>
-                    </div>
-                    <div class="chart-container">
-                        <div class="chart-header">
-                            <h3>O Mapa de Decisão: Matriz de Dominância</h3>
-                            <span class="info-tip" data-tip="Modelo Rank 1 por arena. Ajuda a escolher rapidamente por tipo de tarefa.">ⓘ</span>
-                        </div>
-                        <div class="table-responsive">
-                            <table id="decisionMatrixTable" class="table-simple"></table>
-                        </div>
-                    </div>
-                    <div class="chart-container">
-                        <div class="chart-header">
-                            <h3>Top N em Múltiplas Arenas</h3>
-                            <div class="chart-controls">
-                                <label for="versatilityTopN">Top N</label>
-                                <select id="versatilityTopN">
-                                    <option value="3">3</option>
-                                    <option value="5">5</option>
-                                    <option value="10">10</option>
-                                </select>
-                            </div>
-                            <span class="info-tip" data-tip="Contagem de aparições no Top N por organização, across-arena.">ⓘ</span>
-                        </div>
-                        <canvas id="multiTop3Chart"></canvas>
-                    </div>
-                    <div class="chart-container">
-                        <div class="chart-header">
-                            <h3>Google vs OpenAI vs Anthropic: Share por Arena</h3>
-                            <span class="info-tip" data-tip="Participação no Top 10 por arena. Indica liderança relativa.">ⓘ</span>
-                        </div>
-                        <canvas id="orgShareChart"></canvas>
-                    </div>
-                    <div class="chart-container">
-                        <div class="chart-header">
-                            <h3>Investimento vs Performance (Organizações)</h3>
-                            <div class="chart-controls">
-                                <label for="orgFilterSelect">Organizações</label>
-                                <select id="orgFilterSelect" multiple size="6"></select>
-                            </div>
-                            <span class="info-tip" data-tip="Volume de modelos vs score médio. Filtre organizações para comparação.">ⓘ</span>
-                        </div>
-                        <canvas id="orgVolumePerfChart"></canvas>
-                    </div>
-                    <div class="chart-container">
-                        <div class="chart-header">
-                            <h3>Open-Source vs Proprietário: Performance Média</h3>
-                            <span class="info-tip" data-tip="Score médio por arena separado por licença Open vs Proprietária.">ⓘ</span>
-                        </div>
-                        <canvas id="licensePerfChart"></canvas>
-                        <div id="tcoNote"></div>
-                    </div>
-                    <div class="chart-container">
-                        <div class="chart-header">
-                            <h3>Confidence Intervals: Votes vs CI_95</h3>
-                            <span class="info-tip" data-tip="Relação entre quantidade de votos e incerteza (CI_95).">ⓘ</span>
-                        </div>
-                        <canvas id="votesCiScatter"></canvas>
-                    </div>
-                    <div class="chart-container">
-                        <div class="chart-header">
-                            <h3>Volatilidade de Ranking (Spread Médio)</h3>
-                            <span class="info-tip" data-tip="Média do Rank Spread nos Top 20 como proxy de estabilidade.">ⓘ</span>
-                        </div>
-                        <canvas id="rankSpreadChart"></canvas>
-                    </div>
-                    <div class="chart-container">
-                        <div class="chart-header">
-                            <h3>Modelos Estatisticamente Equivalentes (CI Overlap)</h3>
-                            <span class="info-tip" data-tip="Pares Top 10 por arena com sobreposição de intervalos de confiança.">ⓘ</span>
-                        </div>
-                        <div id="ciEquivalence"></div>
-                    </div>
-                    <div class="chart-container">
-                        <div class="chart-header">
-                            <h3>Multi-Modal Champions</h3>
-                            <span class="info-tip" data-tip="Organizações que lideram múltiplas arenas. Indica generalização.">ⓘ</span>
-                        </div>
-                        <div class="table-responsive">
-                            <table id="multiModalChampionsTable" class="table-simple"></table>
-                        </div>
-                    </div>
-                    <div class="chart-container">
-                        <div class="chart-header">
-                            <h3>Generalização vs Especialização (Índice por Organização)</h3>
-                            <span class="info-tip" data-tip="Quantidade de arenas lideradas por organização.">ⓘ</span>
-                        </div>
-                        <canvas id="generalistIndexChart"></canvas>
-                    </div>
-                    <div class="chart-container">
-                        <div class="chart-header">
-                            <h3>Emerging Players</h3>
-                            <span class="info-tip" data-tip="Modelos com alto score e baixa votação: candidatos promissores.">ⓘ</span>
-                        </div>
-                        <div class="table-responsive">
-                            <table id="emergingPlayersTable" class="table-simple"></table>
-                        </div>
-                    </div>
-                    <div class="chart-container">
-                        <div class="chart-header">
-                            <h3>Dificuldade por Arena (Std Dev de Score)</h3>
-                            <span class="info-tip" data-tip="Dispersão de scores por arena. Maior dispersão sugere maior dificuldade.">ⓘ</span>
-                        </div>
-                        <canvas id="arenaStdDevChart"></canvas>
-                    </div>
-                    <div class="chart-container">
-                        <div class="chart-header">
-                            <h3>Concentration Ratio (CRN em Top 10)</h3>
-                            <div class="chart-controls">
-                                <label for="crTopN">Top N</label>
-                                <select id="crTopN">
-                                    <option value="3">3</option>
-                                    <option value="5">5</option>
-                                    <option value="10">10</option>
-                                </select>
-                            </div>
-                            <span class="info-tip" data-tip="Percentual do Top N sobre o total dos Top 10 por arena.">ⓘ</span>
-                        </div>
-                        <canvas id="arenaCR3Chart"></canvas>
-                    </div>
-                </div>
-
-                
-            </section>
-
-            <!-- Categories Tab -->
-            <section id="categories-section" class="tab-content">
-                <div class="section-header">
-                    <h2>Análise por Categoria</h2>
-                    <p>Top 10 modelos em cada categoria específica</p>
-                </div>
-
-                <div class="category-grid" id="categoryGrid">
-                    <!-- Populated by JavaScript -->
-                </div>
-            </section>
-
-            <!-- Types Tab -->
-            <section id="types-section" class="tab-content">
-                <div class="section-header">
-                    <h2>Análise por Tipo</h2>
-                    <p>Top 10 modelos por arena (Texto, Visão, Texto→Imagem, etc.)</p>
-                </div>
-
-                <div class="category-grid" id="typesGrid">
-                    <!-- Populated by JavaScript -->
-                </div>
-            </section>
-
-            <!-- Companies Tab -->
-            <section id="companies-section" class="tab-content">
-                <div class="section-header">
-                    <h2>Análise por Empresa</h2>
-                    <p>Modelos por organização e comparação do principal modelo com os Top 5 do seu tipo</p>
-                </div>
-
-                <div class="category-grid" id="companiesGrid">
-                    <!-- Populated by JavaScript -->
-                </div>
-            </section>
-        </div>
-
-        <!-- Footer -->
-        <footer class="footer">
-            <p>
-                Dados: LM Arena • Desenvolvido por 
-                <a href="https://guifav.dev/" target="_blank">Guilherme Favaron</a> • 
-                Atualizado: 03/12/2025
-            </p>
-        </footer>
-    </div>
-
-    <script src="script.js?v=20251215-static"></script>
+    <footer><p><a href="/">Início</a> &middot; <a href="/consultoria/">Consultoria</a> &middot; <a href="https://github.com/guifav" target="_blank" rel="noopener">GitHub</a> &middot; <a href="https://linkedin.com/in/guilhermefavaron" target="_blank" rel="noopener">LinkedIn</a> &middot; <a href="https://www.youtube.com/@guifav" target="_blank" rel="noopener">YouTube</a> &middot; <a href="mailto:contact@guifav.dev">Contato</a> &middot; <a href="/blog/assinar/">Expert Insights</a> &middot; <a href="/blog/privacidade/#cookies" data-consent-open>Cookies</a></p></footer>
+  </div>
+  <script src="/assets/site.js?v=202611241500"></script>
+  <script src="/assets/track.js?v=202611241800"></script>
+  <script src="/assets/consent.js?v=202611140300"></script>
+  <script src="/llm-ranking/ordenar.js?v=202611241500"></script>
 </body>
 </html>
