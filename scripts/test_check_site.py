@@ -1421,7 +1421,7 @@ class TrackingSourcesTest(unittest.TestCase):
             self.assertEqual(home.count(f'data-cta-location="{loc}"'), 1, loc)
         self.assertEqual(self.read("portfolio/index.html").count('data-cta-location="chamada-final"'), 2)
         consulting = self.read(C.CONSULTING_PAGE)
-        for loc, n in (("consultoria-pagina", 2), ("como-contratar", 1), ("projetos", 1), ("chamada-final", 2)):
+        for loc, n in (("consultoria-pagina", 1), ("como-contratar", 2), ("projetos", 1), ("chamada-final", 2)):
             self.assertEqual(consulting.count(f'data-cta-location="{loc}"'), n, loc)
 
     def test_signup_marker_in_source(self):
@@ -2335,7 +2335,7 @@ class ConsultingTest(unittest.TestCase):
     PROVIDER = '{"@type":"Person","@id":"https://guifav.dev/#person","name":"G","url":"https://guifav.dev/"}'
     LD = ('<script type="application/ld+json">{"@context":"https://schema.org","@type":"Service",'
           '"provider":' + PROVIDER + ','
-          '"offers":{"@type":"Offer","price":"500","priceCurrency":"BRL"}}</script>')
+          '"offers":{"@type":"Offer","price":"0","priceCurrency":"BRL"}}</script>')
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -2356,7 +2356,7 @@ class ConsultingTest(unittest.TestCase):
         self.assertEqual(self.got(), [])
         # @graph, offers em lista e H1 com marcação dentro também valem
         graph = ('<script type="application/ld+json">[{"@context":"https://schema.org","@graph":[{"@type":"Service",'
-                 '"provider":' + self.PROVIDER + ',"offers":[{"@type":"Offer","price":500,"priceCurrency":"BRL"}]}]}]'
+                 '"provider":' + self.PROVIDER + ',"offers":[{"@type":"Offer","price":0,"priceCurrency":"BRL"}]}]}]'
                  '</script>')
         self.assertEqual(self.got(head=self.TITLE + graph,
                                   body="<h1>Consultoria em <span>inteligência artificial</span>\n para empresas</h1>"), [])
@@ -2384,7 +2384,14 @@ class ConsultingTest(unittest.TestCase):
             ("provider com url de outro site", self.TITLE + self.LD.replace('"url":"https://guifav.dev/"',
                                                                             '"url":"https://guifav.dev.evil/"'), None,
              "sem o JSON-LD Service"),
-            ("Offer sem preço", self.TITLE + self.LD.replace('"price":"500",', ''), None, "sem o JSON-LD Service"),
+            ("Offer sem preço", self.TITLE + self.LD.replace('"price":"0",', ''), None, "sem o JSON-LD Service"),
+            ("Offer com preço null", self.TITLE + self.LD.replace('"price":"0"', '"price":null'), None, "sem o JSON-LD Service"),
+            ("Offer com preço booleano", self.TITLE + self.LD.replace('"price":"0"', '"price":false'), None,
+             "sem o JSON-LD Service"),
+            ("Offer com preço em texto solto", self.TITLE + self.LD.replace('"price":"0"', '"price":"grátis"'), None,
+             "sem o JSON-LD Service"),
+            ("provider com nome null", self.TITLE + self.LD.replace('"name":"G"', '"name":null'), None,
+             "sem o JSON-LD Service"),
             ("Offer em outra moeda", self.TITLE + self.LD.replace('"BRL"', '"USD"'), None, "sem o JSON-LD Service"),
             ("Service com o @id da Person", self.TITLE + self.LD.replace('"@type":"Service",',
                                                                          '"@type":"Service","@id":"https://guifav.dev/#person",'),

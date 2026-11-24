@@ -1336,12 +1336,16 @@ def check_consulting(site: Path) -> list[str]:
         return o if isinstance(o, list) else [o]
 
     def priced(o) -> bool:
-        return (isinstance(o, dict) and o.get("@type") == "Offer" and str(o.get("price", "")).strip() != ""
-                and o.get("priceCurrency") == "BRL")
+        # Preço numérico (0 vale: a primeira conversa é gratuita), em número ou texto; null, booleano e "abc" não.
+        price = o.get("price") if isinstance(o, dict) else None
+        numeric = (isinstance(price, (int, float)) and not isinstance(price, bool)) or (
+            isinstance(price, str) and re.fullmatch(r"\d+(?:\.\d+)?", price.strip()) is not None)
+        return isinstance(o, dict) and o.get("@type") == "Offer" and numeric and o.get("priceCurrency") == "BRL"
 
     def person(pr) -> bool:
         return (isinstance(pr, dict) and pr.get("@id") == PERSON_ID and pr.get("@type") == "Person"
-                and bool(str(pr.get("name", "")).strip()) and pr.get("url") in (SITE_ORIGIN, SITE_ORIGIN + "/"))
+                and isinstance(pr.get("name"), str) and bool(pr["name"].strip())
+                and pr.get("url") in (SITE_ORIGIN, SITE_ORIGIN + "/"))
 
     nodes = _ld_nodes(html)
     if not any(n.get("@type") == "Service" and n.get("@id") != PERSON_ID and person(n.get("provider"))
