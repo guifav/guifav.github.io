@@ -50,57 +50,64 @@
     @media(prefers-reduced-motion:reduce){.flow *{animation:none!important}.flow .f-spark{stroke-dasharray:none}}
     @media(max-width:820px){.hero-split{grid-template-columns:1fr;gap:28px}.flow{justify-self:start;max-width:420px}}
     .dflow{margin:12px 0 32px}
-    @media(min-width:1000px){.dflow{width:min(1320px,calc(100vw - 48px));margin-left:calc(50% - min(660px,50vw - 24px))}}
-    .dflow-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:18px;background:var(--bg-card);padding:20px 16px}
-    .dflow svg{display:block;width:100%;height:auto;min-width:960px;font-family:inherit}
-    .dflow .d-h{font-size:12px;font-weight:700;letter-spacing:1.6px;fill:var(--text-secondary)}
+    @media(min-width:1000px){.dflow{width:min(1120px,calc(100vw - 48px));margin-left:calc(50% - min(560px,50vw - 24px))}}
+    .dflow-wrap{border:1px solid var(--border);border-radius:18px;background:var(--bg-card);padding:20px 16px}
+    .dflow svg{display:block;width:100%;height:auto;font-family:inherit}
+    .dflow .cy-m{display:none}
+    @media(max-width:999px){.dflow .cy-d{display:none}.dflow .cy-m{display:block;max-width:440px;margin:0 auto}.dflow-wrap{padding:12px 6px}}
     .dflow .d-t{font-size:15px;font-weight:650;fill:var(--text)}
-    .dflow .d-l{font-size:14px;font-weight:500;fill:var(--text)}
     .dflow .d-c{font-size:12.5px;fill:var(--text-secondary)}
+    .dflow .cy-m .d-t{font-size:18px}
+    .dflow .cy-m .d-c{font-size:15px}
     .dflow .d-card{fill:var(--bg);stroke:var(--border);stroke-width:1.2}
-    .dflow .d-box{fill:none;stroke:var(--border);stroke-width:1.2}
-    .dflow .d-gold{stroke:var(--hl);stroke-width:1.6}
-    .dflow .d-dot{fill:var(--hl)}
+    .dflow .d-glow{fill:none;stroke:var(--hl);stroke-width:3;opacity:0;animation:d-glow 5s ease-out infinite}
+    .dflow .d-ico-bg{fill:var(--hl);fill-opacity:.1}
+    .dflow .d-trk{fill:none;stroke:var(--border);stroke-width:2.4}
+    .dflow .d-trk-run{fill:none;stroke:var(--hl);stroke-width:2.4;stroke-linecap:round;stroke-dasharray:3 18;opacity:.9;animation:d-run 4s linear infinite}
+    .dflow .d-chev{fill:none;stroke:var(--hl);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+    .dflow .d-token{fill:var(--hl);stroke:var(--bg-card);stroke-width:2.5}
+    .dflow .d-gov{fill:var(--bg);stroke:var(--border);stroke-width:1.2}
+    .dflow .d-gov-o{fill:none;stroke:var(--border);stroke-width:1;stroke-dasharray:1 7}
+    .dflow .d-orbit{fill:none;stroke:var(--hl);stroke-width:2.2;stroke-dasharray:2 16;stroke-linecap:round;opacity:.8;animation:d-run 6s linear infinite}
+    .dflow .d-gov-t{font-size:13px;font-weight:800;letter-spacing:2.2px;fill:var(--text)}
+    .dflow .d-fb-t{font-size:12.5px;font-weight:800;letter-spacing:2.2px;fill:var(--hl-text)}
+    .dflow .d-leader{stroke:var(--hl);stroke-opacity:.6;stroke-width:1.2;stroke-dasharray:2 3}
     .dflow .d-lock{fill:none;stroke:var(--text-secondary);stroke-width:1.6;opacity:.7}
-    .dflow .d-lock circle{fill:var(--text-secondary);stroke:none}
-    .dflow .d-line{fill:none;stroke:var(--border);stroke-width:1.6}
-    .dflow .d-tip{fill:none;stroke:none}
-    .dflow .d-arrow{fill:var(--text-secondary)}
-    .dflow .d-run{fill:none;stroke:var(--hl);stroke-width:2;stroke-linecap:round;stroke-dasharray:3 18;opacity:.9;animation:d-run 3s linear infinite}
-    .dflow .d-run-slow{animation-duration:6s;opacity:.7}
-    .dflow .d-bracket{fill:none;stroke:var(--text-secondary);stroke-width:1.2;opacity:.6}
-    .dflow .d-zone{fill:var(--hl);fill-opacity:.07;stroke:var(--hl);stroke-opacity:.45;stroke-width:1.2;animation:d-zone 4s ease-in-out infinite}
-    .dflow .d-badge circle{fill:var(--hl)}
-    .dflow .d-badge text{font-size:13px;font-weight:800;fill:#171717}
-    .dflow .d-gov{fill:none;stroke:var(--border);stroke-width:1.2;stroke-dasharray:4 4}
-    .dflow .d-pipe{fill:var(--hl);opacity:.35;animation:d-pipe 2.4s ease-in-out infinite}
-    .dflow .d-meter-bg{fill:var(--border)}
-    .dflow .d-meter{fill:var(--hl);transform-box:fill-box;transform-origin:0 50%;animation:d-meter 5s ease-in-out infinite}
-    .dflow .d-bar{fill:var(--hl);transform-box:fill-box;transform-origin:50% 100%;animation:f-bar 3.4s ease-in-out infinite}
-    .dflow .d-typing circle{fill:var(--text-secondary);animation:d-live 1.4s ease-in-out infinite}
-    .dflow .d-typing circle:nth-child(2){animation-delay:.2s}.dflow .d-typing circle:nth-child(3){animation-delay:.4s}
-    .dflow .d-live{fill:var(--hl);animation:d-live 2s ease-in-out infinite}
+    .dflow .i-db-r{fill:var(--bg);stroke:var(--text-secondary);stroke-width:1.3;animation:i-fill 1.5s ease-in-out infinite}
+    .dflow .i-db-top{fill:var(--bg);stroke:var(--text-secondary);stroke-width:1.3}
+    .dflow .i-pipe-b{fill:none;stroke:var(--text-secondary);stroke-width:1.4;opacity:.55}
+    .dflow .i-pipe-r{fill:none;stroke:var(--hl);stroke-width:2;stroke-linecap:round;stroke-dasharray:3 9;animation:d-run 1.6s linear infinite}
+    .dflow .i-pipe-end{fill:var(--hl)}
+    .dflow .i-vc-f{fill:var(--bg-card);fill-opacity:.6}
+    .dflow .i-vc-t{fill:var(--hl);fill-opacity:.14}
+    .dflow .i-vc-y{fill:none;stroke:var(--text-secondary);stroke-width:1;stroke-opacity:.35;stroke-dasharray:2 2}
+    .dflow .i-vc-e{fill:none;stroke:var(--text-secondary);stroke-width:1.3;stroke-linejoin:round}
+    .dflow .i-vc-v{transform-box:view-box;animation:i-swing 4s ease-in-out infinite alternate}
+    .dflow .i-vc-v line{stroke:var(--hl);stroke-width:1.6;stroke-linecap:round}
+    .dflow .i-vc-v circle{fill:var(--hl)}
+    .dflow .i-vc-o{fill:var(--text-secondary)}
+    .dflow .i-lock-b{fill:var(--bg);stroke:var(--text-secondary);stroke-width:1.5}
+    .dflow .i-lock-s{fill:none;stroke:var(--text-secondary);stroke-width:1.5;animation:i-shackle 3s ease-in-out infinite}
+    .dflow .i-lock-k{fill:var(--hl);animation:d-live 3s ease-in-out infinite}
+    .dflow .i-net-e{stroke:var(--text-secondary);stroke-width:1;opacity:.45}
+    .dflow .i-net-n{fill:var(--hl);animation:d-live 1.4s ease-in-out infinite}
+    .dflow .i-bar{fill:var(--hl);transform-box:fill-box;transform-origin:50% 100%;animation:f-bar 3.4s ease-in-out infinite}
+    .dflow .i-chat{fill:var(--bg);stroke:var(--text-secondary);stroke-width:1.3}
+    .dflow .i-chat-d{fill:var(--text-secondary);animation:d-live 1.2s ease-in-out infinite}
     @keyframes d-run{to{stroke-dashoffset:-42}}
-    @keyframes d-zone{0%,100%{fill-opacity:.05}50%{fill-opacity:.12}}
-    @keyframes d-pipe{0%,100%{opacity:.25}50%{opacity:.9}}
     @keyframes d-live{0%,100%{opacity:.3}50%{opacity:1}}
-    @keyframes d-meter{0%,100%{transform:scaleX(.35)}50%{transform:scaleX(.8)}}
-    .dflow-hint{display:none;font-size:12px;color:var(--text-secondary);margin-top:8px}
+    @keyframes d-glow{0%{opacity:0}6%{opacity:.9}30%,100%{opacity:0}}
+    @keyframes i-fill{0%,100%{fill:var(--bg)}40%{fill:var(--hl)}}
+    @keyframes i-shackle{0%,55%,100%{transform:translateY(0)}70%,85%{transform:translateY(-3px)}}
+    @keyframes i-swing{from{transform:rotate(-24deg)}to{transform:rotate(24deg)}}
     .dflow-legend{list-style:none;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px 32px}
-    .dflow-legend li{display:flex;gap:12px;align-items:flex-start}
-    .dflow-legend .n{flex:none;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--hl);color:#171717;font-size:13px;font-weight:800}
+    .dflow-legend li{border-top:2px solid var(--hl);padding-top:12px}
     .dflow-legend a{font-size:15px;font-weight:650;line-height:1.35;color:var(--text);text-decoration:none}
     .dflow-legend a:hover{color:var(--hl-text);text-decoration:underline;text-underline-offset:2px}
     .dflow-legend p{font-size:13.5px;line-height:1.55;color:var(--text-secondary);margin-top:4px}
     @media(max-width:980px){.dflow-legend{grid-template-columns:repeat(2,minmax(0,1fr))}}
-    @media(max-width:820px){.dflow-hint{display:block}.dflow-wrap{padding:14px 10px}}
     @media(max-width:560px){.dflow-legend{grid-template-columns:1fr}}
-    .dflow .d-cube{transform-box:fill-box;transform-origin:50% 50%;animation:d-cube 6s ease-in-out infinite}
-    .dflow .d-cube-f{fill:var(--hl);fill-opacity:.06;stroke:var(--text-secondary);stroke-width:1.1;stroke-linejoin:round}
-    .dflow .d-vec{stroke:var(--hl);stroke-width:1.6;stroke-linecap:round}
-    .dflow .d-vec-p{fill:var(--hl)}
-    @keyframes d-cube{0%,100%{transform:scaleX(1)}25%{transform:scaleX(.2)}50%{transform:scaleX(-1)}75%{transform:scaleX(.2)}}
-    @media(prefers-reduced-motion:reduce){.dflow *{animation:none!important}}
+    @media(prefers-reduced-motion:reduce){.dflow *{animation:none!important}.dflow .d-token{display:none}}
     .card-ico{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:10px;border:1px solid var(--border);margin-bottom:14px;color:var(--hl-text)}
     .card-ico svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
   </style>
@@ -177,166 +184,20 @@
 
     <section id="temas">
       <div class="section-label" data-i18n="section_topics">Temas</div>
-      <p class="section-intro" data-i18n="topics_intro">Um fluxo de dados completo de uma empresa. Os destaques numerados marcam onde tenho maior experiência, e cada número leva aos artigos do tema.</p>
+      <p class="section-intro" data-i18n="topics_intro">O ciclo de dados e de IA de uma empresa, que se retroalimenta: o uso gera dados novos e aprimora as ferramentas. Abaixo, os temas em que tenho mais experiência, com os artigos de cada um.</p>
       <figure class="dflow">
         <div class="dflow-wrap">
-          <svg viewBox="0 0 1400 548" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="dflow-t" focusable="false">
-          <title id="dflow-t" data-i18n="df_title">Fluxo de dados de uma empresa, com os pontos onde atuo destacados</title>
-          <defs><marker id="df-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="d-arrow" d="M0 1 L9 5 L0 9 z"/></marker></defs>
-          <text class="d-h" x="126.0" y="44" text-anchor="middle" data-i18n="df_h1">FONTES</text>
-          <text class="d-h" x="330.0" y="44" text-anchor="middle" data-i18n="df_h2">INTEGRAÇÃO</text>
-          <text class="d-h" x="542.0" y="44" text-anchor="middle" data-i18n="df_h3">DADOS</text>
-          <text class="d-h" x="774.0" y="44" text-anchor="middle" data-i18n="df_h4">ACESSO</text>
-          <text class="d-h" x="998.0" y="44" text-anchor="middle" data-i18n="df_h5">IA</text>
-          <text class="d-h" x="1250.0" y="44" text-anchor="middle" data-i18n="df_h6">USO</text>
-          <rect class="d-zone" x="18" y="362" width="216" height="60" rx="14" style="animation-delay:-2.8s"/>
-          <rect class="d-zone" x="248" y="68" width="412" height="358" rx="16" style="animation-delay:-2.8s"/>
-          <rect class="d-zone" x="672" y="68" width="204" height="358" rx="16" style="animation-delay:-0.7s"/>
-          <rect class="d-zone" x="888" y="148" width="220" height="116" rx="16" style="animation-delay:-1.4s"/>
-          <rect class="d-zone" x="888" y="280" width="220" height="116" rx="16" style="animation-delay:-2.1s"/>
-          <rect class="d-zone" x="1120" y="68" width="260" height="316" rx="16" style="animation-delay:-3.5s"/>
-          <path class="d-line" d="M224 102.0 C 244 102.0, 240 247.0, 260 247.0"/>
-          <path class="d-line" d="M224 160.0 C 244 160.0, 240 247.0, 260 247.0"/>
-          <path class="d-line" d="M224 218.0 C 244 218.0, 240 247.0, 260 247.0"/>
-          <path class="d-line" d="M224 276.0 C 244 276.0, 240 247.0, 260 247.0"/>
-          <path class="d-line" d="M224 334.0 C 244 334.0, 240 247.0, 260 247.0"/>
-          <path class="d-line" d="M224 392.0 C 244 392.0, 240 247.0, 260 247.0"/>
-          <path class="d-line" d="M400 231.0 C 426 231.0, 424 142, 450 142"/>
-          <path class="d-line" d="M400 263.0 C 422 263.0, 414 358, 436 358"/>
-          <path class="d-line" d="M542.0 164 V 178"/>
-          <path class="d-line" d="M542.0 222 V 236"/>
-          <path class="d-line" d="M634 258.0 H 698"/>
-          <path class="d-line" d="M648 358 C 676 358, 670 316, 698 316"/>
-          <path class="d-line" d="M850 258 C 877 258, 873 200, 900 200"/>
-          <path class="d-line" d="M850 316 C 877 316, 873 216, 900 216"/>
-          <path class="d-line" d="M998.0 252 V 292"/>
-          <path class="d-line" d="M1096 200 C 1123 200, 1119 212, 1146 212"/>
-          <path class="d-line" d="M1096 216 C 1123 216, 1119 270, 1146 270"/>
-          <path class="d-line" d="M1096 338 C 1123 338, 1119 328, 1146 328"/>
-          <path class="d-line" d="M634 248.0 C 648 248.0, 666.0 240.0, 666.0 224.0 V 62 C 666.0 54, 672.0 50, 680.0 50 H 1100.0 C 1108.0 50, 1114.0 54, 1114.0 62 V 146 C 1114.0 152, 1118.0 154, 1124.0 154 H 1146"/>
-          <path class="d-line" d="M850 374 C 877 374, 873 350, 900 350"/>
-          <path class="d-line" d="M774.0 396 V 444 H 14 V 410"/>
-          <path class="d-run" d="M224 102.0 C 244 102.0, 240 247.0, 260 247.0" style="animation-delay:-0.00s"/>
-          <path class="d-run" d="M224 160.0 C 244 160.0, 240 247.0, 260 247.0" style="animation-delay:-0.30s"/>
-          <path class="d-run" d="M224 218.0 C 244 218.0, 240 247.0, 260 247.0" style="animation-delay:-0.60s"/>
-          <path class="d-run" d="M224 276.0 C 244 276.0, 240 247.0, 260 247.0" style="animation-delay:-0.90s"/>
-          <path class="d-run" d="M224 334.0 C 244 334.0, 240 247.0, 260 247.0" style="animation-delay:-1.20s"/>
-          <path class="d-run" d="M224 392.0 C 244 392.0, 240 247.0, 260 247.0" style="animation-delay:-1.50s"/>
-          <path class="d-run" d="M400 231.0 C 426 231.0, 424 142, 450 142" style="animation-delay:-0.20s"/>
-          <path class="d-run" d="M400 263.0 C 422 263.0, 414 358, 436 358" style="animation-delay:-0.60s"/>
-          <path class="d-run" d="M542.0 164 V 178" style="animation-delay:-0.10s"/>
-          <path class="d-run" d="M542.0 222 V 236" style="animation-delay:-0.40s"/>
-          <path class="d-run" d="M634 258.0 H 698" style="animation-delay:-0.30s"/>
-          <path class="d-run" d="M648 358 C 676 358, 670 316, 698 316" style="animation-delay:-0.70s"/>
-          <path class="d-run" d="M850 258 C 877 258, 873 200, 900 200" style="animation-delay:-0.50s"/>
-          <path class="d-run" d="M850 316 C 877 316, 873 216, 900 216" style="animation-delay:-0.90s"/>
-          <path class="d-run" d="M998.0 252 V 292" style="animation-delay:-0.20s"/>
-          <path class="d-run" d="M1096 200 C 1123 200, 1119 212, 1146 212" style="animation-delay:-0.30s"/>
-          <path class="d-run" d="M1096 216 C 1123 216, 1119 270, 1146 270" style="animation-delay:-0.80s"/>
-          <path class="d-run" d="M1096 338 C 1123 338, 1119 328, 1146 328" style="animation-delay:-0.60s"/>
-          <path class="d-run" d="M634 248.0 C 648 248.0, 666.0 240.0, 666.0 224.0 V 62 C 666.0 54, 672.0 50, 680.0 50 H 1100.0 C 1108.0 50, 1114.0 54, 1114.0 62 V 146 C 1114.0 152, 1118.0 154, 1124.0 154 H 1146" style="animation-delay:-1.00s"/>
-          <path class="d-run d-run-slow" d="M850 374 C 877 374, 873 350, 900 350" style="animation-delay:-0.40s"/>
-          <path class="d-run d-run-slow" d="M774.0 396 V 444 H 14 V 410" style="animation-delay:-1.20s"/>
-          <path class="d-tip" d="M400 231.0 C 426 231.0, 424 142, 450 142" marker-end="url(#df-arrow)"/>
-          <path class="d-tip" d="M400 263.0 C 422 263.0, 414 358, 436 358" marker-end="url(#df-arrow)"/>
-          <path class="d-tip" d="M542.0 164 V 178" marker-end="url(#df-arrow)"/>
-          <path class="d-tip" d="M542.0 222 V 236" marker-end="url(#df-arrow)"/>
-          <path class="d-tip" d="M634 258.0 H 698" marker-end="url(#df-arrow)"/>
-          <path class="d-tip" d="M648 358 C 676 358, 670 316, 698 316" marker-end="url(#df-arrow)"/>
-          <path class="d-tip" d="M850 258 C 877 258, 873 200, 900 200" marker-end="url(#df-arrow)"/>
-          <path class="d-tip" d="M850 316 C 877 316, 873 216, 900 216" marker-end="url(#df-arrow)"/>
-          <path class="d-tip" d="M998.0 252 V 292" marker-end="url(#df-arrow)"/>
-          <path class="d-tip" d="M1096 200 C 1123 200, 1119 212, 1146 212" marker-end="url(#df-arrow)"/>
-          <path class="d-tip" d="M1096 216 C 1123 216, 1119 270, 1146 270" marker-end="url(#df-arrow)"/>
-          <path class="d-tip" d="M1096 338 C 1123 338, 1119 328, 1146 328" marker-end="url(#df-arrow)"/>
-          <path class="d-tip" d="M634 248.0 C 648 248.0, 666.0 240.0, 666.0 224.0 V 62 C 666.0 54, 672.0 50, 680.0 50 H 1100.0 C 1108.0 50, 1114.0 54, 1114.0 62 V 146 C 1114.0 152, 1118.0 154, 1124.0 154 H 1146" marker-end="url(#df-arrow)"/>
-          <path class="d-tip" d="M850 374 C 877 374, 873 350, 900 350" marker-start="url(#df-arrow)" marker-end="url(#df-arrow)"/>
-          <path class="d-tip" d="M774.0 396 V 444 H 14 V 410" marker-start="url(#df-arrow)" marker-end="url(#df-arrow)"/>
-          <path class="d-bracket" d="M28 84 H 14 V 410 H 28"/>
-          <text class="d-c" x="400" y="466" text-anchor="middle" data-i18n="df_live">acesso ao vivo e ação nos sistemas, com permissão e aprovação humana</text>
-          <text class="d-c" x="998.0" y="70" text-anchor="middle" data-i18n="df_bi">BI direto do ouro</text>
-          <rect class="d-gov" x="260" y="488" width="836" height="40" rx="12"/>
-          <text class="d-c" x="678.0" y="513" text-anchor="middle" data-i18n="df_gov">Governança: permissões, auditoria, avaliação, LGPD e custo sob controle</text>
-          <rect class="d-card" x="28" y="80" width="196" height="44" rx="10"/><circle class="d-dot" cx="46" cy="102" r="3.5"/>
-          <text class="d-l" x="60" y="107" data-i18n="df_s1">CRM e vendas</text>
-          <rect class="d-card" x="28" y="138" width="196" height="44" rx="10"/><circle class="d-dot" cx="46" cy="160" r="3.5"/>
-          <text class="d-l" x="60" y="165" data-i18n="df_s2">ERP e financeiro</text>
-          <rect class="d-card" x="28" y="196" width="196" height="44" rx="10"/><circle class="d-dot" cx="46" cy="218" r="3.5"/>
-          <text class="d-l" x="60" y="223" data-i18n="df_s3">Planilhas</text>
-          <rect class="d-card" x="28" y="254" width="196" height="44" rx="10"/><circle class="d-dot" cx="46" cy="276" r="3.5"/>
-          <text class="d-l" x="60" y="281" data-i18n="df_s4">Documentos e contratos</text>
-          <rect class="d-card" x="28" y="312" width="196" height="44" rx="10"/><circle class="d-dot" cx="46" cy="334" r="3.5"/>
-          <text class="d-l" x="60" y="339" data-i18n="df_s5">Site e marketing</text>
-          <rect class="d-card" x="28" y="370" width="196" height="44" rx="10"/><circle class="d-dot" cx="46" cy="392" r="3.5"/>
-          <text class="d-l" x="60" y="397" data-i18n="df_s6">Sistemas legados</text>
-          <rect class="d-card" x="260" y="183.0" width="140" height="128" rx="14"/>
-          <text class="d-t" x="330.0" y="231.0" text-anchor="middle" data-i18n="df_i_t">Integração</text>
-          <text class="d-c" x="330.0" y="253.0" text-anchor="middle" data-i18n="df_i_s">ETL, APIs e CDC</text>
-          <rect class="d-pipe" x="285" y="275.0" width="26" height="6" rx="3" style="animation-delay:-0.0s"/>
-          <rect class="d-pipe" x="317" y="275.0" width="26" height="6" rx="3" style="animation-delay:-0.5s"/>
-          <rect class="d-pipe" x="349" y="275.0" width="26" height="6" rx="3" style="animation-delay:-1.0s"/>
-          <rect class="d-box" x="436" y="80" width="212" height="218" rx="14"/>
-          <text class="d-t" x="542.0" y="106" text-anchor="middle" data-i18n="df_lake">Lakehouse</text>
-          <rect class="d-card" x="450" y="120" width="184" height="44" rx="10"/>
-          <text class="d-l" x="542.0" y="147" text-anchor="middle" data-i18n="df_d3">Bronze: dado bruto</text>
-          <rect class="d-card" x="450" y="178" width="184" height="44" rx="10"/>
-          <text class="d-l" x="542.0" y="205" text-anchor="middle" data-i18n="df_d2">Prata: limpo e único</text>
-          <rect class="d-card d-gold" x="450" y="236" width="184" height="44" rx="10"/>
-          <text class="d-l" x="542.0" y="263" text-anchor="middle" data-i18n="df_d1">Ouro: dado de negócio</text>
-          <rect class="d-box" x="436" y="314" width="212" height="100" rx="14"/>
-          <g class="d-cube" aria-hidden="true"><path class="d-cube-f" d="M542.0 327 L559.0 335.5 L542.0 344 L525.0 335.5 Z"/><path class="d-cube-f" d="M525.0 335.5 L542.0 344 L542.0 361 L525.0 352.5 Z"/><path class="d-cube-f" d="M559.0 335.5 L542.0 344 L542.0 361 L559.0 352.5 Z"/><line class="d-vec" x1="539.5" y1="348.2" x2="548.8" y2="338.9"/><circle class="d-vec-p" cx="548.8" cy="338.9" r="2.2"/><line class="d-vec" x1="539.5" y1="348.2" x2="531.0" y2="342.3"/><circle class="d-vec-p" cx="531.0" cy="342.3" r="2.2"/><line class="d-vec" x1="539.5" y1="348.2" x2="545.4" y2="353.4"/><circle class="d-vec-p" cx="545.4" cy="353.4" r="2.2"/><line class="d-vec" x1="539.5" y1="348.2" x2="540.3" y2="333.8"/><circle class="d-vec-p" cx="540.3" cy="333.8" r="2.2"/></g>
-          <text class="d-t" x="542.0" y="382" text-anchor="middle" data-i18n="df_vec">Índice vetorial</text>
-          <text class="d-c" x="542.0" y="402" text-anchor="middle" data-i18n="df_vec_s">embeddings dos documentos</text>
-          <rect class="d-box" x="684" y="80" width="180" height="334" rx="14"/>
-          <text class="d-t" x="774.0" y="106" text-anchor="middle" data-i18n="df_acc">Com permissão</text>
-          <text class="d-c" x="774.0" y="128" text-anchor="middle" data-i18n="df_acc_s">só o que o usuário vê</text>
-          <g class="d-lock"><rect x="761.0" y="170" width="26" height="20" rx="4"/><path d="M766.0 170 v-6 a8 8 0 0 1 16 0 v6"/><circle cx="774.0" cy="180" r="2.4"/></g>
-          <rect class="d-card" x="698" y="236" width="152" height="44" rx="10"/>
-          <text class="d-l" x="774.0" y="263" text-anchor="middle" data-i18n="df_sql">Text-to-SQL</text>
-          <rect class="d-card" x="698" y="294" width="152" height="44" rx="10"/>
-          <text class="d-l" x="774.0" y="321" text-anchor="middle" data-i18n="df_rag">RAG</text>
-          <rect class="d-card" x="698" y="352" width="152" height="44" rx="10"/>
-          <text class="d-l" x="774.0" y="371" text-anchor="middle" data-i18n="df_mcp">MCP</text>
-          <text class="d-c" x="774.0" y="388" text-anchor="middle" data-i18n="df_mcp_s">sistemas e ferramentas</text>
-          <rect class="d-card" x="900" y="160" width="196" height="92" rx="14"/>
-          <text class="d-t" x="998.0" y="194" text-anchor="middle" data-i18n="df_m">Modelos</text>
-          <text class="d-c" x="998.0" y="216" text-anchor="middle" data-i18n="df_m_s">comercial, aberto ou ajustado</text>
-          <rect class="d-meter-bg" x="948.0" y="230" width="100" height="5" rx="2.5"/><rect class="d-meter" x="948.0" y="230" width="100" height="5" rx="2.5"/>
-          <rect class="d-card" x="900" y="292" width="196" height="92" rx="14"/>
-          <text class="d-t" x="998.0" y="332" text-anchor="middle" data-i18n="df_ag">Agentes</text>
-          <text class="d-c" x="998.0" y="354" text-anchor="middle" data-i18n="df_ag_s">agem pelo MCP, com revisão</text>
-          <rect class="d-box" x="1132" y="80" width="236" height="292" rx="14"/>
-          <text class="d-t" x="1250.0" y="106" text-anchor="middle" data-i18n="df_apps">Aplicações</text>
-          <rect class="d-card" x="1146" y="132" width="208" height="44" rx="10"/>
-          <text class="d-l" x="1162" y="159" data-i18n="df_u1">Dashboards</text>
-          <rect class="d-card" x="1146" y="190" width="208" height="44" rx="10"/>
-          <text class="d-l" x="1162" y="217" data-i18n="df_u2">Analista de dados com IA</text>
-          <rect class="d-card" x="1146" y="248" width="208" height="44" rx="10"/>
-          <text class="d-l" x="1162" y="275" data-i18n="df_u3">Chatbot</text>
-          <rect class="d-card" x="1146" y="306" width="208" height="44" rx="10"/>
-          <text class="d-l" x="1162" y="333" data-i18n="df_u4">Automações</text>
-          <rect class="d-bar" x="1326" y="152" width="5" height="12" rx="1.5" style="animation-delay:-0.0s"/>
-          <rect class="d-bar" x="1334" y="144" width="5" height="20" rx="1.5" style="animation-delay:-0.8s"/>
-          <rect class="d-bar" x="1342" y="155" width="5" height="9" rx="1.5" style="animation-delay:-1.6s"/>
-          <g class="d-typing"><circle cx="1327" cy="270" r="2.6"/><circle cx="1336" cy="270" r="2.6"/><circle cx="1345" cy="270" r="2.6"/></g>
-          <circle class="d-live" cx="1336" cy="328" r="4"/>
-          <g class="d-badge"><circle cx="252" cy="72" r="13"/><text x="252" y="76.5" text-anchor="middle">4</text></g>
-          <g class="d-badge"><circle cx="872" cy="72" r="13"/><text x="872" y="76.5" text-anchor="middle">1</text></g>
-          <g class="d-badge"><circle cx="892" cy="152" r="13"/><text x="892" y="156.5" text-anchor="middle">2</text></g>
-          <g class="d-badge"><circle cx="892" cy="284" r="13"/><text x="892" y="288.5" text-anchor="middle">3</text></g>
-          <g class="d-badge"><circle cx="1376" cy="72" r="13"/><text x="1376" y="76.5" text-anchor="middle">5</text></g>
-          <g class="d-badge"><circle cx="230" cy="366" r="13"/><text x="230" y="370.5" text-anchor="middle">4</text></g>
-          </svg>
+          <svg class="cy-d" viewBox="0 0 1000 750" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="cy-t-d" focusable="false"><title id="cy-t-d" data-i18n="cy_title">Ciclo de dados e de IA de uma empresa, que se retroalimenta</title><defs><path id="cy-trk-d" d="M500.0 584.0 L300.0 584.0 A150 150 0 0 1 150.0 434.0 L150.0 254.0 A150 150 0 0 1 300.0 104.0 L700.0 104.0 A150 150 0 0 1 850.0 254.0 L850.0 434.0 A150 150 0 0 1 700.0 584.0 L500.0 584.0 Z"/></defs><path class="d-trk" d="M500.0 584.0 L300.0 584.0 A150 150 0 0 1 150.0 434.0 L150.0 254.0 A150 150 0 0 1 300.0 104.0 L700.0 104.0 A150 150 0 0 1 850.0 254.0 L850.0 434.0 A150 150 0 0 1 700.0 584.0 L500.0 584.0 Z"/><path class="d-trk-run" d="M500.0 584.0 L300.0 584.0 A150 150 0 0 1 150.0 434.0 L150.0 254.0 A150 150 0 0 1 300.0 104.0 L700.0 104.0 A150 150 0 0 1 850.0 254.0 L850.0 434.0 A150 150 0 0 1 700.0 584.0 L500.0 584.0 Z"/><rect class="d-gov-o" x="312" y="214.0" width="376" height="260.0" rx="64"/><rect class="d-orbit" x="312" y="214.0" width="376" height="260.0" rx="64"/><rect class="d-gov" x="330" y="232.0" width="340" height="224.0" rx="48"/><g class="d-lock" aria-hidden="true" transform="translate(500 294.0)"><rect x="-7" y="-4" width="14" height="11" rx="2.5"/><path d="M-4.5 -4 v-3 a4.5 4.5 0 0 1 9 0 v3"/></g><text class="d-gov-t" x="500.0" y="330.0" text-anchor="middle" data-i18n="cy_gov_t">GOVERNANÇA</text><text class="d-c" x="500.0" y="356.0" text-anchor="middle" data-i18n="cy_gov_1">permissões e auditoria</text><text class="d-c" x="500.0" y="375.0" text-anchor="middle" data-i18n="cy_gov_2">avaliação e LGPD</text><text class="d-c" x="500.0" y="394.0" text-anchor="middle" data-i18n="cy_gov_3">custo sob controle</text><path class="d-chev" transform="translate(174.9 516.8) rotate(236.5)" d="M-5 -7 L4 0 L-5 7"/><path class="d-chev" transform="translate(174.9 171.2) rotate(303.5)" d="M-5 -7 L4 0 L-5 7"/><path class="d-chev" transform="translate(500.0 104.0) rotate(0.0)" d="M-5 -7 L4 0 L-5 7"/><path class="d-chev" transform="translate(825.1 171.2) rotate(416.5)" d="M-5 -7 L4 0 L-5 7"/><path class="d-chev" transform="translate(825.1 516.8) rotate(123.5)" d="M-5 -7 L4 0 L-5 7"/><path class="d-chev" transform="translate(500.0 584.0) rotate(180.0)" d="M-5 -7 L4 0 L-5 7"/><circle class="d-token" r="5.5"><animateMotion dur="15s" begin="-0.00s" repeatCount="indefinite"><mpath href="#cy-trk-d"/></animateMotion></circle><circle class="d-token" r="5.5"><animateMotion dur="15s" begin="-5.00s" repeatCount="indefinite"><mpath href="#cy-trk-d"/></animateMotion></circle><circle class="d-token" r="5.5"><animateMotion dur="15s" begin="-10.00s" repeatCount="indefinite"><mpath href="#cy-trk-d"/></animateMotion></circle><g><rect class="d-card" x="199.0" y="528.0" width="262" height="112" rx="16"/><rect class="d-glow" style="animation-delay:-3.79s" x="199.0" y="528.0" width="262" height="112" rx="16"/><rect class="d-ico-bg" x="213.0" y="562.0" width="44" height="44" rx="12"/><g aria-hidden="true"><path class="i-db-r" style="animation-delay:0.0s" d="M222.0 574 a13 4.5 0 0 0 26 0 v6 a13 4.5 0 0 1 -26 0 z"/><path class="i-db-r" style="animation-delay:0.5s" d="M222.0 583 a13 4.5 0 0 0 26 0 v6 a13 4.5 0 0 1 -26 0 z"/><path class="i-db-r" style="animation-delay:1.0s" d="M222.0 592 a13 4.5 0 0 0 26 0 v6 a13 4.5 0 0 1 -26 0 z"/><ellipse class="i-db-top" cx="235.0" cy="574" rx="13" ry="4.5"/></g><text class="d-t" x="271.0" y="560.0" data-i18n="cy_fontes_t">Fontes</text><text class="d-c" x="271.0" y="582.0" data-i18n="cy_fontes_1">CRM, ERP e planilhas</text><text class="d-c" x="271.0" y="600.0" data-i18n="cy_fontes_2">documentos e site</text><text class="d-c" x="271.0" y="618.0" data-i18n="cy_fontes_3">sistemas legados</text></g><g><rect class="d-card" x="19.0" y="288.0" width="262" height="112" rx="16"/><rect class="d-glow" style="animation-delay:-1.25s" x="19.0" y="288.0" width="262" height="112" rx="16"/><rect class="d-ico-bg" x="33.0" y="322.0" width="44" height="44" rx="12"/><g aria-hidden="true"><path class="i-pipe-b" d="M40.0 334.0 C51.0 334.0 51.0 344.0 59.0 344.0 H70.0"/><path class="i-pipe-r" style="animation-delay:-0.0s" d="M40.0 334.0 C51.0 334.0 51.0 344.0 59.0 344.0 H70.0"/><path class="i-pipe-b" d="M40.0 344.0 C51.0 344.0 51.0 344.0 59.0 344.0 H70.0"/><path class="i-pipe-r" style="animation-delay:-0.4s" d="M40.0 344.0 C51.0 344.0 51.0 344.0 59.0 344.0 H70.0"/><path class="i-pipe-b" d="M40.0 354.0 C51.0 354.0 51.0 344.0 59.0 344.0 H70.0"/><path class="i-pipe-r" style="animation-delay:-0.8s" d="M40.0 354.0 C51.0 354.0 51.0 344.0 59.0 344.0 H70.0"/><circle class="i-pipe-end" cx="70.0" cy="344.0" r="2.6"/></g><text class="d-t" x="91.0" y="320.0" data-i18n="cy_int_t">Integração</text><text class="d-c" x="91.0" y="342.0" data-i18n="cy_int_1">ETL e ELT</text><text class="d-c" x="91.0" y="360.0" data-i18n="cy_int_2">APIs e CDC</text><text class="d-c" x="91.0" y="378.0" data-i18n="cy_int_3">ingestão de documentos</text></g><g><rect class="d-card" x="199.0" y="48.0" width="262" height="112" rx="16"/><rect class="d-glow" style="animation-delay:-3.71s" x="199.0" y="48.0" width="262" height="112" rx="16"/><rect class="d-ico-bg" x="213.0" y="82.0" width="44" height="44" rx="12"/><g aria-hidden="true"><path class="i-vc-f" d="M235.0 89 L250.0 96.5 L250.0 111.5 L235.0 119 L220.0 111.5 L220.0 96.5 Z"/><path class="i-vc-t" d="M235.0 89 L250.0 96.5 L235.0 104 L220.0 96.5 Z"/><path class="i-vc-y" d="M235.0 104 V119 M235.0 104 L220.0 96.5 M235.0 104 L250.0 96.5"/><g class="i-vc-v" style="transform-origin:234.0px 107px;animation-delay:0.0s;animation-duration:3.2s"><line x1="234.0" y1="107" x2="228.0" y2="99"/><circle cx="228.0" cy="99" r="2"/></g><g class="i-vc-v" style="transform-origin:234.0px 107px;animation-delay:-0.9s;animation-duration:4.1s"><line x1="234.0" y1="107" x2="241.0" y2="102"/><circle cx="241.0" cy="102" r="2"/></g><g class="i-vc-v" style="transform-origin:234.0px 107px;animation-delay:-1.7s;animation-duration:3.6s"><line x1="234.0" y1="107" x2="239.0" y2="113"/><circle cx="239.0" cy="113" r="2"/></g><g class="i-vc-v" style="transform-origin:234.0px 107px;animation-delay:-2.4s;animation-duration:4.6s"><line x1="234.0" y1="107" x2="227.0" y2="110"/><circle cx="227.0" cy="110" r="2"/></g><circle class="i-vc-o" cx="234.0" cy="107" r="1.6"/><path class="i-vc-e" d="M235.0 89 L250.0 96.5 L250.0 111.5 L235.0 119 L220.0 111.5 L220.0 96.5 Z"/></g><text class="d-t" x="271.0" y="80.0" data-i18n="cy_dados_t">Dados</text><text class="d-c" x="271.0" y="102.0" data-i18n="cy_dados_1">lakehouse em camadas</text><text class="d-c" x="271.0" y="120.0" data-i18n="cy_dados_2">bronze, prata e ouro</text><text class="d-c" x="271.0" y="138.0" data-i18n="cy_dados_3">índice vetorial</text></g><g><rect class="d-card" x="539.0" y="48.0" width="262" height="112" rx="16"/><rect class="d-glow" style="animation-delay:-1.29s" x="539.0" y="48.0" width="262" height="112" rx="16"/><rect class="d-ico-bg" x="553.0" y="82.0" width="44" height="44" rx="12"/><g aria-hidden="true"><path class="i-lock-s" d="M569.0 102 v-5 a6 6 0 0 1 12 0 v5"/><rect class="i-lock-b" x="565.0" y="102" width="20" height="15" rx="3.5"/><circle class="i-lock-k" cx="575.0" cy="109" r="2.2"/></g><text class="d-t" x="611.0" y="80.0" data-i18n="cy_acc_t">Acesso com permissão</text><text class="d-c" x="611.0" y="102.0" data-i18n="cy_acc_1">Text-to-SQL</text><text class="d-c" x="611.0" y="120.0" data-i18n="cy_acc_2">RAG sobre documentos</text><text class="d-c" x="611.0" y="138.0" data-i18n="cy_acc_3">MCP para os sistemas</text></g><g><rect class="d-card" x="719.0" y="288.0" width="262" height="112" rx="16"/><rect class="d-glow" style="animation-delay:-3.75s" x="719.0" y="288.0" width="262" height="112" rx="16"/><rect class="d-ico-bg" x="733.0" y="322.0" width="44" height="44" rx="12"/><g aria-hidden="true"><line class="i-net-e" x1="742.0" y1="334.0" x2="755.0" y2="338.0"/><line class="i-net-e" x1="742.0" y1="334.0" x2="755.0" y2="350.0"/><line class="i-net-e" x1="742.0" y1="344.0" x2="755.0" y2="338.0"/><line class="i-net-e" x1="742.0" y1="344.0" x2="755.0" y2="350.0"/><line class="i-net-e" x1="742.0" y1="354.0" x2="755.0" y2="338.0"/><line class="i-net-e" x1="742.0" y1="354.0" x2="755.0" y2="350.0"/><line class="i-net-e" x1="755.0" y1="338.0" x2="768.0" y2="344.0"/><line class="i-net-e" x1="755.0" y1="350.0" x2="768.0" y2="344.0"/><circle class="i-net-n" style="animation-delay:0.00s" cx="742.0" cy="334.0" r="3.2"/><circle class="i-net-n" style="animation-delay:0.00s" cx="742.0" cy="344.0" r="3.2"/><circle class="i-net-n" style="animation-delay:0.00s" cx="742.0" cy="354.0" r="3.2"/><circle class="i-net-n" style="animation-delay:0.35s" cx="755.0" cy="338.0" r="3.2"/><circle class="i-net-n" style="animation-delay:0.35s" cx="755.0" cy="350.0" r="3.2"/><circle class="i-net-n" style="animation-delay:0.70s" cx="768.0" cy="344.0" r="3.2"/></g><text class="d-t" x="791.0" y="320.0" data-i18n="cy_ia_t">IA</text><text class="d-c" x="791.0" y="342.0" data-i18n="cy_ia_1">modelos comerciais,</text><text class="d-c" x="791.0" y="360.0" data-i18n="cy_ia_2">abertos ou ajustados</text><text class="d-c" x="791.0" y="378.0" data-i18n="cy_ia_3">agentes com revisão</text></g><g><rect class="d-card" x="539.0" y="528.0" width="262" height="112" rx="16"/><rect class="d-glow" style="animation-delay:-1.22s" x="539.0" y="528.0" width="262" height="112" rx="16"/><rect class="d-ico-bg" x="553.0" y="562.0" width="44" height="44" rx="12"/><g aria-hidden="true"><rect class="i-bar" style="animation-delay:-0.0s" x="560.0" y="585" width="5" height="10" rx="1.2"/><rect class="i-bar" style="animation-delay:-0.5s" x="567.0" y="578" width="5" height="17" rx="1.2"/><rect class="i-bar" style="animation-delay:-1.0s" x="574.0" y="582" width="5" height="13" rx="1.2"/><path class="i-chat" d="M581.0 572 h10 a3 3 0 0 1 3 3 v6 a3 3 0 0 1 -3 3 h-6 l-4 3 v-3 a3 3 0 0 1 -3 -3 v-6 a3 3 0 0 1 3 -3 z"/><circle class="i-chat-d" style="animation-delay:0.0s" cx="582.5" cy="578" r="1.2"/><circle class="i-chat-d" style="animation-delay:0.2s" cx="586.5" cy="578" r="1.2"/><circle class="i-chat-d" style="animation-delay:0.4s" cx="590.5" cy="578" r="1.2"/></g><text class="d-t" x="611.0" y="560.0" data-i18n="cy_apps_t">Aplicações</text><text class="d-c" x="611.0" y="582.0" data-i18n="cy_apps_1">dashboards</text><text class="d-c" x="611.0" y="600.0" data-i18n="cy_apps_2">analista de dados com IA</text><text class="d-c" x="611.0" y="618.0" data-i18n="cy_apps_3">chatbot e automações</text></g><path class="d-leader" d="M500.0 594.0 V 654.0"/><text class="d-fb-t" x="500.0" y="676.0" text-anchor="middle" data-i18n="cy_fb_t">RETROALIMENTAÇÃO</text><text class="d-c" x="500.0" y="697.0" text-anchor="middle" data-i18n="cy_fb_1">o uso gera dados novos e aprimora as ferramentas:</text><text class="d-c" x="500.0" y="715.0" text-anchor="middle" data-i18n="cy_fb_2">avaliação e feedback ajustam modelos, prompts e agentes</text></svg>
+          <svg class="cy-m" viewBox="0 0 360 1170" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="cy-t-m" focusable="false"><title id="cy-t-m" data-i18n="cy_title">Ciclo de dados e de IA de uma empresa, que se retroalimenta</title><rect class="d-gov-o" x="6" y="8" width="348" height="1154" rx="28"/><g class="d-lock" aria-hidden="true" transform="translate(28 37)"><rect x="-7" y="-4" width="14" height="11" rx="2.5"/><path d="M-4.5 -4 v-3 a4.5 4.5 0 0 1 9 0 v3"/></g><text class="d-gov-t" x="44.0" y="42.0" data-i18n="cy_gov_t">GOVERNANÇA</text><text class="d-c" x="22.0" y="68.0" data-i18n="cy_gov_m1">permissões, auditoria e avaliação</text><text class="d-c" x="22.0" y="89.0" data-i18n="cy_gov_m2">LGPD e custo sob controle</text><defs><path id="cy-trk-m" d="M198.0 112.0 L198.0 1012.0 A18 18 0 0 1 180.0 1030.0 L42.0 1030.0 A18 18 0 0 1 24.0 1012.0 L24.0 130.0 A18 18 0 0 1 42.0 112.0 L198.0 112.0 Z"/></defs><path class="d-trk" d="M198.0 112.0 L198.0 1012.0 A18 18 0 0 1 180.0 1030.0 L42.0 1030.0 A18 18 0 0 1 24.0 1012.0 L24.0 130.0 A18 18 0 0 1 42.0 112.0 L198.0 112.0 Z"/><path class="d-trk-run" d="M198.0 112.0 L198.0 1012.0 A18 18 0 0 1 180.0 1030.0 L42.0 1030.0 A18 18 0 0 1 24.0 1012.0 L24.0 130.0 A18 18 0 0 1 42.0 112.0 L198.0 112.0 Z"/><path class="d-chev" transform="translate(198.0 267.0) rotate(90.0)" d="M-5 -7 L4 0 L-5 7"/><path class="d-chev" transform="translate(198.0 418.8) rotate(90.0)" d="M-5 -7 L4 0 L-5 7"/><path class="d-chev" transform="translate(198.0 570.6) rotate(90.0)" d="M-5 -7 L4 0 L-5 7"/><path class="d-chev" transform="translate(198.0 723.0) rotate(90.0)" d="M-5 -7 L4 0 L-5 7"/><path class="d-chev" transform="translate(198.0 875.3) rotate(90.0)" d="M-5 -7 L4 0 L-5 7"/><path class="d-chev" transform="translate(24.3 1015.0) rotate(260.4)" d="M-5 -7 L4 0 L-5 7"/><path class="d-chev" transform="translate(24.0 567.0) rotate(-90.0)" d="M-5 -7 L4 0 L-5 7"/><path class="d-chev" transform="translate(27.3 119.6) rotate(305.4)" d="M-5 -7 L4 0 L-5 7"/><circle class="d-token" r="5.5"><animateMotion dur="15s" begin="-0.00s" repeatCount="indefinite"><mpath href="#cy-trk-m"/></animateMotion></circle><circle class="d-token" r="5.5"><animateMotion dur="15s" begin="-5.00s" repeatCount="indefinite"><mpath href="#cy-trk-m"/></animateMotion></circle><circle class="d-token" r="5.5"><animateMotion dur="15s" begin="-10.00s" repeatCount="indefinite"><mpath href="#cy-trk-m"/></animateMotion></circle><g><rect class="d-card" x="48.0" y="132.0" width="300" height="118" rx="16"/><rect class="d-glow" style="animation-delay:-4.45s" x="48.0" y="132.0" width="300" height="118" rx="16"/><rect class="d-ico-bg" x="62.0" y="169.0" width="44" height="44" rx="12"/><g aria-hidden="true"><path class="i-db-r" style="animation-delay:0.0s" d="M71.0 181.0 a13 4.5 0 0 0 26 0 v6 a13 4.5 0 0 1 -26 0 z"/><path class="i-db-r" style="animation-delay:0.5s" d="M71.0 190.0 a13 4.5 0 0 0 26 0 v6 a13 4.5 0 0 1 -26 0 z"/><path class="i-db-r" style="animation-delay:1.0s" d="M71.0 199.0 a13 4.5 0 0 0 26 0 v6 a13 4.5 0 0 1 -26 0 z"/><ellipse class="i-db-top" cx="84.0" cy="181.0" rx="13" ry="4.5"/></g><text class="d-t" x="120.0" y="168.0" data-i18n="cy_fontes_t">Fontes</text><text class="d-c" x="120.0" y="193.0" data-i18n="cy_fontes_1">CRM, ERP e planilhas</text><text class="d-c" x="120.0" y="214.0" data-i18n="cy_fontes_2">documentos e site</text><text class="d-c" x="120.0" y="235.0" data-i18n="cy_fontes_3">sistemas legados</text></g><g><rect class="d-card" x="48.0" y="284.0" width="300" height="118" rx="16"/><rect class="d-glow" style="animation-delay:-3.40s" x="48.0" y="284.0" width="300" height="118" rx="16"/><rect class="d-ico-bg" x="62.0" y="321.0" width="44" height="44" rx="12"/><g aria-hidden="true"><path class="i-pipe-b" d="M69.0 333.0 C80.0 333.0 80.0 343.0 88.0 343.0 H99.0"/><path class="i-pipe-r" style="animation-delay:-0.0s" d="M69.0 333.0 C80.0 333.0 80.0 343.0 88.0 343.0 H99.0"/><path class="i-pipe-b" d="M69.0 343.0 C80.0 343.0 80.0 343.0 88.0 343.0 H99.0"/><path class="i-pipe-r" style="animation-delay:-0.4s" d="M69.0 343.0 C80.0 343.0 80.0 343.0 88.0 343.0 H99.0"/><path class="i-pipe-b" d="M69.0 353.0 C80.0 353.0 80.0 343.0 88.0 343.0 H99.0"/><path class="i-pipe-r" style="animation-delay:-0.8s" d="M69.0 353.0 C80.0 353.0 80.0 343.0 88.0 343.0 H99.0"/><circle class="i-pipe-end" cx="99.0" cy="343.0" r="2.6"/></g><text class="d-t" x="120.0" y="320.0" data-i18n="cy_int_t">Integração</text><text class="d-c" x="120.0" y="345.0" data-i18n="cy_int_1">ETL e ELT</text><text class="d-c" x="120.0" y="366.0" data-i18n="cy_int_2">APIs e CDC</text><text class="d-c" x="120.0" y="387.0" data-i18n="cy_int_3">ingestão de documentos</text></g><g><rect class="d-card" x="48.0" y="436.0" width="300" height="118" rx="16"/><rect class="d-glow" style="animation-delay:-2.35s" x="48.0" y="436.0" width="300" height="118" rx="16"/><rect class="d-ico-bg" x="62.0" y="473.0" width="44" height="44" rx="12"/><g aria-hidden="true"><path class="i-vc-f" d="M84.0 480.0 L99.0 487.5 L99.0 502.5 L84.0 510.0 L69.0 502.5 L69.0 487.5 Z"/><path class="i-vc-t" d="M84.0 480.0 L99.0 487.5 L84.0 495.0 L69.0 487.5 Z"/><path class="i-vc-y" d="M84.0 495.0 V510.0 M84.0 495.0 L69.0 487.5 M84.0 495.0 L99.0 487.5"/><g class="i-vc-v" style="transform-origin:83.0px 498.0px;animation-delay:0.0s;animation-duration:3.2s"><line x1="83.0" y1="498.0" x2="77.0" y2="490.0"/><circle cx="77.0" cy="490.0" r="2"/></g><g class="i-vc-v" style="transform-origin:83.0px 498.0px;animation-delay:-0.9s;animation-duration:4.1s"><line x1="83.0" y1="498.0" x2="90.0" y2="493.0"/><circle cx="90.0" cy="493.0" r="2"/></g><g class="i-vc-v" style="transform-origin:83.0px 498.0px;animation-delay:-1.7s;animation-duration:3.6s"><line x1="83.0" y1="498.0" x2="88.0" y2="504.0"/><circle cx="88.0" cy="504.0" r="2"/></g><g class="i-vc-v" style="transform-origin:83.0px 498.0px;animation-delay:-2.4s;animation-duration:4.6s"><line x1="83.0" y1="498.0" x2="76.0" y2="501.0"/><circle cx="76.0" cy="501.0" r="2"/></g><circle class="i-vc-o" cx="83.0" cy="498.0" r="1.6"/><path class="i-vc-e" d="M84.0 480.0 L99.0 487.5 L99.0 502.5 L84.0 510.0 L69.0 502.5 L69.0 487.5 Z"/></g><text class="d-t" x="120.0" y="472.0" data-i18n="cy_dados_t">Dados</text><text class="d-c" x="120.0" y="497.0" data-i18n="cy_dados_1">lakehouse em camadas</text><text class="d-c" x="120.0" y="518.0" data-i18n="cy_dados_2">bronze, prata e ouro</text><text class="d-c" x="120.0" y="539.0" data-i18n="cy_dados_3">índice vetorial</text></g><g><rect class="d-card" x="48.0" y="588.0" width="300" height="118" rx="16"/><rect class="d-glow" style="animation-delay:-1.29s" x="48.0" y="588.0" width="300" height="118" rx="16"/><rect class="d-ico-bg" x="62.0" y="625.0" width="44" height="44" rx="12"/><g aria-hidden="true"><path class="i-lock-s" d="M78.0 645.0 v-5 a6 6 0 0 1 12 0 v5"/><rect class="i-lock-b" x="74.0" y="645.0" width="20" height="15" rx="3.5"/><circle class="i-lock-k" cx="84.0" cy="652.0" r="2.2"/></g><text class="d-t" x="120.0" y="624.0" data-i18n="cy_acc_t">Acesso com permissão</text><text class="d-c" x="120.0" y="649.0" data-i18n="cy_acc_1">Text-to-SQL</text><text class="d-c" x="120.0" y="670.0" data-i18n="cy_acc_2">RAG sobre documentos</text><text class="d-c" x="120.0" y="691.0" data-i18n="cy_acc_3">MCP para os sistemas</text></g><g><rect class="d-card" x="48.0" y="740.0" width="300" height="118" rx="16"/><rect class="d-glow" style="animation-delay:-0.23s" x="48.0" y="740.0" width="300" height="118" rx="16"/><rect class="d-ico-bg" x="62.0" y="777.0" width="44" height="44" rx="12"/><g aria-hidden="true"><line class="i-net-e" x1="71.0" y1="789.0" x2="84.0" y2="793.0"/><line class="i-net-e" x1="71.0" y1="789.0" x2="84.0" y2="805.0"/><line class="i-net-e" x1="71.0" y1="799.0" x2="84.0" y2="793.0"/><line class="i-net-e" x1="71.0" y1="799.0" x2="84.0" y2="805.0"/><line class="i-net-e" x1="71.0" y1="809.0" x2="84.0" y2="793.0"/><line class="i-net-e" x1="71.0" y1="809.0" x2="84.0" y2="805.0"/><line class="i-net-e" x1="84.0" y1="793.0" x2="97.0" y2="799.0"/><line class="i-net-e" x1="84.0" y1="805.0" x2="97.0" y2="799.0"/><circle class="i-net-n" style="animation-delay:0.00s" cx="71.0" cy="789.0" r="3.2"/><circle class="i-net-n" style="animation-delay:0.00s" cx="71.0" cy="799.0" r="3.2"/><circle class="i-net-n" style="animation-delay:0.00s" cx="71.0" cy="809.0" r="3.2"/><circle class="i-net-n" style="animation-delay:0.35s" cx="84.0" cy="793.0" r="3.2"/><circle class="i-net-n" style="animation-delay:0.35s" cx="84.0" cy="805.0" r="3.2"/><circle class="i-net-n" style="animation-delay:0.70s" cx="97.0" cy="799.0" r="3.2"/></g><text class="d-t" x="120.0" y="776.0" data-i18n="cy_ia_t">IA</text><text class="d-c" x="120.0" y="801.0" data-i18n="cy_ia_1">modelos comerciais,</text><text class="d-c" x="120.0" y="822.0" data-i18n="cy_ia_2">abertos ou ajustados</text><text class="d-c" x="120.0" y="843.0" data-i18n="cy_ia_3">agentes com revisão</text></g><g><rect class="d-card" x="48.0" y="892.0" width="300" height="118" rx="16"/><rect class="d-glow" style="animation-delay:-4.17s" x="48.0" y="892.0" width="300" height="118" rx="16"/><rect class="d-ico-bg" x="62.0" y="929.0" width="44" height="44" rx="12"/><g aria-hidden="true"><rect class="i-bar" style="animation-delay:-0.0s" x="69.0" y="952.0" width="5" height="10" rx="1.2"/><rect class="i-bar" style="animation-delay:-0.5s" x="76.0" y="945.0" width="5" height="17" rx="1.2"/><rect class="i-bar" style="animation-delay:-1.0s" x="83.0" y="949.0" width="5" height="13" rx="1.2"/><path class="i-chat" d="M90.0 939.0 h10 a3 3 0 0 1 3 3 v6 a3 3 0 0 1 -3 3 h-6 l-4 3 v-3 a3 3 0 0 1 -3 -3 v-6 a3 3 0 0 1 3 -3 z"/><circle class="i-chat-d" style="animation-delay:0.0s" cx="91.5" cy="945.0" r="1.2"/><circle class="i-chat-d" style="animation-delay:0.2s" cx="95.5" cy="945.0" r="1.2"/><circle class="i-chat-d" style="animation-delay:0.4s" cx="99.5" cy="945.0" r="1.2"/></g><text class="d-t" x="120.0" y="928.0" data-i18n="cy_apps_t">Aplicações</text><text class="d-c" x="120.0" y="953.0" data-i18n="cy_apps_1">dashboards</text><text class="d-c" x="120.0" y="974.0" data-i18n="cy_apps_2">analista de dados com IA</text><text class="d-c" x="120.0" y="995.0" data-i18n="cy_apps_3">chatbot e automações</text></g><text class="d-fb-t" x="180.0" y="1070.0" text-anchor="middle" data-i18n="cy_fb_t">RETROALIMENTAÇÃO</text><text class="d-c" x="180.0" y="1094.0" text-anchor="middle" data-i18n="cy_fbm_1">o uso gera dados novos e aprimora</text><text class="d-c" x="180.0" y="1115.0" text-anchor="middle" data-i18n="cy_fbm_2">as ferramentas: avaliação e feedback</text><text class="d-c" x="180.0" y="1136.0" text-anchor="middle" data-i18n="cy_fbm_3">ajustam modelos, prompts e agentes</text></svg>
         </div>
-        <figcaption class="dflow-hint" data-i18n="df_hint">Arraste para ver o fluxo inteiro.</figcaption>
       </figure>
-      <ol class="dflow-legend">
-        <li><span class="n" aria-hidden="true">1</span><div><a href="/blog/tema/ia-sobre-dados-da-empresa/" hreflang="pt-BR" data-i18n="tp_dados_t">IA sobre os dados da empresa</a><p data-i18n="tp_dados_d">Como a IA lê os dados da empresa com permissão: Text-to-SQL sobre o dado de negócio, RAG sobre os documentos e MCP para os sistemas.</p></div></li>
-        <li><span class="n" aria-hidden="true">2</span><div><a href="/blog/tema/custos-e-modelos-de-ia/" hreflang="pt-BR" data-i18n="tp_custos_t">Custos, ROI e escolha de modelo</a><p data-i18n="tp_custos_d">Qual modelo usar em cada tarefa e quanto ele custa em produção.</p></div></li>
-        <li><span class="n" aria-hidden="true">3</span><div><a href="/blog/tema/agentes-de-ia/" hreflang="pt-BR" data-i18n="tp_agentes_t">Agentes de IA em produção</a><p data-i18n="tp_agentes_d">Agentes que executam tarefas e agem nos sistemas da empresa pelo MCP, com permissão e revisão.</p></div></li>
-        <li><span class="n" aria-hidden="true">4</span><div><a href="/blog/tema/implantacao-de-ia/" hreflang="pt-BR" data-i18n="tp_impl_t">Implantação de IA: sistemas legados e arquitetura de dados</a><p data-i18n="tp_impl_d">A base: integração com os sistemas que já existem e as camadas de dados que vêm antes do modelo.</p></div></li>
-        <li><span class="n" aria-hidden="true">5</span><div><a href="/portfolio/" data-i18n="apps_t">Aplicações em operação</a><p data-i18n="apps_d">Quando a empresa precisa da solução pronta: a aplicação desenhada e colocada em operação, com usuários de verdade. Os projetos estão no portfólio.</p></div></li>
-      </ol>
+      <ul class="dflow-legend">
+        <li><a href="/blog/tema/ia-sobre-dados-da-empresa/" hreflang="pt-BR" data-i18n="tp_dados_t">IA sobre os dados da empresa</a><p data-i18n="tp_dados_d">Como a IA lê os dados da empresa com permissão: Text-to-SQL sobre o dado de negócio, RAG sobre os documentos e MCP para os sistemas.</p></li>
+        <li><a href="/blog/tema/custos-e-modelos-de-ia/" hreflang="pt-BR" data-i18n="tp_custos_t">Custos, ROI e escolha de modelo</a><p data-i18n="tp_custos_d">Qual modelo usar em cada tarefa e quanto ele custa em produção.</p></li>
+        <li><a href="/blog/tema/agentes-de-ia/" hreflang="pt-BR" data-i18n="tp_agentes_t">Agentes de IA em produção</a><p data-i18n="tp_agentes_d">Agentes que executam tarefas e agem nos sistemas da empresa pelo MCP, com permissão e revisão.</p></li>
+        <li><a href="/blog/tema/implantacao-de-ia/" hreflang="pt-BR" data-i18n="tp_impl_t">Implantação de IA: sistemas legados e arquitetura de dados</a><p data-i18n="tp_impl_d">A base: integração com os sistemas que já existem e as camadas de dados que vêm antes do modelo.</p></li>
+        <li><a href="/portfolio/" data-i18n="apps_t">Aplicações em operação</a><p data-i18n="apps_d">Quando a empresa precisa da solução pronta: a aplicação desenhada e colocada em operação, com usuários de verdade. Os projetos estão no portfólio.</p></li>
+      </ul>
     </section>
 
     <section id="ferramentas">
@@ -485,49 +346,46 @@
       "tp_impl_d": "The foundation: integration with existing systems and the data layers that come before the model. In Portuguese.",
       "consulting_short": "I work in five formats, and all of them start with a free 1-hour conversation.",
       "projects_intro": "22 data and AI systems for companies, clients and my own products, each with the problem it solves and what changed.",
-      "df_title": "A company data flow, with the points where I work highlighted",
-      "df_h1": "SOURCES",
-      "df_h2": "INTEGRATION",
-      "df_h3": "DATA",
-      "df_h4": "ACCESS",
-      "df_h5": "AI",
-      "df_gov": "Governance: permissions, audit, evaluation, data privacy and cost under control",
-      "df_s1": "CRM and sales",
-      "df_s2": "ERP and finance",
-      "df_s3": "Spreadsheets",
-      "df_s4": "Documents and contracts",
-      "df_s5": "Website and marketing",
-      "df_s6": "Legacy systems",
-      "df_i_t": "Integration",
-      "df_i_s": "ETL, APIs and CDC",
-      "df_d1": "Gold: business data",
-      "df_d2": "Silver: clean and unique",
-      "df_d3": "Bronze: raw data",
-      "df_u1": "Dashboards",
-      "df_u2": "AI data analyst",
-      "df_u3": "Chatbot",
-      "df_u4": "Automations",
-      "topics_intro": "A complete company data flow. The numbered highlights mark where I have the most experience, and each number leads to the topic's articles, in Portuguese.",
-      "df_hint": "Swipe to see the whole flow.",
-      "df_h6": "USE",
-      "df_lake": "Lakehouse",
-      "df_vec": "Vector index",
-      "df_vec_s": "document embeddings",
-      "df_acc": "With permissions",
-      "df_acc_s": "only what the user can see",
-      "df_sql": "Text-to-SQL",
-      "df_mcp": "MCP",
-      "df_rag": "RAG",
-      "df_m": "Models",
-      "df_m_s": "commercial, open or fine-tuned",
-      "df_ag": "Agents",
-      "df_ag_s": "act through MCP, with review",
-      "df_live": "live access and actions in the systems, with permissions and human approval",
-      "df_bi": "BI straight from gold",
-      "df_mcp_s": "systems and tools",
-      "df_apps": "Applications",
+      "topics_intro": "A company data and AI cycle that feeds back into itself: use creates new data and improves the tools. Below are the topics where I have the most experience, with the articles for each one, in Portuguese.",
       "apps_t": "AI applications in production",
-      "apps_d": "When the company needs the finished solution: the application designed and put into operation, with real users. The projects are in the portfolio."
+      "apps_d": "When the company needs the finished solution: the application designed and put into operation, with real users. The projects are in the portfolio.",
+      "cy_gov_t": "GOVERNANCE",
+      "cy_gov_1": "permissions and audit",
+      "cy_gov_2": "evaluation and data privacy",
+      "cy_gov_3": "cost under control",
+      "cy_fontes_t": "Sources",
+      "cy_fontes_1": "CRM, ERP and spreadsheets",
+      "cy_fontes_2": "documents and website",
+      "cy_fontes_3": "legacy systems",
+      "cy_int_t": "Integration",
+      "cy_int_1": "ETL and ELT",
+      "cy_int_2": "APIs and CDC",
+      "cy_int_3": "document ingestion",
+      "cy_dados_t": "Data",
+      "cy_dados_1": "layered lakehouse",
+      "cy_dados_2": "bronze, silver and gold",
+      "cy_dados_3": "vector index",
+      "cy_acc_t": "Permissioned access",
+      "cy_acc_1": "Text-to-SQL",
+      "cy_acc_2": "RAG over documents",
+      "cy_acc_3": "MCP for the systems",
+      "cy_ia_t": "AI",
+      "cy_ia_1": "commercial, open or",
+      "cy_ia_2": "fine-tuned models",
+      "cy_ia_3": "agents with review",
+      "cy_apps_t": "Applications",
+      "cy_apps_1": "dashboards",
+      "cy_apps_2": "AI data analyst",
+      "cy_apps_3": "chatbot and automations",
+      "cy_fb_t": "FEEDBACK LOOP",
+      "cy_fb_1": "use creates new data and improves the tools:",
+      "cy_fb_2": "evaluation and feedback tune models, prompts and agents",
+      "cy_gov_m1": "permissions, audit and evaluation",
+      "cy_gov_m2": "data privacy and cost under control",
+      "cy_fbm_1": "use creates new data and improves",
+      "cy_fbm_2": "the tools: evaluation and feedback",
+      "cy_fbm_3": "tune models, prompts and agents",
+      "cy_title": "A company data and AI cycle that feeds back into itself"
   }</script>
   <script src="/assets/site.js?v=202611072213"></script>
   <script src="/assets/track.js?v=202611241800"></script>

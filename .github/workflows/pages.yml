@@ -63,6 +63,8 @@ jobs:
           python3 scripts/test_site_redirects.py
           python3 scripts/test_build_sitemaps.py
           python3 scripts/test_indexnow.py
+          python3 scripts/test_build_home_cycle.py
+          python3 scripts/build_home_cycle.py --check
           python3 blog-src/scripts/test_newsletter_draft.py
           python3 blog-src/scripts/test_import_subscribers.py
           python3 blog-src/scripts/test_twenty_sync.py
