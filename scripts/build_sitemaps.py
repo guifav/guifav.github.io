@@ -3,6 +3,8 @@
 - /sitemap-site.xml: as páginas do site fora do blog que devem ser indexadas, com o lastmod do último
   commit que mexeu no arquivo. Entra a página que não é a 404, não está bloqueada no robots.txt, não tem
   noindex e cujo canonical (quando existe) aponta para ela mesma.
+  A home (index.html) lista os últimos artigos do blog (issue #136): o lastmod dela é o mais recente entre o
+  último commit do arquivo e o lastmod, no /blog/sitemap.xml, de cada artigo listado nela (entre os marcadores <!-- ultimos-artigos -->).
 - /sitemap.xml: índice com o /sitemap-site.xml e o /blog/sitemap.xml (gerado pelo Astro). É o único endereço
   enviado ao Search Console e ao Bing. Sem lastmod: no índice ele seria a data do arquivo do sitemap, e o maior
   lastmod das páginas não muda quando uma página sai ou a regra de seleção muda.
@@ -13,10 +15,12 @@ Rodar depois do scripts/assemble_site.py, num clone com histórico completo (fet
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
 from html.parser import HTMLParser
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -25,6 +29,8 @@ NS = "http://www.sitemaps.org/schemas/sitemap/0.9"
 SITE_SITEMAP = "sitemap-site.xml"
 BLOG_SITEMAP = "blog/sitemap.xml"
 INDEX = "sitemap.xml"
+HOME = "index.html"
+HOME_LATEST = re.compile(r"<!-- ultimos-artigos -->(.*?)<!-- /ultimos-artigos -->", re.S)
 HTML_SUFFIXES = {".html", ".htm", ".xhtml"}
 
 
@@ -149,14 +155,37 @@ def sitemapindex(locs: list[str]) -> str:
     return f'<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="{NS}">\n{body}\n</sitemapindex>\n'
 
 
+def _when(lastmod: str) -> datetime:
+    try:
+        d = datetime.fromisoformat(lastmod.replace("Z", "+00:00"))
+    except ValueError as e:
+        raise SitemapError(f"lastmod ilegível: {lastmod!r}") from e
+    if d.tzinfo is None:
+        raise SitemapError(f"lastmod sem fuso: {lastmod!r}")
+    return d
+
+
+def home_lastmod(site: Path, git_date: str, blog_lastmods: dict[str, str]) -> str:
+    """O mais recente entre o commit da home e o lastmod de cada artigo listado nela (sem a lista, o commit)."""
+    m = HOME_LATEST.search((site / HOME).read_text(encoding="utf-8"))
+    if not m:
+        return git_date
+    inner = re.sub(r"<!--.*?-->", "", m.group(1), flags=re.S)
+    paths = re.findall(r"""<a\b[^>]*\bhref\s*=\s*["']([^"']*)["']""", inner, flags=re.I)
+    dates = [git_date]
+    for path in paths:
+        lm = blog_lastmods.get(SITE_ORIGIN + path)
+        if not lm:
+            raise SitemapError(f"{HOME}: o artigo listado {path} não tem lastmod no {BLOG_SITEMAP}")
+        dates.append(lm)
+    return max(dates, key=_when)
+
+
 def build(repo: Path, site: Path) -> tuple[int, int]:
     """Grava os dois arquivos. Devolve (páginas do site, URLs do blog)."""
     for name in (INDEX, SITE_SITEMAP):
         if (site / name).exists():
             raise SitemapError(f"_site/{name} já existe: ele é gerado aqui, tire-o do site-manifest.txt")
-    pages = [(SITE_ORIGIN + url, git_lastmod(repo, rel)) for rel, url in indexable_pages(site)]
-    if not pages:
-        raise SitemapError("nenhuma página do site para o sitemap: algo está errado no _site")
     try:
         blog = ET.parse(site / BLOG_SITEMAP).getroot()
     except (ET.ParseError, FileNotFoundError) as e:
@@ -164,6 +193,14 @@ def build(repo: Path, site: Path) -> tuple[int, int]:
     if blog.tag != f"{{{NS}}}urlset":
         raise SitemapError(f"{BLOG_SITEMAP} não é um urlset")
     blog_locs = list(blog.iter(f"{{{NS}}}loc"))
+    blog_lastmods = {(u.findtext(f"{{{NS}}}loc") or "").strip(): (u.findtext(f"{{{NS}}}lastmod") or "").strip()
+                     for u in blog.iter(f"{{{NS}}}url")}
+    pages = []
+    for rel, url in indexable_pages(site):
+        lm = git_lastmod(repo, rel)
+        pages.append((SITE_ORIGIN + url, home_lastmod(site, lm, blog_lastmods) if rel == HOME else lm))
+    if not pages:
+        raise SitemapError("nenhuma página do site para o sitemap: algo está errado no _site")
     (site / SITE_SITEMAP).write_text(urlset(pages), encoding="utf-8")
     (site / INDEX).write_text(sitemapindex([f"{SITE_ORIGIN}/{SITE_SITEMAP}", f"{SITE_ORIGIN}/{BLOG_SITEMAP}"]),
                               encoding="utf-8")

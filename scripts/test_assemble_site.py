@@ -2,12 +2,18 @@
 
 Rodar: python3 scripts/test_assemble_site.py
 """
+import json
 import os
 import tempfile
 import unittest
 from pathlib import Path
 
 import assemble_site as A
+
+
+HOME_SRC = b"<html>home<!-- ultimos-artigos --><!-- /ultimos-artigos --></html>"
+LATEST_ITEM = {"title": "A & B <c>", "path": "/blog/um-post/", "date": "2026-11-24",
+               "date_label": "24 de novembro de 2026", "description": "Desc \"x\""}
 
 
 def write(p: Path, data: bytes = b"x") -> Path:
@@ -23,7 +29,7 @@ class Fixture(unittest.TestCase):
         self.repo = root / "repo"
         self.blog = root / "blog-dist"
         self.out = root / "_site"
-        write(self.repo / "index.html", b"<html>home</html>")
+        write(self.repo / "index.html", HOME_SRC)
         write(self.repo / "CNAME", b"guifav.dev\n")
         write(self.repo / "portfolio" / "index.html", b"<html>portfolio</html>")
         write(self.repo / "portfolio" / "img" / "a.webp", b"\x00\x01webp")
@@ -35,6 +41,7 @@ class Fixture(unittest.TestCase):
         write(self.repo / "workers" / "newsletter" / "index.js", b"segredo-nao")
         write(self.blog / "index.html", b"<html>blog</html>")
         write(self.blog / "rss.xml", b"<rss/>")
+        write(self.blog / "ultimos-artigos.json", json.dumps({"posts": [LATEST_ITEM]}).encode())
         self.manifest = self.repo / "site-manifest.txt"
         self.manifest.write_text("# comentario\nindex.html\nCNAME\n\nportfolio/\n", encoding="utf-8")
 
@@ -82,7 +89,8 @@ class AssembleTest(Fixture):
 
     def test_root_files_are_byte_identical(self):
         self.assemble()
-        for rel in ["index.html", "CNAME", "portfolio/index.html", "portfolio/img/a.webp"]:
+        # A home leva a lista de últimos artigos (HomeLatestTest); o resto é cópia exata.
+        for rel in ["CNAME", "portfolio/index.html", "portfolio/img/a.webp"]:
             self.assertEqual((self.out / rel).read_bytes(), (self.repo / rel).read_bytes(), rel)
 
     def test_missing_manifest_entry_fails(self):
@@ -168,9 +176,11 @@ class VerifyTest(Fixture):
     def test_repeated_verify_sees_same_size_same_mtime_change(self):
         self.assemble()
         A.verify(self.repo, self.manifest, self.blog, self.out)
-        dst = self.out / "index.html"
+        # Arquivo copiado (a home é renderizada): mesmo tamanho e mesmo mtime, conteúdo trocado.
+        dst = self.out / "portfolio" / "index.html"
         st = dst.stat()
-        dst.write_bytes(b"<html>HOME</html>")
+        dst.write_bytes(b"<html>PORTFOLIO</html>")
+        self.assertEqual(dst.stat().st_size, st.st_size)
         os.utime(dst, ns=(st.st_atime_ns, st.st_mtime_ns))
         with self.assertRaises(A.VerifyError):
             A.verify(self.repo, self.manifest, self.blog, self.out)
@@ -198,6 +208,80 @@ class RealManifestTest(unittest.TestCase):
         entries = A.parse_manifest(self.REPO / "site-manifest.txt")
         for hidden in ["docs/", "_next/", "tools/", "blog-src/", "scripts/", ".github/", "workers/"]:
             self.assertNotIn(hidden, entries)
+
+
+
+class HomeLatestTest(Fixture):
+    """#136: a home publicada traz os últimos artigos do blog entre os marcadores; o resto é cópia exata."""
+
+    def test_home_gets_the_list_escaped_and_verify_accepts_it(self):
+        self.assemble()
+        self.assertEqual(A.verify(self.repo, self.manifest, self.blog, self.out), 6)
+        self.assertFalse((self.out / "blog" / "ultimos-artigos.json").exists())  # consumido, não vai ao ar
+        got = (self.out / "index.html").read_text(encoding="utf-8")
+        self.assertEqual(got, '<html>home<!-- ultimos-artigos --><ul class="latest-list" lang="pt-BR"><li><a href="/blog/um-post/" '
+                         'hreflang="pt-BR">A &amp; B &lt;c&gt;</a> <time datetime="2026-11-24">24 de novembro de 2026'
+                         '</time><p>Desc &quot;x&quot;</p></li></ul><!-- /ultimos-artigos --></html>')
+
+    def test_verify_rejects_a_home_copied_without_the_list_or_edited(self):
+        self.assemble()
+        for data in (HOME_SRC, (self.out / "index.html").read_bytes() + b" "):
+            with self.subTest(data=data[:40]):
+                (self.out / "index.html").write_bytes(data)
+                with self.assertRaisesRegex(A.VerifyError, "diferente da origem: index.html"):
+                    A.verify(self.repo, self.manifest, self.blog, self.out)
+
+    def test_markers_must_exist_once_in_order_and_empty(self):
+        for src in (b"<html>home</html>", HOME_SRC + b"<!-- ultimos-artigos -->",
+                    b"<!-- /ultimos-artigos --><!-- ultimos-artigos -->",
+                    b"<!-- ultimos-artigos --><ul>velha</ul><!-- /ultimos-artigos -->"):
+            with self.subTest(src=src):
+                write(self.repo / "index.html", src)
+                with self.assertRaises(A.RenderError):
+                    self.assemble()
+
+    def test_blog_build_must_bring_a_valid_list(self):
+        bad = [None, {"posts": []}, {"posts": "x"}, [LATEST_ITEM],
+               {"posts": [dict(LATEST_ITEM, path="https://outro.site/x/")]},
+               {"posts": [dict(LATEST_ITEM, path="/blog/../x/")]},
+               {"posts": [dict(LATEST_ITEM, date="24/11/2026")]},
+               {"posts": [dict(LATEST_ITEM, date="2026-02-30")]},
+               {"posts": [dict(LATEST_ITEM, title="  ")]},
+               {"posts": [{k: v for k, v in LATEST_ITEM.items() if k != "description"}]}]
+        for data in bad:
+            with self.subTest(data=data):
+                write(self.blog / "ultimos-artigos.json", json.dumps(data).encode())
+                with self.assertRaises(A.RenderError):
+                    self.assemble()
+        (self.blog / "ultimos-artigos.json").unlink()
+        with self.assertRaisesRegex(A.RenderError, "sem ultimos-artigos.json"):
+            self.assemble()
+        write(self.blog / "ultimos-artigos.json", b"{quebrado")
+        with self.assertRaisesRegex(A.RenderError, "ilegível"):
+            self.assemble()
+
+    def test_render_error_keeps_the_previous_site(self):
+        self.assemble()
+        write(self.blog / "ultimos-artigos.json", b"{quebrado")
+        with self.assertRaises(A.RenderError):
+            self.assemble()
+        self.assertTrue((self.out / "index.html").is_file())
+
+    def test_without_home_in_the_manifest_nothing_is_rendered(self):
+        self.manifest.write_text("CNAME\n", encoding="utf-8")
+        (self.blog / "ultimos-artigos.json").unlink()
+        self.assemble()
+        self.assertEqual(A.verify(self.repo, self.manifest, self.blog, self.out), 3)
+
+    def test_main_reports_render_errors(self):
+        import contextlib
+        import io
+        write(self.repo / "index.html", b"<html>sem marcadores</html>")
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            code = A.main(["--repo", str(self.repo), "--blog", str(self.blog), "--out", str(self.out)])
+        self.assertEqual(code, 1)
+        self.assertIn("ERRO: index.html: precisa de um", err.getvalue())
 
 
 if __name__ == "__main__":

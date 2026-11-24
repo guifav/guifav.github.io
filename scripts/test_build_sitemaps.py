@@ -173,6 +173,67 @@ class BuildTest(Repo):
         self.assertEqual(B.main(["--repo", str(self.repo), "--site", str(self.site)]), 1)
 
 
+class HomeLastmodTest(Repo):
+    """#136: a home lista os últimos artigos; o lastmod dela acompanha o mais recente entre eles e o commit."""
+
+    def latest(self, *paths: str) -> None:
+        lis = "".join(f'<li><a href="{p}">t</a></li>' for p in paths)
+        (self.site / "index.html").write_text(
+            html('<link rel="canonical" href="https://guifav.dev">') +
+            f'<!-- ultimos-artigos --><ul class="latest-list">{lis}</ul><!-- /ultimos-artigos -->', encoding="utf-8")
+
+    def home(self) -> str:
+        B.build(self.repo, self.site)
+        return dict(self.entries("sitemap-site.xml", "url"))["https://guifav.dev/"]
+
+    def test_newest_listed_post_wins_over_an_older_commit(self):
+        self.latest("/blog/b/", "/blog/a/")
+        self.assertEqual(self.home(), "2026-10-01T00:00:00.000Z")
+
+    def test_newer_commit_wins_and_timezones_are_compared(self):
+        self.commit({"index.html": html('<link rel="canonical" href="https://guifav.dev"><b>novo</b>')},
+                    "2026-09-30T22:00:00-03:00")  # 01/10 01:00 UTC, depois do post a
+        self.copy_site()
+        self.latest("/blog/a/")
+        self.assertEqual(self.home(), "2026-09-30T22:00:00-03:00")
+
+    def test_without_the_list_the_commit_counts(self):
+        self.assertEqual(self.home(), "2026-01-10T10:00:00-03:00")
+
+    def test_other_pages_ignore_the_list(self):
+        self.latest("/blog/a/")
+        B.build(self.repo, self.site)
+        self.assertEqual(dict(self.entries("sitemap-site.xml", "url"))["https://guifav.dev/portfolio/"],
+                         "2026-03-05T12:00:00-03:00")
+
+    def test_listed_post_without_lastmod_fails(self):
+        for path in ("/blog/sumiu/", "https://guifav.dev/blog/a/"):
+            with self.subTest(path=path):
+                self.latest(path)
+                with self.assertRaisesRegex(B.SitemapError, "não tem lastmod"):
+                    B.build(self.repo, self.site)
+
+    def test_bad_lastmod_in_the_blog_sitemap_fails(self):
+        for bad, msg in (("ontem", "lastmod ilegível"), ("2026-10-01T00:00:00", "lastmod sem fuso")):
+            with self.subTest(bad=bad):
+                (self.site / "blog" / "sitemap.xml").write_text(BLOG.replace("2026-10-01T00:00:00.000Z", bad),
+                                                                encoding="utf-8")
+                self.latest("/blog/a/")
+                with self.assertRaisesRegex(B.SitemapError, msg):
+                    B.build(self.repo, self.site)
+
+    def test_commented_list_is_not_a_list(self):
+        (self.site / "index.html").write_text(html() + "<!-- ultimos-artigos  -->", encoding="utf-8")
+        self.assertEqual(self.home(), "2026-01-10T10:00:00-03:00")
+        for name in ("sitemap.xml", "sitemap-site.xml"):
+            (self.site / name).unlink()
+        # Link comentado entre os marcadores não conta.
+        (self.site / "index.html").write_text(
+            html() + '<!-- ultimos-artigos --><!-- <a href="/blog/a/">t</a> --><!-- /ultimos-artigos -->',
+            encoding="utf-8")
+        self.assertEqual(self.home(), "2026-01-10T10:00:00-03:00")
+
+
 class RulesTest(unittest.TestCase):
     def test_robots_disallow_only_star_group(self):
         txt = ("User-agent: Googlebot\nDisallow: /g/\n\nUser-agent: *\nDisallow: /a/\nDisallow:\nAllow: /a/b\n"

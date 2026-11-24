@@ -1213,7 +1213,10 @@ class _ArticleImages(HTMLParser):
 
 
 def _ld_blocks(html: str) -> list[tuple[list, bool]]:
-    """Cada raiz de JSON-LD fora de comentário, com o @context do schema.org: (nós, se veio de um @graph)."""
+    """Cada raiz de JSON-LD com o @context do schema.org: (nós, se veio de um @graph).
+
+    Ignora o que não roda na página: comentário, <template>, <noscript> e <script> com data-type em vez de type
+    (#136). Vale para a home, para a /consultoria/ e para os posts (#105): JSON-LD só nesses lugares não conta."""
     html = re.sub(r"<!--.*?-->", "", html, flags=re.S)
     html = re.sub(r"<(template|noscript)\b[^>]*>.*?</\1\s*>", "", html, flags=re.S | re.I)
     scripts = re.findall(r"""<script\b[^>]*(?<![\w-])type\s*=\s*["']application/ld\+json["'][^>]*>(.*?)</script\s*>""",
@@ -1248,7 +1251,7 @@ def _home_websites(html: str) -> list[dict]:
 
 
 def _home_has_website(html: str) -> bool:
-    """Algum JSON-LD da home (fora de comentário) traz um WebSite com HOME_WEBSITE."""
+    """Algum JSON-LD da home (o que _ld_blocks lê) traz um WebSite com HOME_WEBSITE."""
     return bool(_home_websites(html))
 
 
@@ -1444,6 +1447,77 @@ def check_consulting(site: Path) -> list[str]:
                         "com price e priceCurrency BRL")
     if any(n.get("@type") == "FAQPage" for n in nodes):
         problems.append(f"{rel}: FAQPage fora da decisão da #108 (perguntas só em texto visível)")
+    return problems
+
+
+# Home como hub (#136): os últimos artigos, que o scripts/assemble_site.py escreve a partir do build do blog, batem com
+# os posts listados (indexáveis e fora dos podcasts) mais recentes segundo o frontmatter, na ordem do blog; e a seção
+# de temas da home linka cada página de tema publicada, uma vez. Leitura independente do build: pega lista velha,
+# vazia ou com a regra de seleção trocada.
+HOME_TOPICS_ID = "temas"
+
+
+def read_home_latest(consts: Path) -> int | None:
+    """Quantos artigos a home lista: HOME_LATEST do consts.ts do blog, a mesma constante que o build usa."""
+    m = re.search(r"^export const HOME_LATEST = (\d+);", consts.read_text(encoding="utf-8"), flags=re.M)
+    return int(m.group(1)) if m else None
+
+
+def _post_when(fm: dict[str, str]) -> datetime | None:
+    try:
+        d = datetime.fromisoformat(fm.get("date", "").replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return d.replace(tzinfo=timezone.utc) if d.tzinfo is None else d.astimezone(timezone.utc)
+
+
+def _listed_posts(posts: Path) -> tuple[list[tuple[datetime, str]], list[str]]:
+    """(data, slug) dos posts listados (indexáveis e fora dos podcasts) e os arquivos com data ilegível."""
+    listed, bad = [], []
+    for md in sorted(posts.glob("**/*.md")):
+        fm = frontmatter(md.read_text(encoding="utf-8"))
+        if fm.get("index", "").lower() == "false" or fm.get("type") == "podcast":
+            continue
+        when = _post_when(fm)
+        if when is None:
+            bad.append(md.name)
+            continue
+        listed.append((when, fm.get("slug") or md.stem))
+    listed.sort(key=lambda x: (-x[0].timestamp(), x[1]))
+    return listed, bad
+
+
+def expected_home_latest(posts: Path, n: int) -> list[str]:
+    """Caminhos dos n posts listados mais recentes: data decrescente e, na mesma data, slug crescente."""
+    return [f"/blog/{slug}/" for _, slug in _listed_posts(posts)[0][:n]]
+
+
+def check_home(site: Path, posts: Path, n: int | None) -> list[str]:
+    """#136: a lista de últimos artigos e os links das páginas de tema na home montada."""
+    rel = "index.html"
+    page = site / rel
+    if not page.is_file():
+        return [f"{rel}: home ausente no site montado"]
+    if not n:
+        return ["blog-src/src/consts.ts: sem export const HOME_LATEST = <n>; (quantos artigos a home lista)"]
+    html = re.sub(r"<!--(?! /?ultimos-artigos -->).*?-->", "", page.read_text(encoding="utf-8"), flags=re.S)
+    problems = [f"posts: {name} com date ilegível no frontmatter" for name in _listed_posts(posts)[1]]
+    m = re.search(r"<!-- ultimos-artigos -->(.*?)<!-- /ultimos-artigos -->", html, flags=re.S)
+    got = re.findall(r"""<a\b[^>]*\bhref\s*=\s*["']([^"']*)["']""", m.group(1), flags=re.I) if m else None
+    want = expected_home_latest(posts, n)
+    if got != want:
+        problems.append(f"{rel}: os últimos artigos da home precisam ser {want}, são {got}")
+    sec = re.search(r"""<section\b[^>]*\bid\s*=\s*["']%s["'][^>]*>(.*?)</section\s*>""" % HOME_TOPICS_ID, html,
+                    flags=re.S | re.I)
+    links = re.findall(r"""<a\b[^>]*\bhref\s*=\s*["']([^"']*)["']""", sec.group(1), flags=re.I) if sec else []
+    topics = sorted((site / "blog" / "tema").glob("*/index.html"))
+    if not topics:
+        problems.append("blog/tema/: nenhuma página de tema publicada para a home linkar")
+    for t in topics:
+        href = f"/blog/tema/{t.parent.name}/"
+        if links.count(href) != 1:
+            problems.append(f'{rel}: a seção id="{HOME_TOPICS_ID}" precisa linkar {href} uma vez, linka '
+                            f"{links.count(href)}")
     return problems
 
 
@@ -1846,6 +1920,7 @@ def main(argv: list[str] | None = None) -> int:
         problems += check_related(Path(args.site), Path(args.posts))
         problems += check_contrast(Path(args.site))
         problems += check_consulting(Path(args.site))
+        problems += check_home(Path(args.site), Path(args.posts), read_home_latest(Path(args.consts)))
         problems += check_post_ld(Path(args.site), Path(args.posts))
     except ResolverError as e:
         print(f"ERRO: resolvedor de URL indisponível, verificação não feita: {e}", file=sys.stderr)
