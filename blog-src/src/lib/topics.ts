@@ -58,8 +58,8 @@ export interface WaitingTopic {
   reason: string;
 }
 
-const MAPA = '/mapa-decisao-ia/';
-const PLANILHA = '/planilha-custos-ia/';
+const MAPA = '/tools/mapa-decisao-ia/';
+const PLANILHA = '/tools/planilha-custos-ia/';
 const ASSINAR = '/blog/assinar/';
 
 export const TOPICS: Topic[] = [
