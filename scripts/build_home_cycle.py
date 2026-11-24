@@ -3,10 +3,10 @@ diagrama e as chaves cy_* do dicionário EN. É a fonte do diagrama; não edite 
 
     python3 scripts/build_home_cycle.py           # reescreve o index.html
     python3 scripts/build_home_cycle.py --check   # falha se o index.html estiver diferente do que o gerador produz (CI)
-    python3 scripts/build_home_cycle.py --gif-page /tmp/ciclo.html   # página para o render do GIF (render_home_cycle_gif.mjs)
+    python3 scripts/build_home_cycle.py --gif-page /tmp/ciclo.html   # página do render do GIF; imprime hash e loop em JSON
 
 Todas as animações do diagrama fecham em LOOP segundos (o GIF baixável repete sem emenda): ao mudar uma duração,
-mantenha-a divisora de LOOP e rode de novo o scripts/render_home_cycle_gif.mjs.
+mantenha-a divisora de LOOP, com atraso negativo ou zero, e rode de novo o scripts/render_home_cycle_gif.mjs.
 """
 import argparse
 import hashlib
@@ -19,6 +19,7 @@ from pathlib import Path
 PERIOD = 15.0
 TOKENS = 3
 LOOP = PERIOD / TOKENS   # 5 s: o estado do diagrama inteiro se repete a cada LOOP
+GIF_FPS = 12
 GIF = '/assets/ciclo-dados-ia.gif'
 GIF_NAME = 'ciclo-de-dados-e-ia-guifav.gif'
 SRC = ('Fonte: guifav.dev', 'Source: guifav.dev')
@@ -76,7 +77,7 @@ def icon(key, cx, cy):
         o = []
         for k in range(3):
             y = cy - 10 + k * 9
-            o.append(f'<path class="i-db-r" style="animation-delay:{k * .5:.1f}s" d="M{cx - 13} {y} a13 4.5 0 0 0 26 0 v6 a13 4.5 0 0 1 -26 0 z"/>')
+            o.append(f'<path class="i-db-r" style="animation-delay:{k * .5 - 1.25:.2f}s" d="M{cx - 13} {y} a13 4.5 0 0 0 26 0 v6 a13 4.5 0 0 1 -26 0 z"/>')
         o.append(f'<ellipse class="i-db-top" cx="{cx}" cy="{cy - 10}" rx="13" ry="4.5"/>')
         return ''.join(o)
     if key == 'int':
@@ -100,7 +101,7 @@ def icon(key, cx, cy):
         o += [f'<line class="i-net-e" x1="{b[0]}" y1="{b[1]}" x2="{Rn[0]}" y2="{Rn[1]}"/>' for b in M]
         for k, p in enumerate(L + M + [Rn]):
             layer = 0 if k < 3 else (1 if k < 5 else 2)
-            o.append(f'<circle class="i-net-n" style="animation-delay:{layer * .35:.2f}s" cx="{p[0]}" cy="{p[1]}" r="3.2"/>')
+            o.append(f'<circle class="i-net-n" style="animation-delay:{layer * .35 - 1.25:.2f}s" cx="{p[0]}" cy="{p[1]}" r="3.2"/>')
         return ''.join(o)
     if key == 'apps':
         o = []
@@ -108,7 +109,7 @@ def icon(key, cx, cy):
             o.append(f'<rect class="i-bar" style="animation-delay:-{k * .5:.1f}s" x="{cx - 15 + k * 7}" y="{cy + 11 - h}" width="5" height="{h}" rx="1.2"/>')
         o.append(f'<path class="i-chat" d="M{cx + 6} {cy - 12} h10 a3 3 0 0 1 3 3 v6 a3 3 0 0 1 -3 3 h-6 l-4 3 v-3 a3 3 0 0 1 -3 -3 v-6 a3 3 0 0 1 3 -3 z"/>')
         for k in range(3):
-            o.append(f'<circle class="i-chat-d" style="animation-delay:{k * .2:.1f}s" cx="{cx + 7.5 + k * 4}" cy="{cy - 6}" r="1.2"/>')
+            o.append(f'<circle class="i-chat-d" style="animation-delay:{k * .2 - 1.25:.2f}s" cx="{cx + 7.5 + k * 4}" cy="{cy - 6}" r="1.2"/>')
         return ''.join(o)
     raise ValueError(f'ícone desconhecido: {key!r}')
 
@@ -259,9 +260,10 @@ CSS = f'''    .dflow{{margin:12px 0 32px}}
     .dflow-wrap{{position:relative;border:1px solid var(--border);border-radius:18px;background:var(--bg-card);padding:20px 16px}}
     .dflow-dl{{position:absolute;top:14px;right:14px;z-index:1;display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border:1px solid var(--border);border-radius:999px;background:var(--bg);color:var(--text);font-size:13px;font-weight:600;text-decoration:none;opacity:0;transition:opacity .2s}}
     .dflow-dl svg{{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}}
-    .dflow-wrap:hover .dflow-dl,.dflow-dl:focus-visible{{opacity:1}}
+    .dflow-wrap:hover .dflow-dl,.dflow-wrap:focus-within .dflow-dl{{opacity:1}}
     .dflow-dl:hover{{border-color:var(--hl)}}
     @media(hover:none){{.dflow-dl{{opacity:1}}}}
+    @media(max-width:999px){{.dflow-dl{{position:static;display:flex;width:fit-content;margin:0 4px 10px auto;opacity:1}}}}
     .dflow .d-src{{font-size:11.5px;fill:var(--text-secondary);letter-spacing:.2px}}
     .dflow-wrap > svg{{display:block;width:100%;height:auto;font-family:inherit}}
     .dflow .cy-m{{display:none}}
@@ -366,18 +368,31 @@ ROOT = Path(__file__).resolve().parent.parent
 HOME = ROOT / 'index.html'
 GIF_META = ROOT / 'scripts' / 'home_cycle_gif.json'  # fora do site: só o teste lê
 
+def _site_css_for_gif():
+    """Do assets/site.css, só o que muda o GIF: os tokens do tema claro (:root) e a regra do body (fonte)."""
+    css = (ROOT / 'assets' / 'site.css').read_text(encoding='utf-8')
+    root = re.search(r'^:root\{[^}]*\}', css, re.M)
+    body = re.search(r'^body\{[^}]*\}', css, re.M)
+    if not root or not body:
+        raise SystemExit('build_home_cycle: não achei :root{...} ou body{...} no assets/site.css')
+    return root.group(0) + '\n' + body.group(0)
+
 def gif_source():
-    """O que o GIF desenha: o SVG do desktop e o CSS. Se mudar, o GIF tem de ser gerado de novo."""
-    EN.clear()
-    return desktop() + CSS
+    """O que o GIF desenha: o SVG do desktop, o CSS do diagrama e o tema claro do site. Se mudar, gere o GIF de novo."""
+    saved = dict(EN)
+    try:
+        EN.clear()
+        return desktop() + CSS + _site_css_for_gif()
+    finally:
+        EN.clear()
+        EN.update(saved)
 
 def gif_hash():
     return hashlib.sha256(gif_source().encode('utf-8')).hexdigest()
 
 def gif_page():
     """Página isolada (tema claro, 1000 x 750) que o render_home_cycle_gif.mjs fotografa quadro a quadro."""
-    site_css = (ROOT / 'assets' / 'site.css').read_text(encoding='utf-8')
-    return ('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><style>' + site_css + '\n' + CSS +
+    return ('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><style>' + _site_css_for_gif() + '\n' + CSS +
             '    body{margin:0;background:var(--bg-card)}.dflow{margin:0;width:1000px}.dflow svg{width:1000px}</style></head>'
             '<body data-theme="light"><figure class="dflow">' + desktop() + '</figure></body></html>')
 
@@ -388,7 +403,7 @@ def main(argv, path=HOME):
     args = ap.parse_args(argv)
     if args.gif_page:
         Path(args.gif_page).write_text(gif_page(), encoding='utf-8')
-        print(f'build_home_cycle: página do GIF em {args.gif_page} (hash {gif_hash()[:12]})')
+        print(json.dumps({'page': args.gif_page, 'source_sha256': gif_hash(), 'loop_seconds': LOOP, 'fps': GIF_FPS}))
         return 0
     cur = path.read_text(encoding='utf-8')
     new = render(cur)

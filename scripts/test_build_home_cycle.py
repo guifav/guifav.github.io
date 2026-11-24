@@ -1,5 +1,6 @@
 """Testes do gerador do ciclo da home (scripts/build_home_cycle.py)."""
 import contextlib
+import hashlib
 import io
 import json
 import re
@@ -107,28 +108,79 @@ class BuildHomeCycleTest(unittest.TestCase):
     def test_gif_em_dia_com_o_desenho(self):
         meta = json.loads(bhc.GIF_META.read_text(encoding='utf-8'))
         self.assertEqual(meta['source_sha256'], bhc.gif_hash(),
-                         'o SVG ou o CSS do ciclo mudaram: rode scripts/render_home_cycle_gif.mjs')
-        gif = bhc.ROOT / bhc.GIF.lstrip('/')
-        self.assertEqual(gif.read_bytes()[:6], b'GIF89a')
-        self.assertLess(gif.stat().st_size, 1_000_000)
-        self.assertEqual(meta['loop_seconds'], bhc.LOOP)
+                         'o desenho, o CSS do ciclo ou o tema claro mudaram: rode scripts/render_home_cycle_gif.mjs')
+        gif = (bhc.ROOT / bhc.GIF.lstrip('/')).read_bytes()
+        self.assertEqual(gif[:6], b'GIF89a')
+        self.assertEqual(hashlib.sha256(gif).hexdigest(), meta['gif_sha256'], 'o GIF não é o registrado no json')
+        self.assertEqual((int.from_bytes(gif[6:8], 'little'), int.from_bytes(gif[8:10], 'little')), (meta['width'], meta['height']))
+        self.assertLess(len(gif), 1_000_000)
+        self.assertEqual((meta['loop_seconds'], meta['fps'], meta['frames']), (bhc.LOOP, bhc.GIF_FPS, round(bhc.LOOP * bhc.GIF_FPS)))
+
+    def test_hash_cobre_o_tema_claro(self):
+        fonte = bhc.gif_source()
+        self.assertIn(':root{--bg:', fonte)
+        self.assertIn('body{font-family:', fonte)
+        self.assertEqual(bhc.gif_source(), fonte)
+
+    def test_hash_nao_mexe_no_dicionario(self):
+        bhc.EN.clear()
+        bhc.en('cy_x', 'one')
+        bhc.gif_hash()
+        self.assertEqual(bhc.EN, {'cy_x': 'one'})
+        bhc.EN.clear()
+
+    def test_cli_gif_page(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / 'ciclo.html'
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(bhc.main(['--gif-page', str(p)], Path(d) / 'nao-usado.html'), 0)
+            info = json.loads(out.getvalue())
+            self.assertEqual(info['source_sha256'], bhc.gif_hash())
+            self.assertEqual(info['loop_seconds'], bhc.LOOP)
+            pagina = p.read_text(encoding='utf-8')
+            self.assertIn('<svg class="cy-d"', pagina)
+            self.assertIn('data-theme="light"', pagina)
 
     def test_botao_de_baixar_e_fonte(self):
         self.assertIn(f'<a class="dflow-dl" href="{bhc.GIF}" download="{bhc.GIF_NAME}">', self.html)
         self.assertEqual(self.html.count('data-i18n="cy_src">Fonte: guifav.dev<'), 2)
+        # no layout do celular o botão sai do canto e entra no fluxo, para não cobrir o desenho
+        self.assertIn('@media(max-width:999px){.dflow-dl{position:static;', bhc.CSS)
+        self.assertIn('.dflow-wrap:focus-within .dflow-dl', bhc.CSS)
 
     def test_animacoes_fecham_no_loop(self):
-        # cada duração (o dobro, nas alternadas) divide o LOOP: o GIF repete sem emenda
-        for nome, dur in re.findall(r'animation:([a-z-]+) ([0-9.]+)s', bhc.CSS):
-            ciclo = float(dur) * (2 if nome == 'i-swing' else 1)
-            self.assertAlmostEqual(bhc.LOOP / ciclo, round(bhc.LOOP / ciclo), msg=f'{nome} {dur}s')
-        for dur in re.findall(r'animation-duration:([0-9.]+)s', bhc.desktop()):
-            self.assertAlmostEqual(bhc.LOOP / (2 * float(dur)), round(bhc.LOOP / (2 * float(dur))), msg=dur)
-
-    def test_regra_de_largura_nao_pega_o_icone_do_botao(self):
-        # o ícone do "Baixar GIF" é um <svg> dentro do .dflow; a regra de 100% vale só para os dois diagramas
-        self.assertNotRegex(bhc.CSS, r'\.dflow svg\{')
-        self.assertIn('.dflow-wrap > svg{display:block;width:100%', bhc.CSS)
+        def fecha(ciclo, onde):
+            q = bhc.LOOP / ciclo
+            self.assertGreaterEqual(round(q), 1, onde)
+            self.assertAlmostEqual(q, round(q), msg=onde)
+        decls = re.findall(r'\.([a-z-]+)(?:[^{]*)\{\{?[^}]*?animation:([a-z-]+) ([0-9.]+)s([^;}]*)', bhc.CSS)
+        self.assertTrue(decls)
+        alternadas = set()
+        for cls, nome, dur, resto in decls:
+            vai_e_volta = 'alternate' in resto
+            if vai_e_volta:
+                alternadas.add(cls)
+            fecha(float(dur) * (2 if vai_e_volta else 1), f'{cls} {nome} {dur}s')
+        svgs = bhc.desktop() + bhc.mobile()
+        inline = re.findall(r'class="([a-z-]+)" style="[^"]*animation-duration:([0-9.]+)s', svgs)
+        self.assertTrue(inline)
+        for cls, dur in inline:
+            fecha(float(dur) * (2 if cls in alternadas else 1), f'{cls} inline {dur}s')
+        # atraso positivo deixa a animação parada no começo e cria emenda no GIF
+        atrasos = [float(x) for x in re.findall(r'animation-delay:(-?[0-9.]+)s', svgs + bhc.CSS)]
+        self.assertTrue(atrasos)
+        self.assertTrue(all(x <= 0 for x in atrasos), [x for x in atrasos if x > 0])
+        # SMIL: a duração fecha no LOOP e os pontos estão espaçados de LOOP
+        for svg in (bhc.desktop(), bhc.mobile()):
+            durs = {float(x) for x in re.findall(r'<animateMotion dur="([0-9.]+)s"', svg)}
+            begins = sorted(float(x) for x in re.findall(r'<animateMotion dur="[0-9.]+s" begin="(-?[0-9.]+)s"', svg))
+            # pontos iguais, um a cada LOOP: a volta inteira (dur) dura TOKENS * LOOP, e o desenho repete a cada LOOP
+            self.assertEqual(len(durs), 1)
+            self.assertAlmostEqual(durs.pop(), bhc.TOKENS * bhc.LOOP)
+            self.assertEqual(len(begins), bhc.TOKENS)
+            for a, b in zip(begins, begins[1:]):
+                self.assertAlmostEqual(b - a, bhc.LOOP, places=2)
 
     def test_rotulos_do_celular_em_escala(self):
         self.assertIn('.dflow .cy-m .d-gov-t,.dflow .cy-m .d-fb-t{font-size:15px}', bhc.CSS)
@@ -138,8 +190,16 @@ class BuildHomeCycleTest(unittest.TestCase):
         (x, y), _ = t.at(t.length - 1e-9)
         self.assertAlmostEqual(x, 500, places=3)
         self.assertAlmostEqual(y, 584, places=3)
-        self.assertIsNotNone(t.at(sum(sg[-1] for sg in t.segs) + 1e-12))
 
+        class Inflado(bhc.Track):  # comprimento um pouco maior que a soma dos trechos: força a sobra
+            @property
+            def length(self):
+                return sum(sg[-1] for sg in self.segs) + 1e-6
+        u = Inflado((500, 584))
+        u.segs, u.d = t.segs, t.d
+        (x, y), _ = u.at(u.length - 1e-9)
+        self.assertAlmostEqual(x, 500, places=3)
+        self.assertAlmostEqual(y, 584, places=3)
 
 if __name__ == '__main__':
     unittest.main()
