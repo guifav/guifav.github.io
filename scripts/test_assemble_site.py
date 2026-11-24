@@ -176,9 +176,11 @@ class VerifyTest(Fixture):
     def test_repeated_verify_sees_same_size_same_mtime_change(self):
         self.assemble()
         A.verify(self.repo, self.manifest, self.blog, self.out)
-        dst = self.out / "index.html"
+        # Arquivo copiado (a home é renderizada): mesmo tamanho e mesmo mtime, conteúdo trocado.
+        dst = self.out / "portfolio" / "index.html"
         st = dst.stat()
-        dst.write_bytes(b"<html>HOME</html>")
+        dst.write_bytes(b"<html>PORTFOLIO</html>")
+        self.assertEqual(dst.stat().st_size, st.st_size)
         os.utime(dst, ns=(st.st_atime_ns, st.st_mtime_ns))
         with self.assertRaises(A.VerifyError):
             A.verify(self.repo, self.manifest, self.blog, self.out)
@@ -217,7 +219,7 @@ class HomeLatestTest(Fixture):
         self.assertEqual(A.verify(self.repo, self.manifest, self.blog, self.out), 6)
         self.assertFalse((self.out / "blog" / "ultimos-artigos.json").exists())  # consumido, não vai ao ar
         got = (self.out / "index.html").read_text(encoding="utf-8")
-        self.assertEqual(got, '<html>home<!-- ultimos-artigos --><ul class="latest-list"><li><a href="/blog/um-post/" '
+        self.assertEqual(got, '<html>home<!-- ultimos-artigos --><ul class="latest-list" lang="pt-BR"><li><a href="/blog/um-post/" '
                          'hreflang="pt-BR">A &amp; B &lt;c&gt;</a> <time datetime="2026-11-24">24 de novembro de 2026'
                          '</time><p>Desc &quot;x&quot;</p></li></ul><!-- /ultimos-artigos --></html>')
 
@@ -243,6 +245,7 @@ class HomeLatestTest(Fixture):
                {"posts": [dict(LATEST_ITEM, path="https://outro.site/x/")]},
                {"posts": [dict(LATEST_ITEM, path="/blog/../x/")]},
                {"posts": [dict(LATEST_ITEM, date="24/11/2026")]},
+               {"posts": [dict(LATEST_ITEM, date="2026-02-30")]},
                {"posts": [dict(LATEST_ITEM, title="  ")]},
                {"posts": [{k: v for k, v in LATEST_ITEM.items() if k != "description"}]}]
         for data in bad:
@@ -256,6 +259,13 @@ class HomeLatestTest(Fixture):
         write(self.blog / "ultimos-artigos.json", b"{quebrado")
         with self.assertRaisesRegex(A.RenderError, "ilegível"):
             self.assemble()
+
+    def test_render_error_keeps_the_previous_site(self):
+        self.assemble()
+        write(self.blog / "ultimos-artigos.json", b"{quebrado")
+        with self.assertRaises(A.RenderError):
+            self.assemble()
+        self.assertTrue((self.out / "index.html").is_file())
 
     def test_without_home_in_the_manifest_nothing_is_rendered(self):
         self.manifest.write_text("CNAME\n", encoding="utf-8")

@@ -1417,8 +1417,9 @@ class TrackingSourcesTest(unittest.TestCase):
 
     def test_cta_locations_in_sources(self):
         home = self.read("index.html")
-        # #136: o hero da home nova não tem CTA de contato; agendar e escrever ficam na /consultoria/.
-        for loc, n in (("hero", 0), ("projetos", 1), ("consultoria", 1)):
+        # #136: a home nova não tem CTA no hero nem o carrossel (foi para a /consultoria/); agendar e escrever ficam na
+        # /consultoria/.
+        for loc, n in (("hero", 0), ("projetos", 0), ("consultoria", 1)):
             self.assertEqual(home.count(f'data-cta-location="{loc}"'), n, loc)
         self.assertEqual(self.read("portfolio/index.html").count('data-cta-location="chamada-final"'), 2)
         consulting = self.read(C.CONSULTING_PAGE)
@@ -2447,15 +2448,20 @@ class ConsultingTest(unittest.TestCase):
 class HomeHubTest(unittest.TestCase):
     """#136: a home montada lista os últimos artigos listados do blog e linka cada página de tema publicada."""
 
+    # 8 listados (mais que os 6 da home), um podcast indexável, um fora do índice e um "False" do YAML.
+    POSTS = (("a", "2026-11-20", ""), ("b", "2026-11-22T10:00:00Z", ""),
+             ("c", "2026-11-22T07:00:00-03:00", ""),  # 10h UTC: empata com b e vem depois pelo slug
+             ("pod", "2026-11-23", "type: podcast\n"), ("fora", "2026-11-24", "index: false\n"),
+             ("fora2", "2026-11-25", "index: False\n"), ("d", "2026-11-19", ""), ("e", "2026-11-18", ""),
+             ("f", "2026-11-17", ""), ("g", "2026-11-16", ""), ("velho", "2025-01-01", ""))
+    WANT6 = ("/blog/b/", "/blog/c/", "/blog/a/", "/blog/d/", "/blog/e/", "/blog/f/")
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         r = Path(self.tmp.name)
         self.site, self.posts = r / "_site", r / "posts"
         self.posts.mkdir()
-        for slug, date, extra in (("a", "2026-11-20", ""), ("b", "2026-11-22T10:00:00Z", ""),
-                                  ("c", "2026-11-22T07:00:00-03:00", ""),  # 10h UTC: empata com b, vem depois
-                                  ("pod", "2026-11-23", "type: podcast\nindex: false\n"),
-                                  ("fora", "2026-11-24", "index: false\n"), ("velho", "2025-01-01", "")):
+        for slug, date, extra in self.POSTS:
             (self.posts / f"{slug}.md").write_text(f"---\ntitle: t\nslug: {slug}\ndate: {date}\n{extra}---\nx\n",
                                                    encoding="utf-8")
         for t in ("t1", "t2"):
@@ -2466,41 +2472,59 @@ class HomeHubTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def home(self, latest=("/blog/b/", "/blog/c/", "/blog/a/", "/blog/velho/"),
-             topics=("/blog/tema/t1/", "/blog/tema/t2/"), extra="") -> list[str]:
+    def home(self, latest=WANT6, topics=("/blog/tema/t1/", "/blog/tema/t2/"), extra="", n=6) -> list[str]:
         lis = "".join(f'<li><a href="{h}">x</a></li>' for h in latest)
         tl = "".join(f'<a href="{h}">t</a>' for h in topics)
         (self.site / "index.html").write_text(
             f'<html><body><!-- ultimos-artigos --><ul class="latest-list">{lis}</ul><!-- /ultimos-artigos -->'
             f'<section id="temas">{tl}</section>{extra}</body></html>', encoding="utf-8")
-        return C.check_home(self.site, self.posts)
+        return C.check_home(self.site, self.posts, n)
 
     def test_expected_list_order_and_selection(self):
-        self.assertEqual(C.expected_home_latest(self.posts), ["/blog/b/", "/blog/c/", "/blog/a/", "/blog/velho/"])
+        self.assertEqual(C.expected_home_latest(self.posts, 6), list(self.WANT6))
         self.assertEqual(C.expected_home_latest(self.posts, 2), ["/blog/b/", "/blog/c/"])
+        self.assertEqual(len(C.expected_home_latest(self.posts, 100)), 8)
 
     def test_complete_home_passes(self):
         self.assertEqual(self.home(), [])
 
     def test_latest_list_wrong_fails(self):
-        for name, latest in (("vazia", ()), ("ordem", ("/blog/c/", "/blog/b/", "/blog/a/", "/blog/velho/")),
-                             ("com podcast", ("/blog/pod/", "/blog/b/", "/blog/c/", "/blog/a/")),
-                             ("faltando um", ("/blog/b/", "/blog/c/", "/blog/a/"))):
+        for name, latest in (("vazia", ()), ("ordem", ("/blog/c/", "/blog/b/") + self.WANT6[2:]),
+                             ("com podcast indexável", ("/blog/pod/",) + self.WANT6[:5]),
+                             ("com index False", ("/blog/fora2/",) + self.WANT6[:5]),
+                             ("faltando um", self.WANT6[:5]), ("um a mais", self.WANT6 + ("/blog/g/",))):
             with self.subTest(name):
                 got = self.home(latest=latest)
                 self.assertEqual(len(got), 1, got)
                 self.assertIn("os últimos artigos da home precisam ser", got[0])
 
+    def test_count_comes_from_the_argument(self):
+        self.assertEqual(self.home(latest=self.WANT6[:3], n=3), [])
+        self.assertTrue(self.home(latest=self.WANT6, n=7))
+
+    def test_read_home_latest_from_consts(self):
+        consts = Path(self.tmp.name) / "consts.ts"
+        consts.write_text("export const RSS_LIMIT = 50;\nexport const HOME_LATEST = 6;\n", encoding="utf-8")
+        self.assertEqual(C.read_home_latest(consts), 6)
+        consts.write_text("// export const HOME_LATEST = 6;\n", encoding="utf-8")
+        self.assertIsNone(C.read_home_latest(consts))
+        self.assertIn("sem export const HOME_LATEST", self.home(n=None)[0])
+        repo = Path(__file__).resolve().parent.parent / "blog-src" / "src" / "consts.ts"
+        self.assertEqual(C.read_home_latest(repo), 6)
+
+    def test_unreadable_date_is_reported(self):
+        (self.posts / "ruim.md").write_text("---\ntitle: t\nslug: ruim\ndate: ontem\n---\nx\n", encoding="utf-8")
+        self.assertEqual(self.home(), ["posts: ruim.md com date ilegível no frontmatter"])
+
     def test_list_without_markers_or_commented_fails(self):
         (self.site / "index.html").write_text('<section id="temas"><a href="/blog/tema/t1/">t</a>'
                                               '<a href="/blog/tema/t2/">t</a></section>', encoding="utf-8")
-        self.assertIn("são None", C.check_home(self.site, self.posts)[0])
-        got = self.home(extra="")
-        self.assertEqual(got, [])
+        self.assertIn("são None", C.check_home(self.site, self.posts, 6)[0])
+        self.assertEqual(self.home(), [])
         html = (self.site / "index.html").read_text(encoding="utf-8")
         (self.site / "index.html").write_text(html.replace('<ul class="latest-list">', '<!--<ul class="latest-list">')
                                               .replace("</ul>", "</ul>-->"), encoding="utf-8")
-        self.assertIn("são []", C.check_home(self.site, self.posts)[0])
+        self.assertIn("são []", C.check_home(self.site, self.posts, 6)[0])
 
     def test_topics_each_published_page_once(self):
         for name, topics, n in (("faltando", ("/blog/tema/t1/",), 0), ("repetido", ("/blog/tema/t1/",) * 2 +
@@ -2513,10 +2537,15 @@ class HomeHubTest(unittest.TestCase):
         got = self.home(topics=("/blog/tema/t1/",), extra='<a href="/blog/tema/t2/">t</a>')
         self.assertIn("/blog/tema/t2/ uma vez, linka 0", got[0])
 
+    def test_no_published_topic_page_fails(self):
+        import shutil
+        shutil.rmtree(self.site / "blog" / "tema")
+        self.assertEqual(self.home(topics=()), ["blog/tema/: nenhuma página de tema publicada para a home linkar"])
+
     def test_missing_home_fails_and_main_runs_the_rule(self):
-        self.assertEqual(C.check_home(self.site, self.posts), ["index.html: home ausente no site montado"])
+        self.assertEqual(C.check_home(self.site, self.posts, 6), ["index.html: home ausente no site montado"])
         consts = Path(self.tmp.name) / "consts.ts"
-        consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
+        consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\nexport const HOME_LATEST = 6;\n", encoding="utf-8")
         from unittest import mock
         err = io.StringIO()
         with mock.patch.object(C, "check", lambda *a, **k: []), \

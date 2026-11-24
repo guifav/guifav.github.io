@@ -214,14 +214,23 @@ class HomeLastmodTest(Repo):
                     B.build(self.repo, self.site)
 
     def test_bad_lastmod_in_the_blog_sitemap_fails(self):
-        (self.site / "blog" / "sitemap.xml").write_text(BLOG.replace("2026-10-01T00:00:00.000Z", "ontem"),
-                                                        encoding="utf-8")
-        self.latest("/blog/a/")
-        with self.assertRaisesRegex(B.SitemapError, "lastmod ilegível"):
-            B.build(self.repo, self.site)
+        for bad, msg in (("ontem", "lastmod ilegível"), ("2026-10-01T00:00:00", "lastmod sem fuso")):
+            with self.subTest(bad=bad):
+                (self.site / "blog" / "sitemap.xml").write_text(BLOG.replace("2026-10-01T00:00:00.000Z", bad),
+                                                                encoding="utf-8")
+                self.latest("/blog/a/")
+                with self.assertRaisesRegex(B.SitemapError, msg):
+                    B.build(self.repo, self.site)
 
     def test_commented_list_is_not_a_list(self):
         (self.site / "index.html").write_text(html() + "<!-- ultimos-artigos  -->", encoding="utf-8")
+        self.assertEqual(self.home(), "2026-01-10T10:00:00-03:00")
+        for name in ("sitemap.xml", "sitemap-site.xml"):
+            (self.site / name).unlink()
+        # Link comentado entre os marcadores não conta.
+        (self.site / "index.html").write_text(
+            html() + '<!-- ultimos-artigos --><!-- <a href="/blog/a/">t</a> --><!-- /ultimos-artigos -->',
+            encoding="utf-8")
         self.assertEqual(self.home(), "2026-01-10T10:00:00-03:00")
 
 

@@ -170,7 +170,8 @@ def home_lastmod(site: Path, git_date: str, blog_lastmods: dict[str, str]) -> st
     m = HOME_LATEST.search((site / HOME).read_text(encoding="utf-8"))
     if not m:
         return git_date
-    paths = re.findall(r"""<a\b[^>]*\bhref\s*=\s*["']([^"']*)["']""", m.group(1), flags=re.I)
+    inner = re.sub(r"<!--.*?-->", "", m.group(1), flags=re.S)
+    paths = re.findall(r"""<a\b[^>]*\bhref\s*=\s*["']([^"']*)["']""", inner, flags=re.I)
     dates = [git_date]
     for path in paths:
         lm = blog_lastmods.get(SITE_ORIGIN + path)

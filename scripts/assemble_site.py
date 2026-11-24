@@ -20,6 +20,7 @@ Uso:
 from __future__ import annotations
 
 import argparse
+import datetime
 import html
 import json
 import re
@@ -56,7 +57,15 @@ def render_latest(items: list[dict]) -> str:
         f'<li><a href="{e(i["path"])}" hreflang="pt-BR">{e(i["title"])}</a> '
         f'<time datetime="{e(i["date"])}">{e(i["date_label"])}</time><p>{e(i["description"])}</p></li>'
         for i in items)
-    return f'<ul class="latest-list">{lis}</ul>'
+    return f'<ul class="latest-list" lang="pt-BR">{lis}</ul>'
+
+
+def _real_date(s: str) -> bool:
+    try:
+        datetime.date.fromisoformat(s)
+    except ValueError:
+        return False
+    return True
 
 
 def _latest_items(path: Path) -> list[dict]:
@@ -70,7 +79,7 @@ def _latest_items(path: Path) -> list[dict]:
     for i in items:
         if not (isinstance(i, dict) and all(isinstance(i.get(k), str) and i[k].strip()
                                             for k in ("title", "path", "date", "date_label", "description"))
-                and LATEST_PATH.fullmatch(i["path"]) and LATEST_DATE.fullmatch(i["date"])):
+                and LATEST_PATH.fullmatch(i["path"]) and LATEST_DATE.fullmatch(i["date"]) and _real_date(i["date"])):
             raise RenderError(f"{LATEST_JSON}: item inválido: {i!r}")
     return items
 
@@ -185,10 +194,10 @@ def expected_files(repo: Path, manifest: Path, blog: Path) -> dict[str, Path]:
 
 def assemble(repo: Path, manifest: Path, blog: Path, out: Path) -> dict[str, Path]:
     files = expected_files(repo, manifest, blog)
+    rendered = expected_bytes(files, blog)  # antes de apagar o _site: com erro, o anterior fica
     if out.exists():
         shutil.rmtree(out)
     out.mkdir(parents=True)
-    rendered = expected_bytes(files, blog)
     for rel, src in files.items():
         dst = out / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
