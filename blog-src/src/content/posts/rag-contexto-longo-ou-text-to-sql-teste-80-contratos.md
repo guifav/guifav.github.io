@@ -99,7 +99,7 @@ Antes de escolher, faço quatro perguntas sobre a pergunta do usuário. A primei
 | O aditivo da última página muda o sentido da página 3? | Contexto longo | Custo e espera, que crescem com o tamanho do conjunto |
 | Quais dos maiores clientes têm reajuste pelo IPCA | Roteamento: consulta, depois leitura | Quando a resposta não diz de onde veio cada parte |
 
-O [mapa de decisão](/mapa-decisao-ia/) que publiquei em 23 de novembro traz essas quatro perguntas, a matriz completa com latência e mitigação de cada arquitetura, a planilha da conta do custo por pergunta e cinco testes para rodar antes de aprovar um projeto. Para os fundamentos do RAG, há a [introdução ao tema](/blog/o-que-e-rag-llms-ia/) e o texto sobre [RAG em bases de conhecimento corporativas](/blog/rag-knowledge-bases-corporativas-implementacao-pratica/); para a ligação entre modelos e bancos de dados, o [guia de integração de LLMs com SQL e NoSQL](/blog/llm-sql-nosql-guia-integracao/).
+O [mapa de decisão](/tools/mapa-decisao-ia/) que publiquei em 23 de novembro traz essas quatro perguntas, a matriz completa com latência e mitigação de cada arquitetura, a planilha da conta do custo por pergunta e cinco testes para rodar antes de aprovar um projeto. Para os fundamentos do RAG, há a [introdução ao tema](/blog/o-que-e-rag-llms-ia/) e o texto sobre [RAG em bases de conhecimento corporativas](/blog/rag-knowledge-bases-corporativas-implementacao-pratica/); para a ligação entre modelos e bancos de dados, o [guia de integração de LLMs com SQL e NoSQL](/blog/llm-sql-nosql-guia-integracao/).
 
 Antes de aprovar qualquer uma delas, eu pergunto ao time se a arquitetura avisa quando não leu tudo. Na sua empresa, quantas das respostas que a IA já entrega à diretoria passariam nessa pergunta?
 
@@ -115,7 +115,7 @@ No meu teste, ela acertou nas três rodadas quando o conjunto coube na janela, c
 
 ### Quanto custa mandar tudo no contexto?
 
-É a conta de tokens por pergunta vezes o preço por milhão vezes o número de perguntas. Com os 80 contratos no Sonnet 5.5, sem cache, uma empresa com duas mil perguntas por dia gastaria US$ 79,8 mil num mês de 22 dias úteis, só de entrada. A planilha anexa ao [mapa de decisão](/mapa-decisao-ia/) faz essa conta com os seus números, e a [planilha de custos de IA](/planilha-custos-ia/) compara API, assinatura e GPU própria.
+É a conta de tokens por pergunta vezes o preço por milhão vezes o número de perguntas. Com os 80 contratos no Sonnet 5.5, sem cache, uma empresa com duas mil perguntas por dia gastaria US$ 79,8 mil num mês de 22 dias úteis, só de entrada. A planilha anexa ao [mapa de decisão](/tools/mapa-decisao-ia/) faz essa conta com os seus números, e a [planilha de custos de IA](/tools/planilha-custos-ia/) compara API, assinatura e GPU própria.
 
 ### Text-to-SQL é seguro com os dados da empresa?
 
@@ -123,7 +123,7 @@ Tem riscos próprios, e cada um tem mitigação conhecida. A consulta roda com u
 
 ### Como testar a arquitetura antes de aprovar o projeto?
 
-Com perguntas de gabarito conhecido na base da própria empresa: uma contagem, um fato no meio de um documento longo, uma pergunta que cruza número e documento, uma pessoa sem acesso tentando ler uma coluna fechada e uma pergunta maior do que o sistema consegue ler. O [mapa de decisão](/mapa-decisao-ia/) diz o que conta como passar em cada um.
+Com perguntas de gabarito conhecido na base da própria empresa: uma contagem, um fato no meio de um documento longo, uma pergunta que cruza número e documento, uma pessoa sem acesso tentando ler uma coluna fechada e uma pergunta maior do que o sistema consegue ler. O [mapa de decisão](/tools/mapa-decisao-ia/) diz o que conta como passar em cada um.
 
 ---
 

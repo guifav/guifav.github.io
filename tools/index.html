@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="description" content="Ferramentas gratuitas para escolher arquitetura, calcular custos, comparar LLMs e estruturar páginas para Google e buscadores de IA."/>
+  <title>Ferramentas de IA aplicada | Guilherme Favaron</title>
+  <meta name="author" content="Guilherme Favaron">
+  <meta property="og:title" content="Ferramentas de IA aplicada | Guilherme Favaron">
+  <meta property="og:description" content="Ferramentas gratuitas para escolher arquitetura, calcular custos, comparar LLMs e estruturar páginas para Google e buscadores de IA.">
+  <meta property="og:url" content="https://guifav.dev/tools/"/>
+  <meta property="og:image" content="https://guifav.dev/og-image.png"/>
+  <meta property="og:image:width" content="1200"/>
+  <meta property="og:image:height" content="630"/>
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary_large_image"/>
+  <meta name="twitter:title" content="Ferramentas de IA aplicada | Guilherme Favaron"/>
+  <meta name="twitter:description" content="Ferramentas gratuitas para escolher arquitetura, calcular custos, comparar LLMs e estruturar páginas para Google e buscadores de IA."/>
+  <meta name="twitter:image" content="https://guifav.dev/og-image.png"/>
+  <link rel="canonical" href="https://guifav.dev/tools/">
+  <link rel="stylesheet" href="/assets/site.css?v=202611232330">
+  <style>
+    .card-ico{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:10px;border:1px solid var(--border);margin-bottom:14px;color:var(--hl-text)}
+    .card-ico svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+    .card h2{font-size:17px;font-weight:650;margin-bottom:8px;line-height:1.35}
+    .tools-list .card{display:flex;flex-direction:column}
+    .tools-list .card p{flex:1}
+  </style>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-K7Y87QNCX8"></script>
+  <script>window['ga-disable-G-K7Y87QNCX8']=location.hostname.replace(/\.$/,'')!=='guifav.dev';window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('consent','default',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',analytics_storage:'denied'});gtag('set','ads_data_redaction',true);window.guifavConsent=function(){try{var c=JSON.parse(localStorage.getItem('consent-v1')||'null');return c&&c.v==='granted'&&typeof c.t==='number'&&Date.now()-c.t>=0&&Date.now()-c.t<31536e6?'granted':null}catch(e){return null}}();if(window.guifavConsent==='granted')gtag('consent','update',{ad_storage:'granted',ad_user_data:'granted',ad_personalization:'granted',analytics_storage:'granted'});gtag('js',new Date());gtag('config','G-K7Y87QNCX8',{content_group:'ferramentas'});</script>
+  <!-- Microsoft Clarity (mapas de calor e gravações de sessão; campos de formulário mascarados), só depois do aceite dos cookies (#68) -->
+  <script>window.guifavClarity=function(){if(window.clarity)return;(function(c,l,a,r,i,t,y){c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);})(window,document,"clarity","script","zcs8f7r329");};if(window.guifavConsent==='granted')window.guifavClarity();</script>
+  <script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"CollectionPage","@id":"https://guifav.dev/tools/#webpage","name":"Ferramentas de IA aplicada | Guilherme Favaron","description":"Ferramentas gratuitas para escolher arquitetura, calcular custos, comparar LLMs e estruturar páginas para Google e buscadores de IA.","url":"https://guifav.dev/tools/","inLanguage":"pt-BR","isPartOf":{"@id":"https://guifav.dev/#website"},"author":{"@type":"Person","@id":"https://guifav.dev/#person","name":"Guilherme de Mauro Favaron","url":"https://guifav.dev/"},"mainEntity":{"@type":"ItemList","itemListElement":[{"@type":"ListItem","position":1,"name":"Mapa de decisão: RAG, Text-to-SQL ou contexto longo","url":"https://guifav.dev/tools/mapa-decisao-ia/"},{"@type":"ListItem","position":2,"name":"Planilha de custos de IA em produção","url":"https://guifav.dev/tools/planilha-custos-ia/"},{"@type":"ListItem","position":3,"name":"Ranking de LLMs (LMArena)","url":"https://guifav.dev/tools/llm-ranking/"},{"@type":"ListItem","position":4,"name":"Framework de SEO, AEO e GEO","url":"https://guifav.dev/tools/seo-geo-aeo-framework/framework-seo-aeo.html"}]}},{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Guilherme Favaron","item":"https://guifav.dev/"},{"@type":"ListItem","position":2,"name":"Ferramentas","item":"https://guifav.dev/tools/"}]}]}</script>
+  <link rel="icon" href="/favicon.ico" sizes="any">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+</head>
+<body>
+  <div class="container">
+    <nav aria-label="Principal">
+      <a href="/" class="nav-name">Guilherme Favaron</a>
+      <div class="nav-links">
+        <a href="/portfolio/">Portfólio</a>
+        <a href="/consultoria/">Consultoria</a>
+        <a href="/blog/">Insights</a>
+        <a href="mailto:contact@guifav.dev" class="nav-hide-sm">Contato</a>
+        <a href="/consultoria/#como-contratar" class="nav-cta">Agende um horário</a>
+        <button id="theme-toggle" class="nav-btn" aria-label="Toggle theme">&#9790;</button>
+      </div>
+    </nav>
+
+    <main>
+      <header class="hero">
+        <div class="eyebrow">Ferramentas</div>
+        <h1>Ferramentas de IA aplicada</h1>
+        <p class="subtitle">Materiais práticos que eu uso e compartilho para decisões de arquitetura, custo, escolha de modelo e visibilidade em busca e em assistentes de IA. Tudo é gratuito e aberto para adaptar ao contexto da sua empresa.</p>
+      </header>
+
+      <section aria-label="Lista de ferramentas">
+        <div class="grid-2 cols-2 tools-list">
+          <article class="card">
+            <span class="card-ico" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M12 21V11"/><path d="M12 11L6 5M12 11l6-6"/><path d="M4 5h4M16 5h4"/></svg></span>
+            <h2>Mapa de decisão: RAG, Text-to-SQL ou contexto longo</h2>
+            <p>Quatro perguntas de triagem para escolher a arquitetura de IA sobre os dados da empresa, com a matriz de acertos e falhas de cada caminho, a planilha da conta do custo por pergunta e cinco testes para rodar antes de aprovar um projeto.</p>
+            <a href="/tools/mapa-decisao-ia/">Abrir o mapa &#8594;</a>
+          </article>
+
+          <article class="card">
+            <span class="card-ico" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><rect x="3.5" y="4" width="17" height="16" rx="2"/><path d="M3.5 9h17M3.5 14.5h17M9 4v16M15 4v16"/></svg></span>
+            <h2>Planilha de custos de IA em produção</h2>
+            <p>Calcula o custo mensal de rodar IA sobre os dados da empresa em cinco opções (API sem otimização, API otimizada, assinatura por usuário, GPU própria e plataforma pronta) nos volumes de 1 mil, 10 mil e 100 mil consultas, somando inferência, infraestrutura, desperdício e engenharia.</p>
+            <a href="/tools/planilha-custos-ia/">Abrir a planilha &#8594;</a>
+          </article>
+
+          <article class="card">
+            <span class="card-ico" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M4 19h16"/><rect x="5" y="11" width="3.5" height="8" rx="1"/><rect x="10.25" y="5" width="3.5" height="14" rx="1"/><rect x="15.5" y="8" width="3.5" height="11" rx="1"/></svg></span>
+            <h2>Ranking de LLMs (LMArena)</h2>
+            <p>Os 100 modelos de IA mais bem colocados na arena de texto da LMArena, com faixa de posições pela margem de erro, votos, licença e recortes por pesos abertos, tarefa, setor e organização, atualizados a cada publicação da fonte.</p>
+            <a href="/tools/llm-ranking/">Abrir o ranking &#8594;</a>
+          </article>
+
+          <article class="card">
+            <span class="card-ico" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5.5 5.5"/><path d="M8 10.5h5M10.5 8v5"/></svg></span>
+            <h2>Framework de SEO, AEO e GEO</h2>
+            <p>Guia prático para estruturar páginas encontradas no Google e citadas por assistentes como ChatGPT e Perplexity, com a técnica Answer Capsule, configurações técnicas, critérios de E-E-A-T e checklist antes e depois da publicação.</p>
+            <a href="/tools/seo-geo-aeo-framework/framework-seo-aeo.html">Abrir o framework &#8594;</a>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <footer><p><a href="/">Início</a> &middot; <a href="/consultoria/">Consultoria</a> &middot; <a href="https://github.com/guifav" target="_blank" rel="noopener">GitHub</a> &middot; <a href="https://linkedin.com/in/guilhermefavaron" target="_blank" rel="noopener">LinkedIn</a> &middot; <a href="https://huggingface.co/guifav" target="_blank" rel="noopener">Hugging Face</a> &middot; <a href="https://www.youtube.com/@guifav" target="_blank" rel="noopener">YouTube</a> &middot; <a href="mailto:contact@guifav.dev">Contato</a> &middot; <a href="/blog/assinar/">Expert Insights</a> &middot; <a href="/privacidade/">Privacidade</a> &middot; <a href="/termos/">Termos</a> &middot; <a href="/privacidade/#cookies" data-consent-open>Cookies</a></p></footer>
+  </div>
+  <script src="/assets/site.js?v=202611241500"></script>
+  <script src="/assets/track.js?v=202611242200"></script>
+  <script src="/assets/consent.js?v=202611242200"></script>
+</body>
+</html>

@@ -25,7 +25,7 @@ export const INTERESSES = {
 } as const satisfies Record<string, Interesse>;
 
 export interface Material {
-  /** Id do material: o campo `material` do formulário e o caminho da página no site. */
+  /** Id do material: o campo `material` do formulário e o segmento do caminho em /tools/<id>/ no site. */
   id: string;
   titulo: string;
   arquivos: Arquivo[];

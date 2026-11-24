@@ -18,7 +18,7 @@ Todas as demais são recriações.
 ## Renderizar
 
 ```bash
-cd tools/mockups
+cd _mockups
 npm install
 npx playwright install chromium
 npm run render              # todos
