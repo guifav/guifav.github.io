@@ -174,9 +174,9 @@ def _git(dados: Path, *args: str) -> subprocess.CompletedProcess:
     try:
         return subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=GIT_TIMEOUT)
     except subprocess.TimeoutExpired:
-        return subprocess.CompletedProcess(cmd, 1, "", f"git {args[0]} não terminou em {GIT_TIMEOUT}s")
+        return subprocess.CompletedProcess(cmd, 1, "", f"não terminou em {GIT_TIMEOUT}s")
     except OSError as e:
-        return subprocess.CompletedProcess(cmd, 1, "", f"git {args[0]} não rodou: {e}")
+        return subprocess.CompletedProcess(cmd, 1, "", f"não rodou: {e}")
 
 
 def gravar(dados: Path, texto: str, pub: str, git=_git) -> bool:
@@ -187,6 +187,9 @@ def gravar(dados: Path, texto: str, pub: str, git=_git) -> bool:
     falhou) não fazem a rodada seguinte achar que nada mudou: ela compara com o que está publicado e grava de novo."""
     if not (dados / ".git").exists():
         raise SnapshotError(f"{dados} não é um clone do guifav/llm-ranking-data")
+    # Trava que sobrou de um git morto pelo timeout no meio de add ou commit. O wrapper roda sob flock, então este
+    # processo é o único escritor do clone e a trava não pertence a ninguém vivo.
+    (dados / ".git" / "index.lock").unlink(missing_ok=True)
     for args in (("fetch", "-q", "origin", RAMO), ("reset", "-q", "--hard", f"origin/{RAMO}"), ("clean", "-fdq")):
         r = git(dados, *args)
         if r.returncode != 0:

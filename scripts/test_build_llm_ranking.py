@@ -260,6 +260,17 @@ class MudancasTest(unittest.TestCase):
         itens = [t for t in B.mudancas(agora, antes) if "modelo-001" in t]
         self.assertEqual(itens, ["Novo líder: modelo-002, no lugar de modelo-001, que saiu da lista."])
 
+    def test_old_leader_out_of_top10_but_still_listed(self):
+        # r1 do #144 (agy P3): o ex-líder que cai para a 15ª posição continua na lista; a frase não diz que saiu.
+        antes = lista(120)
+        agora = copy.deepcopy(antes)
+        agora[0].update(pontuacao=1569.0, inferior=1564.0, superior=1574.0)
+        agora = renum(agora)
+        itens = B.mudancas(agora, antes)
+        self.assertEqual(itens[0], "Novo líder: modelo-002, no lugar de modelo-001.")
+        self.assertIn("Saiu do top 10: modelo-001 (agora na 15ª posição).", itens)
+        self.assertFalse(any("que saiu da lista" in t for t in itens), itens)
+
     def test_top10_model_gone_from_the_list_is_said_once(self):
         # r1 (agy P1, Claude P3): quem sai do top 10 direto para fora da lista aparece uma vez só.
         antes = lista(120)

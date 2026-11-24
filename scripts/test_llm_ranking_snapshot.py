@@ -294,14 +294,23 @@ class GitTest(unittest.TestCase):
             r = S._git(self.dados, "fetch", "-q", "origin", "main")
         self.assertEqual(vistos.get("timeout"), S.GIT_TIMEOUT)
         self.assertEqual(r.returncode, 1)
-        self.assertIn(f"git fetch não terminou em {S.GIT_TIMEOUT}s", r.stderr)
+        self.assertEqual(r.stderr, f"não terminou em {S.GIT_TIMEOUT}s")
         with mock.patch.object(S.subprocess, "run", side_effect=FileNotFoundError("git")):
             r = S._git(self.dados, "fetch")
         self.assertEqual(r.returncode, 1)
-        self.assertIn("git fetch não rodou", r.stderr)
+        self.assertTrue(r.stderr.startswith("não rodou: "), r.stderr)
         with mock.patch.object(S.subprocess, "run", run), self.assertRaises(S.SnapshotError) as cm:
             S.gravar(self.dados, "a\n", "2026-11-22")
-        self.assertIn("git fetch falhou: git fetch não terminou", str(cm.exception))
+        self.assertEqual(str(cm.exception), f"git fetch falhou: não terminou em {S.GIT_TIMEOUT}s")
+
+    def test_stale_index_lock_is_removed(self):
+        # r1 do #144 (Claude P3): um git morto pelo timeout no meio de add ou commit deixa o index.lock; o wrapper
+        # roda sob flock, então o gravar() é o único escritor do clone e pode apagar a trava que sobrou.
+        self.assertTrue(S.gravar(self.dados, "a\n", "2026-11-22"))
+        (self.dados / ".git" / "index.lock").write_text("")
+        self.assertTrue(S.gravar(self.dados, "b\n", "2026-11-25"))
+        self.assertFalse((self.dados / ".git" / "index.lock").exists())
+        self.assertEqual(self.origin_log()[0], "Arena, arena de texto: publicação de 2026-11-25")
 
     def test_writes_only_when_changed(self):
         self.assertTrue(S.gravar(self.dados, "a\n", "2026-11-22"))
