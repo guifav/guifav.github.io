@@ -555,7 +555,7 @@ SITE_NAME = "Guilherme Favaron"
 TITLE_SEP = " | "
 TITLE_EXEMPT_PREFIXES = ("portfolio/mockups/",)
 # Grupos de conteúdo do GA4 (content_group), um por tipo de página; espelha CONTENT_GROUPS do consts.ts do blog.
-CONTENT_GROUPS = ("home", "portfolio", "insights-lista", "insights-artigo", "expert-insights", "materiais")
+CONTENT_GROUPS = ("home", "portfolio", "insights-lista", "insights-artigo", "expert-insights", "materiais", "consultoria")
 # Páginas dos materiais do canal (issue #99): o formulário e a página de enviado de cada material do catálogo do Worker.
 MATERIALS = ("planilha-custos-ia", "mapa-decisao-ia")
 MATERIAL_PAGES = {f"{m}/{p}index.html" for m in MATERIALS for p in ("", "enviado/")}
@@ -753,7 +753,7 @@ def check_titles_and_groups(rel: str, html: str) -> list[str]:
 # Eventos próprios do GA4 (issue #60): assets/track.js. Contrato igual ao de check_titles_and_groups: alarme de
 # integridade sobre o HTML dos três templates (index.html, portfolio/index.html e Base.astro do blog).
 TRACK_PATH = "/assets/track.js"
-CTA_LOCATIONS = ("hero", "projetos", "consultoria", "chamada-final", "consultoria-pagina")  # a última: #136
+CTA_LOCATIONS = ("hero", "projetos", "consultoria", "chamada-final", "consultoria-pagina", "como-contratar")  # as duas últimas: #136
 SIGNUP_PAGE = "blog/inscricao-confirmada/index.html"
 CONTACT_EMAIL = "contact@guifav.dev"
 SCHEDULE_HOST = "calendar.app.google"
@@ -1226,10 +1226,11 @@ class _ArticleImages(HTMLParser):
 
 
 def _ld_nodes(html: str) -> list[dict]:
-    """Os nós dos JSON-LD da página, fora de comentário: cada raiz com o @context do schema.org, ou os itens do
+    """Os nós dos JSON-LD da página, fora de comentário, <template> e <noscript>: cada raiz com o @context do schema.org, ou os itens do
     @graph dela, quando ele existe e é lista (r1 do #125, agy P3)."""
     html = re.sub(r"<!--.*?-->", "", html, flags=re.S)
-    scripts = re.findall(r"""<script\b[^>]*\btype\s*=\s*["']application/ld\+json["'][^>]*>(.*?)</script\s*>""",
+    html = re.sub(r"<(template|noscript)\b[^>]*>.*?</\1\s*>", "", html, flags=re.S | re.I)
+    scripts = re.findall(r"""<script\b[^>]*(?<![\w-])type\s*=\s*["']application/ld\+json["'][^>]*>(.*?)</script\s*>""",
                          html, flags=re.S | re.I)
     nodes: list = []
     for body in scripts:
@@ -1312,7 +1313,8 @@ CONSULTING_H1 = "Consultoria em inteligência artificial para empresas"
 
 
 def check_consulting(site: Path) -> list[str]:
-    """#136: título, H1 único e JSON-LD Service + Offer ligado a PERSON_ID na /consultoria/."""
+    """#136: título, H1 único e JSON-LD Service (provider: a Person, com tipo, nome e url) com Offer de preço em BRL na
+    /consultoria/, sem FAQPage (#108)."""
     rel = CONSULTING_PAGE
     page = site / rel
     if not page.is_file():
@@ -1333,11 +1335,21 @@ def check_consulting(site: Path) -> list[str]:
         o = n.get("offers")
         return o if isinstance(o, list) else [o]
 
-    if not any(n.get("@type") == "Service" and isinstance(n.get("provider"), dict)
-               and n["provider"].get("@id") == PERSON_ID
-               and any(isinstance(o, dict) and o.get("@type") == "Offer" for o in offers(n))
-               for n in _ld_nodes(html)):
-        problems.append(f"{rel}: sem o JSON-LD Service com provider {{'@id': {PERSON_ID!r}}} e uma Offer")
+    def priced(o) -> bool:
+        return (isinstance(o, dict) and o.get("@type") == "Offer" and str(o.get("price", "")).strip() != ""
+                and o.get("priceCurrency") == "BRL")
+
+    def person(pr) -> bool:
+        return (isinstance(pr, dict) and pr.get("@id") == PERSON_ID and pr.get("@type") == "Person"
+                and bool(str(pr.get("name", "")).strip()) and pr.get("url") in (SITE_ORIGIN, SITE_ORIGIN + "/"))
+
+    nodes = _ld_nodes(html)
+    if not any(n.get("@type") == "Service" and n.get("@id") != PERSON_ID and person(n.get("provider"))
+               and any(priced(o) for o in offers(n)) for n in nodes):
+        problems.append(f"{rel}: sem o JSON-LD Service com provider Person ({PERSON_ID!r}, name e url) e uma Offer "
+                        "com price e priceCurrency BRL")
+    if any(n.get("@type") == "FAQPage" for n in nodes):
+        problems.append(f"{rel}: FAQPage fora da decisão da #108 (perguntas só em texto visível)")
     return problems
 
 

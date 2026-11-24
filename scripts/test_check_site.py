@@ -828,6 +828,7 @@ class TitleAndGroupTest(unittest.TestCase):
                        ("blog/inscricao-invalida/index.html", "expert-insights"),
                        ("blog/o-exame-virou-conspiracao/index.html", "insights-artigo"),
                        ("planilha-custos-ia/index.html", "materiais"), ("mapa-decisao-ia/enviado/index.html", "materiais"),
+                       ("consultoria/index.html", "consultoria"), ("consultoria/x/index.html", None),
                        ("planilha-custos-ia/x/index.html", None),
                        ("llm-ranking/index.html", None), ("blog/pagina/x/index.html", None),
                        ("blog/a/b/index.html", None),
@@ -835,7 +836,8 @@ class TitleAndGroupTest(unittest.TestCase):
                        ("blog/tema/a/b/index.html", None), ("blog/tema/Maiuscula/index.html", None)):
             with self.subTest(rel=rel):
                 self.assertEqual(E(rel), g)
-        self.assertEqual(set(C.CONTENT_GROUPS), {"home", "portfolio", "insights-lista", "insights-artigo", "expert-insights", "materiais"})
+        self.assertEqual(set(C.CONTENT_GROUPS), {"home", "portfolio", "insights-lista", "insights-artigo", "expert-insights",
+                                                 "materiais", "consultoria"})
 
     def test_group_literal_and_define_vars(self):
         title = "<title>Guilherme Favaron | Builder e CTO</title>"
@@ -951,7 +953,7 @@ class ClaritySourcesTest(unittest.TestCase):
         return (self.REPO / rel).read_text(encoding="utf-8")
 
     def test_root_pages(self):
-        for rel in ("index.html", "portfolio/index.html", *sorted(C.MATERIAL_PAGES)):
+        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES)):
             with self.subTest(rel=rel):
                 t = self.read(rel)
                 self.assertIn(C.GA4_TAG, t)
@@ -987,7 +989,7 @@ class NamingSourcesTest(unittest.TestCase):
     """
 
     REPO = Path(__file__).resolve().parent.parent
-    FILES = ("index.html", "portfolio/index.html", "404.html", "blog-src/src/layouts/Base.astro",
+    FILES = ("index.html", "portfolio/index.html", "consultoria/index.html", "404.html", "blog-src/src/layouts/Base.astro",
              "blog-src/src/layouts/PostList.astro", "blog-src/src/components/SubscribeForm.astro",
              "blog-src/src/pages/[slug].astro", "blog-src/src/pages/assinar.astro",
              "blog-src/src/pages/inscricao-enviada.astro", "blog-src/src/pages/inscricao-confirmada.astro",
@@ -1104,7 +1106,8 @@ class TrackingTest(unittest.TestCase):
             with self.subTest(loc=loc):
                 html = self.doc(f'<main><a href="https://calendar.app.google/x" data-cta-location="{loc}">a</a></main>')
                 self.assertEqual(self.check(html), [])
-        self.assertEqual(C.CTA_LOCATIONS, ("hero", "projetos", "consultoria", "chamada-final", "consultoria-pagina"))
+        self.assertEqual(C.CTA_LOCATIONS, ("hero", "projetos", "consultoria", "chamada-final", "consultoria-pagina",
+                                           "como-contratar"))
         for name, a in {
             "sem atributo": '<a href="mailto:contact@guifav.dev">c</a>',
             "vazio": '<a href="mailto:contact@guifav.dev" data-cta-location="">c</a>',
@@ -1258,6 +1261,7 @@ class GaHostGuardTest(unittest.TestCase):
         root = Path(__file__).resolve().parent.parent
         for rel, config in (("index.html", "gtag('config','G-K7Y87QNCX8'"),
                             ("portfolio/index.html", "gtag('config','G-K7Y87QNCX8'"),
+                            (C.CONSULTING_PAGE, "gtag('config','G-K7Y87QNCX8'"),
                             *((p, "gtag('config','G-K7Y87QNCX8'") for p in sorted(C.MATERIAL_PAGES)),
                             ("blog-src/src/layouts/Base.astro", "gtag('config', GA4_ID")):
             with self.subTest(rel=rel):
@@ -1355,7 +1359,7 @@ class ConsentSourcesTest(unittest.TestCase):
     def test_consent_js_same_version_everywhere(self):
         src = re.search(r"CONSENT_SRC = '([^']+)'", self.read("blog-src/src/consts.ts")).group(1)
         self.assertRegex(src, r"^/assets/consent\.js\?v=\d{12}$")
-        for rel in ("index.html", "portfolio/index.html", *sorted(C.MATERIAL_PAGES)):
+        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES)):
             with self.subTest(rel=rel):
                 self.assertEqual(self.read(rel).count(f'<script src="{src}"></script>'), 1)
         self.assertEqual(self.read("blog-src/src/layouts/Base.astro").count(
@@ -1401,7 +1405,7 @@ class TrackingSourcesTest(unittest.TestCase):
         self.assertTrue(m)
         src = m.group(1)
         self.assertTrue(src.startswith(C.TRACK_PATH + "?v="))
-        for rel in ("index.html", "portfolio/index.html", *sorted(C.MATERIAL_PAGES)):
+        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES)):
             with self.subTest(rel=rel):
                 t = self.read(rel)
                 self.assertEqual(t.count(f'<script src="{src}"></script>'), 1)
@@ -1416,6 +1420,9 @@ class TrackingSourcesTest(unittest.TestCase):
         for loc in ("hero", "projetos", "consultoria"):
             self.assertEqual(home.count(f'data-cta-location="{loc}"'), 1, loc)
         self.assertEqual(self.read("portfolio/index.html").count('data-cta-location="chamada-final"'), 2)
+        consulting = self.read(C.CONSULTING_PAGE)
+        for loc, n in (("consultoria-pagina", 2), ("como-contratar", 1), ("projetos", 1), ("chamada-final", 2)):
+            self.assertEqual(consulting.count(f'data-cta-location="{loc}"'), n, loc)
 
     def test_signup_marker_in_source(self):
         self.assertIn('<article class="post page" data-ga-event="sign_up">',
@@ -2325,8 +2332,9 @@ class ConsultingTest(unittest.TestCase):
     """#136: a /consultoria/ existe, com o título, o H1 e o JSON-LD Service + Offer ligado à Person."""
     TITLE = "<title>Consultoria em IA para empresas | Guilherme Favaron</title>"
     H1 = "<h1>Consultoria em inteligência artificial para empresas</h1>"
+    PROVIDER = '{"@type":"Person","@id":"https://guifav.dev/#person","name":"G","url":"https://guifav.dev/"}'
     LD = ('<script type="application/ld+json">{"@context":"https://schema.org","@type":"Service",'
-          '"provider":{"@id":"https://guifav.dev/#person"},'
+          '"provider":' + PROVIDER + ','
           '"offers":{"@type":"Offer","price":"500","priceCurrency":"BRL"}}</script>')
 
     def setUp(self):
@@ -2347,8 +2355,9 @@ class ConsultingTest(unittest.TestCase):
     def test_complete_page_passes(self):
         self.assertEqual(self.got(), [])
         # @graph, offers em lista e H1 com marcação dentro também valem
-        graph = ('<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Service",'
-                 '"provider":{"@id":"https://guifav.dev/#person"},"offers":[{"@type":"Offer"}]}]}</script>')
+        graph = ('<script type="application/ld+json">[{"@context":"https://schema.org","@graph":[{"@type":"Service",'
+                 '"provider":' + self.PROVIDER + ',"offers":[{"@type":"Offer","price":500,"priceCurrency":"BRL"}]}]}]'
+                 '</script>')
         self.assertEqual(self.got(head=self.TITLE + graph,
                                   body="<h1>Consultoria em <span>inteligência artificial</span>\n para empresas</h1>"), [])
 
@@ -2368,9 +2377,25 @@ class ConsultingTest(unittest.TestCase):
             ("sem JSON-LD", self.TITLE, None, "sem o JSON-LD Service"),
             ("JSON-LD em comentário", self.TITLE + commented, None, "sem o JSON-LD Service"),
             ("sem Offer", self.TITLE + self.LD.replace('"Offer"', '"Thing"'), None, "sem o JSON-LD Service"),
-            ("provider sem @id", self.TITLE + self.LD.replace('{"@id":"https://guifav.dev/#person"}',
-                                                              '{"@type":"Person","name":"x"}'), None,
+            ("provider sem @id", self.TITLE + self.LD.replace('"@id":"https://guifav.dev/#person",', ''), None,
              "sem o JSON-LD Service"),
+            ("provider sem nome", self.TITLE + self.LD.replace('"name":"G",', ''), None, "sem o JSON-LD Service"),
+            ("provider sem tipo", self.TITLE + self.LD.replace('"@type":"Person",', ''), None, "sem o JSON-LD Service"),
+            ("provider com url de outro site", self.TITLE + self.LD.replace('"url":"https://guifav.dev/"',
+                                                                            '"url":"https://guifav.dev.evil/"'), None,
+             "sem o JSON-LD Service"),
+            ("Offer sem preço", self.TITLE + self.LD.replace('"price":"500",', ''), None, "sem o JSON-LD Service"),
+            ("Offer em outra moeda", self.TITLE + self.LD.replace('"BRL"', '"USD"'), None, "sem o JSON-LD Service"),
+            ("Service com o @id da Person", self.TITLE + self.LD.replace('"@type":"Service",',
+                                                                         '"@type":"Service","@id":"https://guifav.dev/#person",'),
+             None, "sem o JSON-LD Service"),
+            ("JSON-LD em data-type", self.TITLE + self.LD.replace(' type=', ' data-type='), None,
+             "sem o JSON-LD Service"),
+            ("JSON-LD em template", self.TITLE + "<template>" + self.LD + "</template>", None, "sem o JSON-LD Service"),
+            ("contexto de outro vocabulário", self.TITLE + self.LD.replace("https://schema.org", "https://x.org"), None,
+             "sem o JSON-LD Service"),
+            ("FAQPage", self.TITLE + self.LD + '<script type="application/ld+json">{"@context":"https://schema.org",'
+             '"@type":"FAQPage"}</script>', None, "FAQPage"),
             ("outro tipo", self.TITLE + self.LD.replace('"Service"', '"Product"'), None, "sem o JSON-LD Service"),
             ("JSON quebrado", self.TITLE + self.LD.replace("}}", "}"), None, "sem o JSON-LD Service"),
         ):
@@ -2378,6 +2403,12 @@ class ConsultingTest(unittest.TestCase):
                 got = self.got(head=head, body=body)
                 self.assertEqual(len(got), 1, got)
                 self.assertIn(needle, got[0])
+
+    def test_repo_page_passes(self):
+        # A página do repo, como vai ao ar (o assemble_site a copia sem mudança).
+        (self.site / "consultoria" / "index.html").write_bytes(
+            (Path(__file__).resolve().parent.parent / C.CONSULTING_PAGE).read_bytes())
+        self.assertEqual(C.check_consulting(self.site), [])
 
     def test_main_runs_the_consulting_rule(self):
         site = Path(self.tmp.name) / "vazio"
