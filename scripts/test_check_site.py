@@ -92,7 +92,7 @@ _OLD_URL_IN_SOURCE = re.compile(
 
 
 _LEGACY_URL_IN_SOURCE = re.compile(
-    r"""(?:https?://|(?<![\w./-])www\.)(?:[\w-]+\.)*(?:mindapps\.ai|ia-aplicada\.substack\.com)(?![\w-])[^\s)"'<>\]]*""",
+    r"""(?:(?:https?:)?//|(?<![\w./-])www\.)(?:[\w-]+\.)*(?:mindapps\.ai|ia-aplicada\.substack\.com)(?![\w-])[^\s)"'<>\]]*""",
     re.I)
 
 
@@ -205,7 +205,7 @@ class OldDomainTest(Base):
     def test_indexable_post_sources_have_no_legacy_project_link(self):
         # #105 (PR B, achado P3 do Claude): mindapps.ai (e subdomínios) e o Substack antigo não são o domínio do
         # cutover, então o check_site não os vê; a guarda fica nos fontes dos posts indexáveis. Só conta o que vira
-        # link (esquema ou www., como no GFM); "via mindapps.ai" em texto corrido fica para a tabela do Gui.
+        # link (esquema, // ou www.); "via mindapps.ai" em texto corrido fica para a tabela do Gui.
         found = legacy_links_in_sources(Path(__file__).resolve().parent.parent / "blog-src/src/content/posts")
         self.assertEqual(found, [])
 
@@ -213,12 +213,14 @@ class OldDomainTest(Base):
         with tempfile.TemporaryDirectory() as d:
             Path(d, "p.md").write_text(
                 "---\ntitle: x\n---\n[a](https://mindapps.ai/lab) <http://academia-ia.mindapps.ai/> www.mindapps.ai/x "
-                "https://ia-aplicada.substack.com/p/y [b][r]\ntexto via mindapps.ai e ia-aplicada.substack.com\n\n"
+                "https://ia-aplicada.substack.com/p/y [b][r]\ntexto via mindapps.ai e ia-aplicada.substack.com "
+                '[c](//academia-ia.mindapps.ai) <a href="//mindapps.ai/x">d</a>\n\n'
                 "[r]: https://IA-APLICADA.substack.com/\n", encoding="utf-8")
             Path(d, "pod.md").write_text("---\ntitle: x\nindex: false\n---\n[a](https://mindapps.ai/)\n", encoding="utf-8")
             got = [u for _, u in legacy_links_in_sources(Path(d))]
         self.assertEqual(got, ["https://mindapps.ai/lab", "http://academia-ia.mindapps.ai/", "www.mindapps.ai/x",
-                               "https://ia-aplicada.substack.com/p/y", "https://IA-APLICADA.substack.com/"])
+                               "https://ia-aplicada.substack.com/p/y", "//academia-ia.mindapps.ai", "//mindapps.ai/x",
+                               "https://IA-APLICADA.substack.com/"])
 
     def test_not_checked_before_the_cutover(self):
         self.w("index.html", page('<a href="https://guilhermefavaron.com.br">n</a>', robots=""))
