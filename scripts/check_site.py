@@ -1590,7 +1590,10 @@ _CSS_NAMED = {"white": (255, 255, 255), "black": (0, 0, 0), "red": (255, 0, 0), 
               "blue": (0, 0, 255), "yellow": (255, 255, 0), "orange": (255, 165, 0), "gray": (128, 128, 128),
               "grey": (128, 128, 128), "silver": (192, 192, 192), "navy": (0, 0, 128), "purple": (128, 0, 128)}
 _CSS_STATE = re.compile(r":(?:hover|focus-visible|focus-within|focus|active|visited)(?![\w-])")
-_CSS_THEME = re.compile(r"""(?P<tag>html|body|:root)?\[data-theme=(?:"(?P<a>dark|light)"|'(?P<b>dark|light)'|(?P<c>dark|light))\]""")
+_CSS_STATE_RUN = re.compile(r"(?::(?:hover|focus-visible|focus-within|focus|active|visited)(?![\w-])){2,}")
+_CSS_THEME = re.compile(
+    r"""(?:(?:html|:root)(?:\s*>\s*|\s+)(?P<tag_a>body)?|(?P<tag_b>html|body|:root)?)\[data-theme=(?:"(?P<a>dark|light)"|'(?P<b>dark|light)'|(?P<c>dark|light))\]"""
+)
 _THEME_OF = {"dark": "escuro", "light": "claro"}
 _CSS_ROOTS = (":root", "html", "body")
 _CSS_GROUPS = ("@media", "@supports", "@layer")
@@ -1611,10 +1614,13 @@ def _css_selector(s: str) -> str:
 
 def _statement_end(css: str, i: int, stop: int) -> int | None:
     """Posição do ";" que encerra uma at-rule de uma linha antes de stop, fora de aspas e parênteses."""
-    depth, quote = 0, ""
-    for j in range(i, stop):
+    depth, quote, j = 0, "", i
+    while j < stop:
         ch = css[j]
         if quote:
+            if ch == "\\" and j + 1 < stop:
+                j += 2
+                continue
             if ch == quote:
                 quote = ""
         elif ch in "\"'":
@@ -1625,15 +1631,22 @@ def _statement_end(css: str, i: int, stop: int) -> int | None:
             depth -= 1
         elif ch == ";" and depth == 0:
             return j
+        j += 1
     return None
 
 
 def _split_outside(s: str, sep: str) -> list[str]:
     """s partido em sep fora de aspas e parênteses (:is(.a, .b), content:"a;b", url(a;b))."""
-    out, cur, depth, quote = [], [], 0, ""
-    for ch in s:
+    out, cur, depth, quote, i, n = [], [], 0, "", 0, len(s)
+    while i < n:
+        ch = s[i]
         if quote:
-            quote = "" if ch == quote else quote
+            if ch == "\\" and i + 1 < n:
+                cur.append(s[i:i + 2])
+                i += 2
+                continue
+            if ch == quote:
+                quote = ""
         elif ch in "\"'":
             quote = ch
         elif ch == "(":
@@ -1643,10 +1656,31 @@ def _split_outside(s: str, sep: str) -> list[str]:
         elif ch == sep and depth == 0:
             out.append("".join(cur))
             cur = []
+            i += 1
             continue
         cur.append(ch)
+        i += 1
     out.append("".join(cur))
     return out
+
+
+def _find_open_brace(css: str, i: int) -> int:
+    """Posição do primeiro "{" a partir de i fora de aspas (respeitando escapes em strings), ou -1."""
+    quote, n = "", len(css)
+    while i < n:
+        ch = css[i]
+        if quote:
+            if ch == "\\" and i + 1 < n:
+                i += 2
+                continue
+            if ch == quote:
+                quote = ""
+        elif ch in "\"'":
+            quote = ch
+        elif ch == "{":
+            return i
+        i += 1
+    return -1
 
 
 def _css_rules(css: str, theme: str | None = None) -> list[tuple[list[str], list[tuple[str, str, bool]], str | None]]:
@@ -1656,7 +1690,7 @@ def _css_rules(css: str, theme: str | None = None) -> list[tuple[list[str], list
     out: list[tuple[list[str], list[tuple[str, str, bool]], str | None]] = []
     i, n = 0, len(css)
     while i < n:
-        b = css.find("{", i)
+        b = _find_open_brace(css, i)
         if b < 0:
             break
         if css[i:b].lstrip().startswith("@"):
@@ -1668,7 +1702,11 @@ def _css_rules(css: str, theme: str | None = None) -> list[tuple[list[str], list
         while j < n:
             ch = css[j]
             if quote:
-                quote = "" if ch == quote else quote
+                if ch == "\\" and j + 1 < n:
+                    j += 2
+                    continue
+                if ch == quote:
+                    quote = ""
             elif ch in "\"'":
                 quote = ch
             else:
@@ -1712,16 +1750,49 @@ def _split_top(v: str) -> list[str]:
     return out + ([cur] if cur else [])
 
 
+def _parse_var(v: str) -> tuple[str, str | None] | None:
+    """Se v for uma única chamada var(--nome[, fallback]) com parênteses balanceados, devolve (nome, fallback)."""
+    if v[:4].lower() != "var(" or not v.endswith(")"):
+        return None
+    depth, quote, i, n = 0, "", 3, len(v)
+    while i < n:
+        ch = v[i]
+        if quote:
+            if ch == "\\" and i + 1 < n:
+                i += 2
+                continue
+            if ch == quote:
+                quote = ""
+        elif ch in "\"'":
+            quote = ch
+        elif ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+            if depth == 0:
+                if i != n - 1:
+                    return None
+                break
+        i += 1
+    if depth != 0:
+        return None
+    m = re.fullmatch(r"\s*(--[\w-]+)\s*(?:,\s*(.*))?", v[4:-1], re.S)
+    if not m:
+        return None
+    return m.group(1), m.group(2)
+
+
 def css_color(value: str | None, tokens: dict[str, str], _depth: int = 0) -> tuple[int, int, int] | None:
     """Cor opaca em RGB, resolvendo var() pelos tokens; None para translúcido, desconhecido ou não-cor."""
     if value is None or _depth > 16:
         return None
     v = value.strip()
-    m = re.fullmatch(r"var\(\s*(--[\w-]+)\s*(?:,\s*(.+))?\)", v)
-    if m:
-        if m.group(1) in tokens:
-            return css_color(tokens[m.group(1)], tokens, _depth + 1)
-        return css_color(m.group(2), tokens, _depth + 1)
+    parsed = _parse_var(v)
+    if parsed is not None:
+        name, fallback = parsed
+        if name in tokens:
+            return css_color(tokens[name], tokens, _depth + 1)
+        return css_color(fallback, tokens, _depth + 1)
     if v.lower() in _CSS_NAMED:
         return _CSS_NAMED[v.lower()]
     m = re.fullmatch(r"#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})", v)
@@ -1772,18 +1843,21 @@ def contrast_ratio(a: tuple[int, int, int], b: tuple[int, int, int]) -> float:
 
 def _theme_prefix(s: str) -> tuple[str | None, str, bool]:
     """(tema, elemento, só o elemento do tema) de um seletor:
-    - [data-theme=X] Y: (X, Y, False);
-    - [data-theme=X] ou body[data-theme=X] sozinho: (X, a tag, ou body, True). É onde moram os tokens do tema;
+    - [data-theme=X] Y (com ou sem ancestral html/:root antes): (X, Y, False);
+    - [data-theme=X], body[data-theme=X], html[data-theme=X], :root[data-theme=X] ou html body[data-theme=X] sozinho:
+      (X, "html" ou "body", True). É onde moram os tokens do tema;
     - [data-theme=X].y composto: (X, o seletor inteiro, False). O atributo está no próprio elemento, que só existe
       nesse tema e não se mistura com .y;
+    - :root puro sem prefixo: (None, "html", False), na mesma chave que html e html[data-theme=X];
     - sem prefixo: (None, s, False)."""
     m = _CSS_THEME.match(s)
     if not m:
-        return None, s, False
+        return None, ("html" if s == ":root" else s), False
     theme = _THEME_OF[m.group("a") or m.group("b") or m.group("c")]
     rest = s[m.end():]
     if not rest:
-        return theme, {":root": "html"}.get(m.group("tag") or "body", m.group("tag") or "body"), True
+        tag = m.group("tag_a") or m.group("tag_b") or "body"
+        return theme, ("html" if tag == ":root" else tag), True
     if rest[0] not in " >+~":
         return theme, s, False
     return theme, rest.lstrip(" >+~"), False
@@ -1812,22 +1886,61 @@ def _bg_longhands(k: str, v: str) -> list[tuple[str, object]]:
     return [("bg", v)]
 
 
+def _canon_states(s: str) -> str:
+    """Ordena e deduplica sequências contíguas de pseudo-classes de estado (:hover:active == :active:hover)."""
+    return _CSS_STATE_RUN.sub(lambda m: "".join(sorted(dict.fromkeys(_CSS_STATE.findall(m.group(0))))), s)
+
+
+def _state_subsets(s: str) -> list[str]:
+    """Todos os seletores com subconjunto dos estados de s (base, intermediários e o próprio s)."""
+    ms = list(_CSS_STATE.finditer(s))
+    if not ms:
+        return []
+    if len(ms) > 6:
+        return [_CSS_STATE.sub("", s), s]
+    out = []
+    for mask in range(1 << len(ms)):
+        parts, pos = [], 0
+        for idx, m in enumerate(ms):
+            parts.append(s[pos:m.start()])
+            if mask & (1 << idx):
+                parts.append(m.group(0))
+            pos = m.end()
+        parts.append(s[pos:])
+        out.append("".join(parts))
+    return out
+
+
 def _css_pairs(sheets: list[str]) -> dict[str, dict[str, tuple]]:
     """Por tema, os seletores com color e fundo opacos resolvidos: {tema: {seletor: (color, fundo, color cru, fundo cru)}}.
     Cascata do navegador para color, cor de fundo e imagem de fundo: !important, depois especificidade, depois ordem.
-    O seletor com estado (:hover etc.) recebe também as declarações do seletor base."""
+    Tokens seguem a mesma cascata por camada, com body vencendo :root/html (mais próximo do elemento).
+    O seletor com estado (:hover, :hover:active etc.) herda do seletor base e dos estados intermediários."""
     rules = [r for css in sheets for r in _css_rules(css)]
-    base: dict[str, str] = {}
-    by_theme: dict[str, dict[str, str]] = {"claro": {}, "escuro": {}}
+    tok_won: dict[tuple[str, str], dict[str, tuple]] = {}
+    tok_order = 0
     for sels, decls, only in rules:
-        vs = {k: v for k, v, _ in decls if k.startswith("--")}
+        vs = [(k, v, imp) for k, v, imp in decls if k.startswith("--")]
         for s in sels if vs else ():
-            theme, _, root = _theme_prefix(s)
+            theme, elem, root = _theme_prefix(s)
             if theme is None and s in _CSS_ROOTS:
-                (base if only is None else by_theme[only]).update(vs)
+                layer = "body" if s == "body" else "html"
+                themes = THEMES if only is None else (only,)
             elif root and only in (None, theme):
-                by_theme[theme].update(vs)
-    tokens = {t: {**base, **by_theme[t]} for t in THEMES}
+                layer = elem
+                themes = (theme,)
+            else:
+                continue
+            spec = _specificity(s)
+            for t in themes:
+                slot = tok_won.setdefault((t, layer), {})
+                for k, v, imp in vs:
+                    tok_order += 1
+                    cand = (imp, spec, tok_order, v)
+                    if k not in slot or cand[:3] > slot[k][:3]:
+                        slot[k] = cand
+    html_tokens = {t: {k: c[3] for k, c in tok_won.get((t, "html"), {}).items()} for t in THEMES}
+    tokens = {t: {**html_tokens[t], **{k: c[3] for k, c in tok_won.get((t, "body"), {}).items()}} for t in THEMES}
     # {(tema, elemento): {propriedade: (importante, especificidade, ordem, valor)}}, já com o vencedor de cada uma.
     won: dict[tuple[str, str], dict[str, tuple]] = {}
     order = 0
@@ -1849,17 +1962,27 @@ def _css_pairs(sheets: list[str]) -> dict[str, dict[str, tuple]]:
                     cand = (imp, spec, order, x)
                     if p not in slot or cand[:3] > slot[p][:3]:
                         slot[p] = cand
+    by_canon: dict[tuple[str, str], list[dict[str, tuple]]] = {}
+    for (t, s), d in won.items():
+        by_canon.setdefault((t, _canon_states(s)), []).append(d)
     out: dict[str, dict[str, tuple]] = {t: {} for t in THEMES}
     for (t, s), d in won.items():
-        base_sel = _CSS_STATE.sub("", s)
-        full = dict(won.get((t, base_sel), {})) if base_sel != s else {}
-        for p, cand in d.items():
-            if p not in full or cand[:3] > full[p][:3]:
-                full[p] = cand
+        subsets = _state_subsets(s)
+        if subsets:
+            full: dict[str, tuple] = {}
+            for key in dict.fromkeys(_canon_states("html" if sub == ":root" else sub) for sub in subsets):
+                for sub_d in by_canon.get((t, key), ()):
+                    for p, cand in sub_d.items():
+                        if p not in full or cand[:3] > full[p][:3]:
+                            full[p] = cand
+        else:
+            full = d
         if "color" not in full or "bg" not in full or (full.get("img") and full["img"][3]):
             continue
         c_raw, b_raw = full["color"][3], full["bg"][3]
-        fg, bg = css_color(c_raw, tokens[t]), _css_background(b_raw, tokens[t])
+        base_sel = _CSS_STATE.sub("", s)
+        toks = html_tokens[t] if base_sel in ("html", ":root") else tokens[t]
+        fg, bg = css_color(c_raw, toks), _css_background(b_raw, toks)
         if fg is not None and bg is not None:
             out[t][s] = (fg, bg, c_raw, b_raw)
     return out
