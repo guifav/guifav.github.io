@@ -1938,7 +1938,8 @@ class SeoTest(unittest.TestCase):
         # isola a regra da #103 das demais; o formato do aviso depende de GITHUB_ACTIONS, que a CI define
         with mock.patch.object(C, "check", lambda *a, **k: []), \
                 mock.patch.object(C, "check_related", lambda *a, **k: []), \
-                mock.patch.object(C, "check_consulting", lambda *a, **k: []):  # bloco Leia também (#104), #136
+                mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
+                mock.patch.object(C, "check_home", lambda *a, **k: []):  # bloco Leia também (#104), #136
             for gh, new_mark, group in (("", "AVISO: ", None), ("true", "::warning title=check_site (#103)::", "::group::")):
                 for desc, code in (("d" * 69, 1), ("d" * 165, 0), (self.OK_DESC, 0)):
                     with self.subTest(gh=gh, desc=len(desc)), mock.patch.dict(os.environ, {"GITHUB_ACTIONS": gh}):
@@ -2440,6 +2441,92 @@ class ConsultingTest(unittest.TestCase):
             code = C.main(["--site", str(site), "--posts", str(self.tmp.name), "--consts", str(consts)])
         self.assertEqual(code, 1)
         self.assertIn("consultoria/index.html: a página de consultoria sumiu", err.getvalue())
+
+
+class HomeHubTest(unittest.TestCase):
+    """#136: a home montada lista os últimos artigos listados do blog e linka cada página de tema publicada."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        r = Path(self.tmp.name)
+        self.site, self.posts = r / "_site", r / "posts"
+        self.posts.mkdir()
+        for slug, date, extra in (("a", "2026-11-20", ""), ("b", "2026-11-22T10:00:00Z", ""),
+                                  ("c", "2026-11-22T07:00:00-03:00", ""),  # 10h UTC: empata com b, vem depois
+                                  ("pod", "2026-11-23", "type: podcast\nindex: false\n"),
+                                  ("fora", "2026-11-24", "index: false\n"), ("velho", "2025-01-01", "")):
+            (self.posts / f"{slug}.md").write_text(f"---\ntitle: t\nslug: {slug}\ndate: {date}\n{extra}---\nx\n",
+                                                   encoding="utf-8")
+        for t in ("t1", "t2"):
+            d = self.site / "blog" / "tema" / t
+            d.mkdir(parents=True)
+            (d / "index.html").write_text("<html></html>", encoding="utf-8")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def home(self, latest=("/blog/b/", "/blog/c/", "/blog/a/", "/blog/velho/"),
+             topics=("/blog/tema/t1/", "/blog/tema/t2/"), extra="") -> list[str]:
+        lis = "".join(f'<li><a href="{h}">x</a></li>' for h in latest)
+        tl = "".join(f'<a href="{h}">t</a>' for h in topics)
+        (self.site / "index.html").write_text(
+            f'<html><body><!-- ultimos-artigos --><ul class="latest-list">{lis}</ul><!-- /ultimos-artigos -->'
+            f'<section id="temas">{tl}</section>{extra}</body></html>', encoding="utf-8")
+        return C.check_home(self.site, self.posts)
+
+    def test_expected_list_order_and_selection(self):
+        self.assertEqual(C.expected_home_latest(self.posts), ["/blog/b/", "/blog/c/", "/blog/a/", "/blog/velho/"])
+        self.assertEqual(C.expected_home_latest(self.posts, 2), ["/blog/b/", "/blog/c/"])
+
+    def test_complete_home_passes(self):
+        self.assertEqual(self.home(), [])
+
+    def test_latest_list_wrong_fails(self):
+        for name, latest in (("vazia", ()), ("ordem", ("/blog/c/", "/blog/b/", "/blog/a/", "/blog/velho/")),
+                             ("com podcast", ("/blog/pod/", "/blog/b/", "/blog/c/", "/blog/a/")),
+                             ("faltando um", ("/blog/b/", "/blog/c/", "/blog/a/"))):
+            with self.subTest(name):
+                got = self.home(latest=latest)
+                self.assertEqual(len(got), 1, got)
+                self.assertIn("os últimos artigos da home precisam ser", got[0])
+
+    def test_list_without_markers_or_commented_fails(self):
+        (self.site / "index.html").write_text('<section id="temas"><a href="/blog/tema/t1/">t</a>'
+                                              '<a href="/blog/tema/t2/">t</a></section>', encoding="utf-8")
+        self.assertIn("são None", C.check_home(self.site, self.posts)[0])
+        got = self.home(extra="")
+        self.assertEqual(got, [])
+        html = (self.site / "index.html").read_text(encoding="utf-8")
+        (self.site / "index.html").write_text(html.replace('<ul class="latest-list">', '<!--<ul class="latest-list">')
+                                              .replace("</ul>", "</ul>-->"), encoding="utf-8")
+        self.assertIn("são []", C.check_home(self.site, self.posts)[0])
+
+    def test_topics_each_published_page_once(self):
+        for name, topics, n in (("faltando", ("/blog/tema/t1/",), 0), ("repetido", ("/blog/tema/t1/",) * 2 +
+                                ("/blog/tema/t2/",), 2)):
+            with self.subTest(name):
+                got = self.home(topics=topics)
+                self.assertEqual(len(got), 1, got)
+                self.assertIn(f"linka {n}", got[0])
+        # tema linkado fora da seção não conta
+        got = self.home(topics=("/blog/tema/t1/",), extra='<a href="/blog/tema/t2/">t</a>')
+        self.assertIn("/blog/tema/t2/ uma vez, linka 0", got[0])
+
+    def test_missing_home_fails_and_main_runs_the_rule(self):
+        self.assertEqual(C.check_home(self.site, self.posts), ["index.html: home ausente no site montado"])
+        consts = Path(self.tmp.name) / "consts.ts"
+        consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
+        from unittest import mock
+        err = io.StringIO()
+        with mock.patch.object(C, "check", lambda *a, **k: []), \
+                mock.patch.object(C, "check_related", lambda *a, **k: []), \
+                mock.patch.object(C, "check_contrast", lambda *a, **k: []), \
+                mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
+                mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
+                contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            code = C.main(["--site", str(self.site), "--posts", str(self.posts), "--consts", str(consts)])
+        self.assertEqual(code, 1)
+        self.assertIn("index.html: home ausente", err.getvalue())
 
 
 if __name__ == "__main__":

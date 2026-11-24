@@ -1360,6 +1360,59 @@ def check_consulting(site: Path) -> list[str]:
     return problems
 
 
+# Home como hub (#136): os últimos artigos, que o scripts/assemble_site.py escreve a partir do build do blog, batem com
+# os posts listados (indexáveis e fora dos podcasts) mais recentes segundo o frontmatter, na ordem do blog; e a seção
+# de temas da home linka cada página de tema publicada, uma vez. Leitura independente do build: pega lista velha,
+# vazia ou com a regra de seleção trocada.
+HOME_LATEST = 6
+HOME_TOPICS_ID = "temas"
+
+
+def _post_when(fm: dict[str, str]) -> datetime | None:
+    try:
+        d = datetime.fromisoformat(fm.get("date", "").replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return d.replace(tzinfo=timezone.utc) if d.tzinfo is None else d.astimezone(timezone.utc)
+
+
+def expected_home_latest(posts: Path, n: int = HOME_LATEST) -> list[str]:
+    """Caminhos dos n posts listados mais recentes: data decrescente e, na mesma data, slug crescente."""
+    listed = []
+    for md in posts.glob("**/*.md"):
+        fm = frontmatter(md.read_text(encoding="utf-8"))
+        when = _post_when(fm)
+        if when is None or fm.get("index") == "false" or fm.get("type") == "podcast":
+            continue
+        listed.append((when, fm.get("slug") or md.stem))
+    listed.sort(key=lambda x: (-x[0].timestamp(), x[1]))
+    return [f"/blog/{slug}/" for _, slug in listed[:n]]
+
+
+def check_home(site: Path, posts: Path) -> list[str]:
+    """#136: a lista de últimos artigos e os links das páginas de tema na home montada."""
+    rel = "index.html"
+    page = site / rel
+    if not page.is_file():
+        return [f"{rel}: home ausente no site montado"]
+    html = re.sub(r"<!--(?! /?ultimos-artigos -->).*?-->", "", page.read_text(encoding="utf-8"), flags=re.S)
+    problems = []
+    m = re.search(r"<!-- ultimos-artigos -->(.*?)<!-- /ultimos-artigos -->", html, flags=re.S)
+    got = re.findall(r"""<a\b[^>]*\bhref\s*=\s*["']([^"']*)["']""", m.group(1), flags=re.I) if m else None
+    want = expected_home_latest(posts)
+    if got != want:
+        problems.append(f"{rel}: os últimos artigos da home precisam ser {want}, são {got}")
+    sec = re.search(r"""<section\b[^>]*\bid\s*=\s*["']%s["'][^>]*>(.*?)</section\s*>""" % HOME_TOPICS_ID, html,
+                    flags=re.S | re.I)
+    links = re.findall(r"""<a\b[^>]*\bhref\s*=\s*["']([^"']*)["']""", sec.group(1), flags=re.I) if sec else []
+    for t in sorted((site / "blog" / "tema").glob("*/index.html")):
+        href = f"/blog/tema/{t.parent.name}/"
+        if links.count(href) != 1:
+            problems.append(f'{rel}: a seção id="{HOME_TOPICS_ID}" precisa linkar {href} uma vez, linka '
+                            f"{links.count(href)}")
+    return problems
+
+
 def _gh_escape(msg: str) -> str:
     return msg.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
 
@@ -1759,6 +1812,7 @@ def main(argv: list[str] | None = None) -> int:
         problems += check_related(Path(args.site), Path(args.posts))
         problems += check_contrast(Path(args.site))
         problems += check_consulting(Path(args.site))
+        problems += check_home(Path(args.site), Path(args.posts))
     except ResolverError as e:
         print(f"ERRO: resolvedor de URL indisponível, verificação não feita: {e}", file=sys.stderr)
         return 1
