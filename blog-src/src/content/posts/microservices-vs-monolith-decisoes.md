@@ -19,7 +19,7 @@ Quando a Netflix enfrentou o [colapso de seu datacenter em 2008](https://www.nbc
 
 Por outro lado, quando o Segment — uma plataforma de dados de clientes — [migrou de microservices de volta para um monolito em 2018](https://www.twilio.com/en-us/blog/developers/best-practices/goodbye-microservices), a equipe reportou redução de 50% em custos de infraestrutura, diminuição de 90% no tempo de debugging, e aumento significativo na velocidade de desenvolvimento. Dois casos reais, decisões opostas, ambos considerados sucessos.
 
-Este aparente paradoxo revela uma verdade fundamental: a escolha entre microservices e monolith não é questão de qual arquitetura é “melhor”, mas qual é apropriada para [contexto específico de negócio, maturidade organizacional e objetivos estratégicos.](https://www.guilhermefavaron.com.br/post/modernizacao-sistemas-legados-vantagem-competitiva)
+Este aparente paradoxo revela uma verdade fundamental: a escolha entre microservices e monolith não é questão de qual arquitetura é “melhor”, mas qual é apropriada para [contexto específico de negócio, maturidade organizacional e objetivos estratégicos.](/blog/modernizacao-de-sistemas-legados/)
 
 <pre class="code-html">Um sistema de <strong>microservices (microserviços)</strong> é composto por múltiplos serviços pequenos e independentes, cada um responsável por um domínio específico, com deploy, escala e falhas isoladas, comunicando-se por APIs e adotando práticas como observabilidade, automação de CI/CD e, quando necessário, consistência eventual.
 
@@ -311,4 +311,4 @@ Mais importante ainda: estabelecer princípios de arquitetura evolucionária que
 
 ***
 
-No próximo artigo desta série, exploraremos Arquitetura API-first e estratégias de ecosystem design — tema intimamente relacionado, já que decisão de como serviços (sejam microservices ou módulos de monolito) comunicam-se é tão crítica quanto decisão de como estruturá-los. Leia o artigo anterior desta série sobre Arquitetura Empresarial: **[Modernização de Sistemas Legados: Da Paralisia Tecnológica à Vantagem Competitiva](https://www.guilhermefavaron.com.br/post/modernizacao-sistemas-legados-vantagem-competitiva)**
+No próximo artigo desta série, exploraremos Arquitetura API-first e estratégias de ecosystem design — tema intimamente relacionado, já que decisão de como serviços (sejam microservices ou módulos de monolito) comunicam-se é tão crítica quanto decisão de como estruturá-los. Leia o artigo anterior desta série sobre Arquitetura Empresarial: **[Modernização de Sistemas Legados: Da Paralisia Tecnológica à Vantagem Competitiva](/blog/modernizacao-de-sistemas-legados/)**

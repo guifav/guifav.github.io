@@ -209,5 +209,3 @@ O futuro da IA ​​corporativa está em sistemas que podem lidar com a complex
 ***
 
 *No próximo artigo da série, exploraremos IA generativa em produção, focando em otimização de custos, escalonamento de desempenho e considerações operacionais que determinam o sucesso de sistemas de IA em ambientes empresariais de grande escala.*
-
-Artigo originalmente publicado em [www<!---->.guilhermefavaron.com.br](/blog/)

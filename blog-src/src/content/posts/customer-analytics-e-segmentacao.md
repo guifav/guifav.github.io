@@ -325,5 +325,3 @@ Sucesso em modelos de negócio centrados no cliente cada vez mais depende da cap
 ***
 
 *Continue acompanhando para mais insights sobre como implementar analytics centrados no cliente que transformam compreensão de cliente em vantagem competitiva através de experiências personalizadas que impulsionam resultados mensuráveis de negócio.*
-
-Artigo originalmente publicado em [www<!---->.guilhermefavaron.com.br](/blog/)

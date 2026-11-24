@@ -91,6 +91,22 @@ _OLD_URL_IN_SOURCE = re.compile(
     r"""(?:https?://(?:www\.)?|(?<![\w./-])www\.)guilhermefavaron\.com\.br[^\s)"'<>\]]*""", re.I)
 
 
+_LEGACY_URL_IN_SOURCE = re.compile(
+    r"""(?:(?:https?:)?//|(?<![\w./-])www\.)(?:[\w-]+\.)*(?:mindapps\.ai|ia-aplicada\.substack\.com)(?![\w-])[^\s)"'<>\]]*""",
+    re.I)
+
+
+def legacy_links_in_sources(posts: Path) -> list[tuple[str, str]]:
+    """Links para mindapps.ai (e subdomínios) e ia-aplicada.substack.com nos posts indexáveis (#105)."""
+    out = []
+    for f in sorted(posts.glob("*.md*")):
+        text = f.read_text(encoding="utf-8")
+        if C.frontmatter(text).get("index") == "false":
+            continue
+        out += [(f"blog/{f.stem}/index.html", m.group(0).rstrip(".,;:!?*_~")) for m in _LEGACY_URL_IN_SOURCE.finditer(text)]
+    return out
+
+
 def old_links_in_sources(posts: Path) -> list[tuple[str, str]]:
     """Toda URL do domínio antigo nos fontes (inline, referência, autolink, solta, www.), com a página de destino."""
     # Pontuação final fica fora do link, como no GFM.
@@ -158,18 +174,14 @@ class OldDomainTest(Base):
         html = page('<meta http-equiv="refresh" content="0; url=https://www.guilhermefavaron.com.br/p/x">', robots=ROBOTS_INDEX)
         self.assertEqual(len(self.flagged("blog/um-post/index.html", html)), 1)
 
-    def test_known_dead_links_from_the_import_are_allowed_only_on_their_page(self):
-        rel, url = C.OLD_DOMAIN_DEAD_LINKS[0]
-        self.w("blog/" + rel.split("/")[1] + "/index.html", "")
-        self.assertEqual(self.flagged(rel, page(f'<a href="{url}">x</a>', robots=ROBOTS_INDEX)), [])
-        self.assertEqual(len(self.flagged("blog/um-post/index.html", page(f'<a href="{url}">x</a>', robots=ROBOTS_INDEX))), 1)
-
-    def test_other_old_link_on_an_allowed_page_is_flagged(self):
-        rel, url = C.OLD_DOMAIN_DEAD_LINKS[0]
-        for other in ("https://www.guilhermefavaron.com.br", url + "/", url.replace("https://www.", "https://")):
-            with self.subTest(other=other):
+    def test_links_once_allowed_from_the_import_are_flagged_on_their_own_page(self):
+        # #105 (PR B): os 8 links da era Wix saíram dos posts, e a lista de exceção da importação acabou.
+        for rel, url in (("blog/data-pipelines-empresariais-como/index.html",
+                          "https://www.guilhermefavaron.com.br/post/machine-learning-producao-modelos-empresariais-roi"),
+                         ("blog/modernizacao-de-sistemas-legados/index.html", "https://www.guilhermefavaron.com.br/pagina-inicial")):
+            with self.subTest(rel=rel):
                 self.setUp()
-                self.assertEqual(len(self.flagged(rel, page(f'<a href="{other}">x</a>', robots=ROBOTS_INDEX))), 1)
+                self.assertEqual(len(self.flagged(rel, page(f'<a href="{url}">x</a>', robots=ROBOTS_INDEX))), 1)
 
     def test_source_scan_catches_every_markdown_link_form(self):
         # #50 r2: link por referência, autolink, URL solta e www. (o GFM transforma os dois últimos em link).
@@ -183,15 +195,32 @@ class OldDomainTest(Base):
                                "https://GuilhermeFavaron.com.br/d", "www.guilhermefavaron.com.br/e",
                                "https://www.guilhermefavaron.com.br/b"])
 
-    def test_known_dead_list_matches_the_post_sources(self):
-        # Referência independente da lista: toda URL do domínio antigo nos fontes dos posts importados.
-        # 7 pares (8 ocorrências: um deles aparece duas vezes no mesmo post) que já davam 404 no Substack antes do
-        # cutover (caminhos da era Wix); a importação não altera texto.
+    def test_post_sources_have_no_old_domain_link(self):
+        # #105 (PR B): nenhum post, indexável ou não, linka o domínio antigo (inline, referência, autolink, URL solta
+        # ou www.). Menção em texto sem esquema nem www. não é link e fica para a tabela de aprovação do Gui.
         found = old_links_in_sources(Path(__file__).resolve().parent.parent / "blog-src/src/content/posts")
-        self.assertEqual(len(found), 8)
-        self.assertEqual(set(found), set(C.OLD_DOMAIN_DEAD_LINKS))
-        self.assertTrue(all(rel.startswith("blog/") for rel, _ in C.OLD_DOMAIN_DEAD_LINKS))
-        self.assertEqual(len(C.OLD_DOMAIN_DEAD_LINKS), len(set(C.OLD_DOMAIN_DEAD_LINKS)))
+        self.assertEqual(found, [])
+        self.assertFalse(hasattr(C, "OLD_DOMAIN_DEAD_LINKS"))
+
+    def test_indexable_post_sources_have_no_legacy_project_link(self):
+        # #105 (PR B, achado P3 do Claude): mindapps.ai (e subdomínios) e o Substack antigo não são o domínio do
+        # cutover, então o check_site não os vê; a guarda fica nos fontes dos posts indexáveis. Só conta o que vira
+        # link (esquema, // ou www.); "via mindapps.ai" em texto corrido fica para a tabela do Gui.
+        found = legacy_links_in_sources(Path(__file__).resolve().parent.parent / "blog-src/src/content/posts")
+        self.assertEqual(found, [])
+
+    def test_legacy_scan_catches_link_forms_and_skips_text_and_noindex(self):
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "p.md").write_text(
+                "---\ntitle: x\n---\n[a](https://mindapps.ai/lab) <http://academia-ia.mindapps.ai/> www.mindapps.ai/x "
+                "https://ia-aplicada.substack.com/p/y [b][r]\ntexto via mindapps.ai e ia-aplicada.substack.com "
+                '[c](//academia-ia.mindapps.ai) <a href="//mindapps.ai/x">d</a>\n\n'
+                "[r]: https://IA-APLICADA.substack.com/\n", encoding="utf-8")
+            Path(d, "pod.md").write_text("---\ntitle: x\nindex: false\n---\n[a](https://mindapps.ai/)\n", encoding="utf-8")
+            got = [u for _, u in legacy_links_in_sources(Path(d))]
+        self.assertEqual(got, ["https://mindapps.ai/lab", "http://academia-ia.mindapps.ai/", "www.mindapps.ai/x",
+                               "https://ia-aplicada.substack.com/p/y", "//academia-ia.mindapps.ai", "//mindapps.ai/x",
+                               "https://IA-APLICADA.substack.com/"])
 
     def test_not_checked_before_the_cutover(self):
         self.w("index.html", page('<a href="https://guilhermefavaron.com.br">n</a>', robots=""))

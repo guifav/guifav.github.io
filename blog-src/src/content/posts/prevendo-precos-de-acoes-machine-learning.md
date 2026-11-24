@@ -259,4 +259,4 @@ Para quem quiser evoluir o projeto, algumas ideias:
 
 ***
 
-*Guilherme Favaron é CTO do GRI Institute, uma organização global de inteligência imobiliária e de infraestrutura. Escreve sobre inteligência artificial aplicada em ia-aplicada.substack.com e é autor do livro “Desbloqueando a Inteligência Artificial”.*
+*Guilherme Favaron é CTO do GRI Institute, uma organização global de inteligência imobiliária e de infraestrutura. Escreve sobre inteligência artificial aplicada em [guifav.dev](/blog/) e é autor do livro “Desbloqueando a Inteligência Artificial”.*

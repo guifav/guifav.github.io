@@ -214,5 +214,3 @@ Para CTOs navegando essas decisões: foquem primeiro em definir claramente crit�
 ***
 
 *No próximo artigo da série, exploraremos LangGraph para orquestração de workflows complexos de IA, demonstrando como estruturar sistemas que vão além de chains simples para entregar lógica de negócio sofisticada através de arquiteturas baseadas em grafos.*
-
-Artigo originalmente publicado em [www<!---->.guilhermefavaron.com.br](/blog/)
