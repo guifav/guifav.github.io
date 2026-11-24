@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseOrigem, encodeOrigem, decodeOrigem, CAMPOS, CANAIS, FONTES, type Origem } from '../src/origem.ts';
 import { signLink, verifyConfirmLink, verifyLink } from '../src/token.ts';
-import { recordConversion } from '../src/conversoes.ts';
+import { recordConversion, requestInfo } from '../src/conversoes.ts';
 import { d1, rows, capturaErros } from './d1.ts';
 import { pontaAPonta, PROIBIDOS } from './ponta-a-ponta.ts';
 
@@ -134,4 +134,19 @@ test('P1: ponta a ponta, uma inscrição e um pedido de material gravam canal, f
     'ga_client_id', 'request_id', 'file', 'origin_channel', 'origin_source', 'utm_source', 'utm_medium', 'utm_campaign', 'landing_path']);
   const tudo = JSON.stringify(linhas);
   for (const p of PROIBIDOS) assert.ok(!tudo.includes(p), `o D1 não guarda ${p}`);
+});
+
+test('O6: o download herda a origem do pedido revalidada; direto e desconhecida não levam fonte (revisão do agy no #127)', async () => {
+  const db = d1();
+  const ins = (id: string, canal: string, fonte: string | null) => db.raw.prepare(`INSERT INTO conversions (id, email, action, material,
+    interests, occurred_at, verified, origin_channel, origin_source, landing_path) VALUES (?, 'leitor@exemplo.com', 'material_request',
+    'planilha-custos-ia', '[]', '2026-11-24T12:00:00.000Z', 0, ?, ?, '/planilha-custos-ia/')`).run(id, canal, fonte);
+  ins('p-direto', 'direto', 'google'); // o CHECK aceita a combinação; a regra, não
+  ins('p-desconhecida', 'desconhecida', 'chatgpt');
+  ins('p-busca', 'busca', 'google');
+  assert.deepEqual((await requestInfo(db, 'p-direto')).origem,
+    { canal: 'direto', fonte: null, utmSource: null, utmMedium: null, utmCampaign: null, entrada: '/planilha-custos-ia/' });
+  assert.equal((await requestInfo(db, 'p-desconhecida')).origem?.fonte, null);
+  assert.equal((await requestInfo(db, 'p-busca')).origem?.fonte, 'google');
+  assert.deepEqual(await requestInfo(db, 'sem-pedido'), { clientId: null, origem: null });
 });

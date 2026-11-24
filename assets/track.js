@@ -45,29 +45,39 @@
   var FONTE_CANAL = { google: 'busca', bing: 'busca', chatgpt: 'assistente', perplexity: 'assistente', claude: 'assistente',
     copilot: 'assistente', gemini: 'assistente', linkedin: 'social', youtube: 'social', github: 'outro_site', outro: '' };
   // Host de onde a visita veio (sem www.), na ordem: o primeiro que casar vale. [expressão, fonte, canal]
+  // Nos apps Android, o referrer é android-app://<pacote>, e o pacote faz o papel do host.
   var HOSTS = [
-    [/^(?:chatgpt\.com|chat\.openai\.com)$/, 'chatgpt', 'assistente'],
-    [/^perplexity\.ai$/, 'perplexity', 'assistente'],
-    [/^claude\.ai$/, 'claude', 'assistente'],
-    [/^(?:copilot\.microsoft\.com|edgeservices\.bing\.com|copilot\.cloud\.microsoft|m365\.cloud\.microsoft)$/, 'copilot', 'assistente'],
-    [/^(?:gemini|bard)\.google\.com$/, 'gemini', 'assistente'],
+    [/^(?:chatgpt\.com|chat\.openai\.com|com\.openai\.chatgpt)$/, 'chatgpt', 'assistente'],
+    [/^(?:perplexity\.ai|ai\.perplexity\.app\.android)$/, 'perplexity', 'assistente'],
+    [/^(?:claude\.ai|com\.anthropic\.claude)$/, 'claude', 'assistente'],
+    [/^(?:copilot\.microsoft\.com|copilot\.bing\.com|edgeservices\.bing\.com|copilot\.cloud\.microsoft|m365\.cloud\.microsoft|com\.microsoft\.copilot)$/,
+      'copilot', 'assistente'],
+    [/^(?:gemini\.google\.com|bard\.google\.com|com\.google\.android\.apps\.bard)$/, 'gemini', 'assistente'],
     [/^(?:mail\.google\.com|com\.google\.android\.gm|outlook\.(?:live|office|office365)\.com|mail\.yahoo\.com)$/, 'outro', 'email'],
     [/^(?:google\.(?:[a-z]{2,3}|com?\.[a-z]{2})|com\.google\.android\.googlequicksearchbox)$/, 'google', 'busca'],
-    [/^(?:cn\.)?bing\.com$/, 'bing', 'busca'],
+    [/^(?:(?:cn|m|www2)\.)?bing\.com$|^com\.microsoft\.bing$/, 'bing', 'busca'],
     [/^(?:duckduckgo\.com|search\.yahoo\.com|ecosia\.org|search\.brave\.com|yandex\.[a-z]{2,3}|baidu\.com)$/, 'outro', 'busca'],
-    [/^(?:[a-z0-9-]+\.)?linkedin\.com$|^lnkd\.in$/, 'linkedin', 'social'],
-    [/^(?:m\.)?youtube\.com$|^youtu\.be$/, 'youtube', 'social'],
+    [/^(?:[a-z0-9-]+\.)?linkedin\.com$|^(?:lnkd\.in|com\.linkedin\.android)$/, 'linkedin', 'social'],
+    [/^(?:m\.)?youtube\.com$|^(?:youtu\.be|com\.google\.android\.youtube)$/, 'youtube', 'social'],
     [/^(?:[a-z0-9-]+\.)?github\.com$/, 'github', 'outro_site'],
-    [/^(?:x\.com|t\.co|twitter\.com|(?:[a-z]+\.)?facebook\.com|instagram\.com|(?:old\.)?reddit\.com|news\.ycombinator\.com|bsky\.app|threads\.net|threads\.com)$/, 'outro', 'social']
+    [/^(?:x\.com|t\.co|twitter\.com|(?:[a-z]+\.)?facebook\.com|(?:l\.)?instagram\.com|(?:old\.|out\.)?reddit\.com|news\.ycombinator\.com|bsky\.app|threads\.net|threads\.com)$/,
+      'outro', 'social']
   ];
   // utm_source com o nome do serviço (sem o domínio): o que não está aqui passa pelos HOSTS (chatgpt.com, por exemplo).
   var SOURCE_NAMES = { google: 'google', bing: 'bing', chatgpt: 'chatgpt', openai: 'chatgpt', perplexity: 'perplexity',
     claude: 'claude', copilot: 'copilot', gemini: 'gemini', linkedin: 'linkedin', youtube: 'youtube', github: 'github' };
-  // Clique de anúncio: só classifica como pago; o valor nunca é guardado.
-  var PAID_IDS = ['gclid', 'gbraid', 'wbraid', 'dclid', 'msclkid', 'li_fat_id', 'ttclid'];
+  // Clique de anúncio, com a fonte que o parâmetro já indica: só classifica; o valor nunca é guardado.
+  var PAID_IDS = { gclid: 'google', gbraid: 'google', wbraid: 'google', dclid: 'google', msclkid: 'bing', li_fat_id: 'linkedin',
+    ttclid: 'outro' };
+  // O fbclid não é anúncio: a Meta o acrescenta a todo link que sai do Facebook e do Instagram, orgânico ou pago. Ele só
+  // indica a rede social quando o referrer não vem (app, no-referrer); o anúncio da Meta se reconhece pelo utm_medium.
+  var SOCIAL_IDS = ['fbclid'];
   var PAID_MEDIUM = /^(?:cpc|ppc|cpm|cpv|cpa|paid|paidsearch|paid[._-]?(?:search|social|media)|display|banner|ads?)$/;
-  var MEDIUM_CANAL = [[/^(?:e-?mail|newsletter)$/, 'email'], [/^(?:social|social[._-]?(?:media|network)|sm)$/, 'social'],
-    [/^organic$/, 'busca'], [/^referral$/, 'outro_site']];
+  // utm_medium que decide o canal sozinho, na frente da fonte e do referrer.
+  var MEDIUM_FORTE = [[/^(?:e-?mail|newsletter)$/, 'email'], [/^(?:social|social[._-]?(?:media|network)|sm)$/, 'social']];
+  // utm_medium genérico: só vale depois da fonte conhecida e do referrer (utm_source=chatgpt.com&utm_medium=referral é
+  // assistente, não outro site).
+  var MEDIUM_FRACO = [[/^organic$/, 'busca'], [/^referral$/, 'outro_site']];
 
   function send() {
     if (typeof window.gtag === 'function') window.gtag.apply(window, arguments);
@@ -114,6 +124,11 @@
     return null;
   }
 
+  function medium(lista, v) {
+    for (var i = 0; v && i < lista.length; i++) if (lista[i][0].test(v)) return lista[i][1];
+    return null;
+  }
+
   function utm(params, k) {
     var v = params.get(k);
     v = v === null ? '' : v.toLowerCase();
@@ -138,20 +153,31 @@
     var refHit = ref && !internal ? matchHost(ref) : null;
     var src = o.utm_source;
     var srcName = src ? (own(SOURCE_NAMES, src) || (matchHost(host(src)) || {}).fonte || null) : null;
-    var paid = false;
-    for (var i = 0; i < PAID_IDS.length; i++) if (params.has(PAID_IDS[i])) paid = true;
+    var paid = false, paidFonte = null;
+    for (var k in PAID_IDS) {
+      if (own(PAID_IDS, k) && params.has(k)) { paid = true; paidFonte = paidFonte || PAID_IDS[k]; }
+    }
     if (o.utm_medium && PAID_MEDIUM.test(o.utm_medium)) paid = true;
-    var mediumCanal = null;
-    for (var j = 0; o.utm_medium && j < MEDIUM_CANAL.length; j++) if (MEDIUM_CANAL[j][0].test(o.utm_medium)) mediumCanal = MEDIUM_CANAL[j][1];
+    var forte = medium(MEDIUM_FORTE, o.utm_medium);
+    var fraco = medium(MEDIUM_FRACO, o.utm_medium);
+    var socialId = false;
+    for (var i = 0; i < SOCIAL_IDS.length; i++) if (params.has(SOCIAL_IDS[i])) socialId = true;
     var srcCanal = src ? (own(SOURCE_NAMES, src) ? own(FONTE_CANAL, srcName) : (matchHost(host(src)) || {}).canal || null) : null;
+    // Precedência: clique pago, utm_medium forte, fonte conhecida do utm_source, referrer, fbclid, utm_medium fraco.
     if (paid) o.canal = 'pago';
-    else if (mediumCanal) o.canal = mediumCanal;
+    else if (forte) o.canal = forte;
     else if (srcCanal) o.canal = srcCanal;
     else if (refHit) o.canal = refHit.canal;
+    else if (socialId) o.canal = 'social';
+    else if (fraco) o.canal = fraco;
     else if (ref && !internal) o.canal = 'outro_site';
     else if (o.utm_source || o.utm_medium || o.utm_campaign || internal) o.canal = 'desconhecida';
     if (o.canal !== 'direto' && o.canal !== 'desconhecida') {
-      o.fonte = srcName || (refHit && refHit.fonte) || 'outro';
+      // Canal vindo das etiquetas (pago ou utm_medium forte) com um utm_source: a fonte é a dele, ou "outro", e nunca a do
+      // referrer, que pode ser outro serviço (utm_source=substack&utm_medium=email aberto a partir do Google).
+      if (src && (paid || forte)) o.fonte = srcName || 'outro';
+      else if (paid) o.fonte = paidFonte || (refHit && refHit.fonte) || 'outro';
+      else o.fonte = srcName || (refHit && refHit.fonte) || 'outro';
     }
     return o;
   }

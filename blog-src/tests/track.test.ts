@@ -494,6 +494,90 @@ test('origem: classificador de canal com a lista fixa de fontes', () => {
   assert.deepEqual(origemDe('', P), { canal: 'direto', fonte: null, ...SEM, entrada: '/blog/x/' });
 });
 
+test('origem: utm_medium referral e organic só valem depois da fonte conhecida e do referrer (revisão do agy no #127)', () => {
+  const P = 'https://guifav.dev/blog/x/';
+  const casos: [string, string, string, string | null][] = [
+    ['', `${P}?utm_source=chatgpt.com&utm_medium=referral`, 'assistente', 'chatgpt'],
+    ['', `${P}?utm_source=perplexity&utm_medium=referral`, 'assistente', 'perplexity'],
+    ['', `${P}?utm_source=claude.ai&utm_medium=referral`, 'assistente', 'claude'],
+    ['', `${P}?utm_source=gemini&utm_medium=referral`, 'assistente', 'gemini'],
+    ['', `${P}?utm_source=linkedin&utm_medium=referral`, 'social', 'linkedin'],
+    ['', `${P}?utm_source=chatgpt.com&utm_medium=organic`, 'assistente', 'chatgpt'],
+    ['https://www.perplexity.ai/', `${P}?utm_medium=referral`, 'assistente', 'perplexity'],
+    ['https://www.linkedin.com/', `${P}?utm_medium=organic`, 'social', 'linkedin'],
+    // Sem fonte conhecida nem referrer, o medium fraco decide.
+    ['', `${P}?utm_source=parceiro&utm_medium=referral`, 'outro_site', 'outro'],
+    ['', `${P}?utm_medium=organic`, 'busca', 'outro'],
+    // email e social continuam na frente da fonte.
+    ['', `${P}?utm_source=chatgpt.com&utm_medium=email`, 'email', 'chatgpt'],
+  ];
+  for (const [ref, href, canal, fonte] of casos) {
+    const o = origemDe(ref, href);
+    assert.deepEqual([o.canal, o.fonte], [canal, fonte], `${ref} -> ${href}`);
+  }
+});
+
+test('origem: clique pago sem referrer nem utm_source tira a fonte do parâmetro, sem guardar o valor', () => {
+  const P = 'https://guifav.dev/blog/x/';
+  const casos: [string, string][] = [['gclid', 'google'], ['gbraid', 'google'], ['wbraid', 'google'], ['dclid', 'google'],
+    ['msclkid', 'bing'], ['li_fat_id', 'linkedin'], ['ttclid', 'outro']];
+  for (const [param, fonte] of casos) {
+    const o = origemDe('', `${P}?${param}=VALORSECRETO`);
+    assert.deepEqual([o.canal, o.fonte], ['pago', fonte], param);
+    assert.ok(!JSON.stringify(o).includes('VALORSECRETO'), param);
+  }
+  // Com utm_source, vale a fonte dele (ou "outro"), nunca a do parâmetro nem a do referrer.
+  assert.deepEqual([origemDe('https://www.google.com/', `${P}?gclid=x&utm_source=parceiro`).canal,
+    origemDe('https://www.google.com/', `${P}?gclid=x&utm_source=parceiro`).fonte], ['pago', 'outro']);
+});
+
+test('origem: utm_source fora da lista com referrer conhecido não herda a fonte do referrer quando a etiqueta decide', () => {
+  const P = 'https://guifav.dev/blog/x/';
+  for (const [href, canal] of [[`${P}?utm_source=substack&utm_medium=email`, 'email'], [`${P}?utm_source=substack&utm_medium=social`, 'social'],
+    [`${P}?utm_source=parceiro&utm_medium=cpc`, 'pago']]) {
+    const o = origemDe('https://www.google.com/', href);
+    assert.deepEqual([o.canal, o.fonte, o.utm_source], [canal, 'outro', href.includes('substack') ? 'substack' : 'parceiro'], href);
+  }
+  // Sem etiqueta que decida, o referrer conhecido segue valendo (a fonte do utm_source não está na lista).
+  assert.deepEqual([origemDe('https://www.google.com/', `${P}?utm_source=parceiro`).canal, origemDe('https://www.google.com/', `${P}?utm_source=parceiro`).fonte],
+    ['busca', 'google']);
+});
+
+test('origem: fbclid não é anúncio; sem referrer, indica rede social (revisão do Roger no #127)', () => {
+  const P = 'https://guifav.dev/blog/x/';
+  const fb = origemDe('', `${P}?fbclid=META123`);
+  assert.deepEqual([fb.canal, fb.fonte], ['social', 'outro']);
+  const comRef = origemDe('https://l.facebook.com/', `${P}?fbclid=META123`);
+  assert.deepEqual([comRef.canal, comRef.fonte], ['social', 'outro']);
+  // O anúncio da Meta se reconhece pela etiqueta.
+  const anuncio = origemDe('https://l.facebook.com/', `${P}?fbclid=META123&utm_source=facebook&utm_medium=paid_social`);
+  assert.deepEqual([anuncio.canal, anuncio.fonte], ['pago', 'outro']);
+  for (const o of [fb, comRef, anuncio]) assert.ok(!JSON.stringify(o).includes('META123'));
+});
+
+test('origem: apps Android e subdomínios dos serviços da lista', () => {
+  const P = 'https://guifav.dev/blog/x/';
+  const casos: [string, string, string][] = [
+    ['android-app://com.google.android.apps.bard/', 'assistente', 'gemini'],
+    ['android-app://com.openai.chatgpt/', 'assistente', 'chatgpt'],
+    ['android-app://ai.perplexity.app.android/', 'assistente', 'perplexity'],
+    ['android-app://com.anthropic.claude/', 'assistente', 'claude'],
+    ['android-app://com.microsoft.copilot/', 'assistente', 'copilot'],
+    ['android-app://com.microsoft.bing/', 'busca', 'bing'],
+    ['android-app://com.linkedin.android/', 'social', 'linkedin'],
+    ['android-app://com.google.android.youtube/', 'social', 'youtube'],
+    ['https://copilot.bing.com/', 'assistente', 'copilot'],
+    ['https://m.bing.com/', 'busca', 'bing'],
+    ['https://www2.bing.com/', 'busca', 'bing'],
+    ['https://l.instagram.com/', 'social', 'outro'],
+    ['https://out.reddit.com/', 'social', 'outro'],
+  ];
+  for (const [ref, canal, fonte] of casos) {
+    const o = origemDe(ref, P);
+    assert.deepEqual([o.canal, o.fonte], [canal, fonte], ref);
+  }
+});
+
 test('origem: UTM fora de [a-z0-9._-]{1,64} é recusado campo a campo; maiúsculas viram minúsculas', () => {
   const base = 'https://guifav.dev/?';
   assert.deepEqual(origemDe('', `${base}utm_source=LinkedIn&utm_medium=Social&utm_campaign=Lancamento_2026.v1`),

@@ -95,7 +95,9 @@ function origemDaLinha(r: PedidoRow): Origem | null {
   const casa = (rx: RegExp, v: string | null) => (v !== null && rx.test(v) ? v : null);
   return {
     canal,
-    fonte: (FONTES as readonly string[]).includes(r.origin_source ?? '') ? (r.origin_source as Origem['fonte']) : null,
+    // Direto e desconhecida não têm fonte, como no parseOrigem e no sync: o CHECK do D1 aceita a combinação, a regra não.
+    fonte: canal === 'direto' || canal === 'desconhecida' ? null
+      : (FONTES as readonly string[]).includes(r.origin_source ?? '') ? (r.origin_source as Origem['fonte']) : null,
     utmSource: casa(UTM, r.utm_source), utmMedium: casa(UTM, r.utm_medium), utmCampaign: casa(UTM, r.utm_campaign),
     entrada: entradaValida(r.landing_path) ? r.landing_path : null,
   };
