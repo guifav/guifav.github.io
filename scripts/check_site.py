@@ -30,7 +30,7 @@ import shutil
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
-from datetime import datetime
+from datetime import datetime, timezone
 from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
@@ -667,13 +667,30 @@ def _visible_html(html: str) -> str:
     return re.sub(r"<script\b[^>]*>.*?</script\s*>", "", html, flags=re.S | re.I)
 
 
+class _MetaTags(HTMLParser):
+    """Atributos de cada <meta>, pelo parser de HTML: um ">" literal dentro das aspas não corta a tag (r1, agy P2)."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.tags: list[dict[str, str]] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "meta":
+            a: dict[str, str] = {}
+            for k, v in attrs:
+                a.setdefault(k, v or "")  # atributo repetido: vale o primeiro, como no navegador
+            self.tags.append(a)
+
+    handle_startendtag = handle_starttag
+
+
 def _meta_contents(html: str, prop: str) -> list[str]:
-    values = []
-    for tag in re.findall(r"<meta\b[^>]*>", html, flags=re.I):
-        if re.search(r"""(?:^|\s)(?:property|name)\s*=\s*["']""" + re.escape(prop) + r"""["']""", tag, flags=re.I):
-            m = re.search(r"""(?:^|\s)content\s*=\s*(["'])(.*?)\1""", tag, flags=re.S)
-            values.append(unescape(m.group(2)).strip() if m else "")
-    return values
+    """content de cada <meta> cujo property ou name é prop (sem diferença de caixa); "" quando falta o content."""
+    p = _MetaTags()
+    p.feed(html)
+    p.close()
+    return [t.get("content", "").strip() for t in p.tags
+            if prop.lower() in (t.get("property", "").lower(), t.get("name", "").lower())]
 
 
 def check_titles_and_groups(rel: str, html: str) -> list[str]:
@@ -1049,7 +1066,10 @@ def check_root_sitemaps(site: Path, root_pages: list[tuple[str, str, "_Page"]]) 
 # na medida. Falha só em post novo (date a partir do cutover) com description curta; o resto é aviso. Os posts
 # importados (Substack e os restaurados do Wix, todos com date anterior) só recebem aviso, e só os indexáveis.
 HOME_WEBSITE = {"name": SITE_NAME, "url": SITE_ORIGIN + "/"}
-NEW_POST_SINCE = "2026-11-12"
+SCHEMA_CONTEXTS = ("https://schema.org", "https://schema.org/", "http://schema.org", "http://schema.org/")
+PERSON_ID = SITE_ORIGIN + "/#person"
+# Comparado em UTC, como o blog.ts e o schema.ts: date sem hora é meia-noite UTC; com fuso, convertida (r1, agy P3).
+NEW_POST_SINCE = datetime(2026, 11, 12, tzinfo=timezone.utc)
 DESCRIPTION_MIN_NEW = 70
 DESCRIPTION_RANGE = (120, 160)
 TITLE_MAX = 60
@@ -1088,10 +1108,18 @@ def _home_has_website(html: str) -> bool:
             data = json.loads(body)
         except ValueError:
             continue
-        nodes = data if isinstance(data, list) else [data]
-        nodes += [n for d in nodes if isinstance(d, dict) for n in d.get("@graph", [])]
-        if any(isinstance(n, dict) and n.get("@type") == "WebSite" and all(n.get(k) == v for k, v in HOME_WEBSITE.items())
-               for n in nodes):
+        # r1 (agy P3): cada raiz traz o @context do schema.org; o @graph, quando existe, é lista; o WebSite não usa o
+        # @id da Person.
+        nodes = []
+        for root in data if isinstance(data, list) else [data]:
+            if not isinstance(root, dict) or root.get("@context") not in SCHEMA_CONTEXTS:
+                continue
+            if "@graph" not in root:
+                nodes.append(root)
+            elif isinstance(root["@graph"], list):
+                nodes += root["@graph"]
+        if any(isinstance(n, dict) and n.get("@type") == "WebSite" and n.get("@id") != PERSON_ID
+               and all(n.get(k) == v for k, v in HOME_WEBSITE.items()) for n in nodes):
             return True
     return False
 
@@ -1116,10 +1144,12 @@ def check_seo(site: Path, posts: Path) -> tuple[list[str], list[str], list[str]]
         page = site / rel
         if not page.is_file():
             continue  # check() já acusa post sem página
-        date = fm.get("date", "")[:10]
-        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
+        try:
+            date = datetime.fromisoformat(fm.get("date", ""))
+        except ValueError:
             problems.append(f"{rel}: date do post ilegível no frontmatter: {fm.get('date', '')!r}")
             continue
+        date = date.replace(tzinfo=timezone.utc) if date.tzinfo is None else date.astimezone(timezone.utc)
         new = date >= NEW_POST_SINCE
         if not new and fm.get("index") == "false":
             continue

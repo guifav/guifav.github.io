@@ -1596,7 +1596,6 @@ class ToolsSourcesTest(unittest.TestCase):
                 self.assertTrue((self.REPO / rel).is_file())
 
 
-
 class SeoTest(unittest.TestCase):
     """#103: WebSite na home; description, título e alt dos posts (falha só em post novo com description curta)."""
 
@@ -1646,6 +1645,14 @@ class SeoTest(unittest.TestCase):
                 self.assertEqual(bool(problems), fails)
                 self.assertEqual(bool(warn_new), warns)
 
+    def test_new_post_date_is_compared_in_utc(self):
+        # r1 (agy P3): como blog.ts e schema.ts, a data com fuso vira UTC antes da comparação.
+        for date, new in (("2026-11-11T23:30:00-03:00", True), ("2026-11-12T01:00:00+03:00", False),
+                          ("2026-11-12T00:00:00.000Z", True), ("2026-11-11T23:59:59Z", False)):
+            with self.subTest(date=date):
+                self.post(date=date, desc="curta")
+                self.assertEqual(bool(self.seo()[0]), new)
+
     def test_cutover_date_is_the_boundary(self):
         self.post(date="2026-11-12", desc="curta")
         self.assertTrue(self.seo()[0])
@@ -1675,6 +1682,14 @@ class SeoTest(unittest.TestCase):
         self.post(title="t" * 60, body='<img src="a.webp" alt="Gráfico">')
         self.assertEqual(self.seo(), ([], [], []))
 
+    def test_literal_gt_in_description_does_not_cut_the_tag(self):
+        # r1 (agy P2): o Base.astro não escapa ">" em atributo; a description inteira conta, não "0 caracteres".
+        desc = "RAG -> SQL: " + "d" * 128
+        self.post(desc=desc)
+        self.assertEqual(self.seo(), ([], [], []))
+        self.assertEqual(C._meta_contents(f'<meta name="description" content="{desc}">', "description"), [desc])
+        self.assertEqual(C._meta_contents('<meta content="a > b" property="og:title">', "og:title"), ["a > b"])
+
     def test_description_comes_from_the_published_html(self):
         self.post(desc="A &amp; " + "d" * 132)  # 140 caracteres depois de decodificar a entidade
         self.assertEqual(self.seo(), ([], [], []))
@@ -1690,7 +1705,14 @@ class SeoTest(unittest.TestCase):
                "nome errado": self.WEBSITE.replace("Guilherme Favaron", "guifav"),
                "url sem barra": self.WEBSITE.replace('"https://guifav.dev/"', '"https://guifav.dev"'),
                "outro tipo": self.WEBSITE.replace("WebSite", "Person"),
-               "json inválido": self.WEBSITE.replace("}", "")}
+               "json inválido": self.WEBSITE.replace("}", ""),
+               # r1 (agy P3): @context na raiz, @id que não é o da Person e @graph em lista.
+               "sem @context": self.WEBSITE.replace('"@context":"https://schema.org",', ""),
+               "@context errado": self.WEBSITE.replace("https://schema.org", "https://example.org"),
+               "@id da Person": self.WEBSITE.replace('"@type":"WebSite",', '"@type":"WebSite","@id":"https://guifav.dev/#person",'),
+               "@graph que não é lista": self.WEBSITE.replace('{"@context":"https://schema.org",',
+                                                              '{"@context":"https://schema.org","@graph":{')
+                                                     .replace("</script>", "}</script>")}
         for name, head in bad.items():
             with self.subTest(name=name):
                 self.home(head)
