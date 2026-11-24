@@ -11,7 +11,9 @@ um marcador <!--LLM:nome--> que aparece uma vez no template. O resultado:
 - a faixa de posições de cada modelo, calculada pelos intervalos de 95% sobre a lista inteira;
 - os destaques do topo, o "o que mudou" na janela de 7 dias, os recortes e a atribuição exigida pela CC BY 4.0;
 - a data da publicação na meta DATA_META, que o build_sitemaps.py usa como lastmod da página (e o IndexNow, por
-  consequência, só avisa quando os dados mudam), e o JSON-LD WebPage com isBasedOn e dateModified.
+  consequência, só avisa quando os dados mudam), e o JSON-LD WebPage com isBasedOn e dateModified;
+- a versão do conteúdo (sha256 do snapshot) na meta VERSAO_META, que o llm_ranking_snapshot.py da KVM compara com o
+  repositório de dados para pedir o deploy quando a página no ar está atrás.
 
 Uso (depois do assemble_site.py, antes do build_sitemaps.py):
     python3 scripts/build_llm_ranking.py --snapshot _dados/llm-ranking/arena-texto.json [--site _site]
@@ -19,6 +21,7 @@ Uso (depois do assemble_site.py, antes do build_sitemaps.py):
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import re
@@ -36,6 +39,7 @@ CONFIG = "text_style_control"
 LICENSE_URL = "https://creativecommons.org/licenses/by/4.0/deed.pt-br"
 ARENA_URL = "https://arena.ai/leaderboard/text"
 DATA_META = "dados-publicados-em"
+VERSAO_META = "dados-versao"  # sha256 de serializar(snapshot): o snapshot da KVM compara com o repositório de dados
 SCHEMA = 1
 TOP = 100
 JANELA_DIAS = 7
@@ -307,8 +311,23 @@ def data_extenso(d: date) -> str:
 # ---------------------------------------------------------------- blocos
 
 
+def serializar(snap: dict) -> str:
+    """Forma canônica do snapshot: é o que o llm_ranking_snapshot.py grava no repositório de dados."""
+    return json.dumps(snap, ensure_ascii=False, indent=1, sort_keys=True) + "\n"
+
+
+def versao(snap: dict) -> str:
+    """Versão do conteúdo dos dados: sha256 da forma canônica. Muda com qualquer mudança no snapshot, inclusive uma
+    republicação da fonte com a mesma data; o snapshot da KVM a compara com a da página no ar para pedir o deploy."""
+    return hashlib.sha256(serializar(snap).encode("utf-8")).hexdigest()
+
+
 def bloco_meta(pub: date) -> str:
     return f'<meta name="{DATA_META}" content="{pub.isoformat()}">'
+
+
+def bloco_versao(v: str) -> str:
+    return f'<meta name="{VERSAO_META}" content="{v}">'
 
 
 def bloco_jsonld(pub: date) -> str:
@@ -445,7 +464,7 @@ def blocos(snap: dict) -> dict[str, str]:
     pub = date.fromisoformat(snap["publicacao"])
     modelos = snap["modelos"]
     return {
-        "meta": bloco_meta(pub),
+        "meta": bloco_meta(pub) + "\n  " + bloco_versao(versao(snap)),
         "jsonld": bloco_jsonld(pub),
         "data": bloco_data(pub),
         "total": bloco_total(modelos),

@@ -4,6 +4,7 @@ Rodar: python3 scripts/test_build_llm_ranking.py
 """
 import contextlib
 import copy
+import hashlib
 import io
 import json
 import re
@@ -497,12 +498,25 @@ class BuildTest(unittest.TestCase):
         html = (self.site / B.PAGE).read_text(encoding="utf-8")
         self.assertEqual(C.check_llm_ranking(self.site), [])
         self.assertIn('<meta name="dados-publicados-em" content="2026-11-22">', html)
+        self.assertIn(f'<meta name="dados-versao" content="{B.versao(snapshot())}">', html)
         self.assertIn("Dados de 22/11/2026;", html)
         self.assertIn("com os 120 modelos", html)
         self.assertEqual(C.check_titles_and_groups(B.PAGE, html), [])
         self.assertEqual(C.check_consent(B.PAGE, html), [])
         self.assertEqual(C.check_ga_host_guard(B.PAGE, html), [])
         self.assertEqual(C.check_tracking(B.PAGE, html), [])
+
+    def test_version_is_the_hash_of_the_canonical_snapshot(self):
+        # O snapshot da KVM grava B.serializar(snap); a versão é o sha256 desses bytes, então é a mesma dos dois lados
+        # mesmo que o arquivo lido pelo build tenha outra formatação.
+        s = snapshot()
+        texto = B.serializar(s)
+        self.assertEqual(B.versao(s), hashlib.sha256(texto.encode("utf-8")).hexdigest())
+        self.assertEqual(B.versao(json.loads(json.dumps(s))), B.versao(s))
+        t = copy.deepcopy(s); t["modelos"][5]["votos"] += 1
+        self.assertNotEqual(B.versao(t), B.versao(s))
+        self.assertEqual(t["publicacao"], s["publicacao"])
+        self.assertTrue(texto.endswith("}\n"))
 
     def test_template_without_build_fails_the_check(self):
         self.assertTrue(any("marcador do template" in p for p in C.check_llm_ranking(self.site)))

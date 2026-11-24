@@ -9,9 +9,9 @@ Fonte: o dataset oficial `lmarena-ai/leaderboard-dataset` no Hugging Face (CC BY
 
 O snapshot passa pela mesma validação do build (build_llm_ranking.validar) antes de ser gravado. Com --apply, grava
 `arena-texto.json` no clone do guifav/llm-ranking-data e faz commit e push só quando o conteúdo mudou. A saída termina
-em três linhas: "gravado" ou "sem mudança"; "no ar: <data>" (a data dos dados da página publicada, ou "não lida"); e
-"deploy" ou "sem deploy: ...". O wrapper da KVM dispara o deploy do site pela linha "deploy", que sai quando o
-snapshot foi gravado ou quando a página no ar não tem a data dos dados (ver main). Sem --apply, só mostra o resumo e
+em três linhas: "gravado" ou "sem mudança"; "no ar: versão <sha256>" (a versão dos dados da página publicada, ou "não
+lida"); e "deploy" ou "sem deploy: ...". O wrapper da KVM dispara o deploy do site pela linha "deploy", que sai quando
+o snapshot foi gravado ou quando a página no ar não tem a versão dos dados do repositório (ver main). Sem --apply, só mostra o resumo e
 não lê a página.
 
 Uso:
@@ -171,8 +171,7 @@ def coletar(fonte: Fonte) -> dict:
             "modelos": [linha(r) for r in atual], "categorias": categorias, "anterior": anterior}
 
 
-def serializar(snap: dict) -> str:
-    return json.dumps(snap, ensure_ascii=False, indent=1, sort_keys=True) + "\n"
+serializar = B.serializar  # a forma canônica fica no build, que calcula a versão (dados-versao) do mesmo jeito
 
 
 def _git(dados: Path, *args: str) -> subprocess.CompletedProcess:
@@ -214,13 +213,15 @@ def gravar(dados: Path, texto: str, pub: str, git=_git) -> bool:
     return True
 
 
-_META_RE = re.compile(r'<meta name="%s" content="([^"]*)">' % re.escape(B.DATA_META))
+_META_RE = re.compile(r'<meta name="%s" content="([^"]*)">' % re.escape(B.VERSAO_META))
+_VERSAO_RE = re.compile(r"[0-9a-f]{64}")
 
 
-def data_no_ar(get=None, urlopen=urllib.request.urlopen) -> str | None:
-    """Data dos dados do /llm-ranking/ que está no ar, lida da meta que o build grava. None quando não dá para saber
-    (fora do ar, sem a meta, duas metas, data fora do formato). Pede HTML sem cache (Cache-Control e um parâmetro na
-    URL), para não ler uma cópia velha nem ser recusado por quem negocia o Accept."""
+def versao_no_ar(get=None, urlopen=urllib.request.urlopen) -> str | None:
+    """Versão dos dados do /llm-ranking/ que está no ar (sha256 do snapshot, B.versao), lida da meta que o build grava.
+    None quando não dá para saber (fora do ar, página antiga sem a meta, duas metas, valor fora do formato). Pede HTML
+    sem cache (Cache-Control e um parâmetro na URL), para não ler uma cópia velha nem ser recusado por quem negocia o
+    Accept."""
     if get is None:
         def get(url):
             return http_get(url, urlopen=urlopen, accept="text/html", no_cache=True)
@@ -231,21 +232,18 @@ def data_no_ar(get=None, urlopen=urllib.request.urlopen) -> str | None:
         achados = _META_RE.findall(body.decode("utf-8"))
     except UnicodeDecodeError:
         return None
-    if len(achados) != 1:
-        return None
-    try:
-        B._dia(achados[0], "meta")
-    except B.RankingError:
+    if len(achados) != 1 or not _VERSAO_RE.fullmatch(achados[0]):
         return None
     return achados[0]
 
 
-def main(argv: list[str] | None = None, fonte: Fonte | None = None, git=_git, no_ar=data_no_ar) -> int:
+def main(argv: list[str] | None = None, fonte: Fonte | None = None, git=_git, no_ar=versao_no_ar) -> int:
     """Com --apply, a saída termina em três linhas que o wrapper do cron lê:
-    "gravado" ou "sem mudança"; "no ar: <data>" (ou "no ar: não lida"); e "deploy" ou "sem deploy: ...".
-    O deploy é pedido quando o snapshot foi gravado e também quando a página no ar não tem a data dos dados do
+    "gravado" ou "sem mudança"; "no ar: versão <sha256>" (ou "no ar: não lida"); e "deploy" ou "sem deploy: ...".
+    O deploy é pedido quando o snapshot foi gravado e também quando a página no ar não tem a versão dos dados do
     repositório: assim uma rodada que publicou e falhou depois (push aceito com timeout no cliente, disparo do deploy
-    que falhou, deploy que quebrou) é recuperada pela rodada seguinte, mesmo sem dado novo."""
+    que falhou, deploy que quebrou) é recuperada pela rodada seguinte, mesmo sem dado novo e mesmo quando a fonte
+    republicou com a mesma data. A versão é o sha256 da forma canônica do snapshot (B.versao)."""
     ap = argparse.ArgumentParser(description="Snapshot da arena de texto da Arena para o /llm-ranking/.")
     ap.add_argument("--dados", required=True, type=Path, help="clone do guifav/llm-ranking-data")
     ap.add_argument("--apply", action="store_true", help="grava, faz commit e push quando mudou")
@@ -265,12 +263,12 @@ def main(argv: list[str] | None = None, fonte: Fonte | None = None, git=_git, no
             return 0
         gravou = gravar(args.dados, texto, snap["publicacao"], git)
         print("gravado" if gravou else "sem mudança")
-        data = no_ar()
-        print(f"no ar: {data or 'não lida'}")
-        if gravou or data != snap["publicacao"]:
+        v = no_ar()
+        print(f"no ar: versão {v}" if v else "no ar: não lida")
+        if gravou or v != B.versao(snap):
             print("deploy")
         else:
-            print(f"sem deploy: a página no ar já tem os dados de {data}")
+            print(f"sem deploy: a página no ar já tem a versão {v}")
     except (SnapshotError, B.RankingError) as e:
         print(f"llm_ranking_snapshot: ERRO: {e}", file=sys.stderr)
         return 1
