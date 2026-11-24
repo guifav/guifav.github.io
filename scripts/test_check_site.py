@@ -1709,19 +1709,23 @@ class SeoTest(unittest.TestCase):
         consts = Path(self.tmp.name) / "consts.ts"
         consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
         args = ["--site", str(self.site), "--posts", str(self.posts), "--consts", str(consts)]
-        real_check = C.check
-        C.check = lambda *a, **k: []  # isola a regra da #103 das demais
-        try:
-            for desc, code in (("d" * 69, 1), ("d" * 165, 0), (self.OK_DESC, 0)):
-                with self.subTest(desc=len(desc)):
-                    self.post(desc=desc)
-                    out, err = io.StringIO(), io.StringIO()
-                    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-                        self.assertEqual(C.main(args), code)
-                    self.assertEqual("ERRO" in err.getvalue(), code == 1)
-                    self.assertEqual("AVISO: " in out.getvalue(), len(desc) == 165)
-        finally:
-            C.check = real_check
+        from unittest import mock
+        self.post(slug="antigo", date="2024-03-01", desc="curta")  # importado: só aviso, agrupado na CI
+        # isola a regra da #103 das demais; o formato do aviso depende de GITHUB_ACTIONS, que a CI define
+        with mock.patch.object(C, "check", lambda *a, **k: []):
+            for gh, new_mark, group in (("", "AVISO: ", None), ("true", "::warning title=check_site (#103)::", "::group::")):
+                for desc, code in (("d" * 69, 1), ("d" * 165, 0), (self.OK_DESC, 0)):
+                    with self.subTest(gh=gh, desc=len(desc)), mock.patch.dict(os.environ, {"GITHUB_ACTIONS": gh}):
+                        self.post(desc=desc)
+                        out, err = io.StringIO(), io.StringIO()
+                        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                            self.assertEqual(C.main(args), code)
+                        self.assertEqual("ERRO" in err.getvalue(), code == 1)
+                        self.assertEqual(new_mark in out.getvalue(), len(desc) == 165)
+                        self.assertIn("AVISO (importado): blog/antigo/index.html", out.getvalue())
+                        if group:
+                            self.assertIn(group + "Avisos dos posts importados (1)", out.getvalue())
+                            self.assertIn("::endgroup::", out.getvalue())
 
 
 if __name__ == "__main__":
