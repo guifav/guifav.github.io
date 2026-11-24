@@ -1143,6 +1143,48 @@ def check_related(site: Path, posts: Path) -> list[str]:
 # Quando não declara, o bloco não aparece. Alarme de integridade do [slug].astro.
 SUMMARY_CLASS = "post-summary"
 SUMMARY_LABEL = "Em resumo"
+_YAML_BLOCK_INDICATOR = re.compile(r"^[>|](?:[+-]?\d?|\d[+-]?)(?:\s+#.*)?$")
+
+
+def _has_frontmatter_summary(text: str) -> bool:
+    """True quando o frontmatter declara summary com valor não vazio, na mesma linha, na seguinte ou em bloco >/|."""
+    m = re.match(r"^---\r?\n(.*?)\r?\n---\r?\n", text, re.S)
+    if not m:
+        return False
+    lines = m.group(1).splitlines()
+    found: bool | None = None
+    i = 0
+    while i < len(lines):
+        km = re.match(r"^summary:\s*(.*)$", lines[i])
+        if not km:
+            i += 1
+            continue
+        raw = km.group(1).strip()
+        block = bool(_YAML_BLOCK_INDICATOR.fullmatch(raw))
+        i += 1
+        cont: list[str] = []
+        while i < len(lines) and (lines[i] == "" or lines[i][0] in " \t"):
+            cont.append(lines[i])
+            i += 1
+        if block:
+            found = any(ln.strip() for ln in cont)
+        elif raw and not raw.startswith("#"):
+            val = _yaml_scalar(raw)
+            if raw[0] in ("'", '"'):
+                found = bool(val.strip())
+            else:
+                found = bool(val.strip()) and val.strip().lower() not in ("null", "~")
+        else:
+            cleaned = [ln.strip() for ln in cont if ln.strip() and not ln.strip().startswith("#")]
+            if not cleaned:
+                found = False
+            else:
+                first = cleaned[0]
+                if first[0] in ("'", '"'):
+                    found = bool(_yaml_scalar(first).strip()) or len(cleaned) > 1
+                else:
+                    found = first.lower() not in ("null", "~") or len(cleaned) > 1
+    return bool(found)
 
 
 class _SummaryBlocks(HTMLParser):
@@ -1195,13 +1237,14 @@ def check_summary(site: Path, posts: Path) -> list[str]:
     """#108: bloco 'Em resumo' acima de .post-body em todo post com summary, e em nenhum sem summary."""
     problems: list[str] = []
     for md in sorted(posts.glob("*.md")):
-        fm = frontmatter(md.read_text(encoding="utf-8"))
+        md_text = md.read_text(encoding="utf-8")
+        fm = frontmatter(md_text)
         slug = fm.get("slug") or md.stem
         rel = f"blog/{slug}/index.html"
         page = site / rel
         if not page.is_file():
             continue  # check() já acusa post sem página
-        has_summary = bool(fm.get("summary", "").strip())
+        has_summary = _has_frontmatter_summary(md_text)
         p = _SummaryBlocks()
         p.feed(page.read_text(encoding="utf-8"))
         p.close()

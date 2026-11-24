@@ -80,6 +80,21 @@ test('[slug].astro: renderiza "Em resumo" acima de .post-body e <figure>, sem su
       '',
       'Corpo sem resumo.',
     ].join('\n'),
+    'teste-summary-multilinha-108': [
+      '---',
+      'title: "Post de teste com summary multilinha"',
+      `description: "${descSem}"`,
+      'summary:',
+      '  Resumo indentado na linha seguinte.',
+      '  Segunda frase do resumo.',
+      'date: 2026-11-24T12:00:00Z',
+      'slug: teste-summary-multilinha-108',
+      'type: newsletter',
+      'index: false',
+      '---',
+      '',
+      'Corpo com resumo multilinha.',
+    ].join('\n'),
   });
 
   const com = pages['teste-com-summary-108'];
@@ -113,4 +128,8 @@ test('[slug].astro: renderiza "Em resumo" acima de .post-body e <figure>, sem su
   assert.equal(sem.includes('post-summary'), false, 'bloco .post-summary não pode aparecer sem summary');
   assert.equal(sem.includes('Em resumo'), false, 'rótulo "Em resumo" não pode aparecer sem summary');
   assert.ok(sem.includes(`<meta name="description" content="${descSem}">`), 'meta description alterada sem summary');
+
+  const multi = pages['teste-summary-multilinha-108'];
+  assert.ok(multi.includes('<section class="post-summary" aria-label="Em resumo">'), 'summary multilinha ausente');
+  assert.ok(multi.includes('Resumo indentado na linha seguinte. Segunda frase do resumo.'), 'texto multilinha incorreto');
 });
