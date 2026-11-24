@@ -446,8 +446,8 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
             if not in_blog and OLD_DOMAIN in (site / rel).read_text(encoding="utf-8").lower():
                 problems.append(f"{rel}: menciona o domínio antigo ({OLD_DOMAIN})")
             # Em todo o site, links e embeds pela URL resolvida: pega entidade HTML, percent-encoding e ponto final,
-            # que a busca literal não vê. No blog, menção em texto corrido de post importado fica, e só os links
-            # mortos conhecidos passam, cada um na sua página (todas do blog; o teste confere contra os fontes).
+            # que a busca literal não vê. No blog, menção em texto corrido de post importado fica, mas todo link ou
+            # embed para o domínio antigo é apontado, sem exceção (a lista de links mortos da importação saiu na #105).
             for u in dict.fromkeys(list(p.refs) + [v for _, v in p.url_values]):
                 if _old_host(resolved[(base, u)]):
                     problems.append(f"{rel}: link para o domínio antigo: {u[:80]}")
