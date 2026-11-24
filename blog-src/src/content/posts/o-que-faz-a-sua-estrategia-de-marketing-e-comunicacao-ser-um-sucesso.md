@@ -1,6 +1,6 @@
 ---
 title: "O que faz a sua estratégia de marketing e comunicação ser um sucesso?"
-description: "O que faz uma campanha de marketing ser bem sucedida?"
+description: "Por que campanhas de tráfego pago e redes sociais falham sem clareza de proposta e o fator central que sustenta estratégias de marketing e comunicação."
 date: 2021-07-01T03:00:00.000Z
 updated: 2024-01-04T18:32:59.176Z
 slug: o-que-faz-a-sua-estrategia-de-marketing-e-comunicacao-ser-um-sucesso

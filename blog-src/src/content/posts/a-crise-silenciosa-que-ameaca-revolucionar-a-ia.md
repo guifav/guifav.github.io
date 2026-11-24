@@ -1,6 +1,6 @@
 ---
 title: "A Crise silenciosa que ameaça revolucionar a IA"
-description: "O que a escassez de GPUs significa para o futuro da tecnologia e como isso pode impactar o seu negócio"
+description: "Como a escassez global de GPUs afeta o custo de computação em nuvem, o prazo dos projetos de IA e as alternativas de infraestrutura para empresas."
 date: 2024-08-07T03:00:00.000Z
 updated: 2024-09-18T10:58:42.223Z
 slug: a-crise-silenciosa-que-ameaca-revolucionar-a-ia

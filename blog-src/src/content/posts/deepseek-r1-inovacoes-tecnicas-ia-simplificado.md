@@ -1,7 +1,7 @@
 ---
 title: "DeepSeek R1: A Sinfonia da Inovação em IA - Um Mergulho Técnico Simplificado"
 subtitle: "Descubra as inovações revolucionárias do DeepSeek R1: da arquitetura MoE à Previsão Multi-Token."
-description: "Descubra as inovações revolucionárias do DeepSeek R1: da arquitetura MoE à Previsão Multi-Token."
+description: "Explicação técnica simplificada do DeepSeek R1: como funcionam a arquitetura MoE, a previsão multi-token e por que o modelo reduziu o custo de inferência."
 date: 2025-02-05T03:00:00.000Z
 updated: 2025-11-24T20:04:02.366Z
 slug: deepseek-r1-inovacoes-tecnicas-ia-simplificado

@@ -1,6 +1,6 @@
 ---
 title: "Desmistificando GPUs em IA"
-description: "A força motriz por trás da revolução"
+description: "Entenda o papel das GPUs no treinamento e na inferência de modelos de IA e por que o processamento paralelo viabiliza os LLMs atuais nas empresas."
 date: 2024-01-03T23:42:15.000Z
 updated: 2024-01-04T00:40:56.330Z
 slug: desmistificando-gpus-em-ia-79e168b03ccd

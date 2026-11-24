@@ -1,7 +1,7 @@
 ---
 title: "A nova era dos negócios impulsionada pela IA"
 subtitle: "Como a Inteligência Artificial vai revolucionar estratégias de crescimento e otimizar investimentos"
-description: "Como a Inteligência Artificial vai revolucionar estratégias de crescimento e otimizar investimentos"
+description: "Primeira edição da newsletter IA Aplicada: visão prática sobre como inteligência artificial, dados e tecnologia apoiam crescimento e alocação de capital."
 date: 2024-01-04T00:33:32.131Z
 updated: 2024-01-04T00:33:32.195Z
 slug: a-nova-era-dos-negocios-impulsionada

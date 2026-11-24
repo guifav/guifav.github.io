@@ -1,7 +1,7 @@
 ---
 title: "Inteligência Artificial nos Negócios: Uma Nova Era de Transformação Empresarial"
 subtitle: "Descubra como a IA está transformando os negócios em 2025: da simples automação aos agentes autônomos."
-description: "Descubra como a IA está transformando os negócios em 2025: da simples automação aos agentes autônomos."
+description: "Como empresas saem de testes isolados para agentes de IA nos processos de negócio, lidando com integração, custo-benefício e confiabilidade das entregas."
 date: 2025-01-07T03:00:00.000Z
 updated: 2025-11-24T20:04:25.425Z
 slug: inteligencia-artificial-negocios-transformacao-empresarial

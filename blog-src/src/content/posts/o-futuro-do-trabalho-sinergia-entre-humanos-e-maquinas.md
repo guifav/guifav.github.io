@@ -1,6 +1,6 @@
 ---
 title: "O Futuro do Trabalho: Sinergia entre Humanos e Máquinas"
-description: "No mundo digital em constante evolução, a interação entre humanos e web agents tem se tornado cada vez mais prevalente."
+description: "Como humanos e web agents de IA se complementam em tomada de decisão, processamento de informação e recuperação de erros nas rotinas de trabalho."
 date: 2024-05-07T03:00:00.000Z
 updated: 2024-08-26T10:40:58.348Z
 slug: o-futuro-do-trabalho-sinergia-entre-humanos-e-maquinas

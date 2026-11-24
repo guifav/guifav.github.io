@@ -1,6 +1,6 @@
 ---
 title: "Inteligência Artificial: Revolucionando os Processos Empresariais"
-description: "A IA não é mais uma tecnologia do futuro - é uma realidade presente que está remodelando a forma como fazemos negócios."
+description: "Exemplos práticos de inteligência artificial aplicada a processos empresariais: atendimento ao cliente, automação operacional, personalização e saúde."
 date: 2024-03-18T03:00:00.000Z
 updated: 2024-07-09T20:13:20.978Z
 slug: inteligencia-artificial-revolucionando-os-processos-empresariais

@@ -1,7 +1,7 @@
 ---
 title: "Fine-tuning vs Prompt Engineering: Quando Investir em Cada Abordagem"
 subtitle: "Decisões Práticas Baseadas em ROI e restrições técnicas"
-description: "Decisões Práticas Baseadas em ROI e restrições técnicas"
+description: "Fine-tuning, RAG ou prompt engineering: framework prático com análise de custo, ROI e restrições técnicas para decidir qual abordagem usar em LLMs."
 date: 2025-08-28T21:05:59.774Z
 updated: 2025-11-24T20:05:35.972Z
 slug: fine-tuning-vs-prompt-engineering

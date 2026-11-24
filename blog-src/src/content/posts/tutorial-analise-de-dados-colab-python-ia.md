@@ -1,6 +1,6 @@
 ---
 title: "Tutorial: analise de dados avançada com IA para gestores (não programadores)"
-description: "Acesse as ferramentas e arquivos utilizados neste tutorial"
+description: "Tutorial passo a passo para gestores analisarem arquivos CSV e dados de vendas com Python no Google Colab usando IA, sem precisar programar."
 date: 2024-08-21T03:00:00.000Z
 updated: 2024-10-02T23:49:08.731Z
 slug: tutorial-analise-de-dados-colab-python-ia

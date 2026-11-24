@@ -1,6 +1,6 @@
 ---
 title: "Como ser bem sucedido - será que estou no caminho certo?"
-description: "Com certeza você já se perguntou… será que eu sou bem sucedido?"
+description: "Reflexão direta sobre o que define sucesso profissional, como avaliar se você está no caminho certo e os critérios para medir evolução na carreira."
 date: 2021-12-07T03:00:00.000Z
 updated: 2024-01-04T18:32:58.997Z
 slug: como-ser-bem-sucedido

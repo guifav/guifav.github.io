@@ -1,6 +1,6 @@
 ---
 title: "Decifrando o Código da IA: Estratégias para Mitigar Vieses em Negócios Inteligentes"
-description: "Explore os desafios dos vieses cognitivos na IA aplicada a negócios."
+description: "Como identificar e mitigar vieses cognitivos e alucinações em LLMs antes de usar inteligência artificial em decisões de negócio e investimento."
 date: 2024-07-20T03:00:00.000Z
 updated: 2024-09-05T21:07:10.793Z
 slug: decifrando-o-codigo-da-ia-estrategias-para-mitigar-vieses-em-negocios-inteligentes

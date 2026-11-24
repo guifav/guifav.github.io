@@ -1,6 +1,6 @@
 ---
 title: "Engenharia de Prompt: Guia Completo para Dominar a Arte de Interagir com IA"
-description: "A engenharia de prompt está revolucionando a maneira como interagimos com sistemas de inteligência artificial (IA)."
+description: "Guia prático de engenharia de prompt para ChatGPT, Claude e Gemini: fundamentos, padrões para tarefas específicas e técnicas para elevar a precisão."
 date: 2024-08-18T03:00:00.000Z
 updated: 2024-10-02T23:49:09.505Z
 slug: engenharia-de-prompt-guia-completo

@@ -1,6 +1,6 @@
 ---
 title: "O que são e como implementar Revenue Management, RevOps - Operações da Geração de Receita?"
-description: "Revenue Operations (Operações da Geração de Receita) é o emprego de crescimento mais rápido nos EUA."
+description: "O que é RevOps (Revenue Operations), como integra vendas, marketing e atendimento no mesmo funil e os passos para estruturar a operação de receita."
 date: 2024-04-09T03:00:00.000Z
 updated: 2024-08-15T20:52:42.165Z
 slug: o-que-sao-revops-revenue-management

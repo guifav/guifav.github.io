@@ -1,7 +1,7 @@
 ---
 title: "IA: Revolucionando os Processos Empresariais"
 subtitle: "A IA não é mais uma tecnologia do futuro - é uma realidade presente que está remodelando a forma como fazemos negócios."
-description: "A IA não é mais uma tecnologia do futuro - é uma realidade presente que está remodelando a forma como fazemos negócios."
+description: "Como empresas aplicam IA em atendimento, automação de processos complexos, operações e geração de conteúdo para ganhar eficiência com controle de risco."
 date: 2024-03-19T11:02:47.130Z
 updated: 2024-03-19T20:49:30.694Z
 slug: inteligencia-artificial-revolucionando

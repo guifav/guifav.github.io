@@ -1,7 +1,7 @@
 ---
 title: "OpenAI vs Modelos Open-Source: Decisões Estratégicas para CTOs"
 subtitle: "OpenAI vs modelos open-source: guia completo para CTOs. Arquitetura híbrida, análise de custos e cases práticos. Framework baseado em experiência real."
-description: "OpenAI vs modelos open-source: guia completo para CTOs."
+description: "OpenAI ou modelos open source: critérios técnicos, análise de custos e padrões de arquitetura híbrida para CTOs decidirem o que usar em produção."
 date: 2025-08-25T03:00:00.000Z
 updated: 2025-11-24T20:05:11.258Z
 slug: openai-vs-open-source-decisoes-estrategicas-ctos

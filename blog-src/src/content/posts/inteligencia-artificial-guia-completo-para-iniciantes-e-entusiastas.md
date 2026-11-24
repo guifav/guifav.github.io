@@ -1,6 +1,6 @@
 ---
 title: "Inteligência Artificial: Guia Completo para Iniciantes e Entusiastas"
-description: "Explore o fascinante mundo da Inteligência Artificial neste guia completo."
+description: "Guia introdutório de inteligência artificial para iniciantes: fundamentos, principais plataformas e aplicações práticas no trabalho e no dia a dia."
 date: 2024-07-06T03:00:00.000Z
 updated: 2024-09-05T21:07:12.287Z
 slug: inteligencia-artificial-guia-completo-para-iniciantes-e-entusiastas

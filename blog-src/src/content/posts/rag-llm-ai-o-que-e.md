@@ -1,6 +1,6 @@
 ---
 title: "O que é RAG em LLMs de IA e Primeiros passos para implementação"
-description: "Introdução"
+description: "Entenda o que é RAG (Retrieval-Augmented Generation), como conecta LLMs aos dados da empresa para reduzir alucinações e por onde começar na prática."
 date: 2024-09-14T03:00:00.000Z
 updated: 2024-12-02T11:31:19.782Z
 slug: rag-llm-ai-o-que-e
