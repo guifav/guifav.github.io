@@ -576,7 +576,7 @@ class CheckTest(Base):
             self.assertTrue(any("sitemap" in p and "assinar" in p for p in self.problems(pre_cutover=pre)), pre)
 
     def test_private_pages_set_is_pinned(self):
-        self.assertEqual(C.BLOG_PRIVATE_PAGES, frozenset({"assinar", "inscricao-enviada", "inscricao-confirmada", "inscricao-invalida", "privacidade"}))
+        self.assertEqual(C.BLOG_PRIVATE_PAGES, frozenset({"assinar", "inscricao-enviada", "inscricao-confirmada", "inscricao-invalida"}))
 
     def test_index_false_post_with_noindex_after_cutover_is_required(self):
         (self.posts / "um-post.md").write_text("---\ntitle: x\nslug: um-post\nindex: false\n---\n", encoding="utf-8")
@@ -851,7 +851,9 @@ class TitleAndGroupTest(unittest.TestCase):
         E = C.expected_content_group
         for rel, g in (("index.html", "home"), ("portfolio/index.html", "portfolio"), ("blog/index.html", "insights-lista"),
                        ("blog/pagina/2/index.html", "insights-lista"), ("blog/pagina/12/index.html", "insights-lista"),
-                       ("blog/assinar/index.html", "expert-insights"), ("blog/privacidade/index.html", "expert-insights"),
+                       ("blog/assinar/index.html", "expert-insights"),
+                       ("privacidade/index.html", "legal"), ("termos/index.html", "legal"),
+                       ("privacidade/x/index.html", None), ("termos/x/index.html", None),
                        ("blog/inscricao-enviada/index.html", "expert-insights"),
                        ("blog/inscricao-confirmada/index.html", "expert-insights"),
                        ("blog/inscricao-invalida/index.html", "expert-insights"),
@@ -867,7 +869,7 @@ class TitleAndGroupTest(unittest.TestCase):
             with self.subTest(rel=rel):
                 self.assertEqual(E(rel), g)
         self.assertEqual(set(C.CONTENT_GROUPS), {"home", "portfolio", "insights-lista", "insights-artigo", "expert-insights",
-                                                 "materiais", "consultoria", "ferramentas"})
+                                                 "materiais", "consultoria", "ferramentas", "legal"})
 
     def test_group_literal_and_define_vars(self):
         title = "<title>Guilherme Favaron | Builder e CTO</title>"
@@ -967,7 +969,6 @@ class TitleAndGroupSourcesTest(unittest.TestCase):
         for rel, g in (("blog-src/src/layouts/PostList.astro", "insights-lista"),
                        ("blog-src/src/pages/[slug].astro", "insights-artigo"),
                        ("blog-src/src/pages/assinar.astro", "expert-insights"),
-                       ("blog-src/src/pages/privacidade.astro", "expert-insights"),
                        ("blog-src/src/pages/inscricao-enviada.astro", "expert-insights"),
                        ("blog-src/src/pages/inscricao-confirmada.astro", "expert-insights"),
                        ("blog-src/src/pages/inscricao-invalida.astro", "expert-insights")):
@@ -989,7 +990,7 @@ class ClaritySourcesTest(unittest.TestCase):
         return (self.REPO / rel).read_text(encoding="utf-8")
 
     def test_root_pages(self):
-        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES), C.LLM_RANKING_PAGE):
+        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES), C.LLM_RANKING_PAGE, *C.LEGAL_PAGES):
             with self.subTest(rel=rel):
                 t = self.read(rel)
                 self.assertIn(C.GA4_TAG, t)
@@ -1009,7 +1010,7 @@ class ClaritySourcesTest(unittest.TestCase):
         self.assertIn('data-clarity-mask="true"', self.read("blog-src/src/components/SubscribeForm.astro"))
 
     def test_privacy_mentions_clarity(self):
-        t = self.read("blog-src/src/pages/privacidade.astro")
+        t = self.read("privacidade/index.html")
         self.assertIn("Microsoft Clarity", t)
         # r1 (Kimi e Astra P2): a política cita os cookies e o identificador, e não promete anonimato.
         for must in ("_clck", "_clsk", "identificador", "privacy.microsoft.com"):
@@ -1029,7 +1030,7 @@ class NamingSourcesTest(unittest.TestCase):
              "blog-src/src/layouts/PostList.astro", "blog-src/src/components/SubscribeForm.astro",
              "blog-src/src/pages/[slug].astro", "blog-src/src/pages/assinar.astro",
              "blog-src/src/pages/inscricao-enviada.astro", "blog-src/src/pages/inscricao-confirmada.astro",
-             "blog-src/src/pages/inscricao-invalida.astro", "blog-src/src/pages/privacidade.astro",
+             "blog-src/src/pages/inscricao-invalida.astro", "privacidade/index.html", "termos/index.html",
              "blog-src/src/pages/rss.xml.ts", "workers/newsletter/src/email.ts", "workers/admin/src/index.ts")
     ALLOWED = ("Newsletter no LinkedIn: O CTO na Mesa", "LinkedIn newsletter: O CTO na Mesa", "YouTube: IA Aplicada",
                "assinava a IA Aplicada no Substack", "linkedin.com/newsletters/",
@@ -1300,6 +1301,7 @@ class GaHostGuardTest(unittest.TestCase):
                             (C.CONSULTING_PAGE, "gtag('config','G-K7Y87QNCX8'"),
                             *((p, "gtag('config','G-K7Y87QNCX8'") for p in sorted(C.MATERIAL_PAGES)),
                             (C.LLM_RANKING_PAGE, "gtag('config','G-K7Y87QNCX8'"),
+                            *((p, "gtag('config','G-K7Y87QNCX8'") for p in C.LEGAL_PAGES),
                             ("blog-src/src/layouts/Base.astro", "gtag('config', GA4_ID")):
             with self.subTest(rel=rel):
                 t = (root / rel).read_text(encoding="utf-8")
@@ -1321,7 +1323,7 @@ class ConsentTest(unittest.TestCase):
                "t.src=\"https://www.clarity.ms/tag/\"+i;})(window,document,\"clarity\",\"script\",\"zcs8f7r329\");};"
                "if(window.guifavConsent==='granted')window.guifavClarity();")
     CJS = '<script src="/assets/consent.js?v=1"></script>'
-    FOOT = '<footer><a href="/blog/privacidade/#cookies" data-consent-open>Cookies</a></footer>'
+    FOOT = '<footer><a href="/privacidade/#cookies" data-consent-open>Cookies</a></footer>'
 
     def doc(self, ga_js=None, clarity=None, cjs=1, foot=None, ga=True):
         ga_js = self.INIT + self.DEFAULT + self.CONFIG if ga_js is None else ga_js
@@ -1380,8 +1382,8 @@ class ConsentTest(unittest.TestCase):
 
     def test_footer_cookies_link_once(self):
         for name, foot in {"sem rodapé": "", "rodapé sem link": "<footer><a href='/'>x</a></footer>",
-                           "fora do rodapé": "<main><a href='/blog/privacidade/#cookies' data-consent-open>Cookies</a></main><footer></footer>",
-                           "dois links": "<footer>" + 2 * "<a href='/blog/privacidade/#cookies' data-consent-open>Cookies</a>" + "</footer>",
+                           "fora do rodapé": "<main><a href='/privacidade/#cookies' data-consent-open>Cookies</a></main><footer></footer>",
+                           "dois links": "<footer>" + 2 * "<a href='/privacidade/#cookies' data-consent-open>Cookies</a>" + "</footer>",
                            "sem href": "<footer><a data-consent-open>Cookies</a></footer>"}.items():
             with self.subTest(name=name):
                 self.assertTrue(any("Cookies" in p for p in self.flagged(self.doc(foot=foot))), name)
@@ -1396,14 +1398,14 @@ class ConsentSourcesTest(unittest.TestCase):
     def test_consent_js_same_version_everywhere(self):
         src = re.search(r"CONSENT_SRC = '([^']+)'", self.read("blog-src/src/consts.ts")).group(1)
         self.assertRegex(src, r"^/assets/consent\.js\?v=\d{12}$")
-        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES), C.LLM_RANKING_PAGE):
+        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES), C.LLM_RANKING_PAGE, *C.LEGAL_PAGES):
             with self.subTest(rel=rel):
                 self.assertEqual(self.read(rel).count(f'<script src="{src}"></script>'), 1)
         self.assertEqual(self.read("blog-src/src/layouts/Base.astro").count(
             "{!DRAFT_PREVIEW && <script data-site-script is:inline src={CONSENT_SRC}></script>}"), 1)
 
     def test_policy_has_cookies_section(self):
-        t = self.read("blog-src/src/pages/privacidade.astro")
+        t = self.read("privacidade/index.html")
         self.assertIn('<h2 id="cookies">', t)
         for must in ("consentimento", "Sim", "Não", "Cookies", "_ga", "_clck"):
             self.assertIn(must, t)
@@ -1442,7 +1444,7 @@ class TrackingSourcesTest(unittest.TestCase):
         self.assertTrue(m)
         src = m.group(1)
         self.assertTrue(src.startswith(C.TRACK_PATH + "?v="))
-        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES), C.LLM_RANKING_PAGE):
+        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES), C.LLM_RANKING_PAGE, *C.LEGAL_PAGES):
             with self.subTest(rel=rel):
                 t = self.read(rel)
                 self.assertEqual(t.count(f'<script src="{src}"></script>'), 1)
@@ -1468,14 +1470,14 @@ class TrackingSourcesTest(unittest.TestCase):
                       self.read("blog-src/src/pages/inscricao-confirmada.astro"))
 
     def test_privacy_mentions_events(self):
-        t = self.read("blog-src/src/pages/privacidade.astro")
+        t = self.read("privacidade/index.html")
         self.assertIn("alguns cliques: contato, agendamento, links do rodapé, troca de idioma e de tema, a "
                       "confirmação da inscrição e o pedido e o download de materiais (sem o email)", t)
 
     def test_privacy_discloses_google_ads(self):
         # #64: GA4 vinculado ao Google Ads com publicidade personalizada (Gui, 13/11/2026). A política diz o recurso,
         # os cookies, como o Google usa os dados e como desativar.
-        t = self.read("blog-src/src/pages/privacidade.astro")
+        t = self.read("privacidade/index.html")
         for must in ("Google Ads", "publicidade personalizada", "<code>_ga</code>", "<code>_ga_K7Y87QNCX8</code>",
                      "medir campanhas", "mostrar anúncios do guifav.dev a quem já visitou o site",
                      # r1 (Kimi e Astra P2): o uso conjunto de cookies do site e de publicidade do Google, exigido pela
@@ -1485,12 +1487,12 @@ class TrackingSourcesTest(unittest.TestCase):
                      "https://adssettings.google.com/", "https://tools.google.com/dlpage/gaoptout",
                      "https://policies.google.com/technologies/partner-sites"):
             self.assertIn(must, t)
-        self.assertIn("Atualizada em 24 de novembro de 2026.", t)  # #68: seção Cookies; 23/11: Materiais para baixar; 24/11: registro no CRM (#97)
+        self.assertIn("Atualizada em 24 de novembro de 2026.", t)  # #68: seção Cookies; 23/11: Materiais para baixar; 24/11: CRM (#97) e /privacidade/ (#146)
 
     def test_privacy_says_material_record_goes_to_the_crm(self):
         # #97 fase 2: o registro dos materiais vai ao Twenty. O download cria o contato; o pedido sem download só entra
         # se o email já for contato; a remoção apaga pedidos e downloads nos dois lugares e o contato só a pedido.
-        t = self.read("blog-src/src/pages/privacidade.astro")
+        t = self.read("privacidade/index.html")
         for must in ("O registro vai também para o meu CRM",
                      "o download cria lá um contato só com o seu email, se ele ainda não existir",
                      "o pedido sem download só entra no CRM se o seu email já for um contato",
@@ -1508,6 +1510,18 @@ class TrackingSourcesTest(unittest.TestCase):
         # r1 (Kimi P1): a remoção não apaga o contato nem o resumo dele; a frase antiga prometia mais do que o código faz.
         self.assertNotIn("e também o contato, se você pedir", t)
         self.assertNotIn("anteriores a esta versão da página", t)
+
+    def test_privacy_describes_origin(self):
+        # #114 e #146: a política mantém a descrição da origem da visita (sem URL completa, termo nem id de navegador).
+        t = self.read("privacidade/index.html")
+        for must in ('<h2 id="origem">De onde você chegou</h2>',
+                     "Não guardo com a origem o endereço completo de onde você veio, o que você buscou nem identificador do seu navegador.",
+                     "enquanto a aba está aberta (não é cookie e some ao fechar)",
+                     "com ou sem o aceite dos cookies",
+                     "log de envios do Resend",
+                     "cliques de contato e de agendamento",
+                     "legítimo interesse (Lei 13.709/2018, art. 7º, IX)"):
+            self.assertIn(must, t)
 
 
 class ToolsTest(unittest.TestCase):
@@ -1980,7 +1994,8 @@ class SeoTest(unittest.TestCase):
                 mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
                 mock.patch.object(C, "check_home", lambda *a, **k: []), \
                 mock.patch.object(C, "check_post_ld", lambda *a, **k: []), \
-                mock.patch.object(C, "check_llm_ranking", lambda *a, **k: []):  # Leia também (#104), JSON-LD (#105), /consultoria/ e home (#136), #113
+                mock.patch.object(C, "check_llm_ranking", lambda *a, **k: []), \
+                mock.patch.object(C, "check_legal", lambda *a, **k: []):  # Leia também (#104), JSON-LD (#105), /consultoria/ e home (#136), #113, #146
             for gh, new_mark, group in (("", "AVISO: ", None), ("true", "::warning title=check_site (#103)::", "::group::")):
                 for desc, code in (("d" * 69, 1), ("d" * 165, 0), (self.OK_DESC, 0)):
                     with self.subTest(gh=gh, desc=len(desc)), mock.patch.dict(os.environ, {"GITHUB_ACTIONS": gh}):
@@ -2231,7 +2246,8 @@ class PostLdTest(unittest.TestCase):
                 mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
                 mock.patch.object(C, "check_home", lambda *a, **k: []), \
                 mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
-                mock.patch.object(C, "check_llm_ranking", lambda *a, **k: []):  # #113 isolada; ver LlmRankingTest
+                mock.patch.object(C, "check_llm_ranking", lambda *a, **k: []), \
+                mock.patch.object(C, "check_legal", lambda *a, **k: []):  # #113 e #146 isoladas; ver LlmRankingTest e LegalTest
             for head, code in (("", 1), (ld_script(post_graph()), 0)):
                 with self.subTest(code=code):
                     self.post(head)
@@ -2706,6 +2722,7 @@ class LlmRankingTest(unittest.TestCase):
                 mock.patch.object(C, "check_post_ld", lambda *a, **k: []), \
                 mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
                 mock.patch.object(C, "check_home", lambda *a, **k: []), \
+                mock.patch.object(C, "check_legal", lambda *a, **k: []), \
                 contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
             code = C.main(["--site", str(self.site), "--posts", str(self.site), "--consts", str(consts)])
         self.assertEqual(code, 1)
@@ -2718,6 +2735,7 @@ class LlmRankingTest(unittest.TestCase):
                 mock.patch.object(C, "check_post_ld", lambda *a, **k: []), \
                 mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
                 mock.patch.object(C, "check_home", lambda *a, **k: []), \
+                mock.patch.object(C, "check_legal", lambda *a, **k: []), \
                 contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(C.main(["--site", str(self.site), "--posts", str(self.site), "--consts", str(consts)]), 0)
 
@@ -2746,7 +2764,7 @@ class NavSourcesTest(unittest.TestCase):
         files = self.sources()
         rels = {str(f.relative_to(self.ROOT)) for f in files}
         for must in ("index.html", "404.html", "portfolio/index.html", "consultoria/index.html", "llm-ranking/index.html",
-                     "blog-src/src/layouts/Base.astro"):
+                     "privacidade/index.html", "termos/index.html", "blog-src/src/layouts/Base.astro"):
             self.assertIn(must, rels)
         for f in files:
             rel = str(f.relative_to(self.ROOT))
@@ -2904,6 +2922,7 @@ class ConsultingTest(unittest.TestCase):
                 mock.patch.object(C, "check_post_ld", lambda *a, **k: []), \
                 mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
                 mock.patch.object(C, "check_llm_ranking", lambda *a, **k: []), \
+                mock.patch.object(C, "check_legal", lambda *a, **k: []), \
                 contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
             code = C.main(["--site", str(site), "--posts", str(self.tmp.name), "--consts", str(consts)])
         self.assertEqual(code, 1)
@@ -3019,10 +3038,253 @@ class HomeHubTest(unittest.TestCase):
                 mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
                 mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
                 mock.patch.object(C, "check_llm_ranking", lambda *a, **k: []), \
+                mock.patch.object(C, "check_legal", lambda *a, **k: []), \
                 contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
             code = C.main(["--site", str(self.site), "--posts", str(self.posts), "--consts", str(consts)])
         self.assertEqual(code, 1)
         self.assertIn("index.html: home ausente", err.getvalue())
+
+
+class LegalTest(unittest.TestCase):
+    """#146: /privacidade/ e /termos/ no build e no sitemap-site.xml, com título, H1, canonical, âncoras e rodapé em todo o site."""
+
+    GA = TrackingTest.GA
+    FOOT_GA = ('<footer><p><a href="/privacidade/">Privacidade</a> &middot; '
+               '<a href="/termos/">Termos</a> &middot; '
+               '<a href="/privacidade/#cookies" data-consent-open>Cookies</a></p></footer>')
+    FOOT_NO_GA = ('<footer><p><a href="/privacidade/">Privacidade</a> &middot; '
+                  '<a href="/termos/">Termos</a> &middot; '
+                  '<a href="/privacidade/#cookies">Cookies</a></p></footer>')
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.site = Path(self.tmp.name) / "_site"
+        self.site.mkdir()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def w(self, rel: str, content: str) -> None:
+        p = self.site / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content, encoding="utf-8")
+
+    def legal_doc(self, url: str, title: str, h1: str, body: str = "", head: str = "", foot: str | None = None, ga: bool = True) -> str:
+        return (f'<!DOCTYPE html><html lang="pt-BR"><head><title>{title}</title>'
+                f'<link rel="canonical" href="https://guifav.dev{url}">{self.GA if ga else ""}{head}</head>'
+                f'<body><main><h1>{h1}</h1>{body}</main>{self.FOOT_GA if foot is None else foot}</body></html>')
+
+    def build_valid_site(self) -> None:
+        anchors = "".join(f'<h2 id="{a}">{a}</h2>' for a in C.PRIVACY_ANCHORS)
+        self.w("privacidade/index.html", self.legal_doc("/privacidade/", "Política de privacidade | Guilherme Favaron",
+                                                        "Política de privacidade", anchors))
+        self.w("termos/index.html", self.legal_doc("/termos/", "Termos de uso | Guilherme Favaron", "Termos de uso"))
+        self.w("blog/um-post/index.html", f"<!DOCTYPE html><html><head>{self.GA}</head><body>{self.FOOT_GA}</body></html>")
+        self.w("404.html", f"<!DOCTYPE html><html><head></head><body>{self.FOOT_NO_GA}</body></html>")
+        self.w("portfolio/mockups/crm.html", "<!DOCTYPE html><html><head></head><body>mockup sem rodapé</body></html>")
+        self.w("sitemap-site.xml",
+               '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+               '<url><loc>https://guifav.dev/privacidade/</loc><lastmod>2026-11-24T12:00:00-03:00</lastmod></url>'
+               '<url><loc>https://guifav.dev/termos/</loc><lastmod>2026-11-24T12:00:00-03:00</lastmod></url>'
+               "</urlset>")
+
+    def test_complete_site_passes(self):
+        self.build_valid_site()
+        self.assertEqual(C.check_legal(self.site), [])
+
+    def test_missing_legal_page_or_sitemap_entry_fails(self):
+        for rel, url in (("privacidade/index.html", "/privacidade/"), ("termos/index.html", "/termos/")):
+            with self.subTest(missing_page=rel):
+                self.build_valid_site()
+                (self.site / rel).unlink()
+                got = C.check_legal(self.site)
+                self.assertTrue(any(rel in p and "ausente" in p for p in got), got)
+            with self.subTest(missing_sitemap=url):
+                self.build_valid_site()
+                sm = (self.site / "sitemap-site.xml").read_text(encoding="utf-8")
+                (self.site / "sitemap-site.xml").write_text(sm.replace(f"https://guifav.dev{url}", "https://guifav.dev/x/"),
+                                                            encoding="utf-8")
+                got = C.check_legal(self.site)
+                self.assertTrue(any(url in p and "sitemap-site.xml" in p for p in got), got)
+
+    def test_noindex_bad_canonical_title_h1_or_missing_anchor_fails(self):
+        self.build_valid_site()
+        self.w("termos/index.html", self.legal_doc("/termos/", "Termos de uso | Guilherme Favaron", "Termos de uso",
+                                                   head='<meta name="robots" content="noindex, follow">'))
+        self.assertTrue(any("noindex" in p for p in C.check_legal(self.site)))
+
+        self.build_valid_site()
+        html = (self.site / "termos/index.html").read_text(encoding="utf-8").replace("https://guifav.dev/termos/", "https://guifav.dev/outro/")
+        self.w("termos/index.html", html)
+        self.assertTrue(any("canonical" in p for p in C.check_legal(self.site)))
+
+        self.build_valid_site()
+        html = (self.site / "termos/index.html").read_text(encoding="utf-8").replace('<link rel="canonical" href="https://guifav.dev/termos/">', "")
+        self.w("termos/index.html", html)
+        self.assertTrue(any("canonical" in p for p in C.check_legal(self.site)))
+
+        self.build_valid_site()
+        self.w("termos/index.html", self.legal_doc("/termos/", "Termos | Guilherme Favaron", "Termos de uso"))
+        self.assertTrue(any("o título precisa ser" in p for p in C.check_legal(self.site)))
+
+        self.build_valid_site()
+        self.w("termos/index.html", self.legal_doc("/termos/", "Termos de uso | Guilherme Favaron", "Outro H1"))
+        self.assertTrue(any("H1" in p for p in C.check_legal(self.site)))
+
+        for anchor in C.PRIVACY_ANCHORS:
+            for kind, rep in (("removida", ""), ("comentada", f'<!-- <h2 id="{anchor}">x</h2> -->'),
+                              ("hidden", f'<h2 id="{anchor}" hidden>x</h2>'),
+                              ("template", f'<template><h2 id="{anchor}">x</h2></template>')):
+                with self.subTest(anchor=anchor, kind=kind):
+                    self.build_valid_site()
+                    html = (self.site / "privacidade/index.html").read_text(encoding="utf-8")
+                    self.w("privacidade/index.html", html.replace(f'<h2 id="{anchor}">{anchor}</h2>', rep))
+                    got = C.check_legal(self.site)
+                    self.assertTrue(any(f"#{anchor}" in p for p in got), got)
+
+    def test_footer_rules_with_and_without_ga(self):
+        doc_ga = lambda body: f"<!DOCTYPE html><html><head>{self.GA}</head><body>{body}</body></html>"
+        doc_noga = lambda body: f"<!DOCTYPE html><html><head></head><body>{body}</body></html>"
+        self.assertEqual(C.check_legal_footer("index.html", doc_ga(self.FOOT_GA)), [])
+        self.assertEqual(C.check_legal_footer("404.html", doc_noga(self.FOOT_NO_GA)), [])
+        self.assertEqual(C.check_legal_footer("portfolio/mockups/crm.html", "<html><body>sem rodapé</body></html>"), [])
+
+        bad_ga = {
+            "sem footer": "<main></main>",
+            "falta privacidade": '<footer><a href="/termos/">Termos</a><a href="/privacidade/#cookies" data-consent-open>Cookies</a></footer>',
+            "falta termos": '<footer><a href="/privacidade/">Privacidade</a><a href="/privacidade/#cookies" data-consent-open>Cookies</a></footer>',
+            "falta cookies": '<footer><a href="/privacidade/">Privacidade</a><a href="/termos/">Termos</a></footer>',
+            "termos repetido": self.FOOT_GA.replace("</footer>", '<a href="/termos/">Termos</a></footer>'),
+            "fora do footer": '<main><a href="/termos/">Termos</a></main><footer><a href="/privacidade/">Privacidade</a><a href="/privacidade/#cookies" data-consent-open>Cookies</a></footer>',
+            "comentado": '<footer><!-- <a href="/termos/">Termos</a> --><a href="/privacidade/">Privacidade</a><a href="/privacidade/#cookies" data-consent-open>Cookies</a></footer>',
+            "em template": '<footer><template><a href="/termos/">Termos</a></template><a href="/privacidade/">Privacidade</a><a href="/privacidade/#cookies" data-consent-open>Cookies</a></footer>',
+            "em noscript": '<footer><noscript><a href="/termos/">Termos</a></noscript><a href="/privacidade/">Privacidade</a><a href="/privacidade/#cookies" data-consent-open>Cookies</a></footer>',
+            "hidden no link": '<footer><a href="/termos/" hidden>Termos</a><a href="/privacidade/">Privacidade</a><a href="/privacidade/#cookies" data-consent-open>Cookies</a></footer>',
+            "hidden no pai": '<footer><div hidden><a href="/termos/">Termos</a></div><a href="/privacidade/">Privacidade</a><a href="/privacidade/#cookies" data-consent-open>Cookies</a></footer>',
+            "nofollow": self.FOOT_GA.replace('href="/termos/"', 'href="/termos/" rel="nofollow"'),
+            "cookies sem data-consent-open": self.FOOT_NO_GA,
+            "termos com data-consent-open": self.FOOT_GA.replace('href="/termos/"', 'href="/termos/" data-consent-open'),
+        }
+        for name, body in bad_ga.items():
+            with self.subTest(ga=True, case=name):
+                self.assertTrue(C.check_legal_footer("blog/um-post/index.html", doc_ga(body)), name)
+        # Página sem GA4: Cookies sem data-consent-open passa; com data-consent-open falha.
+        self.assertTrue(any("sem GA4" in p for p in C.check_legal_footer("404.html", doc_noga(self.FOOT_GA))))
+
+    def test_main_runs_the_legal_rule(self):
+        consts = Path(self.tmp.name) / "consts.ts"
+        consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
+        from unittest import mock
+        err = io.StringIO()
+        with mock.patch.object(C, "check", lambda *a, **k: []), \
+                mock.patch.object(C, "check_related", lambda *a, **k: []), \
+                mock.patch.object(C, "check_contrast", lambda *a, **k: []), \
+                mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
+                mock.patch.object(C, "check_home", lambda *a, **k: []), \
+                mock.patch.object(C, "check_post_ld", lambda *a, **k: []), \
+                mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
+                mock.patch.object(C, "check_llm_ranking", lambda *a, **k: []), \
+                contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            code = C.main(["--site", str(self.site), "--posts", str(self.tmp.name), "--consts", str(consts)])
+        self.assertEqual(code, 1)
+        self.assertIn("privacidade/index.html: página legal ausente", err.getvalue())
+        self.build_valid_site()
+        with mock.patch.object(C, "check", lambda *a, **k: []), \
+                mock.patch.object(C, "check_related", lambda *a, **k: []), \
+                mock.patch.object(C, "check_contrast", lambda *a, **k: []), \
+                mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
+                mock.patch.object(C, "check_home", lambda *a, **k: []), \
+                mock.patch.object(C, "check_post_ld", lambda *a, **k: []), \
+                mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
+                mock.patch.object(C, "check_llm_ranking", lambda *a, **k: []), \
+                contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(C.main(["--site", str(self.site), "--posts", str(self.tmp.name), "--consts", str(consts)]), 0)
+
+
+class LegalSourcesTest(unittest.TestCase):
+    """#146: fontes reais do site (páginas legais na raiz, rodapés, traduções, sem Termos nos formulários nem travessões)."""
+
+    REPO = Path(__file__).resolve().parent.parent
+
+    def root_html_files(self) -> list[tuple[str, Path]]:
+        entries = [l.strip() for l in (self.REPO / "site-manifest.txt").read_text(encoding="utf-8").splitlines()
+                   if l.strip() and not l.startswith("#")]
+        files: list[Path] = []
+        for e in entries:
+            p = self.REPO / e
+            if e.endswith("/"):
+                files += sorted(f for f in p.rglob("*.html") if "mockups" not in f.parts)
+            elif e.endswith(".html"):
+                files.append(p)
+        return [(f.relative_to(self.REPO).as_posix(), f) for f in files]
+
+    def test_old_blog_privacy_page_is_removed_and_new_pages_are_in_manifest(self):
+        self.assertFalse((self.REPO / "blog-src/src/pages/privacidade.astro").exists())
+        manifest = [l.strip() for l in (self.REPO / "site-manifest.txt").read_text(encoding="utf-8").splitlines()
+                    if l.strip() and not l.startswith("#")]
+        self.assertIn("privacidade/", manifest)
+        self.assertIn("termos/", manifest)
+
+    def test_legal_pages_pass_all_page_checks_and_copy_rules(self):
+        site_css = (self.REPO / "assets/site.css").read_text(encoding="utf-8")
+        with tempfile.TemporaryDirectory() as d:
+            site = Path(d)
+            for rel in C.LEGAL_PAGES:
+                html = (self.REPO / rel).read_text(encoding="utf-8")
+                with self.subTest(rel=rel):
+                    self.assertEqual(C.check_titles_and_groups(rel, html), [])
+                    self.assertEqual(C.check_tracking(rel, html), [])
+                    self.assertEqual(C.check_ga_host_guard(rel, html), [])
+                    self.assertEqual(C.check_consent(rel, html), [])
+                    self.assertEqual(C.check_legal_footer(rel, html), [])
+                    styles = re.findall(r"<style[^>]*>(.*?)</style>", html, flags=re.S | re.I)
+                    self.assertEqual(C.contrast_problems([site_css, *styles]), [])
+                    self.assertNotIn("\u2014", html)  # sem travessão
+                    self.assertNotIn("\u2013", html)  # sem meia-risca
+                dst = site / rel
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                dst.write_text(html, encoding="utf-8")
+            (site / "sitemap-site.xml").write_text(
+                '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+                '<url><loc>https://guifav.dev/privacidade/</loc><lastmod>2026-11-24T12:00:00-03:00</lastmod></url>'
+                '<url><loc>https://guifav.dev/termos/</loc><lastmod>2026-11-24T12:00:00-03:00</lastmod></url>'
+                "</urlset>", encoding="utf-8")
+            self.assertEqual(C.check_legal(site), [])
+
+    def test_terms_length_and_history_link(self):
+        html = (self.REPO / "termos/index.html").read_text(encoding="utf-8")
+        body = re.search(r'<div class="post-body">(.*?)</div>', html, re.S).group(1)
+        words = re.findall(r"\b\w+\b", re.sub(r"<[^>]+>", " ", body))
+        self.assertLessEqual(len(words), 400, f"Termos passou de 400 palavras ({len(words)})")
+        self.assertIn('href="https://github.com/guifav/guifav.github.io/commits/main/termos/index.html"', html)
+        self.assertIn("versões anteriores", html)
+        self.assertIn("oferecido como está, respondo pelo que a lei exige", html)
+
+    def test_every_root_page_and_blog_layout_has_legal_footer_and_no_old_privacy_links(self):
+        for rel, f in self.root_html_files():
+            html = f.read_text(encoding="utf-8")
+            with self.subTest(rel=rel):
+                self.assertEqual(C.check_legal_footer(rel, html), [])
+                self.assertNotIn("/blog/privacidade", html)
+                if 'id="lang-toggle"' in html:
+                    self.assertIn('"ft_privacy": "Privacy"', html)
+                    self.assertIn('"ft_terms": "Terms"', html)
+                    self.assertIn('href="/privacidade/" hreflang="pt-BR" data-i18n="ft_privacy"', html)
+                    self.assertIn('href="/termos/" hreflang="pt-BR" data-i18n="ft_terms"', html)
+        base = (self.REPO / "blog-src/src/layouts/Base.astro").read_text(encoding="utf-8")
+        foot = re.search(r"<footer>(.*?)</footer>", base, re.S).group(1)
+        self.assertIn('<a href="/privacidade/">Privacidade</a>', foot)
+        self.assertIn('<a href="/termos/">Termos</a>', foot)
+        self.assertIn('<a href="/privacidade/#cookies" data-consent-open>Cookies</a>', foot)
+        self.assertNotIn("/blog/privacidade", base)
+
+    def test_terms_not_in_forms_or_cookie_banner(self):
+        self.assertNotIn("/termos/", (self.REPO / "assets/consent.js").read_text(encoding="utf-8"))
+        self.assertNotIn("/termos/", (self.REPO / "blog-src/src/components/SubscribeForm.astro").read_text(encoding="utf-8"))
+        for rel in ("index.html", "planilha-custos-ia/index.html", "mapa-decisao-ia/index.html"):
+            html = (self.REPO / rel).read_text(encoding="utf-8")
+            for form in re.findall(r"<form\b[^>]*>.*?</form>", html, flags=re.S | re.I):
+                self.assertNotIn("/termos/", form, rel)
 
 
 if __name__ == "__main__":

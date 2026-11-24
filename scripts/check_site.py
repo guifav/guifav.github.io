@@ -66,7 +66,7 @@ SITE_FORM_ACTIONS = {"https://insights.guifav.dev/subscribe"}
 # Páginas de tema (#104), /blog/tema/<id>/: indexáveis, com canonical próprio e no sitemap do blog.
 TOPIC_PAGE = re.compile(r"blog/tema/[a-z0-9][a-z0-9-]*/index\.html")
 # Páginas da newsletter (#21): noindex e fora do sitemap sempre, também depois do cutover (A10).
-BLOG_PRIVATE_PAGES = frozenset({"assinar", "inscricao-enviada", "inscricao-confirmada", "inscricao-invalida", "privacidade"})
+BLOG_PRIVATE_PAGES = frozenset({"assinar", "inscricao-enviada", "inscricao-confirmada", "inscricao-invalida"})
 IFRAME_HOSTS = {
     "open.spotify.com", "creators.spotify.com", "podcasters.spotify.com",
     "www.youtube.com", "www.youtube-nocookie.com", "player.vimeo.com",
@@ -543,14 +543,22 @@ SITE_NAME = "Guilherme Favaron"
 TITLE_SEP = " | "
 TITLE_EXEMPT_PREFIXES = ("portfolio/mockups/",)
 # Grupos de conteúdo do GA4 (content_group), um por tipo de página; espelha CONTENT_GROUPS do consts.ts do blog.
-CONTENT_GROUPS = ("home", "portfolio", "insights-lista", "insights-artigo", "expert-insights", "materiais", "consultoria", "ferramentas")
+CONTENT_GROUPS = ("home", "portfolio", "insights-lista", "insights-artigo", "expert-insights", "materiais", "consultoria", "ferramentas", "legal")
 # Páginas dos materiais do canal (issue #99): o formulário e a página de enviado de cada material do catálogo do Worker.
 MATERIALS = ("planilha-custos-ia", "mapa-decisao-ia")
 MATERIAL_PAGES = {f"{m}/{p}index.html" for m in MATERIALS for p in ("", "enviado/")}
 # Ferramentas sem material para baixar (issue #113): grupo próprio, para não misturar com o funil dos materiais.
 LLM_RANKING_PAGE = "llm-ranking/index.html"
+# Páginas legais na raiz (#146): Política de privacidade e Termos de uso, públicas, indexáveis e no sitemap.
+LEGAL_PAGES = ("privacidade/index.html", "termos/index.html")
+LEGAL_SPECS = (
+    ("privacidade/index.html", "/privacidade/", "Política de privacidade" + TITLE_SEP + SITE_NAME, "Política de privacidade"),
+    ("termos/index.html", "/termos/", "Termos de uso" + TITLE_SEP + SITE_NAME, "Termos de uso"),
+)
+PRIVACY_ANCHORS = ("cookies", "materiais", "origem", "quem-processa")
+LEGAL_FOOTER_HREFS = ("/privacidade/", "/termos/", "/privacidade/#cookies")
 EXPERT_INSIGHTS_PAGES = {f"blog/{p}/index.html" for p in
-                         ("assinar", "inscricao-enviada", "inscricao-confirmada", "inscricao-invalida", "privacidade")}
+                         ("assinar", "inscricao-enviada", "inscricao-confirmada", "inscricao-invalida")}
 
 
 def expected_content_group(rel: str) -> str | None:
@@ -560,6 +568,8 @@ def expected_content_group(rel: str) -> str | None:
         return "portfolio"
     if rel == "consultoria/index.html":
         return "consultoria"
+    if rel in LEGAL_PAGES:
+        return "legal"
     if (rel == "blog/index.html" or re.fullmatch(r"blog/pagina/\d+/index\.html", rel)
             or re.fullmatch(r"blog/tema/[a-z0-9][a-z0-9-]*/index\.html", rel)):
         return "insights-lista"
@@ -2043,6 +2053,142 @@ def check_llm_ranking(site: Path) -> list[str]:
     return problems
 
 
+class _LiveIds(HTMLParser):
+    """Atributos id fora de comentário, <template>, <noscript> e elementos hidden."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.stack: list[tuple[str, bool]] = []
+        self.ids: set[str] = set()
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+        if tag not in VOID_TAGS:
+            self.handle_endtag(tag)
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        a: dict[str, str] = {}
+        for k, v in attrs:
+            a.setdefault(k, v or "")
+        inert = any(i for _, i in self.stack) or tag in ("template", "noscript") or "hidden" in a
+        if not inert and a.get("id", "").strip():
+            self.ids.add(a["id"].strip())
+        if tag not in VOID_TAGS:
+            self.stack.append((tag, tag in ("template", "noscript") or "hidden" in a))
+
+    def handle_endtag(self, tag: str) -> None:
+        for i in range(len(self.stack) - 1, -1, -1):
+            if self.stack[i][0] == tag:
+                del self.stack[i:]
+                return
+
+
+class _LegalFooter(HTMLParser):
+    """Links <a> visíveis dentro de <footer>: (href, tem data-consent-open, tokens de rel)."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.stack: list[tuple[str, bool, bool]] = []  # (tag, é footer visível, torna inerte)
+        self.footers = 0
+        self.links: list[tuple[str, bool, list[str]]] = []
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+        if tag not in VOID_TAGS:
+            self.handle_endtag(tag)
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        a: dict[str, str] = {}
+        for k, v in attrs:
+            a.setdefault(k, v or "")
+        inert = any(i for _, _, i in self.stack) or tag in ("template", "noscript") or "hidden" in a
+        if tag == "footer" and not inert:
+            self.footers += 1
+        if tag == "a" and not inert and any(is_f for _, is_f, _ in self.stack):
+            href = a.get("href", "").strip()
+            if href:
+                self.links.append((href, "data-consent-open" in a, a.get("rel", "").lower().split()))
+        if tag not in VOID_TAGS:
+            self.stack.append((tag, tag == "footer" and not inert, tag in ("template", "noscript") or "hidden" in a))
+
+    def handle_endtag(self, tag: str) -> None:
+        for i in range(len(self.stack) - 1, -1, -1):
+            if self.stack[i][0] == tag:
+                del self.stack[i:]
+                return
+
+
+def check_legal_footer(rel: str, html: str) -> list[str]:
+    """#146: todo rodapé (fora os mockups do portfólio) leva Privacidade, Termos e Cookies."""
+    if rel.startswith(TITLE_EXEMPT_PREFIXES):
+        return []
+    p = _LegalFooter()
+    p.feed(html)
+    p.close()
+    if p.footers == 0:
+        return [f"{rel}: página sem <footer> com os links legais"]
+    problems: list[str] = []
+    has_ga = GA4_TAG in html
+    for href in LEGAL_FOOTER_HREFS:
+        matches = [(c, r) for h, c, r in p.links if h == href]
+        if len(matches) != 1:
+            problems.append(f"{rel}: rodapé precisa do link legal {href} uma vez, tem {len(matches)}")
+            continue
+        has_open, rels = matches[0]
+        if "nofollow" in rels:
+            problems.append(f"{rel}: rodapé com o link legal {href} em rel=nofollow")
+        if href == "/privacidade/#cookies":
+            if has_ga and not has_open:
+                problems.append(f"{rel}: link Cookies no rodapé de página com GA4 precisa de data-consent-open")
+            elif not has_ga and has_open:
+                problems.append(f"{rel}: link Cookies no rodapé de página sem GA4 não leva data-consent-open")
+        elif has_open:
+            problems.append(f"{rel}: link legal {href} não leva data-consent-open")
+    return problems
+
+
+def check_legal(site: Path) -> list[str]:
+    """#146: /privacidade/ e /termos/ existem no build, são indexáveis, estão no sitemap e todo rodapé tem os três links."""
+    problems: list[str] = []
+    entries = _sitemap(site, "sitemap-site.xml", "urlset", "url", problems)
+    sitemap_locs = {loc for loc, _ in entries} if entries is not None else None
+    for rel, url, want_title, want_h1 in LEGAL_SPECS:
+        if sitemap_locs is not None and SITE_ORIGIN + url not in sitemap_locs:
+            problems.append(f"sitemap-site.xml: falta página legal {SITE_ORIGIN}{url}")
+        page = site / rel
+        if not page.is_file():
+            problems.append(f"{rel}: página legal ausente no site montado (site-manifest.txt)")
+            continue
+        html = page.read_text(encoding="utf-8")
+        p = _Page()
+        p.feed(html)
+        p.close()
+        if any(_robots_noindex(r) for r in p.robots):
+            problems.append(f"{rel}: página legal não pode ter noindex")
+        if not p.canonicals or not canonical_is_self(p.canonicals, url):
+            problems.append(f"{rel}: página legal precisa de canonical próprio ({SITE_ORIGIN}{url}), tem {p.canonicals}")
+        visible = _visible_html(html)
+        m = re.search(r"<title[^>]*>(.*?)</title\s*>", visible, flags=re.S | re.I)
+        title = unescape(m.group(1)).strip() if m else None
+        if title != want_title:
+            problems.append(f"{rel}: o título precisa ser {want_title!r}: {title!r}")
+        h1s = [re.sub(r"\s+", " ", unescape(re.sub(r"<[^>]+>", "", h))).strip()
+               for h in re.findall(r"<h1\b[^>]*>(.*?)</h1\s*>", visible, flags=re.S | re.I)]
+        if h1s != [want_h1]:
+            problems.append(f"{rel}: a página precisa de um H1 {want_h1!r}, tem {h1s}")
+        if rel == "privacidade/index.html":
+            ids = _LiveIds()
+            ids.feed(html)
+            ids.close()
+            for anchor in PRIVACY_ANCHORS:
+                if anchor not in ids.ids:
+                    problems.append(f"{rel}: falta a âncora #{anchor}")
+    for f in html_files(site):
+        rel = f.relative_to(site).as_posix()
+        problems += check_legal_footer(rel, f.read_text(encoding="utf-8"))
+    return problems
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Verifica o site montado em _site/ antes do deploy.")
     ap.add_argument("--site", default="_site")
@@ -2058,6 +2204,7 @@ def main(argv: list[str] | None = None) -> int:
         problems += check_home(Path(args.site), Path(args.posts), read_home_latest(Path(args.consts)))
         problems += check_post_ld(Path(args.site), Path(args.posts))
         problems += check_llm_ranking(Path(args.site))
+        problems += check_legal(Path(args.site))
     except ResolverError as e:
         print(f"ERRO: resolvedor de URL indisponível, verificação não feita: {e}", file=sys.stderr)
         return 1

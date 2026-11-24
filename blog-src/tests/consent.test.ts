@@ -81,7 +81,7 @@ function setup(opts: { lang?: string; stored?: unknown; storage?: Storage | type
   const body = html.appendChild(new Node('body'));
   const footer = body.appendChild(new Node('footer'));
   const cookieLink = footer.appendChild(new Node('a'));
-  cookieLink.attrs = { href: '/blog/privacidade/#cookies', 'data-consent-open': '' };
+  cookieLink.attrs = { href: '/privacidade/#cookies', 'data-consent-open': '' };
   const langBtn = body.appendChild(new Node('button'));
   langBtn.attrs.id = 'lang-toggle';
   const other = body.appendChild(new Node('a'));
@@ -148,7 +148,7 @@ test('sem escolha: banner em português com Sim, Não e o link da política', ()
   assert.equal(s.btn('consent-yes').textContent, 'Sim');
   assert.equal(s.btn('consent-no').textContent, 'Não');
   const find = (n: Node): Node | null => (n.tag === 'a' ? n : n.children.map(find).find(Boolean) ?? null);
-  assert.equal(find(b)!.attrs.href, '/blog/privacidade/#cookies');
+  assert.equal(find(b)!.attrs.href, '/privacidade/#cookies');
   assert.deepEqual(updates(s.calls), []);
 });
 
@@ -266,7 +266,7 @@ function runInline(rel: string, stored: unknown) {
 }
 
 const MATERIAIS = ['planilha-custos-ia', 'mapa-decisao-ia'].flatMap((m) => [`${m}/index.html`, `${m}/enviado/index.html`]);
-for (const rel of ['index.html', 'portfolio/index.html', 'consultoria/index.html', ...MATERIAIS, 'Base.astro']) {
+for (const rel of ['index.html', 'portfolio/index.html', 'consultoria/index.html', 'privacidade/index.html', 'termos/index.html', ...MATERIAIS, 'Base.astro']) {
   test(`${rel}: padrão negado antes do config; aceite válido vira update granted antes do config; vencido não`, () => {
     const names = (l: unknown[][]) => l.map((c) => `${c[0]}:${c[0] === 'consent' ? c[1] : ''}`);
     const none = runInline(rel, undefined);

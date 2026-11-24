@@ -6,7 +6,7 @@ export const BLOG_NAME = 'Insights';
 // Nome da lista de email (Gui, 12/11/2026), sempre associado a Guilherme Favaron. Em frase: "os Expert Insights".
 export const EMAIL_LIST_NAME = 'Expert Insights';
 // Grupos de conteúdo do GA4 (parâmetro content_group), um por tipo de página (Gui, 13/11/2026).
-export const CONTENT_GROUPS = ['home', 'portfolio', 'insights-lista', 'insights-artigo', 'expert-insights', 'materiais', 'consultoria', 'ferramentas'] as const;
+export const CONTENT_GROUPS = ['home', 'portfolio', 'insights-lista', 'insights-artigo', 'expert-insights', 'materiais', 'consultoria', 'ferramentas', 'legal'] as const;
 export type ContentGroup = (typeof CONTENT_GROUPS)[number];
 export const AUTHOR_NAME = 'Guilherme Favaron';
 export const AUTHOR_ID = 'https://guifav.dev/#person';
@@ -20,9 +20,9 @@ export const GA4_ID = 'G-K7Y87QNCX8';
 // Microsoft Clarity (mapas de calor e gravações de sessão), em todas as páginas que têm o GA4.
 export const CLARITY_ID = 'zcs8f7r329';
 // Eventos próprios do GA4 (issue #60). Mesmo endereço, com a mesma versão, na home e no portfólio.
-export const TRACK_SRC = '/assets/track.js?v=202611241800';
+export const TRACK_SRC = '/assets/track.js?v=202611242200';
 // Banner de consentimento de cookies (issue #68), o mesmo arquivo da home e do portfólio.
-export const CONSENT_SRC = '/assets/consent.js?v=202611140300';
+export const CONSENT_SRC = '/assets/consent.js?v=202611242200';
 // Prévia de rascunho (issue #62): build só na KVM, pelo scripts/draft_preview.py, com DRAFT_PREVIEW=1. Nesse
 // build nenhuma página carrega GA4 nem Clarity e todas saem com noindex. O build do site nunca define a variável.
 export const DRAFT_PREVIEW = process.env.DRAFT_PREVIEW === '1';

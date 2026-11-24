@@ -22,3 +22,5 @@ llm-ranking/
 seo-geo-aeo-framework/
 planilha-custos-ia/
 mapa-decisao-ia/
+privacidade/
+termos/

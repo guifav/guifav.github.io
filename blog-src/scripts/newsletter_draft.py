@@ -458,7 +458,7 @@ def _envelope(post: Post, body_html: str, truncated: bool, notice: str = "", tod
         '<tr><td style="padding:24px 20px 28px;border-top:1px solid #eee;font-family:Arial,sans-serif;font-size:13px;line-height:1.5;color:#777;">'
         + e(" ".join(_footer_lines(today))) + '<br>'
         '<a href="{{{RESEND_UNSUBSCRIBE_URL}}}" style="color:#777;">Sair da lista</a> &middot; '
-        f'<a href="{BLOG}/privacidade/" style="color:#777;">Privacidade</a>'
+        f'<a href="{SITE}/privacidade/" style="color:#777;">Privacidade</a>'
         '</td></tr></table></td></tr></table></body></html>'
     )
 
@@ -476,7 +476,7 @@ def _text(post: Post, body_text: str, truncated: bool, notice: str = "", today: 
     parts.append(f"Ler no site: {post.url}")
     parts.append(" ".join(_footer_lines(today)) + "\n"
                  "Sair da lista: {{{RESEND_UNSUBSCRIBE_URL}}}\n"
-                 f"Privacidade: {BLOG}/privacidade/")
+                 f"Privacidade: {SITE}/privacidade/")
     return "\n\n".join(p for p in parts if p) + "\n"
 
 
