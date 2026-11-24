@@ -21,16 +21,19 @@ a-voz-das-estrelas-o-novo-chatbot-a42
 ab-testing-e-experimentacao-cientifica
 adobe-max-2024-as-novidades-da-adobe-5f1
 agente-ia-clawdbot-moltbot-configuracao-erros-acertos
+agentes-ia-por-onde-comecar
 agi-chegou-inteligencia-artificial-geral
 ai-na-escrita-cientifica-revolucao-777
 alexa-20-o-futuro-chegou-ao-seu-lar-7a8
 analise-componentes-principais-pca-guia-empresarial
 analise-preditiva-tomada-decisao-producao
+analise-vendas-ia-guia-completo
 api-first-architecture-quando-faz-sentido
 apple-intelligence-2810-nos-seus-0d4
 apple-intelligence-a-revolucao-da-1bb
 arquitetura-consolidacao-dados-ia-sem-reescrever-sistemas-legados
 arquitetura-dados-analytics-ai
+arquitetura-sistemas-agentes-ia
 as-10-regras-de-ouro-do-crescimento
 avaliadores-autoaprendizes-ia-capaz-d7a
 blockchain-ia-a-revolucao-que-vai-332
@@ -49,6 +52,7 @@ claude-35-sonnet-o-assistente-virtual-4c0
 claude-o-guia-definitivo-ia-consultoria
 como-a-inteligencia-artificial-vai-transformar-a-lideranca-e-os-negocios-no-futuro
 como-crescer-na-empresa-ouvindo-seus-colegas-de-trabalho
+como-criar-agentes-ia-guia-passo-a-passo
 como-criar-um-modelo-de-machine-learning
 como-designers-profissionais-usam-ia-guia-completo-2024
 como-encontrar-o-equilibrio-entre-velocidade-e-flexibilidade-hard-code-low-e-no-code-explicados
@@ -68,6 +72,7 @@ customer-analytics-e-segmentacao
 da-revolucao-do-computador-a-era-da-ia-1982-2024
 da-rota-da-seda-a-rota-digital-como-0c1
 dados-o-combustivel-da-revolucao-f07
+data-governance-custo-dados-nao-confiaveis
 data-pipelines-empresariais-como
 datacenters-movidos-a-energia-nuclear-o-futuro-da-computacao-sustentavel-na-era-da-ia
 decifrando-o-codigo-da-ia-estrategias-para-mitigar-vieses-em-negocios-inteligentes
@@ -143,6 +148,8 @@ licoes-ia-marketing
 linus-torvalds-vs-ia-o-criador-do-572
 livro-ia-inteligencia-artificial-portugues-gratuito
 llama-32-o-futuro-da-ia-e-no-seu-e82
+llm-sql-nosql-guia-integracao
+machine-learning-producao-modelos-empresariais-roi
 mcp-model-context-protocol-revolucao-inteligencia-artificial
 mcp-ou-aplicacao-dados-da-empresa-na-ia
 melhores-praticas-para-uso-do-chatgpt-e-outros-llms
