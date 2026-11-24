@@ -44,20 +44,6 @@ SITE_HOST = "guifav.dev"
 # Domínio antigo do Substack (#24): depois do cutover, nada no site aponta para ele.
 OLD_DOMAIN = "guilhermefavaron.com.br"
 OLD_HOSTS = {OLD_DOMAIN, "www." + OLD_DOMAIN}
-# Links de posts importados que já davam 404 no Substack antes do cutover (caminhos da era Wix, conferidos em
-# 2026-11-12). A importação não altera texto, então eles ficam; o 301 genérico os leva à raiz do blog.
-_W = "https://www." + OLD_DOMAIN
-OLD_DOMAIN_DEAD_LINKS = (
-    ("blog/desbloqueando-a-inteligencia-artificial-o-guia-definitivo-para-empresarios-na-era-da-ia-livro-da-ia/index.html",
-     _W + "/livro-ia-guia-estrategico-empresarios-era-digital"),
-    ("blog/decifrando-o-codigo-da-ia-estrategias-para-mitigar-vieses-em-negocios-inteligentes/index.html",
-     _W + "/livro-ia-guia-estrategico-empresarios-era-digital"),
-    ("blog/microservices-vs-monolith-decisoes/index.html", _W + "/post/modernizacao-sistemas-legados-vantagem-competitiva"),
-    ("blog/como-designers-profissionais-usam-ia-guia-completo-2024/index.html", _W + "/pagina-inicial/hashtags/FF0000"),
-    ("blog/como-designers-profissionais-usam-ia-guia-completo-2024/index.html", _W + "/pagina-inicial/hashtags/000000"),
-    ("blog/modernizacao-de-sistemas-legados/index.html", _W + "/pagina-inicial"),
-    ("blog/data-pipelines-empresariais-como/index.html", _W + "/post/machine-learning-producao-modelos-empresariais-roi"),
-)
 BLOG_PREFIX = "/blog/"
 # Toda página com o GA4 do site também carrega o Microsoft Clarity (mesmo escopo de medição).
 GA4_TAG = "googletagmanager.com/gtag/js?id=G-K7Y87QNCX8"
@@ -463,7 +449,7 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
             # que a busca literal não vê. No blog, menção em texto corrido de post importado fica, e só os links
             # mortos conhecidos passam, cada um na sua página (todas do blog; o teste confere contra os fontes).
             for u in dict.fromkeys(list(p.refs) + [v for _, v in p.url_values]):
-                if _old_host(resolved[(base, u)]) and (rel, u) not in OLD_DOMAIN_DEAD_LINKS:
+                if _old_host(resolved[(base, u)]):
                     problems.append(f"{rel}: link para o domínio antigo: {u[:80]}")
         for ref in p.refs:
             path = _internal(resolved[(base, ref)])

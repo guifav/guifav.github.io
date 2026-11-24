@@ -158,18 +158,14 @@ class OldDomainTest(Base):
         html = page('<meta http-equiv="refresh" content="0; url=https://www.guilhermefavaron.com.br/p/x">', robots=ROBOTS_INDEX)
         self.assertEqual(len(self.flagged("blog/um-post/index.html", html)), 1)
 
-    def test_known_dead_links_from_the_import_are_allowed_only_on_their_page(self):
-        rel, url = C.OLD_DOMAIN_DEAD_LINKS[0]
-        self.w("blog/" + rel.split("/")[1] + "/index.html", "")
-        self.assertEqual(self.flagged(rel, page(f'<a href="{url}">x</a>', robots=ROBOTS_INDEX)), [])
-        self.assertEqual(len(self.flagged("blog/um-post/index.html", page(f'<a href="{url}">x</a>', robots=ROBOTS_INDEX))), 1)
-
-    def test_other_old_link_on_an_allowed_page_is_flagged(self):
-        rel, url = C.OLD_DOMAIN_DEAD_LINKS[0]
-        for other in ("https://www.guilhermefavaron.com.br", url + "/", url.replace("https://www.", "https://")):
-            with self.subTest(other=other):
+    def test_links_once_allowed_from_the_import_are_flagged_on_their_own_page(self):
+        # #105 (PR B): os 8 links da era Wix saíram dos posts, e a lista de exceção da importação acabou.
+        for rel, url in (("blog/data-pipelines-empresariais-como/index.html",
+                          "https://www.guilhermefavaron.com.br/post/machine-learning-producao-modelos-empresariais-roi"),
+                         ("blog/modernizacao-de-sistemas-legados/index.html", "https://www.guilhermefavaron.com.br/pagina-inicial")):
+            with self.subTest(rel=rel):
                 self.setUp()
-                self.assertEqual(len(self.flagged(rel, page(f'<a href="{other}">x</a>', robots=ROBOTS_INDEX))), 1)
+                self.assertEqual(len(self.flagged(rel, page(f'<a href="{url}">x</a>', robots=ROBOTS_INDEX))), 1)
 
     def test_source_scan_catches_every_markdown_link_form(self):
         # #50 r2: link por referência, autolink, URL solta e www. (o GFM transforma os dois últimos em link).
@@ -183,15 +179,12 @@ class OldDomainTest(Base):
                                "https://GuilhermeFavaron.com.br/d", "www.guilhermefavaron.com.br/e",
                                "https://www.guilhermefavaron.com.br/b"])
 
-    def test_known_dead_list_matches_the_post_sources(self):
-        # Referência independente da lista: toda URL do domínio antigo nos fontes dos posts importados.
-        # 7 pares (8 ocorrências: um deles aparece duas vezes no mesmo post) que já davam 404 no Substack antes do
-        # cutover (caminhos da era Wix); a importação não altera texto.
+    def test_post_sources_have_no_old_domain_link(self):
+        # #105 (PR B): nenhum post, indexável ou não, linka o domínio antigo (inline, referência, autolink, URL solta
+        # ou www.). Menção em texto sem esquema nem www. não é link e fica para a tabela de aprovação do Gui.
         found = old_links_in_sources(Path(__file__).resolve().parent.parent / "blog-src/src/content/posts")
-        self.assertEqual(len(found), 8)
-        self.assertEqual(set(found), set(C.OLD_DOMAIN_DEAD_LINKS))
-        self.assertTrue(all(rel.startswith("blog/") for rel, _ in C.OLD_DOMAIN_DEAD_LINKS))
-        self.assertEqual(len(C.OLD_DOMAIN_DEAD_LINKS), len(set(C.OLD_DOMAIN_DEAD_LINKS)))
+        self.assertEqual(found, [])
+        self.assertFalse(hasattr(C, "OLD_DOMAIN_DEAD_LINKS"))
 
     def test_not_checked_before_the_cutover(self):
         self.w("index.html", page('<a href="https://guilhermefavaron.com.br">n</a>', robots=""))
