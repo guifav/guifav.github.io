@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <meta name="description" content="Guilherme Favaron, builder e CTO do GRI Institute. Transformo problemas de negócio em aplicações reais de dados e IA: produtos, plataformas e automações."/>
+  <meta name="description" content="Guilherme Favaron, builder e CTO do GRI Institute. Artigos, ferramentas e consultoria sobre IA aplicada e dados, a partir de aplicações reais em produção."/>
   <title>Guilherme Favaron | Builder e CTO</title>
   <meta name="author" content="Guilherme Favaron">
   <meta property="og:title" content="Guilherme Favaron | Builder e CTO">
@@ -20,6 +20,14 @@
   <meta property="og:type" content="profile">
   <link rel="canonical" href="https://guifav.dev">
   <link rel="stylesheet" href="/assets/site.css?v=202611232330">
+  <style>
+    .latest-list{list-style:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(340px,100%),1fr));gap:16px}
+    .latest-list li{border:1px solid var(--border);border-radius:10px;padding:20px 24px;background:var(--bg-card)}
+    .latest-list a{font-size:16px;font-weight:650;line-height:1.4;color:var(--text);text-decoration:none}
+    .latest-list a:hover{color:var(--hl-text)}
+    .latest-list time{display:block;font-size:12px;color:var(--text-secondary);margin:6px 0 8px}
+    .latest-list p{font-size:14px;line-height:1.6;color:var(--text-secondary)}
+  </style>
   <script async defer src="https://challenges.cloudflare.com/turnstile/v0/api.js"></script>
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-K7Y87QNCX8"></script>
   <script>window['ga-disable-G-K7Y87QNCX8']=location.hostname.replace(/\.$/,'')!=='guifav.dev';window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('consent','default',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',analytics_storage:'denied'});gtag('set','ads_data_redaction',true);window.guifavConsent=function(){try{var c=JSON.parse(localStorage.getItem('consent-v1')||'null');return c&&c.v==='granted'&&typeof c.t==='number'&&Date.now()-c.t>=0&&Date.now()-c.t<31536e6?'granted':null}catch(e){return null}}();if(window.guifavConsent==='granted')gtag('consent','update',{ad_storage:'granted',ad_user_data:'granted',ad_personalization:'granted',analytics_storage:'granted'});gtag('js',new Date());gtag('config','G-K7Y87QNCX8',{content_group:'home'});</script>
@@ -40,28 +48,55 @@
         <a href="/consultoria/" data-i18n="nav_consulting">Consultoria</a>
         <a href="/blog/" data-i18n="nav_blog">Insights</a>
         <a href="mailto:contact@guifav.dev" class="nav-hide-sm" data-i18n="nav_contact">Contato</a>
-        <a href="https://calendar.app.google/VyG67Nq5p6zsstAt8" target="_blank" rel="noopener" class="nav-cta" data-i18n="nav_schedule">Agende um horário</a>
+        <a href="/consultoria/#como-contratar" class="nav-cta" data-i18n="nav_schedule">Agende um horário</a>
         <button id="lang-toggle" class="nav-btn lang-toggle" aria-label="Toggle language">EN</button>
         <button id="theme-toggle" class="nav-btn" aria-label="Toggle theme">&#9790;</button>
       </div>
     </nav>
 
     <div class="hero">
-      <div class="eyebrow" data-i18n="hero_kicker">Builder, CTO e arquiteto de dados e IA</div>
-      <h1 data-i18n="hero_title">Transformo problemas de negócio em aplicações reais.</h1>
-      <p class="subtitle" data-i18n="hero_desc">Produtos, plataformas de dados, automações e modelos especializados, desenhados a partir do problema e entregues em operação, com usuários, custos e metas de verdade. Para empresas que querem tirar a IA do piloto e colocá-la para trabalhar.</p>
+      <div class="eyebrow" data-i18n="hero_kicker">CTO do GRI Institute · Builder e arquiteto de dados e IA</div>
+      <h1>Guilherme Favaron</h1>
+      <p class="subtitle" data-i18n="hero_desc">Transformo problemas de negócio em aplicações reais: produtos, plataformas de dados, automações e modelos especializados, desenhados a partir do problema e entregues em operação, com usuários, custos e metas de verdade. Para empresas que querem tirar a IA do piloto e colocá-la para trabalhar.</p>
       <div class="hero-cta">
-        <a href="/portfolio/" class="btn btn-primary" data-i18n="hero_cta_portfolio">Ver o portfólio</a>
-        <a href="mailto:contact@guifav.dev" class="btn" data-i18n="hero_cta_contact" data-cta-location="hero">Entre em contato</a>
+        <a href="/blog/" class="btn btn-primary" data-i18n="hero_cta_blog">Ler os artigos</a>
+        <a href="/consultoria/" class="btn" data-i18n="hero_cta_consulting">Consultoria</a>
       </div>
     </div>
+
+    <section id="artigos">
+      <div class="section-label" data-i18n="section_latest">Últimos artigos</div>
+      <!-- ultimos-artigos --><!-- /ultimos-artigos -->
+      <div class="section-cta">
+        <a href="/blog/" data-i18n="latest_all">Ver todos os artigos &#8594;</a>
+      </div>
+    </section>
+
+    <section id="temas">
+      <div class="section-label" data-i18n="section_topics">Temas</div>
+      <div class="grid-2 cols-2">
+        <div class="card"><h3 data-i18n="tp_dados_t">IA sobre os dados da empresa</h3><p data-i18n="tp_dados_d">Como fazer a IA responder com os dados da empresa: RAG, Text-to-SQL, MCP e análise de planilhas com LLMs.</p><a href="/blog/tema/ia-sobre-dados-da-empresa/" hreflang="pt-BR" data-i18n="tp_a">Ver os artigos do tema &#8594;</a></div>
+        <div class="card"><h3 data-i18n="tp_custos_t">Custos, ROI e escolha de modelo</h3><p data-i18n="tp_custos_d">Quanto custa a IA generativa em produção e como escolher o modelo: fronteira, aberto, fine-tuning e GPU própria.</p><a href="/blog/tema/custos-e-modelos-de-ia/" hreflang="pt-BR" data-i18n="tp_a">Ver os artigos do tema &#8594;</a></div>
+        <div class="card"><h3 data-i18n="tp_agentes_t">Agentes de IA em produção</h3><p data-i18n="tp_agentes_d">Como criar agentes de IA para a empresa: arquitetura, MCP, LangChain, LangGraph e memória.</p><a href="/blog/tema/agentes-de-ia/" hreflang="pt-BR" data-i18n="tp_a">Ver os artigos do tema &#8594;</a></div>
+        <div class="card"><h3 data-i18n="tp_impl_t">Implantação de IA: sistemas legados e arquitetura de dados</h3><p data-i18n="tp_impl_d">Como implementar IA numa empresa com sistemas legados: plano, integração, time e arquitetura de dados.</p><a href="/blog/tema/implantacao-de-ia/" hreflang="pt-BR" data-i18n="tp_a">Ver os artigos do tema &#8594;</a></div>
+      </div>
+    </section>
+
+    <section id="ferramentas">
+      <div class="section-label" data-i18n="section_tools">Ferramentas e guias</div>
+      <div class="grid-2 cols-2">
+        <div class="card"><h3 data-i18n="tools_map_t">Mapa de decisão: RAG, Text-to-SQL ou contexto longo</h3><p data-i18n="tools_map_d">Quatro perguntas de triagem, uma matriz de decisão e a conta do custo por pergunta, para escolher a arquitetura antes de aprovar o projeto.</p><a href="/mapa-decisao-ia/" hreflang="pt-BR" data-i18n="tools_map_a">Abrir o mapa &#8594;</a></div>
+        <div class="card"><h3 data-i18n="tools_sheet_t">Planilha de custos de IA em produção</h3><p data-i18n="tools_sheet_d">Compara o custo mensal de API, assinatura por usuário, GPU própria e plataforma em 1 mil, 10 mil e 100 mil consultas.</p><a href="/planilha-custos-ia/" hreflang="pt-BR" data-i18n="tools_sheet_a">Abrir a planilha &#8594;</a></div>
+        <div class="card"><h3 data-i18n="content_book_t">Livro: Desbloqueando a IA</h3><p data-i18n="tools_book_d">Guia prático de IA aplicada, escrito para empresários e com download gratuito.</p><a href="/blog/livro-ia-inteligencia-artificial-portugues-gratuito/" hreflang="pt-BR" data-i18n="tools_book_a">Baixar o livro &#8594;</a></div>
+        <div class="card"><h3 data-i18n="tools_seo_t">Framework de SEO, AEO e GEO</h3><p data-i18n="tools_seo_d">Como ser encontrado no Google e citado pelo ChatGPT e pelo Perplexity, com checklist de publicação.</p><a href="/seo-geo-aeo-framework/framework-seo-aeo.html" hreflang="pt-BR" data-i18n="tools_seo_a">Abrir o framework &#8594;</a></div>
+      </div>
+    </section>
 
     <section id="about">
       <div class="section-label" data-i18n="section_about">Sobre</div>
       <div class="about-grid">
         <div>
           <p data-i18n="about_p1">Sou um builder. O que me move é encontrar um problema que incomoda alguém de verdade, entender o contexto de quem convive com ele e construir a resposta até ela funcionar no dia a dia. Essa forma de agir define o meu trabalho como CTO, os produtos que lanço e os projetos que desenho com clientes, e também a forma como me relaciono com a minha esposa, os meus filhos e os meus amigos: escutar com atenção, propor, construir junto e ajustar até ficar bom.</p>
-          <p data-i18n="about_p2">Em mais de 18 anos liderando tecnologia, aprendi a começar pelo problema e a escolher a ferramenta por último. Um bom projeto cabe numa frase sem citar tecnologia, tem dono, custo e uma métrica que mostra se deu certo. Essa disciplina me permite ser ambicioso com IA e manter os pés no chão, porque cada decisão se apoia em dado medido e cada entrega é conferida por quem vai usá-la.</p>
           <p data-i18n="about_p3">Trabalho onde engenharia de software, dados e inteligência artificial se encontram. Desenho arquiteturas de dados, construo aplicações e treino modelos com a convicção de que a IA rende mais quando amplia o julgamento das pessoas. Por isso os sistemas que lidero mostram de onde veio cada número, deixam o raciocínio à vista e mantêm alguém no comando das decisões que importam.</p>
         </div>
         <div>
@@ -118,47 +153,18 @@
     <section id="consulting">
       <div class="section-label" data-i18n="section_consulting">Consultoria</div>
       <p class="section-intro" data-i18n="consulting_intro">Ajudo CEOs, CFOs e CTOs a decidir onde dados e IA geram resultado e a colocar isso em operação, com a mesma disciplina que aplico nos meus próprios produtos.</p>
-      <div class="grid-2 cols-2">
-        <div class="card card-wide card-hl"><h3 data-i18n="cs_method_t">Método de trabalho humano + IA</h3><p data-i18n="cs_method_d">Desenho como o seu time passa a trabalhar com agentes de IA: o que a IA executa, quem decide, como cada entrega é revisada por modelos diferentes e medida antes de chegar à produção. É o método com que entrego os projetos deste site com times enxutos.</p></div>
-        <div class="card"><h3 data-i18n="cs_data_t">Arquitetura de dados e infraestrutura para IA</h3><p data-i18n="cs_data_d">Organizo os dados da empresa para que a IA tenha em que se apoiar: integração das fontes, camadas governadas, contratos de dados, acesso por MCP para agentes e custo de nuvem sob controle, em AWS, GCP ou Cloudflare.</p></div>
-        <div class="card"><h3 data-i18n="cs2_t">Estratégia</h3><p data-i18n="cs2_d">Defino o que fazer, e o que deixar de fora, a partir do problema: com dono, custo e métrica antes de qualquer ferramenta.</p></div>
-        <div class="card"><h3 data-i18n="cs1_t">Due diligence de projeto ou fornecedor</h3><p data-i18n="cs1_d">Leio o projeto ou a proposta antes de você assinar e digo o que é real, quanto vai custar de verdade e o que está faltando.</p></div>
-        <div class="card"><h3 data-i18n="cs4_t">Formação de time e liderança</h3><p data-i18n="cs4_d">Preparo time e diretoria para decidir e executar tecnologia por conta própria, sem depender de fornecedor.</p></div>
-      </div>
+      <p class="section-intro" data-i18n="consulting_short">Trabalho em cinco formatos, e todos começam com uma conversa de 1 hora, que custa R$ 500.</p>
       <div class="section-cta">
-        <a href="https://calendar.app.google/VyG67Nq5p6zsstAt8" target="_blank" rel="noopener" data-i18n="consulting_cta" data-cta-location="consultoria">Agende um horário &#8599;</a>
         <a href="/consultoria/" data-i18n="consulting_cta3">Ver formatos e como contratar &#8594;</a>
-        <a href="/portfolio/" data-i18n="consulting_cta2">Ver o que já entreguei &#8594;</a>
-      </div>
-    </section>
-
-    <section id="ferramentas">
-      <div class="section-label" data-i18n="section_tools">Ferramentas e guias</div>
-      <div class="grid-2 cols-2">
-        <div class="card"><h3 data-i18n="tools_map_t">Mapa de decisão: RAG, Text-to-SQL ou contexto longo</h3><p data-i18n="tools_map_d">Quatro perguntas de triagem, uma matriz de decisão e a conta do custo por pergunta, para escolher a arquitetura antes de aprovar o projeto.</p><a href="/mapa-decisao-ia/" hreflang="pt-BR" data-i18n="tools_map_a">Abrir o mapa &#8594;</a></div>
-        <div class="card"><h3 data-i18n="tools_sheet_t">Planilha de custos de IA em produção</h3><p data-i18n="tools_sheet_d">Compara o custo mensal de API, assinatura por usuário, GPU própria e plataforma em 1 mil, 10 mil e 100 mil consultas.</p><a href="/planilha-custos-ia/" hreflang="pt-BR" data-i18n="tools_sheet_a">Abrir a planilha &#8594;</a></div>
-        <div class="card"><h3 data-i18n="content_book_t">Livro: Desbloqueando a IA</h3><p data-i18n="tools_book_d">Guia prático de IA aplicada, escrito para empresários e com download gratuito.</p><a href="/blog/livro-ia-inteligencia-artificial-portugues-gratuito/" hreflang="pt-BR" data-i18n="tools_book_a">Baixar o livro &#8594;</a></div>
-        <div class="card"><h3 data-i18n="tools_seo_t">Framework de SEO, AEO e GEO</h3><p data-i18n="tools_seo_d">Como ser encontrado no Google e citado pelo ChatGPT e pelo Perplexity, com checklist de publicação.</p><a href="/seo-geo-aeo-framework/framework-seo-aeo.html" hreflang="pt-BR" data-i18n="tools_seo_a">Abrir o framework &#8594;</a></div>
+        <a href="https://calendar.app.google/VyG67Nq5p6zsstAt8" target="_blank" rel="noopener" data-i18n="consulting_cta" data-cta-location="consultoria">Agende um horário &#8599;</a>
       </div>
     </section>
 
     <section id="research">
       <div class="section-label" data-i18n="section_research">Pesquisa</div>
       <div class="grid-2 cols-2">
-        <div class="card"><h3 data-i18n="r_jepa_t">Raciocínio latente em LLMs (JEPA)</h3><p data-i18n="r_jepa_d">Protótipo de pesquisa que testa se um objetivo de predição latente no estilo JEPA melhora o raciocínio de LLMs, com backbone pareado (Gemma 4 E2B) em GSM8K, ARC, HellaSwag e RegexEval. Protocolo aberto para crítica, ainda sem resultados em GPU.</p><div class="card-links"><a href="https://github.com/guifav/jepa-latent-reasoning-llms" target="_blank" rel="noopener">GitHub &#8599;</a></div></div>
-        <div class="card"><h3>Caramelo</h3><p data-i18n="r_caramelo_d">Modelo brasileiro aberto (Gemma 4 E4B com LoRA), treinado na minha escrita e servido em CPU, com API compatível com OpenAI, app web e CLI. É a prova pública da tese da Tramline, empresa de modelos especializados que estou construindo: um modelo aberto, treinado para uma tarefa e rodando na infraestrutura da própria empresa, custa uma fração de um modelo de fronteira e entrega mais naquela tarefa.</p><div class="card-links"><a href="https://ia-caramelo.com" target="_blank" rel="noopener" data-i18n="r_caramelo_site">Conhecer o Caramelo &#8599;</a><a href="https://huggingface.co/guifav" target="_blank" rel="noopener">Hugging Face &#8599;</a><a href="https://tramline.ai" target="_blank" rel="noopener">Tramline &#8599;</a></div></div>
-      </div>
-    </section>
-
-    <section>
-      <div class="section-label">Stack</div>
-      <div class="skills-grid">
-        <div class="skill-group"><h3 data-i18n="sk_ai">IA e agentes</h3><span class="pill">LLMs</span><span class="pill" data-i18n="sk_agents">Agentes</span><span class="pill">RAG</span><span class="pill">MCP</span><span class="pill">Evals</span><span class="pill">LLM-as-judge</span><span class="pill">Guardrails</span></div>
-        <div class="skill-group"><h3 data-i18n="sk_ds">Modelos e data science</h3><span class="pill">Python</span><span class="pill">scikit-learn</span><span class="pill">XGBoost</span><span class="pill">SHAP</span><span class="pill">Fine-tuning LoRA</span><span class="pill">Hugging Face</span><span class="pill" data-i18n="sk_stats">Estatística aplicada</span></div>
-        <div class="skill-group"><h3 data-i18n="sk_de">Engenharia e camadas de dados</h3><span class="pill">Redshift</span><span class="pill">BigQuery</span><span class="pill">PostgreSQL</span><span class="pill">AWS Glue</span><span class="pill">ETL / ELT</span><span class="pill" data-i18n="sk_contracts">Contratos de dados</span><span class="pill" data-i18n="sk_dq">Qualidade e linhagem</span></div>
-        <div class="skill-group"><h3 data-i18n="sk_arch">Arquitetura e MLOps</h3><span class="pill" data-i18n="sk_layers">Arquitetura em camadas</span><span class="pill">DVC</span><span class="pill" data-i18n="sk_serving">Serving de modelos</span><span class="pill" data-i18n="sk_obs">Observabilidade</span><span class="pill">CI/CD</span><span class="pill">Docker</span></div>
-        <div class="skill-group"><h3 data-i18n="sk_cloud">Cloud e infraestrutura</h3><span class="pill">AWS</span><span class="pill">GCP</span><span class="pill">Cloudflare</span><span class="pill">Lambda</span><span class="pill">Cloud Run</span><span class="pill">Firebase</span></div>
-        <div class="skill-group"><h3 data-i18n="sk_dev">Produto e desenvolvimento</h3><span class="pill">TypeScript</span><span class="pill">Next.js</span><span class="pill">React</span><span class="pill">Node.js</span><span class="pill">FastAPI</span><span class="pill">Prisma</span></div>
+        <div class="card"><h3 data-i18n="r_jepa_t">Raciocínio latente em LLMs (JEPA)</h3><p data-i18n="r_jepa_d">Protótipo de pesquisa que testa se um objetivo de predição latente no estilo JEPA melhora o raciocínio de LLMs. O protocolo está aberto para crítica, ainda sem resultados em GPU.</p><div class="card-links"><a href="https://github.com/guifav/jepa-latent-reasoning-llms" target="_blank" rel="noopener">GitHub &#8599;</a></div></div>
+        <div class="card"><h3>Caramelo</h3><p data-i18n="r_caramelo_d">Modelo brasileiro aberto, treinado na minha escrita e servido em CPU. É a prova pública da tese da Tramline, a empresa de modelos especializados que estou construindo.</p><div class="card-links"><a href="https://ia-caramelo.com" target="_blank" rel="noopener" data-i18n="r_caramelo_site">Conhecer o Caramelo &#8599;</a><a href="https://huggingface.co/guifav" target="_blank" rel="noopener">Hugging Face &#8599;</a><a href="https://tramline.ai" target="_blank" rel="noopener">Tramline &#8599;</a></div></div>
       </div>
     </section>
 
@@ -184,14 +190,10 @@
       "nav_blog": "Insights",
       "nav_contact": "Contact",
       "nav_schedule": "Schedule a chat",
-      "hero_kicker": "Builder, CTO and data and AI architect",
-      "hero_title": "I turn business problems into real applications.",
-      "hero_desc": "Products, data platforms, automations and specialized models, designed from the problem up and delivered into operation, with real users, costs and goals. For companies that want to take AI out of the pilot and put it to work.",
-      "hero_cta_portfolio": "See the portfolio",
-      "hero_cta_contact": "Get in touch",
+      "hero_kicker": "CTO at GRI Institute · Builder and data and AI architect",
+      "hero_desc": "I turn business problems into real applications: products, data platforms, automations and specialized models, designed from the problem up and delivered into operation, with real users, costs and goals. For companies that want to take AI out of the pilot and put it to work.",
       "section_about": "About",
       "about_p1": "I am a builder. What drives me is finding a problem that truly bothers someone, understanding the context of the people who live with it and building the answer until it works day to day. That way of acting defines my work as a CTO, the products I launch and the projects I design with clients, and also how I relate to my wife, my children and my friends: listen closely, propose, build together and adjust until it is right.",
-      "about_p2": "In more than 18 years leading technology, I learned to start with the problem and choose the tool last. A good project fits in one sentence without naming a technology, and it has an owner, a cost and a metric that shows whether it worked. That discipline lets me be ambitious with AI and keep my feet on the ground, because every decision rests on measured data and every delivery is checked by the people who will use it.",
       "about_p3": "I work where software engineering, data and artificial intelligence meet. I design data architectures, build applications and train models, convinced that AI pays off most when it extends people's judgment. That is why the systems I lead show where every number came from, keep the reasoning visible and leave a person in charge of the decisions that matter.",
       "stat_years": "years leading technology",
       "stat_role": "at GRI Institute, a global real estate and infrastructure think tank with a community of 20,000+ executives in 110+ countries",
@@ -205,37 +207,13 @@
       "projects_cta2": "Talk about a project &#8599;",
       "section_consulting": "Consulting",
       "consulting_intro": "I help CEOs, CFOs and CTOs decide where data and AI produce results and put that into operation, with the same discipline I apply to my own products.",
-      "cs_method_t": "Human + AI working method",
-      "cs_method_d": "I design how your team works with AI agents: what the AI executes, who decides, how every delivery is reviewed by different models and measured before it reaches production. It is the method I use to deliver the projects on this site with lean teams.",
-      "cs_data_t": "Data architecture and infrastructure for AI",
-      "cs_data_d": "I organize the company's data so AI has something solid to stand on: source integration, governed layers, data contracts, MCP access for agents and cloud costs under control, on AWS, GCP or Cloudflare.",
-      "cs2_t": "Strategy",
-      "cs2_d": "I define what to do, and what to leave out, starting from the problem: with an owner, a cost and a metric before any tool.",
-      "cs1_t": "Project or vendor due diligence",
-      "cs1_d": "I read the project or the vendor proposal before you sign, and tell you what is real, what it will actually cost and what is missing.",
-      "cs4_t": "Team and leadership training",
-      "cs4_d": "I prepare your team and leadership to decide and execute technology on their own, without depending on a vendor.",
       "consulting_cta": "Schedule a chat &#8599;",
-      "consulting_cta2": "See what I have delivered &#8594;",
       "consulting_cta3": "See formats and how to hire &#8594;",
       "section_research": "Research",
       "r_jepa_t": "Latent reasoning in LLMs (JEPA)",
-      "r_jepa_d": "Research prototype that tests whether a JEPA-style latent prediction objective improves LLM reasoning, with a paired backbone design (Gemma 4 E2B) on GSM8K, ARC, HellaSwag and RegexEval. The protocol is open for critique; no GPU results yet.",
-      "r_caramelo_d": "An open Brazilian model (Gemma 4 E4B with LoRA), trained on my writing and served on CPU, with an OpenAI-compatible API, web app and CLI. It is the public proof of the thesis behind Tramline, the specialized models company I am building: an open model, trained for one task and running on the company's own infrastructure, costs a fraction of a frontier model and delivers more on that task.",
+      "r_jepa_d": "Research prototype that tests whether a JEPA-style latent prediction objective improves LLM reasoning. The protocol is open for critique, with no GPU results yet.",
+      "r_caramelo_d": "An open Brazilian model, trained on my writing and served on CPU. It is the public proof of the thesis behind Tramline, the specialized models company I am building.",
       "r_caramelo_site": "Visit Caramelo &#8599;",
-      "sk_ai": "AI and agents",
-      "sk_agents": "Agents",
-      "sk_ds": "Models and data science",
-      "sk_stats": "Applied statistics",
-      "sk_de": "Data engineering and layers",
-      "sk_contracts": "Data contracts",
-      "sk_dq": "Quality and lineage",
-      "sk_arch": "Architecture and MLOps",
-      "sk_layers": "Layered architecture",
-      "sk_serving": "Model serving",
-      "sk_obs": "Observability",
-      "sk_cloud": "Cloud and infrastructure",
-      "sk_dev": "Product and development",
       "section_content": "Content",
       "content_news_t": "Articles by email: Expert Insights",
       "content_news_d": "Real AI implementations with code, architecture, costs, failures and lessons.",
@@ -300,7 +278,22 @@
       "cf_gestao_qualidade_d": "Quality procedures with traceable versions, an audit trail and a map of which documents cite which, ready for audit.",
       "cf_gestao_qualidade_t": "Quality Management Portal",
       "cf_talkwithdata_t": "AI data analysis",
-      "cf_caramelo_t": "Specialized AI model"
+      "cf_caramelo_t": "Specialized AI model",
+      "hero_cta_blog": "Read the articles",
+      "hero_cta_consulting": "Consulting",
+      "section_latest": "Latest articles, in Portuguese",
+      "latest_all": "See all articles &#8594;",
+      "section_topics": "Topics",
+      "tp_dados_t": "AI on company data",
+      "tp_dados_d": "How to make AI answer with company data: RAG, Text-to-SQL, MCP and spreadsheet analysis with LLMs. In Portuguese.",
+      "tp_custos_t": "Costs, ROI and model choice",
+      "tp_custos_d": "How much generative AI costs in production and how to choose the model: frontier, open, fine-tuning and your own GPU. In Portuguese.",
+      "tp_agentes_t": "AI agents in production",
+      "tp_agentes_d": "How to build AI agents for the company: architecture, MCP, LangChain, LangGraph and memory. In Portuguese.",
+      "tp_impl_t": "AI implementation: legacy systems and data architecture",
+      "tp_impl_d": "How to implement AI in a company with legacy systems: plan, integration, team and data architecture. In Portuguese.",
+      "tp_a": "See the topic's articles &#8594;",
+      "consulting_short": "I work in five formats, and all of them start with a 1-hour conversation, which costs R$ 500."
   }</script>
   <script src="/assets/site.js?v=202611072213"></script>
   <script src="/assets/track.js?v=202611241800"></script>
