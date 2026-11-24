@@ -1417,8 +1417,9 @@ class TrackingSourcesTest(unittest.TestCase):
 
     def test_cta_locations_in_sources(self):
         home = self.read("index.html")
-        for loc in ("hero", "projetos", "consultoria"):
-            self.assertEqual(home.count(f'data-cta-location="{loc}"'), 1, loc)
+        # #136: o hero da home nova não tem CTA de contato; agendar e escrever ficam na /consultoria/.
+        for loc, n in (("hero", 0), ("projetos", 1), ("consultoria", 1)):
+            self.assertEqual(home.count(f'data-cta-location="{loc}"'), n, loc)
         self.assertEqual(self.read("portfolio/index.html").count('data-cta-location="chamada-final"'), 2)
         consulting = self.read(C.CONSULTING_PAGE)
         for loc, n in (("consultoria-pagina", 1), ("como-contratar", 2), ("projetos", 1), ("chamada-final", 2)):
