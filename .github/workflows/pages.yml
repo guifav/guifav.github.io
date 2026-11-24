@@ -60,6 +60,7 @@ jobs:
           python3 scripts/test_assemble_site.py
           python3 scripts/test_check_site.py
           python3 scripts/test_cutover_redirects.py
+          python3 scripts/test_site_redirects.py
           python3 scripts/test_build_sitemaps.py
           python3 scripts/test_indexnow.py
           python3 blog-src/scripts/test_newsletter_draft.py
