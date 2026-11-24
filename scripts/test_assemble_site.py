@@ -36,7 +36,7 @@ class Fixture(unittest.TestCase):
         # Pastas que existem no repo e nunca podem ir ao ar.
         write(self.repo / "docs" / "plan.md", b"plano interno")
         write(self.repo / "_next" / "static" / "x.js", b"js")
-        write(self.repo / "tools" / "mockups" / "README.md", b"readme")
+        write(self.repo / "_mockups" / "README.md", b"readme")
         write(self.repo / "blog-src" / "package.json", b"{}")
         write(self.repo / "workers" / "newsletter" / "index.js", b"segredo-nao")
         write(self.blog / "index.html", b"<html>blog</html>")
@@ -84,7 +84,7 @@ class AssembleTest(Fixture):
 
     def test_excluded_folders_never_published(self):
         self.assemble()
-        for name in ["docs", "_next", "tools", "blog-src", "workers"]:
+        for name in ["docs", "_next", "_mockups", "blog-src", "workers"]:
             self.assertFalse((self.out / name).exists(), name)
 
     def test_root_files_are_byte_identical(self):
@@ -206,7 +206,7 @@ class RealManifestTest(unittest.TestCase):
 
     def test_real_manifest_excludes_hidden_folders(self):
         entries = A.parse_manifest(self.REPO / "site-manifest.txt")
-        for hidden in ["docs/", "_next/", "tools/", "blog-src/", "scripts/", ".github/", "workers/"]:
+        for hidden in ["docs/", "_next/", "_mockups/", "blog-src/", "scripts/", ".github/", "workers/"]:
             self.assertNotIn(hidden, entries)
 
 

@@ -1,4 +1,4 @@
-// Ordena a tabela do /llm-ranking/ por clique no cabeçalho (issue #113). Camada sobre as linhas que o build gera:
+// Ordena a tabela do /tools/llm-ranking/ por clique no cabeçalho (issue #113). Camada sobre as linhas que o build gera:
 // sem JavaScript, a tabela é a mesma, na ordem da fonte. Coluna numérica ordena pelo data-valor da célula; coluna de
 // texto, pelo texto em português. O primeiro clique ordena do maior para o menor nas numéricas, exceto posição e faixa,
 // e de A a Z nas de texto; o segundo inverte.
