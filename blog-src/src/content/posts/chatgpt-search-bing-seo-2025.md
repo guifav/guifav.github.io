@@ -31,7 +31,7 @@ Um dos erros técnicos mais comuns que vejo em auditorias é bloquear todos os b
 | `ChatGPT-User` | Busca sob demanda quando um usuário pede para abrir uma URL específica | O `robots.txt` pode não se aplicar porque a ação parte de um usuário, e esse user-agent não controla a elegibilidade no ChatGPT Search | Para sair da busca, usar `OAI-SearchBot`; para bloquear acesso sob demanda, configurar regra no WAF |
 | `Bingbot` | Rastreia e indexa páginas para o Microsoft Bing e Microsoft Copilot | Tira o site do índice do Bing, do Copilot e das buscas apoiadas nele | Manter sempre liberado e monitorado no Bing Webmaster Tools |
 
-Se a empresa decide bloquear treinamento de modelos mantendo visibilidade nas respostas de busca com link, a configuração mínima no `robots.txt` separa os dois rastreadores de forma explícita:
+Se a empresa decide bloquear treinamento de modelos mantendo visibilidade nas respostas de busca com link, a configuração mínima no `robots.txt` separa coleta para treino e rastreamento de busca de forma explícita:
 
 ```text
 User-agent: GPTBot
@@ -83,5 +83,7 @@ Um único artigo bem estruturado atende às três frentes quando entrega respost
 ### Quanto tempo leva para mudanças no robots.txt surtirem efeito para a OpenAI?
 
 Segundo a documentação da OpenAI, alterações no `robots.txt` costumam levar cerca de 24 horas para se propagar pelos sistemas de rastreamento, embora o reflexo em reindexação de páginas específicas dependa da frequência de visita ao domínio.
+
+---
 
 Nas auditorias técnicas que faço, começo sempre pelos logs do servidor para ver se o `OAI-SearchBot` recebe resposta 200 ou é barrado em silêncio pelo firewall da borda. Esse teste já foi feito no seu domínio?
