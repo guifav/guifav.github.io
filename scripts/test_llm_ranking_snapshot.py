@@ -378,13 +378,85 @@ class GitTest(unittest.TestCase):
         self.assertFalse((self.dados / "sobra.txt").exists())
 
 
+class DataNoArTest(unittest.TestCase):
+    """A data dos dados da página no ar, lida da meta que o build grava (#144, achado da revisão automática)."""
+
+    def get(self, status, body):
+        vistos = []
+
+        def fake(url):
+            vistos.append(url)
+            return status, body.encode(), {}
+        return fake, vistos
+
+    def test_reads_the_meta(self):
+        g, vistos = self.get(200, '<head><meta name="dados-publicados-em" content="2026-11-22"></head>')
+        self.assertEqual(S.data_no_ar(g), "2026-11-22")
+        self.assertTrue(vistos[0].startswith(B.URL + "?snapshot="), vistos)
+
+    def test_anything_else_is_unknown(self):
+        for status, body in ((200, "<head></head>"),
+                             (200, '<meta name="dados-publicados-em" content="2026-11-22">' * 2),
+                             (200, '<meta name="dados-publicados-em" content="22/11/2026">'),
+                             (404, '<meta name="dados-publicados-em" content="2026-11-22">'),
+                             (0, "")):
+            with self.subTest(status=status, body=body[:40]):
+                self.assertIsNone(S.data_no_ar(self.get(status, body)[0]))
+
+    def test_bad_bytes_are_unknown(self):
+        self.assertIsNone(S.data_no_ar(lambda url: (200, b"\xff\xfe<meta", {})))
+
+
 class MainTest(GitTest):
-    def main(self, *argv, data=None):
+    def main(self, *argv, data=None, git=S._git, no_ar="2026-11-22"):
         f = fonte(FakeServer(data or dataset()))
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            code = S.main(["--dados", str(self.dados), *argv], fonte=f)
+            code = S.main(["--dados", str(self.dados), *argv], fonte=f, git=git, no_ar=lambda: no_ar)
         return code, out.getvalue(), err.getvalue()
+
+    def test_deploy_when_written(self):
+        code, out, _ = self.main("--apply", no_ar="2026-11-11")
+        self.assertEqual((code, out.strip().splitlines()[-3:]), (0, ["gravado", "no ar: 2026-11-11", "deploy"]))
+
+    def test_deploy_when_written_even_if_the_page_already_has_the_date(self):
+        code, out, _ = self.main("--apply", no_ar="2026-11-22")
+        self.assertEqual(out.strip().splitlines()[-1], "deploy")
+
+    def test_no_deploy_when_nothing_changed_and_the_page_is_current(self):
+        self.main("--apply")
+        code, out, _ = self.main("--apply", no_ar="2026-11-22")
+        self.assertEqual((code, out.strip().splitlines()[-3:]),
+                         (0, ["sem mudança", "no ar: 2026-11-22", "sem deploy: a página no ar já tem os dados de 2026-11-22"]))
+
+    def test_deploy_when_nothing_changed_but_the_page_is_behind(self):
+        # Revisão automática do #144 (P1): o push foi aceito pelo remoto, mas o cliente estourou o tempo. A primeira
+        # rodada sai com erro e sem deploy; a seguinte acha o conteúdo igual e, antes, devolvia só "sem mudança", sem
+        # disparar o deploy, e a página ficava parada até a próxima mudança dos dados.
+        def push_aceito_com_timeout(dados, *args):
+            r = S._git(dados, *args)
+            if args[0] == "push" and r.returncode == 0:
+                return subprocess.CompletedProcess(args, 1, "", f"não terminou em {S.GIT_TIMEOUT}s")
+            return r
+        code, out, err = self.main("--apply", git=push_aceito_com_timeout, no_ar="2026-11-11")
+        self.assertEqual(code, 1)
+        self.assertIn("git push falhou: não terminou", err)
+        self.assertNotIn("deploy", out)
+        self.assertEqual(self.origin_log()[0], "Arena, arena de texto: publicação de 2026-11-22")
+        code, out, _ = self.main("--apply", no_ar="2026-11-11")
+        self.assertEqual((code, out.strip().splitlines()[-3:]), (0, ["sem mudança", "no ar: 2026-11-11", "deploy"]))
+
+    def test_deploy_when_the_page_date_is_unknown(self):
+        self.main("--apply")
+        code, out, _ = self.main("--apply", no_ar=None)
+        self.assertEqual(out.strip().splitlines()[-2:], ["no ar: não lida", "deploy"])
+
+    def test_dry_run_does_not_read_the_page(self):
+        def nunca():
+            raise AssertionError("a simulação não lê a página no ar")
+        f = fonte(FakeServer(dataset()))
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(S.main(["--dados", str(self.dados)], fonte=f, no_ar=nunca), 0)
 
     def test_dry_run_touches_nothing(self):
         code, out, _ = self.main()
@@ -396,11 +468,11 @@ class MainTest(GitTest):
 
     def test_apply_then_no_change(self):
         code, out, _ = self.main("--apply")
-        self.assertEqual((code, out.strip().splitlines()[-1]), (0, "gravado"))
+        self.assertEqual((code, out.strip().splitlines()[-3]), (0, "gravado"))
         snap = json.loads((self.dados / S.ARQUIVO).read_text(encoding="utf-8"))
         B.validar(snap)
         code, out, _ = self.main("--apply")
-        self.assertEqual((code, out.strip().splitlines()[-1]), (0, "sem mudança"))
+        self.assertEqual((code, out.strip().splitlines()[-3]), (0, "sem mudança"))
         self.assertEqual(len(self.origin_log()), 2)
 
     def test_invalid_source_writes_nothing(self):

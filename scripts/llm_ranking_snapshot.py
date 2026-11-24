@@ -20,6 +20,7 @@ import argparse
 import http.client
 import json
 import math
+import re
 import subprocess
 import sys
 import time
@@ -206,7 +207,34 @@ def gravar(dados: Path, texto: str, pub: str, git=_git) -> bool:
     return True
 
 
-def main(argv: list[str] | None = None, fonte: Fonte | None = None, git=_git) -> int:
+_META_RE = re.compile(r'<meta name="%s" content="([^"]*)">' % re.escape(B.DATA_META))
+
+
+def data_no_ar(get=http_get) -> str | None:
+    """Data dos dados do /llm-ranking/ que está no ar, lida da meta que o build grava. None quando não dá para saber
+    (fora do ar, sem a meta, duas metas, data fora do formato). O parâmetro na URL evita resposta de cache."""
+    status, body, _ = get(f"{B.URL}?snapshot={int(time.time())}")
+    if status != 200:
+        return None
+    try:
+        achados = _META_RE.findall(body.decode("utf-8"))
+    except UnicodeDecodeError:
+        return None
+    if len(achados) != 1:
+        return None
+    try:
+        B._dia(achados[0], "meta")
+    except B.RankingError:
+        return None
+    return achados[0]
+
+
+def main(argv: list[str] | None = None, fonte: Fonte | None = None, git=_git, no_ar=data_no_ar) -> int:
+    """Com --apply, a saída termina em três linhas que o wrapper do cron lê:
+    "gravado" ou "sem mudança"; "no ar: <data>" (ou "no ar: não lida"); e "deploy" ou "sem deploy: ...".
+    O deploy é pedido quando o snapshot foi gravado e também quando a página no ar não tem a data dos dados do
+    repositório: assim uma rodada que publicou e falhou depois (push aceito com timeout no cliente, disparo do deploy
+    que falhou, deploy que quebrou) é recuperada pela rodada seguinte, mesmo sem dado novo."""
     ap = argparse.ArgumentParser(description="Snapshot da arena de texto da Arena para o /llm-ranking/.")
     ap.add_argument("--dados", required=True, type=Path, help="clone do guifav/llm-ranking-data")
     ap.add_argument("--apply", action="store_true", help="grava, faz commit e push quando mudou")
@@ -224,7 +252,14 @@ def main(argv: list[str] | None = None, fonte: Fonte | None = None, git=_git) ->
         if not args.apply:
             print("simulação: nada foi gravado (use --apply)")
             return 0
-        print("gravado" if gravar(args.dados, texto, snap["publicacao"], git) else "sem mudança")
+        gravou = gravar(args.dados, texto, snap["publicacao"], git)
+        print("gravado" if gravou else "sem mudança")
+        data = no_ar()
+        print(f"no ar: {data or 'não lida'}")
+        if gravou or data != snap["publicacao"]:
+            print("deploy")
+        else:
+            print(f"sem deploy: a página no ar já tem os dados de {data}")
     except (SnapshotError, B.RankingError) as e:
         print(f"llm_ranking_snapshot: ERRO: {e}", file=sys.stderr)
         return 1
