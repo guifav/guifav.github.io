@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 import xml.etree.ElementTree as ET
+from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -273,15 +274,33 @@ class RulesTest(unittest.TestCase):
 # sitemap gerado, o teste falha em vez de se pular (#117). No passo dos testes, antes da montagem, ele se pula.
 REQUIRED_ENV = "SITEMAP_REAL_SITE"
 REPO = Path(__file__).resolve().parent.parent
-_META_ROBOTS = re.compile(r"""<meta\b(?=[^>]*\bname\s*=\s*["']?robots["']?)[^>]*\bcontent\s*=\s*["']([^"']*)["']""", re.I)
-_CANONICAL = re.compile(r"""<link\b(?=[^>]*\brel\s*=\s*["']?canonical["']?)[^>]*\bhref\s*=\s*["']([^"']*)["']""", re.I)
-
-
 _HTML_SUFFIXES = (".html", ".htm", ".xhtml")
 
 
+class _OracleHead(HTMLParser):
+    """Leitor próprio do oráculo para meta robots e link canonical (independente do build_sitemaps)."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.robots: list[str] = []
+        self.canonicals: list[str] = []
+
+    def handle_startendtag(self, tag, attrs):
+        self.handle_starttag(tag, attrs)
+
+    def handle_starttag(self, tag, attrs):
+        a: dict[str, str] = {}
+        for k, v in attrs:
+            a.setdefault(k, v or "")
+        if tag == "meta" and a.get("name", "").lower() == "robots":
+            self.robots.append(a.get("content", "").lower())
+        elif tag == "link" and "canonical" in a.get("rel", "").lower().split():
+            self.canonicals.append(a.get("href", "").strip())
+
+
 def _star_disallow(robots_txt: str) -> list[str]:
-    """Prefixos Disallow só do grupo User-agent: * (um grupo de outro robô não conta), sem comentários."""
+    """Prefixos Disallow só do grupo User-agent: * (um grupo de outro robô não conta), sem comentários.
+    Curingas '*' e '$' não são suportados nem aqui nem no build_sitemaps e fazem o teste falhar sem silêncio."""
     out, in_star, seen_rule = [], False, False
     for raw in robots_txt.splitlines():
         line = raw.split("#", 1)[0].strip()
@@ -294,6 +313,10 @@ def _star_disallow(robots_txt: str) -> list[str]:
         elif key in ("allow", "disallow"):
             seen_rule = True
             if in_star and key == "disallow" and val:
+                if "*" in val or "$" in val:
+                    raise AssertionError(
+                        f"robots.txt usa curinga em Disallow ({val!r}), não suportado pelo oráculo nem pelo build_sitemaps"
+                    )
                 out.append(val)
     return out
 
@@ -308,32 +331,41 @@ def _url(rel: str) -> str:
 def manifest_pages(repo: Path) -> list[str]:
     """Oráculo independente do build_sitemaps: as páginas HTML do site-manifest.txt (lidas dos fontes do repo) que
     devem ir ao /sitemap-site.xml. Sai o 404, o que o grupo User-agent: * do robots.txt do repo bloqueia, o que tem
-    meta robots noindex/none e o que aponta o canonical para outra URL. Comentários HTML não contam."""
+    meta robots noindex/none e o que aponta o canonical para outra URL. Comentários HTML e tags em <script> não contam."""
     disallow = _star_disallow((repo / "robots.txt").read_text(encoding="utf-8"))
     files: list[Path] = []
     for raw in (repo / "site-manifest.txt").read_text(encoding="utf-8").splitlines():
-        entry = raw.split("#", 1)[0].strip()
-        if not entry:
+        entry = raw.strip()
+        if not entry or entry.startswith("#"):
             continue
-        src = repo / entry
+        src = repo / entry.rstrip("/")
         if not src.exists():
             raise AssertionError(f"site-manifest.txt cita {entry}, que não existe no repo")
         if entry.endswith("/"):
+            if not src.is_dir():
+                raise AssertionError(f"site-manifest.txt lista {entry} como pasta, mas não é pasta no repo")
             files += sorted(f for f in src.rglob("*") if f.is_file() and f.suffix.lower() in _HTML_SUFFIXES)
-        elif src.suffix.lower() in _HTML_SUFFIXES:
-            files.append(src)
+        else:
+            if src.is_dir():
+                raise AssertionError(f"site-manifest.txt lista a pasta {entry} sem '/' no final")
+            if not src.is_file():
+                raise AssertionError(f"site-manifest.txt lista {entry}, que não é arquivo no repo")
+            if src.suffix.lower() in _HTML_SUFFIXES:
+                files.append(src)
     out = []
     for f in files:
         rel = f.relative_to(repo).as_posix()
         if rel == "404.html":
             continue
         url = _url(rel)
-        text = re.sub(r"<!--.*?-->", "", f.read_text(encoding="utf-8"), flags=re.S)
         if any(url.startswith(d) for d in disallow):
             continue
-        if any({d.strip().lower() for d in c.split(",")} & {"noindex", "none"} for c in _META_ROBOTS.findall(text)):
+        h = _OracleHead()
+        h.feed(f.read_text(encoding="utf-8"))
+        h.close()
+        if any({d.strip() for d in c.split(",")} & {"noindex", "none"} for c in h.robots):
             continue
-        canon = {(s.scheme, s.netloc, s.path or "/", s.query, s.fragment) for s in map(urlsplit, _CANONICAL.findall(text))}
+        canon = {(s.scheme, s.netloc, s.path or "/", s.query, s.fragment) for s in map(urlsplit, h.canonicals)}
         if canon and canon != {("https", "guifav.dev", url, "", "")}:  # "https://guifav.dev" sem barra é a home
             continue
         out.append(url)
@@ -451,7 +483,7 @@ class RealSiteGuardTest(unittest.TestCase):
             repo = Path(d)
             (repo / "robots.txt").write_text("User-agent: GPTBot\nDisallow: /\n\nUser-agent: *\n"
                                              "Disallow: /p/mockups/  # mockups\n", encoding="utf-8")
-            (repo / "site-manifest.txt").write_text("# c\n#fora/index.html\nindex.html\n404.html\np/\nsolto.html  # comentário\n"
+            (repo / "site-manifest.txt").write_text("# c\n#fora/index.html\nindex.html\n404.html\np/\nsolto.html\n"
                                                     "img.png\n", encoding="utf-8")
             pages = {
                 "index.html": html('<link rel="canonical" href="https://guifav.dev">'),
@@ -478,6 +510,72 @@ class RealSiteGuardTest(unittest.TestCase):
     def test_url_of_folder_index(self):
         # r1 (Claude P3): a conversão de caminho em URL é do próprio teste.
         self.assertEqual([_url(r) for r in ("index.html", "a/index.html", "a/b.html")], ["/", "/a/", "/a/b.html"])
+
+    def test_oracle_parses_meta_robots_and_canonical_strictly(self):
+        # #135 item 1: atributos data-*, prefixos de name, rel com vários tokens e tags dentro de <script>.
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d)
+            (repo / "robots.txt").write_text("User-agent: *\nDisallow:\n", encoding="utf-8")
+            (repo / "site-manifest.txt").write_text(
+                "index.html\na.html\nb.html\nb2.html\nc.html\nd.html\nd2.html\ne.html\nf.html\n", encoding="utf-8")
+            pages = {
+                "index.html": html(),
+                "a.html": html('<meta data-name="robots" content="noindex">'),
+                "b.html": html('<meta name="robots" content="index, follow" data-content="noindex">'),
+                "b2.html": html('<meta name="robots" data-content="noindex" content="index, follow">'),
+                "c.html": html('<meta name="robots-extra" content="noindex">'),
+                "d.html": html('<link rel="canonical" href="https://guifav.dev/d.html" data-href="https://outro.example/d.html">'),
+                "d2.html": html('<link rel="canonical" data-href="https://outro.example/d2.html" href="https://guifav.dev/d2.html">'),
+                "e.html": html('<link rel="alternate canonical" href="https://outro.example/e.html">'),
+                "f.html": html('<script>var x = \'<meta name="robots" content="noindex">\';</script>'),
+            }
+            for rel, text in pages.items():
+                (repo / rel).write_text(text, encoding="utf-8")
+            self.assertEqual(manifest_pages(repo), ["/", "/a.html", "/b.html", "/b2.html", "/c.html", "/d.html", "/d2.html", "/f.html"])
+
+    def test_oracle_rejects_inline_comment_in_manifest(self):
+        # #135 item 2: assemble_site.py só aceita '#' no começo da linha; comentário inline falha no oráculo também.
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d)
+            (repo / "robots.txt").write_text("User-agent: *\nDisallow:\n", encoding="utf-8")
+            (repo / "index.html").write_text(html(), encoding="utf-8")
+            (repo / "solto.html").write_text(html(), encoding="utf-8")
+            (repo / "site-manifest.txt").write_text("# comentário inteiro\nindex.html\nsolto.html  # comentário inline\n",
+                                                    encoding="utf-8")
+            with self.assertRaisesRegex(AssertionError, "solto.html"):
+                manifest_pages(repo)
+
+    def test_oracle_rejects_robots_wildcards_in_star_group(self):
+        # #135 item 3: curingas '*' e '$' em Disallow do grupo '*' não são suportados e devem falhar sem silêncio.
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d)
+            (repo / "index.html").write_text(html(), encoding="utf-8")
+            (repo / "site-manifest.txt").write_text("index.html\n", encoding="utf-8")
+            for rule in ("/privado*", "/*.pdf$", "/exato$"):
+                with self.subTest(rule=rule):
+                    (repo / "robots.txt").write_text(f"User-agent: *\nDisallow: {rule}\n", encoding="utf-8")
+                    with self.assertRaisesRegex(AssertionError, "curinga"):
+                        manifest_pages(repo)
+            # Curinga em grupo de outro robô não afeta o grupo '*'.
+            (repo / "robots.txt").write_text("User-agent: GPTBot\nDisallow: /*.pdf$\n\nUser-agent: *\nDisallow: /tools/\n",
+                                             encoding="utf-8")
+            self.assertEqual(manifest_pages(repo), ["/"])
+
+    def test_oracle_rejects_manifest_directory_without_trailing_slash(self):
+        # #135 item 4: pasta listada sem '/' (ou arquivo listado com '/') falha em vez de ser ignorado sem aviso.
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d)
+            (repo / "robots.txt").write_text("User-agent: *\nDisallow:\n", encoding="utf-8")
+            (repo / "index.html").write_text(html(), encoding="utf-8")
+            (repo / "p").mkdir()
+            (repo / "p/index.html").write_text(html(), encoding="utf-8")
+            (repo / "site-manifest.txt").write_text("index.html\np\n", encoding="utf-8")
+            with self.assertRaisesRegex(AssertionError, r"p.*sem '/'"):
+                manifest_pages(repo)
+            (repo / "solto.html").write_text(html(), encoding="utf-8")
+            (repo / "site-manifest.txt").write_text("index.html\nsolto.html/\n", encoding="utf-8")
+            with self.assertRaisesRegex(AssertionError, r"solto\.html/.*não é pasta"):
+                manifest_pages(repo)
 
 
 if __name__ == "__main__":
