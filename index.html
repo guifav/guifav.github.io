@@ -19,7 +19,7 @@
   <meta name="twitter:image" content="https://guifav.dev/og-image.png"/>
   <meta property="og:type" content="profile">
   <link rel="canonical" href="https://guifav.dev">
-  <link rel="stylesheet" href="/assets/site.css?v=202611140300">
+  <link rel="stylesheet" href="/assets/site.css?v=202611232330">
   <script async defer src="https://challenges.cloudflare.com/turnstile/v0/api.js"></script>
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-K7Y87QNCX8"></script>
   <script>window['ga-disable-G-K7Y87QNCX8']=location.hostname.replace(/\.$/,'')!=='guifav.dev';window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('consent','default',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',analytics_storage:'denied'});gtag('set','ads_data_redaction',true);window.guifavConsent=function(){try{var c=JSON.parse(localStorage.getItem('consent-v1')||'null');return c&&c.v==='granted'&&typeof c.t==='number'&&Date.now()-c.t>=0&&Date.now()-c.t<31536e6?'granted':null}catch(e){return null}}();if(window.guifavConsent==='granted')gtag('consent','update',{ad_storage:'granted',ad_user_data:'granted',ad_personalization:'granted',analytics_storage:'granted'});gtag('js',new Date());gtag('config','G-K7Y87QNCX8',{content_group:'home'});</script>
@@ -32,7 +32,7 @@
 </head>
 <body>
   <div class="container">
-    <nav>
+    <nav aria-label="Principal" data-i18n-aria="nav_aria">
       <a href="/" class="nav-name">Guilherme Favaron</a>
       <div class="nav-links">
         <a href="/portfolio/" data-i18n="nav_portfolio">Portfólio</a>
@@ -129,6 +129,16 @@
       </div>
     </section>
 
+    <section id="ferramentas">
+      <div class="section-label" data-i18n="section_tools">Ferramentas e guias</div>
+      <div class="grid-2 cols-2">
+        <div class="card"><h3 data-i18n="tools_map_t">Mapa de decisão: RAG, Text-to-SQL ou contexto longo</h3><p data-i18n="tools_map_d">Quatro perguntas de triagem, uma matriz de decisão e a conta do custo por pergunta, para escolher a arquitetura antes de aprovar o projeto.</p><a href="/mapa-decisao-ia/" hreflang="pt-BR" data-i18n="tools_map_a">Abrir o mapa &#8594;</a></div>
+        <div class="card"><h3 data-i18n="tools_sheet_t">Planilha de custos de IA em produção</h3><p data-i18n="tools_sheet_d">Compara o custo mensal de API, assinatura por usuário, GPU própria e plataforma em 1 mil, 10 mil e 100 mil consultas.</p><a href="/planilha-custos-ia/" hreflang="pt-BR" data-i18n="tools_sheet_a">Abrir a planilha &#8594;</a></div>
+        <div class="card"><h3 data-i18n="content_book_t">Livro: Desbloqueando a IA</h3><p data-i18n="tools_book_d">Guia prático de IA aplicada, escrito para empresários e com download gratuito.</p><a href="/blog/livro-ia-inteligencia-artificial-portugues-gratuito/" hreflang="pt-BR" data-i18n="tools_book_a">Baixar o livro &#8594;</a></div>
+        <div class="card"><h3 data-i18n="tools_seo_t">Framework de SEO, AEO e GEO</h3><p data-i18n="tools_seo_d">Como ser encontrado no Google e citado pelo ChatGPT e pelo Perplexity, com checklist de publicação.</p><a href="/seo-geo-aeo-framework/framework-seo-aeo.html" hreflang="pt-BR" data-i18n="tools_seo_a">Abrir o framework &#8594;</a></div>
+      </div>
+    </section>
+
     <section id="research">
       <div class="section-label" data-i18n="section_research">Pesquisa</div>
       <div class="grid-2 cols-2">
@@ -154,7 +164,6 @@
       <div class="grid-2 cols-2">
         <div class="card"><h3 data-i18n="content_news_t">Artigos por email: Expert Insights</h3><p data-i18n="content_news_d">Implementações reais de IA com código, arquitetura, custos, falhas e aprendizados.</p><a href="/blog/assinar/" data-i18n="content_news_a">Assinar</a></div>
         <div class="card"><h3 data-i18n="content_li_t">Newsletter no LinkedIn: O CTO na Mesa</h3><p data-i18n="content_li_d">Tecnologia e IA vistas da mesa de quem decide: o que fazer, como fazer acontecer e o que aprendi construindo.</p><a href="https://www.linkedin.com/newsletters/o-cto-na-mesa-7085701437812281345/" target="_blank" rel="noopener" data-i18n="content_li_a">Assinar &#8599;</a></div>
-        <div class="card"><h3 data-i18n="content_book_t">Livro: Desbloqueando a IA</h3><p data-i18n="content_book_d">Guia prático sobre IA aplicada para empresários, disponível gratuitamente.</p><a href="/blog/livro-ia-inteligencia-artificial-portugues-gratuito/">Download</a></div>
         <div class="card"><h3>YouTube: IA Aplicada</h3><p data-i18n="content_yt_d">Vídeos sobre implementações reais, cases práticos e análises técnicas.</p><a href="https://youtube.com/@ia-aplicada-guilhermefavaron" target="_blank" rel="noopener" data-i18n="content_yt_a">Assistir &#8599;</a></div>
       </div>
     </section>
@@ -163,9 +172,10 @@
       <div class="newsletter-box"><h3>Expert Insights</h3><p data-i18n="nl_desc">Artigos sobre IA aplicada, dados e engenharia de software, com código, arquiteturas de produção e decisões técnicas.</p><form class="subscribe-form" method="post" action="https://insights.guifav.dev/subscribe" data-clarity-mask="true"><label for="nl-email" data-i18n="nl_label">Seu email</label><div class="subscribe-row"><input id="nl-email" type="email" name="email" required autocomplete="email" maxlength="254" placeholder="voce@exemplo.com"><button type="submit" data-i18n="nl_btn">Assinar</button></div><div class="cf-turnstile" data-sitekey="0x4AAAAAAF8raRhCn4ciudgW" data-language="auto" data-size="compact"></div><p class="subscribe-note" data-i18n="nl_note">Um email a cada artigo novo. A inscrição só vale depois que você confirma pelo link enviado ao seu email, e dá para sair a qualquer momento. <a href="/blog/privacidade/">Como seus dados são usados</a>.</p></form></div>
     </section>
 
-    <footer><p><a href="https://github.com/guifav" target="_blank" rel="noopener">GitHub</a> &middot; <a href="https://linkedin.com/in/guilhermefavaron" target="_blank" rel="noopener">LinkedIn</a> &middot; <a href="https://huggingface.co/guifav" target="_blank" rel="noopener">Hugging Face</a> &middot; <a href="https://youtube.com/@ia-aplicada-guilhermefavaron" target="_blank" rel="noopener">YouTube</a> &middot; <a href="mailto:contact@guifav.dev" data-i18n="nav_contact">Contato</a> &middot; <a href="/blog/assinar/">Expert Insights</a> &middot; <a href="/blog/privacidade/#cookies" data-consent-open>Cookies</a></p></footer>
+    <footer><nav class="footer-tools" aria-label="Ferramentas e guias" data-i18n-aria="ft_aria"><p><span class="footer-label" data-i18n="ft_label">Ferramentas e guias:</span> <span><a href="/mapa-decisao-ia/" hreflang="pt-BR" data-i18n="ft_map">Mapa de decisão de IA</a>&nbsp;&middot;</span> <span><a href="/planilha-custos-ia/" hreflang="pt-BR" data-i18n="ft_sheet">Planilha de custos de IA</a>&nbsp;&middot;</span> <span><a href="/blog/livro-ia-inteligencia-artificial-portugues-gratuito/" hreflang="pt-BR" data-i18n="ft_book">Livro gratuito de IA</a>&nbsp;&middot;</span> <span><a href="/seo-geo-aeo-framework/framework-seo-aeo.html" hreflang="pt-BR" data-i18n="ft_seo">Framework de SEO e AEO</a></span></p></nav><p><a href="https://github.com/guifav" target="_blank" rel="noopener">GitHub</a> &middot; <a href="https://linkedin.com/in/guilhermefavaron" target="_blank" rel="noopener">LinkedIn</a> &middot; <a href="https://huggingface.co/guifav" target="_blank" rel="noopener">Hugging Face</a> &middot; <a href="https://youtube.com/@ia-aplicada-guilhermefavaron" target="_blank" rel="noopener">YouTube</a> &middot; <a href="mailto:contact@guifav.dev" data-i18n="nav_contact">Contato</a> &middot; <a href="/blog/assinar/">Expert Insights</a> &middot; <a href="/blog/privacidade/#cookies" data-consent-open>Cookies</a></p></footer>
   </div>
   <script type="application/json" id="i18n-en">{
+      "nav_aria": "Main",
       "nav_portfolio": "Portfolio",
       "nav_blog": "Insights",
       "nav_contact": "Contact",
@@ -229,7 +239,24 @@
       "content_li_d": "Technology and AI seen from the table where decisions are made: what to do, how to make it happen and what I learned building.",
       "content_li_a": "Subscribe &#8599;",
       "content_book_t": "Book: Unlocking AI",
-      "content_book_d": "Practical guide on applied AI for business leaders, available for free.",
+      "section_tools": "Tools and guides",
+      "tools_map_t": "Decision map: RAG, Text-to-SQL or long context",
+      "tools_map_d": "Four triage questions, a decision matrix and the cost-per-question math, to choose the architecture before approving the project. In Portuguese.",
+      "tools_map_a": "Open the map &#8594;",
+      "tools_sheet_t": "AI in production cost spreadsheet",
+      "tools_sheet_d": "Compares the monthly cost of API, per-user subscription, your own GPU and platform at 1,000, 10,000 and 100,000 queries. In Portuguese.",
+      "tools_sheet_a": "Open the spreadsheet &#8594;",
+      "tools_book_d": "A practical guide to applied AI, written for business leaders and free to download. In Portuguese.",
+      "tools_book_a": "Download the book &#8594;",
+      "tools_seo_t": "SEO, AEO and GEO framework",
+      "tools_seo_d": "How to be found on Google and cited by ChatGPT and Perplexity, with a publishing checklist. In Portuguese.",
+      "tools_seo_a": "Open the framework &#8594;",
+      "ft_aria": "Tools and guides",
+      "ft_label": "Tools and guides:",
+      "ft_map": "AI decision map",
+      "ft_sheet": "AI cost spreadsheet",
+      "ft_book": "Free AI book",
+      "ft_seo": "SEO and AEO framework",
       "content_yt_d": "Videos on real implementations, practical cases and technical analysis.",
       "content_yt_a": "Watch &#8599;",
       "nl_desc": "Articles on applied AI, data and software engineering, with code, production architectures and technical decisions.",

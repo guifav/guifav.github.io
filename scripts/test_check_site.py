@@ -1444,5 +1444,141 @@ class TrackingSourcesTest(unittest.TestCase):
         self.assertNotIn("anteriores a esta versão da página", t)
 
 
+class ToolsTest(unittest.TestCase):
+    """Issue #104, item 1: os quatro links de "Ferramentas e guias" na seção da home e no rodapé da home e do blog."""
+
+    GA = TrackingTest.GA
+
+    def links(self, hrefs=C.TOOLS_LINKS):
+        return "".join(f'<a href="{h}">x</a>' for h in hrefs)
+
+    def doc(self, section=None, footer=None, ga=True):
+        sec = "" if section is None else f'<section id="{C.TOOLS_SECTION_ID}">{section}</section>'
+        foot = "" if footer is None else f"<footer>{footer}</footer>"
+        return f"<!DOCTYPE html><html><head>{self.GA if ga else ''}</head><body>{sec}<main></main>{foot}</body></html>"
+
+    def test_home_and_blog_complete_pass(self):
+        self.assertEqual(C.check_tools("index.html", self.doc(self.links(), self.links())), [])
+        self.assertEqual(C.check_tools("blog/um-post/index.html", self.doc(footer=self.links())), [])
+        self.assertEqual(C.check_tools("blog/index.html", self.doc(footer=self.links())), [])
+
+    def test_each_link_missing_from_home_section_or_footer_fails(self):
+        for missing in C.TOOLS_LINKS:
+            rest = [h for h in C.TOOLS_LINKS if h != missing]
+            with self.subTest(missing=missing):
+                sec = C.check_tools("index.html", self.doc(self.links(rest), self.links()))
+                self.assertTrue(any("seção" in p and missing in p for p in sec), sec)
+                foot = C.check_tools("index.html", self.doc(self.links(), self.links(rest)))
+                self.assertTrue(any("rodapé" in p and missing in p for p in foot), foot)
+                blog = C.check_tools("blog/um-post/index.html", self.doc(footer=self.links(rest)))
+                self.assertTrue(any("rodapé" in p and missing in p for p in blog), blog)
+
+    def test_home_without_section_fails(self):
+        self.assertTrue(C.check_tools("index.html", self.doc(footer=self.links())))
+
+    def missing(self, problems, where):
+        """Os links que a regra deu como ausentes no bloco `where` ("rodapé" ou "seção")."""
+        tail = " sem o link de Ferramentas e guias "
+        out = []
+        for p in problems:
+            msg = p.partition(": ")[2]
+            if msg.startswith(where) and tail in msg:
+                out.append(msg.split(tail, 1)[1])
+        return sorted(out)
+
+    def test_links_outside_the_footer_do_not_count(self):
+        html = self.doc(footer="").replace("<footer></footer>", f"<main>{self.links()}</main><footer></footer>")
+        problems = C.check_tools("blog/um-post/index.html", html)
+        self.assertEqual(self.missing(problems, "rodapé"), sorted(C.TOOLS_LINKS), problems)
+
+    def test_inert_links_inside_the_footer_do_not_count(self):
+        # Dentro do <footer>: o link só conta como <a> com href, fora de comentário.
+        for name, footer in {
+            "comentado": f"<!-- {self.links()} -->",
+            "sem href": "".join(f"<a>{h}</a>" for h in C.TOOLS_LINKS),
+            "href vazio": "".join(f'<a href="">{h}</a>' for h in C.TOOLS_LINKS),
+        }.items():
+            with self.subTest(name=name):
+                problems = C.check_tools("blog/um-post/index.html", self.doc(footer=footer))
+                self.assertEqual(self.missing(problems, "rodapé"), sorted(C.TOOLS_LINKS), problems)
+                problems = C.check_tools("index.html", self.doc(footer + self.links(), footer))
+                self.assertEqual(self.missing(problems, "rodapé"), sorted(C.TOOLS_LINKS), problems)
+                self.assertEqual(self.missing(problems, "seção"), [], problems)
+
+    def test_section_and_footer_do_not_stand_in_for_each_other(self):
+        # Link da seção não vale pelo rodapé...
+        problems = C.check_tools("index.html", self.doc(self.links(), ""))
+        self.assertEqual(len(problems), len(C.TOOLS_LINKS), problems)
+        self.assertEqual(self.missing(problems, "rodapé"), sorted(C.TOOLS_LINKS), problems)
+        # ...nem o do rodapé pela seção.
+        problems = C.check_tools("index.html", self.doc("", self.links()))
+        self.assertEqual(len(problems), len(C.TOOLS_LINKS), problems)
+        self.assertEqual(self.missing(problems, "seção"), sorted(C.TOOLS_LINKS), problems)
+
+    def test_repeated_link_in_block_fails(self):
+        dup = self.links() + self.links(C.TOOLS_LINKS[:1])
+        self.assertTrue(any("2 vezes" in p for p in C.check_tools("blog/um-post/index.html", self.doc(footer=dup))))
+
+    def test_rule_only_on_home_and_blog_pages_with_ga4(self):
+        self.assertEqual(C.check_tools("index.html", self.doc(ga=False)), [])
+        self.assertEqual(C.check_tools("blog/um-post/index.html", self.doc(ga=False)), [])
+        self.assertEqual(C.check_tools("portfolio/index.html", self.doc()), [])
+        self.assertEqual(C.check_tools("mapa-decisao-ia/index.html", self.doc()), [])
+
+
+class ToolsWiredTest(Base):
+    def test_check_runs_tools_rule(self):
+        self.w("blog/um-post/index.html", page(TrackingTest.GA + '<footer><a href="/blog/">blog</a></footer>'))
+        self.assertTrue(any("blog/um-post/index.html: rodapé sem o link" in p
+                            for p in self.problems(pre_cutover=False)))
+
+
+class ToolsSourcesTest(unittest.TestCase):
+    """Fontes: a seção e o rodapé da home e o rodapé do Base.astro levam os quatro links, e as páginas existem."""
+
+    REPO = Path(__file__).resolve().parent.parent
+
+    def read(self, rel):
+        return (self.REPO / rel).read_text(encoding="utf-8")
+
+    def test_home_section_and_footer(self):
+        home = self.read("index.html")
+        self.assertEqual(C.check_tools("index.html", home), [])
+        self.assertEqual(home.count(f'<section id="{C.TOOLS_SECTION_ID}">'), 1)
+
+    def test_blog_footer(self):
+        footer = re.search(r"<footer>.*?</footer>", self.read("blog-src/src/layouts/Base.astro"), flags=re.S)
+        self.assertTrue(footer)
+        for href in C.TOOLS_LINKS:
+            with self.subTest(href=href):
+                self.assertEqual(footer.group(0).count(f'href="{href}"'), 1)
+                # O destino é só em português; na home em inglês, o hreflang avisa (r1, agy P3).
+                self.assertEqual(footer.group(0).count(f'href="{href}" hreflang="pt-BR"'), 1)
+
+    def test_home_has_two_navs_each_labelled(self):
+        # r1 (agy P3): com o nav do rodapé, o do topo também precisa de nome acessível, traduzido em inglês.
+        home = self.read("index.html")
+        self.assertEqual(re.findall(r"<nav\b[^>]*>", home),
+                         ['<nav aria-label="Principal" data-i18n-aria="nav_aria">',
+                          '<nav class="footer-tools" aria-label="Ferramentas e guias" data-i18n-aria="ft_aria">'])
+        en = json.loads(re.search(r'<script type="application/json" id="i18n-en">(.*?)</script>', home, re.S).group(1))
+        self.assertEqual((en["nav_aria"], en["ft_aria"]), ("Main", "Tools and guides"))
+
+    def test_both_footers_carry_the_same_tools_line(self):
+        def tools_nav(text):
+            m = re.search(r'<nav class="footer-tools".*?</nav>', text, flags=re.S)
+            self.assertTrue(m)
+            # A home traduz por data-i18n; o blog só tem português. O resto da linha é igual.
+            return re.sub(r' data-i18n(?:-aria)?="[^"]*"', "", m.group(0))
+        self.assertEqual(tools_nav(self.read("index.html")), tools_nav(self.read("blog-src/src/layouts/Base.astro")))
+
+    def test_targets_exist_in_sources(self):
+        for rel in ("mapa-decisao-ia/index.html", "planilha-custos-ia/index.html",
+                    "seo-geo-aeo-framework/framework-seo-aeo.html",
+                    "blog-src/src/content/posts/livro-ia-inteligencia-artificial-portugues-gratuito.md"):
+            with self.subTest(rel=rel):
+                self.assertTrue((self.REPO / rel).is_file())
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
