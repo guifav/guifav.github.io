@@ -1,7 +1,7 @@
 ---
 title: "RAG, contexto longo ou Text-to-SQL: o teste em 80 contratos"
 subtitle: "Fiz a mesma pergunta de contagem a um RAG, a uma consulta SQL e a um modelo com os 80 contratos inteiros na janela. O RAG respondeu que nenhum contrato vencia em março, quando eram 17. Aqui estão o método, os números e o critério que uso para escolher a arquitetura."
-description: "Medi RAG, contexto longo e Text-to-SQL em 80 contratos e numa planilha de 5 mil linhas: quem acertou, quantos tokens cada um gastou e quando usar cada um."
+description: "Medi RAG, contexto longo e Text-to-SQL em 80 contratos e numa planilha de 5 mil linhas: quem acertou, quanto cada um custou em tokens e quando usar cada um."
 date: 2026-11-24T12:00:00Z
 slug: rag-contexto-longo-ou-text-to-sql-teste-80-contratos
 type: newsletter
@@ -86,7 +86,7 @@ O RAG rodou com uma configuração: um modelo de embeddings, pedaços de 800 tok
 
 O contexto longo teve três rodadas, num modelo, e a espera variou bastante entre elas. Os preços são os de lista da Anthropic lidos em 22 e 23 de novembro de 2026, e mudam rápido. A contagem da planilha foi feita em outro modelo, o Opus 5.5, e mede só a entrada, sem gerar resposta. Os 554 tokens cobrem a instrução, a consulta pronta, o resultado e a pergunta. Num Text-to-SQL real, há antes uma chamada em que o modelo recebe o esquema da tabela para escrever a consulta, e ela ficou fora da conta.
 
-Também deixei de medir a pergunta em que o RAG costuma ir bem, a que localiza um trecho, como a multa por rescisão de um contrato específico. O que medi vale para uma pergunta de contagem. Soma e ranking se apoiam no mesmo mecanismo, o banco percorrendo todas as linhas, e ficaram sem medição própria aqui. São as perguntas que eu mais vejo em reunião de resultado.
+Também deixei de medir a pergunta em que o RAG costuma ir bem, a que localiza um trecho, como a multa por rescisão de um contrato específico. O que medi vale para uma pergunta de contagem. Soma e ranking se apoiam no mesmo mecanismo, o banco percorrendo todas as linhas, e ficaram sem medição própria aqui. Contagem, soma e ranking são as perguntas que eu mais vejo em reunião de resultado.
 
 ## Quando usar RAG, Text-to-SQL ou contexto longo?
 
