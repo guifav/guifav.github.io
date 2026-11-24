@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import colorsys
 import json
+import math
 import os
 import re
 import shutil
@@ -1336,9 +1337,11 @@ def check_consulting(site: Path) -> list[str]:
         return o if isinstance(o, list) else [o]
 
     def priced(o) -> bool:
-        # Preço numérico (0 vale: a primeira conversa é gratuita), em número ou texto; null, booleano e "abc" não.
+        # Preço numérico, finito e não negativo (0 vale: a primeira conversa é gratuita), em número ou texto; null,
+        # booleano, "abc", negativo, NaN e Infinity não.
         price = o.get("price") if isinstance(o, dict) else None
-        numeric = (isinstance(price, (int, float)) and not isinstance(price, bool)) or (
+        numeric = (isinstance(price, (int, float)) and not isinstance(price, bool) and math.isfinite(price)
+                   and price >= 0) or (
             isinstance(price, str) and re.fullmatch(r"\d+(?:\.\d+)?", price.strip()) is not None)
         return isinstance(o, dict) and o.get("@type") == "Offer" and numeric and o.get("priceCurrency") == "BRL"
 
