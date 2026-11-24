@@ -120,11 +120,16 @@ class PlanTest(unittest.TestCase):
         with mock.patch.object(S, "OLD_POSTS", ((GROUP_C_ENCODED, "novo"),)):
             self.assertIn(ENCODED_LIVE.removeprefix("https://"), {r.source for r in S.redirects()})
 
-    def test_existing_posts_keep_the_one_hop_cutover_and_are_not_in_the_list(self):
-        for slug in sorted(p.stem for p in POSTS.glob("*.md"))[::20]:
-            mid = C.simulate(WWW, f"/post/{slug}")
-            self.assertEqual(mid, f"https://guifav.dev/blog/{slug}/")
-            self.assertIsNone(S.simulate(mid), slug)
+    def test_every_post_keeps_the_one_hop_cutover_and_only_duplicates_are_in_the_list(self):
+        # Todos os posts, não uma amostra (P2 do agy no #123): só as duplicatas absorvidas ganham o segundo salto.
+        slugs = sorted(p.stem for p in POSTS.glob("*.md"))
+        self.assertGreater(len(slugs), 200)
+        for slug in slugs:
+            with self.subTest(slug=slug):
+                mid = C.simulate(WWW, f"/post/{slug}")
+                self.assertEqual(mid, f"https://guifav.dev/blog/{slug}/")
+                want = f"https://guifav.dev/blog/{DUPS[slug]}/" if slug in DUPS else None
+                self.assertEqual(S.simulate(mid), want)
 
     def test_list_has_both_slash_forms_and_nothing_else(self):
         reds = S.redirects()
@@ -346,7 +351,7 @@ class ApplyTest(unittest.TestCase):
                                        ("PUT", f"/accounts/acc/rulesets/phases/{S.PHASE}/entrypoint")])
         put_items = cf.calls.index(("PUT", "/accounts/acc/rules/lists/L-a/items"))
         reads = [i for i, c in enumerate(cf.calls) if c == ("GET", "/accounts/acc/rules/lists/L-a/items")]
-        self.assertGreaterEqual(len(reads), 2)  # 32 itens em páginas de 20: o cursor foi seguido
+        self.assertGreaterEqual(len(reads), 2)  # 38 itens em páginas de 20: o cursor foi seguido
         self.assertTrue(put_items < reads[0] and reads[-1] < len(cf.calls) - 1)
         self.assertEqual(cf.phase, [S.rule(self.A)])
         self.assertEqual(len(cf.items["L-a"]), 38)
@@ -461,6 +466,22 @@ class CfErrorsTest(unittest.TestCase):
                 self.assertIn("GET /accounts/acc/rules/lists", msg)
                 self.assertIn(word, msg)
                 self.assertNotIn("segredo", msg)
+
+
+class CfClosesTest(unittest.TestCase):
+    def test_http_error_body_is_closed_after_reading(self):
+        import urllib.error
+        body = io.BytesIO(b'{"success": false, "errors": [{"code": 1}]}')
+
+        errs = []  # mantém o erro vivo: sem isso o coletor de lixo fecharia o corpo e o teste não provaria nada
+
+        def opener(req, timeout=None):
+            errs.append(urllib.error.HTTPError(req.full_url, 403, "Forbidden", {}, body))
+            raise errs[-1]
+
+        with self.assertRaises(SystemExit):
+            S._cf("GET", "/accounts/acc/rules/lists", "tok", opener=opener)
+        self.assertTrue(errs and body.closed)
 
 
 class RemoveTest(unittest.TestCase):

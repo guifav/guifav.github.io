@@ -448,6 +448,43 @@ class VerifyTest(unittest.TestCase):
                                   [R.Job(f"https://{WWW}/p/a")])
         self.assertEqual(rc, 1, out)  # post fora da lista não ganha salto extra
 
+    def test_failure_after_the_planned_hop_names_the_final_url_and_ignores_allow_404(self):
+        # P3 do #123: depois do salto previsto, o 404 é da vencedora; a falha mostra a URL final, e allow_404
+        # (pensado para destino sem página) não pode esconder a vencedora fora do ar.
+        import site_redirects as SR
+        dup, win = SR.DUPLICATES[0]
+        mid, final = f"https://guifav.dev/blog/{dup}/", f"https://guifav.dev/blog/{win}/"
+        dest = {mid: (301, final), final: (404, None)}
+        for allow in (False, True):
+            with self.subTest(allow_404=allow):
+                rc, out = self.run_verify(self.fetcher(dest=dest), [R.Job(f"https://{WWW}/p/{dup}", allow_404=allow)])
+                self.assertEqual(rc, 1, out)
+                self.assertIn(final, out)
+                self.assertIn("sem página (permitidas): 0", out)
+        # Sem salto, allow_404 continua valendo como antes.
+        rc, out = self.run_verify(self.fetcher(dest={"https://guifav.dev/blog/a/": (404, None)}),
+                                  [R.Job(f"https://{WWW}/p/a", allow_404=True)])
+        self.assertEqual(rc, 0, out)
+        self.assertIn("sem página (permitidas): 1", out)
+
+    def test_land_works_when_loaded_from_another_directory(self):
+        # P3 do #123: land() importa site_redirects; precisa funcionar sem scripts/ no sys.path.
+        import subprocess
+        import tempfile
+        scripts = Path(R.__file__).resolve().parent
+        code = (
+            "import importlib.util, sys\n"
+            "sys.path[:] = [p for p in sys.path if not p.rstrip('/').endswith('scripts')]\n"
+            f"spec = importlib.util.spec_from_file_location('cr', {str(scripts / 'cutover_redirects.py')!r})\n"
+            "m = importlib.util.module_from_spec(spec); sys.modules['cr'] = m; spec.loader.exec_module(m)\n"
+            "print(m.land('https://guifav.dev/blog/x/', fetcher=lambda u, meth='GET': "
+            "(301, 'https://guifav.dev/blog/y/') if u.endswith('/x/') else (200, None)))\n"
+        )
+        with tempfile.TemporaryDirectory() as d:
+            r = subprocess.run([sys.executable, "-c", code], cwd=d, capture_output=True, text=True, timeout=60,
+                               env={k: v for k, v in os.environ.items() if k != "PYTHONPATH"})
+        self.assertEqual(r.returncode, 0, r.stderr)
+
     def test_head_and_http_are_sent_as_such(self):
         seen = []
         todo = [R.Job(f"https://{WWW}/p/a", "HEAD"), R.Job(f"http://{APEX}/p/a")]
