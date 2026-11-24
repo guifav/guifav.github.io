@@ -8,8 +8,11 @@ Fonte: o dataset oficial `lmarena-ai/leaderboard-dataset` no Hugging Face (CC BY
 - a lista overall da publicação mais recente com data até JANELA_DIAS antes (split `full`), para o "o que mudou".
 
 O snapshot passa pela mesma validação do build (build_llm_ranking.validar) antes de ser gravado. Com --apply, grava
-`arena-texto.json` no clone do guifav/llm-ranking-data e faz commit e push só quando o conteúdo mudou; a saída diz
-"gravado" (o wrapper da KVM então dispara o deploy do site) ou "sem mudança". Sem --apply, só mostra o resumo.
+`arena-texto.json` no clone do guifav/llm-ranking-data e faz commit e push só quando o conteúdo mudou. A saída termina
+em três linhas: "gravado" ou "sem mudança"; "no ar: <data>" (a data dos dados da página publicada, ou "não lida"); e
+"deploy" ou "sem deploy: ...". O wrapper da KVM dispara o deploy do site pela linha "deploy", que sai quando o
+snapshot foi gravado ou quando a página no ar não tem a data dos dados (ver main). Sem --apply, só mostra o resumo e
+não lê a página.
 
 Uso:
     python3 scripts/llm_ranking_snapshot.py --dados /root/.roger/gui-projects/llm-ranking-data [--apply]
@@ -47,10 +50,14 @@ class SnapshotError(Exception):
     """A fonte respondeu algo que não dá para usar, ou o git falhou."""
 
 
-def http_get(url: str, urlopen=urllib.request.urlopen) -> tuple[int, bytes, dict[str, str]]:
+def http_get(url: str, urlopen=urllib.request.urlopen, accept: str = "application/json",
+             no_cache: bool = False) -> tuple[int, bytes, dict[str, str]]:
     """GET com o status HTTP. Falha de transporte (rede, DNS, timeout, corpo truncado) volta como status 0, que o
     Fonte.filtrar trata como erro transitório, igual a um 5xx."""
-    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
+    headers = {"User-Agent": UA, "Accept": accept}
+    if no_cache:
+        headers["Cache-Control"] = "no-cache"
+    req = urllib.request.Request(url, headers=headers)
     try:
         with urlopen(req, timeout=60) as r:
             return r.status, r.read(), {k.lower(): v for k, v in r.headers.items()}
@@ -210,9 +217,13 @@ def gravar(dados: Path, texto: str, pub: str, git=_git) -> bool:
 _META_RE = re.compile(r'<meta name="%s" content="([^"]*)">' % re.escape(B.DATA_META))
 
 
-def data_no_ar(get=http_get) -> str | None:
+def data_no_ar(get=None, urlopen=urllib.request.urlopen) -> str | None:
     """Data dos dados do /llm-ranking/ que está no ar, lida da meta que o build grava. None quando não dá para saber
-    (fora do ar, sem a meta, duas metas, data fora do formato). O parâmetro na URL evita resposta de cache."""
+    (fora do ar, sem a meta, duas metas, data fora do formato). Pede HTML sem cache (Cache-Control e um parâmetro na
+    URL), para não ler uma cópia velha nem ser recusado por quem negocia o Accept."""
+    if get is None:
+        def get(url):
+            return http_get(url, urlopen=urlopen, accept="text/html", no_cache=True)
     status, body, _ = get(f"{B.URL}?snapshot={int(time.time())}")
     if status != 200:
         return None

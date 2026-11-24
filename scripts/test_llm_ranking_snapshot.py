@@ -403,6 +403,37 @@ class DataNoArTest(unittest.TestCase):
             with self.subTest(status=status, body=body[:40]):
                 self.assertIsNone(S.data_no_ar(self.get(status, body)[0]))
 
+    def test_asks_for_fresh_html(self):
+        pedidos = []
+
+        class Resp(io.BytesIO):
+            status = 200
+            headers = {}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def urlopen(req, timeout):
+            pedidos.append(req)
+            return Resp(b'<meta name="dados-publicados-em" content="2026-11-22">')
+        self.assertEqual(S.data_no_ar(urlopen=urlopen), "2026-11-22")
+        self.assertEqual(pedidos[0].get_header("Accept"), "text/html")
+        self.assertEqual(pedidos[0].get_header("Cache-control"), "no-cache")
+        self.assertTrue(pedidos[0].full_url.startswith(B.URL + "?snapshot="))
+
+    def test_the_source_is_still_asked_for_json(self):
+        pedidos = []
+
+        def urlopen(req, timeout):
+            pedidos.append(req)
+            raise TimeoutError("x")
+        S.http_get("https://exemplo/", urlopen=urlopen)
+        self.assertEqual(pedidos[0].get_header("Accept"), "application/json")
+        self.assertIsNone(pedidos[0].get_header("Cache-control"))
+
     def test_bad_bytes_are_unknown(self):
         self.assertIsNone(S.data_no_ar(lambda url: (200, b"\xff\xfe<meta", {})))
 

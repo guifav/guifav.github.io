@@ -2764,11 +2764,19 @@ class NavSourcesTest(unittest.TestCase):
 
     def test_root_pages_load_one_version_of_site_js(self):
         # #113 r4 (P3 do agy e do Claude): o #142 mudou o site.js e subiu o ?v=; página que entra por merge com a versão
-        # antiga cria outra chave de cache para o mesmo script.
+        # antiga cria outra chave de cache para o mesmo script. Revisão automática do #142 (P3): cada página carrega o
+        # site.js exatamente uma vez, sempre com ?v= de 12 dígitos, como nos testes do consent.js e do track.js.
         versions = {}
-        for f in self.sources()[:-1]:
-            for v in re.findall(r'src="/assets/site\.js\?v=([^"]+)"', f.read_text(encoding="utf-8")):
-                versions.setdefault(v, []).append(str(f.relative_to(self.ROOT)))
+        pages = self.sources()[:-1]
+        self.assertIn("llm-ranking/index.html", {str(f.relative_to(self.ROOT)) for f in pages})
+        for f in pages:
+            rel = str(f.relative_to(self.ROOT))
+            with self.subTest(rel=rel):
+                h = f.read_text(encoding="utf-8")
+                self.assertEqual(len(re.findall(r"/assets/site\.js\b", h)), 1, rel)
+                m = re.findall(r'<script src="/assets/site\.js\?v=(\d{12})"></script>', h)
+                self.assertEqual(len(m), 1, rel)
+                versions.setdefault(m[0], []).append(rel)
         self.assertEqual(len(versions), 1, versions)
 
 
