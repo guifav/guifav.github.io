@@ -78,11 +78,14 @@ try {
   const tmpGif = join(work, 'ciclo.gif');
   const pal = '[0:v]split[a][b];[a]palettegen=max_colors=96:stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle';
   execFileSync('ffmpeg', ['-loglevel', 'error', '-y', '-framerate', String(fps), '-i', join(work, 'f%03d.png'), '-filter_complex', pal, '-loop', '0', tmpGif]);
-  copyFileSync(tmpGif, OUT_GIF);
-  const gifHash = createHash('sha256').update(readFileSync(OUT_GIF)).digest('hex');
+  const gifHash = createHash('sha256').update(readFileSync(tmpGif)).digest('hex');
   const meta = { source_sha256: sourceHash, gif_sha256: gifHash, width: W, height: H, loop_seconds: loop, fps, frames,
     chromium: chromiumVersion, ffmpeg: ffmpegVersion };
-  writeFileSync(OUT_META, JSON.stringify(meta, null, 2) + '\n');
+  const tmpMeta = join(work, 'meta.json');
+  writeFileSync(tmpMeta, JSON.stringify(meta, null, 2) + '\n');
+  // os dois arquivos só são trocados no fim, juntos, depois de tudo dar certo
+  copyFileSync(tmpGif, OUT_GIF);
+  copyFileSync(tmpMeta, OUT_META);
   console.log(`render_home_cycle_gif: ${OUT_GIF} (${(statSync(OUT_GIF).size / 1024).toFixed(0)} KB, ${frames} quadros)`);
 } catch (e) {
   fail(e.message);

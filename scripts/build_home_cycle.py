@@ -377,15 +377,19 @@ def _site_css_for_gif():
         raise SystemExit('build_home_cycle: não achei :root{...} ou body{...} no assets/site.css')
     return root.group(0) + '\n' + body.group(0)
 
-def gif_source():
-    """O que o GIF desenha: o SVG do desktop, o CSS do diagrama e o tema claro do site. Se mudar, gere o GIF de novo."""
+def _desktop_isolado():
+    """desktop() sem deixar rastro no dicionário EN global (ele registra as chaves ao desenhar)."""
     saved = dict(EN)
     try:
         EN.clear()
-        return desktop() + CSS + _site_css_for_gif()
+        return desktop()
     finally:
         EN.clear()
         EN.update(saved)
+
+def gif_source():
+    """O que o GIF desenha: o SVG do desktop, o CSS do diagrama e o tema claro do site. Se mudar, gere o GIF de novo."""
+    return _desktop_isolado() + CSS + _site_css_for_gif()
 
 def gif_hash():
     return hashlib.sha256(gif_source().encode('utf-8')).hexdigest()
@@ -394,7 +398,7 @@ def gif_page():
     """Página isolada (tema claro, 1000 x 750) que o render_home_cycle_gif.mjs fotografa quadro a quadro."""
     return ('<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><style>' + _site_css_for_gif() + '\n' + CSS +
             '    body{margin:0;background:var(--bg-card)}.dflow{margin:0;width:1000px}.dflow svg{width:1000px}</style></head>'
-            '<body data-theme="light"><figure class="dflow">' + desktop() + '</figure></body></html>')
+            '<body data-theme="light"><figure class="dflow">' + _desktop_isolado() + '</figure></body></html>')
 
 def main(argv, path=HOME):
     ap = argparse.ArgumentParser(description='Gera o ciclo de dados e de IA da home.')

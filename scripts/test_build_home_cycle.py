@@ -122,12 +122,18 @@ class BuildHomeCycleTest(unittest.TestCase):
         self.assertIn('body{font-family:', fonte)
         self.assertEqual(bhc.gif_source(), fonte)
 
-    def test_hash_nao_mexe_no_dicionario(self):
+    def test_hash_e_pagina_nao_mexem_no_dicionario(self):
         bhc.EN.clear()
         bhc.en('cy_x', 'one')
         bhc.gif_hash()
+        bhc.gif_page()
         self.assertEqual(bhc.EN, {'cy_x': 'one'})
         bhc.EN.clear()
+
+    def test_regra_de_largura_nao_pega_o_icone_do_botao(self):
+        # o ícone do "Baixar GIF" é um <svg> dentro do .dflow; a regra de 100% vale só para os dois diagramas
+        self.assertNotRegex(bhc.CSS, r'\.dflow svg\{')
+        self.assertIn('.dflow-wrap > svg{display:block;width:100%', bhc.CSS)
 
     def test_cli_gif_page(self):
         with tempfile.TemporaryDirectory() as d:
@@ -138,6 +144,7 @@ class BuildHomeCycleTest(unittest.TestCase):
             info = json.loads(out.getvalue())
             self.assertEqual(info['source_sha256'], bhc.gif_hash())
             self.assertEqual(info['loop_seconds'], bhc.LOOP)
+            self.assertEqual(info['fps'], bhc.GIF_FPS)
             pagina = p.read_text(encoding='utf-8')
             self.assertIn('<svg class="cy-d"', pagina)
             self.assertIn('data-theme="light"', pagina)
@@ -154,8 +161,9 @@ class BuildHomeCycleTest(unittest.TestCase):
             q = bhc.LOOP / ciclo
             self.assertGreaterEqual(round(q), 1, onde)
             self.assertAlmostEqual(q, round(q), msg=onde)
-        decls = re.findall(r'\.([a-z-]+)(?:[^{]*)\{\{?[^}]*?animation:([a-z-]+) ([0-9.]+)s([^;}]*)', bhc.CSS)
-        self.assertTrue(decls)
+        # a classe é a última antes da chave (".dflow .i-vc-v{...}" -> i-vc-v)
+        decls = re.findall(r'\.([a-z-]+)\{[^}]*?animation:([a-z-]+) ([0-9.]+)s([^;}]*)', bhc.CSS)
+        self.assertEqual(len(decls), len(re.findall(r'animation:(?!none\b)', bhc.CSS)))
         alternadas = set()
         for cls, nome, dur, resto in decls:
             vai_e_volta = 'alternate' in resto
@@ -163,8 +171,10 @@ class BuildHomeCycleTest(unittest.TestCase):
                 alternadas.add(cls)
             fecha(float(dur) * (2 if vai_e_volta else 1), f'{cls} {nome} {dur}s')
         svgs = bhc.desktop() + bhc.mobile()
+        self.assertIn('i-vc-v', alternadas)
         inline = re.findall(r'class="([a-z-]+)" style="[^"]*animation-duration:([0-9.]+)s', svgs)
         self.assertTrue(inline)
+        self.assertLessEqual({cls for cls, _ in inline}, {cls for cls, *_ in decls})
         for cls, dur in inline:
             fecha(float(dur) * (2 if cls in alternadas else 1), f'{cls} inline {dur}s')
         # atraso positivo deixa a animação parada no começo e cria emenda no GIF
@@ -179,6 +189,8 @@ class BuildHomeCycleTest(unittest.TestCase):
             self.assertEqual(len(durs), 1)
             self.assertAlmostEqual(durs.pop(), bhc.TOKENS * bhc.LOOP)
             self.assertEqual(len(begins), bhc.TOKENS)
+            self.assertEqual(svg.count('<animateMotion'), bhc.TOKENS)
+            self.assertTrue(all(b <= 0 for b in begins), begins)
             for a, b in zip(begins, begins[1:]):
                 self.assertAlmostEqual(b - a, bhc.LOOP, places=2)
 
