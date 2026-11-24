@@ -117,7 +117,7 @@ Os valores abaixo foram conferidos nas páginas oficiais da Anthropic (`claude.c
 | API direta (Anthropic Console) | Por 1M de tokens (entrada / saída): Haiku 5.5 US$ 0,10 / US$ 0,50 (~R$ 0,60 / R$ 2,99, prompts até 100k tokens; acima de 100k, US$ 0,50 / US$ 2,50); Sonnet 5.5 US$ 2,00 / US$ 10,00 (~R$ 11,94 / R$ 59,71); Opus 5.5 US$ 4,00 / US$ 20,00 (~R$ 23,88 / R$ 119,42) | Sem mínimo | Sem treino nos dados por padrão | Workspaces, limites de gasto e Admin API; Batch -50% e cache hit a 5% do valor base | Produtos, automações e integrações com sistemas internos |
 | AWS Bedrock / Google Vertex AI | Tarifa de API faturada na conta da nuvem (com opção de faturamento local em reais via filial BR, conforme contrato da conta) | Sem mínimo | Sem treino por padrão | IAM, integração com VPC e logs de auditoria da nuvem (região e roteamento dependem da configuração do modelo) | Empresas no Brasil que precisam de faturamento local e governança na nuvem já aprovada |
 
-Para uso individual antes de fechar contrato de equipe, a tabela oficial de 24/11/2026 traz os planos Free (gratuito limitado), Pro (US$ 20/mês), Max (US$ 100/mês) e Ultra (US$ 200/mês). Se você quiser simular quando compensa assinar por assento versus pagar consumo de API para o tamanho do seu time, use a [planilha de custos de IA](/planilha-custos-ia/).
+Para uso individual antes de fechar contrato de equipe, a tabela oficial de 24/11/2026 traz os planos Free (gratuito limitado), Pro (US$ 20/mês), Max (US$ 100/mês) e Ultra (US$ 200/mês). Se você quiser simular quando compensa assinar por assento versus pagar consumo de API para o tamanho do seu time, use a [planilha de custos de IA](/tools/planilha-custos-ia/).
 
 ***
 
@@ -171,7 +171,7 @@ Minha experiência prática sugere que o Claude, especialmente com a combinaçã
 
 ## Como contratar o Claude no Brasil com privacidade, LGPD e nota fiscal?
 
-Para empresas brasileiras, a decisão de contratação passa por dois filtros práticos além da qualidade do modelo: faturamento fiscal e governança de dados sob a LGPD.
+Para empresas brasileiras, a contratação envolve faturamento fiscal e governança de dados sob a LGPD além da qualidade do modelo:
 
 **1. Contratação direta com a Anthropic (Claude Team, Enterprise ou API direta):** a cobrança é feita em dólares americanos. Em empresas que pagam com cartão corporativo internacional, incidem IOF e spread cambial sobre a fatura, e o documento fiscal é um invoice internacional (sem emissão de nota fiscal brasileira). Para equipes pequenas testando Chat, Cowork ou Claude Code, o Team Standard ou Team Premium costuma ser o caminho mais rápido para começar.
 
@@ -201,7 +201,7 @@ Na contratação direta em `claude.com`, a cobrança ocorre em dólar via invoic
 
 ### Quando usar Claude via assinatura por usuário e quando integrar pela API?
 
-A assinatura por usuário (Team ou Enterprise) faz sentido para produtividade individual e departamental no Chat, no Cowork e no Claude Code, quando cada pessoa interage diretamente com a interface. A integração via API (direta, Bedrock ou Vertex AI) vence quando o Claude precisa rodar dentro de sistemas internos, pipelines de dados, atendimentos em volume ou automações com controle rigoroso de permissões e custo proporcional ao uso real. Você pode comparar os dois cenários na [planilha de custos de IA](/planilha-custos-ia/).
+A assinatura por usuário (Team ou Enterprise) faz sentido para produtividade individual e departamental no Chat, no Cowork e no Claude Code, quando cada pessoa interage diretamente com a interface. A integração via API (direta, Bedrock ou Vertex AI) vence quando o Claude precisa rodar dentro de sistemas internos, pipelines de dados, atendimentos em volume ou automações com controle rigoroso de permissões e custo proporcional ao uso real. Você pode comparar os dois cenários na [planilha de custos de IA](/tools/planilha-custos-ia/).
 
 ***
 

@@ -26,7 +26,7 @@ O Model Context Protocol (MCP) é um protocolo aberto que padroniza a forma como
 
 Criado originalmente pela Anthropic (desenvolvedora do Claude) e hoje adotado por múltiplos clientes, editores de código e provedores de IA, o MCP resolve um limite fundamental dos LLMs: por si só, eles geram texto fluente e demonstram compreensão linguística, mas sem integrações externas continuam incapazes de enviar um e-mail, consultar informações atualizadas ou interagir com APIs corporativas.
 
-O MCP fornece uma camada intermediária padronizada para que modelos e agentes acessem ferramentas e serviços externos de maneira consistente, reutilizável e auditável.
+O MCP fornece uma camada intermediária padronizada para que modelos e agentes acessem ferramentas e serviços externos de maneira consistente e auditável.
 
 ## Qual limitação dos LLMs o MCP resolve que o function calling tradicional não resolvia?
 

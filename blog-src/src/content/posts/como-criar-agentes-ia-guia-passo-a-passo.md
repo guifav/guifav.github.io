@@ -20,7 +20,7 @@ Criar agentes de Inteligência Artificial (IA) exige planejamento de escopo, esc
 
 Um agente de IA é um sistema de software com autonomia controlada: ele lê entradas do ambiente, decide qual passo executar em seguida e aciona ferramentas externas para atingir um objetivo. Um chatbot comum recebe uma pergunta e devolve texto. Um fluxo de automação fixo executa sempre a mesma sequência de regras. O agente entra quando o caminho até o resultado depende de interpretar contexto variável, consultar fontes diferentes e ajustar a ação conforme a resposta obtida.
 
-Antes de partir para um agente, vale testar se uma automação determinística já resolve o problema. Quando as entradas são previsíveis e as regras de negócio são fechadas, código tradicional ou um fluxo simples custa menos, falha menos e é mais fácil de auditar. O agente faz sentido quando há triagem de texto livre, consulta a múltiplas bases, síntese de documentos ou decisões intermediárias que mudam a cada caso.
+Antes de partir para um agente, vale testar se uma automação determinística já resolve o problema. Quando as entradas são previsíveis e as regras de negócio são fechadas, código tradicional ou um fluxo simples custa menos e é mais simples de auditar. O agente faz sentido quando há triagem de texto livre, consulta a múltiplas bases, síntese de documentos ou decisões intermediárias que mudam a cada caso.
 
 ## Qual caminho escolher: plataforma no-code ou framework em código?
 
@@ -52,11 +52,17 @@ MAX_STEPS = 5
 def executar_agente(messages: list[dict]) -> str:
     for _ in range(MAX_STEPS):
         response = llm.create(system=SYSTEM_PROMPT, messages=messages, tools=TOOLS)
+        messages.append(response.assistant_message)
         if not response.tool_calls:
             return response.text
         for call in response.tool_calls:
             result = execute_tool_with_policy(call.name, call.arguments)
-            messages.append({"role": "tool", "name": call.name, "content": result})
+            messages.append({
+                "role": "tool",
+                "tool_call_id": call.id,
+                "name": call.name,
+                "content": result,
+            })
     raise RuntimeError("Limite de passos atingido; encaminhar para revisão humana.")
 ```
 
@@ -64,7 +70,7 @@ Travar `MAX_STEPS` e validar cada chamada dentro de `execute_tool_with_policy` e
 
 ## Como estruturar os módulos do agente (objetivo, prompt, ferramentas e memória)?
 
-Construir o agente em módulos separados facilita trocar de modelo, testar componentes isolados e corrigir falhas sem reescrever o sistema inteiro.
+Construir o agente em módulos separados facilita trocar de modelo e testar cada componente isoladamente sem reescrever o sistema inteiro.
 
 ### Passo 1: Definição do projeto e objetivos
 
