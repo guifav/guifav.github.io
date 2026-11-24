@@ -2607,7 +2607,8 @@ class LlmRankingTest(unittest.TestCase):
 
     def page(self, rows: int = 100, cells: int = 7, meta: str = '<meta name="dados-publicados-em" content="2026-11-22">',
              modified: str = "2026-11-22", extra: str = "", attribution: bool = True, license_rel: str = "license",
-             first_pos: str = "1", jsonld: str | None = None) -> list[str]:
+             first_pos: str = "1", jsonld: str | None = None,
+             versao: str = '<meta name="dados-versao" content="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa">') -> list[str]:
         trs = []
         for i in range(1, rows + 1):
             pos = first_pos if i == 1 else str(i)
@@ -2617,7 +2618,7 @@ class LlmRankingTest(unittest.TestCase):
             {"@type": "WebPage", "dateModified": modified}, {"@type": "BreadcrumbList"}]})
         att = (f'<a href="{C.LLM_DATASET_URL}">d</a> <a href="https://creativecommons.org/licenses/by/4.0/deed.pt-br" '
                f'rel="{license_rel}">CC BY 4.0</a>') if attribution else ""
-        html = (f"<!DOCTYPE html><html><head>{meta}<script type=\"application/ld+json\">{ld}</script></head><body>"
+        html = (f"<!DOCTYPE html><html><head>{meta}{versao}<script type=\"application/ld+json\">{ld}</script></head><body>"
                 f'<table id="ranking"><caption>x</caption><thead><tr><th>Posição</th></tr></thead><tbody>{"".join(trs)}'
                 f"</tbody></table><p>{att}</p>{extra}</body></html>")
         (self.site / "llm-ranking/index.html").write_text(html, encoding="utf-8")
@@ -2625,6 +2626,17 @@ class LlmRankingTest(unittest.TestCase):
 
     def test_good_page(self):
         self.assertEqual(self.page(), [])
+
+    def test_content_version(self):
+        # Revisão automática do #144 (P1): o snapshot da KVM compara esta versão (hash do snapshot) com a do repositório
+        # de dados para saber se a página no ar está atrás, mesmo quando a fonte republica com a mesma data.
+        self.assertTrue(any("esperava uma meta dados-versao, achou 0" in p for p in self.page(versao="")))
+        dois = '<meta name="dados-versao" content="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa">' * 2
+        self.assertTrue(any("esperava uma meta dados-versao, achou 2" in p for p in self.page(versao=dois)))
+        for ruim in ("A" * 64, "a" * 63, "g" * 64, ""):
+            with self.subTest(ruim=ruim):
+                self.assertTrue(any("meta dados-versao inválida" in p
+                                    for p in self.page(versao=f'<meta name="dados-versao" content="{ruim}">')))
 
     def test_missing_page(self):
         (self.site / "llm-ranking").rmdir()
@@ -2764,11 +2776,19 @@ class NavSourcesTest(unittest.TestCase):
 
     def test_root_pages_load_one_version_of_site_js(self):
         # #113 r4 (P3 do agy e do Claude): o #142 mudou o site.js e subiu o ?v=; página que entra por merge com a versão
-        # antiga cria outra chave de cache para o mesmo script.
+        # antiga cria outra chave de cache para o mesmo script. Revisão automática do #142 (P3): cada página carrega o
+        # site.js exatamente uma vez, sempre com ?v= de 12 dígitos, como nos testes do consent.js e do track.js.
         versions = {}
-        for f in self.sources()[:-1]:
-            for v in re.findall(r'src="/assets/site\.js\?v=([^"]+)"', f.read_text(encoding="utf-8")):
-                versions.setdefault(v, []).append(str(f.relative_to(self.ROOT)))
+        pages = self.sources()[:-1]
+        self.assertIn("llm-ranking/index.html", {str(f.relative_to(self.ROOT)) for f in pages})
+        for f in pages:
+            rel = str(f.relative_to(self.ROOT))
+            with self.subTest(rel=rel):
+                h = f.read_text(encoding="utf-8")
+                self.assertEqual(len(re.findall(r"/assets/site\.js\b", h)), 1, rel)
+                m = re.findall(r'<script src="/assets/site\.js\?v=(\d{12})"></script>', h)
+                self.assertEqual(len(m), 1, rel)
+                versions.setdefault(m[0], []).append(rel)
         self.assertEqual(len(versions), 1, versions)
 
 

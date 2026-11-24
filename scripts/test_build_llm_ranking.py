@@ -4,6 +4,7 @@ Rodar: python3 scripts/test_build_llm_ranking.py
 """
 import contextlib
 import copy
+import hashlib
 import io
 import json
 import re
@@ -103,6 +104,8 @@ class ValidarTest(unittest.TestCase):
             (lambda m: m.update(modelo="modelo-001"), "repetido"),
             (lambda m: m.update(organizacao=None), "organização"),
             (lambda m: m.update(licenca="WTFPL"), "licença desconhecida"),
+            (lambda m: m.update(licenca=["MIT"]), "licença desconhecida"),
+            (lambda m: m.update(licenca={"MIT": 1}), "licença desconhecida"),
             (lambda m: m.update(pontuacao="1500"), "não numérico"),
             (lambda m: m.update(superior=float("nan")), "não numérico"),
             (lambda m: m.update(inferior=float("inf")), "não numérico"),
@@ -215,7 +218,7 @@ class MudancasTest(unittest.TestCase):
     def test_leader_gone_from_the_list(self):
         antes = lista(120)
         agora = renum(copy.deepcopy(antes[1:]))
-        self.assertEqual(B.mudancas(agora, antes)[0], "Novo líder: modelo-002, no lugar de modelo-001.")
+        self.assertEqual(B.mudancas(agora, antes)[0], "Novo líder: modelo-002, no lugar de modelo-001, que saiu da lista.")
 
     def test_top10_in_and_out(self):
         antes = lista(120)
@@ -250,6 +253,24 @@ class MudancasTest(unittest.TestCase):
         self.assertFalse(any(t.startswith("Entrou no top 10: modelo-030") for t in itens), itens)
         # A subida além da margem é outro evento (o tamanho do salto) e continua no bloco.
         self.assertIn("Subiu além da margem de erro: modelo-030, de 1.540 para 1.650 pontos (30ª para 1ª posição).", itens)
+
+    def test_old_leader_gone_from_the_list_is_said_once(self):
+        # r2 (Claude P4): o ex-líder que sai da lista entra uma vez, no item do novo líder.
+        antes = lista(120)
+        agora = renum([m for m in copy.deepcopy(antes) if m["modelo"] != "modelo-001"])
+        itens = [t for t in B.mudancas(agora, antes) if "modelo-001" in t]
+        self.assertEqual(itens, ["Novo líder: modelo-002, no lugar de modelo-001, que saiu da lista."])
+
+    def test_old_leader_out_of_top10_but_still_listed(self):
+        # r1 do #144 (agy P3): o ex-líder que cai para a 15ª posição continua na lista; a frase não diz que saiu.
+        antes = lista(120)
+        agora = copy.deepcopy(antes)
+        agora[0].update(pontuacao=1569.0, inferior=1564.0, superior=1574.0)
+        agora = renum(agora)
+        itens = B.mudancas(agora, antes)
+        self.assertEqual(itens[0], "Novo líder: modelo-002, no lugar de modelo-001.")
+        self.assertIn("Saiu do top 10: modelo-001 (agora na 15ª posição).", itens)
+        self.assertFalse(any("que saiu da lista" in t for t in itens), itens)
 
     def test_top10_model_gone_from_the_list_is_said_once(self):
         # r1 (agy P1, Claude P3): quem sai do top 10 direto para fora da lista aparece uma vez só.
@@ -477,12 +498,25 @@ class BuildTest(unittest.TestCase):
         html = (self.site / B.PAGE).read_text(encoding="utf-8")
         self.assertEqual(C.check_llm_ranking(self.site), [])
         self.assertIn('<meta name="dados-publicados-em" content="2026-11-22">', html)
+        self.assertIn(f'<meta name="dados-versao" content="{B.versao(snapshot())}">', html)
         self.assertIn("Dados de 22/11/2026;", html)
         self.assertIn("com os 120 modelos", html)
         self.assertEqual(C.check_titles_and_groups(B.PAGE, html), [])
         self.assertEqual(C.check_consent(B.PAGE, html), [])
         self.assertEqual(C.check_ga_host_guard(B.PAGE, html), [])
         self.assertEqual(C.check_tracking(B.PAGE, html), [])
+
+    def test_version_is_the_hash_of_the_canonical_snapshot(self):
+        # O snapshot da KVM grava B.serializar(snap); a versão é o sha256 desses bytes, então é a mesma dos dois lados
+        # mesmo que o arquivo lido pelo build tenha outra formatação.
+        s = snapshot()
+        texto = B.serializar(s)
+        self.assertEqual(B.versao(s), hashlib.sha256(texto.encode("utf-8")).hexdigest())
+        self.assertEqual(B.versao(json.loads(json.dumps(s))), B.versao(s))
+        t = copy.deepcopy(s); t["modelos"][5]["votos"] += 1
+        self.assertNotEqual(B.versao(t), B.versao(s))
+        self.assertEqual(t["publicacao"], s["publicacao"])
+        self.assertTrue(texto.endswith("}\n"))
 
     def test_template_without_build_fails_the_check(self):
         self.assertTrue(any("marcador do template" in p for p in C.check_llm_ranking(self.site)))
@@ -524,12 +558,14 @@ function el(text, attrs) {
     removeAttribute: k => { delete attrs[k]; }, appendChild(c) { this.children.push(c); },
     addEventListener(t, f) { this.listeners[t] = f; }, attrs};
 }
-const linhas = [[1, 'beta', 10], [2, 'Alfa', 30], [3, 'gama', 30], [4, 'ágata', 5]].map(([p, n, v]) => {
-  const r = {cells: [el(String(p), {'data-valor': String(p)}), el(n), el(String(v), {'data-valor': String(v)})]};
+const linhas = [[1, 1, 'beta', 10], [2, 1, 'Alfa', 30], [3, 3, 'gama', 30], [4, 2, 'ágata', 5]].map(([p, f, n, v]) => {
+  const r = {cells: [el(String(p), {'data-valor': String(p)}), el(f + ' a 9', {'data-valor': String(f)}), el(n),
+    el(String(v), {'data-valor': String(v)})]};
   r.id = p; return r;
 });
 const tbody = {rows: linhas.slice(), appendChild(r) { this.rows.splice(this.rows.indexOf(r), 1); this.rows.push(r); }};
-const ths = [el('Posição', {'data-ordem': 'num'}), el('Modelo', {'data-ordem': 'texto'}), el('Votos', {'data-ordem': 'num'})];
+const ths = [el('Posição', {'data-ordem': 'num'}), el('Faixa', {'data-ordem': 'num'}), el('Modelo', {'data-ordem': 'texto'}),
+  el('Votos', {'data-ordem': 'num'})];
 const tabela = {tBodies: [tbody], tHead: {rows: [{cells: ths}]}};
 const document = {getElementById: id => (id === 'ranking' ? tabela : null), createElement: () => el('')};
 vm.runInNewContext(fs.readFileSync(process.argv[1], 'utf8'), {document});
@@ -555,25 +591,31 @@ class SorterTest(unittest.TestCase):
         return json.loads(r.stdout)
 
     def test_sorting(self):
-        out = self.run_clicks([2, 2, 1, 1, 0, 0])
-        A, D = "ascending", "descending"
-        self.assertEqual(out[0], {"ordem": [1, 2, 3, 4], "aria": [A, None, None]})
+        out = self.run_clicks([3, 3, 2, 2, 0, 0])
+        A, D, N = "ascending", "descending", None
+        self.assertEqual(out[0], {"ordem": [1, 2, 3, 4], "aria": [A, N, N, N]})
         # Votos: primeiro clique do maior para o menor; empate (30 e 30) desfeito pela posição da fonte.
-        self.assertEqual(out[1], {"ordem": [2, 3, 1, 4], "aria": [None, None, D]})
-        self.assertEqual(out[2], {"ordem": [4, 1, 2, 3], "aria": [None, None, A]})
+        self.assertEqual(out[1], {"ordem": [2, 3, 1, 4], "aria": [N, N, N, D]})
+        self.assertEqual(out[2], {"ordem": [4, 1, 2, 3], "aria": [N, N, N, A]})
         # Modelo: texto em português, de A a Z, sem diferença de caixa nem acento.
-        self.assertEqual(out[3], {"ordem": [4, 2, 1, 3], "aria": [None, A, None]})
-        self.assertEqual(out[4], {"ordem": [3, 1, 2, 4], "aria": [None, D, None]})
+        self.assertEqual(out[3], {"ordem": [4, 2, 1, 3], "aria": [N, N, A, N]})
+        self.assertEqual(out[4], {"ordem": [3, 1, 2, 4], "aria": [N, N, D, N]})
         # Posição: primeiro clique em ordem crescente.
-        self.assertEqual(out[5], {"ordem": [1, 2, 3, 4], "aria": [A, None, None]})
-        self.assertEqual(out[6], {"ordem": [4, 3, 2, 1], "aria": [D, None, None]})
-        self.assertEqual(out[7], {"botoes": ["Posição|button", "Modelo|button", "Votos|button"]})
+        self.assertEqual(out[5], {"ordem": [1, 2, 3, 4], "aria": [A, N, N, N]})
+        self.assertEqual(out[6], {"ordem": [4, 3, 2, 1], "aria": [D, N, N, N]})
+        self.assertEqual(out[7], {"botoes": ["Posição|button", "Faixa|button", "Modelo|button", "Votos|button"]})
+
+    def test_range_sorts_ascending_first(self):
+        # r2 (agy P3): a Faixa é numérica e, como a posição, começa da melhor (menor) para a pior.
+        out = self.run_clicks([1, 1])
+        self.assertEqual(out[1], {"ordem": [1, 2, 4, 3], "aria": [None, "ascending", None, None]})
+        self.assertEqual(out[2], {"ordem": [3, 4, 1, 2], "aria": [None, "descending", None, None]})
 
     def test_tie_is_broken_by_source_position_not_by_current_order(self):
         # Modelo de Z a A deixa gama (3) antes de Alfa (2); empatados em votos, voltam à ordem da fonte (2, 3).
-        out = self.run_clicks([1, 1, 2])
+        out = self.run_clicks([2, 2, 3])
         self.assertEqual(out[2]["ordem"], [3, 1, 2, 4])
-        self.assertEqual(out[3], {"ordem": [2, 3, 1, 4], "aria": [None, None, "descending"]})
+        self.assertEqual(out[3], {"ordem": [2, 3, 1, 4], "aria": [None, None, None, "descending"]})
 
 
 class TemplateTest(unittest.TestCase):

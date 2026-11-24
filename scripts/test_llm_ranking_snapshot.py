@@ -3,6 +3,7 @@
 Rodar: python3 scripts/test_llm_ranking_snapshot.py
 """
 import contextlib
+import hashlib
 import io
 import json
 import os
@@ -269,6 +270,49 @@ class GitTest(unittest.TestCase):
                            text=True, check=True)
         return r.stdout.split("\n")[:-1]
 
+    def test_remote_advanced_by_another_clone(self):
+        # r2 (agy P3): outro clone publica antes; o gravar() traz o avanço e não reescreve o que já está lá.
+        outro = Path(self.tmp.name) / "outro"
+        self.sh("git", "clone", "-q", str(self.origin), str(outro))
+        (outro / S.ARQUIVO).write_text("b\n")
+        self.sh("git", "-C", str(outro), "add", S.ARQUIVO)
+        self.sh("git", "-C", str(outro), "commit", "-q", "-m", "de outro clone")
+        self.sh("git", "-C", str(outro), "push", "-q", "origin", "HEAD:main")
+        self.assertFalse(S.gravar(self.dados, "b\n", "2026-11-22"))
+        self.assertEqual(self.origin_log()[0], "de outro clone")
+        self.assertTrue(S.gravar(self.dados, "c\n", "2026-11-25"))
+        self.assertEqual(self.origin_log()[:2], ["Arena, arena de texto: publicação de 2026-11-25", "de outro clone"])
+
+    def test_git_has_a_timeout_and_never_raises(self):
+        # r2 (agy P3): fetch ou push travado não prende o cron; git ausente vira erro do snapshot, não exceção solta.
+        from unittest import mock
+        vistos = {}
+
+        def run(cmd, **kw):
+            vistos.update(kw)
+            raise subprocess.TimeoutExpired(cmd, kw.get("timeout"))
+        with mock.patch.object(S.subprocess, "run", run):
+            r = S._git(self.dados, "fetch", "-q", "origin", "main")
+        self.assertEqual(vistos.get("timeout"), S.GIT_TIMEOUT)
+        self.assertEqual(r.returncode, 1)
+        self.assertEqual(r.stderr, f"não terminou em {S.GIT_TIMEOUT}s")
+        with mock.patch.object(S.subprocess, "run", side_effect=FileNotFoundError("git")):
+            r = S._git(self.dados, "fetch")
+        self.assertEqual(r.returncode, 1)
+        self.assertTrue(r.stderr.startswith("não rodou: "), r.stderr)
+        with mock.patch.object(S.subprocess, "run", run), self.assertRaises(S.SnapshotError) as cm:
+            S.gravar(self.dados, "a\n", "2026-11-22")
+        self.assertEqual(str(cm.exception), f"git fetch falhou: não terminou em {S.GIT_TIMEOUT}s")
+
+    def test_stale_index_lock_is_removed(self):
+        # r1 do #144 (Claude P3): um git morto pelo timeout no meio de add ou commit deixa o index.lock; o wrapper
+        # roda sob flock, então o gravar() é o único escritor do clone e pode apagar a trava que sobrou.
+        self.assertTrue(S.gravar(self.dados, "a\n", "2026-11-22"))
+        (self.dados / ".git" / "index.lock").write_text("")
+        self.assertTrue(S.gravar(self.dados, "b\n", "2026-11-25"))
+        self.assertFalse((self.dados / ".git" / "index.lock").exists())
+        self.assertEqual(self.origin_log()[0], "Arena, arena de texto: publicação de 2026-11-25")
+
     def test_writes_only_when_changed(self):
         self.assertTrue(S.gravar(self.dados, "a\n", "2026-11-22"))
         self.assertEqual(self.origin_log()[0], "Arena, arena de texto: publicação de 2026-11-22")
@@ -335,13 +379,148 @@ class GitTest(unittest.TestCase):
         self.assertFalse((self.dados / "sobra.txt").exists())
 
 
+class VersaoNoArTest(unittest.TestCase):
+    """A versão dos dados da página no ar (sha256 do snapshot), lida da meta que o build grava (revisão automática do
+    #144: a data sozinha não pega uma republicação com a mesma data)."""
+
+    V = "0123456789abcdef" * 4
+
+    def get(self, status, body):
+        vistos = []
+
+        def fake(url):
+            vistos.append(url)
+            return status, body.encode(), {}
+        return fake, vistos
+
+    def test_reads_the_meta(self):
+        g, vistos = self.get(200, f'<head><meta name="dados-versao" content="{self.V}"></head>')
+        self.assertEqual(S.versao_no_ar(g), self.V)
+        self.assertTrue(vistos[0].startswith(B.URL + "?snapshot="), vistos)
+
+    def test_anything_else_is_unknown(self):
+        for status, body in ((200, "<head></head>"),
+                             (200, '<meta name="dados-publicados-em" content="2026-11-22">'),
+                             (200, f'<meta name="dados-versao" content="{self.V}">' * 2),
+                             (200, f'<meta name="dados-versao" content="{self.V.upper()}">'),
+                             (200, f'<meta name="dados-versao" content="{self.V[:-1]}">'),
+                             (404, f'<meta name="dados-versao" content="{self.V}">'),
+                             (0, "")):
+            with self.subTest(status=status, body=body[:50]):
+                self.assertIsNone(S.versao_no_ar(self.get(status, body)[0]))
+
+    def test_asks_for_fresh_html(self):
+        pedidos = []
+
+        class Resp(io.BytesIO):
+            status = 200
+            headers = {}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *a):
+                return False
+
+        def urlopen(req, timeout):
+            pedidos.append(req)
+            return Resp(f'<meta name="dados-versao" content="{self.V}">'.encode())
+        self.assertEqual(S.versao_no_ar(urlopen=urlopen), self.V)
+        self.assertEqual(pedidos[0].get_header("Accept"), "text/html")
+        self.assertEqual(pedidos[0].get_header("Cache-control"), "no-cache")
+        self.assertTrue(pedidos[0].full_url.startswith(B.URL + "?snapshot="))
+
+    def test_the_source_is_still_asked_for_json(self):
+        pedidos = []
+
+        def urlopen(req, timeout):
+            pedidos.append(req)
+            raise TimeoutError("x")
+        S.http_get("https://exemplo/", urlopen=urlopen)
+        self.assertEqual(pedidos[0].get_header("Accept"), "application/json")
+        self.assertIsNone(pedidos[0].get_header("Cache-control"))
+
+    def test_bad_bytes_are_unknown(self):
+        self.assertIsNone(S.versao_no_ar(lambda url: (200, b"\xff\xfe<meta", {})))
+
+
 class MainTest(GitTest):
-    def main(self, *argv, data=None):
+    def versao(self, data=None) -> str:
+        return B.versao(S.coletar(fonte(FakeServer(data or dataset()))))
+
+    def main(self, *argv, data=None, git=S._git, no_ar="em dia"):
+        no_ar = self.versao(data) if no_ar == "em dia" else no_ar
         f = fonte(FakeServer(data or dataset()))
         out, err = io.StringIO(), io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            code = S.main(["--dados", str(self.dados), *argv], fonte=f)
+            code = S.main(["--dados", str(self.dados), *argv], fonte=f, git=git, no_ar=lambda: no_ar)
         return code, out.getvalue(), err.getvalue()
+
+    def test_deploy_when_written(self):
+        code, out, _ = self.main("--apply", no_ar="b" * 64)
+        self.assertEqual((code, out.strip().splitlines()[-3:]), (0, ["gravado", "no ar: versão " + "b" * 64, "deploy"]))
+
+    def test_deploy_when_written_even_if_the_page_already_has_the_version(self):
+        code, out, _ = self.main("--apply")
+        self.assertEqual(out.strip().splitlines()[-1], "deploy")
+
+    def test_no_deploy_when_nothing_changed_and_the_page_is_current(self):
+        self.main("--apply")
+        code, out, _ = self.main("--apply")
+        v = self.versao()
+        self.assertEqual((code, out.strip().splitlines()[-3:]),
+                         (0, ["sem mudança", f"no ar: versão {v}", f"sem deploy: a página no ar já tem a versão {v}"]))
+
+    def push_aceito_com_timeout(self, dados, *args):
+        r = S._git(dados, *args)
+        if args[0] == "push" and r.returncode == 0:
+            return subprocess.CompletedProcess(args, 1, "", f"não terminou em {S.GIT_TIMEOUT}s")
+        return r
+
+    def test_deploy_when_nothing_changed_but_the_page_is_behind(self):
+        # Revisão automática do #144 (P1, head 64c1433): o push foi aceito pelo remoto, mas o cliente estourou o tempo.
+        # A primeira rodada sai com erro e sem deploy; a seguinte acha o conteúdo igual e precisa pedir o deploy.
+        code, out, err = self.main("--apply", git=self.push_aceito_com_timeout, no_ar="b" * 64)
+        self.assertEqual(code, 1)
+        self.assertIn("git push falhou: não terminou", err)
+        self.assertNotIn("deploy", out)
+        self.assertEqual(self.origin_log()[0], "Arena, arena de texto: publicação de 2026-11-22")
+        code, out, _ = self.main("--apply", no_ar="b" * 64)
+        self.assertEqual((code, out.strip().splitlines()[-3:]), (0, ["sem mudança", "no ar: versão " + "b" * 64, "deploy"]))
+
+    def test_same_date_new_content_after_push_timeout(self):
+        # Revisão automática do #144 (P1, head 8299207): a página está com o conteúdo A da data D; a fonte republica B com
+        # a mesma data D; o push de B é aceito com timeout no cliente. Pela data, a rodada seguinte via a página "em
+        # dia" e não pedia deploy; pela versão (hash do conteúdo), ela vê A no ar e B no repositório e pede.
+        self.main("--apply")
+        versao_a = self.versao()
+        b = dataset()
+        b["latest"][0]["vote_count"] += 1
+        self.assertNotEqual(self.versao(b), versao_a)
+        code, out, err = self.main("--apply", data=b, git=self.push_aceito_com_timeout, no_ar=versao_a)
+        self.assertEqual(code, 1)
+        self.assertNotIn("deploy", out)
+        code, out, _ = self.main("--apply", data=b, no_ar=versao_a)
+        self.assertEqual((code, out.strip().splitlines()[-3:]), (0, ["sem mudança", f"no ar: versão {versao_a}", "deploy"]))
+        code, out, _ = self.main("--apply", data=b)
+        self.assertEqual(out.strip().splitlines()[-1], f"sem deploy: a página no ar já tem a versão {self.versao(b)}")
+
+    def test_deploy_when_the_page_version_is_unknown(self):
+        self.main("--apply")
+        code, out, _ = self.main("--apply", no_ar=None)
+        self.assertEqual(out.strip().splitlines()[-2:], ["no ar: não lida", "deploy"])
+
+    def test_written_file_is_what_the_version_hashes(self):
+        self.main("--apply")
+        texto = (self.dados / S.ARQUIVO).read_bytes()
+        self.assertEqual(hashlib.sha256(texto).hexdigest(), self.versao())
+
+    def test_dry_run_does_not_read_the_page(self):
+        def nunca():
+            raise AssertionError("a simulação não lê a página no ar")
+        f = fonte(FakeServer(dataset()))
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(S.main(["--dados", str(self.dados)], fonte=f, no_ar=nunca), 0)
 
     def test_dry_run_touches_nothing(self):
         code, out, _ = self.main()
@@ -353,11 +532,11 @@ class MainTest(GitTest):
 
     def test_apply_then_no_change(self):
         code, out, _ = self.main("--apply")
-        self.assertEqual((code, out.strip().splitlines()[-1]), (0, "gravado"))
+        self.assertEqual((code, out.strip().splitlines()[-3]), (0, "gravado"))
         snap = json.loads((self.dados / S.ARQUIVO).read_text(encoding="utf-8"))
         B.validar(snap)
         code, out, _ = self.main("--apply")
-        self.assertEqual((code, out.strip().splitlines()[-1]), (0, "sem mudança"))
+        self.assertEqual((code, out.strip().splitlines()[-3]), (0, "sem mudança"))
         self.assertEqual(len(self.origin_log()), 2)
 
     def test_invalid_source_writes_nothing(self):
