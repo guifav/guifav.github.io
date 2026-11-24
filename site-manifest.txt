@@ -19,3 +19,5 @@ assets/
 portfolio/
 consultoria/
 tools/
+privacidade/
+termos/

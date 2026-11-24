@@ -17,7 +17,7 @@
   var d = document;
   var KEY = 'consent-v1';
   var MAX_AGE = 365 * 24 * 3600 * 1000;
-  var POLICY = '/blog/privacidade/#cookies';
+  var POLICY = '/privacidade/#cookies';
   var TEXT = {
     pt: { q: 'Aceitar os cookies?', yes: 'Sim', no: 'Não', policy: 'Política de privacidade e cookies' },
     en: { q: 'Accept cookies?', yes: 'Yes', no: 'No', policy: 'Privacy and cookie policy' }

@@ -1,4 +1,4 @@
-"""Redirects de URLs antigas do guifav.dev (posts e ferramentas movidas), por Bulk Redirects da conta Cloudflare (#102, #106, #151).
+"""Redirects de URLs antigas para posts, ferramentas movidas e mudanças de endereço do guifav.dev, por Bulk Redirects da conta Cloudflare (#102, #106, #146, #151).
 
 Fonte única do par de listas de Bulk Redirects `guifav_redirects_a` e `guifav_redirects_b` e da regra da conta que
 liga uma delas. Ninguém edita essas listas ou a fase de redirects da conta pelo painel: o `apply` substitui a lista
@@ -123,24 +123,35 @@ MOVED_TOOLS: tuple[tuple[str, str], ...] = (
     ("/seo-geo-aeo-framework/framework-seo-aeo.html", "/tools/seo-geo-aeo-framework/framework-seo-aeo.html"),
 )
 
+# #146: mudanças de endereço do próprio site (fora dos posts). Cada par leva (com e sem barra) em 301 para o endereço
+# novo, sem query nem fragmento no target_url (o navegador preserva a âncora, como #cookies).
+SITE_MOVES: tuple[tuple[str, str], ...] = (
+    ("/blog/privacidade/", "/privacidade/"),
+)
+
 _SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 _OLD = re.compile(r"[a-z0-9%]+(?:-[a-z0-9%]+)*")
 _TOOL_PATH = re.compile(r"/[a-z0-9]+(?:[/-][a-z0-9]+)*(?:/|\.html)")
+_SITE_PATH = re.compile(r"/(?:[a-z0-9]+(?:-[a-z0-9]+)*/)+")
 
 
 @dataclass(frozen=True)
 class Redirect:
     source: str  # host + caminho, sem esquema (casa http e https)
-    target: str  # URL absoluta de destino
+    target: str  # URL absoluta do destino em guifav.dev (sem query nem #)
 
 
 def post_url(slug: str) -> str:
     return f"{BLOG}{slug}/"
 
 
-def _repo_page(repo_dir: Path, path: str) -> Path:
+def _repo_page(repo: Path, path: str) -> Path:
     rel = path.lstrip("/")
-    return repo_dir / rel / "index.html" if path.endswith("/") else repo_dir / rel
+    return repo / rel / "index.html" if path.endswith("/") else repo / rel
+
+
+def site_url(path: str) -> str:
+    return f"https://{HOST}{path}"
 
 
 def first_hop(old: str) -> str:
@@ -153,14 +164,16 @@ def first_hop(old: str) -> str:
 
 def redirects() -> list[Redirect]:
     out = []
-    pairs = [(first_hop(old), new) for old, new in OLD_POSTS] + [(post_url(dup), new) for dup, new in DUPLICATES]
-    for loc, new in pairs:
+    pairs = ([(first_hop(old), post_url(new)) for old, new in OLD_POSTS]
+             + [(post_url(dup), post_url(new)) for dup, new in DUPLICATES]
+             + [(site_url(old), site_url(new)) for old, new in SITE_MOVES])
+    for loc, target in pairs:
         src = loc.removeprefix("https://")
         for s in (src, src.rstrip("/")):  # com e sem barra: a lista casa o caminho exato
-            out.append(Redirect(s, post_url(new)))
+            out.append(Redirect(s, target))
     for old_path, new_path in MOVED_TOOLS:
         src = HOST + old_path
-        target = f"https://{HOST}{new_path}"
+        target = site_url(new_path)
         forms = (src, src.rstrip("/")) if old_path.endswith("/") else (src,)
         for s in forms:
             out.append(Redirect(s, target))
@@ -186,7 +199,7 @@ def all_posts(posts_dir: Path = POSTS) -> set[str]:
     return {f.stem for f in posts_dir.glob("*.md")}
 
 
-def problems(reds: list[Redirect] | None = None, posts_dir: Path = POSTS, repo_dir: Path = REPO) -> list[str]:
+def problems(reds: list[Redirect] | None = None, posts_dir: Path = POSTS, repo: Path = REPO) -> list[str]:
     """O que impede gravar a lista. Vazio = pode gravar."""
     reds = redirects() if reds is None else reds
     live, every = indexable_posts(posts_dir), all_posts(posts_dir)
@@ -217,10 +230,35 @@ def problems(reds: list[Redirect] | None = None, posts_dir: Path = POSTS, repo_d
             out.append(f"caminho antigo fora do formato em MOVED_TOOLS: {old_path!r}")
         if not new_path.startswith("/tools/") or not _TOOL_PATH.fullmatch(new_path):
             out.append(f"{old_path}: destino fora de /tools/: {new_path!r}")
-        if _repo_page(repo_dir, old_path).exists():
+        if _repo_page(repo, old_path).exists():
             out.append(f"{old_path}: origem ainda existe no repo")
-        if not _repo_page(repo_dir, new_path).is_file():
+        if not _repo_page(repo, new_path).is_file():
             out.append(f"{old_path}: destino {new_path!r} não existe no repo")
+    moves = [m for m, _ in SITE_MOVES]
+    if len(set(moves)) != len(moves):
+        out.append("caminho antigo repetido em SITE_MOVES")
+    post_paths = {f"/blog/{s}/" for s in (*olds, *dups)}
+    tool_paths = set(tool_olds)
+    for old, new in SITE_MOVES:
+        if not _SITE_PATH.fullmatch(old) or not _SITE_PATH.fullmatch(new):
+            out.append(f"mudança de endereço fora do formato /caminho/: {old!r} -> {new!r}")
+            continue
+        if old == new:
+            out.append(f"{old}: origem e destino iguais em SITE_MOVES")
+        if old in post_paths:
+            out.append(f"{old}: já está em OLD_POSTS ou DUPLICATES")
+        if old in tool_paths:
+            out.append(f"{old}: já está em MOVED_TOOLS")
+        if not (repo / new.lstrip("/") / "index.html").is_file():
+            out.append(f"{old}: destino {new!r} não existe no repo ({new.lstrip('/')}index.html)")
+        if (repo / old.lstrip("/") / "index.html").exists():
+            out.append(f"{old}: ainda existe na raiz do repo; o redirect esconderia a página")
+        if old.startswith("/blog/"):
+            slug = old.removeprefix("/blog/").rstrip("/")
+            if slug in live:
+                out.append(f"{old}: é um post indexável; o redirect esconderia a página")
+            if (repo / "blog-src/src/pages" / f"{slug}.astro").exists():
+                out.append(f"{old}: ainda existe em blog-src/src/pages/{slug}.astro")
     sources = [r.source for r in reds]
     if len(set(sources)) != len(sources):
         out.append("origem repetida na lista")
@@ -232,19 +270,19 @@ def problems(reds: list[Redirect] | None = None, posts_dir: Path = POSTS, repo_d
         path = "/" + r.source.split("/", 1)[1]
         if not r.source.startswith(HOST + "/") or path == "/":
             out.append(f"origem fora de {HOST}/: {r.source}")
-        elif r.source.startswith(HOST + "/blog/"):
+        elif path.startswith("/blog/"):
             slug = path.removeprefix("/blog/").rstrip("/")
             if slug in live:
                 out.append(f"origem {r.source} é um post indexável: o redirect esconderia a página")
-        elif _repo_page(repo_dir, path).is_file() or (
-                not path.endswith("/") and _repo_page(repo_dir, path + "/").is_file()):
+        elif _repo_page(repo, path).is_file() or (
+                not path.endswith("/") and _repo_page(repo, path + "/").is_file()):
             out.append(f"origem {r.source} existe no repo: o redirect esconderia a página")
         if "https://" + r.source in targets or "https://" + r.source + "/" in targets:
             out.append(f"origem {r.source} também é destino: cadeia de redirects")
-        blog_ok = r.target.startswith(BLOG) and r.target.endswith("/")
-        tool_ok = r.target.startswith(TOOLS) and (r.target.endswith("/") or r.target.endswith(".html"))
-        if not (blog_ok or tool_ok):
-            out.append(f"destino fora de {BLOG} ou {TOOLS}: {r.target}")
+        valid_end = r.target.endswith("/") or (r.target.startswith(TOOLS) and r.target.endswith(".html"))
+        if (not r.target.startswith(f"https://{HOST}/") or not valid_end
+                or r.target == f"https://{HOST}/" or "?" in r.target or "#" in r.target):
+            out.append(f"destino fora de https://{HOST}/.../: {r.target}")
     if len(reds) * len(LISTS) > MAX_ITEMS:
         out.append(f"{len(reds)} itens em {len(LISTS)} listas: o plano Free aceita {MAX_ITEMS} somando as listas")
     return out
@@ -441,7 +479,7 @@ def verify(fetcher=cutover.fetch, pause: float = 0.12, out=sys.stdout) -> int:
         checks.append((final, 200, None))
     for dup, new in DUPLICATES:
         checks.append((post_url(new), 200, None))
-    for target in dict.fromkeys(f"https://{HOST}{new}" for _, new in MOVED_TOOLS):
+    for target in dict.fromkeys(site_url(new) for _, new in (*MOVED_TOOLS, *SITE_MOVES)):
         checks.append((target, 200, None))
     checks += [("https://" + r.source, 301, r.target) for r in reds]  # inclui o segundo salto de cada caminho
     for url, status, loc in checks:

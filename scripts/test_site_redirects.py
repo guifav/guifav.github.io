@@ -60,7 +60,11 @@ TOOLS = {
     "/seo-geo-aeo-framework/": "/tools/seo-geo-aeo-framework/framework-seo-aeo.html",
     "/seo-geo-aeo-framework/framework-seo-aeo.html": "/tools/seo-geo-aeo-framework/framework-seo-aeo.html",
 }
-TOTAL = 17 * 2 + 2 * 2 + 6 * 2 + 1  # 51 itens na lista
+# Mudanças de endereço do próprio site (#146), escritas à parte: origem -> destino.
+MOVES = {
+    "/blog/privacidade/": "/privacidade/",
+}
+TOTAL = 17 * 2 + 2 * 2 + 1 * 2 + 6 * 2 + 1  # 53 itens na lista
 # Grupo C da #120 (decisão do Gui): fica em 404, fora da lista.
 GROUP_C_ENCODED = "como-a-intelig%c3%aancia-artificial-vai-transformar-a-lideran%c3%a7a-e-os-neg%c3%b3cios-no-futuro"
 # Location que a zona antiga devolveu ao vivo em 24/11 para o caminho com acentos (curl -I).
@@ -99,6 +103,23 @@ class PlanTest(unittest.TestCase):
             self.assertTrue(S._repo_page(repo, new_path).is_file(), new_path)
         self.assertIsNone(S.simulate("https://guifav.dev/tools/"))
         self.assertIsNone(S.simulate("https://guifav.dev/tools"))
+
+    def test_site_moves_are_separate_from_posts_and_carry_privacy(self):
+        self.assertEqual(dict(S.SITE_MOVES), MOVES)
+        self.assertNotIn("privacidade", dict(S.OLD_POSTS))
+        self.assertNotIn("privacidade", dict(S.DUPLICATES))
+        want = "https://guifav.dev/privacidade/"
+        for url in ("https://guifav.dev/blog/privacidade/", "https://guifav.dev/blog/privacidade",
+                    "http://guifav.dev/blog/privacidade/", "http://guifav.dev/blog/privacidade",
+                    "https://guifav.dev/blog/privacidade/#cookies", "https://guifav.dev/blog/privacidade#materiais",
+                    "https://guifav.dev/blog/privacidade/#origem", "https://guifav.dev/blog/privacidade/#quem-processa"):
+            self.assertEqual(S.simulate(url), want, url)
+        self.assertIsNone(S.simulate(want))
+        # Domínio antigo -> cutover leva a /blog/privacidade/ -> lista leva a /privacidade/ (sem mexer no cutover).
+        for host in (APEX, WWW):
+            for path in ("/privacy", "/privacy/", "/tos", "/tos/",
+                         "/p/politica-de-privacidade", "/p/termos-e-condicoes-de-uso"):
+                self.assertEqual(end_to_end(f"https://{host}{path}"), want, (host, path))
 
     def test_absorbed_copy_stays_in_the_repo_without_index_and_the_winner_is_indexable(self):
         live = S.indexable_posts()
@@ -172,6 +193,11 @@ class PlanTest(unittest.TestCase):
             expected = {src: want, src.rstrip("/"): want} if old_path.endswith("/") else {src: want}
             got = {r.source: r.target for r in reds if r.source in expected}
             self.assertEqual(got, expected)
+        for old, new in MOVES.items():
+            src = S.HOST + old
+            got = {r.source: r.target for r in reds if r.source.rstrip("/") == src.rstrip("/")}
+            self.assertEqual(got, {src: f"https://{S.HOST}{new}",
+                                   src.rstrip("/"): f"https://{S.HOST}{new}"})
 
 
 class SimulateTest(unittest.TestCase):
@@ -196,11 +222,45 @@ def _posts(tmp: Path, files: dict[str, str]) -> Path:
 
 
 class ProblemsTest(unittest.TestCase):
-    def run_with(self, table, posts, reds=None, dups=()):
+    def run_with(self, table, posts, reds=None, dups=(), moves=(), tools=(), files=()):
         with tempfile.TemporaryDirectory() as d, mock.patch.object(S, "OLD_POSTS", table), \
-                mock.patch.object(S, "DUPLICATES", dups):
-            p = _posts(Path(d), posts)
-            return S.problems(S.redirects() if reds is None else reds, p)
+                mock.patch.object(S, "DUPLICATES", dups), mock.patch.object(S, "SITE_MOVES", moves), \
+                mock.patch.object(S, "MOVED_TOOLS", tools):
+            root = Path(d)
+            posts_dir = root / "posts"
+            posts_dir.mkdir()
+            p = _posts(posts_dir, posts)
+            for rel in files:
+                f = root / rel
+                f.parent.mkdir(parents=True, exist_ok=True)
+                f.write_text("<html></html>", encoding="utf-8")
+            return S.problems(S.redirects() if reds is None else reds, p, repo=root)
+
+    def test_site_moves_must_point_to_existing_page_and_remove_old_source(self):
+        ok_files = ("privacidade/index.html",)
+        self.assertEqual(self.run_with((("velho", "novo"),), {"novo": ""}, moves=(("/blog/privacidade/", "/privacidade/"),),
+                                       files=ok_files), [])
+        cases = (
+            (("/blog/privacidade/", "/privacidade/"), (), "não existe no repo"),
+            (("/blog/privacidade/", "/privacidade/"), (*ok_files, "blog-src/src/pages/privacidade.astro"), "privacidade.astro"),
+            (("/antigo/", "/privacidade/"), (*ok_files, "antigo/index.html"), "esconderia a página"),
+            (("/blog/novo/", "/privacidade/"), ok_files, "post indexável"),
+            (("/privacidade/", "/privacidade/"), ok_files, "iguais"),
+            (("/blog/privacidade", "/privacidade/"), ok_files, "fora do formato"),
+            (("/blog/privacidade/", "/privacidade/#cookies"), ok_files, "fora do formato"),
+            (("/blog/velho/", "/privacidade/"), ok_files, "OLD_POSTS"),
+        )
+        for move, files, word in cases:
+            with self.subTest(move=move, files=files):
+                got = self.run_with((("velho", "novo"),), {"novo": ""}, moves=(move,), files=files)
+                self.assertTrue(any(word in x for x in got), got)
+        dup_moves = (("/blog/privacidade/", "/privacidade/"), ("/blog/privacidade/", "/privacidade/"))
+        got = self.run_with((("velho", "novo"),), {"novo": ""}, moves=dup_moves, files=ok_files)
+        self.assertTrue(any("repetido em SITE_MOVES" in x for x in got), got)
+        # Fragmento no target_url sobrescreveria a âncora do navegador (#cookies): recusado.
+        bad_frag = [S.Redirect("guifav.dev/blog/privacidade/", "https://guifav.dev/privacidade/#cookies")]
+        got = self.run_with((("velho", "novo"),), {"novo": ""}, reds=bad_frag)
+        self.assertTrue(any("destino fora" in x for x in got), got)
 
     def test_duplicate_must_stay_without_index_and_point_to_an_indexable_post(self):
         ok = {"novo": "", "dup": "index: false\n", "orig": ""}
@@ -259,7 +319,8 @@ class ProblemsTest(unittest.TestCase):
                             ((("velho", "novo"), ("velho", "novo")), "repetido")):
             with self.subTest(table=table):
                 with tempfile.TemporaryDirectory() as d, mock.patch.object(S, "OLD_POSTS", table), \
-                        mock.patch.object(S, "DUPLICATES", ()):
+                        mock.patch.object(S, "DUPLICATES", ()), mock.patch.object(S, "SITE_MOVES", ()), \
+                        mock.patch.object(S, "MOVED_TOOLS", ()):
                     got = S.problems([], _posts(Path(d), {"novo": ""}))
                 self.assertTrue(any(word in p for p in got), got)
 
@@ -272,17 +333,18 @@ class ProblemsTest(unittest.TestCase):
             (repo / "tools/ferramenta/index.html").write_text("<html></html>", encoding="utf-8")
             with mock.patch.object(S, "OLD_POSTS", (("velho", "novo"),)), \
                     mock.patch.object(S, "DUPLICATES", ()), \
+                    mock.patch.object(S, "SITE_MOVES", ()), \
                     mock.patch.object(S, "MOVED_TOOLS", (("/ferramenta/", "/tools/ferramenta/"),)):
-                self.assertEqual(S.problems(posts_dir=posts, repo_dir=repo), [])
+                self.assertEqual(S.problems(posts_dir=posts, repo=repo), [])
                 # Origem ainda existe no repo -> recusado
                 (repo / "ferramenta").mkdir()
                 (repo / "ferramenta/index.html").write_text("<html></html>", encoding="utf-8")
-                got = S.problems(posts_dir=posts, repo_dir=repo)
+                got = S.problems(posts_dir=posts, repo=repo)
                 self.assertTrue(any("ainda existe no repo" in p for p in got), got)
                 (repo / "ferramenta/index.html").unlink()
                 # Destino ausente no repo -> recusado
                 (repo / "tools/ferramenta/index.html").unlink()
-                got = S.problems(posts_dir=posts, repo_dir=repo)
+                got = S.problems(posts_dir=posts, repo=repo)
                 self.assertTrue(any("não existe no repo" in p for p in got), got)
             # Origem em /tools/ ou repetida ou destino fora de /tools/ -> recusados
             (repo / "tools/ferramenta/index.html").write_text("<html></html>", encoding="utf-8")
@@ -294,9 +356,20 @@ class ProblemsTest(unittest.TestCase):
                 with self.subTest(tools=tools):
                     with mock.patch.object(S, "OLD_POSTS", (("velho", "novo"),)), \
                             mock.patch.object(S, "DUPLICATES", ()), \
+                            mock.patch.object(S, "SITE_MOVES", ()), \
                             mock.patch.object(S, "MOVED_TOOLS", tools):
-                        got = S.problems([], posts_dir=posts, repo_dir=repo)
+                        got = S.problems([], posts_dir=posts, repo=repo)
                     self.assertTrue(any(word in p for p in got), got)
+            # Origem duplicada entre MOVED_TOOLS e SITE_MOVES -> recusada
+            (repo / "privacidade").mkdir(parents=True)
+            (repo / "privacidade/index.html").write_text("<html></html>", encoding="utf-8")
+            with mock.patch.object(S, "OLD_POSTS", (("velho", "novo"),)), \
+                    mock.patch.object(S, "DUPLICATES", ()), \
+                    mock.patch.object(S, "MOVED_TOOLS", (("/ferramenta/", "/tools/ferramenta/"),)), \
+                    mock.patch.object(S, "SITE_MOVES", (("/ferramenta/", "/privacidade/"),)):
+                got = S.problems(posts_dir=posts, repo=repo)
+            self.assertTrue(any("já está em MOVED_TOOLS" in p for p in got), got)
+            self.assertTrue(any("origem repetida na lista" in p for p in got), got)
 
     def test_limit_of_the_free_plan_counts_both_lists_of_the_pair(self):
         def reds(n):
@@ -318,6 +391,7 @@ class PayloadTest(unittest.TestCase):
             self.assertEqual((r["status_code"], r["preserve_query_string"], r["include_subdomains"],
                               r["subpath_matching"]), (301, False, False, False))
             self.assertFalse(r["source_url"].startswith("http"))
+            self.assertNotIn("#", r["target_url"])  # sem fragmento no destino: o navegador preserva a âncora
 
     def test_rule_enables_exactly_the_given_list_of_the_pair(self):
         self.assertEqual(S.LISTS, ("guifav_redirects_a", "guifav_redirects_b"))
@@ -419,7 +493,7 @@ class ApplyTest(unittest.TestCase):
                                        ("PUT", f"/accounts/acc/rulesets/phases/{S.PHASE}/entrypoint")])
         put_items = cf.calls.index(("PUT", "/accounts/acc/rules/lists/L-a/items"))
         reads = [i for i, c in enumerate(cf.calls) if c == ("GET", "/accounts/acc/rules/lists/L-a/items")]
-        self.assertGreaterEqual(len(reads), 3)  # 51 itens em páginas de 20: o cursor foi seguido
+        self.assertGreaterEqual(len(reads), 3)  # 53 itens em páginas de 20: o cursor foi seguido
         self.assertTrue(put_items < reads[0] and reads[-1] < len(cf.calls) - 1)
         self.assertEqual(cf.phase, [S.rule(self.A)])
         self.assertEqual(len(cf.items["L-a"]), TOTAL)
@@ -600,6 +674,11 @@ class CliTest(unittest.TestCase):
             self.assertEqual(S.main(["rules"]), 0)
         data = json.loads(out.getvalue())
         self.assertEqual((data["lists"], len(data["items"])), (list(S.LISTS), TOTAL))
+        by_src = {it["redirect"]["source_url"]: it["redirect"] for it in data["items"]}
+        for src in ("guifav.dev/blog/privacidade/", "guifav.dev/blog/privacidade"):
+            self.assertEqual(by_src[src]["target_url"], "https://guifav.dev/privacidade/")
+            self.assertEqual(by_src[src]["status_code"], 301)
+            self.assertNotIn("#", by_src[src]["target_url"])
 
 
 class VerifyTest(unittest.TestCase):
@@ -622,7 +701,7 @@ class VerifyTest(unittest.TestCase):
     def test_all_good_passes_and_counts_every_check(self):
         rc, out = self.run_verify(self.live())
         self.assertEqual(rc, 0, out)
-        self.assertIn(f"ok: {17 * 4 + 17 + 2 + 6 + TOTAL}; falhas: 0", out)
+        self.assertIn(f"ok: {17 * 4 + 17 + 2 + 6 + 1 + TOTAL}; falhas: 0", out)
 
     def test_each_hop_is_checked(self):
         old, new = S.OLD_POSTS[0]
@@ -633,7 +712,10 @@ class VerifyTest(unittest.TestCase):
                             (mid, (404, None)), (mid.rstrip("/"), (302, final)),
                             (final, (404, None)),
                             ("https://guifav.dev/llm-ranking", (404, None)),
-                            ("https://guifav.dev/tools/llm-ranking/", (404, None))):
+                            ("https://guifav.dev/tools/llm-ranking/", (404, None)),
+                            ("https://guifav.dev/blog/privacidade/", (404, None)),
+                            ("https://guifav.dev/blog/privacidade", (302, "https://guifav.dev/privacidade/")),
+                            ("https://guifav.dev/privacidade/", (404, None))):
             with self.subTest(url=url):
                 rc, out = self.run_verify(self.live(url, answer))
                 self.assertEqual(rc, 1)
