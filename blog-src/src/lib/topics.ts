@@ -71,7 +71,7 @@ export const TOPICS: Topic[] = [
     description:
       'Artigos de Guilherme Favaron sobre como fazer a IA responder com os dados da empresa: RAG, Text-to-SQL, MCP e análise de planilhas com LLMs.',
     intro:
-      'Quase todo projeto de IA que acompanho precisa que o modelo responda com os dados da própria empresa, com cada número conferido na fonte. Os caminhos são vários (RAG sobre documentos, Text-to-SQL sobre o banco, MCP e análise de planilhas), e cada um acerta num tipo de pergunta e falha em outro. Comece pelos seis primeiros artigos, que tratam da escolha de arquitetura e de cada caminho. Os seguintes descem para planilhas e modelos preditivos, e a lista termina nos casos que construí.',
+      'Quase todo projeto de IA que acompanho precisa que o modelo responda com os dados da própria empresa, com cada número conferido na fonte. Os caminhos são vários (RAG sobre documentos, Text-to-SQL sobre o banco, MCP e análise de planilhas), e cada um acerta num tipo de pergunta e falha em outro. Comece pelos cinco primeiros artigos, que tratam da escolha de arquitetura, de RAG e de Text-to-SQL. Os seguintes descem para planilhas e modelos preditivos, e a lista termina nos casos que construí.',
     pageCta: [
       'Antes de escolher a arquitetura, use o ',
       { text: 'mapa de decisão', href: MAPA },
