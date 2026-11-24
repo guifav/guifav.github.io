@@ -5,6 +5,20 @@ import { spotifyEmbedUrl } from './blog.ts';
 
 export const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
+// Temas do blog (#104, aprovados pelo Gui em 23/11/2026 a partir do mapa de demanda da #112). O id é também
+// o endereço da página do tema, /blog/tema/<id>/. Tema novo ou renomeado passa por aprovação do Gui.
+export const TOPIC_IDS = [
+  'ia-sobre-dados-da-empresa',
+  'custos-roi-e-escolha-de-modelo',
+  'agentes-de-ia-em-producao',
+  'implantacao-de-ia-legados-e-arquitetura',
+  'engenharia-de-software-com-ia',
+] as const;
+export type TopicId = (typeof TOPIC_IDS)[number];
+
+// Teto do summary: 2 ou 3 frases que respondem à pergunta principal do post (#108).
+export const SUMMARY_MAX = 500;
+
 // Data ISO 8601 existente no calendário: "2026-11-10" ou "2026-11-10T12:00:00Z" (com fuso).
 // new Date() sozinho normaliza dias inexistentes ("2026-02-30" vira 2 de março) sem erro.
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?(?:Z|[+-](\d{2}):(\d{2})))?$/;
@@ -53,6 +67,18 @@ export const postSchema = z
       .optional(),
     index: z.boolean().default(true),
     newsletter: z.boolean().default(false),
+    // Temas do post (#104). Opcional: post fora do foco fica sem tema. O primeiro é o tema principal.
+    topics: z
+      .array(z.enum(TOPIC_IDS))
+      .min(1)
+      .refine((t) => new Set(t).size === t.length, { message: 'tema repetido em topics' })
+      .optional(),
+    // Resumo no topo do post (#108). Independente da description e nunca a substitui (#103).
+    summary: z
+      .string()
+      .refine((s) => s.trim().length > 0, { message: 'summary vazio' })
+      .refine((s) => s.length <= SUMMARY_MAX, { message: `summary passa de ${SUMMARY_MAX} caracteres` })
+      .optional(),
   })
   .refine((d) => d.type !== 'podcast' || Boolean(d.spotify_url), {
     message: 'podcast precisa de spotify_url',

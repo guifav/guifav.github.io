@@ -1,7 +1,7 @@
 // Testes do esquema do frontmatter e da checagem dos arquivos de post (rodam antes do build).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { postSchema } from '../src/lib/schema.ts';
+import { postSchema, TOPIC_IDS } from '../src/lib/schema.ts';
 import { checkPostFiles, checkPublicFiles, frontmatterSlug } from '../src/lib/postfiles.ts';
 
 const base = {
@@ -53,6 +53,42 @@ test('esquema mantém as regras de slug, capa e updated', () => {
   assert.equal(postSchema.safeParse({ ...base, cover: 'img/../x.webp' }).success, false);
   assert.equal(postSchema.safeParse({ ...base, updated: '2026-11-01' }).success, false);
   assert.equal(postSchema.safeParse({ ...base, index: 'false' }).success, false);
+});
+
+test('esquema: topics é opcional e só aceita os 5 temas da #104, sem repetição', () => {
+  assert.deepEqual([...TOPIC_IDS], [
+    'ia-sobre-dados-da-empresa',
+    'custos-roi-e-escolha-de-modelo',
+    'agentes-de-ia-em-producao',
+    'implantacao-de-ia-legados-e-arquitetura',
+    'engenharia-de-software-com-ia',
+  ]);
+  const sem = postSchema.safeParse(base);
+  assert.ok(sem.success);
+  assert.equal(sem.data.topics, undefined);
+  for (const topics of [['agentes-de-ia-em-producao'], ['ia-sobre-dados-da-empresa', 'custos-roi-e-escolha-de-modelo']]) {
+    const r = postSchema.safeParse({ ...base, topics });
+    assert.ok(r.success, JSON.stringify(topics));
+    assert.deepEqual(r.data.topics, topics);
+  }
+  for (const topics of [[], ['fundamentos'], ['Agentes-de-IA-em-producao'], 'agentes-de-ia-em-producao', ['agentes-de-ia-em-producao', 'agentes-de-ia-em-producao'], [null]]) {
+    assert.equal(postSchema.safeParse({ ...base, topics }).success, false, JSON.stringify(topics));
+  }
+});
+
+test('esquema: summary é opcional, curto e independente da description', () => {
+  const r = postSchema.safeParse({ ...base, summary: 'Duas frases. Respondem a pergunta.' });
+  assert.ok(r.success);
+  assert.equal(r.data.summary, 'Duas frases. Respondem a pergunta.');
+  assert.equal(r.data.description, 'd');
+  assert.equal(postSchema.safeParse(base).data?.summary, undefined);
+  assert.ok(postSchema.safeParse({ ...base, summary: 'x'.repeat(500) }).success);
+  for (const summary of ['', '   ', 'x'.repeat(501), 42, null]) {
+    assert.equal(postSchema.safeParse({ ...base, summary }).success, false, JSON.stringify(summary));
+  }
+  // O summary nunca ocupa o lugar da description.
+  const { description: _, ...semDescription } = base;
+  assert.equal(postSchema.safeParse({ ...semDescription, summary: 'resumo' }).success, false);
 });
 
 const md = (slug: string) => `---\ntitle: x\nslug: ${slug}\n---\ncorpo\n`;
