@@ -234,7 +234,8 @@ def _cf(method: str, path: str, token: str, body: dict | None = None, opener=url
         with opener(req, timeout=30) as r:
             data = json.load(r)
     except urllib.error.HTTPError as e:
-        data = json.load(e)
+        with e:  # fecha o corpo da resposta de erro
+            data = json.load(e)
     if missing_ok and any(e.get("code") == 10003 for e in data.get("errors") or []):
         return {"success": True, "result": {"rules": []}}  # a fase ainda não tem ruleset
     if not data.get("success"):
@@ -279,7 +280,8 @@ def fetch(url: str, method: str = "GET") -> tuple[int, str | None]:
         with _opener.open(req, timeout=20) as r:
             return r.status, r.headers.get("Location")
     except urllib.error.HTTPError as e:
-        return e.code, e.headers.get("Location")
+        with e:  # fecha o corpo da resposta de erro
+            return e.code, e.headers.get("Location")
     except (urllib.error.URLError, TimeoutError, OSError, ValueError, UnicodeError):
         return 0, None
 

@@ -7,6 +7,8 @@ import os
 import re
 import sys
 import unittest
+import urllib.error
+from email.message import Message
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -234,6 +236,29 @@ class ApplyTest(unittest.TestCase):
         self.assertEqual(calls[2][2], {"rules": R.cloudflare_rules(False)})
         self.assertFalse(any(r["enabled"] for r in calls[2][2]["rules"]))
         self.assertEqual(calls[2][3], "Bearer tok")
+
+    def test_http_error_body_is_closed_after_reading(self):
+        # P4 do Claude no #128 (#102): o corpo do HTTPError é lido e fechado, com sucesso ou não. O teste guarda o erro
+        # para que o coletor do CPython não feche o corpo sozinho ao fim do except (o que esconderia a falta do with).
+        bodies, errors = [], []
+
+        def op(req, timeout=None):
+            if req.full_url.endswith("?name=guilhermefavaron.com.br"):
+                return _Resp(json.dumps({"success": True, "result": [{"id": "Z1", "name": "guilhermefavaron.com.br"}]}).encode())
+            if req.get_method() == "GET":  # fase sem ruleset: a API responde 404 com o código 10003
+                body = io.BytesIO(json.dumps({"success": False, "errors": [{"code": 10003}]}).encode())
+            else:
+                body = io.BytesIO(json.dumps({"success": False, "errors": [{"code": 9109, "message": "x"}]}).encode())
+            bodies.append(body)
+            errors.append(urllib.error.HTTPError(req.full_url, 404 if req.get_method() == "GET" else 403, "erro",
+                                                 Message(), body))
+            raise errors[-1]
+
+        with self.assertRaises(SystemExit) as cm:
+            R.apply("tok", False, opener=op)
+        self.assertIn("Cloudflare PUT", str(cm.exception))
+        self.assertEqual(len(bodies), 2)
+        self.assertTrue(all(b.closed for b in bodies))
 
     def test_own_rules_already_there_are_replaced(self):
         op, calls = self.opener(current=[{"description": "cutover #24: x", "id": "a"}])
@@ -524,6 +549,25 @@ class VerifyTest(unittest.TestCase):
 
     def test_to_uri_keeps_existing_escapes_and_query(self):
         self.assertEqual(R.to_uri("https://x.com.br/a%20b/é?q=á&r=1#frag"), "https://x.com.br/a%20b/%C3%A9?q=%C3%A1&r=1")
+
+    def test_fetch_closes_the_http_error_body(self):
+        # P4 do Claude no #128 (#102): o HTTPError do fetch (3xx sem seguir, 4xx, 5xx) tem o corpo fechado. O erro fica
+        # guardado para o coletor não fechar o corpo sozinho.
+        body, errors = io.BytesIO(b"<html>301</html>"), []
+        headers = Message()
+        headers["Location"] = "https://guifav.dev/blog/a/"
+
+        def raising_open(req, timeout=None):
+            errors.append(urllib.error.HTTPError(req.full_url, 301, "Moved", headers, body))
+            raise errors[-1]
+
+        orig = R._opener.open
+        R._opener.open = raising_open
+        try:
+            self.assertEqual(R.fetch("https://www.guilhermefavaron.com.br/p/a"), (301, "https://guifav.dev/blog/a/"))
+        finally:
+            R._opener.open = orig
+        self.assertTrue(body.closed)
 
     def test_fetch_never_raises_on_bad_urls(self):
         self.assertEqual(R.fetch("http://[::1"), (0, None))
