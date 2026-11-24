@@ -126,7 +126,7 @@ def validar_linhas(linhas, onde: str, minimo: int = 1) -> None:
         nomes.add(m["modelo"])
         if not isinstance(m["organizacao"], str):
             raise RankingError(f"{onde}[{i}]: organização inválida")
-        if m["licenca"] not in LICENCAS:
+        if not isinstance(m["licenca"], str) or m["licenca"] not in LICENCAS:
             raise RankingError(f"{onde}[{i}]: licença desconhecida {m['licenca']!r} (classifique em build_llm_ranking.py)")
         if not all(_num(m[k]) for k in ("pontuacao", "inferior", "superior")):
             raise RankingError(f"{onde}[{i}]: pontuação ou intervalo não numérico")
@@ -206,15 +206,19 @@ def mudancas(atual: list[dict], antes: list[dict]) -> list[str]:
     """O que mudou desde a publicação anterior (parecer do Fable): novo líder; entradas e saídas do top 10; modelos
     novos e removidos dentro do top 100; subidas e quedas no top 100 só quando o intervalo de agora e o de antes não se
     sobrepõem. No máximo MAX_MUDANCAS itens, nessa prioridade. O pareamento é pelo nome da fonte. Cada modelo aparece
-    uma vez por evento: o novo líder vindo de fora do top 10 não conta de novo como entrada no top 10, e quem saiu do top
-    10 direto para fora da lista não conta de novo como saída da lista."""
+    uma vez por evento: o novo líder vindo de fora do top 10 não conta de novo como entrada no top 10, quem saiu do top
+    10 direto para fora da lista não conta de novo como saída da lista, e o ex-líder que saiu da lista fica no item do
+    novo líder."""
     por_nome_antes = {m["modelo"]: m for m in antes}
     por_nome_agora = {m["modelo"]: m for m in atual}
     itens: list[str] = []
     lider, lider_antes = atual[0], antes[0]
     if lider["modelo"] != lider_antes["modelo"]:
         ex = por_nome_agora.get(lider_antes["modelo"])
-        margem = " (dentro da margem de erro)" if ex is not None and sobrepoe(lider, ex) else ""
+        if ex is None:
+            margem = ", que saiu da lista"
+        else:
+            margem = " (dentro da margem de erro)" if sobrepoe(lider, ex) else ""
         itens.append(f"Novo líder: {_m(lider)}, no lugar de {_m(lider_antes)}{margem}.")
     top10 = [m["modelo"] for m in atual[:TOP_DESTAQUE]]
     top10_antes = [m["modelo"] for m in antes[:TOP_DESTAQUE]]
@@ -224,7 +228,7 @@ def mudancas(atual: list[dict], antes: list[dict]) -> list[str]:
             onde = f"vindo da {p['posicao']}ª posição" if p else "estreia na lista"
             itens.append(f"Entrou no top 10: {_m(por_nome_agora[n])}, {por_nome_agora[n]['posicao']}ª posição ({onde}).")
     for n in top10_antes:
-        if n not in top10:
+        if n not in top10 and not (n == lider_antes["modelo"] and n not in por_nome_agora):
             agora = por_nome_agora.get(n)
             onde = f"agora na {agora['posicao']}ª posição" if agora else "saiu da lista"
             itens.append(f"Saiu do top 10: {_m(por_nome_antes[n])} ({onde}).")

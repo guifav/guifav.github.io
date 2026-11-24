@@ -269,6 +269,40 @@ class GitTest(unittest.TestCase):
                            text=True, check=True)
         return r.stdout.split("\n")[:-1]
 
+    def test_remote_advanced_by_another_clone(self):
+        # r2 (agy P3): outro clone publica antes; o gravar() traz o avanço e não reescreve o que já está lá.
+        outro = Path(self.tmp.name) / "outro"
+        self.sh("git", "clone", "-q", str(self.origin), str(outro))
+        (outro / S.ARQUIVO).write_text("b\n")
+        self.sh("git", "-C", str(outro), "add", S.ARQUIVO)
+        self.sh("git", "-C", str(outro), "commit", "-q", "-m", "de outro clone")
+        self.sh("git", "-C", str(outro), "push", "-q", "origin", "HEAD:main")
+        self.assertFalse(S.gravar(self.dados, "b\n", "2026-11-22"))
+        self.assertEqual(self.origin_log()[0], "de outro clone")
+        self.assertTrue(S.gravar(self.dados, "c\n", "2026-11-25"))
+        self.assertEqual(self.origin_log()[:2], ["Arena, arena de texto: publicação de 2026-11-25", "de outro clone"])
+
+    def test_git_has_a_timeout_and_never_raises(self):
+        # r2 (agy P3): fetch ou push travado não prende o cron; git ausente vira erro do snapshot, não exceção solta.
+        from unittest import mock
+        vistos = {}
+
+        def run(cmd, **kw):
+            vistos.update(kw)
+            raise subprocess.TimeoutExpired(cmd, kw.get("timeout"))
+        with mock.patch.object(S.subprocess, "run", run):
+            r = S._git(self.dados, "fetch", "-q", "origin", "main")
+        self.assertEqual(vistos.get("timeout"), S.GIT_TIMEOUT)
+        self.assertEqual(r.returncode, 1)
+        self.assertIn(f"git fetch não terminou em {S.GIT_TIMEOUT}s", r.stderr)
+        with mock.patch.object(S.subprocess, "run", side_effect=FileNotFoundError("git")):
+            r = S._git(self.dados, "fetch")
+        self.assertEqual(r.returncode, 1)
+        self.assertIn("git fetch não rodou", r.stderr)
+        with mock.patch.object(S.subprocess, "run", run), self.assertRaises(S.SnapshotError) as cm:
+            S.gravar(self.dados, "a\n", "2026-11-22")
+        self.assertIn("git fetch falhou: git fetch não terminou", str(cm.exception))
+
     def test_writes_only_when_changed(self):
         self.assertTrue(S.gravar(self.dados, "a\n", "2026-11-22"))
         self.assertEqual(self.origin_log()[0], "Arena, arena de texto: publicação de 2026-11-22")

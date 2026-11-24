@@ -35,6 +35,7 @@ import build_llm_ranking as B  # noqa: E402
 API = "https://datasets-server.huggingface.co/filter"
 ARQUIVO = "arena-texto.json"
 RAMO = "main"
+GIT_TIMEOUT = 120  # segundos por comando git; fetch ou push travado não prende o cron
 PAGINA = 100
 UA = "guifav-llm-ranking/1.0 (+https://guifav.dev/llm-ranking/)"
 PAUSA = 1.0
@@ -167,7 +168,15 @@ def serializar(snap: dict) -> str:
 
 
 def _git(dados: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", "-C", str(dados), *args], capture_output=True, text=True, check=False)
+    """git no clone de dados, com limite de tempo. Nunca levanta exceção: timeout ou git ausente voltam como
+    returncode 1 com o motivo no stderr, e o gravar() transforma isso em SnapshotError (alerta e saída 1)."""
+    cmd = ["git", "-C", str(dados), *args]
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=GIT_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(cmd, 1, "", f"git {args[0]} não terminou em {GIT_TIMEOUT}s")
+    except OSError as e:
+        return subprocess.CompletedProcess(cmd, 1, "", f"git {args[0]} não rodou: {e}")
 
 
 def gravar(dados: Path, texto: str, pub: str, git=_git) -> bool:
