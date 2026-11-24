@@ -7,7 +7,7 @@ import { handle, entrypoint, type Env } from '../src/index.ts';
 import { signLink, signMaterialLink, MATERIAL_TTL_MS } from '../src/token.ts';
 import { MATERIAIS, INTERESSES } from '../src/materiais.ts';
 import { createHash } from 'node:crypto';
-import { d1, rows, capturaErros, variantes } from './d1.ts';
+import { d1, rows, capturaErros, variantes, SEM_ORIGEM } from './d1.ts';
 
 const NOW = Date.UTC(2026, 10, 23, 12, 0, 0);
 const SECRET = 'segredo-de-teste-com-tamanho-suficiente-0123456789';
@@ -211,6 +211,7 @@ test('C1: o clique no link grava a conversão com email, material e interesses; 
     material: 'mapa-decisao-ia', interests: JSON.stringify([INTERESSES.ARQUITETURA_IA, INTERESSES.CUSTO_IA]),
     occurred_at: new Date(NOW).toISOString(), synced_at: null, verified: 1, ga_client_id: null,
     request_id: pedidoEsperado('mapa-decisao-ia', 'leitor@exemplo.com', q), file: 'mapa-decisao-pdf',
+    ...SEM_ORIGEM, // link de um pedido sem linha no D1 (ou anterior à #114): o download não tem de onde herdar a origem
   });
   assert.ok(!JSON.stringify(c).includes(sig(q)), 'o D1 nunca guarda a assinatura do link');
 });
@@ -233,6 +234,7 @@ test('C2: o pedido grava material_request com o email não comprovado, os intere
     id: pedidoEsperado('planilha-custos-ia', 'leitor@exemplo.com', q), email: 'leitor@exemplo.com', action: 'material_request',
     material: 'planilha-custos-ia', interests: JSON.stringify([INTERESSES.CUSTO_IA]), occurred_at: new Date(NOW).toISOString(),
     synced_at: null, verified: 0, ga_client_id: '1234567890.1700000000', request_id: null, file: null,
+    ...SEM_ORIGEM, origin_channel: 'desconhecida', // formulário sem os campos de origem (#114)
   }]);
   assert.equal((await s.rows('sqlite_master')).filter((t) => t.name === 'material_requests').length, 0, 'a contagem sem email saiu (0005)');
 });
@@ -268,9 +270,9 @@ test('C3: D1 fora do ar não impede o download nem o email do pedido, e o log n�
   assert.equal(emails(s.calls).length, 1);
   // O erro do D1 falso cita o email; o log troca por <email>.
   assert.deepEqual(erros.sort(), [
-    'client_id do pedido não lido: D1_ERROR: UNIQUE constraint failed for <email>',
     'conversão não gravada (material_download): D1_ERROR: UNIQUE constraint failed for <email>',
     'conversão não gravada (material_request): D1_ERROR: UNIQUE constraint failed for <email>',
+    'pedido não lido: D1_ERROR: UNIQUE constraint failed for <email>',
   ]);
   assert.ok(!erros.join('\n').includes('exemplo.com'));
 });

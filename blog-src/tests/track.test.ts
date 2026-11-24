@@ -47,6 +47,12 @@ class El {
   querySelector(sel: string): El | null {
     return walk(this).slice(1).find((e) => e.matches(sel)) ?? null;
   }
+  appendChild(c: El): El {
+    c.parent = this;
+    this.children.push(c);
+    return c;
+  }
+  value = '';
 }
 
 function matchOne(el: El, s: string): boolean {
@@ -96,6 +102,8 @@ interface Opts {
   lead?: string; // data-material-id da página de enviado (issue #99)
   cookie?: string;
   local?: Storage | typeof Blocked;
+  referrer?: string; // document.referrer da página (issue #114)
+  href?: string; // endereço da página aberta (issue #114)
 }
 
 function setup(opts: Opts = {}) {
@@ -113,7 +121,9 @@ function setup(opts: Opts = {}) {
     documentElement: html,
     body,
     cookie: opts.cookie ?? '',
+    referrer: opts.referrer ?? '',
     baseURI: 'https://guifav.dev/portfolio/',
+    createElement: (tag: string) => new El(tag),
     addEventListener(type: string, fn: (e: unknown) => void, opt?: boolean | { capture?: boolean }) {
       const capture = typeof opt === 'boolean' ? opt : Boolean(opt?.capture);
       (listeners[type] ??= []).push({ fn, capture });
@@ -128,7 +138,7 @@ function setup(opts: Opts = {}) {
   const ctx: Record<string, unknown> = {
     document,
     URL,
-    location: { href: 'https://guifav.dev/portfolio/', origin: 'https://guifav.dev', host: 'guifav.dev' },
+    location: { href: opts.href ?? 'https://guifav.dev/portfolio/', origin: 'https://guifav.dev', host: 'guifav.dev', hostname: 'guifav.dev' },
     sessionStorage: opts.storage ?? new Storage(),
     localStorage: opts.local ?? new Storage(),
     Date,
@@ -170,9 +180,9 @@ test('contato e agendamento no menu e no rodapé: posição pela estrutura da p�
   // No rodapé, o contato conta como CTA e como clique de rodapé.
   s.fire('click', new El('a', { href: 'mailto:contact@guifav.dev', 'data-cta-location': 'hero' }, s.footer));
   assert.deepEqual(events(s.calls), [
-    ['event', 'contact_click', { cta_location: 'menu', transport_type: B }],
-    ['event', 'schedule_click', { cta_location: 'menu', transport_type: B }],
-    ['event', 'contact_click', { cta_location: 'rodape', transport_type: B }],
+    ['event', 'contact_click', { cta_location: 'menu', origin_channel: 'direto', transport_type: B }],
+    ['event', 'schedule_click', { cta_location: 'menu', origin_channel: 'direto', transport_type: B }],
+    ['event', 'contact_click', { cta_location: 'rodape', origin_channel: 'direto', transport_type: B }],
     ['event', 'footer_click', { link_label: 'contato', transport_type: B }],
   ]);
 });
@@ -186,10 +196,10 @@ test('CTAs no corpo da página: data-cta-location distingue os dois "Agende" da 
   // Sem atributo (link dentro de um post): "conteudo".
   s.fire('click', new El('a', { href: 'https://calendar.app.google/outro' }, s.main));
   assert.deepEqual(events(s.calls), [
-    ['event', 'schedule_click', { cta_location: 'projetos', transport_type: B }],
-    ['event', 'schedule_click', { cta_location: 'consultoria', transport_type: B }],
-    ['event', 'contact_click', { cta_location: 'hero', transport_type: B }],
-    ['event', 'schedule_click', { cta_location: 'conteudo', transport_type: B }],
+    ['event', 'schedule_click', { cta_location: 'projetos', origin_channel: 'direto', transport_type: B }],
+    ['event', 'schedule_click', { cta_location: 'consultoria', origin_channel: 'direto', transport_type: B }],
+    ['event', 'contact_click', { cta_location: 'hero', origin_channel: 'direto', transport_type: B }],
+    ['event', 'schedule_click', { cta_location: 'conteudo', origin_channel: 'direto', transport_type: B }],
   ]);
 });
 
@@ -197,7 +207,7 @@ test('clique num filho do link (ícone, span) conta como clique no link', () => 
   const s = setup();
   const a = new El('a', { href: 'https://calendar.app.google/x', 'data-cta-location': 'hero' }, s.main);
   s.fire('click', new El('span', {}, a));
-  assert.deepEqual(events(s.calls), [['event', 'schedule_click', { cta_location: 'hero', transport_type: B }]]);
+  assert.deepEqual(events(s.calls), [['event', 'schedule_click', { cta_location: 'hero', origin_channel: 'direto', transport_type: B }]]);
 });
 
 test('só o email do Gui e o Google Calendar são CTA', () => {
@@ -227,8 +237,8 @@ test('variações do mailto do Gui continuam sendo contato', () => {
   s.fire('click', new El('a', { href: 'mailto:Contact@GuiFav.dev?subject=Oi' }, s.main));
   s.fire('click', new El('a', { href: 'MAILTO:contact%40guifav.dev' }, s.main));
   assert.deepEqual(events(s.calls), [
-    ['event', 'contact_click', { cta_location: 'conteudo', transport_type: B }],
-    ['event', 'contact_click', { cta_location: 'conteudo', transport_type: B }],
+    ['event', 'contact_click', { cta_location: 'conteudo', origin_channel: 'direto', transport_type: B }],
+    ['event', 'contact_click', { cta_location: 'conteudo', origin_channel: 'direto', transport_type: B }],
   ]);
 });
 
@@ -298,7 +308,7 @@ test('clique do meio (auxclick) em CTA conta; botão direito e auxclick em botã
   const tt = new El('button', { id: 'theme-toggle' }, s.nav);
   s.body.setAttribute('data-theme', 'dark');
   s.fire('auxclick', tt, { button: 1 });
-  assert.deepEqual(events(s.calls), [['event', 'schedule_click', { cta_location: 'hero', transport_type: B }]]);
+  assert.deepEqual(events(s.calls), [['event', 'schedule_click', { cta_location: 'hero', origin_channel: 'direto', transport_type: B }]]);
 });
 
 test('sign_up na página de inscrição confirmada, uma vez por sessão', () => {
@@ -426,4 +436,243 @@ test('ga_cid: formulário sem data-ga-client-id não é tocado', () => {
   const s = formSetup({ cookie: GA, local: aceito(), marked: false });
   s.fire('submit', s.form);
   assert.equal(s.input.value, 'antigo');
+});
+
+// ---------------------------------------------------------------- Origem da visita (issue #114)
+
+type Origem = { canal: string; fonte: string | null; utm_source: string | null; utm_medium: string | null; utm_campaign: string | null;
+  entrada: string | null };
+const origemDe = (referrer: string, href: string): Origem => {
+  const s = setup({ referrer, href });
+  return JSON.parse(JSON.stringify((s.ctx.guifavOrigin as { current(): Origem }).current()));
+};
+const SEM = { utm_source: null, utm_medium: null, utm_campaign: null };
+
+test('origem: classificador de canal com a lista fixa de fontes', () => {
+  const P = 'https://guifav.dev/blog/x/';
+  const casos: [string, string, string, string | null][] = [
+    // [referrer, página de entrada, canal, fonte]
+    ['', P, 'direto', null],
+    ['https://www.google.com/', P, 'busca', 'google'],
+    ['https://www.google.com.br/', P, 'busca', 'google'],
+    ['https://google.co.uk/', P, 'busca', 'google'],
+    ['android-app://com.google.android.googlequicksearchbox/', P, 'busca', 'google'],
+    ['https://www.bing.com/', P, 'busca', 'bing'],
+    ['https://duckduckgo.com/', P, 'busca', 'outro'],
+    ['https://chatgpt.com/', P, 'assistente', 'chatgpt'],
+    ['https://chat.openai.com/', P, 'assistente', 'chatgpt'],
+    ['https://www.perplexity.ai/', P, 'assistente', 'perplexity'],
+    ['https://claude.ai/', P, 'assistente', 'claude'],
+    ['https://copilot.microsoft.com/', P, 'assistente', 'copilot'],
+    ['https://edgeservices.bing.com/', P, 'assistente', 'copilot'],
+    ['https://gemini.google.com/', P, 'assistente', 'gemini'],
+    ['https://www.linkedin.com/', P, 'social', 'linkedin'],
+    ['https://lnkd.in/', P, 'social', 'linkedin'],
+    ['https://www.youtube.com/', P, 'social', 'youtube'],
+    ['https://t.co/', P, 'social', 'outro'],
+    ['https://github.com/guifav', P, 'outro_site', 'github'],
+    ['https://mail.google.com/', P, 'email', 'outro'],
+    ['https://exemplo.com.br/artigo', P, 'outro_site', 'outro'],
+    ['https://docs.google.com/', P, 'outro_site', 'outro'], // só a busca do Google é busca
+    ['https://guifav.dev/', P, 'desconhecida', null], // primeira página da aba com referrer interno: a origem se perdeu
+    ['https://www.guifav.dev/', P, 'desconhecida', null],
+    ['nao e url', P, 'direto', null],
+    // UTM manda mais que o referrer; clique pago (id de anúncio ou utm_medium pago) manda mais que tudo.
+    ['', `${P}?utm_source=chatgpt.com`, 'assistente', 'chatgpt'],
+    ['', `${P}?utm_source=linkedin&utm_medium=social`, 'social', 'linkedin'],
+    ['', `${P}?utm_source=linkedin&utm_medium=email`, 'email', 'linkedin'],
+    ['', `${P}?utm_source=newsletter&utm_medium=email`, 'email', 'outro'],
+    ['https://www.google.com/', `${P}?gclid=abc123`, 'pago', 'google'],
+    ['', `${P}?utm_source=google&utm_medium=cpc`, 'pago', 'google'],
+    ['', `${P}?utm_source=parceiro`, 'desconhecida', null],
+    ['https://www.google.com/', `${P}?utm_source=parceiro`, 'busca', 'google'],
+  ];
+  for (const [ref, href, canal, fonte] of casos) {
+    const o = origemDe(ref, href);
+    assert.deepEqual([o.canal, o.fonte], [canal, fonte], `${ref} -> ${href}`);
+  }
+  assert.deepEqual(origemDe('', P), { canal: 'direto', fonte: null, ...SEM, entrada: '/blog/x/' });
+});
+
+test('origem: utm_medium referral e organic só valem depois da fonte conhecida e do referrer (revisão do agy no #127)', () => {
+  const P = 'https://guifav.dev/blog/x/';
+  const casos: [string, string, string, string | null][] = [
+    ['', `${P}?utm_source=chatgpt.com&utm_medium=referral`, 'assistente', 'chatgpt'],
+    ['', `${P}?utm_source=perplexity&utm_medium=referral`, 'assistente', 'perplexity'],
+    ['', `${P}?utm_source=claude.ai&utm_medium=referral`, 'assistente', 'claude'],
+    ['', `${P}?utm_source=gemini&utm_medium=referral`, 'assistente', 'gemini'],
+    ['', `${P}?utm_source=linkedin&utm_medium=referral`, 'social', 'linkedin'],
+    ['', `${P}?utm_source=chatgpt.com&utm_medium=organic`, 'assistente', 'chatgpt'],
+    ['https://www.perplexity.ai/', `${P}?utm_medium=referral`, 'assistente', 'perplexity'],
+    ['https://www.linkedin.com/', `${P}?utm_medium=organic`, 'social', 'linkedin'],
+    // Sem fonte conhecida nem referrer, o medium fraco decide.
+    ['', `${P}?utm_source=parceiro&utm_medium=referral`, 'outro_site', 'outro'],
+    ['', `${P}?utm_medium=organic`, 'busca', 'outro'],
+    // email e social continuam na frente da fonte.
+    ['', `${P}?utm_source=chatgpt.com&utm_medium=email`, 'email', 'chatgpt'],
+  ];
+  for (const [ref, href, canal, fonte] of casos) {
+    const o = origemDe(ref, href);
+    assert.deepEqual([o.canal, o.fonte], [canal, fonte], `${ref} -> ${href}`);
+  }
+});
+
+test('origem: clique pago sem referrer nem utm_source tira a fonte do parâmetro, sem guardar o valor', () => {
+  const P = 'https://guifav.dev/blog/x/';
+  const casos: [string, string][] = [['gclid', 'google'], ['gbraid', 'google'], ['wbraid', 'google'], ['dclid', 'google'],
+    ['msclkid', 'bing'], ['li_fat_id', 'linkedin'], ['ttclid', 'outro']];
+  for (const [param, fonte] of casos) {
+    const o = origemDe('', `${P}?${param}=VALORSECRETO`);
+    assert.deepEqual([o.canal, o.fonte], ['pago', fonte], param);
+    assert.ok(!JSON.stringify(o).includes('VALORSECRETO'), param);
+  }
+  // Com utm_source, vale a fonte dele (ou "outro"), nunca a do parâmetro nem a do referrer.
+  assert.deepEqual([origemDe('https://www.google.com/', `${P}?gclid=x&utm_source=parceiro`).canal,
+    origemDe('https://www.google.com/', `${P}?gclid=x&utm_source=parceiro`).fonte], ['pago', 'outro']);
+});
+
+test('origem: utm_source fora da lista com referrer conhecido não herda a fonte do referrer quando a etiqueta decide', () => {
+  const P = 'https://guifav.dev/blog/x/';
+  for (const [href, canal] of [[`${P}?utm_source=substack&utm_medium=email`, 'email'], [`${P}?utm_source=substack&utm_medium=social`, 'social'],
+    [`${P}?utm_source=parceiro&utm_medium=cpc`, 'pago']]) {
+    const o = origemDe('https://www.google.com/', href);
+    assert.deepEqual([o.canal, o.fonte, o.utm_source], [canal, 'outro', href.includes('substack') ? 'substack' : 'parceiro'], href);
+  }
+  // Sem etiqueta que decida, o referrer conhecido segue valendo (a fonte do utm_source não está na lista).
+  assert.deepEqual([origemDe('https://www.google.com/', `${P}?utm_source=parceiro`).canal, origemDe('https://www.google.com/', `${P}?utm_source=parceiro`).fonte],
+    ['busca', 'google']);
+});
+
+test('origem: fbclid não é anúncio; sem referrer, indica rede social (revisão do Roger no #127)', () => {
+  const P = 'https://guifav.dev/blog/x/';
+  const fb = origemDe('', `${P}?fbclid=META123`);
+  assert.deepEqual([fb.canal, fb.fonte], ['social', 'outro']);
+  const comRef = origemDe('https://l.facebook.com/', `${P}?fbclid=META123`);
+  assert.deepEqual([comRef.canal, comRef.fonte], ['social', 'outro']);
+  // O anúncio da Meta se reconhece pela etiqueta.
+  const anuncio = origemDe('https://l.facebook.com/', `${P}?fbclid=META123&utm_source=facebook&utm_medium=paid_social`);
+  assert.deepEqual([anuncio.canal, anuncio.fonte], ['pago', 'outro']);
+  for (const o of [fb, comRef, anuncio]) assert.ok(!JSON.stringify(o).includes('META123'));
+});
+
+test('origem: apps Android e subdomínios dos serviços da lista', () => {
+  const P = 'https://guifav.dev/blog/x/';
+  const casos: [string, string, string][] = [
+    ['android-app://com.google.android.apps.bard/', 'assistente', 'gemini'],
+    ['android-app://com.openai.chatgpt/', 'assistente', 'chatgpt'],
+    ['android-app://ai.perplexity.app.android/', 'assistente', 'perplexity'],
+    ['android-app://com.anthropic.claude/', 'assistente', 'claude'],
+    ['android-app://com.microsoft.copilot/', 'assistente', 'copilot'],
+    ['android-app://com.microsoft.bing/', 'busca', 'bing'],
+    ['android-app://com.linkedin.android/', 'social', 'linkedin'],
+    ['android-app://com.google.android.youtube/', 'social', 'youtube'],
+    ['https://copilot.bing.com/', 'assistente', 'copilot'],
+    ['https://m.bing.com/', 'busca', 'bing'],
+    ['https://www2.bing.com/', 'busca', 'bing'],
+    ['https://l.instagram.com/', 'social', 'outro'],
+    ['https://out.reddit.com/', 'social', 'outro'],
+  ];
+  for (const [ref, canal, fonte] of casos) {
+    const o = origemDe(ref, P);
+    assert.deepEqual([o.canal, o.fonte], [canal, fonte], ref);
+  }
+});
+
+test('origem: UTM fora de [a-z0-9._-]{1,64} é recusado campo a campo; maiúsculas viram minúsculas', () => {
+  const base = 'https://guifav.dev/?';
+  assert.deepEqual(origemDe('', `${base}utm_source=LinkedIn&utm_medium=Social&utm_campaign=Lancamento_2026.v1`),
+    { canal: 'social', fonte: 'linkedin', utm_source: 'linkedin', utm_medium: 'social', utm_campaign: 'lancamento_2026.v1', entrada: '/' });
+  for (const ruim of ['a b', 'a+b', 'ação', 'a/b', 'https://x.com', 'a?b', 'a=b', 'a@b.com', 'x'.repeat(65), '', '%20']) {
+    const o = origemDe('', `${base}utm_source=google&utm_campaign=${encodeURIComponent(ruim)}`);
+    assert.equal(o.utm_campaign, null, ruim);
+    assert.equal(o.utm_source, 'google', 'os outros campos ficam');
+  }
+  assert.equal(origemDe('', `${base}utm_campaign=${'x'.repeat(64)}`).utm_campaign, 'x'.repeat(64));
+  // Nomes do protótipo casam com o padrão, mas não são fonte da lista.
+  for (const nome of ['constructor', 'tostring', '__proto__', 'hasownproperty', 'valueof']) {
+    assert.deepEqual([origemDe('', `${base}utm_source=${nome}`).canal, origemDe('', `${base}utm_source=${nome}`).fonte], ['desconhecida', null], nome);
+  }
+});
+
+test('origem: nem a URL de onde a pessoa veio, nem o termo buscado, nem gclid ou query entram na origem', () => {
+  const st = new Storage();
+  const s = setup({ storage: st, referrer: 'https://www.google.com/search?q=termo+secreto&oq=termo',
+    href: 'https://guifav.dev/blog/rag/?q=termo&gclid=GCLIDSECRETO&fbclid=FB1&utm_term=termo&utm_source=google#ancora' });
+  const salvo = st.getItem('site_origin_v1')!;
+  assert.deepEqual(JSON.parse(salvo), { canal: 'pago', fonte: 'google', utm_source: 'google', utm_medium: null, utm_campaign: null,
+    entrada: '/blog/rag/' });
+  for (const proibido of ['termo', 'secreto', 'GCLID', 'FB1', 'http', 'search', '?', '#', 'ancora']) {
+    assert.ok(!salvo.includes(proibido), proibido);
+  }
+  assert.equal(Object.keys(JSON.parse(salvo)).length, 6, 'só os seis campos');
+  void s;
+});
+
+test('origem: gravada na primeira página da aba e nunca trocada pela navegação interna', () => {
+  const st = new Storage();
+  origemDe('', 'x'); // sem storage compartilhado: não interfere
+  setup({ storage: st, referrer: 'https://chatgpt.com/', href: 'https://guifav.dev/blog/agentes/?utm_source=chatgpt.com' });
+  const primeira = st.getItem('site_origin_v1');
+  // Segunda página da mesma aba: referrer interno e outra query; a origem continua a da entrada.
+  const s2 = setup({ storage: st, referrer: 'https://guifav.dev/blog/agentes/', href: 'https://guifav.dev/planilha-custos-ia/?utm_source=x' });
+  assert.equal(st.getItem('site_origin_v1'), primeira);
+  assert.deepEqual(JSON.parse(JSON.stringify((s2.ctx.guifavOrigin as { current(): Origem }).current())),
+    { canal: 'assistente', fonte: 'chatgpt', utm_source: 'chatgpt.com', utm_medium: null, utm_campaign: null, entrada: '/blog/agentes/' });
+  // Valor adulterado no storage: só o que casa com as listas e os padrões fica; o resto vira nulo.
+  const bad = new Storage();
+  bad.setItem('site_origin_v1', JSON.stringify({ canal: 'busca', fonte: 'google', entrada: 'https://x.com/?q=termo', utm_source: 'A B' }));
+  const proto = new Storage();
+  proto.setItem('site_origin_v1', JSON.stringify({ canal: 'social', fonte: 'constructor' }));
+  assert.equal(JSON.parse(JSON.stringify((setup({ storage: proto }).ctx.guifavOrigin as { current(): Origem }).current())).fonte, null);
+  const s3 = setup({ storage: bad, referrer: '', href: 'https://guifav.dev/' });
+  assert.deepEqual(JSON.parse(JSON.stringify((s3.ctx.guifavOrigin as { current(): Origem }).current())),
+    { canal: 'busca', fonte: 'google', ...SEM, entrada: null });
+});
+
+test('origem: sem sessionStorage, vale a classificação da página aberta, e nada quebra', () => {
+  const s = setup({ storage: Blocked, referrer: 'https://www.bing.com/', href: 'https://guifav.dev/blog/' });
+  assert.deepEqual(JSON.parse(JSON.stringify((s.ctx.guifavOrigin as { current(): Origem }).current())),
+    { canal: 'busca', fonte: 'bing', ...SEM, entrada: '/blog/' });
+});
+
+const CAMPOS = ['origem_canal', 'origem_fonte', 'utm_source', 'utm_medium', 'utm_campaign', 'origem_entrada'];
+const campos = (form: El) => Object.fromEntries(form.children.filter((c) => c.tag === 'input' && CAMPOS.includes(c.attrs.name))
+  .map((c) => [c.attrs.name, c.value]));
+
+test('origem: os formulários de inscrição e de material recebem os campos ocultos no envio, com ou sem cookies', () => {
+  for (const action of ['https://insights.guifav.dev/subscribe', 'https://insights.guifav.dev/material']) {
+    const s = setup({ referrer: 'https://www.linkedin.com/feed/', href: 'https://guifav.dev/blog/x/?utm_source=linkedin&utm_campaign=post-12' });
+    const form = new El('form', { method: 'post', action }, s.main);
+    const btn = new El('button', { type: 'submit' }, form);
+    s.fire('submit', btn);
+    assert.deepEqual(campos(form), { origem_canal: 'social', origem_fonte: 'linkedin', utm_source: 'linkedin', utm_medium: '',
+      utm_campaign: 'post-12', origem_entrada: '/blog/x/' }, action);
+    for (const c of form.children.filter((c) => c.tag === 'input')) assert.equal(c.attrs.type, 'hidden');
+    // Reenvio (voltar e enviar de novo): os mesmos campos, sem duplicar.
+    s.fire('submit', btn);
+    assert.equal(form.children.filter((c) => c.tag === 'input').length, 6);
+  }
+});
+
+test('origem: outros formulários não recebem campos de origem', () => {
+  for (const action of ['https://guifav.dev/busca', 'https://insights.guifav.dev/confirm', 'http://insights.guifav.dev/subscribe',
+    'https://insights.guifav.dev.evil.example/subscribe', '']) {
+    const s = setup({ referrer: 'https://www.google.com/' });
+    const form = new El('form', action ? { action } : {}, s.main);
+    s.fire('submit', form);
+    assert.deepEqual(campos(form), {}, action);
+  }
+});
+
+test('origem: contact_click e schedule_click levam origin_channel e origin_source', () => {
+  const s = setup({ referrer: 'https://www.perplexity.ai/', href: 'https://guifav.dev/' });
+  s.fire('click', new El('a', { href: 'mailto:contact@guifav.dev', 'data-cta-location': 'hero' }, s.main));
+  s.fire('click', new El('a', { href: 'https://calendar.app.google/x', 'data-cta-location': 'hero' }, s.main));
+  assert.deepEqual(events(s.calls), [
+    ['event', 'contact_click', { cta_location: 'hero', origin_channel: 'assistente', origin_source: 'perplexity', transport_type: B }],
+    ['event', 'schedule_click', { cta_location: 'hero', origin_channel: 'assistente', origin_source: 'perplexity', transport_type: B }],
+  ]);
+  // O rodapé e os outros eventos não mudam.
+  s.fire('click', new El('a', { href: 'https://github.com/guifav' }, s.footer));
+  assert.deepEqual(events(s.calls).at(-1), ['event', 'footer_click', { link_label: 'github', transport_type: B }]);
 });

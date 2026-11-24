@@ -3,6 +3,7 @@
 // falha vai para o log, sem o email, e nunca atrasa nem impede a entrega do arquivo nem a confirmação da inscrição.
 // As funções daqui nunca rejeitam.
 import type { Interesse } from './materiais.ts';
+import { CANAIS, FONTES, UTM, entradaValida, type Origem } from './origem.ts';
 
 export interface D1Stmt {
   bind(...v: unknown[]): D1Stmt;
@@ -55,28 +56,64 @@ export async function recordConversion(
     requestId?: string | null;
     /** No download: o id do arquivo baixado. */
     file?: string | null;
+    /** Origem da visita (issue #114); nula nas conversões de links emitidos antes dela. */
+    origem?: Origem | null;
   },
 ): Promise<void> {
+  const o = c.origem ?? null;
   try {
     await db
-      .prepare(`INSERT OR IGNORE INTO conversions
-        (id, email, action, material, interests, occurred_at, verified, ga_client_id, request_id, file) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      // Só a repetição do id (o mesmo link aberto de novo) é ignorada. Um CHECK violado (issue #114) é erro e vai para o
+      // log: o OR IGNORE de antes descartaria a linha em silêncio.
+      .prepare(`INSERT INTO conversions
+        (id, email, action, material, interests, occurred_at, verified, ga_client_id, request_id, file,
+         origin_channel, origin_source, utm_source, utm_medium, utm_campaign, landing_path)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING`)
       .bind(c.id, c.email, c.acao, c.material, JSON.stringify(c.interesses), new Date(c.nowMs).toISOString(),
-        c.verified ? 1 : 0, c.gaClientId ?? null, c.requestId ?? null, c.file ?? null)
+        c.verified ? 1 : 0, c.gaClientId ?? null, c.requestId ?? null, c.file ?? null,
+        o?.canal ?? null, o?.fonte ?? null, o?.utmSource ?? null, o?.utmMedium ?? null, o?.utmCampaign ?? null, o?.entrada ?? null)
       .run();
   } catch (e) {
     console.error(`conversão não gravada (${c.acao}): ${motivo(e)}`);
   }
 }
 
-/** client_id do GA4 guardado no pedido, ou null (pedido sem consentimento, anterior ao #99 ou D1 com falha). */
-export async function requestClientId(db: D1Like, id: string): Promise<string | null> {
+interface PedidoRow {
+  ga_client_id: string | null;
+  origin_channel: string | null;
+  origin_source: string | null;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+  landing_path: string | null;
+}
+
+/** Origem guardada numa linha, revalidada (o CHECK do D1 já garante o formato; isto é defesa a mais), ou null. */
+function origemDaLinha(r: PedidoRow): Origem | null {
+  const canal = (CANAIS as readonly string[]).includes(r.origin_channel ?? '') ? (r.origin_channel as Origem['canal']) : null;
+  if (!canal) return null;
+  const casa = (rx: RegExp, v: string | null) => (v !== null && rx.test(v) ? v : null);
+  return {
+    canal,
+    // Direto e desconhecida não têm fonte, como no parseOrigem e no sync: o CHECK do D1 aceita a combinação, a regra não.
+    fonte: canal === 'direto' || canal === 'desconhecida' ? null
+      : (FONTES as readonly string[]).includes(r.origin_source ?? '') ? (r.origin_source as Origem['fonte']) : null,
+    utmSource: casa(UTM, r.utm_source), utmMedium: casa(UTM, r.utm_medium), utmCampaign: casa(UTM, r.utm_campaign),
+    entrada: entradaValida(r.landing_path) ? r.landing_path : null,
+  };
+}
+
+/**
+ * O que o download herda do pedido que gerou o link: o client_id do GA4 (nulo sem consentimento, em pedido anterior ao
+ * #99 ou com o D1 em falha) e a origem da visita (issue #114; nula em pedido anterior a ela ou com o D1 em falha).
+ */
+export async function requestInfo(db: D1Like, id: string): Promise<{ clientId: string | null; origem: Origem | null }> {
   try {
-    const r = await db.prepare(`SELECT ga_client_id FROM conversions WHERE id = ? AND action = 'material_request'`)
-      .bind(id).first<{ ga_client_id: string | null }>();
-    return r?.ga_client_id ?? null;
+    const r = await db.prepare(`SELECT ga_client_id, origin_channel, origin_source, utm_source, utm_medium, utm_campaign, landing_path
+      FROM conversions WHERE id = ? AND action = 'material_request'`).bind(id).first<PedidoRow>();
+    return { clientId: r?.ga_client_id ?? null, origem: r ? origemDaLinha(r) : null };
   } catch (e) {
-    console.error(`client_id do pedido não lido: ${motivo(e)}`);
-    return null;
+    console.error(`pedido não lido: ${motivo(e)}`);
+    return { clientId: null, origem: null };
   }
 }

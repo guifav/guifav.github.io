@@ -52,3 +52,7 @@ export function variantes(s: string): string[] {
   const i = A.indexOf(s.at(-1)!);
   return [1, 2, 3].map((d) => s.slice(0, -1) + A[(i & ~3) | ((i + d) & 3)]);
 }
+
+/** As colunas de origem (issue #114, migração 0006) de uma linha sem origem: anterior à #114 ou sem de onde herdar. */
+export const SEM_ORIGEM = { origin_channel: null, origin_source: null, utm_source: null, utm_medium: null, utm_campaign: null,
+  landing_path: null } as const;
