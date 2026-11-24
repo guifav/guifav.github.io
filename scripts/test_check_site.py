@@ -2,7 +2,9 @@
 
 Rodar: python3 scripts/test_check_site.py
 """
+import ast
 import contextlib
+import inspect
 import io
 import json
 import os
@@ -10,8 +12,10 @@ import shutil
 import subprocess
 import re
 import tempfile
+import textwrap
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import check_site as C
 
@@ -1791,7 +1795,7 @@ class RelatedWiredTest(Base):
         consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
         self.assertEqual(self.problems(pre_cutover=False), [])  # check() sozinho não tem a regra
         err = io.StringIO()
-        with contextlib.redirect_stderr(err):
+        with isolate_main_rule("check_related"), contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
             code = C.main(["--site", str(self.site), "--posts", str(self.posts), "--consts", str(consts)])
         self.assertEqual(code, 1)
         self.assertIn("blog/um-post/index.html: post indexável precisa de um bloco Leia também, tem 0", err.getvalue())
@@ -1989,13 +1993,7 @@ class SeoTest(unittest.TestCase):
         from unittest import mock
         self.post(slug="antigo", date="2024-03-01", desc="curta")  # importado: só aviso, agrupado na CI
         # isola a regra da #103 das demais; o formato do aviso depende de GITHUB_ACTIONS, que a CI define
-        with mock.patch.object(C, "check", lambda *a, **k: []), \
-                mock.patch.object(C, "check_related", lambda *a, **k: []), \
-                mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
-                mock.patch.object(C, "check_home", lambda *a, **k: []), \
-                mock.patch.object(C, "check_post_ld", lambda *a, **k: []), \
-                mock.patch.object(C, "check_llm_ranking", lambda *a, **k: []), \
-                mock.patch.object(C, "check_legal", lambda *a, **k: []):  # Leia também (#104), JSON-LD (#105), /consultoria/ e home (#136), #113, #146
+        with isolate_main_rule("check_seo"):
             for gh, new_mark, group in (("", "AVISO: ", None), ("true", "::warning title=check_site (#103)::", "::group::")):
                 for desc, code in (("d" * 69, 1), ("d" * 165, 0), (self.OK_DESC, 0)):
                     with self.subTest(gh=gh, desc=len(desc)), mock.patch.dict(os.environ, {"GITHUB_ACTIONS": gh}):
@@ -2239,15 +2237,7 @@ class PostLdTest(unittest.TestCase):
         consts = Path(self.tmp.name) / "consts.ts"
         consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
         args = ["--site", str(self.site), "--posts", str(self.posts), "--consts", str(consts)]
-        from unittest import mock
-        with mock.patch.object(C, "check", lambda *a, **k: []), \
-                mock.patch.object(C, "check_related", lambda *a, **k: []), \
-                mock.patch.object(C, "check_contrast", lambda *a, **k: []), \
-                mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
-                mock.patch.object(C, "check_home", lambda *a, **k: []), \
-                mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
-                mock.patch.object(C, "check_llm_ranking", lambda *a, **k: []), \
-                mock.patch.object(C, "check_legal", lambda *a, **k: []):  # #113 e #146 isoladas; ver LlmRankingTest e LegalTest
+        with isolate_main_rule("check_post_ld"):
             for head, code in (("", 1), (ld_script(post_graph()), 0)):
                 with self.subTest(code=code):
                     self.post(head)
@@ -2604,7 +2594,7 @@ class ContrastSiteTest(Base):
                                 '<style>.subscribe-row button{color:var(--hl-text)}</style>',
                                 robots='<meta name="robots" content="noindex">'))
         err = io.StringIO()
-        with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+        with isolate_main_rule("check_contrast"), contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
             code = C.main(["--site", str(self.site), "--posts", str(self.posts), "--consts", str(consts)])
         self.assertEqual(code, 1)
         self.assertIn("404.html: contraste 1.00:1", err.getvalue())
@@ -2723,31 +2713,16 @@ class LlmRankingTest(unittest.TestCase):
         self.assertTrue(any("marcador do template" in p for p in self.page(extra="<!--LLM:tabela-->")))
 
     def test_main_runs_the_rule(self):
-        from unittest import mock
         consts = Path(self.tmp.name) / "consts.ts"
         consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
         err = io.StringIO()
-        with mock.patch.object(C, "check", lambda *a, **k: []), \
-                mock.patch.object(C, "check_related", lambda *a, **k: []), \
-                mock.patch.object(C, "check_contrast", lambda *a, **k: []), \
-                mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
-                mock.patch.object(C, "check_post_ld", lambda *a, **k: []), \
-                mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
-                mock.patch.object(C, "check_home", lambda *a, **k: []), \
-                mock.patch.object(C, "check_legal", lambda *a, **k: []), \
+        with isolate_main_rule("check_llm_ranking"), \
                 contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
             code = C.main(["--site", str(self.site), "--posts", str(self.site), "--consts", str(consts)])
         self.assertEqual(code, 1)
         self.assertIn("ERRO: llm-ranking/index.html: página não existe no _site", err.getvalue())
         self.page()
-        with mock.patch.object(C, "check", lambda *a, **k: []), \
-                mock.patch.object(C, "check_related", lambda *a, **k: []), \
-                mock.patch.object(C, "check_contrast", lambda *a, **k: []), \
-                mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
-                mock.patch.object(C, "check_post_ld", lambda *a, **k: []), \
-                mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
-                mock.patch.object(C, "check_home", lambda *a, **k: []), \
-                mock.patch.object(C, "check_legal", lambda *a, **k: []), \
+        with isolate_main_rule("check_llm_ranking"), \
                 contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(C.main(["--site", str(self.site), "--posts", str(self.site), "--consts", str(consts)]), 0)
 
@@ -2933,17 +2908,8 @@ class ConsultingTest(unittest.TestCase):
         site.mkdir()
         consts = Path(self.tmp.name) / "consts.ts"
         consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
-        from unittest import mock
         err = io.StringIO()
-        with mock.patch.object(C, "check", lambda *a, **k: []), \
-                mock.patch.object(C, "check_related", lambda *a, **k: []), \
-                mock.patch.object(C, "check_contrast", lambda *a, **k: []), \
-                mock.patch.object(C, "check_home", lambda *a, **k: []), \
-                mock.patch.object(C, "check_post_ld", lambda *a, **k: []), \
-                mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
-                mock.patch.object(C, "check_llm_ranking", lambda *a, **k: []), \
-                mock.patch.object(C, "check_legal", lambda *a, **k: []), \
-                contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+        with isolate_main_rule("check_consulting"), contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
             code = C.main(["--site", str(site), "--posts", str(self.tmp.name), "--consts", str(consts)])
         self.assertEqual(code, 1)
         self.assertIn("consultoria/index.html: a página de consultoria sumiu", err.getvalue())
@@ -3050,19 +3016,11 @@ class HomeHubTest(unittest.TestCase):
         self.assertEqual(C.check_home(self.site, self.posts, 6), ["index.html: home ausente no site montado"])
         consts = Path(self.tmp.name) / "consts.ts"
         consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\nexport const HOME_LATEST = 6;\n", encoding="utf-8")
-        from unittest import mock
         err = io.StringIO()
-        with mock.patch.object(C, "check", lambda *a, **k: []), \
-                mock.patch.object(C, "check_related", lambda *a, **k: []), \
-                mock.patch.object(C, "check_contrast", lambda *a, **k: []), \
-                mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
-                mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
-                mock.patch.object(C, "check_llm_ranking", lambda *a, **k: []), \
-                mock.patch.object(C, "check_legal", lambda *a, **k: []), \
-                contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+        with isolate_main_rule("check_home"), contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
             code = C.main(["--site", str(self.site), "--posts", str(self.posts), "--consts", str(consts)])
         self.assertEqual(code, 1)
-        self.assertIn("index.html: home ausente", err.getvalue())
+        self.assertEqual(err.getvalue().splitlines(), ["ERRO: index.html: home ausente no site montado"])
 
 
 class LegalTest(unittest.TestCase):
@@ -3194,29 +3152,14 @@ class LegalTest(unittest.TestCase):
     def test_main_runs_the_legal_rule(self):
         consts = Path(self.tmp.name) / "consts.ts"
         consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
-        from unittest import mock
         err = io.StringIO()
-        with mock.patch.object(C, "check", lambda *a, **k: []), \
-                mock.patch.object(C, "check_related", lambda *a, **k: []), \
-                mock.patch.object(C, "check_contrast", lambda *a, **k: []), \
-                mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
-                mock.patch.object(C, "check_home", lambda *a, **k: []), \
-                mock.patch.object(C, "check_post_ld", lambda *a, **k: []), \
-                mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
-                mock.patch.object(C, "check_llm_ranking", lambda *a, **k: []), \
+        with isolate_main_rule("check_legal"), \
                 contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
             code = C.main(["--site", str(self.site), "--posts", str(self.tmp.name), "--consts", str(consts)])
         self.assertEqual(code, 1)
         self.assertIn("privacidade/index.html: página legal ausente", err.getvalue())
         self.build_valid_site()
-        with mock.patch.object(C, "check", lambda *a, **k: []), \
-                mock.patch.object(C, "check_related", lambda *a, **k: []), \
-                mock.patch.object(C, "check_contrast", lambda *a, **k: []), \
-                mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
-                mock.patch.object(C, "check_home", lambda *a, **k: []), \
-                mock.patch.object(C, "check_post_ld", lambda *a, **k: []), \
-                mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
-                mock.patch.object(C, "check_llm_ranking", lambda *a, **k: []), \
+        with isolate_main_rule("check_legal"), \
                 contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(C.main(["--site", str(self.site), "--posts", str(self.tmp.name), "--consts", str(consts)]), 0)
 
@@ -3305,6 +3248,143 @@ class LegalSourcesTest(unittest.TestCase):
             html = (self.REPO / rel).read_text(encoding="utf-8")
             for form in re.findall(r"<form\b[^>]*>.*?</form>", html, flags=re.S | re.I):
                 self.assertNotIn("/termos/", form, rel)
+
+
+# Regras chamadas por C.main() e o retorno neutro usado ao isolar uma delas (#147).
+MAIN_RULES = {
+    "check": lambda *a, **k: [],
+    "check_related": lambda *a, **k: [],
+    "check_contrast": lambda *a, **k: [],
+    "check_consulting": lambda *a, **k: [],
+    "check_home": lambda *a, **k: [],
+    "check_post_ld": lambda *a, **k: [],
+    "check_llm_ranking": lambda *a, **k: [],
+    "check_legal": lambda *a, **k: [],
+    "check_seo": lambda *a, **k: ([], [], []),
+}
+
+
+@contextlib.contextmanager
+def isolate_main_rule(keep: str):
+    """Faz mock de todas as regras de C.main(), exceto `keep`, para o teste depender só dela."""
+    if keep not in MAIN_RULES:
+        raise KeyError(f"regra fora de MAIN_RULES: {keep!r}")
+    with contextlib.ExitStack() as stack:
+        for name, stub in MAIN_RULES.items():
+            if name != keep:
+                stack.enter_context(mock.patch.object(C, name, stub))
+        yield
+
+
+def _main_rules_in_source(fn) -> set[str]:
+    """Extrai via AST todas as chamadas a check / check_* dentro de C.main()."""
+    tree = ast.parse(textwrap.dedent(inspect.getsource(fn)))
+    out: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name) and (node.func.id == "check" or node.func.id.startswith("check_")):
+                out.add(node.func.id)
+    return out
+
+
+def _with_item_mocks(expr: ast.AST, rules: set[str]) -> set[str]:
+    """Quais regras de `rules` um item de `with` isola (via isolate_main_rule ou mock.patch.object)."""
+    if not isinstance(expr, ast.Call):
+        return set()
+    f = expr.func
+    if isinstance(f, ast.Name) and f.id == "isolate_main_rule":
+        arg = expr.args[0] if expr.args else next((kw.value for kw in expr.keywords if kw.arg == "keep"), None)
+        if isinstance(arg, ast.Constant) and isinstance(arg.value, str) and arg.value in rules:
+            return set(MAIN_RULES) - {arg.value}
+        return set()
+    if (isinstance(f, ast.Attribute) and f.attr == "object"
+            and isinstance(f.value, ast.Attribute) and f.value.attr == "patch"
+            and len(expr.args) >= 2
+            and isinstance(expr.args[0], ast.Name) and expr.args[0].id == "C"
+            and isinstance(expr.args[1], ast.Constant) and isinstance(expr.args[1].value, str)):
+        return {expr.args[1].value}
+    return set()
+
+
+def _unisolated_main_tests(source: str, rules: set[str]) -> dict[str, set[str]]:
+    """Retorna {Classe.metodo: regras_nao_isoladas} para cada chamada a C.main() em teste sem isolar as outras regras."""
+    tree = ast.parse(source)
+    bad: dict[str, set[str]] = {}
+
+    def walk(node: ast.AST, active: frozenset[str], label: str) -> None:
+        if isinstance(node, ast.With):
+            added: set[str] = set()
+            for item in node.items:
+                walk(item.context_expr, active, label)
+                added |= _with_item_mocks(item.context_expr, rules)
+            inner = active | added
+            for stmt in node.body:
+                walk(stmt, inner, label)
+            return
+        if isinstance(node, ast.Call):
+            f = node.func
+            if isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name) and f.value.id == "C" and f.attr == "main":
+                unmocked = rules - active
+                if len(unmocked) > 1:
+                    bad.setdefault(label, set()).update(unmocked)
+        for child in ast.iter_child_nodes(node):
+            walk(child, active, label)
+
+    for cls in (n for n in tree.body if isinstance(n, ast.ClassDef)):
+        for fn in (n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name.startswith("test_")):
+            walk(fn, frozenset(), f"{cls.name}.{fn.name}")
+    return bad
+
+
+class MainRuleIsolationTest(unittest.TestCase):
+    """#147: garante que MAIN_RULES acompanha C.main() e que todo teste de C.main() isola todas as outras regras."""
+
+    def test_main_rules_registry_matches_c_main(self):
+        self.assertEqual(set(MAIN_RULES), _main_rules_in_source(C.main))
+
+    def test_every_main_test_isolates_all_other_rules(self):
+        src = Path(__file__).read_text(encoding="utf-8")
+        rules = _main_rules_in_source(C.main)
+        self.assertEqual(_unisolated_main_tests(src, rules), {})
+
+    def test_isolate_main_rule_patches_every_other_rule(self):
+        real_home = C.check_home
+        real_post_ld = C.check_post_ld
+        with isolate_main_rule("check_home"):
+            self.assertIs(C.check_home, real_home)
+            self.assertIsNot(C.check_post_ld, real_post_ld)
+            self.assertEqual(C.check_post_ld(Path("."), Path(".")), [])
+            self.assertEqual(C.check_seo(Path("."), Path(".")), ([], [], []))
+        self.assertIs(C.check_post_ld, real_post_ld)
+        with self.assertRaises(KeyError):
+            with isolate_main_rule("check_inexistente"):
+                pass
+
+    def test_guard_catches_new_rule_and_missing_mock(self):
+        def fake_main():
+            check()
+            check_nova()
+
+        self.assertIn("check_nova", _main_rules_in_source(fake_main) - set(MAIN_RULES))
+
+        sample = (
+            "class T:\n"
+            "    def test_incomplete(self):\n"
+            "        with mock.patch.object(C, 'check', lambda *a, **k: []):\n"
+            "            C.main([])\n"
+            "    def test_outside_with(self):\n"
+            "        with isolate_main_rule('check_home'):\n"
+            "            pass\n"
+            "        C.main([])\n"
+            "    def test_ok_helper(self):\n"
+            "        with isolate_main_rule('check_home'):\n"
+            "            C.main([])\n"
+        )
+        rules = set(MAIN_RULES)
+        got = _unisolated_main_tests(sample, rules)
+        self.assertEqual(set(got.keys()), {"T.test_incomplete", "T.test_outside_with"})
+        self.assertEqual(got["T.test_incomplete"], rules - {"check"})
+        self.assertEqual(got["T.test_outside_with"], rules)
 
 
 if __name__ == "__main__":
