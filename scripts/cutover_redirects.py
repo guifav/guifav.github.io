@@ -329,6 +329,17 @@ def jobs(hosts: tuple[str, ...] = HOSTS, quick: bool = False, extra: list[str] =
     return out
 
 
+def land(url: str, fetcher=fetch) -> tuple[int, str | None]:
+    """Resposta do destino. Aceita um salto a mais só quando é o 301 que a lista de scripts/site_redirects.py prevê
+    para essa URL (duplicata absorvida na #106, ou caminho antigo do grupo A da #120)."""
+    status, loc = fetcher(url, "GET")
+    if status == 301 and loc is not None:
+        import site_redirects  # noqa: PLC0415 (importa este módulo; aqui o ciclo já está resolvido)
+        if loc == site_redirects.simulate(url):
+            return fetcher(loc, "GET")
+    return status, loc
+
+
 def verify(todo: list[Job], fetcher=fetch, pause: float = 0.12, out=sys.stdout, hosts: tuple[str, ...] = HOSTS) -> int:
     """Confere cada URL antiga. Falha: status, Location, conexão ou destino diferente de 200 direto, salvo
     destino 404 em URL marcada como allow_404 (contada à parte)."""
@@ -348,7 +359,7 @@ def verify(todo: list[Job], fetcher=fetch, pause: float = 0.12, out=sys.stdout, 
             fails.append(f"{job.method} {job.url}: esperado 301 -> {want}, veio {status} -> {loc}")
             continue
         if want not in dest_cache:
-            dest_cache[want] = fetcher(want, "GET")
+            dest_cache[want] = land(want, fetcher)
             time.sleep(pause)
         dstatus, dloc = dest_cache[want]
         if dstatus == 200:

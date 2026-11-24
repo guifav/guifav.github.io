@@ -43,6 +43,13 @@ PLAN = {
     "streaming-data-em-escala-arquiteturas-para-analytics-sem-latencia-analitica":
         "streaming-data-em-escala-arquiteturas",
 }
+# A escolha registrada na #106, escrita à parte: duplicata absorvida -> versão original.
+DUPS = {
+    "a-era-dos-prototipos-acabou-como":
+        "a-era-dos-prototipos-acabou-como-a-ia-esta-revolucionando-o-desenvolvimento-de-software",
+    "sabia-2-o-rival-brasileiro-do-chatgpt40":
+        "sabia-2-o-novo-modelo-de-linguagem-em-portugues-que-rivaliza-com-gpt-4-maritaca-ai",
+}
 # Grupo C da #120 (decisão do Gui): fica em 404, fora da lista.
 GROUP_C_ENCODED = "como-a-intelig%c3%aancia-artificial-vai-transformar-a-lideran%c3%a7a-e-os-neg%c3%b3cios-no-futuro"
 # Location que a zona antiga devolveu ao vivo em 24/11 para o caminho com acentos (curl -I).
@@ -62,6 +69,26 @@ class PlanTest(unittest.TestCase):
     def test_table_is_exactly_the_posted_plan(self):
         self.assertEqual(dict(S.OLD_POSTS), PLAN)
         self.assertEqual(len(S.OLD_POSTS), 17)
+
+    def test_duplicates_are_exactly_the_choice_posted_on_106(self):
+        self.assertEqual(dict(S.DUPLICATES), DUPS)
+
+    def test_absorbed_copy_stays_in_the_repo_without_index_and_the_winner_is_indexable(self):
+        live = S.indexable_posts()
+        for dup, win in DUPS.items():
+            self.assertTrue((POSTS / f"{dup}.md").is_file(), dup)
+            self.assertNotIn(dup, live)
+            self.assertIn(win, live)
+
+    def test_absorbed_url_old_domain_and_both_slash_forms_end_on_the_winner(self):
+        for dup, win in DUPS.items():
+            want = f"https://guifav.dev/blog/{win}/"
+            for url in (f"https://guifav.dev/blog/{dup}/", f"http://guifav.dev/blog/{dup}"):
+                self.assertEqual(S.simulate(url), want, url)
+            for host in (APEX, WWW):
+                for path in (f"/p/{dup}", f"/p/{dup}/", f"/post/{dup}"):
+                    self.assertEqual(end_to_end(f"https://{host}{path}"), want, (host, path))
+            self.assertIsNone(S.simulate(want))  # a vencedora não é origem
 
     def test_group_c_path_stays_out_of_the_list(self):
         self.assertNotIn(GROUP_C_ENCODED, dict(S.OLD_POSTS))
@@ -101,7 +128,7 @@ class PlanTest(unittest.TestCase):
 
     def test_list_has_both_slash_forms_and_nothing_else(self):
         reds = S.redirects()
-        self.assertEqual(len(reds), 34)
+        self.assertEqual(len(reds), 38)
         for old, new in PLAN.items():
             src = C.simulate(WWW, f"/post/{old}").removeprefix("https://")
             got = {r.source: r.target for r in reds if r.source.rstrip("/") == src.rstrip("/")}
@@ -131,10 +158,27 @@ def _posts(tmp: Path, files: dict[str, str]) -> Path:
 
 
 class ProblemsTest(unittest.TestCase):
-    def run_with(self, table, posts, reds=None):
-        with tempfile.TemporaryDirectory() as d, mock.patch.object(S, "OLD_POSTS", table):
+    def run_with(self, table, posts, reds=None, dups=()):
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(S, "OLD_POSTS", table), \
+                mock.patch.object(S, "DUPLICATES", dups):
             p = _posts(Path(d), posts)
             return S.problems(S.redirects() if reds is None else reds, p)
+
+    def test_duplicate_must_stay_without_index_and_point_to_an_indexable_post(self):
+        ok = {"novo": "", "dup": "index: false\n", "orig": ""}
+        self.assertEqual(self.run_with((("velho", "novo"),), ok, dups=(("dup", "orig"),)), [])
+        cases = (
+            ({"novo": "", "dup": "", "orig": ""}, (("dup", "orig"),), "index: false"),      # cópia ainda indexável
+            ({"novo": "", "orig": ""}, (("dup", "orig"),), "index: false"),                  # cópia apagada do repo
+            ({"novo": "", "dup": "index: false\n"}, (("dup", "orig"),), "não é post indexável"),
+            (ok, (("dup", "dup"),), "não é post indexável"),                                  # aponta para si
+            (ok, (("dup", "orig"), ("dup", "orig")), "repetida"),
+            (ok, (("velho", "orig"),), "repetida"),                                          # também em OLD_POSTS
+        )
+        for posts, dups, word in cases:
+            with self.subTest(dups=dups, posts=posts):
+                got = self.run_with((("velho", "novo"),), posts, dups=dups)
+                self.assertTrue(any(word in x for x in got), got)
 
     def test_target_must_be_an_indexable_post(self):
         self.assertEqual(self.run_with((("velho", "novo"),), {"novo": ""}), [])
@@ -176,7 +220,8 @@ class ProblemsTest(unittest.TestCase):
         for table, word in (((("Velho", "novo"),), "fora do formato"), ((("a b", "novo"),), "fora do formato"),
                             ((("velho", "novo"), ("velho", "novo")), "repetido")):
             with self.subTest(table=table):
-                with tempfile.TemporaryDirectory() as d, mock.patch.object(S, "OLD_POSTS", table):
+                with tempfile.TemporaryDirectory() as d, mock.patch.object(S, "OLD_POSTS", table), \
+                        mock.patch.object(S, "DUPLICATES", ()):
                     got = S.problems([], _posts(Path(d), {"novo": ""}))
                 self.assertTrue(any(word in p for p in got), got)
 
@@ -192,7 +237,7 @@ class ProblemsTest(unittest.TestCase):
 class PayloadTest(unittest.TestCase):
     def test_items_are_exact_301_without_query_subdomains_or_subpaths(self):
         items = S.list_items()
-        self.assertEqual(len(items), 34)
+        self.assertEqual(len(items), 38)
         for it in items:
             r = it["redirect"]
             self.assertEqual(set(r), {"source_url", "target_url", "status_code", "preserve_query_string",
@@ -304,7 +349,7 @@ class ApplyTest(unittest.TestCase):
         self.assertGreaterEqual(len(reads), 2)  # 32 itens em páginas de 20: o cursor foi seguido
         self.assertTrue(put_items < reads[0] and reads[-1] < len(cf.calls) - 1)
         self.assertEqual(cf.phase, [S.rule(self.A)])
-        self.assertEqual(len(cf.items["L-a"]), 34)
+        self.assertEqual(len(cf.items["L-a"]), 38)
         self.assertEqual(cf.lists[0]["description"], S.LIST_DESCRIPTION)
         self.assertTrue(cf.raw_cursors and all("+" not in c and "/" not in c and "=" not in c for c in cf.raw_cursors),
                         cf.raw_cursors)  # cursor opaco codificado na query
@@ -318,7 +363,7 @@ class ApplyTest(unittest.TestCase):
                                                ("PUT", f"/accounts/acc/rulesets/phases/{S.PHASE}/entrypoint")])
                 self.assertEqual(cf.phase, [S.rule(other)])
                 self.assertEqual(cf.items[on_id], self.OLD)  # a lista ativa antes não foi tocada
-                self.assertEqual(len(cf.items[other_id]), 34)
+                self.assertEqual(len(cf.items[other_id]), 38)
 
     def test_failed_update_keeps_the_active_rule_on_the_untouched_list(self):
         # Achado P1 da revisão de beb73ac: com a regra ativa, a falha de validação não pode deixá-la sobre uma
@@ -465,7 +510,7 @@ class CliTest(unittest.TestCase):
         with contextlib.redirect_stdout(out):
             self.assertEqual(S.main(["rules"]), 0)
         data = json.loads(out.getvalue())
-        self.assertEqual((data["lists"], len(data["items"])), (list(S.LISTS), 34))
+        self.assertEqual((data["lists"], len(data["items"])), (list(S.LISTS), 38))
 
 
 class VerifyTest(unittest.TestCase):
@@ -488,7 +533,7 @@ class VerifyTest(unittest.TestCase):
     def test_all_good_passes_and_counts_every_check(self):
         rc, out = self.run_verify(self.live())
         self.assertEqual(rc, 0, out)
-        self.assertIn(f"ok: {17 * 4 + 17 + 34}; falhas: 0", out)
+        self.assertIn(f"ok: {17 * 4 + 17 + 2 + 38}; falhas: 0", out)
 
     def test_each_hop_is_checked(self):
         old, new = S.OLD_POSTS[0]

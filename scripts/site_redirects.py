@@ -100,6 +100,16 @@ OLD_POSTS: tuple[tuple[str, str], ...] = (
      "streaming-data-em-escala-arquiteturas"),
 )
 
+# #106: posts quase idênticos publicados duas vezes. A cópia absorvida fica no repo com index: false (sai do sitemap e
+# ganha noindex) e o endereço dela vai em 301 para a versão original. Vencedora escolhida e registrada na #106: a que
+# tem impressões no Search Console e link interno, e é a publicação original (a absorvida é a repostagem seguinte).
+DUPLICATES: tuple[tuple[str, str], ...] = (
+    ("a-era-dos-prototipos-acabou-como",
+     "a-era-dos-prototipos-acabou-como-a-ia-esta-revolucionando-o-desenvolvimento-de-software"),
+    ("sabia-2-o-rival-brasileiro-do-chatgpt40",
+     "sabia-2-o-novo-modelo-de-linguagem-em-portugues-que-rivaliza-com-gpt-4-maritaca-ai"),
+)
+
 _SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 _OLD = re.compile(r"[a-z0-9%]+(?:-[a-z0-9%]+)*")
 
@@ -124,8 +134,9 @@ def first_hop(old: str) -> str:
 
 def redirects() -> list[Redirect]:
     out = []
-    for old, new in OLD_POSTS:
-        src = first_hop(old).removeprefix("https://")
+    pairs = [(first_hop(old), new) for old, new in OLD_POSTS] + [(post_url(dup), new) for dup, new in DUPLICATES]
+    for loc, new in pairs:
+        src = loc.removeprefix("https://")
         for s in (src, src.rstrip("/")):  # com e sem barra: a lista casa o caminho exato
             out.append(Redirect(s, post_url(new)))
     return out
@@ -165,6 +176,14 @@ def problems(reds: list[Redirect] | None = None, posts_dir: Path = POSTS) -> lis
             out.append(f"{old}: já é um post; o cutover leva direto a ele")
         if not _SLUG.fullmatch(new) or new not in live:
             out.append(f"{old}: destino {new!r} não é post indexável")
+    dups = [d for d, _ in DUPLICATES]
+    if len(set(dups)) != len(dups) or set(dups) & set(olds):
+        out.append("duplicata repetida ou também em OLD_POSTS")
+    for dup, new in DUPLICATES:
+        if dup not in every or dup in live:
+            out.append(f"{dup}: a duplicata absorvida precisa ficar no repo com index: false")
+        if not _SLUG.fullmatch(new) or new not in live or new == dup:
+            out.append(f"{dup}: destino {new!r} não é post indexável")
     sources = [r.source for r in reds]
     if len(set(sources)) != len(sources):
         out.append("origem repetida na lista")
@@ -373,6 +392,8 @@ def verify(fetcher=cutover.fetch, pause: float = 0.12, out=sys.stdout) -> int:
         mid, final = first_hop(old), post_url(new)
         checks += [(f"https://{host}/post/{old}{suffix}", 301, mid) for host in cutover.HOSTS for suffix in ("", "/")]
         checks.append((final, 200, None))
+    for dup, new in DUPLICATES:
+        checks.append((post_url(new), 200, None))
     checks += [("https://" + r.source, 301, r.target) for r in reds]  # inclui o segundo salto de cada caminho
     for url, status, loc in checks:
         ok += hop(url, status, loc)

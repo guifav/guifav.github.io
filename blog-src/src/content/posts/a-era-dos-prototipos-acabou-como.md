@@ -7,6 +7,8 @@ updated: 2024-02-27T09:22:28.669Z
 slug: a-era-dos-prototipos-acabou-como
 cover: img/a-era-dos-prototipos-acabou-como/capa.jpg
 type: newsletter
+# Duplicata absorvida (#106): 301 para a versão original, por scripts/site_redirects.py.
+index: false
 ---
 
 <figure>

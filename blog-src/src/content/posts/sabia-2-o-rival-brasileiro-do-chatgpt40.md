@@ -7,6 +7,8 @@ updated: 2024-04-04T21:36:17.567Z
 slug: sabia-2-o-rival-brasileiro-do-chatgpt40
 cover: img/sabia-2-o-rival-brasileiro-do-chatgpt40/capa.jpg
 type: newsletter
+# Duplicata absorvida (#106): 301 para a versão original, por scripts/site_redirects.py.
+index: false
 ---
 
 A Inteligência Artificial (IA) tem avançado a passos largos nos últimos anos, especialmente no campo do Processamento de Linguagem Natural (PLN). Os modelos de linguagem grandes (LLMs) têm se tornado cada vez mais poderosos e versáteis, capazes de realizar uma ampla gama de tarefas, desde a geração de textos criativos até a resposta a perguntas complexas. Nesse cenário, a Maritaca AI, uma empresa brasileira dedicada à pesquisa e desenvolvimento de IA, publicou no dia 26/03/2024 o Sabiá-2, um LLM especializado em português que está revolucionando o campo.
