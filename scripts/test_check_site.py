@@ -1476,17 +1476,44 @@ class ToolsTest(unittest.TestCase):
     def test_home_without_section_fails(self):
         self.assertTrue(C.check_tools("index.html", self.doc(footer=self.links())))
 
-    def test_links_outside_the_block_or_inert_do_not_count(self):
-        for name, body in {
-            "fora do rodapé": f"<main>{self.links()}</main>",
+    def missing(self, problems, where):
+        """Os links que a regra deu como ausentes no bloco `where` ("rodapé" ou "seção")."""
+        tail = " sem o link de Ferramentas e guias "
+        out = []
+        for p in problems:
+            msg = p.partition(": ")[2]
+            if msg.startswith(where) and tail in msg:
+                out.append(msg.split(tail, 1)[1])
+        return sorted(out)
+
+    def test_links_outside_the_footer_do_not_count(self):
+        html = self.doc(footer="").replace("<footer></footer>", f"<main>{self.links()}</main><footer></footer>")
+        problems = C.check_tools("blog/um-post/index.html", html)
+        self.assertEqual(self.missing(problems, "rodapé"), sorted(C.TOOLS_LINKS), problems)
+
+    def test_inert_links_inside_the_footer_do_not_count(self):
+        # Dentro do <footer>: o link só conta como <a> com href, fora de comentário.
+        for name, footer in {
             "comentado": f"<!-- {self.links()} -->",
             "sem href": "".join(f"<a>{h}</a>" for h in C.TOOLS_LINKS),
+            "href vazio": "".join(f'<a href="">{h}</a>' for h in C.TOOLS_LINKS),
         }.items():
             with self.subTest(name=name):
-                html = self.doc(footer="").replace("<footer></footer>", f"{body}<footer></footer>")
-                self.assertTrue(C.check_tools("blog/um-post/index.html", html), name)
-        # Link da seção não vale pelo rodapé, nem o do rodapé pela seção.
-        self.assertTrue(C.check_tools("index.html", self.doc(self.links() * 2, "")))
+                problems = C.check_tools("blog/um-post/index.html", self.doc(footer=footer))
+                self.assertEqual(self.missing(problems, "rodapé"), sorted(C.TOOLS_LINKS), problems)
+                problems = C.check_tools("index.html", self.doc(footer + self.links(), footer))
+                self.assertEqual(self.missing(problems, "rodapé"), sorted(C.TOOLS_LINKS), problems)
+                self.assertEqual(self.missing(problems, "seção"), [], problems)
+
+    def test_section_and_footer_do_not_stand_in_for_each_other(self):
+        # Link da seção não vale pelo rodapé...
+        problems = C.check_tools("index.html", self.doc(self.links(), ""))
+        self.assertEqual(len(problems), len(C.TOOLS_LINKS), problems)
+        self.assertEqual(self.missing(problems, "rodapé"), sorted(C.TOOLS_LINKS), problems)
+        # ...nem o do rodapé pela seção.
+        problems = C.check_tools("index.html", self.doc("", self.links()))
+        self.assertEqual(len(problems), len(C.TOOLS_LINKS), problems)
+        self.assertEqual(self.missing(problems, "seção"), sorted(C.TOOLS_LINKS), problems)
 
     def test_repeated_link_in_block_fails(self):
         dup = self.links() + self.links(C.TOOLS_LINKS[:1])
@@ -1525,6 +1552,17 @@ class ToolsSourcesTest(unittest.TestCase):
         for href in C.TOOLS_LINKS:
             with self.subTest(href=href):
                 self.assertEqual(footer.group(0).count(f'href="{href}"'), 1)
+                # O destino é só em português; na home em inglês, o hreflang avisa (r1, agy P3).
+                self.assertEqual(footer.group(0).count(f'href="{href}" hreflang="pt-BR"'), 1)
+
+    def test_home_has_two_navs_each_labelled(self):
+        # r1 (agy P3): com o nav do rodapé, o do topo também precisa de nome acessível, traduzido em inglês.
+        home = self.read("index.html")
+        self.assertEqual(re.findall(r"<nav\b[^>]*>", home),
+                         ['<nav aria-label="Principal" data-i18n-aria="nav_aria">',
+                          '<nav class="footer-tools" aria-label="Ferramentas e guias" data-i18n-aria="ft_aria">'])
+        en = json.loads(re.search(r'<script type="application/json" id="i18n-en">(.*?)</script>', home, re.S).group(1))
+        self.assertEqual((en["nav_aria"], en["ft_aria"]), ("Main", "Tools and guides"))
 
     def test_both_footers_carry_the_same_tools_line(self):
         def tools_nav(text):
