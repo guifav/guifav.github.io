@@ -47,7 +47,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cutover_redirects as cutover  # noqa: E402
@@ -59,20 +59,25 @@ HOST = "guifav.dev"
 BLOG = f"https://{HOST}/blog/"
 # Par azul/verde: o apply escreve e confere a lista inativa e só então troca a regra para ela.
 LISTS = ("guifav_redirects_a", "guifav_redirects_b")
-LIST_DESCRIPTION = "guifav.dev: URLs antigas para posts (scripts/site_redirects.py, #102 e #106)"
+# Marca das listas do par: o apply só adota (e sobrescreve) lista com exatamente esta descrição.
+LIST_DESCRIPTION = "guifav.dev: URLs antigas para posts; escrita só por scripts/site_redirects.py"
 PHASE = "http_request_redirect"
 RULE_DESCRIPTION = "site_redirects: lista guifav_redirects"
-MAX_ITEMS = 10_000  # URLs em todas as listas da conta, plano Free
+MAX_ITEMS = 10_000  # URLs somadas em todas as listas da conta, plano Free (o par guarda a lista duas vezes)
 
-# Caminhos /post/<antigo> do site anterior ao Substack que têm post equivalente (#102). A equivalência foi medida
-# pelo texto da página arquivada contra os posts (0,90 a 0,98; os demais ficaram abaixo de 0,07), exceto
-# modernizacao-sistemas-legados-vantagem-competitiva, sem cópia arquivada: o post microservices-vs-monolith-decisoes
-# o cita como o artigo anterior da série, publicado dois dias antes. Caminho com %XX em caixa baixa, como no link.
+# Grupo A da #120: caminhos /post/<antigo> do domínio antigo que têm post equivalente com outro slug. A tabela final,
+# com as divergências da proposta, está registrada na #120. Evidência de cada par:
+# - texto da página arquivada no Internet Archive contra os posts (0,90 a 0,98; os demais ficaram abaixo de 0,07);
+# - modernizacao-sistemas-legados-vantagem-competitiva, sem cópia arquivada: o post microservices-vs-monolith-decisoes
+#   o cita como o artigo anterior da série, publicado dois dias antes;
+# - microservices-vs-monolith-decisoes-arquiteturais-competitividade (21/11/2025, depois da última captura): o slug é
+#   o título do post, palavra por palavra;
+# - ia-brasileira-sabia-2-amazonia-...: o post ia-brasileira-sabia-3-... tem o mesmo slug com 3 no lugar de 2, e o alt
+#   da imagem de capa guarda o título antigo ("IA Brasileira - Sabia 2, Amazonia IA, Maritaca AI - ...").
+# Fica fora, por decisão do Gui (grupo C da #120): o caminho de liderança e negócios no futuro, que segue em 404.
 OLD_POSTS: tuple[tuple[str, str], ...] = (
     ("analise-preditiva-tomada-decisao-modelos-empresariais", "analise-preditiva-tomada-decisao-producao"),
     ("arquitetura-ia-empresarial-definitiva", "a-arquitetura-definitiva-de-ia-para"),
-    ("como-a-intelig%c3%aancia-artificial-vai-transformar-a-lideran%c3%a7a-e-os-neg%c3%b3cios-no-futuro",
-     "como-a-inteligencia-artificial-vai-transformar-a-lideranca-e-os-negocios-no-futuro"),
     ("construindo-times-ia-lideranca-tecnica-transformacao-empresarial", "construindo-times-de-ia-lideranca"),
     ("criancas-conectadas-pesquisa-sobre-como-as-familias-equilibram-tecnologia-e-bem-estar-parte-1",
      "criancas-conectadas-pesquisa-sobre-como-as-familias-equilibram-tecnologia-e-bem-estar-parte-1-0f6d9e9adf6a"),
@@ -82,8 +87,11 @@ OLD_POSTS: tuple[tuple[str, str], ...] = (
     ("data-pipelines-empresariais-silos-dados-business-intelligence", "data-pipelines-empresariais-como"),
     ("desmistificando-gpus-em-ia", "desmistificando-gpus-em-ia-79e168b03ccd"),
     ("fine-tuning-vs-prompt-engineering-decisoes-roi", "fine-tuning-vs-prompt-engineering"),
+    ("ia-brasileira-sabia-2-amazonia-ia-maritaca-ai-inteligencia-artificial-nacional",
+     "ia-brasileira-sabia-3-amazonia-ia-maritaca-ai-inteligencia-artificial-nacional"),
     ("ia-generativa-producao-custos-performance-escalabilidade", "ia-generativa-em-producao-custos"),
     ("langgraph-workflows-complexos-ia-orquestracao", "langgraph-orquestrando-workflows"),
+    ("microservices-vs-monolith-decisoes-arquiteturais-competitividade", "microservices-vs-monolith-decisoes"),
     ("modernizacao-sistemas-legados-vantagem-competitiva", "modernizacao-de-sistemas-legados"),
     ("o-futuro-das-organizacoes-alem-da-tecnologia-e-processos", "o-futuro-das-organizacoes-alem-da"),
     ("o-surgimento-da-ia-geral-super-humana",
@@ -172,8 +180,8 @@ def problems(reds: list[Redirect] | None = None, posts_dir: Path = POSTS) -> lis
             out.append(f"origem {r.source} também é destino: cadeia de redirects")
         if not r.target.startswith(BLOG) or not r.target.endswith("/"):
             out.append(f"destino fora de {BLOG}<slug>/: {r.target}")
-    if len(reds) > MAX_ITEMS:
-        out.append(f"{len(reds)} itens: o plano Free aceita {MAX_ITEMS}")
+    if len(reds) * len(LISTS) > MAX_ITEMS:
+        out.append(f"{len(reds)} itens em {len(LISTS)} listas: o plano Free aceita {MAX_ITEMS} somando as listas")
     return out
 
 
@@ -232,7 +240,13 @@ def _cf(method: str, path: str, token: str, body=None, opener=urllib.request.url
         with opener(req, timeout=30) as r:
             data = json.load(r)
     except urllib.error.HTTPError as e:
-        data = json.load(e)
+        try:
+            data = json.load(e)
+        except ValueError:
+            raise SystemExit(f"Cloudflare {method} {path}: HTTP {e.code} sem corpo JSON") from None
+    except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
+        raise SystemExit(f"Cloudflare {method} {path}: falha de conexão ou resposta ilegível "
+                         f"({type(e).__name__})") from None
     if missing_ok and any(e.get("code") == 10003 for e in data.get("errors") or []):
         return {"success": True, "result": None}  # a fase ainda não tem ruleset
     if not data.get("success"):
@@ -254,7 +268,7 @@ def _phase_rules(account: str, token: str, opener) -> list[dict]:
 def _items(account: str, list_id: str, token: str, opener) -> list[dict]:
     out, cursor = [], None
     while True:
-        q = f"?per_page=500" + (f"&cursor={cursor}" if cursor else "")
+        q = "?per_page=500" + (f"&cursor={quote(cursor, safe='')}" if cursor else "")
         data = _cf("GET", f"/accounts/{account}/rules/lists/{list_id}/items{q}", token, opener=opener)
         out += data.get("result") or []
         cursor = ((data.get("result_info") or {}).get("cursors") or {}).get("after")
@@ -293,6 +307,9 @@ def apply(token: str, account: str, opener=urllib.request.urlopen, sleep=time.sl
     for x in lists:
         if x.get("name") in LISTS and x.get("kind") != "redirect":
             raise SystemExit(f"já existe uma lista {x.get('name')} de tipo {x.get('kind')!r}")
+        if x.get("name") in LISTS and x.get("description") != LIST_DESCRIPTION:
+            raise SystemExit(f"a lista {x.get('name')} existe com outra descrição ({x.get('description')!r}): "
+                             "não foi criada por este script, e o apply não a adota")
     same = [x for x in lists if x.get("name") == target]
     if same:
         list_id = same[0]["id"]

@@ -8,6 +8,7 @@ import os
 import sys
 import tempfile
 import unittest
+import urllib.parse
 from pathlib import Path
 from unittest import mock
 
@@ -22,8 +23,6 @@ APEX, WWW = "guilhermefavaron.com.br", "www.guilhermefavaron.com.br"
 PLAN = {
     "analise-preditiva-tomada-decisao-modelos-empresariais": "analise-preditiva-tomada-decisao-producao",
     "arquitetura-ia-empresarial-definitiva": "a-arquitetura-definitiva-de-ia-para",
-    "como-a-intelig%c3%aancia-artificial-vai-transformar-a-lideran%c3%a7a-e-os-neg%c3%b3cios-no-futuro":
-        "como-a-inteligencia-artificial-vai-transformar-a-lideranca-e-os-negocios-no-futuro",
     "construindo-times-ia-lideranca-tecnica-transformacao-empresarial": "construindo-times-de-ia-lideranca",
     "criancas-conectadas-pesquisa-sobre-como-as-familias-equilibram-tecnologia-e-bem-estar-parte-1":
         "criancas-conectadas-pesquisa-sobre-como-as-familias-equilibram-tecnologia-e-bem-estar-parte-1-0f6d9e9adf6a",
@@ -32,8 +31,11 @@ PLAN = {
     "data-pipelines-empresariais-silos-dados-business-intelligence": "data-pipelines-empresariais-como",
     "desmistificando-gpus-em-ia": "desmistificando-gpus-em-ia-79e168b03ccd",
     "fine-tuning-vs-prompt-engineering-decisoes-roi": "fine-tuning-vs-prompt-engineering",
+    "ia-brasileira-sabia-2-amazonia-ia-maritaca-ai-inteligencia-artificial-nacional":
+        "ia-brasileira-sabia-3-amazonia-ia-maritaca-ai-inteligencia-artificial-nacional",
     "ia-generativa-producao-custos-performance-escalabilidade": "ia-generativa-em-producao-custos",
     "langgraph-workflows-complexos-ia-orquestracao": "langgraph-orquestrando-workflows",
+    "microservices-vs-monolith-decisoes-arquiteturais-competitividade": "microservices-vs-monolith-decisoes",
     "modernizacao-sistemas-legados-vantagem-competitiva": "modernizacao-de-sistemas-legados",
     "o-futuro-das-organizacoes-alem-da-tecnologia-e-processos": "o-futuro-das-organizacoes-alem-da",
     "o-surgimento-da-ia-geral-super-humana":
@@ -41,6 +43,8 @@ PLAN = {
     "streaming-data-em-escala-arquiteturas-para-analytics-sem-latencia-analitica":
         "streaming-data-em-escala-arquiteturas",
 }
+# Grupo C da #120 (decisão do Gui): fica em 404, fora da lista.
+GROUP_C_ENCODED = "como-a-intelig%c3%aancia-artificial-vai-transformar-a-lideran%c3%a7a-e-os-neg%c3%b3cios-no-futuro"
 # Location que a zona antiga devolveu ao vivo em 24/11 para o caminho com acentos (curl -I).
 ENCODED_LIVE = ("https://guifav.dev/blog/como-a-intelig%C3%AAncia-artificial-vai-transformar-a-lideran%C3%A7a-e-os-"
                 "neg%C3%B3cios-no-futuro/")
@@ -57,7 +61,11 @@ def end_to_end(url: str) -> str | None:
 class PlanTest(unittest.TestCase):
     def test_table_is_exactly_the_posted_plan(self):
         self.assertEqual(dict(S.OLD_POSTS), PLAN)
-        self.assertEqual(len(S.OLD_POSTS), 16)
+        self.assertEqual(len(S.OLD_POSTS), 17)
+
+    def test_group_c_path_stays_out_of_the_list(self):
+        self.assertNotIn(GROUP_C_ENCODED, dict(S.OLD_POSTS))
+        self.assertIsNone(S.simulate(S.first_hop(GROUP_C_ENCODED)))
 
     def test_real_repo_has_no_problems(self):
         self.assertEqual(S.problems(), [])
@@ -81,9 +89,9 @@ class PlanTest(unittest.TestCase):
                         self.assertEqual(end_to_end(url), f"https://guifav.dev/blog/{new}/", url)
 
     def test_encoded_path_matches_the_location_the_zone_really_sends(self):
-        old = next(o for o in PLAN if "%" in o)
-        self.assertEqual(S.first_hop(old), ENCODED_LIVE)
-        self.assertIn(ENCODED_LIVE.removeprefix("https://"), {r.source for r in S.redirects()})
+        self.assertEqual(S.first_hop(GROUP_C_ENCODED), ENCODED_LIVE)
+        with mock.patch.object(S, "OLD_POSTS", ((GROUP_C_ENCODED, "novo"),)):
+            self.assertIn(ENCODED_LIVE.removeprefix("https://"), {r.source for r in S.redirects()})
 
     def test_existing_posts_keep_the_one_hop_cutover_and_are_not_in_the_list(self):
         for slug in sorted(p.stem for p in POSTS.glob("*.md"))[::20]:
@@ -93,7 +101,7 @@ class PlanTest(unittest.TestCase):
 
     def test_list_has_both_slash_forms_and_nothing_else(self):
         reds = S.redirects()
-        self.assertEqual(len(reds), 32)
+        self.assertEqual(len(reds), 34)
         for old, new in PLAN.items():
             src = C.simulate(WWW, f"/post/{old}").removeprefix("https://")
             got = {r.source: r.target for r in reds if r.source.rstrip("/") == src.rstrip("/")}
@@ -172,16 +180,19 @@ class ProblemsTest(unittest.TestCase):
                     got = S.problems([], _posts(Path(d), {"novo": ""}))
                 self.assertTrue(any(word in p for p in got), got)
 
-    def test_limit_of_the_free_plan(self):
-        reds = [S.Redirect(f"guifav.dev/blog/x{i}/", "https://guifav.dev/blog/novo/") for i in range(S.MAX_ITEMS + 1)]
-        got = self.run_with((("velho", "novo"),), {"novo": ""}, reds)
-        self.assertTrue(any("plano Free" in p for p in got))
+    def test_limit_of_the_free_plan_counts_both_lists_of_the_pair(self):
+        def reds(n):
+            return [S.Redirect(f"guifav.dev/blog/x{i}/", "https://guifav.dev/blog/novo/") for i in range(n)]
+        half = S.MAX_ITEMS // len(S.LISTS)
+        self.assertFalse(any("plano Free" in p for p in self.run_with((("velho", "novo"),), {"novo": ""}, reds(half))))
+        got = self.run_with((("velho", "novo"),), {"novo": ""}, reds(half + 1))
+        self.assertTrue(any("plano Free" in p for p in got), got)
 
 
 class PayloadTest(unittest.TestCase):
     def test_items_are_exact_301_without_query_subdomains_or_subpaths(self):
         items = S.list_items()
-        self.assertEqual(len(items), 32)
+        self.assertEqual(len(items), 34)
         for it in items:
             r = it["redirect"]
             self.assertEqual(set(r), {"source_url", "target_url", "status_code", "preserve_query_string",
@@ -220,6 +231,7 @@ class FakeCF:
         self.op_status = list(op_status)
         self.echo_items, self.echo_rule, self.page = echo_items, echo_rule, page
         self.calls: list[tuple[str, str]] = []
+        self.raw_cursors: list[str] = []
 
     def __call__(self, req, timeout=None):
         m, url = req.get_method(), req.full_url.removeprefix(S.API)
@@ -246,12 +258,16 @@ class FakeCF:
             st = self.op_status.pop(0) if len(self.op_status) > 1 else self.op_status[0]
             return ok({"status": st, "error": "boom" if st == "failed" else None})
         if "/items" in url and m == "GET":
-            start = int(url.split("cursor=")[1]) if "cursor=" in url else 0
+            start = 0
+            if "cursor=" in url:
+                raw = url.split("cursor=")[1]
+                self.raw_cursors.append(raw)
+                start = int(urllib.parse.unquote(raw).rsplit("=", 1)[1])
             items = self.items.get(url.split("/lists/")[1].split("/")[0], [])
             chunk = [{"id": str(i), "created_on": "x", "redirect": {**it["redirect"], "preserve_path_suffix": True}}
                      for i, it in enumerate(items[start:start + self.page], start)]
             after = start + self.page
-            cursors = {"after": str(after)} if after < len(items) else {}
+            cursors = {"after": f"c+/x={after}"} if after < len(items) else {}  # opaco, como os da Cloudflare
             return ok(chunk, result_info={"cursors": cursors})
         raise AssertionError(f"chamada inesperada {m} {url}")
 
@@ -271,7 +287,8 @@ class ApplyTest(unittest.TestCase):
 
     def live(self, on=None):
         """Conta com a regra ativa na lista `on` (que tem OLD) e a outra lista do par já criada."""
-        lists = [{"id": "LA", "name": self.A, "kind": "redirect"}, {"id": "LB", "name": self.B, "kind": "redirect"}]
+        lists = [{"id": "LA", "name": self.A, "kind": "redirect", "description": S.LIST_DESCRIPTION},
+                 {"id": "LB", "name": self.B, "kind": "redirect", "description": S.LIST_DESCRIPTION}]
         rule = S.rule(on)
         return FakeCF(phase=[{"id": "r", **rule}], lists=lists,
                       items={"LA" if on == self.A else "LB": list(self.OLD)})
@@ -287,7 +304,10 @@ class ApplyTest(unittest.TestCase):
         self.assertGreaterEqual(len(reads), 2)  # 32 itens em páginas de 20: o cursor foi seguido
         self.assertTrue(put_items < reads[0] and reads[-1] < len(cf.calls) - 1)
         self.assertEqual(cf.phase, [S.rule(self.A)])
-        self.assertEqual(len(cf.items["L-a"]), 32)
+        self.assertEqual(len(cf.items["L-a"]), 34)
+        self.assertEqual(cf.lists[0]["description"], S.LIST_DESCRIPTION)
+        self.assertTrue(cf.raw_cursors and all("+" not in c and "/" not in c and "=" not in c for c in cf.raw_cursors),
+                        cf.raw_cursors)  # cursor opaco codificado na query
 
     def test_update_writes_only_the_inactive_list_and_then_switches_the_rule(self):
         for on, other, other_id, on_id in ((self.A, self.B, "LB", "LA"), (self.B, self.A, "LA", "LB")):
@@ -298,7 +318,7 @@ class ApplyTest(unittest.TestCase):
                                                ("PUT", f"/accounts/acc/rulesets/phases/{S.PHASE}/entrypoint")])
                 self.assertEqual(cf.phase, [S.rule(other)])
                 self.assertEqual(cf.items[on_id], self.OLD)  # a lista ativa antes não foi tocada
-                self.assertEqual(len(cf.items[other_id]), 32)
+                self.assertEqual(len(cf.items[other_id]), 34)
 
     def test_failed_update_keeps_the_active_rule_on_the_untouched_list(self):
         # Achado P1 da revisão de beb73ac: com a regra ativa, a falha de validação não pode deixá-la sobre uma
@@ -339,10 +359,21 @@ class ApplyTest(unittest.TestCase):
     def test_list_with_the_same_name_of_another_kind_is_refused(self):
         for name in S.LISTS:
             with self.subTest(name=name):
-                cf = FakeCF(lists=[{"id": "L9", "name": name, "kind": "ip"}])
-                with self.assertRaises(SystemExit):
+                cf = FakeCF(lists=[{"id": "L9", "name": name, "kind": "ip", "description": S.LIST_DESCRIPTION}])
+                with self.assertRaises(SystemExit) as e:
                     self.apply(cf)
+                self.assertIn("de tipo 'ip'", str(e.exception))
                 self.assertEqual(cf.writes(), [])
+
+    def test_list_of_the_pair_with_another_description_is_not_adopted(self):
+        for desc in (None, "", "lista feita no painel", S.LIST_DESCRIPTION + " "):
+            for name in S.LISTS:
+                with self.subTest(desc=desc, name=name):
+                    cf = FakeCF(lists=[{"id": "L9", "name": name, "kind": "redirect", "description": desc}])
+                    with self.assertRaises(SystemExit) as e:
+                        self.apply(cf)
+                    self.assertIn("outra descrição", str(e.exception))
+                    self.assertEqual(cf.writes(), [])
 
     def test_list_problems_stop_before_any_call(self):
         cf = FakeCF()
@@ -360,6 +391,31 @@ class ApplyTest(unittest.TestCase):
     def test_rule_answer_differing_is_an_error(self):
         with self.assertRaises(SystemExit):
             self.apply(FakeCF(echo_rule=False))
+
+
+class CfErrorsTest(unittest.TestCase):
+    """Falha da API ou da rede vira SystemExit com método e caminho, sem traceback nem token."""
+
+    def test_http_error_without_json_and_connection_errors(self):
+        import urllib.error
+
+        def http_html(req, timeout=None):
+            raise urllib.error.HTTPError(req.full_url, 502, "Bad Gateway", {}, io.BytesIO(b"<html>502</html>"))
+
+        def no_net(req, timeout=None):
+            raise urllib.error.URLError("sem rede")
+
+        def not_json(req, timeout=None):
+            return _Resp(b"<html>ok</html>")
+
+        for opener, word in ((http_html, "HTTP 502"), (no_net, "URLError"), (not_json, "JSONDecodeError")):
+            with self.subTest(word=word):
+                with self.assertRaises(SystemExit) as e:
+                    S._cf("GET", "/accounts/acc/rules/lists", "segredo", opener=opener)
+                msg = str(e.exception)
+                self.assertIn("GET /accounts/acc/rules/lists", msg)
+                self.assertIn(word, msg)
+                self.assertNotIn("segredo", msg)
 
 
 class RemoveTest(unittest.TestCase):
@@ -409,7 +465,7 @@ class CliTest(unittest.TestCase):
         with contextlib.redirect_stdout(out):
             self.assertEqual(S.main(["rules"]), 0)
         data = json.loads(out.getvalue())
-        self.assertEqual((data["lists"], len(data["items"])), (list(S.LISTS), 32))
+        self.assertEqual((data["lists"], len(data["items"])), (list(S.LISTS), 34))
 
 
 class VerifyTest(unittest.TestCase):
@@ -432,7 +488,7 @@ class VerifyTest(unittest.TestCase):
     def test_all_good_passes_and_counts_every_check(self):
         rc, out = self.run_verify(self.live())
         self.assertEqual(rc, 0, out)
-        self.assertIn(f"ok: {16 * 4 + 16 + 32}; falhas: 0", out)
+        self.assertIn(f"ok: {17 * 4 + 17 + 34}; falhas: 0", out)
 
     def test_each_hop_is_checked(self):
         old, new = S.OLD_POSTS[0]
