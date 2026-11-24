@@ -614,7 +614,7 @@ test('origem: gravada na primeira página da aba e nunca trocada pela navegaçã
   setup({ storage: st, referrer: 'https://chatgpt.com/', href: 'https://guifav.dev/blog/agentes/?utm_source=chatgpt.com' });
   const primeira = st.getItem('site_origin_v1');
   // Segunda página da mesma aba: referrer interno e outra query; a origem continua a da entrada.
-  const s2 = setup({ storage: st, referrer: 'https://guifav.dev/blog/agentes/', href: 'https://guifav.dev/planilha-custos-ia/?utm_source=x' });
+  const s2 = setup({ storage: st, referrer: 'https://guifav.dev/blog/agentes/', href: 'https://guifav.dev/tools/planilha-custos-ia/?utm_source=x' });
   assert.equal(st.getItem('site_origin_v1'), primeira);
   assert.deepEqual(JSON.parse(JSON.stringify((s2.ctx.guifavOrigin as { current(): Origem }).current())),
     { canal: 'assistente', fonte: 'chatgpt', utm_source: 'chatgpt.com', utm_medium: null, utm_campaign: null, entrada: '/blog/agentes/' });

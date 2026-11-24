@@ -80,7 +80,7 @@ test('M1: pedido válido manda um email com o link assinado e redireciona para a
   const s = setup();
   const r = await s.run(pedir(ok));
   assert.equal(r.status, 303);
-  assert.equal(loc(r), 'https://guifav.dev/planilha-custos-ia/enviado/');
+  assert.equal(loc(r), 'https://guifav.dev/tools/planilha-custos-ia/enviado/');
   const sent = emails(s.calls);
   assert.equal(sent.length, 1);
   const b = sent[0].body;
@@ -110,7 +110,7 @@ test('M2: com a caixa dos Expert Insights marcada, o mesmo email traz o link de 
 test('M3: o mapa de decisão manda um link por arquivo', async () => {
   const s = setup();
   const r = await s.run(pedir({ ...ok, material: 'mapa-decisao-ia' }));
-  assert.equal(loc(r), 'https://guifav.dev/mapa-decisao-ia/enviado/');
+  assert.equal(loc(r), 'https://guifav.dev/tools/mapa-decisao-ia/enviado/');
   const b = emails(s.calls)[0].body;
   assert.equal(b.subject, 'Seus links: Mapa de decisão: RAG, Text-to-SQL ou contexto longo');
   const l = links(b.html);
@@ -129,7 +129,7 @@ test('M4: material desconhecido, origem errada e método errado não mandam nada
 test('M5: Turnstile reprovado volta para a página com o erro, sem email', async () => {
   const s = setup({ turnstile: { success: false } });
   const r = await s.run(pedir(ok));
-  assert.equal(loc(r), 'https://guifav.dev/planilha-custos-ia/#erro-verificacao');
+  assert.equal(loc(r), 'https://guifav.dev/tools/planilha-custos-ia/#erro-verificacao');
   assert.equal(emails(s.calls).length, 0);
 });
 
@@ -137,7 +137,7 @@ test('M6: email inválido, limite atingido e falha no envio respondem igual ao s
   for (const o of [{ fields: { ...ok, email: 'sem-arroba' } }, { rlEmail: false }, { rlIp: false }, { emailStatus: 500 }] as any[]) {
     const s = setup(o);
     const r = await s.run(pedir(o.fields ?? ok));
-    assert.equal(loc(r), 'https://guifav.dev/planilha-custos-ia/enviado/');
+    assert.equal(loc(r), 'https://guifav.dev/tools/planilha-custos-ia/enviado/');
   }
 });
 
@@ -160,10 +160,10 @@ test('M8: link expirado, adulterado ou de outro tipo não entrega nada', async (
   const q = await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', NOW, SECRET);
   // Expirado: 7 dias e 1 minuto depois.
   const r1 = await setup({ now: NOW + MATERIAL_TTL_MS + 60e3 }).run(baixar(q));
-  assert.equal(loc(r1), 'https://guifav.dev/planilha-custos-ia/#link-expirado');
+  assert.equal(loc(r1), 'https://guifav.dev/tools/planilha-custos-ia/#link-expirado');
   // Assinatura de um arquivo usada para outro.
   const r2 = await s.run(baixar(q.replace('f=planilha-custos-ia', 'f=mapa-decisao-pdf')));
-  assert.equal(loc(r2), 'https://guifav.dev/mapa-decisao-ia/#link-expirado');
+  assert.equal(loc(r2), 'https://guifav.dev/tools/mapa-decisao-ia/#link-expirado');
   // O link de confirmação da newsletter não vale como download.
   const r3 = await s.run(baixar(`f=planilha-custos-ia&${await signLink('leitor@exemplo.com', NOW, SECRET)}`));
   assert.equal(r3.status, 303);
@@ -310,7 +310,7 @@ test('C6: a assinatura só vale na forma canônica; as variantes com os mesmos b
   const q = await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', NOW, SECRET);
   for (const v of variantes(sig(q))) {
     const r = await s.run(baixar(q.replace(`s=${sig(q)}`, `s=${v}`)));
-    assert.equal(loc(r), 'https://guifav.dev/planilha-custos-ia/#link-expirado', v);
+    assert.equal(loc(r), 'https://guifav.dev/tools/planilha-custos-ia/#link-expirado', v);
   }
   assert.equal((await s.rows('conversions')).length, 0);
   assert.equal((await s.run(baixar(q))).status, 200);
@@ -321,7 +321,7 @@ test('C3: D1 que não responde não segura a resposta do pedido nem do download 
   const s = setup({ d1Pendura: /conversions|material_requests/ });
   const limite = <T>(p: Promise<T>) => Promise.race([p, new Promise<never>((_, no) => setTimeout(() => no(new Error('a resposta esperou o D1')), 1000))]);
   const r1 = await limite(s.run(pedir(ok)));
-  assert.equal(loc(r1), 'https://guifav.dev/planilha-custos-ia/enviado/');
+  assert.equal(loc(r1), 'https://guifav.dev/tools/planilha-custos-ia/enviado/');
   assert.equal(emails(s.calls).length, 1);
   const r2 = await limite(s.run(baixar(await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', NOW, SECRET))));
   assert.equal(await r2.text(), 'conteudo:planilha-custos-ia');
