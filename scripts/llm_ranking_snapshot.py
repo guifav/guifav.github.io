@@ -8,8 +8,11 @@ Fonte: o dataset oficial `lmarena-ai/leaderboard-dataset` no Hugging Face (CC BY
 - a lista overall da publicação mais recente com data até JANELA_DIAS antes (split `full`), para o "o que mudou".
 
 O snapshot passa pela mesma validação do build (build_llm_ranking.validar) antes de ser gravado. Com --apply, grava
-`arena-texto.json` no clone do guifav/llm-ranking-data e faz commit e push só quando o conteúdo mudou; a saída diz
-"gravado" (o wrapper da KVM então dispara o deploy do site) ou "sem mudança". Sem --apply, só mostra o resumo.
+`arena-texto.json` no clone do guifav/llm-ranking-data e faz commit e push só quando o conteúdo mudou. A saída termina
+em três linhas: "gravado" ou "sem mudança"; "no ar: versão <sha256>" (a versão dos dados da página publicada, ou "não
+lida"); e "deploy" ou "sem deploy: ...". O wrapper da KVM dispara o deploy do site pela linha "deploy", que sai quando
+o snapshot foi gravado ou quando a página no ar não tem a versão dos dados do repositório (ver main). Sem --apply, só mostra o resumo e
+não lê a página.
 
 Uso:
     python3 scripts/llm_ranking_snapshot.py --dados /root/.roger/gui-projects/llm-ranking-data [--apply]
@@ -20,6 +23,7 @@ import argparse
 import http.client
 import json
 import math
+import re
 import subprocess
 import sys
 import time
@@ -35,6 +39,7 @@ import build_llm_ranking as B  # noqa: E402
 API = "https://datasets-server.huggingface.co/filter"
 ARQUIVO = "arena-texto.json"
 RAMO = "main"
+GIT_TIMEOUT = 120  # segundos por comando git; fetch ou push travado não prende o cron
 PAGINA = 100
 UA = f"guifav-llm-ranking/1.0 (+{B.URL})"
 PAUSA = 1.0
@@ -45,10 +50,14 @@ class SnapshotError(Exception):
     """A fonte respondeu algo que não dá para usar, ou o git falhou."""
 
 
-def http_get(url: str, urlopen=urllib.request.urlopen) -> tuple[int, bytes, dict[str, str]]:
+def http_get(url: str, urlopen=urllib.request.urlopen, accept: str = "application/json",
+             no_cache: bool = False) -> tuple[int, bytes, dict[str, str]]:
     """GET com o status HTTP. Falha de transporte (rede, DNS, timeout, corpo truncado) volta como status 0, que o
     Fonte.filtrar trata como erro transitório, igual a um 5xx."""
-    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/json"})
+    headers = {"User-Agent": UA, "Accept": accept}
+    if no_cache:
+        headers["Cache-Control"] = "no-cache"
+    req = urllib.request.Request(url, headers=headers)
     try:
         with urlopen(req, timeout=60) as r:
             return r.status, r.read(), {k.lower(): v for k, v in r.headers.items()}
@@ -162,12 +171,19 @@ def coletar(fonte: Fonte) -> dict:
             "modelos": [linha(r) for r in atual], "categorias": categorias, "anterior": anterior}
 
 
-def serializar(snap: dict) -> str:
-    return json.dumps(snap, ensure_ascii=False, indent=1, sort_keys=True) + "\n"
+serializar = B.serializar  # a forma canônica fica no build, que calcula a versão (dados-versao) do mesmo jeito
 
 
 def _git(dados: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", "-C", str(dados), *args], capture_output=True, text=True, check=False)
+    """git no clone de dados, com limite de tempo. Nunca levanta exceção: timeout ou git ausente voltam como
+    returncode 1 com o motivo no stderr, e o gravar() transforma isso em SnapshotError (alerta e saída 1)."""
+    cmd = ["git", "-C", str(dados), *args]
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, check=False, timeout=GIT_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(cmd, 1, "", f"não terminou em {GIT_TIMEOUT}s")
+    except OSError as e:
+        return subprocess.CompletedProcess(cmd, 1, "", f"não rodou: {e}")
 
 
 def gravar(dados: Path, texto: str, pub: str, git=_git) -> bool:
@@ -178,6 +194,9 @@ def gravar(dados: Path, texto: str, pub: str, git=_git) -> bool:
     falhou) não fazem a rodada seguinte achar que nada mudou: ela compara com o que está publicado e grava de novo."""
     if not (dados / ".git").exists():
         raise SnapshotError(f"{dados} não é um clone do guifav/llm-ranking-data")
+    # Trava que sobrou de um git morto pelo timeout no meio de add ou commit. O wrapper roda sob flock, então este
+    # processo é o único escritor do clone e a trava não pertence a ninguém vivo.
+    (dados / ".git" / "index.lock").unlink(missing_ok=True)
     for args in (("fetch", "-q", "origin", RAMO), ("reset", "-q", "--hard", f"origin/{RAMO}"), ("clean", "-fdq")):
         r = git(dados, *args)
         if r.returncode != 0:
@@ -194,7 +213,37 @@ def gravar(dados: Path, texto: str, pub: str, git=_git) -> bool:
     return True
 
 
-def main(argv: list[str] | None = None, fonte: Fonte | None = None, git=_git) -> int:
+_META_RE = re.compile(r'<meta name="%s" content="([^"]*)">' % re.escape(B.VERSAO_META))
+_VERSAO_RE = re.compile(r"[0-9a-f]{64}")
+
+
+def versao_no_ar(get=None, urlopen=urllib.request.urlopen) -> str | None:
+    """Versão dos dados do /tools/llm-ranking/ que está no ar (sha256 do snapshot, B.versao), lida da meta que o build
+    grava. None quando não dá para saber (fora do ar, página antiga sem a meta, duas metas, valor fora do formato). Pede
+    HTML sem cache (Cache-Control e um parâmetro na URL), para não ler uma cópia velha nem ser recusado por quem negocia
+    o Accept."""
+    if get is None:
+        def get(url):
+            return http_get(url, urlopen=urlopen, accept="text/html", no_cache=True)
+    status, body, _ = get(f"{B.URL}?snapshot={int(time.time())}")
+    if status != 200:
+        return None
+    try:
+        achados = _META_RE.findall(body.decode("utf-8"))
+    except UnicodeDecodeError:
+        return None
+    if len(achados) != 1 or not _VERSAO_RE.fullmatch(achados[0]):
+        return None
+    return achados[0]
+
+
+def main(argv: list[str] | None = None, fonte: Fonte | None = None, git=_git, no_ar=versao_no_ar) -> int:
+    """Com --apply, a saída termina em três linhas que o wrapper do cron lê:
+    "gravado" ou "sem mudança"; "no ar: versão <sha256>" (ou "no ar: não lida"); e "deploy" ou "sem deploy: ...".
+    O deploy é pedido quando o snapshot foi gravado e também quando a página no ar não tem a versão dos dados do
+    repositório: assim uma rodada que publicou e falhou depois (push aceito com timeout no cliente, disparo do deploy
+    que falhou, deploy que quebrou) é recuperada pela rodada seguinte, mesmo sem dado novo e mesmo quando a fonte
+    republicou com a mesma data. A versão é o sha256 da forma canônica do snapshot (B.versao)."""
     ap = argparse.ArgumentParser(description="Snapshot da arena de texto da Arena para o /tools/llm-ranking/.")
     ap.add_argument("--dados", required=True, type=Path, help="clone do guifav/llm-ranking-data")
     ap.add_argument("--apply", action="store_true", help="grava, faz commit e push quando mudou")
@@ -212,7 +261,14 @@ def main(argv: list[str] | None = None, fonte: Fonte | None = None, git=_git) ->
         if not args.apply:
             print("simulação: nada foi gravado (use --apply)")
             return 0
-        print("gravado" if gravar(args.dados, texto, snap["publicacao"], git) else "sem mudança")
+        gravou = gravar(args.dados, texto, snap["publicacao"], git)
+        print("gravado" if gravou else "sem mudança")
+        v = no_ar()
+        print(f"no ar: versão {v}" if v else "no ar: não lida")
+        if gravou or v != B.versao(snap):
+            print("deploy")
+        else:
+            print(f"sem deploy: a página no ar já tem a versão {v}")
     except (SnapshotError, B.RankingError) as e:
         print(f"llm_ranking_snapshot: ERRO: {e}", file=sys.stderr)
         return 1

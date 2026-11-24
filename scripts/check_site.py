@@ -1950,6 +1950,7 @@ def check_contrast(site: Path) -> list[str]:
 LLM_RANKING_ROWS = 100
 LLM_RANKING_COLS = 7
 LLM_DATA_META = "dados-publicados-em"
+LLM_VERSAO_META = "dados-versao"  # sha256 do snapshot; o snapshot da KVM o compara para saber se a página está atrás
 LLM_DATASET_URL = "https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset"
 LLM_LICENSE_PREFIX = "https://creativecommons.org/licenses/by/4.0/"
 
@@ -1964,6 +1965,7 @@ class _LlmRanking(HTMLParser):
         self.data_dates: list[str] = []
         self.jsonld: list[str] = []
         self.links: list[tuple[str, str]] = []
+        self.versions: list[str] = []
         self._depth = 0  # profundidade de <table> dentro da tabela do ranking (0 = fora dela)
         self._tbody = False
         self._cell: list[str] | None = None
@@ -1985,6 +1987,8 @@ class _LlmRanking(HTMLParser):
             self._cell = []
         elif tag == "meta" and a.get("name", "").lower() == LLM_DATA_META:
             self.data_dates.append(a.get("content", "").strip())
+        elif tag == "meta" and a.get("name", "").lower() == LLM_VERSAO_META:
+            self.versions.append(a.get("content", ""))
         elif tag == "script" and a.get("type", "").lower() == "application/ld+json":
             self._script = []
         if tag == "a":
@@ -2050,6 +2054,11 @@ def check_llm_ranking(site: Path) -> list[str]:
         if data and data != p.data_dates[0]:
             problems.append(f"{rel}: meta {LLM_DATA_META} fora do formato AAAA-MM-DD: {p.data_dates[0]!r}")
             data = None
+    if len(p.versions) != 1:
+        problems.append(f"{rel}: esperava uma meta {LLM_VERSAO_META}, achou {len(p.versions)}")
+    elif not re.fullmatch(r"[0-9a-f]{64}", p.versions[0]):
+        problems.append(f"{rel}: meta {LLM_VERSAO_META} inválida (esperado sha256 em hexadecimal minúsculo): "
+                        f"{p.versions[0]!r}")
     modified = []
     for raw in p.jsonld:
         try:
