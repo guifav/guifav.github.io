@@ -23,6 +23,7 @@ Uso:
 from __future__ import annotations
 
 import argparse
+import colorsys
 import json
 import os
 import re
@@ -1304,31 +1305,54 @@ def _gh_escape(msg: str) -> str:
 
 
 # Contraste (#119): o botão "Assinar" do blog saiu com color e fundo iguais no modo escuro. Para cada página, as folhas
-# de estilo entram na ordem do documento (<link rel="stylesheet"> internos e <style>), os tokens de cor vêm de :root
-# (tema claro) e de [data-theme="dark"] (tema escuro), e todo seletor que declara color e fundo opaco, nas suas regras
-# ou nas do mesmo seletor sem o estado (:hover herda o color do seletor base), precisa de CONTRAST_MIN nos dois temas.
+# de estilo entram na ordem do documento (<link rel="stylesheet"> internos e <style>, fora os só de impressão), os tokens
+# de cor vêm de :root/html/body (tema claro) e do seletor do tema escuro ([data-theme=dark], com ou sem aspas, com ou
+# sem body/html na frente: o site.js põe o atributo no body e o Astro minifica as aspas), e todo seletor que declara
+# color e fundo opaco, nas suas regras ou nas do mesmo seletor sem o estado (:hover, :focus-visible etc. herdam do
+# seletor base), precisa de CONTRAST_MIN nos dois temas. background e background-color são o mesmo fundo: vale o
+# último na cascata.
 # Alarme de integridade sobre o CSS do próprio site: só entram as páginas que carregam SITE_CSS (os mockups do
-# portfólio e o /llm-ranking/ têm paleta própria e ficam de fora); não avalia cor herdada de outro elemento, fundo
-# translúcido, imagem ou gradiente, nem style="" inline.
+# portfólio e o /llm-ranking/ têm paleta própria e ficam de fora). Não avalia cor herdada de outro elemento, fundo
+# translúcido, imagem ou gradiente, style="" inline, nem cores fora de hex, rgb(), hsl() e dos nomes de _CSS_NAMED.
 CONTRAST_MIN = 4.5
 SITE_CSS = "/assets/site.css"
 THEMES = ("claro", "escuro")
-_DARK_PREFIX = '[data-theme="dark"]'
 _CSS_COMMENT = re.compile(r"/\*.*?\*/", re.S)
-_CSS_NAMED = {"white": (255, 255, 255), "black": (0, 0, 0)}
-_CSS_STATE = re.compile(r":(?:hover|focus|focus-visible|focus-within|active|visited)\b")
+_CSS_NAMED = {"white": (255, 255, 255), "black": (0, 0, 0), "red": (255, 0, 0), "green": (0, 128, 0),
+              "blue": (0, 0, 255), "yellow": (255, 255, 0), "orange": (255, 165, 0), "gray": (128, 128, 128),
+              "grey": (128, 128, 128), "silver": (192, 192, 192), "navy": (0, 0, 128), "purple": (128, 0, 128)}
+_CSS_STATE = re.compile(r":(?:hover|focus-visible|focus-within|focus|active|visited)(?![\w-])")
+_CSS_DARK = re.compile(r"""(?:html|body|:root)?\[data-theme=(?:"dark"|'dark'|dark)\]""")
+_CSS_ROOTS = (":root", "html", "body")
 _CSS_GROUPS = ("@media", "@supports", "@layer")
 
 
-def _css_rules(css: str, theme: str | None = None) -> list[tuple[list[str], dict[str, str], str | None]]:
-    """(seletores, declarações, tema só) na ordem do texto; @media/@supports entram, @keyframes e afins não."""
+def _print_only(media: str) -> bool:
+    m = media.lower()
+    return bool(re.search(r"\bprint\b", m)) and not re.search(r"\b(?:screen|all)\b", m)
+
+
+def _css_selector(s: str) -> str:
+    """Forma canônica de um seletor: espaços colapsados, sem espaço em volta de > + ~, valor de atributo sem aspas."""
+    s = re.sub(r"\s+", " ", s.strip())
+    s = re.sub(r"\s*([>+~])\s*", r"\1", s)
+    return re.sub(r"""\[([\w-]+)([~|^$*]?=)(["'])([\w-]+)\3\]""", r"[\1\2\4]", s)
+
+
+def _css_rules(css: str, theme: str | None = None) -> list[tuple[list[str], list[tuple[str, str]], str | None]]:
+    """(seletores canônicos, declarações em ordem, tema só) na ordem do texto. @media/@supports/@layer com bloco entram
+    (fora os só de impressão); at-rules de uma linha (@charset, @import, @layer a, b;) e @keyframes e afins não."""
     css = _CSS_COMMENT.sub("", css)
-    out: list[tuple[list[str], dict[str, str], str | None]] = []
+    out: list[tuple[list[str], list[tuple[str, str]], str | None]] = []
     i, n = 0, len(css)
     while i < n:
         b = css.find("{", i)
+        semi = css.find(";", i)
         if b < 0:
             break
+        if 0 <= semi < b and css[i:semi].strip().startswith("@"):
+            i = semi + 1
+            continue
         head, depth, j = css[i:b].strip(), 0, b
         while j < n:
             depth += {"{": 1, "}": -1}.get(css[j], 0)
@@ -1337,21 +1361,36 @@ def _css_rules(css: str, theme: str | None = None) -> list[tuple[list[str], dict
             j += 1
         body = css[b + 1:j]
         if head.startswith("@"):
-            if head.startswith(_CSS_GROUPS):
+            if head.startswith(_CSS_GROUPS) and not (head.startswith("@media") and _print_only(head[6:])):
                 only = theme
                 m = re.search(r"prefers-color-scheme\s*:\s*(dark|light)", head)
                 if m:
                     only = "escuro" if m.group(1) == "dark" else "claro"
                 out += _css_rules(body, only)
         else:
-            decls = {}
+            decls = []
             for d in body.split(";"):
                 if ":" in d:
                     k, v = d.split(":", 1)
-                    decls[k.strip().lower()] = v.replace("!important", "").strip()
-            out.append(([s.strip() for s in head.split(",") if s.strip()], decls, theme))
+                    k = k.strip()
+                    decls.append((k if k.startswith("--") else k.lower(), v.replace("!important", "").strip()))
+            out.append(([_css_selector(s) for s in head.split(",") if s.strip()], decls, theme))
         i = j + 1
     return out
+
+
+def _split_top(v: str) -> list[str]:
+    """Tokens separados por espaço fora de parênteses."""
+    out, depth, cur = [], 0, ""
+    for ch in v:
+        depth += {"(": 1, ")": -1}.get(ch, 0)
+        if ch.isspace() and depth == 0:
+            if cur:
+                out.append(cur)
+            cur = ""
+        else:
+            cur += ch
+    return out + ([cur] if cur else [])
 
 
 def css_color(value: str | None, tokens: dict[str, str], _depth: int = 0) -> tuple[int, int, int] | None:
@@ -1366,16 +1405,39 @@ def css_color(value: str | None, tokens: dict[str, str], _depth: int = 0) -> tup
         return css_color(m.group(2), tokens, _depth + 1)
     if v.lower() in _CSS_NAMED:
         return _CSS_NAMED[v.lower()]
-    m = re.fullmatch(r"#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})", v)
+    m = re.fullmatch(r"#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})", v)
     if m:
-        h = m.group(1) if len(m.group(1)) == 6 else "".join(c * 2 for c in m.group(1))
+        h = m.group(1)
+        if len(h) in (3, 4):
+            h = "".join(c * 2 for c in h)
+        if len(h) == 8:
+            if h[6:].lower() != "ff":
+                return None
+            h = h[:6]
         return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
     m = re.fullmatch(r"rgba?\(\s*(\d+)\s*,?\s*(\d+)\s*,?\s*(\d+)\s*(?:[,/]\s*([\d.]+)(%?))?\s*\)", v)
     if m:
         if m.group(4) is not None and float(m.group(4)) != (100.0 if m.group(5) else 1.0):
             return None
         return (int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    m = re.fullmatch(r"hsla?\(\s*([\d.]+)(?:deg)?\s*,?\s*([\d.]+)%\s*,?\s*([\d.]+)%\s*(?:[,/]\s*([\d.]+)(%?))?\s*\)", v)
+    if m:
+        if m.group(4) is not None and float(m.group(4)) != (100.0 if m.group(5) else 1.0):
+            return None
+        h, s, l = float(m.group(1)) % 360 / 360, float(m.group(2)) / 100, float(m.group(3)) / 100
+        return tuple(round(c * 255) for c in colorsys.hls_to_rgb(h, l, s))
     return None
+
+
+def _css_background(raw: str, tokens: dict[str, str]) -> tuple[int, int, int] | None:
+    """Cor do fundo de um valor de background/background-color (atalho com um só componente de cor)."""
+    if "url(" in raw or "gradient(" in raw:
+        return None
+    whole = css_color(raw, tokens)
+    if whole is not None:
+        return whole
+    found = [c for c in (css_color(tok, tokens) for tok in _split_top(raw)) if c is not None]
+    return found[0] if len(found) == 1 else None
 
 
 def contrast_ratio(a: tuple[int, int, int], b: tuple[int, int, int]) -> float:
@@ -1388,86 +1450,110 @@ def contrast_ratio(a: tuple[int, int, int], b: tuple[int, int, int]) -> float:
     return (hi + 0.05) / (lo + 0.05)
 
 
-def _css_background(decls: dict[str, str]) -> str | None:
-    if "background-color" in decls:
-        return decls["background-color"]
-    bg = decls.get("background")
-    if bg is None or "url(" in bg or "gradient(" in bg:
-        return None
-    return bg
-
-
-def _css_effective(sheets: list[str]) -> tuple[dict[str, dict[str, str]], dict[tuple[str, str], dict[str, str]]]:
-    """Tokens por tema e, por (tema, seletor), as declarações de color e fundo depois da cascata."""
+def _css_pairs(sheets: list[str]) -> dict[str, dict[str, tuple]]:
+    """Por tema, os seletores com color e fundo opacos resolvidos: {tema: {seletor: (color, fundo, color cru, fundo cru)}}."""
     rules = [r for css in sheets for r in _css_rules(css)]
     light: dict[str, str] = {}
     dark: dict[str, str] = {}
     for sels, decls, only in rules:
-        vs = {k: v for k, v in decls.items() if k.startswith("--")}
+        vs = {k: v for k, v in decls if k.startswith("--")}
         for s in sels if vs else ():
-            if s in (":root", "html") and only != "escuro":
+            if s in _CSS_ROOTS and only != "escuro":
                 light.update(vs)
-            if (s in (":root", "html") and only == "escuro") or s in (_DARK_PREFIX, ":root" + _DARK_PREFIX,
-                                                                        "html" + _DARK_PREFIX):
+            if (s in _CSS_ROOTS and only == "escuro") or _CSS_DARK.fullmatch(s):
                 dark.update(vs)
     tokens = {"claro": light, "escuro": {**light, **dark}}
     eff: dict[tuple[str, str], dict[str, str]] = {}
-    keep = ("color", "background", "background-color")
     for sels, decls, only in rules:
-        picked = {k: v for k, v in decls.items() if k in keep}
+        picked = {}
+        for k, v in decls:
+            if k == "color":
+                picked["color"] = v
+            elif k in ("background", "background-color"):
+                picked["bg"] = v
         for s in sels if picked else ():
             themes = THEMES if only is None else (only,)
-            if s.startswith(_DARK_PREFIX + " "):
-                s, themes = s[len(_DARK_PREFIX):].strip(), tuple(t for t in themes if t == "escuro")
+            m = _CSS_DARK.match(s)
+            if m:
+                rest = s[m.end():].lstrip(" >+~")
+                if not rest:
+                    continue  # o próprio elemento do tema (body): só tokens
+                s, themes = rest, tuple(t for t in themes if t == "escuro")
             for t in themes:
                 eff.setdefault((t, s), {}).update(picked)
-    return tokens, eff
+    out: dict[str, dict[str, tuple]] = {t: {} for t in THEMES}
+    for (t, s), d in eff.items():
+        base = _CSS_STATE.sub("", s)
+        full = {**eff.get((t, base), {}), **d} if base != s else d
+        if "color" not in full or "bg" not in full:
+            continue
+        fg, bg = css_color(full["color"], tokens[t]), _css_background(full["bg"], tokens[t])
+        if fg is not None and bg is not None:
+            out[t][s] = (fg, bg, full["color"], full["bg"])
+    return out
 
 
 def css_cascade(sheets: list[str]) -> dict[str, dict[str, tuple[tuple[int, int, int], tuple[int, int, int]]]]:
     """Por tema, os seletores com color e fundo opacos resolvidos: {tema: {seletor: (color, fundo)}}."""
-    tokens, eff = _css_effective(sheets)
-    out: dict[str, dict] = {t: {} for t in THEMES}
-    for (t, s), d in eff.items():
-        base = _CSS_STATE.sub("", s)
-        full = {**eff.get((t, base), {}), **d} if base != s else d
-        fg, bg = css_color(full.get("color"), tokens[t]), css_color(_css_background(full), tokens[t])
-        if fg is not None and bg is not None:
-            out[t][s] = (fg, bg)
-    return out
+    return {t: {s: p[:2] for s, p in ps.items()} for t, ps in _css_pairs(sheets).items()}
 
 
 def contrast_problems(sheets: list[str], minimum: float = CONTRAST_MIN) -> list[tuple[str, str, float, str, str]]:
     """(seletor, tema, razão, color, fundo) de cada par abaixo do mínimo, em ordem estável."""
-    tokens, eff = _css_effective(sheets)
+    pairs = _css_pairs(sheets)
     out = []
-    pairs = css_cascade(sheets)
     for t, s in sorted((t, s) for t in THEMES for s in pairs[t]):
-        r = contrast_ratio(*pairs[t][s])
+        fg, bg, fg_raw, bg_raw = pairs[t][s]
+        r = contrast_ratio(fg, bg)
         if r < minimum:
-            base = _CSS_STATE.sub("", s)
-            d = {**eff.get((t, base), {}), **eff[(t, s)]}
-            out.append((s, t, r, d.get("color", ""), _css_background(d) or ""))
+            out.append((s, t, r, fg_raw, bg_raw))
     return out
 
 
-_STYLESHEET_OR_STYLE = re.compile(r"<link\b[^>]*>|<style\b[^>]*>(.*?)</style\s*>", re.S | re.I)
+class _Sheets(HTMLParser):
+    """<link rel="stylesheet"> (sem alternate) e <style>, em ordem, fora os só de impressão. O conteúdo de <script> é
+    texto para o parser, então um "<style>" dentro de uma string de JS não conta."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.items: list[tuple[str, str]] = []  # ("link", href) ou ("style", css)
+        self._style: list[str] | None = None
+
+    def handle_starttag(self, tag, attrs):
+        a: dict[str, str] = {}
+        for k, v in attrs:
+            a.setdefault(k, v or "")
+        if _print_only(a.get("media", "") or "all"):
+            return
+        if tag == "link":
+            rel = a.get("rel", "").lower().split()
+            if "stylesheet" in rel and "alternate" not in rel and a.get("href"):
+                self.items.append(("link", a["href"]))
+        elif tag == "style":
+            self._style = []
+
+    def handle_data(self, data):
+        if self._style is not None:
+            self._style.append(data)
+
+    def handle_endtag(self, tag):
+        if tag == "style" and self._style is not None:
+            self.items.append(("style", "".join(self._style)))
+            self._style = None
 
 
 def _page_sheets(site: Path, f: Path, html: str) -> tuple[list[str], bool]:
     """As folhas da página, na ordem do documento (<link rel=stylesheet> internos, lidos do _site, e <style>), e se
     uma delas é o SITE_CSS."""
+    p = _Sheets()
+    p.feed(html)
+    p.close()
     sheets, uses_site_css = [], False
-    for m in _STYLESHEET_OR_STYLE.finditer(re.sub(r"<!--.*?-->", "", html, flags=re.S)):
-        if m.group(0).lower().startswith("<style"):
-            sheets.append(m.group(1))
+    for kind, value in p.items:
+        if kind == "style":
+            sheets.append(value)
             continue
-        tag = m.group(0)
-        rel = re.search(r"""\brel\s*=\s*["']?([^"'>\s]+)""", tag, re.I)
-        href = re.search(r"""\bhref\s*=\s*["']([^"']*)["']""", tag, re.I)
-        if not rel or rel.group(1).lower() != "stylesheet" or not href:
-            continue
-        path = urlsplit(unescape(href.group(1)))
+        path = urlsplit(value)
         if path.scheme or path.netloc:
             continue
         target = (site / path.path.lstrip("/")) if path.path.startswith("/") else (f.parent / path.path)

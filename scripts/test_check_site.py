@@ -2017,6 +2017,89 @@ class ContrastUnitTest(unittest.TestCase):
         self.assertEqual({s for s, *_ in C.contrast_problems([css])}, {".b"})
 
 
+class ContrastReviewR1Test(unittest.TestCase):
+    """Achados da rodada 1 do #131 (agy P1/P2/P3, Claude P3)."""
+
+    def pairs(self, css, theme):
+        return {s: round(C.contrast_ratio(*p), 2) for s, p in C.css_cascade([css])[theme].items()}
+
+    def test_intermediate_ratios_pin_the_formula(self):
+        # agy P2: pesos, expoente e ramo linear da WCAG 2.
+        self.assertAlmostEqual(C.contrast_ratio((23, 23, 23), (255, 190, 0)), 10.77, places=2)
+        self.assertAlmostEqual(C.contrast_ratio((23, 23, 23), (230, 171, 0)), 8.70, places=2)
+        self.assertAlmostEqual(C.contrast_ratio((138, 100, 0), (255, 190, 0)), 3.23, places=2)
+        self.assertAlmostEqual(C.contrast_ratio((8, 8, 8), (255, 255, 255)), 20.03, places=2)  # canal <= 10: ramo linear
+        self.assertAlmostEqual(C.contrast_ratio((255, 0, 0), (255, 255, 255)), 4.0, places=2)
+        self.assertAlmostEqual(C.contrast_ratio((0, 0, 255), (255, 255, 255)), 8.59, places=2)
+
+    def test_focus_visible_and_focus_within_inherit_the_base(self):
+        # agy P1: :focus casava antes de :focus-visible e virava ".b-visible".
+        css = TOKENS_CSS + ".b{background:#fff;color:var(--hl-text)}.b:focus-visible{background:var(--hl)}.b:focus-within{background:var(--hl)}"
+        found = {s for s, t, *_ in C.contrast_problems([css]) if t == "escuro"}
+        self.assertTrue({".b:focus-visible", ".b:focus-within"} <= found, found)
+
+    def test_minified_and_body_dark_selectors(self):
+        # agy P1: o LightningCSS do Astro grava [data-theme=dark] sem aspas no <style> do blog; o site.js põe o tema no body.
+        for prefix in ('[data-theme=dark]', "[data-theme='dark']", 'body[data-theme="dark"]', 'body[data-theme=dark]',
+                       'html[data-theme=dark]'):
+            with self.subTest(prefix=prefix):
+                css = TOKENS_CSS + f".x{{background:#fff;color:#000}}{prefix} .x{{background:#000;color:#fff}}"
+                self.assertEqual(C.contrast_problems([css]), [])
+                self.assertEqual(self.pairs(css, "claro")[".x"], 21.0)
+                self.assertEqual(self.pairs(css, "escuro")[".x"], 21.0)
+
+    def test_dark_tokens_on_body_and_unquoted(self):
+        for sel in ("[data-theme=dark]", "body[data-theme=dark]", 'body[data-theme="dark"]'):
+            with self.subTest(sel=sel):
+                css = f":root{{--f:#000;--g:#fff}}{sel}{{--f:#fff;--g:#fff}}.x{{color:var(--f);background:var(--g)}}"
+                self.assertEqual([(s, t) for s, t, *_ in C.contrast_problems([css])], [(".x", "escuro")])
+
+    def test_last_background_declaration_wins(self):
+        # agy P1 / Claude P3: background e background-color são o mesmo fundo; vale o último da cascata.
+        self.assertTrue(C.contrast_problems(["a{background-color:#fff;color:#000}a{background:#000}"]))
+        self.assertEqual(C.contrast_problems(["a{background-color:#fff;color:#000}a:hover{background:#000;color:#fff}"]), [])
+        self.assertTrue(C.contrast_problems(["a{background:#000;color:#000;background-color:#000}"]))
+        self.assertEqual(C.contrast_problems(["a{background-color:#000;background:#fff;color:#000}"]), [])
+        # Fundo que não se resolve depois de um que se resolve: não é avaliado.
+        self.assertEqual(C.contrast_problems(["a{background:#000;color:#000}a{background:url(x.png)}"]), [])
+        self.assertEqual(C.contrast_problems(["a{background:#000;color:#000}a{background:transparent}"]), [])
+
+    def test_charset_import_and_layer_statements_do_not_eat_the_next_rule(self):
+        # agy P2: at-rule terminada em ";" engolia o :root seguinte.
+        for head in ('@charset "UTF-8";', '@import url("x.css");', "@layer a, b;"):
+            with self.subTest(head=head):
+                css = head + ":root{--f:#000;--g:#000}.x{color:var(--f);background:var(--g)}"
+                self.assertTrue(C.contrast_problems([css]))
+
+    def test_selectors_normalized_across_sheets(self):
+        # agy P2: o CSS do blog é minificado; a sobrescrita precisa casar com o seletor do site.css.
+        site = ".a > .b  .c[aria-pressed='true']{background:#fff;color:#000}"
+        blog = ".a>.b .c[aria-pressed=true]{color:#fff}"
+        self.assertTrue(C.contrast_problems([site, blog]))
+
+    def test_print_media_ignored(self):
+        self.assertEqual(C.contrast_problems(["@media print{.x{background:#fff;color:#fff}}"]), [])
+        self.assertTrue(C.contrast_problems(["@media screen and (max-width:600px){.x{background:#fff;color:#fff}}"]))
+
+    def test_custom_property_names_keep_their_case(self):
+        # agy P3: --bgCard e --bgcard são tokens diferentes.
+        css = ":root{--bgCard:#000;--bgcard:#fff}.x{color:#fff;background:var(--bgCard)}"
+        self.assertEqual(C.contrast_problems([css]), [])
+        self.assertEqual(C.css_cascade([css])["claro"][".x"], ((255, 255, 255), (0, 0, 0)))
+
+    def test_more_color_syntaxes(self):
+        # Claude P3: hex de 4 e 8 dígitos com alfa total, hsl() e cores nomeadas comuns.
+        toks = {}
+        self.assertEqual(C.css_color("#ffbe00ff", toks), (255, 190, 0))
+        self.assertEqual(C.css_color("#fb0f", toks), (255, 187, 0))
+        self.assertIsNone(C.css_color("#ffbe0080", toks))
+        self.assertEqual(C.css_color("hsl(0, 0%, 100%)", toks), (255, 255, 255))
+        self.assertEqual(C.css_color("hsl(120deg 100% 25%)", toks), (0, 128, 0))
+        self.assertIsNone(C.css_color("hsl(0 0% 100% / .5)", toks))
+        self.assertEqual(C.css_color("Red", toks), (255, 0, 0))
+        self.assertIsNone(C.css_color("transparent", toks))
+
+
 class ContrastSiteTest(Base):
     """A regra lê as folhas de cada página na ordem do documento: <link> internos e <style>."""
 
@@ -2063,6 +2146,24 @@ class ContrastSiteTest(Base):
         self.w("blog/um-post/index.html", page('<link rel="stylesheet" href="/assets/site.css">'
                                                '<style>.b{background:var(--hl);color:var(--hl)}</style>'))
         self.assertTrue(C.check_contrast(self.site))
+
+    def test_page_parsing_rel_tokens_media_and_script(self):
+        # agy P2: rel com vários tokens, alternate, media=print, <style> dentro de <script>, href sem aspas.
+        bad = ".subscribe-row button{color:var(--hl-text)}"
+        self.w("x.css", bad)
+        cases = [
+            ('<link rel="preload stylesheet" href="/assets/site.css"><link rel="stylesheet" href="/x.css">', True),
+            ('<link rel=stylesheet href=/assets/site.css><link rel=stylesheet href=/x.css>', True),
+            ('<link rel="stylesheet" href="/assets/site.css"><link rel="alternate stylesheet" href="/x.css">', False),
+            ('<link rel="stylesheet" href="/assets/site.css"><link rel="stylesheet" media="print" href="/x.css">', False),
+            ('<link rel="stylesheet" href="/assets/site.css"><style media="print">' + bad + '</style>', False),
+            ('<link rel="stylesheet" href="/assets/site.css"><script>var s="<style>' + bad + '</style>";</script>', False),
+            ('<link data-rel="stylesheet" rel="icon" href="/assets/site.css"><style>' + bad + '</style>', False),
+        ]
+        for head, judged in cases:
+            with self.subTest(head=head):
+                self.w("blog/um-post/index.html", page(head))
+                self.assertEqual(bool(C.check_contrast(self.site)), judged)
 
     def test_main_runs_the_contrast_rule(self):
         consts = Path(self.tmp.name) / "consts.ts"
