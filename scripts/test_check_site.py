@@ -2498,18 +2498,37 @@ class ContrastReviewR3Test(unittest.TestCase):
         self.assertEqual(C.css_cascade([css])["claro"][".x:hover"], ((0, 0, 0), (255, 255, 255)))
 
     def test_more_specific_rule_wins_regardless_of_order(self):
-        css = "#a .x{color:#000;background:#fff}.x{color:#fff}"
+        # Mesma chave (".x" no escuro) com especificidades diferentes: body[data-theme=dark] .x (0,2,1) vence [data-theme=dark] .x (0,2,0).
+        css = "body[data-theme=dark] .x{color:#fff;background:#000}[data-theme=dark] .x{color:#000}"
         self.assertEqual(C.contrast_problems([css]), [])
+        self.assertEqual(C.css_cascade([css])["escuro"][".x"], ((255, 255, 255), (0, 0, 0)))
+        css_bad = "body[data-theme=dark] .x{color:#fff;background:#fff}[data-theme=dark] .x{color:#000}"
+        self.assertEqual([(s, t) for s, t, *_ in C.contrast_problems([css_bad])], [(".x", "escuro")])
         # o :hover (0,2,0) vence o base (0,1,0) mesmo vindo antes no texto
         css = ".x:hover{color:#000}.x{color:#fff;background:#000}"
         self.assertEqual(C.css_cascade([css])["claro"][".x:hover"], ((0, 0, 0), (0, 0, 0)))
         self.assertTrue(C.contrast_problems([".x{color:#000;background:#fff}.x{color:#fff}"]))
 
     def test_important_beats_a_later_normal_declaration(self):
-        # Claude P3.
+        # Claude P3 e #138 (agy P2): !important vence empate e também seletor mais específico.
         self.assertEqual(C.contrast_problems([".x{color:#000!important;background:#fff}.x{color:#fff}"]), [])
         self.assertTrue(C.contrast_problems([".x{color:#000!important;background:#fff}.x{color:#fff!important}"]))
         self.assertEqual(C.contrast_problems([".x{color:#000 !IMPORTANT;background:#fff}.x{color:#fff}"]), [])
+        # !important em seletor menos específico vencendo seletor mais específico (herança de estado e mesma chave).
+        css = ".x{color:#000!important;background:#fff}.x:hover{color:#fff}"
+        self.assertEqual(C.contrast_problems([css]), [])
+        self.assertEqual(C.css_cascade([css])["claro"][".x:hover"], ((0, 0, 0), (255, 255, 255)))
+        self.assertIn((".x:hover", "claro"),
+                      {(s, t) for s, t, *_ in C.contrast_problems([".x{color:#fff!important;background:#fff}.x:hover{color:#000}"])})
+        self.assertEqual(C.contrast_problems([
+            "[data-theme=dark] .x{color:#fff!important;background:#000}body[data-theme=dark] .x{color:#000}"
+        ]), [])
+        self.assertEqual(
+            [(s, t) for s, t, *_ in C.contrast_problems([
+                "[data-theme=dark] .x{color:#000!important;background:#000}body[data-theme=dark] .x{color:#fff}"
+            ])],
+            [(".x", "escuro")],
+        )
 
     def test_braces_and_semicolons_inside_strings(self):
         # Claude P3, agy P4: content:"{" não engole a regra seguinte; ";" numa string não parte a declaração.
@@ -2544,6 +2563,109 @@ class ContrastReviewR3Test(unittest.TestCase):
                                                      "body[data-theme=dark] .x", "a::before", ":root", "#a .b c")],
                          [(0, 0, 0), (0, 0, 1), (0, 1, 0), (1, 0, 0), (0, 2, 0), (0, 2, 0), (0, 2, 1), (0, 0, 2),
                           (0, 1, 0), (1, 1, 1)])
+
+
+class ContrastFollowup138Test(unittest.TestCase):
+    """#138: 7 ajustes menores da rodada 4 do #131 (itens 2 a 7; item 1 está em ContrastReviewR3Test)."""
+
+    def test_body_tokens_beat_root_and_html_tokens(self):
+        # Item 2 (Claude P3): body é filho de html/:root, então os tokens de body vencem mesmo vindo antes.
+        css = "body{--t:#fff}:root{--t:#000}.x{color:var(--t);background:#000}"
+        self.assertEqual(C.contrast_problems([css]), [])
+        for theme in C.THEMES:
+            self.assertEqual(C.css_cascade([css])[theme][".x"], ((255, 255, 255), (0, 0, 0)))
+        css_bad = "body{--t:#000}html{--t:#fff}.x{color:var(--t);background:#000}"
+        self.assertEqual([(s, t) for s, t, *_ in C.contrast_problems([css_bad])], [(".x", "claro"), (".x", "escuro")])
+        # Dentro da mesma camada, especificidade e tema continuam valendo.
+        css_theme = "body[data-theme=dark]{--t:#fff}body{--t:#000}.x{color:var(--t);background:#000}"
+        self.assertEqual([(s, t) for s, t, *_ in C.contrast_problems([css_theme])], [(".x", "claro")])
+        css_root_vs_html = ":root{--t:#fff}html{--t:#000}.x{color:var(--t);background:#000}"
+        self.assertEqual(C.contrast_problems([css_root_vs_html]), [])
+        # html/:root não herda tokens definidos em body.
+        css_no_leak = ":root{--t:#000;color:var(--t);background:#fff}body{--t:#fff;color:var(--t);background:#000}"
+        self.assertEqual(C.contrast_problems([css_no_leak]), [])
+
+    def test_root_and_html_theme_share_the_same_key(self):
+        # Item 3 (agy P3): :root puro e html[data-theme]/:root[data-theme] caem na mesma chave "html".
+        css_ok = ":root{--text:#000;color:var(--text);background:#fff}:root[data-theme=dark]{--text:#fff;background:#000}"
+        self.assertEqual(C.contrast_problems([css_ok]), [])
+        self.assertEqual(C.css_cascade([css_ok])["escuro"]["html"], ((255, 255, 255), (0, 0, 0)))
+        css_bad = ":root{color:#000;background:#fff}html[data-theme=dark]{background:#000}"
+        self.assertEqual([(s, t) for s, t, *_ in C.contrast_problems([css_bad])], [("html", "escuro")])
+        # :root (0,1,0) vence html (0,0,1) na mesma chave "html".
+        self.assertEqual(C.contrast_problems([":root{color:#fff;background:#000}html{color:#000}"]), [])
+
+    def test_escaped_quotes_and_braces_inside_quoted_selectors(self):
+        # Item 4 (agy P3): escapes com barra invertida em strings e "{" dentro de aspas no seletor ou @import.
+        for css, want in (
+            ('.a::before{content:"\\"}"}.x{color:#fff;background:#fff}', ".x"),
+            (".a::before{content:'\\'}'}.x{color:#fff;background:#fff}", ".x"),
+            ('.a::before{content:"\\\\\\"{" }.x{color:#fff;background:#fff}', ".x"),
+            ('.a::before{content:"\\\\"}.x{color:#fff;background:#fff}', ".x"),
+            ('.a{content:"a\\";color:#000";color:#fff;background:#fff}', ".a"),
+            ('.a{content:"a\\\\";color:#fff;background:#fff}', ".a"),
+            ('a[data-x="{"]{color:#fff;background:#fff}', 'a[data-x="{"]'),
+            ('a[data-x="\\"{"].z{color:#fff;background:#fff}', 'a[data-x="\\"{"].z'),
+            ('@import url("https://example.com/a{b;c\\";d");.x{color:#fff;background:#fff}', ".x"),
+        ):
+            with self.subTest(css=css):
+                self.assertEqual({s for s, *_ in C.contrast_problems([css])}, {want}, css)
+        # Vírgula escapada dentro de aspas no seletor não parte o seletor.
+        probs = C.contrast_problems(['[data-x="a\\",b"],.y{color:#fff;background:#fff}'])
+        self.assertEqual({s for s, *_ in probs}, {'[data-x="a\\",b"]', ".y"})
+
+    def test_compound_states_inherit_intermediate_states(self):
+        # Item 5 (agy P3): estados compostos (:hover:active) herdam dos estados intermediários pela cascata.
+        css_ok = ".btn{color:#000;background:#fff}.btn:hover{color:#fff;background:#000}.btn:hover:active{background:#111}"
+        self.assertEqual(C.contrast_problems([css_ok]), [])
+        self.assertEqual(C.css_cascade([css_ok])["claro"][".btn:hover:active"], ((255, 255, 255), (17, 17, 17)))
+        css_bad = ".btn{color:#000;background:#fff}.btn:hover{color:#fff;background:#000}.btn:hover:active{background:#fff}"
+        self.assertEqual({s for s, *_ in C.contrast_problems([css_bad])}, {".btn:hover:active"})
+        # Desempate por ordem entre intermediários de mesma especificidade.
+        css_order_bad = ".btn{background:#fff}.btn:hover{color:#fff;background:#000}.btn:active{color:#000;background:#fff}.btn:hover:active{background:#000}"
+        self.assertEqual({s for s, *_ in C.contrast_problems([css_order_bad])}, {".btn:hover:active"})
+        css_order_ok = ".btn{background:#fff}.btn:active{color:#000;background:#fff}.btn:hover{color:#fff;background:#000}.btn:hover:active{background:#000}"
+        self.assertEqual(C.contrast_problems([css_order_ok]), [])
+        # !important no intermediário vence o estado composto.
+        css_imp = ".btn{background:#fff}.btn:hover{color:#fff!important}.btn:hover:active{color:#000;background:#fff}"
+        self.assertIn(".btn:hover:active", {s for s, *_ in C.contrast_problems([css_imp])})
+        # Estados intermediários em ordem diferente (.btn:active:hover) e em partes diferentes do seletor.
+        css_perm = ".btn{background:#fff}.btn:active:hover{color:#fff;background:#000}.btn:hover:active:focus{background:#111}"
+        self.assertEqual(C.contrast_problems([css_perm]), [])
+        css_split = ".card .btn{color:#000;background:#fff}.card:hover .btn{color:#fff;background:#000}.card:hover .btn:active{background:#111}"
+        self.assertEqual(C.contrast_problems([css_split]), [])
+
+    def test_var_followed_by_another_token(self):
+        # Item 6 (agy P4): var(...) só vale como cor única quando o ")" correspondente encerra a string.
+        toks = {"--a": "#fff", "--b": "#000"}
+        self.assertIsNone(C.css_color("var(--a, #fff) var(--b)", toks))
+        self.assertIsNone(C.css_color("var(--a, #000) rgb(0, 0, 0)", toks))
+        self.assertIsNone(C.css_color("var(--a, #000) calc(1px)", toks))
+        self.assertEqual(C.css_color("var(--a, var(--b, rgb(0, 0, 0)))", {}), (0, 0, 0))
+        self.assertIsNone(C._css_background("var(--a, #fff) var(--b)", toks))
+        self.assertEqual(C.contrast_problems([":root{--a:#fff;--b:#000}.x{color:#fff;background:var(--a, #fff) var(--b)}"]), [])
+        self.assertEqual(C.contrast_problems([":root{--a:#fff}.x{color:var(--a, #fff) calc(1px);background:#fff}"]), [])
+
+    def test_ancestor_before_data_theme(self):
+        # Item 7 (Claude P4): ancestral html/:root antes de [data-theme] sobrescreve o seletor e os tokens do tema.
+        for prefix in ("html body[data-theme=dark]", "html > body[data-theme=dark]",
+                       ":root body[data-theme=dark]", ":root > body[data-theme=dark]",
+                       "html [data-theme=dark]"):
+            with self.subTest(prefix=prefix):
+                css_ok = f".x{{color:#000;background:#fff}}{prefix} .x{{color:#fff;background:#000}}"
+                self.assertEqual(C.contrast_problems([css_ok]), [])
+                self.assertEqual(C.css_cascade([css_ok])["escuro"][".x"], ((255, 255, 255), (0, 0, 0)))
+                css_bad = f".x{{color:#000;background:#fff}}{prefix} .x{{background:#000}}"
+                self.assertEqual([(s, t) for s, t, *_ in C.contrast_problems([css_bad])], [(".x", "escuro")])
+        # Tokens e cores no próprio body com ancestral html.
+        css_tok = ":root{--f:#000;--b:#fff}html body[data-theme=dark]{--f:#fff;--b:#000}.x{color:var(--f);background:var(--b)}"
+        self.assertEqual(C.contrast_problems([css_tok]), [])
+        self.assertEqual(C.css_cascade([css_tok])["escuro"][".x"], ((255, 255, 255), (0, 0, 0)))
+        css_body = "body{color:#000;background:#fff}html body[data-theme=dark]{background:#000}"
+        self.assertEqual([(s, t) for s, t, *_ in C.contrast_problems([css_body])], [("body", "escuro")])
+        # Ancestral arbitrário não-raiz não se mistura com .x global.
+        css_scoped = ".x{color:#000;background:#fff}.card [data-theme=dark] .x{background:#000}"
+        self.assertEqual(C.contrast_problems([css_scoped]), [])
 
 
 class ContrastSiteTest(Base):
