@@ -16,12 +16,13 @@ Uma fonte só para as regras de Single Redirects da Cloudflare, com três usos:
         Single Redirects (Zone > Single Redirect > Edit).
 
     python3 scripts/cutover_redirects.py verify [--urls ARQUIVO] [--allow-404 ARQUIVO] [--quick]
-        Confere no ar: 301 de um salto, Location exata e destino 200 sem novo redirect. A matriz cobre, nos dois
+        Confere no ar: 301 de um salto, Location exata e destino 200. O destino só pode dar mais um salto quando é
+        o 301 que a lista de scripts/site_redirects.py prevê para ele (#102, #106). A matriz cobre, nos dois
         hosts, todos os posts em /p/ e /post/ (com e sem barra, /comments e /comments/), as páginas especiais (com e
         sem barra) e, para uma amostra de cada forma de caminho, query string, http:// e HEAD, além do host em caixa
         alta. --urls acrescenta URLs antigas (por exemplo, as páginas do Search Console), conferidas nos dois hosts.
         Destino 404 reprova, salvo para as URLs listadas em --allow-404 (erros de digitação conhecidos, guardados
-        fora do repo).
+        fora do repo). O --allow-404 vale só para o destino direto: depois do salto previsto, 404 sempre reprova.
 
     --hosts h1,h2 (em apply e verify) troca os hosts filtrados pelas regras. Serve para o ensaio: as mesmas regras
     ligadas só num host descartável da zona, sem tocar no apex nem no www.
@@ -329,21 +330,26 @@ def jobs(hosts: tuple[str, ...] = HOSTS, quick: bool = False, extra: list[str] =
     return out
 
 
-def land(url: str, fetcher=fetch) -> tuple[int, str | None]:
-    """Resposta do destino. Aceita um salto a mais só quando é o 301 que a lista de scripts/site_redirects.py prevê
-    para essa URL (duplicata absorvida na #106, ou caminho antigo do grupo A da #120)."""
+def land(url: str, fetcher=fetch) -> tuple[int, str | None, str]:
+    """Resposta do destino: (status, Location, URL que respondeu). Aceita um salto a mais só quando é o 301 que a
+    lista de scripts/site_redirects.py prevê para essa URL (duplicata absorvida na #106, ou caminho antigo do grupo A
+    da #120); a URL devolvida é então a do segundo salto."""
     status, loc = fetcher(url, "GET")
     if status == 301 and loc is not None:
+        here = str(Path(__file__).resolve().parent)
+        if here not in sys.path:  # o import abaixo não pode depender de onde o script foi chamado
+            sys.path.insert(0, here)
         import site_redirects  # noqa: PLC0415 (importa este módulo; aqui o ciclo já está resolvido)
         if loc == site_redirects.simulate(url):
-            return fetcher(loc, "GET")
-    return status, loc
+            return (*fetcher(loc, "GET"), loc)
+    return status, loc, url
 
 
 def verify(todo: list[Job], fetcher=fetch, pause: float = 0.12, out=sys.stdout, hosts: tuple[str, ...] = HOSTS) -> int:
-    """Confere cada URL antiga. Falha: status, Location, conexão ou destino diferente de 200 direto, salvo
-    destino 404 em URL marcada como allow_404 (contada à parte)."""
-    dest_cache: dict[str, tuple[int, str | None]] = {}
+    """Confere cada URL antiga. Falha: status, Location, conexão ou destino diferente de 200 (direto, ou depois do
+    único salto que a lista do site_redirects.py prevê), salvo destino direto 404 em URL marcada como allow_404
+    (contada à parte). Depois do salto previsto, 404 sempre reprova, com a URL final na mensagem."""
+    dest_cache: dict[str, tuple[int, str | None, str]] = {}
     fails: list[str] = []
     no_page: list[str] = []
     ok = 0
@@ -361,13 +367,14 @@ def verify(todo: list[Job], fetcher=fetch, pause: float = 0.12, out=sys.stdout, 
         if want not in dest_cache:
             dest_cache[want] = land(want, fetcher)
             time.sleep(pause)
-        dstatus, dloc = dest_cache[want]
+        dstatus, dloc, final = dest_cache[want]
         if dstatus == 200:
             ok += 1
-        elif dstatus == 404 and job.allow_404:
+        elif dstatus == 404 and job.allow_404 and final == want:
             no_page.append(job.url)
         else:
-            fails.append(f"{job.url}: destino {want} respondeu {dstatus}" + (f" -> {dloc}" if dloc else ""))
+            via = f" -> {final}" if final != want else ""
+            fails.append(f"{job.url}: destino {want}{via} respondeu {dstatus}" + (f" -> {dloc}" if dloc else ""))
     print(f"verificadas: {len(todo)}; ok: {ok}; sem página (permitidas): {len(no_page)}; falhas: {len(fails)}",
           file=out)
     for f in fails[:50]:

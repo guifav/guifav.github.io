@@ -259,10 +259,11 @@ def _cf(method: str, path: str, token: str, body=None, opener=urllib.request.url
         with opener(req, timeout=30) as r:
             data = json.load(r)
     except urllib.error.HTTPError as e:
-        try:
-            data = json.load(e)
-        except ValueError:
-            raise SystemExit(f"Cloudflare {method} {path}: HTTP {e.code} sem corpo JSON") from None
+        with e:  # fecha o corpo da resposta de erro
+            try:
+                data = json.load(e)
+            except ValueError:
+                raise SystemExit(f"Cloudflare {method} {path}: HTTP {e.code} sem corpo JSON") from None
     except (urllib.error.URLError, TimeoutError, OSError, ValueError) as e:
         raise SystemExit(f"Cloudflare {method} {path}: falha de conexão ou resposta ilegível "
                          f"({type(e).__name__})") from None
