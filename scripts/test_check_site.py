@@ -829,13 +829,15 @@ class TitleAndGroupTest(unittest.TestCase):
                        ("blog/o-exame-virou-conspiracao/index.html", "insights-artigo"),
                        ("planilha-custos-ia/index.html", "materiais"), ("mapa-decisao-ia/enviado/index.html", "materiais"),
                        ("planilha-custos-ia/x/index.html", None),
-                       ("llm-ranking/index.html", None), ("blog/pagina/x/index.html", None),
+                       ("llm-ranking/index.html", "ferramentas"), ("llm-ranking/x/index.html", None),
+                       ("blog/pagina/x/index.html", None),
                        ("blog/a/b/index.html", None),
                        ("blog/tema/ia-sobre-dados-da-empresa/index.html", "insights-lista"),
                        ("blog/tema/a/b/index.html", None), ("blog/tema/Maiuscula/index.html", None)):
             with self.subTest(rel=rel):
                 self.assertEqual(E(rel), g)
-        self.assertEqual(set(C.CONTENT_GROUPS), {"home", "portfolio", "insights-lista", "insights-artigo", "expert-insights", "materiais"})
+        self.assertEqual(set(C.CONTENT_GROUPS), {"home", "portfolio", "insights-lista", "insights-artigo", "expert-insights", "materiais",
+                                                 "ferramentas"})
 
     def test_group_literal_and_define_vars(self):
         title = "<title>Guilherme Favaron | Builder e CTO</title>"
@@ -894,8 +896,14 @@ class TitleAndGroupTest(unittest.TestCase):
                 self.assertTrue(self.check("index.html", self.doc(title, self.GA + inert)))
 
     def test_ga_page_outside_the_map_is_flagged(self):
-        html = self.doc("<title>LLM Ranking | Guilherme Favaron</title>", self.GA + self.cfg(",{content_group:'home'}"))
-        self.assertTrue(any("sem grupo de conteúdo previsto" in p for p in self.check("llm-ranking/index.html", html)))
+        html = self.doc("<title>Ferramenta | Guilherme Favaron</title>", self.GA + self.cfg(",{content_group:'home'}"))
+        self.assertTrue(any("sem grupo de conteúdo previsto" in p for p in self.check("ferramenta-nova/index.html", html)))
+
+    def test_llm_ranking_is_ferramentas(self):
+        html = self.doc("<title>Ranking | Guilherme Favaron</title>", self.GA + self.cfg(",{content_group:'ferramentas'}"))
+        self.assertEqual(self.check("llm-ranking/index.html", html), [])
+        html = self.doc("<title>Ranking | Guilherme Favaron</title>", self.GA + self.cfg(",{content_group:'materiais'}"))
+        self.assertTrue(any("esperado ['ferramentas']" in p for p in self.check("llm-ranking/index.html", html)))
 
     def test_no_ga_no_group_needed(self):
         self.assertEqual(self.check("llm-ranking/index.html", self.doc("<title>LLM Ranking | Guilherme Favaron</title>")), [])
@@ -1930,7 +1938,8 @@ class SeoTest(unittest.TestCase):
         self.post(slug="antigo", date="2024-03-01", desc="curta")  # importado: só aviso, agrupado na CI
         # isola a regra da #103 das demais; o formato do aviso depende de GITHUB_ACTIONS, que a CI define
         with mock.patch.object(C, "check", lambda *a, **k: []), \
-                mock.patch.object(C, "check_related", lambda *a, **k: []):  # bloco Leia também (#104)
+                mock.patch.object(C, "check_related", lambda *a, **k: []), \
+                mock.patch.object(C, "check_llm_ranking", lambda *a, **k: []):  # bloco Leia também (#104); #113
             for gh, new_mark, group in (("", "AVISO: ", None), ("true", "::warning title=check_site (#103)::", "::group::")):
                 for desc, code in (("d" * 69, 1), ("d" * 165, 0), (self.OK_DESC, 0)):
                     with self.subTest(gh=gh, desc=len(desc)), mock.patch.dict(os.environ, {"GITHUB_ACTIONS": gh}):
@@ -2297,6 +2306,98 @@ class ContrastSiteTest(Base):
             code = C.main(["--site", str(self.site), "--posts", str(self.posts), "--consts", str(consts)])
         self.assertEqual(code, 1)
         self.assertIn("404.html: contraste 1.00:1", err.getvalue())
+
+
+class LlmRankingTest(unittest.TestCase):
+    """#113: a regra que falha se o /llm-ranking/ sair sem a tabela, a data dos dados, o JSON-LD ou a atribuição."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.site = Path(self.tmp.name)
+        (self.site / "llm-ranking").mkdir()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def page(self, rows: int = 100, cells: int = 7, meta: str = '<meta name="dados-publicados-em" content="2026-11-22">',
+             modified: str = "2026-11-22", extra: str = "", attribution: bool = True, license_rel: str = "license",
+             first_pos: str = "1", jsonld: str | None = None) -> list[str]:
+        trs = []
+        for i in range(1, rows + 1):
+            pos = first_pos if i == 1 else str(i)
+            tds = [f"<td>{pos}</td>"] + [f"<td><span>c{j}</span></td>" for j in range(cells - 1)]
+            trs.append("<tr>" + "".join(tds) + "</tr>")
+        ld = jsonld if jsonld is not None else json.dumps({"@context": "https://schema.org", "@graph": [
+            {"@type": "WebPage", "dateModified": modified}, {"@type": "BreadcrumbList"}]})
+        att = (f'<a href="{C.LLM_DATASET_URL}">d</a> <a href="https://creativecommons.org/licenses/by/4.0/deed.pt-br" '
+               f'rel="{license_rel}">CC BY 4.0</a>') if attribution else ""
+        html = (f"<!DOCTYPE html><html><head>{meta}<script type=\"application/ld+json\">{ld}</script></head><body>"
+                f'<table id="ranking"><caption>x</caption><thead><tr><th>Posição</th></tr></thead><tbody>{"".join(trs)}'
+                f"</tbody></table><p>{att}</p>{extra}</body></html>")
+        (self.site / "llm-ranking/index.html").write_text(html, encoding="utf-8")
+        return C.check_llm_ranking(self.site)
+
+    def test_good_page(self):
+        self.assertEqual(self.page(), [])
+
+    def test_missing_page(self):
+        (self.site / "llm-ranking").rmdir()
+        self.assertEqual(C.check_llm_ranking(self.site), ["llm-ranking/index.html: página não existe no _site"])
+
+    def test_without_the_table(self):
+        (self.site / "llm-ranking/index.html").write_text(
+            '<html><head><meta name="dados-publicados-em" content="2026-11-22"></head><body></body></html>', encoding="utf-8")
+        self.assertTrue(any('esperava uma <table id="ranking">, achou 0' in p for p in C.check_llm_ranking(self.site)))
+
+    def test_rows_and_cells(self):
+        self.assertTrue(any("99 linhas" in p for p in self.page(rows=99)))
+        self.assertTrue(any("101 linhas" in p for p in self.page(rows=101)))
+        self.assertTrue(any("linha 1 da tabela com 6 células" in p for p in self.page(cells=6)))
+        self.assertTrue(any("com a posição '2'" in p for p in self.page(first_pos="2")))
+
+    def test_empty_cell(self):
+        probs = self.page(extra="")
+        self.assertEqual(probs, [])
+        html = (self.site / "llm-ranking/index.html").read_text(encoding="utf-8").replace("<td><span>c0</span></td>", "<td></td>", 1)
+        (self.site / "llm-ranking/index.html").write_text(html, encoding="utf-8")
+        self.assertTrue(any("célula vazia" in p for p in C.check_llm_ranking(self.site)))
+
+    def test_nested_table_rows_do_not_count(self):
+        html = (self.site / "llm-ranking/index.html")
+        self.page()
+        t = html.read_text(encoding="utf-8").replace("<td><span>c0</span></td>", "<td><table><tbody><tr><td>x</td></tr></tbody></table>c</td>", 1)
+        html.write_text(t, encoding="utf-8")
+        self.assertEqual(C.check_llm_ranking(self.site), [])
+
+    def test_two_ranking_tables(self):
+        self.assertTrue(any("achou 2" in p for p in self.page(extra='<table id="ranking"><tbody></tbody></table>')))
+
+    def test_data_meta(self):
+        self.assertTrue(any("achou 0" in p and "meta" in p for p in self.page(meta="")))
+        two = '<meta name="dados-publicados-em" content="2026-11-22">' * 2
+        self.assertTrue(any("achou 2" in p for p in self.page(meta=two)))
+        self.assertTrue(any("inválida" in p for p in self.page(meta='<meta name="dados-publicados-em" content="2026-13-01">')))
+        self.assertTrue(any("inválida" in p for p in self.page(meta='<meta name="dados-publicados-em" content="ontem">')))
+        self.assertTrue(any("fora do formato" in p for p in self.page(meta='<meta name="dados-publicados-em" content="2026-1-2">')))
+
+    def test_jsonld(self):
+        self.assertTrue(any("diferente da data dos dados" in p for p in self.page(modified="2026-11-19")))
+        self.assertTrue(any("esperava um WebPage" in p for p in self.page(jsonld='{"@type": "Dataset"}')))
+        self.assertTrue(any("JSON-LD inválido" in p for p in self.page(jsonld="{")))
+        self.assertEqual(self.page(jsonld='{"@type": "WebPage", "dateModified": "2026-11-22"}'), [])
+
+    def test_attribution(self):
+        self.assertTrue(any("link da fonte" in p for p in self.page(attribution=False)))
+        self.assertTrue(any('rel="license"' in p for p in self.page(license_rel="nofollow")))
+
+    def test_leftover_marker(self):
+        self.assertTrue(any("marcador do template" in p for p in self.page(extra="<!--LLM:tabela-->")))
+
+    def test_main_runs_the_rule(self):
+        src = Path(__file__).read_text(encoding="utf-8")
+        main = (Path(__file__).resolve().parent / "check_site.py").read_text(encoding="utf-8").split("def main(", 1)[1]
+        self.assertIn("problems += check_llm_ranking(Path(args.site))", main)
+        self.assertTrue(src)
 
 
 class ContrastSourcesTest(unittest.TestCase):

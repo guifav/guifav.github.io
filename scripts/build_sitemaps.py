@@ -1,7 +1,8 @@
 """Gera os sitemaps da raiz do guifav.dev no _site/ já montado.
 
 - /sitemap-site.xml: as páginas do site fora do blog que devem ser indexadas, com o lastmod do último
-  commit que mexeu no arquivo. Entra a página que não é a 404, não está bloqueada no robots.txt, não tem
+  commit que mexeu no arquivo. Página gerada a partir de dados de fora (o /llm-ranking/, #113) declara a data dos
+  dados na meta DATA_META, e o lastmod dela é essa data: muda quando os dados mudam, não quando o build roda. Entra a página que não é a 404, não está bloqueada no robots.txt, não tem
   noindex e cujo canonical (quando existe) aponta para ela mesma.
 - /sitemap.xml: índice com o /sitemap-site.xml e o /blog/sitemap.xml (gerado pelo Astro). É o único endereço
   enviado ao Search Console e ao Bing. Sem lastmod: no índice ele seria a data do arquivo do sitemap, e o maior
@@ -13,9 +14,11 @@ Rodar depois do scripts/assemble_site.py, num clone com histórico completo (fet
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
+from datetime import date
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -26,6 +29,9 @@ SITE_SITEMAP = "sitemap-site.xml"
 BLOG_SITEMAP = "blog/sitemap.xml"
 INDEX = "sitemap.xml"
 HTML_SUFFIXES = {".html", ".htm", ".xhtml"}
+# Data dos dados de uma página gerada (scripts/build_llm_ranking.py), no formato AAAA-MM-DD.
+DATA_META = "dados-publicados-em"
+_DATA_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
 
 class SitemapError(Exception):
@@ -39,6 +45,7 @@ class _Head(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.robots: list[str] = []
         self.canonicals: list[str] = []
+        self.data_dates: list[str] = []
 
     def handle_startendtag(self, tag, attrs):
         self.handle_starttag(tag, attrs)
@@ -49,6 +56,8 @@ class _Head(HTMLParser):
             a.setdefault(k, v or "")
         if tag == "meta" and a.get("name", "").lower() == "robots":
             self.robots.append(a.get("content", "").lower())
+        if tag == "meta" and a.get("name", "").lower() == DATA_META:
+            self.data_dates.append(a.get("content", "").strip())
         if tag == "link" and "canonical" in a.get("rel", "").lower().split():
             self.canonicals.append(a.get("href", "").strip())
 
@@ -135,6 +144,27 @@ def git_lastmod(repo: Path, rel: str) -> str:
     return d
 
 
+def data_lastmod(site: Path, rel: str) -> str | None:
+    """A data dos dados declarada na página (meta DATA_META), como meia-noite UTC, ou None se ela não declara. Mais de uma, data fora do
+    formato ou inválida param o build: um lastmod errado faria o IndexNow avisar à toa ou nunca."""
+    h = _Head()
+    h.feed((site / rel).read_text(encoding="utf-8"))
+    h.close()
+    if not h.data_dates:
+        return None
+    if len(h.data_dates) != 1:
+        raise SitemapError(f"{rel}: {len(h.data_dates)} metas {DATA_META}, esperado uma")
+    d = h.data_dates[0]
+    if not _DATA_RE.fullmatch(d):
+        raise SitemapError(f"{rel}: {DATA_META} fora do formato AAAA-MM-DD: {d!r}")
+    try:
+        date.fromisoformat(d)
+    except ValueError as e:
+        raise SitemapError(f"{rel}: {DATA_META} inválida: {d!r}") from e
+    # O sitemap da raiz usa data, hora e fuso (check_site.check_root_sitemaps): a data da fonte vira meia-noite UTC.
+    return f"{d}T00:00:00+00:00"
+
+
 def _esc(s: str) -> str:
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
@@ -154,7 +184,7 @@ def build(repo: Path, site: Path) -> tuple[int, int]:
     for name in (INDEX, SITE_SITEMAP):
         if (site / name).exists():
             raise SitemapError(f"_site/{name} já existe: ele é gerado aqui, tire-o do site-manifest.txt")
-    pages = [(SITE_ORIGIN + url, git_lastmod(repo, rel)) for rel, url in indexable_pages(site)]
+    pages = [(SITE_ORIGIN + url, data_lastmod(site, rel) or git_lastmod(repo, rel)) for rel, url in indexable_pages(site)]
     if not pages:
         raise SitemapError("nenhuma página do site para o sitemap: algo está errado no _site")
     try:

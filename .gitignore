@@ -41,3 +41,6 @@ blog-src/.astro/
 __pycache__/
 # Segredos locais do wrangler (Worker da newsletter)
 .dev.vars
+
+# Snapshot de dados do /llm-ranking/, baixado no build (#113)
+_dados/

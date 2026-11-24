@@ -10,6 +10,7 @@
   posts e as páginas da newsletter continuam precisando de noindex.
 - Sob /blog/ só há .html, .xml e mídia da lista.
 - Ferramentas e guias (#104): a home (seção e rodapé) e o rodapé do blog levam os links das quatro ferramentas.
+- /llm-ranking/ (#113): a página sai com a tabela gerada no build, a data dos dados, o JSON-LD e a atribuição.
 - Alarme secundário de conteúdo ativo nas páginas do blog (ver blog-src/CONTRATO-DE-CONTEUDO.md:
   a barreira de segurança é a limpeza no render e a lista de extensões, não este verificador).
 
@@ -555,10 +556,12 @@ SITE_NAME = "Guilherme Favaron"
 TITLE_SEP = " | "
 TITLE_EXEMPT_PREFIXES = ("portfolio/mockups/",)
 # Grupos de conteúdo do GA4 (content_group), um por tipo de página; espelha CONTENT_GROUPS do consts.ts do blog.
-CONTENT_GROUPS = ("home", "portfolio", "insights-lista", "insights-artigo", "expert-insights", "materiais")
+CONTENT_GROUPS = ("home", "portfolio", "insights-lista", "insights-artigo", "expert-insights", "materiais", "ferramentas")
 # Páginas dos materiais do canal (issue #99): o formulário e a página de enviado de cada material do catálogo do Worker.
 MATERIALS = ("planilha-custos-ia", "mapa-decisao-ia")
 MATERIAL_PAGES = {f"{m}/{p}index.html" for m in MATERIALS for p in ("", "enviado/")}
+# Ferramentas sem material para baixar (issue #113): grupo próprio, para não misturar com o funil dos materiais.
+LLM_RANKING_PAGE = "llm-ranking/index.html"
 EXPERT_INSIGHTS_PAGES = {f"blog/{p}/index.html" for p in
                          ("assinar", "inscricao-enviada", "inscricao-confirmada", "inscricao-invalida", "privacidade")}
 
@@ -575,6 +578,8 @@ def expected_content_group(rel: str) -> str | None:
         return "expert-insights"
     if rel in MATERIAL_PAGES:
         return "materiais"
+    if rel == LLM_RANKING_PAGE:
+        return "ferramentas"
     if re.fullmatch(r"blog/[a-z0-9][a-z0-9-]*/index\.html", rel):
         return "insights-artigo"
     return None
@@ -1312,7 +1317,7 @@ def _gh_escape(msg: str) -> str:
 # seletor base), precisa de CONTRAST_MIN nos dois temas. background e background-color são o mesmo fundo: vale o
 # vencedor da cascata.
 # Alarme de integridade sobre o CSS do próprio site: só entram as páginas que carregam SITE_CSS (os mockups do
-# portfólio e o /llm-ranking/ têm paleta própria e ficam de fora). Não avalia cor herdada de outro elemento, fundo
+# portfólio têm paleta própria e ficam de fora). Não avalia cor herdada de outro elemento, fundo
 # translúcido, imagem ou gradiente, style="" inline, nem cores fora de hex, rgb(), hsl() e dos nomes de _CSS_NAMED.
 # Cascata: !important, especificidade (aproximada: argumentos de :is()/:not() não contam) e ordem do texto, por
 # propriedade (color, cor de fundo, imagem de fundo).
@@ -1687,6 +1692,134 @@ def check_contrast(site: Path) -> list[str]:
     return problems
 
 
+# /llm-ranking/ (issue #113): a página é gerada no build (scripts/build_llm_ranking.py) a partir do snapshot da Arena.
+# O build já falha sem snapshot válido; esta regra é o alarme de que a página publicada saiu como deve: a tabela com
+# LLM_RANKING_ROWS linhas legíveis sem JavaScript, a data dos dados (que é o lastmod do sitemap), o JSON-LD com a mesma
+# data, a atribuição da CC BY 4.0 e nenhum marcador do template sobrando.
+LLM_RANKING_ROWS = 100
+LLM_RANKING_COLS = 7
+LLM_DATA_META = "dados-publicados-em"
+LLM_DATASET_URL = "https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset"
+LLM_LICENSE_PREFIX = "https://creativecommons.org/licenses/by/4.0/"
+
+
+class _LlmRanking(HTMLParser):
+    """Linhas e células da tabela id="ranking" (tbody), as metas DATA_META, os JSON-LD e os links da página."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.tables = 0
+        self.rows: list[list[str]] = []
+        self.data_dates: list[str] = []
+        self.jsonld: list[str] = []
+        self.links: list[tuple[str, str]] = []
+        self._depth = 0  # profundidade de <table> dentro da tabela do ranking (0 = fora dela)
+        self._tbody = False
+        self._cell: list[str] | None = None
+        self._script: list[str] | None = None
+
+    def handle_starttag(self, tag, attrs):
+        a = {k: (v or "") for k, v in attrs}
+        if tag == "table":
+            if self._depth:
+                self._depth += 1
+            elif a.get("id") == "ranking":
+                self.tables += 1
+                self._depth = 1
+        elif self._depth == 1 and tag == "tbody":
+            self._tbody = True
+        elif self._depth == 1 and self._tbody and tag == "tr":
+            self.rows.append([])
+        elif self._depth == 1 and self._tbody and tag == "td" and self.rows:
+            self._cell = []
+        elif tag == "meta" and a.get("name", "").lower() == LLM_DATA_META:
+            self.data_dates.append(a.get("content", "").strip())
+        elif tag == "script" and a.get("type", "").lower() == "application/ld+json":
+            self._script = []
+        if tag == "a":
+            self.links.append((a.get("href", ""), a.get("rel", "")))
+
+    def handle_startendtag(self, tag, attrs):
+        if tag == "meta":
+            self.handle_starttag(tag, attrs)
+
+    def handle_endtag(self, tag):
+        if tag == "table" and self._depth:
+            self._depth -= 1
+            if not self._depth:
+                self._tbody = False
+        elif tag == "tbody" and self._depth == 1:
+            self._tbody = False
+        elif tag == "td" and self._cell is not None:
+            self.rows[-1].append("".join(self._cell).strip())
+            self._cell = None
+        elif tag == "script" and self._script is not None:
+            self.jsonld.append("".join(self._script))
+            self._script = None
+
+    def handle_data(self, data):
+        if self._cell is not None:
+            self._cell.append(data)
+        if self._script is not None:
+            self._script.append(data)
+
+
+def check_llm_ranking(site: Path) -> list[str]:
+    rel = LLM_RANKING_PAGE
+    f = site / rel
+    if not f.is_file():
+        return [f"{rel}: página não existe no _site"]
+    html = f.read_text(encoding="utf-8")
+    problems = []
+    if "<!--LLM:" in html:
+        problems.append(f"{rel}: marcador do template sobrando (<!--LLM:...-->): o build_llm_ranking.py não rodou?")
+    p = _LlmRanking()
+    p.feed(html)
+    p.close()
+    if p.tables != 1:
+        problems.append(f'{rel}: esperava uma <table id="ranking">, achou {p.tables}')
+    elif len(p.rows) != LLM_RANKING_ROWS:
+        problems.append(f"{rel}: a tabela tem {len(p.rows)} linhas no tbody, esperado {LLM_RANKING_ROWS}")
+    else:
+        for i, row in enumerate(p.rows, 1):
+            if len(row) != LLM_RANKING_COLS or not all(row):
+                problems.append(f"{rel}: linha {i} da tabela com {len(row)} células ou célula vazia")
+                break
+            if row[0] != str(i):
+                problems.append(f"{rel}: linha {i} da tabela com a posição {row[0]!r}")
+                break
+    data = None
+    if len(p.data_dates) != 1:
+        problems.append(f"{rel}: esperava uma meta {LLM_DATA_META}, achou {len(p.data_dates)}")
+    else:
+        try:
+            data = datetime.strptime(p.data_dates[0], "%Y-%m-%d").date().isoformat()
+        except ValueError:
+            problems.append(f"{rel}: meta {LLM_DATA_META} inválida: {p.data_dates[0]!r}")
+        if data and data != p.data_dates[0]:
+            problems.append(f"{rel}: meta {LLM_DATA_META} fora do formato AAAA-MM-DD: {p.data_dates[0]!r}")
+            data = None
+    modified = []
+    for raw in p.jsonld:
+        try:
+            doc = json.loads(raw)
+        except json.JSONDecodeError:
+            problems.append(f"{rel}: JSON-LD inválido")
+            continue
+        nodes = doc.get("@graph", [doc]) if isinstance(doc, dict) else []
+        modified += [n.get("dateModified") for n in nodes if isinstance(n, dict) and n.get("@type") == "WebPage"]
+    if len(modified) != 1:
+        problems.append(f"{rel}: esperava um WebPage no JSON-LD, achou {len(modified)}")
+    elif data and modified[0] != data:
+        problems.append(f"{rel}: dateModified do JSON-LD ({modified[0]!r}) diferente da data dos dados ({data!r})")
+    hrefs = [h for h, _ in p.links]
+    if LLM_DATASET_URL not in hrefs:
+        problems.append(f"{rel}: sem o link da fonte ({LLM_DATASET_URL}), exigido pela CC BY 4.0")
+    if not any(h.startswith(LLM_LICENSE_PREFIX) and "license" in r.split() for h, r in p.links):
+        problems.append(f'{rel}: sem o link rel="license" da CC BY 4.0')
+    return problems
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Verifica o site montado em _site/ antes do deploy.")
     ap.add_argument("--site", default="_site")
@@ -1698,6 +1831,7 @@ def main(argv: list[str] | None = None) -> int:
         problems = check(Path(args.site), Path(args.posts), pre_cutover=pre)
         problems += check_related(Path(args.site), Path(args.posts))
         problems += check_contrast(Path(args.site))
+        problems += check_llm_ranking(Path(args.site))
     except ResolverError as e:
         print(f"ERRO: resolvedor de URL indisponível, verificação não feita: {e}", file=sys.stderr)
         return 1

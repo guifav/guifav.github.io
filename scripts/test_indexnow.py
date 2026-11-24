@@ -121,6 +121,16 @@ class DiffTest(Site):
     def test_nothing_changed(self):
         self.assertEqual(I.plan(self.site, FakeWeb(self.built()))["urls"], [])
 
+    def test_llm_ranking_is_announced_only_when_the_data_date_moves(self):
+        """#113: o lastmod do /llm-ranking/ é a data dos dados (build_sitemaps); o IndexNow avisa quando ela muda."""
+        url = "https://guifav.dev/llm-ranking/"
+        self.w("llm-ranking/index.html", b"<html>ranking</html>")
+        self.w("sitemap-site.xml", urlset(dict(SITE_NEW, **{url: "2026-11-22T00:00:00+00:00"})))
+        live = dict(self.built())
+        self.assertEqual(I.plan(self.site, FakeWeb(live))["urls"], [])
+        live["https://guifav.dev/sitemap-site.xml"] = urlset(dict(SITE_NEW, **{url: "2026-11-19T00:00:00+00:00"}))
+        self.assertEqual(I.plan(self.site, FakeWeb(live))["urls"], [url])
+
     def test_one_post_updated_from_index_layout(self):
         web = FakeWeb(dict(self.built(), **{"https://guifav.dev/blog/sitemap.xml": urlset(
             dict(BLOG_NEW, **{"https://guifav.dev/blog/a/": "2025-12-01T00:00:00.000Z"}))}))

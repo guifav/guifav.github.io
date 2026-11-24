@@ -100,6 +100,37 @@ class BuildTest(Repo):
         self.assertEqual(got["https://guifav.dev/portfolio/"], "2026-11-12T09:00:00-03:00")
         self.assertEqual(got["https://guifav.dev/"], "2026-01-10T10:00:00-03:00")
 
+    def test_data_meta_is_the_lastmod_of_a_generated_page(self):
+        """#113: o /llm-ranking/ é gerado no build e declara a data dos dados; o lastmod é ela, não o commit."""
+        (self.site / "llm-ranking/index.html").write_text(html('<meta name="dados-publicados-em" content="2026-11-22">'),
+                                                         encoding="utf-8")
+        B.build(self.repo, self.site)
+        got = dict(self.entries("sitemap-site.xml", "url"))
+        self.assertEqual(got["https://guifav.dev/llm-ranking/"], "2026-11-22T00:00:00+00:00")
+        self.assertEqual(got["https://guifav.dev/portfolio/"], "2026-03-05T12:00:00-03:00")
+
+    def test_data_meta_newer_commit_does_not_move_the_lastmod(self):
+        self.commit({"llm-ranking/index.html": html('<meta name="dados-publicados-em" content="2026-11-11"><b>novo</b>')},
+                    "2026-11-24T09:00:00-03:00")
+        self.copy_site()
+        B.build(self.repo, self.site)
+        self.assertEqual(dict(self.entries("sitemap-site.xml", "url"))["https://guifav.dev/llm-ranking/"], "2026-11-11T00:00:00+00:00")
+
+    def test_bad_data_meta_stops_the_build(self):
+        for head, trecho in (('<meta name="dados-publicados-em" content="2026-11-22">'
+                              '<meta name="dados-publicados-em" content="2026-11-22">', "2 metas"),
+                             ('<meta name="dados-publicados-em" content="22/11/2026">', "fora do formato"),
+                             ('<meta name="dados-publicados-em" content="2026-11-22T10:00:00Z">', "fora do formato"),
+                             ('<meta name="dados-publicados-em" content="2026-02-30">', "inválida"),
+                             ('<meta name="dados-publicados-em" content="">', "fora do formato")):
+            with self.subTest(head=head):
+                (self.site / "llm-ranking/index.html").write_text(html(head), encoding="utf-8")
+                for f in (B.SITE_SITEMAP, B.INDEX):
+                    (self.site / f).unlink(missing_ok=True)
+                with self.assertRaises(B.SitemapError) as cm:
+                    B.build(self.repo, self.site)
+                self.assertIn(trecho, str(cm.exception))
+
     def test_index_cites_both_sitemaps_without_lastmod(self):
         # lastmod no índice seria a data do arquivo do sitemap; o maior lastmod das páginas não serve (r1).
         B.build(self.repo, self.site)
