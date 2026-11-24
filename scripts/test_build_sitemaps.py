@@ -3,11 +3,14 @@
 Rodar: python3 scripts/test_build_sitemaps.py
 """
 import os
+import re
 import subprocess
+import sys
 import tempfile
 import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import build_sitemaps as B
 
@@ -205,16 +208,130 @@ class RulesTest(unittest.TestCase):
         self.assertIn("<loc>https://guifav.dev/a?b=1&amp;c=2</loc>", B.urlset([("https://guifav.dev/a?b=1&c=2", "d")]))
 
 
-class RealSiteTest(unittest.TestCase):
-    """O _site deste repo, quando montado: as 4 páginas que devem ir ao Google."""
+# Na CI, o passo depois do build_sitemaps.py roda esta classe com SITEMAP_REAL_SITE=required: sem _site montado ou sem o
+# sitemap gerado, o teste falha em vez de se pular (#117). No passo dos testes, antes da montagem, ele se pula.
+REQUIRED_ENV = "SITEMAP_REAL_SITE"
+REPO = Path(__file__).resolve().parent.parent
+_META_ROBOTS = re.compile(r"""<meta\b(?=[^>]*\bname\s*=\s*["']?robots["']?)[^>]*\bcontent\s*=\s*["']([^"']*)["']""", re.I)
+_CANONICAL = re.compile(r"""<link\b(?=[^>]*\brel\s*=\s*["']?canonical["']?)[^>]*\bhref\s*=\s*["']([^"']*)["']""", re.I)
 
-    def test_repo_pages(self):
-        repo = Path(__file__).resolve().parent.parent
-        site = repo / "_site"
-        if not (site / "index.html").is_file():
-            self.skipTest("_site não montado")
-        urls = [u for _, u in B.indexable_pages(site)]
-        self.assertEqual(urls, ["/", "/llm-ranking/", "/portfolio/", "/seo-geo-aeo-framework/framework-seo-aeo.html"])
+
+def manifest_pages(repo: Path) -> list[str]:
+    """Oráculo independente do build_sitemaps: as páginas HTML do site-manifest.txt (lidas dos fontes do repo) que
+    devem ir ao /sitemap-site.xml. Sai o 404, o que o robots.txt do repo bloqueia, o que tem meta robots noindex/none
+    e o que aponta o canonical para outra URL."""
+    disallow = [line.split(":", 1)[1].strip() for line in (repo / "robots.txt").read_text(encoding="utf-8").splitlines()
+                if line.lower().startswith("disallow:") and line.split(":", 1)[1].strip()]
+    files: list[Path] = []
+    for raw in (repo / "site-manifest.txt").read_text(encoding="utf-8").splitlines():
+        entry = raw.split("#", 1)[0].strip()
+        if not entry:
+            continue
+        src = repo / entry
+        files += sorted(src.rglob("*.html")) if entry.endswith("/") else ([src] if src.suffix == ".html" else [])
+    out = []
+    for f in files:
+        rel = f.relative_to(repo).as_posix()
+        if rel == "404.html":
+            continue
+        url = B.page_url(rel)
+        text = f.read_text(encoding="utf-8")
+        if any(url.startswith(d) for d in disallow):
+            continue
+        if any({d.strip().lower() for d in c.split(",")} & {"noindex", "none"} for c in _META_ROBOTS.findall(text)):
+            continue
+        canon = {(s.scheme, s.netloc, s.path or "/", s.query, s.fragment) for s in map(urlsplit, _CANONICAL.findall(text))}
+        if canon and canon != {("https", "guifav.dev", url, "", "")}:  # "https://guifav.dev" sem barra é a home
+            continue
+        out.append(url)
+    return sorted(out)
+
+
+class RealSiteTest(unittest.TestCase):
+    """O _site deste repo, montado e com sitemaps gerados: o /sitemap-site.xml tem exatamente as páginas indexáveis do
+    site-manifest.txt (#117), sem lista fixa."""
+
+    def site_sitemap(self) -> Path:
+        site = REPO / "_site"
+        sm = site / B.SITE_SITEMAP
+        if not sm.is_file():
+            msg = "_site sem sitemap-site.xml (rode assemble_site.py e build_sitemaps.py antes)"
+            if os.environ.get(REQUIRED_ENV) == "required":
+                self.fail(msg)
+            self.skipTest(msg)
+        return sm
+
+    def test_sitemap_has_every_indexable_manifest_page(self):
+        sm = self.site_sitemap()
+        got = sorted(urlsplit(e.text.strip()).path for e in ET.parse(sm).getroot().iter(f"{NS}loc"))
+        want = manifest_pages(REPO)
+        self.assertIn("/", want)
+        self.assertEqual(got, want)
+
+    def test_oracle_and_generator_agree_on_the_assembled_site(self):
+        self.site_sitemap()
+        self.assertEqual([u for _, u in B.indexable_pages(REPO / "_site")], manifest_pages(REPO))
+
+
+class RealSiteGuardTest(unittest.TestCase):
+    """O próprio RealSiteTest: com o modo obrigatório ele falha sem _site, e o oráculo enxerga uma página que some."""
+
+    def run_real(self, env_value):
+        with tempfile.TemporaryDirectory() as d:
+            env = {k: v for k, v in os.environ.items() if k != REQUIRED_ENV}
+            if env_value:
+                env[REQUIRED_ENV] = env_value
+            # Cópia do script num diretório sem _site: o REPO do teste aponta para ela.
+            scripts = Path(d) / "scripts"
+            scripts.mkdir()
+            for name in ("test_build_sitemaps.py", "build_sitemaps.py"):
+                (scripts / name).write_text((REPO / "scripts" / name).read_text(encoding="utf-8"), encoding="utf-8")
+            return subprocess.run([sys.executable, str(scripts / "test_build_sitemaps.py"), "RealSiteTest"],
+                                  capture_output=True, text=True, env=env)
+
+    def test_required_mode_fails_without_site(self):
+        r = self.run_real("required")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("_site sem sitemap-site.xml", r.stderr)
+        self.assertNotIn("skipped", r.stderr)
+
+    def test_default_mode_skips_without_site(self):
+        r = self.run_real(None)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("skipped", r.stderr)
+
+    def test_workflow_runs_it_required_after_the_sitemaps(self):
+        wf = (REPO / ".github/workflows/pages.yml").read_text(encoding="utf-8")
+        step = re.search(r"- name: [^\n]*#117\)\n(?:[ ]+[^\n]*\n)+?[ ]+run: python3 scripts/test_build_sitemaps.py RealSiteTest\n", wf)
+        self.assertTrue(step, "passo do RealSiteTest ausente no pages.yml")
+        self.assertIn(f"{REQUIRED_ENV}: required", step.group(0))
+        pos = {k: wf.index(k) for k in ("python3 scripts/assemble_site.py", "python3 scripts/build_sitemaps.py",
+                                        "python3 scripts/check_site.py")}
+        self.assertLess(pos["python3 scripts/assemble_site.py"], pos["python3 scripts/build_sitemaps.py"])
+        self.assertLess(pos["python3 scripts/build_sitemaps.py"], step.start())
+        self.assertLess(step.start(), pos["python3 scripts/check_site.py"])
+
+    def test_oracle_follows_manifest_robots_noindex_and_canonical(self):
+        with tempfile.TemporaryDirectory() as d:
+            repo = Path(d)
+            (repo / "robots.txt").write_text("User-agent: *\nDisallow: /p/mockups/\n", encoding="utf-8")
+            (repo / "site-manifest.txt").write_text("# c\nindex.html\n404.html\np/\nsolto.html\nimg.png\n", encoding="utf-8")
+            pages = {
+                "index.html": html('<link rel="canonical" href="https://guifav.dev">'),
+                "404.html": html(),
+                "p/index.html": html('<link rel="canonical" href="https://guifav.dev/p/">'),
+                "p/outra.html": html('<link rel="canonical" href="https://guifav.dev/p/">'),
+                "p/fechada/index.html": html('<meta name="robots" content="noindex, follow">'),
+                "p/mockups/a.html": html(),
+                "solto.html": html('<meta content="index,follow" name="robots">'),
+                "p/query.html": html('<link rel="canonical" href="https://guifav.dev/p/query.html?x=1">'),
+                "fora/index.html": html(),
+            }
+            for rel, text in pages.items():
+                (repo / rel).parent.mkdir(parents=True, exist_ok=True)
+                (repo / rel).write_text(text, encoding="utf-8")
+            (repo / "img.png").write_text("x", encoding="utf-8")
+            self.assertEqual(manifest_pages(repo), ["/", "/p/", "/solto.html"])
 
 
 if __name__ == "__main__":

@@ -76,6 +76,12 @@ jobs:
       - name: Gerar o índice /sitemap.xml e o /sitemap-site.xml
         run: python3 scripts/build_sitemaps.py
 
+      - name: O /sitemap-site.xml tem as páginas indexáveis do site-manifest.txt (#117)
+        # Aqui o _site já está montado: sem ele ou sem o sitemap, o RealSiteTest falha em vez de se pular.
+        env:
+          SITEMAP_REAL_SITE: required
+        run: python3 scripts/test_build_sitemaps.py RealSiteTest
+
       - name: Verificar links, noindex, RSS e sitemaps
         run: python3 scripts/check_site.py
 
