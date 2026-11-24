@@ -20,18 +20,18 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 
-# URL publicada -> arquivo do repo que precisa ser servido byte a byte. O /llm-ranking/ saiu da lista em #113: o HTML
+# URL publicada -> arquivo do repo que precisa ser servido byte a byte. O /tools/llm-ranking/ saiu da lista em #113: o HTML
 # dele é gerado no build a partir do snapshot de dados, então difere do template do repo por construção.
 IDENTICAL = {
     "/": "index.html",
     "/portfolio/": "portfolio/index.html",
     "/robots.txt": "robots.txt",
 }
-# Fora do site por decisão do Gui (docs/, _next/, tools/): precisam responder 404.
+# Fora do site por decisão do Gui (docs/, _next/, _mockups/): precisam responder 404.
 GONE = [
     "/docs/plan-guifav-dev-tramline-caramelo-mindapps.md",
     "/_next/static/css/87919ea87e96f046.css",
-    "/tools/mockups/README.md",
+    "/_mockups/README.md",
 ]
 
 

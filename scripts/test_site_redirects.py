@@ -50,10 +50,21 @@ DUPS = {
     "sabia-2-o-rival-brasileiro-do-chatgpt40":
         "sabia-2-o-novo-modelo-de-linguagem-em-portugues-que-rivaliza-com-gpt-4-maritaca-ai",
 }
+# #151: as quatro ferramentas movidas para /tools/, escrita à parte.
+TOOLS = {
+    "/mapa-decisao-ia/": "/tools/mapa-decisao-ia/",
+    "/mapa-decisao-ia/enviado/": "/tools/mapa-decisao-ia/enviado/",
+    "/planilha-custos-ia/": "/tools/planilha-custos-ia/",
+    "/planilha-custos-ia/enviado/": "/tools/planilha-custos-ia/enviado/",
+    "/llm-ranking/": "/tools/llm-ranking/",
+    "/seo-geo-aeo-framework/": "/tools/seo-geo-aeo-framework/framework-seo-aeo.html",
+    "/seo-geo-aeo-framework/framework-seo-aeo.html": "/tools/seo-geo-aeo-framework/framework-seo-aeo.html",
+}
 # Mudanças de endereço do próprio site (#146), escritas à parte: origem -> destino.
 MOVES = {
     "/blog/privacidade/": "/privacidade/",
 }
+TOTAL = 17 * 2 + 2 * 2 + 1 * 2 + 6 * 2 + 1  # 53 itens na lista
 # Grupo C da #120 (decisão do Gui): fica em 404, fora da lista.
 GROUP_C_ENCODED = "como-a-intelig%c3%aancia-artificial-vai-transformar-a-lideran%c3%a7a-e-os-neg%c3%b3cios-no-futuro"
 # Location que a zona antiga devolveu ao vivo em 24/11 para o caminho com acentos (curl -I).
@@ -76,6 +87,22 @@ class PlanTest(unittest.TestCase):
 
     def test_duplicates_are_exactly_the_choice_posted_on_106(self):
         self.assertEqual(dict(S.DUPLICATES), DUPS)
+
+    def test_moved_tools_table_and_redirect_simulation(self):
+        self.assertEqual(dict(S.MOVED_TOOLS), TOOLS)
+        repo = Path(__file__).resolve().parent.parent
+        for old_path, new_path in TOOLS.items():
+            want = f"https://guifav.dev{new_path}"
+            forms = (old_path, old_path.rstrip("/")) if old_path.endswith("/") else (old_path,)
+            for path in forms:
+                for scheme in ("https", "http"):
+                    url = f"{scheme}://guifav.dev{path}"
+                    self.assertEqual(S.simulate(url), want, url)
+            self.assertIsNone(S.simulate(want), want)  # o destino não é origem
+            self.assertFalse(S._repo_page(repo, old_path).exists(), old_path)
+            self.assertTrue(S._repo_page(repo, new_path).is_file(), new_path)
+        self.assertIsNone(S.simulate("https://guifav.dev/tools/"))
+        self.assertIsNone(S.simulate("https://guifav.dev/tools"))
 
     def test_site_moves_are_separate_from_posts_and_carry_privacy(self):
         self.assertEqual(dict(S.SITE_MOVES), MOVES)
@@ -154,12 +181,18 @@ class PlanTest(unittest.TestCase):
 
     def test_list_has_both_slash_forms_and_nothing_else(self):
         reds = S.redirects()
-        self.assertEqual(len(reds), 40)
+        self.assertEqual(len(reds), TOTAL)
         for old, new in PLAN.items():
             src = C.simulate(WWW, f"/post/{old}").removeprefix("https://")
             got = {r.source: r.target for r in reds if r.source.rstrip("/") == src.rstrip("/")}
             self.assertEqual(got, {src: f"https://guifav.dev/blog/{new}/",
                                    src.rstrip("/"): f"https://guifav.dev/blog/{new}/"})
+        for old_path, new_path in TOOLS.items():
+            src = f"guifav.dev{old_path}"
+            want = f"https://guifav.dev{new_path}"
+            expected = {src: want, src.rstrip("/"): want} if old_path.endswith("/") else {src: want}
+            got = {r.source: r.target for r in reds if r.source in expected}
+            self.assertEqual(got, expected)
         for old, new in MOVES.items():
             src = S.HOST + old
             got = {r.source: r.target for r in reds if r.source.rstrip("/") == src.rstrip("/")}
@@ -189,9 +222,10 @@ def _posts(tmp: Path, files: dict[str, str]) -> Path:
 
 
 class ProblemsTest(unittest.TestCase):
-    def run_with(self, table, posts, reds=None, dups=(), moves=(), files=()):
+    def run_with(self, table, posts, reds=None, dups=(), moves=(), tools=(), files=()):
         with tempfile.TemporaryDirectory() as d, mock.patch.object(S, "OLD_POSTS", table), \
-                mock.patch.object(S, "DUPLICATES", dups), mock.patch.object(S, "SITE_MOVES", moves):
+                mock.patch.object(S, "DUPLICATES", dups), mock.patch.object(S, "SITE_MOVES", moves), \
+                mock.patch.object(S, "MOVED_TOOLS", tools):
             root = Path(d)
             posts_dir = root / "posts"
             posts_dir.mkdir()
@@ -285,9 +319,57 @@ class ProblemsTest(unittest.TestCase):
                             ((("velho", "novo"), ("velho", "novo")), "repetido")):
             with self.subTest(table=table):
                 with tempfile.TemporaryDirectory() as d, mock.patch.object(S, "OLD_POSTS", table), \
-                        mock.patch.object(S, "DUPLICATES", ()), mock.patch.object(S, "SITE_MOVES", ()):
+                        mock.patch.object(S, "DUPLICATES", ()), mock.patch.object(S, "SITE_MOVES", ()), \
+                        mock.patch.object(S, "MOVED_TOOLS", ()):
                     got = S.problems([], _posts(Path(d), {"novo": ""}))
                 self.assertTrue(any(word in p for p in got), got)
+
+    def test_moved_tools_origin_must_be_gone_and_target_must_exist_in_repo(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            posts = _posts(root / "posts", {"novo": ""}) if (root / "posts").mkdir() is None else root / "posts"
+            repo = root / "repo"
+            (repo / "tools/ferramenta").mkdir(parents=True)
+            (repo / "tools/ferramenta/index.html").write_text("<html></html>", encoding="utf-8")
+            with mock.patch.object(S, "OLD_POSTS", (("velho", "novo"),)), \
+                    mock.patch.object(S, "DUPLICATES", ()), \
+                    mock.patch.object(S, "SITE_MOVES", ()), \
+                    mock.patch.object(S, "MOVED_TOOLS", (("/ferramenta/", "/tools/ferramenta/"),)):
+                self.assertEqual(S.problems(posts_dir=posts, repo=repo), [])
+                # Origem ainda existe no repo -> recusado
+                (repo / "ferramenta").mkdir()
+                (repo / "ferramenta/index.html").write_text("<html></html>", encoding="utf-8")
+                got = S.problems(posts_dir=posts, repo=repo)
+                self.assertTrue(any("ainda existe no repo" in p for p in got), got)
+                (repo / "ferramenta/index.html").unlink()
+                # Destino ausente no repo -> recusado
+                (repo / "tools/ferramenta/index.html").unlink()
+                got = S.problems(posts_dir=posts, repo=repo)
+                self.assertTrue(any("não existe no repo" in p for p in got), got)
+            # Origem em /tools/ ou repetida ou destino fora de /tools/ -> recusados
+            (repo / "tools/ferramenta/index.html").write_text("<html></html>", encoding="utf-8")
+            for tools, word in (
+                ((("/tools/x/", "/tools/ferramenta/"),), "fora do formato"),
+                ((("/x/", "/ferramenta/"),), "destino fora de /tools/"),
+                ((("/x/", "/tools/ferramenta/"), ("/x/", "/tools/ferramenta/")), "repetido"),
+            ):
+                with self.subTest(tools=tools):
+                    with mock.patch.object(S, "OLD_POSTS", (("velho", "novo"),)), \
+                            mock.patch.object(S, "DUPLICATES", ()), \
+                            mock.patch.object(S, "SITE_MOVES", ()), \
+                            mock.patch.object(S, "MOVED_TOOLS", tools):
+                        got = S.problems([], posts_dir=posts, repo=repo)
+                    self.assertTrue(any(word in p for p in got), got)
+            # Origem duplicada entre MOVED_TOOLS e SITE_MOVES -> recusada
+            (repo / "privacidade").mkdir(parents=True)
+            (repo / "privacidade/index.html").write_text("<html></html>", encoding="utf-8")
+            with mock.patch.object(S, "OLD_POSTS", (("velho", "novo"),)), \
+                    mock.patch.object(S, "DUPLICATES", ()), \
+                    mock.patch.object(S, "MOVED_TOOLS", (("/ferramenta/", "/tools/ferramenta/"),)), \
+                    mock.patch.object(S, "SITE_MOVES", (("/ferramenta/", "/privacidade/"),)):
+                got = S.problems(posts_dir=posts, repo=repo)
+            self.assertTrue(any("já está em MOVED_TOOLS" in p for p in got), got)
+            self.assertTrue(any("origem repetida na lista" in p for p in got), got)
 
     def test_limit_of_the_free_plan_counts_both_lists_of_the_pair(self):
         def reds(n):
@@ -301,7 +383,7 @@ class ProblemsTest(unittest.TestCase):
 class PayloadTest(unittest.TestCase):
     def test_items_are_exact_301_without_query_subdomains_or_subpaths(self):
         items = S.list_items()
-        self.assertEqual(len(items), 40)
+        self.assertEqual(len(items), TOTAL)
         for it in items:
             r = it["redirect"]
             self.assertEqual(set(r), {"source_url", "target_url", "status_code", "preserve_query_string",
@@ -411,10 +493,10 @@ class ApplyTest(unittest.TestCase):
                                        ("PUT", f"/accounts/acc/rulesets/phases/{S.PHASE}/entrypoint")])
         put_items = cf.calls.index(("PUT", "/accounts/acc/rules/lists/L-a/items"))
         reads = [i for i, c in enumerate(cf.calls) if c == ("GET", "/accounts/acc/rules/lists/L-a/items")]
-        self.assertGreaterEqual(len(reads), 2)  # 38 itens em páginas de 20: o cursor foi seguido
+        self.assertGreaterEqual(len(reads), 3)  # 53 itens em páginas de 20: o cursor foi seguido
         self.assertTrue(put_items < reads[0] and reads[-1] < len(cf.calls) - 1)
         self.assertEqual(cf.phase, [S.rule(self.A)])
-        self.assertEqual(len(cf.items["L-a"]), 40)
+        self.assertEqual(len(cf.items["L-a"]), TOTAL)
         self.assertEqual(cf.lists[0]["description"], S.LIST_DESCRIPTION)
         self.assertTrue(cf.raw_cursors and all("+" not in c and "/" not in c and "=" not in c for c in cf.raw_cursors),
                         cf.raw_cursors)  # cursor opaco codificado na query
@@ -428,7 +510,7 @@ class ApplyTest(unittest.TestCase):
                                                ("PUT", f"/accounts/acc/rulesets/phases/{S.PHASE}/entrypoint")])
                 self.assertEqual(cf.phase, [S.rule(other)])
                 self.assertEqual(cf.items[on_id], self.OLD)  # a lista ativa antes não foi tocada
-                self.assertEqual(len(cf.items[other_id]), 40)
+                self.assertEqual(len(cf.items[other_id]), TOTAL)
 
     def test_failed_update_keeps_the_active_rule_on_the_untouched_list(self):
         # Achado P1 da revisão de beb73ac: com a regra ativa, a falha de validação não pode deixá-la sobre uma
@@ -591,7 +673,7 @@ class CliTest(unittest.TestCase):
         with contextlib.redirect_stdout(out):
             self.assertEqual(S.main(["rules"]), 0)
         data = json.loads(out.getvalue())
-        self.assertEqual((data["lists"], len(data["items"])), (list(S.LISTS), 40))
+        self.assertEqual((data["lists"], len(data["items"])), (list(S.LISTS), TOTAL))
         by_src = {it["redirect"]["source_url"]: it["redirect"] for it in data["items"]}
         for src in ("guifav.dev/blog/privacidade/", "guifav.dev/blog/privacidade"):
             self.assertEqual(by_src[src]["target_url"], "https://guifav.dev/privacidade/")
@@ -619,7 +701,7 @@ class VerifyTest(unittest.TestCase):
     def test_all_good_passes_and_counts_every_check(self):
         rc, out = self.run_verify(self.live())
         self.assertEqual(rc, 0, out)
-        self.assertIn(f"ok: {17 * 4 + 17 + 2 + 1 + 40}; falhas: 0", out)
+        self.assertIn(f"ok: {17 * 4 + 17 + 2 + 6 + 1 + TOTAL}; falhas: 0", out)
 
     def test_each_hop_is_checked(self):
         old, new = S.OLD_POSTS[0]
@@ -629,6 +711,8 @@ class VerifyTest(unittest.TestCase):
                             (f"https://{APEX}/post/{old}/", (404, None)),
                             (mid, (404, None)), (mid.rstrip("/"), (302, final)),
                             (final, (404, None)),
+                            ("https://guifav.dev/llm-ranking", (404, None)),
+                            ("https://guifav.dev/tools/llm-ranking/", (404, None)),
                             ("https://guifav.dev/blog/privacidade/", (404, None)),
                             ("https://guifav.dev/blog/privacidade", (302, "https://guifav.dev/privacidade/")),
                             ("https://guifav.dev/privacidade/", (404, None))):

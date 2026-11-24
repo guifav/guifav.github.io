@@ -1,4 +1,4 @@
-"""Grava na KVM o snapshot da arena de texto da Arena que o build do /llm-ranking/ lê (issue #113).
+"""Grava na KVM o snapshot da arena de texto da Arena que o build do /tools/llm-ranking/ lê (issue #113).
 
 Fonte: o dataset oficial `lmarena-ai/leaderboard-dataset` no Hugging Face (CC BY 4.0), subconjunto
 `text_style_control`, lido pela API pública do datasets-server (sem login e sem chave). O snapshot tem:
@@ -41,7 +41,7 @@ ARQUIVO = "arena-texto.json"
 RAMO = "main"
 GIT_TIMEOUT = 120  # segundos por comando git; fetch ou push travado não prende o cron
 PAGINA = 100
-UA = "guifav-llm-ranking/1.0 (+https://guifav.dev/llm-ranking/)"
+UA = f"guifav-llm-ranking/1.0 (+{B.URL})"
 PAUSA = 1.0
 TENTATIVAS = 5
 
@@ -218,10 +218,10 @@ _VERSAO_RE = re.compile(r"[0-9a-f]{64}")
 
 
 def versao_no_ar(get=None, urlopen=urllib.request.urlopen) -> str | None:
-    """Versão dos dados do /llm-ranking/ que está no ar (sha256 do snapshot, B.versao), lida da meta que o build grava.
-    None quando não dá para saber (fora do ar, página antiga sem a meta, duas metas, valor fora do formato). Pede HTML
-    sem cache (Cache-Control e um parâmetro na URL), para não ler uma cópia velha nem ser recusado por quem negocia o
-    Accept."""
+    """Versão dos dados do /tools/llm-ranking/ que está no ar (sha256 do snapshot, B.versao), lida da meta que o build
+    grava. None quando não dá para saber (fora do ar, página antiga sem a meta, duas metas, valor fora do formato). Pede
+    HTML sem cache (Cache-Control e um parâmetro na URL), para não ler uma cópia velha nem ser recusado por quem negocia
+    o Accept."""
     if get is None:
         def get(url):
             return http_get(url, urlopen=urlopen, accept="text/html", no_cache=True)
@@ -244,7 +244,7 @@ def main(argv: list[str] | None = None, fonte: Fonte | None = None, git=_git, no
     repositório: assim uma rodada que publicou e falhou depois (push aceito com timeout no cliente, disparo do deploy
     que falhou, deploy que quebrou) é recuperada pela rodada seguinte, mesmo sem dado novo e mesmo quando a fonte
     republicou com a mesma data. A versão é o sha256 da forma canônica do snapshot (B.versao)."""
-    ap = argparse.ArgumentParser(description="Snapshot da arena de texto da Arena para o /llm-ranking/.")
+    ap = argparse.ArgumentParser(description="Snapshot da arena de texto da Arena para o /tools/llm-ranking/.")
     ap.add_argument("--dados", required=True, type=Path, help="clone do guifav/llm-ranking-data")
     ap.add_argument("--apply", action="store_true", help="grava, faz commit e push quando mudou")
     args = ap.parse_args(argv)

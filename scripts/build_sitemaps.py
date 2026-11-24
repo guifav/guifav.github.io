@@ -1,7 +1,7 @@
 """Gera os sitemaps da raiz do guifav.dev no _site/ já montado.
 
 - /sitemap-site.xml: as páginas do site fora do blog que devem ser indexadas, com o lastmod do último
-  commit que mexeu no arquivo. Página gerada a partir de dados de fora (o /llm-ranking/, #113) declara a data dos
+  commit que mexeu no arquivo. Página gerada a partir de dados de fora (o /tools/llm-ranking/, #113) declara a data dos
   dados na meta DATA_META, e o lastmod dela é essa data: muda quando os dados mudam, não quando o build roda. Entra a página que não é a 404, não está bloqueada no robots.txt, não tem
   noindex e cujo canonical (quando existe) aponta para ela mesma.
   A home (index.html) lista os últimos artigos do blog (issue #136): o lastmod dela é o mais recente entre o
@@ -226,7 +226,7 @@ def build(repo: Path, site: Path) -> tuple[int, int]:
                      for u in blog.iter(f"{{{NS}}}url")}
     pages = []
     for rel, url in indexable_pages(site):
-        # #113: página gerada a partir de dados (o /llm-ranking/) leva a data dos dados; as outras, o último commit.
+        # #113: página gerada a partir de dados (o /tools/llm-ranking/) leva a data dos dados; as outras, o último commit.
         lm = data_lastmod(site, rel) or git_lastmod(repo, rel)
         pages.append((SITE_ORIGIN + url, home_lastmod(site, lm, blog_lastmods) if rel == HOME else lm))
     if not pages:
