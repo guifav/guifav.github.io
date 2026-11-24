@@ -2037,41 +2037,49 @@ class PostLdTest(unittest.TestCase):
             return node(g, "BreadcrumbList")["itemListElement"]
 
         cases = {
-            "sem Person": (lambda g: drop(g, "Person"), "Person"),
-            "Person com outro nome": (lambda g: node(g, "Person").update(name="Guilherme de Mauro Favaron"), "Person"),
-            "Person com url sem barra": (lambda g: node(g, "Person").update(url="https://guifav.dev"), "Person"),
-            "Person com outro @id": (lambda g: node(g, "Person").update({"@id": "https://guifav.dev/#autor"}), "Person"),
-            "Person sem @type": (lambda g: node(g, "Person").pop("@type"), "Person"),
-            "author de outro @id": (lambda g: node(g, "BlogPosting").update(author={"@id": "https://x.org/#p"}), "author"),
-            "author ausente": (lambda g: node(g, "BlogPosting").pop("author"), "author"),
-            "author em texto": (lambda g: node(g, "BlogPosting").update(author="Guilherme Favaron"), "author"),
-            "publisher ausente": (lambda g: node(g, "BlogPosting").pop("publisher"), "publisher"),
+            "sem Person": (lambda g: drop(g, "Person"), "0 nós Person"),
+            "Person com outro nome": (lambda g: node(g, "Person").update(name="Guilherme de Mauro Favaron"),
+                                      "a Person do @graph"),
+            "Person com url sem barra": (lambda g: node(g, "Person").update(url="https://guifav.dev"), "a Person do @graph"),
+            "Person com outro @id": (lambda g: node(g, "Person").update({"@id": "https://guifav.dev/#autor"}), "0 nós Person"),
+            "Person sem @type": (lambda g: node(g, "Person").pop("@type"), "a Person do @graph"),
+            "author de outro @id": (lambda g: node(g, "BlogPosting").update(author={"@id": "https://x.org/#p"}),
+                                    "author não aponta"),
+            "author ausente": (lambda g: node(g, "BlogPosting").pop("author"), "author não aponta"),
+            "author em texto": (lambda g: node(g, "BlogPosting").update(author="Guilherme Favaron"), "author não aponta"),
+            "publisher ausente": (lambda g: node(g, "BlogPosting").pop("publisher"), "publisher não aponta"),
             "publisher GRI": (lambda g: node(g, "BlogPosting").update(
                 publisher={"@type": "Organization", "name": "GRI Institute", "url": "https://www.griinstitute.org/"}),
-                "publisher"),
-            "isPartOf ausente": (lambda g: node(g, "BlogPosting").pop("isPartOf"), "isPartOf"),
+                "publisher não aponta"),
+            "isPartOf ausente": (lambda g: node(g, "BlogPosting").pop("isPartOf"), "isPartOf não aponta"),
             "isPartOf de outro @id": (lambda g: node(g, "BlogPosting").update(isPartOf={"@id": "https://guifav.dev/#blog"}),
-                                      "isPartOf"),
-            "url de outro post": (lambda g: node(g, "BlogPosting").update(url="https://guifav.dev/blog/q/"), "url"),
+                                      "isPartOf não aponta"),
+            "url de outro post": (lambda g: node(g, "BlogPosting").update(url="https://guifav.dev/blog/q/"),
+                                  "url diferente"),
             "mainEntityOfPage de outro post": (
-                lambda g: node(g, "BlogPosting").update(mainEntityOfPage="https://guifav.dev/blog/q/"), "mainEntityOfPage"),
-            "headline vazio": (lambda g: node(g, "BlogPosting").update(headline=" "), "headline"),
-            "sem BreadcrumbList": (lambda g: drop(g, "BreadcrumbList"), "BreadcrumbList"),
-            "trilha com 2 níveis": (lambda g: crumbs(g).pop(1), "BreadcrumbList"),
+                lambda g: node(g, "BlogPosting").update(mainEntityOfPage="https://guifav.dev/blog/q/"),
+                "mainEntityOfPage diferente"),
+            # o último nível da trilha também em branco: só a regra do headline pode acusar
+            "headline em branco": (lambda g: (node(g, "BlogPosting").update(headline=" "), crumbs(g)[2].update(name=" ")),
+                                   "headline vazio"),
+            "sem BreadcrumbList": (lambda g: drop(g, "BreadcrumbList"), "0 BreadcrumbList"),
+            "trilha com 2 níveis": (lambda g: crumbs(g).pop(1), "BreadcrumbList fora da trilha"),
             "trilha com 4 níveis": (lambda g: crumbs(g).insert(2, {"@type": "ListItem", "position": 3, "name": "Tema",
                                                                    "item": "https://guifav.dev/blog/tema/x/"}),
-                                    "BreadcrumbList"),
-            "posição fora de ordem": (lambda g: crumbs(g)[1].update(position=3), "BreadcrumbList"),
-            "posição em texto": (lambda g: crumbs(g)[0].update(position="1"), "BreadcrumbList"),
-            "blog sem barra": (lambda g: crumbs(g)[1].update(item="https://guifav.dev/blog"), "BreadcrumbList"),
-            "home sem barra": (lambda g: crumbs(g)[0].update(item="https://guifav.dev"), "BreadcrumbList"),
+                                    "BreadcrumbList fora da trilha"),
+            "nível a mais depois do post": (lambda g: crumbs(g).append(dict(crumbs(g)[2], position=4)),
+                                            "BreadcrumbList fora da trilha"),
+            "posição fora de ordem": (lambda g: crumbs(g)[1].update(position=3), "BreadcrumbList fora da trilha"),
+            "posição em texto": (lambda g: crumbs(g)[0].update(position="1"), "BreadcrumbList fora da trilha"),
+            "blog sem barra": (lambda g: crumbs(g)[1].update(item="https://guifav.dev/blog"), "BreadcrumbList fora da trilha"),
+            "home sem barra": (lambda g: crumbs(g)[0].update(item="https://guifav.dev"), "BreadcrumbList fora da trilha"),
             "último nível de outro post": (lambda g: crumbs(g)[2].update(item="https://guifav.dev/blog/q/"),
-                                           "BreadcrumbList"),
-            "último nível com outro nome": (lambda g: crumbs(g)[2].update(name="Outro"), "BreadcrumbList"),
-            "nível sem nome": (lambda g: crumbs(g)[1].update(name=""), "BreadcrumbList"),
-            "nível que não é ListItem": (lambda g: crumbs(g)[0].update({"@type": "Thing"}), "BreadcrumbList"),
-            "duas BreadcrumbList": (lambda g: g["@graph"].append(dict(node(g, "BreadcrumbList"))), "BreadcrumbList"),
-            "duas Person com o @id": (lambda g: g["@graph"].append(dict(node(g, "Person"))), "Person"),
+                                           "BreadcrumbList fora da trilha"),
+            "último nível com outro nome": (lambda g: crumbs(g)[2].update(name="Outro"), "BreadcrumbList fora da trilha"),
+            "nível sem nome": (lambda g: crumbs(g)[1].update(name=""), "BreadcrumbList fora da trilha"),
+            "nível que não é ListItem": (lambda g: crumbs(g)[0].update({"@type": "Thing"}), "BreadcrumbList fora da trilha"),
+            "duas BreadcrumbList": (lambda g: g["@graph"].append(dict(node(g, "BreadcrumbList"))), "2 BreadcrumbList"),
+            "duas Person com o @id": (lambda g: g["@graph"].append(dict(node(g, "Person"))), "2 nós Person"),
         }
         for name, (fn, reason) in cases.items():
             with self.subTest(name=name):
@@ -2085,24 +2093,28 @@ class PostLdTest(unittest.TestCase):
         g = post_graph()
         flat = [dict(n, **{"@context": "https://schema.org"}) for n in g["@graph"]]
         cases = {
-            "nós em scripts separados, sem @graph": "".join(ld_script(n) for n in flat),
-            "lista de raízes sem @graph": ld_script(flat),
-            "comentado": f"<!-- {ld_script(g)} -->",
-            "@context errado": ld_script(dict(g, **{"@context": "https://example.org"})),
-            "sem @context": ld_script({"@graph": g["@graph"]}),
-            "@graph que não é lista": ld_script({"@context": "https://schema.org", "@graph": g["@graph"][0]}),
-            "json inválido": ld_script(g).replace("}", "", 1),
-            "dois BlogPosting": ld_script(g) + ld_script(dict(g["@graph"][0], **{"@context": "https://schema.org"})),
-            "Person em outro script": ld_script(dict(g, **{"@graph": g["@graph"][:2]}))
-                                      + ld_script(dict(g["@graph"][2], **{"@context": "https://schema.org"})),
-            "outro tipo": ld_script(g).replace('"BlogPosting"', '"Article"'),
+            "nós em scripts separados, sem @graph": ("".join(ld_script(n) for n in flat), "não está num @graph"),
+            "lista de raízes sem @graph": (ld_script(flat), "não está num @graph"),
+            "comentado": (f"<!-- {ld_script(g)} -->", "nenhum BlogPosting"),
+            "@context errado": (ld_script(dict(g, **{"@context": "https://example.org"})), "nenhum BlogPosting"),
+            "sem @context": (ld_script({"@graph": g["@graph"]}), "nenhum BlogPosting"),
+            "@graph que não é lista": (ld_script({"@context": "https://schema.org", "@graph": g["@graph"][0]}),
+                                       "nenhum BlogPosting"),
+            "json inválido": (ld_script(g).replace("}", "", 1), "nenhum BlogPosting"),
+            "dois BlogPosting": (ld_script(g) + ld_script(dict(g["@graph"][0], **{"@context": "https://schema.org"})),
+                                 "2 BlogPosting"),
+            "Person em outro script": (ld_script(dict(g, **{"@graph": g["@graph"][:2]}))
+                                       + ld_script(dict(g["@graph"][2], **{"@context": "https://schema.org"})),
+                                       "0 nós Person"),
+            "outro tipo": (ld_script(g).replace('"BlogPosting"', '"Article"'), "nenhum BlogPosting"),
         }
-        for name, head in cases.items():
+        for name, (head, reason) in cases.items():
             with self.subTest(name=name):
                 self.post(head)
                 got = self.ld()
                 self.assertEqual(len(got), 1, got)
-                self.assertTrue(got[0].startswith("blog/p/index.html: post indexável sem o JSON-LD do post (#105)"), got)
+                self.assertTrue(got[0].startswith("blog/p/index.html: post indexável sem o JSON-LD do post (#105): "), got)
+                self.assertIn(reason, got[0])
 
     def test_ispartof_follows_the_home_website_id(self):
         # O @id do isPartOf é conferido contra o WebSite da home, não contra uma constante solta.
