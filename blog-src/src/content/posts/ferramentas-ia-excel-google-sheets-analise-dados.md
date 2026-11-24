@@ -20,7 +20,7 @@ A tabela abaixo resume as principais vias e ferramentas, onde cada uma roda, par
 
 | Ferramenta / Via | Onde roda (Excel / Sheets / Web) | Melhor uso (fórmula, limpeza, gráfico, análise) | Modelo de preço | Limitação principal |
 |---|---|---|---|---|
-| Microsoft Copilot no Excel | Excel (Microsoft 365) | Fórmulas, tabelas dinâmicas, gráficos e Python no Excel dentro do arquivo | Assinatura paga sobre o Microsoft 365 | Exige arquivo em tabela estruturada no OneDrive/SharePoint e licença adicional |
+| Microsoft Copilot no Excel | Excel (Microsoft 365) | Fórmulas, tabelas dinâmicas, gráficos e Python no Excel dentro do arquivo | Plano Microsoft 365 com Copilot | Exige licenciamento compatível e arquivo em nuvem estruturado em tabela (conforme regras vigentes do Microsoft 365) |
 | Gemini no Google Sheets | Google Sheets (Google Workspace) | Organização de tabelas, fórmulas simples e resumos direto no navegador | Incluído nos planos pagos do Google Workspace | Menos profundo para análises estatísticas complexas e arquivos muito grandes |
 | Upload em ChatGPT, Claude ou Gemini | Web / Desktop (CSV e XLSX) | Limpeza em Python, cruzamento de abas, gráficos rápidos e leitura executiva | Gratuito limitado ou plano pago / corporativo | Sai da planilha viva; exige cuidado redobrado com sigilo em contas gratuitas |
 | Equals | Web (planilha própria conectada a dados) | Fórmulas, consultas SQL, dashboards atualizados e colaboração em equipe | Assinatura paga (SaaS) | Exige migrar o fluxo para o ambiente da plataforma |
@@ -168,8 +168,6 @@ Para tirar resultado confiável na primeira tentativa, diga ao modelo o formato 
 | Detecção de anomalia | Histórico mensal de despesas ou faturamento por centro de custo | "Calcule a mediana e o desvio por categoria nos últimos 12 meses e destaque os lançamentos acima de dois desvios padrão, citando linha, data e valor exato." |
 
 ## Quais cuidados tomar com privacidade, fórmulas erradas e volume de linhas?
-
-Três problemas aparecem com frequência quando equipes levam planilhas corporativas para ferramentas de IA:
 
 1. **Privacidade e LGPD**: evite subir planilhas com CPF, dados bancários, folha de pagamento ou lista de clientes em contas gratuitas que podem reter ou usar entradas para treinamento. Para dados sensíveis, use plano corporativo com treinamento desativado por contrato ou anonimize as colunas identificadoras antes do envio.
 2. **Contas feitas no texto em vez de código**: modelos de linguagem erram somas e médias quando tentam calcular "de cabeça" lendo centenas de linhas no texto. Exija que a ferramenta rode Python ou gere uma fórmula conferível dentro do Excel, e valide sempre os totais contra a planilha original.

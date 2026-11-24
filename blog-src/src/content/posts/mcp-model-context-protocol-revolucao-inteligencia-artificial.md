@@ -30,8 +30,6 @@ O MCP fornece uma camada intermediária padronizada para que modelos e agentes a
 
 ## Qual limitação dos LLMs o MCP resolve que o function calling tradicional não resolvia?
 
-Para entender o papel do MCP, vale revisar primeiro as limitações dos LLMs isolados e o gargalo das integrações sob medida.
-
 ### LLMs são essencialmente preditores de texto
 
 Em sua essência, um LLM é um modelo matemático treinado para prever o próximo token (palavra ou parte de palavra) em uma sequência. Por exemplo, se você digitar "Meu Grande Gordo Casamento", o modelo prevê que a próxima palavra será provavelmente "Grego". Essa capacidade de previsão de texto é útil para linguagem, mas sozinha não executa operações fora da conversa.
@@ -259,11 +257,11 @@ O ecossistema MCP amadureceu rápido desde a especificação inicial e hoje ofer
 Expor dados da empresa por MCP exige os mesmos rigores de qualquer API interna, somados ao comportamento probabilístico do modelo:
 
 1. **Excesso de permissão e exposição de banco de produção**: ligar um servidor MCP com credenciais amplas direto ao banco transacional abre margem para consultas pesadas, vazamento de colunas sensíveis e alterações indevidas.
-2. **Controle de acesso por usuário**: o servidor MCP precisa respeitar a permissão real de quem faz a pergunta (RBAC/ACL), nunca operar com uma chave única que enxerga dados de toda a organização.
+2. **Controle de acesso por usuário**: o servidor MCP precisa respeitar a permissão real de quem faz a pergunta (RBAC/ACL), operando com credenciais por perfil em vez de uma chave única que enxerga dados de toda a organização.
 3. **Injeção de prompt via dados externos**: textos lidos de e-mails, tickets ou documentos podem conter instruções maliciosas tentando induzir o modelo a chamar outra ferramenta MCP de escrita ou exfiltração.
 4. **Complexidade de manutenção e auditoria**: sistemas com cliente, servidor MCP e APIs externas exigem logs centralizados de cada chamada, versionamento de contrato e limites claros de taxa e timeout.
 
-Nem todo caso de uso corporativo pede um servidor MCP aberto. Quando a empresa precisa de regras fechadas de negócio, cálculos auditáveis e garantias rígidas de saída para diretoria, uma aplicação controlada costuma ser melhor do que expor ferramentas soltas ao modelo. Analiso essa fronteira em detalhes no artigo [MCP aberto ou aplicação: como colocar dados da empresa na IA](/blog/mcp-ou-aplicacao-dados-da-empresa-na-ia/).
+Quando a empresa precisa de regras fechadas de negócio, cálculos auditáveis e garantias rígidas de saída para diretoria, uma aplicação controlada atende melhor do que expor ferramentas soltas ao modelo. Analiso essa fronteira em detalhes no artigo [MCP aberto ou aplicação: como colocar dados da empresa na IA](/blog/mcp-ou-aplicacao-dados-da-empresa-na-ia/).
 
 ## Perguntas frequentes sobre o Model Context Protocol (MCP)
 

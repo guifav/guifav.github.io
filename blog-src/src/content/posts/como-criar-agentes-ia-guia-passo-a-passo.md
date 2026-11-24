@@ -48,22 +48,23 @@ Regras obrigatórias:
 ```python
 MAX_STEPS = 5
 
-for step in range(MAX_STEPS):
-    response = llm.create(system=SYSTEM_PROMPT, messages=messages, tools=TOOLS)
-    if not response.tool_calls:
-        return response.text
-    for call in response.tool_calls:
-        result = execute_tool_with_policy(call.name, call.arguments)
-        messages.append({"role": "tool", "name": call.name, "content": result})
 
-raise RuntimeError("Limite de passos atingido; encaminhar para revisão humana.")
+def executar_agente(messages: list[dict]) -> str:
+    for _ in range(MAX_STEPS):
+        response = llm.create(system=SYSTEM_PROMPT, messages=messages, tools=TOOLS)
+        if not response.tool_calls:
+            return response.text
+        for call in response.tool_calls:
+            result = execute_tool_with_policy(call.name, call.arguments)
+            messages.append({"role": "tool", "name": call.name, "content": result})
+    raise RuntimeError("Limite de passos atingido; encaminhar para revisão humana.")
 ```
 
 Travar `MAX_STEPS` e validar cada chamada dentro de `execute_tool_with_policy` evita loops infinitos de tokens e ações fora do escopo autorizado.
 
 ## Como estruturar os módulos do agente (objetivo, prompt, ferramentas e memória)?
 
-Construir o agente em módulos separados facilita trocar de modelo, testar componentes isolados e corrigir falhas sem reescrever o sistema inteiro. As cinco etapas abaixo organizam o desenho base.
+Construir o agente em módulos separados facilita trocar de modelo, testar componentes isolados e corrigir falhas sem reescrever o sistema inteiro.
 
 ### Passo 1: Definição do projeto e objetivos
 
@@ -163,7 +164,7 @@ O módulo de ação traduz as decisões do agente em chamadas concretas no ambie
    - Adicione verificações para prevenir ações potencialmente prejudiciais.
    - Implemente mecanismos de parada de emergência e confirmação humana em operações críticas.
 
-Com percepção, raciocínio e ação conectados, o sistema deixa de ser passivo e passa a executar tarefas reais. A partir desse ponto, segurança de integração e testes controlados passam a mandar no cronograma.
+Com percepção, raciocínio e ação conectados, o agente passa a executar tarefas concretas no ambiente. A partir desse ponto, segurança de integração e testes controlados passam a mandar no cronograma.
 
 ## Como conectar o agente aos dados e sistemas da empresa com segurança?
 
@@ -173,7 +174,7 @@ Na prática, quatro controles precisam existir antes de liberar integrações:
 
 1. **Camada de interface controlada**: exponha consultas e ações por APIs dedicadas ou servidores padronizados como o [MCP (Model Context Protocol)](/blog/mcp-model-context-protocol-revolucao-inteligencia-artificial/), em vez de entregar acesso amplo ao banco.
 2. **Privilégio mínimo e leitura primeiro**: comece com ferramentas somente leitura (`Read-Only`) e só libere escrita em endpoints com validação de schema e trava de limite.
-3. **Permissões no servidor, nunca só no prompt**: o controle de quem pode ver qual dado precisa morar na camada de dados ou na API, porque uma instrução textual no prompt pode ser contornada.
+3. **Permissões na camada de dados e na API**: o controle de quem pode ver qual dado deve morar no servidor que atende a consulta, porque uma instrução textual no prompt pode ser contornada.
 4. **Proteção de dados sob a LGPD**: mascare dados pessoais desnecessários antes do envio ao modelo, use contratos corporativos sem uso de dados para treino e grave logs de auditoria com quem pediu, qual ferramenta rodou e o que retornou.
 
 Para aprofundar o desenho de sistemas completos em ambiente corporativo, veja também o guia sobre [arquitetura de sistemas de agentes de IA](/blog/arquitetura-sistemas-agentes-ia/).
@@ -189,8 +190,6 @@ Testar um agente exige mais do que rodar dois exemplos felizes. Como o modelo re
 | Falha de ferramenta e timeout | Indisponibilidade de API, resposta malformada e loops de retentativa | Limite de passos respeitado, erro tratado sem travar e fallback previsível |
 | Custo por execução | Volume de tokens de entrada e saída nos piores cenários da bateria | Teto de custo por tarefa definido com alerta automático de desvio |
 | Supervisão humana | Ações irreversíveis (envio externo, escrita financeira, alteração cadastral) | Trava de aprovação humana (human-in-the-loop) obrigatória antes de executar |
-
-Os quatro passos finais abaixo cobrem a passagem do protótipo para uma operação estável.
 
 ### Passo 6: Integração e testes
 
@@ -260,8 +259,6 @@ Documentação e treinamento garantem que o agente continue operável e auditáv
    - Crie canais para registrar erros e sugestões de usuários e equipes internas.
    - Transforme erros reais de produção em novos casos fixos na bateria de testes.
 
-Criar um agente confiável é um ciclo contínuo de escopo bem delimitado, testes em sandbox e revisão sobre dados reais de operação. Quanto mais cedo o time mede falhas e custos em ambiente controlado, menor o risco quando o agente passa a atuar na rotina da empresa.
-
 ## Perguntas frequentes sobre como criar agentes de IA
 
 ### Qual é a diferença prática entre um chatbot e um agente de IA?
@@ -282,4 +279,4 @@ Um protótipo isolado para uma tarefa simples sai em poucos dias quando os dados
 
 ### Como evitar que o agente execute ações indevidas ou vaze dados sob a LGPD?
 
-Combine quatro camadas de proteção: dê ao agente apenas permissões de leitura na fase inicial, valide permissões de usuário na camada de dados e API (nunca só no prompt), exija aprovação humana antes de ações irreversíveis como envios externos ou alterações financeiras, e mantenha logs de auditoria com contratos de API que desativem o uso dos dados corporativos para treinamento de modelos.
+Combine quatro camadas de proteção: dê ao agente apenas permissões de leitura na fase inicial, valide permissões de usuário na camada de dados e na API, exija aprovação humana antes de ações irreversíveis como envios externos ou alterações financeiras, e mantenha logs de auditoria com contratos de API que desativem o uso dos dados corporativos para treinamento de modelos.
