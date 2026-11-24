@@ -205,4 +205,4 @@ Nos próximos artigos desta série, explorarei decisões arquiteturais igualment
 
 ***
 
-*Guilherme Favaron é VP de Tecnologia especializado em IA aplicada e transformações digitais empresariais. Com mais de 18 anos liderando implementações em organizações globais, combina profundidade técnica com visão estratégica de negócios. Compartilha conhecimento através de seu blog ([www<!---->.guilhermefavaron.com.br](https://www.guilhermefavaron.com.br/pagina-inicial)), newsletter IA Aplicada, e plataforma [MindApps.ai](http://mindapps.ai/).*
+*Guilherme Favaron é VP de Tecnologia especializado em IA aplicada e transformações digitais empresariais. Com mais de 18 anos liderando implementações em organizações globais, combina profundidade técnica com visão estratégica de negócios. Compartilha conhecimento através de seu blog ([www<!---->.guilhermefavaron.com.br](/blog/)), newsletter IA Aplicada, e plataforma MindApps.ai.*

@@ -107,7 +107,7 @@ Esta experiência confirmou que o sucesso da implementação de data pipeline de
 
 ***
 
-Este artigo compõe um conjunto de artigos sobre Data Science que vou publicar. O primeiro da sequencia foi o [Machine Learning em Produção: Como transformei modelos experimentais em motores de crescimento empresarial](https://www.guilhermefavaron.com.br/post/machine-learning-producao-modelos-empresariais-roi). O próximo será Análise preditiva para tomada de decisão. Se inscreva para receber os artigos diretamente na seu email.
+Este artigo compõe um conjunto de artigos sobre Data Science que vou publicar. O primeiro da sequencia foi o [Machine Learning em Produção: Como transformei modelos experimentais em motores de crescimento empresarial](/blog/machine-learning-producao-modelos-empresariais-roi/). O próximo será Análise preditiva para tomada de decisão. Se inscreva para receber os artigos diretamente na seu email.
 
 ***
 

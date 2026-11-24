@@ -86,7 +86,7 @@ Sem cadastro de cartão. Sem upsell. Sem “premium” escondido atrás de paywa
 
 ## Bora?
 
-A academia tá no ar em [academia-ia.mindapps.ai](http://academia-ia.mindapps.ai/).
+A academia tá no ar em academia-ia.mindapps.ai.
 
 Se você é a pessoa que sempre se prometeu “*esse mês eu começo a entender IA pra valer*”, esse mês é esse mês. Você se inscreve, recebe o Dia 1 no email, e começa amanhã de manhã. Se travar, me responde por aqui mesmo, eu leio. Eu fiz esse curso nos momentos de calmaria nos cuidados com meu pai acamado. Então, se tiver algum bug, só responder esse email que corrijo.
 
