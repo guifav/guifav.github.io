@@ -1946,5 +1946,151 @@ class SeoTest(unittest.TestCase):
                             self.assertIn("::endgroup::", out.getvalue())
 
 
+TOKENS_CSS = (":root{--bg:#fafafa;--text:#171717;--hl:#FFBE00;--hl-text:#8a6400}"
+              '[data-theme="dark"]{--bg:#0a0a0a;--text:#fafafa;--hl:#FFBE00;--hl-text:#FFBE00}')
+
+
+class ContrastUnitTest(unittest.TestCase):
+    """#119: contraste WCAG entre color e fundo de cada seletor, nos dois temas, na ordem da cascata."""
+
+    def test_ratio_known_values(self):
+        self.assertAlmostEqual(C.contrast_ratio((0, 0, 0), (255, 255, 255)), 21.0, places=2)
+        self.assertAlmostEqual(C.contrast_ratio((255, 190, 0), (255, 190, 0)), 1.0, places=2)
+
+    def test_resolve_var_hex_rgb_and_fallback(self):
+        toks = {"--a": "var(--b)", "--b": "#fff"}
+        self.assertEqual(C.css_color("var(--a)", toks), (255, 255, 255))
+        self.assertEqual(C.css_color("var(--nada, #000)", toks), (0, 0, 0))
+        self.assertEqual(C.css_color("rgb(255, 190, 0)", toks), (255, 190, 0))
+        self.assertEqual(C.css_color("#fb0", toks), (255, 187, 0))
+
+    def test_translucent_and_unknown_are_not_judged(self):
+        self.assertIsNone(C.css_color("rgba(0,0,0,.5)", {}))
+        self.assertIsNone(C.css_color("var(--nada)", {}))
+        self.assertIsNone(C.css_color("currentColor", {}))
+        self.assertEqual(C.contrast_problems([TOKENS_CSS + ".x{color:var(--text);background:rgba(255,190,0,.2)}"]), [])
+
+    def test_same_color_text_and_background_gives_one_to_one(self):
+        # O caso da #119: no escuro --hl-text é igual a --hl.
+        css = TOKENS_CSS + ".b{background:var(--hl);color:var(--hl-text)}"
+        found = {(sel, theme) for sel, theme, *_ in C.contrast_problems([css])}
+        self.assertIn((".b", "escuro"), found)
+        ratio = {t: r for s, t, r, *_ in C.contrast_problems([css])}
+        self.assertAlmostEqual(ratio["escuro"], 1.0, places=2)
+
+    def test_light_theme_also_judged(self):
+        found = {t for _, t, *_ in C.contrast_problems([TOKENS_CSS + ".b{background:var(--hl);color:var(--hl-text)}"])}
+        self.assertIn("claro", found)  # #8a6400 sobre #FFBE00 dá 3,2:1
+
+    def test_good_pair_passes_both_themes(self):
+        self.assertEqual(C.contrast_problems([TOKENS_CSS + ".b{background:var(--hl);color:#171717}"]), [])
+
+    def test_later_sheet_wins_the_cascade(self):
+        good = TOKENS_CSS + ".b{background:var(--hl);color:#171717}"
+        bad = ".b{color:var(--hl-text)}"
+        self.assertTrue(C.contrast_problems([good, bad]))
+        self.assertEqual(C.contrast_problems([bad.replace("--hl-text", "--text") + TOKENS_CSS, good]), [])
+
+    def test_background_from_one_rule_color_from_another(self):
+        css = TOKENS_CSS + ".b{background:var(--hl)}.b{color:var(--hl-text)}"
+        self.assertTrue(C.contrast_problems([css]))
+
+    def test_dark_prefixed_selector_only_in_dark(self):
+        css = TOKENS_CSS + '.b{background:#fff;color:#000}[data-theme="dark"] .b{color:#fff}'
+        self.assertEqual([(s, t) for s, t, *_ in C.contrast_problems([css])], [(".b", "escuro")])
+
+    def test_hover_inherits_the_base_color(self):
+        css = TOKENS_CSS + ".b{background:#fff;color:var(--hl-text)}.b:hover{background:var(--hl)}"
+        self.assertIn((".b:hover", "escuro"), {(s, t) for s, t, *_ in C.contrast_problems([css])})
+
+    def test_media_rules_count_and_prefers_dark_tokens_are_dark(self):
+        css = (":root{--fg:#000;--bg2:#fff}@media (prefers-color-scheme: dark){:root{--fg:#fff;--bg2:#fff}}"
+               "@media (max-width:600px){.m{color:var(--fg);background:var(--bg2)}}")
+        self.assertEqual([(s, t) for s, t, *_ in C.contrast_problems([css])], [(".m", "escuro")])
+
+    def test_comments_and_keyframes_ignored(self):
+        css = TOKENS_CSS + "/* .b{color:#fff;background:#fff} */@keyframes k{from{color:#fff;background:#fff}}"
+        self.assertEqual(C.contrast_problems([css]), [])
+
+    def test_grouped_selectors_are_split(self):
+        css = TOKENS_CSS + ".a,.b{background:var(--hl)}.b{color:var(--hl-text)}.a{color:#171717}"
+        self.assertEqual({s for s, *_ in C.contrast_problems([css])}, {".b"})
+
+
+class ContrastSiteTest(Base):
+    """A regra lê as folhas de cada página na ordem do documento: <link> internos e <style>."""
+
+    def setUp(self):
+        super().setUp()
+        self.w("assets/site.css", TOKENS_CSS + ".subscribe-row button{background:var(--hl);color:#171717}")
+
+    def test_inline_style_after_link_breaks_the_button(self):
+        self.w("blog/um-post/index.html", page('<link rel="stylesheet" href="/assets/site.css?v=1">'
+                                               '<style>.subscribe-row button{color:var(--hl-text)}</style>'))
+        probs = C.check_contrast(self.site)
+        self.assertTrue(any(p.startswith("blog/um-post/index.html: contraste 1.00:1") and "tema escuro" in p
+                            and ".subscribe-row button" in p for p in probs), probs)
+
+    def test_link_after_style_restores_it(self):
+        self.w("blog/um-post/index.html", page('<style>.subscribe-row button{color:var(--hl-text)}</style>'
+                                               '<link rel="stylesheet" href="/assets/site.css">'))
+        self.assertEqual(C.check_contrast(self.site), [])
+
+    def test_external_stylesheet_ignored_and_relative_resolved(self):
+        self.w("blog/x.css", ".subscribe-row button{color:var(--hl-text)}")
+        self.w("blog/index.html", page('<link rel="stylesheet" href="https://fonts.example/a.css">'
+                                       '<link rel="stylesheet" href="/assets/site.css"><link href="x.css" rel="stylesheet">'))
+        self.assertTrue(any(p.startswith("blog/index.html:") for p in C.check_contrast(self.site)))
+
+    def test_same_sheets_reported_once_with_page_count(self):
+        bad = page('<link rel="stylesheet" href="/assets/site.css"><style>.subscribe-row button{color:var(--hl-text)}</style>')
+        self.w("blog/index.html", bad)
+        self.w("blog/um-post/index.html", bad)
+        probs = [p for p in C.check_contrast(self.site) if "tema escuro" in p]
+        self.assertEqual(len(probs), 1, probs)
+        self.assertIn("(e mais 1 página com as mesmas folhas)", probs[0])
+
+    def test_pages_without_the_site_css_are_not_judged(self):
+        # Mockups do portfólio e o /llm-ranking/ têm paleta própria: a regra é sobre o CSS do site.
+        self.w("blog/um-post/index.html", page('<style>' + TOKENS_CSS + '.b{background:var(--hl);color:var(--hl)}</style>'))
+        self.assertEqual(C.check_contrast(self.site), [])
+        self.w("blog/um-post/index.html", page('<link rel="stylesheet" href="/assets/site.css">'
+                                               '<style>.b{background:var(--hl);color:var(--hl)}</style>'))
+        self.assertTrue(C.check_contrast(self.site))
+
+    def test_main_runs_the_contrast_rule(self):
+        consts = Path(self.tmp.name) / "consts.ts"
+        consts.write_text("export const PRE_CUTOVER_NOINDEX = true;\n", encoding="utf-8")
+        self.w("404.html", page('<a href="/">home</a><link rel="stylesheet" href="/assets/site.css">'
+                                '<style>.subscribe-row button{color:var(--hl-text)}</style>',
+                                robots='<meta name="robots" content="noindex">'))
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            code = C.main(["--site", str(self.site), "--posts", str(self.posts), "--consts", str(consts)])
+        self.assertEqual(code, 1)
+        self.assertIn("404.html: contraste 1.00:1", err.getvalue())
+
+
+class ContrastSourcesTest(unittest.TestCase):
+    """Fontes reais: o CSS do site e o do blog, na ordem do Base.astro (site.css por <link>, blog.css inline depois)."""
+
+    REPO = Path(__file__).resolve().parent.parent
+
+    def sheets(self):
+        return [(self.REPO / "assets/site.css").read_text(encoding="utf-8"),
+                (self.REPO / "blog-src/src/styles/blog.css").read_text(encoding="utf-8")]
+
+    def test_no_pair_below_the_minimum(self):
+        self.assertEqual(C.contrast_problems(self.sheets()), [])
+
+    def test_subscribe_button_in_both_themes(self):
+        rules = C.css_cascade(self.sheets())
+        for theme in C.THEMES:
+            for sel in (".subscribe-row button", ".subscribe-row button:hover"):
+                with self.subTest(theme=theme, sel=sel):
+                    fg, bg = rules[theme][sel]
+                    self.assertGreaterEqual(C.contrast_ratio(fg, bg), C.CONTRAST_MIN)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
