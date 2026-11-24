@@ -22,6 +22,7 @@ LOOP = PERIOD / TOKENS   # 5 s: o estado do diagrama inteiro se repete a cada LO
 GIF_FPS = 12
 GIF = '/assets/ciclo-dados-ia.gif'
 GIF_NAME = 'ciclo-de-dados-e-ia-guifav.gif'
+GIF_GA_DOWNLOAD = 'ciclo-dados-ia'
 SRC = ('Fonte: guifav.dev', 'Source: guifav.dev')
 DL = ('Baixar GIF', 'Download GIF (in Portuguese)')
 
@@ -342,7 +343,7 @@ def render(html):
     en('cy_title', TITLE[1])
     en('cy_desc', DESC[1])
     en('cy_dl', DL[1])
-    dl = (f'<a class="dflow-dl" href="{GIF}" download="{GIF_NAME}">'
+    dl = (f'<a class="dflow-dl" href="{GIF}" download="{GIF_NAME}" data-ga-download="{GIF_GA_DOWNLOAD}">'
           '<svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/></svg>'
           f'<span data-i18n="cy_dl">{DL[0]}</span></a>')
     fig = '      <figure class="dflow">\n        <div class="dflow-wrap">\n          ' + dl + '\n          ' + d + '\n          ' + m + '\n        </div>\n      </figure>\n'

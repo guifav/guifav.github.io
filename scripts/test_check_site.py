@@ -1476,6 +1476,14 @@ class TrackingSourcesTest(unittest.TestCase):
         self.assertIn('<article class="post page" data-ga-event="sign_up">',
                       self.read("blog-src/src/pages/inscricao-confirmada.astro"))
 
+    def test_home_gif_download_marker_in_source(self):
+        # #148: o link do GIF do ciclo na home leva data-ga-download para o track.js emitir file_download.
+        self.assertIn(
+            '<a class="dflow-dl" href="/assets/ciclo-dados-ia.gif" download="ciclo-de-dados-e-ia-guifav.gif" '
+            'data-ga-download="ciclo-dados-ia">',
+            self.read("index.html"),
+        )
+
     def test_privacy_mentions_events(self):
         t = self.read("privacidade/index.html")
         self.assertIn("alguns cliques: contato, agendamento, links do rodapé, troca de idioma e de tema, a "
