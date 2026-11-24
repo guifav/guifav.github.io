@@ -216,26 +216,58 @@ _META_ROBOTS = re.compile(r"""<meta\b(?=[^>]*\bname\s*=\s*["']?robots["']?)[^>]*
 _CANONICAL = re.compile(r"""<link\b(?=[^>]*\brel\s*=\s*["']?canonical["']?)[^>]*\bhref\s*=\s*["']([^"']*)["']""", re.I)
 
 
+_HTML_SUFFIXES = (".html", ".htm", ".xhtml")
+
+
+def _star_disallow(robots_txt: str) -> list[str]:
+    """Prefixos Disallow só do grupo User-agent: * (um grupo de outro robô não conta), sem comentários."""
+    out, in_star, seen_rule = [], False, False
+    for raw in robots_txt.splitlines():
+        line = raw.split("#", 1)[0].strip()
+        key, _, val = line.partition(":")
+        key, val = key.strip().lower(), val.strip()
+        if key == "user-agent":
+            if seen_rule:
+                in_star, seen_rule = False, False
+            in_star = in_star or val == "*"
+        elif key in ("allow", "disallow"):
+            seen_rule = True
+            if in_star and key == "disallow" and val:
+                out.append(val)
+    return out
+
+
+def _url(rel: str) -> str:
+    """Caminho publicado de um arquivo: pasta/index.html vira /pasta/ (escrito aqui, sem o page_url sob teste)."""
+    if rel == "index.html":
+        return "/"
+    return "/" + (rel[: -len("index.html")] if rel.endswith("/index.html") else rel)
+
+
 def manifest_pages(repo: Path) -> list[str]:
     """Oráculo independente do build_sitemaps: as páginas HTML do site-manifest.txt (lidas dos fontes do repo) que
-    devem ir ao /sitemap-site.xml. Sai o 404, o que o robots.txt do repo bloqueia, o que tem meta robots noindex/none
-    e o que aponta o canonical para outra URL."""
-    disallow = [line.split(":", 1)[1].strip() for line in (repo / "robots.txt").read_text(encoding="utf-8").splitlines()
-                if line.lower().startswith("disallow:") and line.split(":", 1)[1].strip()]
+    devem ir ao /sitemap-site.xml. Sai o 404, o que o grupo User-agent: * do robots.txt do repo bloqueia, o que tem
+    meta robots noindex/none e o que aponta o canonical para outra URL. Comentários HTML não contam."""
+    disallow = _star_disallow((repo / "robots.txt").read_text(encoding="utf-8"))
     files: list[Path] = []
     for raw in (repo / "site-manifest.txt").read_text(encoding="utf-8").splitlines():
         entry = raw.split("#", 1)[0].strip()
         if not entry:
             continue
         src = repo / entry
-        files += sorted(src.rglob("*.html")) if entry.endswith("/") else ([src] if src.suffix == ".html" else [])
+        if not src.exists():
+            raise AssertionError(f"site-manifest.txt cita {entry}, que não existe no repo")
+        if entry.endswith("/"):
+            files += sorted(f for f in src.rglob("*") if f.is_file() and f.suffix.lower() in _HTML_SUFFIXES)
+        elif src.suffix.lower() in _HTML_SUFFIXES:
+            files.append(src)
     out = []
     for f in files:
         rel = f.relative_to(repo).as_posix()
         if rel == "404.html":
             continue
-        url = B.page_url(rel)
-        text = f.read_text(encoding="utf-8")
+        url = _url(rel)
+        text = re.sub(r"<!--.*?-->", "", f.read_text(encoding="utf-8"), flags=re.S)
         if any(url.startswith(d) for d in disallow):
             continue
         if any({d.strip().lower() for d in c.split(",")} & {"noindex", "none"} for c in _META_ROBOTS.findall(text)):
@@ -263,10 +295,10 @@ class RealSiteTest(unittest.TestCase):
 
     def test_sitemap_has_every_indexable_manifest_page(self):
         sm = self.site_sitemap()
-        got = sorted(urlsplit(e.text.strip()).path for e in ET.parse(sm).getroot().iter(f"{NS}loc"))
+        got = sorted((e.text or "").strip() for e in ET.parse(sm).getroot().iter(f"{NS}loc"))
         want = manifest_pages(REPO)
         self.assertIn("/", want)
-        self.assertEqual(got, want)
+        self.assertEqual(got, ["https://guifav.dev" + u for u in want])
 
     def test_oracle_and_generator_agree_on_the_assembled_site(self):
         self.site_sitemap()
@@ -318,11 +350,35 @@ class RealSiteGuardTest(unittest.TestCase):
         files["_site/sitemap-site.xml"] = files["_site/sitemap-site.xml"].replace("/c.html", "/b.html")
         self.assertEqual(self.run_real("required", files).returncode, 0)
 
+    def fake_repo(self, sitemap_paths, site_pages=None):
+        pages = {"index.html": html(), "a.html": html(), "b.html": html()}
+        loc = "<url><loc>{}</loc><lastmod>2026-11-24T00:00:00-03:00</lastmod></url>"
+        site = pages if site_pages is None else site_pages
+        return {"robots.txt": "User-agent: *\nDisallow: /tools/\n", "site-manifest.txt": "index.html\na.html\nb.html\n",
+                **pages, **{f"_site/{k}": v for k, v in site.items()},
+                "_site/sitemap-site.xml": f'<urlset xmlns="{B.NS}">' + "".join(loc.format(u) for u in sitemap_paths)
+                + "</urlset>"}
+
+    def test_wrong_host_or_query_in_the_sitemap_fails(self):
+        # r1 (agy P2): a comparação é da URL inteira, não só do caminho.
+        ok = ["https://guifav.dev/", "https://guifav.dev/a.html", "https://guifav.dev/b.html"]
+        self.assertEqual(self.run_real("required", self.fake_repo(ok)).returncode, 0)
+        for bad in (["http://guifav.dev/"] + ok[1:], ["https://www.guifav.dev/"] + ok[1:], ok[:2] + [ok[2] + "?x=1"]):
+            with self.subTest(bad=bad):
+                r = self.run_real("required", self.fake_repo(bad))
+                self.assertIn("FAIL: test_sitemap_has_every_indexable_manifest_page", r.stderr)
+
+    def test_page_missing_from_the_assembled_site_fails(self):
+        # r1 (agy P3): o caminho de falha do teste que compara o oráculo com o _site montado.
+        ok = ["https://guifav.dev/", "https://guifav.dev/a.html", "https://guifav.dev/b.html"]
+        r = self.run_real("required", self.fake_repo(ok, site_pages={"index.html": html(), "a.html": html()}))
+        self.assertIn("FAIL: test_oracle_and_generator_agree_on_the_assembled_site", r.stderr)
+
     def test_workflow_runs_it_required_after_the_sitemaps(self):
         wf = (REPO / ".github/workflows/pages.yml").read_text(encoding="utf-8")
         step = re.search(r"- name: [^\n]*#117\)\n(?:[ ]+[^\n]*\n)+?[ ]+run: python3 scripts/test_build_sitemaps.py RealSiteTest\n", wf)
         self.assertTrue(step, "passo do RealSiteTest ausente no pages.yml")
-        self.assertIn(f"{REQUIRED_ENV}: required", step.group(0))
+        self.assertRegex(step.group(0), rf"\n[ ]+env:\n[ ]+{REQUIRED_ENV}: required\n")  # r1 (agy P3): não comentado
         pos = {k: wf.index(k) for k in ("python3 scripts/assemble_site.py", "python3 scripts/build_sitemaps.py",
                                         "python3 scripts/check_site.py")}
         self.assertLess(pos["python3 scripts/assemble_site.py"], pos["python3 scripts/build_sitemaps.py"])
@@ -332,7 +388,8 @@ class RealSiteGuardTest(unittest.TestCase):
     def test_oracle_follows_manifest_robots_noindex_and_canonical(self):
         with tempfile.TemporaryDirectory() as d:
             repo = Path(d)
-            (repo / "robots.txt").write_text("User-agent: *\nDisallow: /p/mockups/\n", encoding="utf-8")
+            (repo / "robots.txt").write_text("User-agent: GPTBot\nDisallow: /\n\nUser-agent: *\n"
+                                             "Disallow: /p/mockups/  # mockups\n", encoding="utf-8")
             (repo / "site-manifest.txt").write_text("# c\n#fora/index.html\nindex.html\n404.html\np/\nsolto.html  # comentário\n"
                                                     "img.png\n", encoding="utf-8")
             pages = {
@@ -345,12 +402,21 @@ class RealSiteGuardTest(unittest.TestCase):
                 "solto.html": html('<meta content="index,follow" name="robots">'),
                 "p/query.html": html('<link rel="canonical" href="https://guifav.dev/p/query.html?x=1">'),
                 "fora/index.html": html(),
+                "p/comentada.html": html('<!-- <meta name="robots" content="noindex"> -->'),
+                "p/maiuscula.HTM": html(),
             }
             for rel, text in pages.items():
                 (repo / rel).parent.mkdir(parents=True, exist_ok=True)
                 (repo / rel).write_text(text, encoding="utf-8")
             (repo / "img.png").write_text("x", encoding="utf-8")
-            self.assertEqual(manifest_pages(repo), ["/", "/p/", "/solto.html"])
+            self.assertEqual(manifest_pages(repo), ["/", "/p/", "/p/comentada.html", "/p/maiuscula.HTM", "/solto.html"])
+            (repo / "site-manifest.txt").write_text("index.html\nsumiu/\n", encoding="utf-8")
+            with self.assertRaisesRegex(AssertionError, "sumiu/"):
+                manifest_pages(repo)
+
+    def test_url_of_folder_index(self):
+        # r1 (Claude P3): a conversão de caminho em URL é do próprio teste.
+        self.assertEqual([_url(r) for r in ("index.html", "a/index.html", "a/b.html")], ["/", "/a/", "/a/b.html"])
 
 
 if __name__ == "__main__":
