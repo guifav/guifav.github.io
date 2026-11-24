@@ -7,7 +7,6 @@ updated: 2025-12-15T06:04:24.037Z
 slug: devops-e-deployment-pipeline-design
 cover: img/devops-e-deployment-pipeline-design/capa.jpg
 type: newsletter
-topics: [engenharia-de-software-com-ia]
 ---
 
 Em janeiro de 2012, a Etsy realizava deploys em produção duas vezes por semana. Cada deployment exigia uma “deployment army” — múltiplos engenheiros coordenados durante 6 a 14 horas, frequentemente resultando em downtime programado e noites longas de correções emergenciais. Três anos depois, a mesma empresa executava mais de 50 deploys por dia, com qualquer engenheiro — incluindo novos contratados em seu primeiro dia — capaz de enviar código para produção com um único clique. A transformação não veio de uma ferramenta mágica, mas de uma reimaginação completa do que significa entregar software.

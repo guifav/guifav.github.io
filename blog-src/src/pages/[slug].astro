@@ -68,11 +68,10 @@ const ld = blogPostingLd({
     </div>
     {related.length > 0 && (
       <aside class="related" aria-label="Leia também">
-        <h2>Leia também</h2>
+        {topic ? <h2>Mais artigos sobre <a href={topicPath(base, topic.id)}>{topic.about}</a></h2> : <h2>Leia também</h2>}
         <ul>
           {related.map((r) => <li><a href={postPath(base, r.id)}>{r.data.title}</a></li>)}
         </ul>
-        {topic && <p class="related-topic">Tema: <a href={topicPath(base, topic.id)}>{topic.name}</a></p>}
         {topic?.blockCta && <p class="related-cta"><CtaLine parts={topic.blockCta} location={CTA_LOCATION_END} /></p>}
       </aside>
     )}

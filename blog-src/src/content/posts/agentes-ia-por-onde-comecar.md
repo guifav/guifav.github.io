@@ -5,7 +5,7 @@ date: 2024-09-22T03:00:00.000Z
 slug: agentes-ia-por-onde-comecar
 cover: img/agentes-ia-por-onde-comecar/capa.jpg
 type: newsletter
-topics: [agentes-de-ia-em-producao]
+topics: [agentes-de-ia]
 ---
 
 Na era da transformação digital, os agentes de Inteligência Artificial (IA) estão emergindo como a espinha dorsal da próxima geração de aplicações autônomas e interativas. Esses agentes são projetados para realizar tarefas complexas, tomar decisões e operar de forma semi-autônoma ou totalmente independente, revolucionando a maneira como interagimos com a tecnologia e automatizamos processos.

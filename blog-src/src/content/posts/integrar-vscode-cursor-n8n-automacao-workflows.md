@@ -7,7 +7,6 @@ updated: 2026-01-20T22:23:43.092Z
 slug: integrar-vscode-cursor-n8n-automacao-workflows
 cover: img/integrar-vscode-cursor-n8n-automacao-workflows/capa.jpg
 type: newsletter
-topics: [engenharia-de-software-com-ia]
 ---
 
 Se você trabalha com automações no N8N, provavelmente já enfrentou situações onde perdeu um workflow por edição acidental, precisou recuperar uma versão anterior ou quis compartilhar fluxos complexos com sua equipe de forma organizada. A boa notícia é que existe uma solução elegante para todos esses problemas: **integrar seu editor de código favorito diretamente com sua instância N8N.**

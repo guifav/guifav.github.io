@@ -7,7 +7,7 @@ updated: 2025-11-24T20:05:11.258Z
 slug: openai-vs-open-source-decisoes-estrategicas-ctos
 cover: img/openai-vs-open-source-decisoes-estrategicas-ctos/capa.jpg
 type: newsletter
-topics: [custos-roi-e-escolha-de-modelo]
+topics: [custos-e-modelos-de-ia]
 ---
 
 ## Além do Custo: Como Escolher a Arquitetura Certa para Cada Caso de Uso

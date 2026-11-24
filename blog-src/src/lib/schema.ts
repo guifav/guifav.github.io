@@ -5,13 +5,14 @@ import { spotifyEmbedUrl } from './blog.ts';
 
 export const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-// Temas do blog (#104, aprovados pelo Gui em 23/11/2026 a partir do mapa de demanda da #112). O id é também
-// o endereço da página do tema, /blog/tema/<id>/. Tema novo ou renomeado passa por aprovação do Gui.
+// Temas do blog (#104, aprovados pelo Gui em 23/11/2026 a partir do mapa de demanda da #112; ids do parecer do
+// Fable 5.2, aprovados pelo Gui e avaliados pelo agy em 24/11). O id é também o endereço da página do tema,
+// /blog/tema/<id>/, e fica congelado: ele não acompanha renomeação do título, e cada troca custaria um 301.
 export const TOPIC_IDS = [
   'ia-sobre-dados-da-empresa',
-  'custos-roi-e-escolha-de-modelo',
-  'agentes-de-ia-em-producao',
-  'implantacao-de-ia-legados-e-arquitetura',
+  'custos-e-modelos-de-ia',
+  'agentes-de-ia',
+  'implantacao-de-ia',
   'engenharia-de-software-com-ia',
 ] as const;
 export type TopicId = (typeof TOPIC_IDS)[number];

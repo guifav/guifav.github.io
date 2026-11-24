@@ -6,7 +6,6 @@ updated: 2024-07-08T13:20:51.086Z
 slug: a-era-dos-prototipos-acabou-como-a-ia-esta-revolucionando-o-desenvolvimento-de-software
 cover: img/a-era-dos-prototipos-acabou-como-a-ia-esta-revolucionando-o-desenvolvimento-de-software/capa.jpg
 type: newsletter
-topics: [engenharia-de-software-com-ia]
 ---
 
 ###### Por décadas, as empresas construíram software da mesma maneira: com longos ciclos manuais de desenvolvimento focados em protótipos, MVPs, e constantes reconstruções. Mas essa era chegou ao fim.

@@ -6,7 +6,7 @@ updated: 2025-12-15T22:45:50.900Z
 slug: guia-migracao-cloud-modelos-public-private-hybrid-de-migracao-para-cloud
 cover: img/guia-migracao-cloud-modelos-public-private-hybrid-de-migracao-para-cloud/capa.jpg
 type: newsletter
-topics: [implantacao-de-ia-legados-e-arquitetura]
+topics: [implantacao-de-ia]
 ---
 
 Quando a [Capital One anunciou em 2020 que concluiria sua migração completa para AWS](https://aws.amazon.com/pt/solutions/case-studies/capital-one-all-in-on-aws/) até o final daquele ano, a decisão representou mais que uma mudança tecnológica: foi uma aposta de $150 milhões em transformação digital que prometia reduzir custos operacionais em 30% e acelerar time-to-market de novos produtos em até 50%. A instituição financeira eliminou seus últimos data centers proprietários, consolidando toda infraestrutura crítica na nuvem pública.

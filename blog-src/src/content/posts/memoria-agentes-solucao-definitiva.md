@@ -7,7 +7,7 @@ updated: 2026-03-08T17:04:11.287Z
 slug: memoria-agentes-solucao-definitiva
 cover: img/memoria-agentes-solucao-definitiva/capa.jpg
 type: newsletter
-topics: [agentes-de-ia-em-producao]
+topics: [agentes-de-ia]
 ---
 
 ***

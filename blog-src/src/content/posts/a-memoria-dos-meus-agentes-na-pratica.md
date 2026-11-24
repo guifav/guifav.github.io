@@ -7,7 +7,7 @@ updated: 2026-07-22T03:40:03.866Z
 slug: a-memoria-dos-meus-agentes-na-pratica
 cover: img/a-memoria-dos-meus-agentes-na-pratica/capa.jpg
 type: newsletter
-topics: [agentes-de-ia-em-producao]
+topics: [agentes-de-ia]
 ---
 
 <figure>

@@ -7,7 +7,7 @@ updated: 2025-12-07T20:56:20.188Z
 slug: modernizacao-de-sistemas-legados
 cover: img/modernizacao-de-sistemas-legados/capa.jpg
 type: newsletter
-topics: [implantacao-de-ia-legados-e-arquitetura]
+topics: [implantacao-de-ia]
 ---
 
 Quando empresas se deparam com sistemas críticos rodando em mainframes COBOL há mais de 20 anos, consumindo 70% do orçamento de TI apenas em manutenção, enquanto a concorrência lança features em dias, não estamos falando apenas de dívida técnica — estamos diante de um risco existencial ao negócio.

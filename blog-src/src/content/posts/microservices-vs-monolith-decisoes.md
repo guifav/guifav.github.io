@@ -7,7 +7,7 @@ updated: 2025-12-07T20:57:18.102Z
 slug: microservices-vs-monolith-decisoes
 cover: img/microservices-vs-monolith-decisoes/capa.jpg
 type: newsletter
-topics: [implantacao-de-ia-legados-e-arquitetura]
+topics: [implantacao-de-ia]
 ---
 
 Quando a Netflix enfrentou o [colapso de seu datacenter em 2008](https://www.nbcnews.com/id/wbna26202698), resultando em 3 dias de indisponibilidade completa e milhões em receita perdida, a organização tomou uma decisão radical: abandonar seu monolito em favor de centenas de microservices na nuvem. Sete anos depois, a empresa operava mais de 700 microservices processando 2 bilhões de requisições por dia, com disponibilidade de 99.99% — uma transformação que não apenas resolveu problemas técnicos, mas habilitou expansão global para 190 países.

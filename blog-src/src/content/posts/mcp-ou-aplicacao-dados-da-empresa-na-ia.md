@@ -6,7 +6,7 @@ date: 2026-11-16T12:00:00Z
 slug: mcp-ou-aplicacao-dados-da-empresa-na-ia
 cover: img/mcp-ou-aplicacao-dados-da-empresa-na-ia/capa.png
 type: newsletter
-topics: [ia-sobre-dados-da-empresa]
+topics: [ia-sobre-dados-da-empresa, agentes-de-ia]
 ---
 
 Em março de 2025 escrevi aqui sobre o [MCP, o Model Context Protocol](/blog/mcp-model-context-protocol-revolucao-inteligencia-artificial/). O argumento era que, sem um padrão, cada ligação entre um modelo de linguagem e um sistema da empresa precisava ser construída sob medida, e esse custo travava o uso de IA com dados reais. Na época era uma proposta recente da Anthropic, com poucos servidores disponíveis.

@@ -7,7 +7,6 @@ updated: 2026-04-19T23:57:34.432Z
 slug: candy-crush-ia
 cover: img/candy-crush-ia/capa.jpg
 type: newsletter
-topics: [engenharia-de-software-com-ia]
 ---
 
 <figure>

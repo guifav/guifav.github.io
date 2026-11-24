@@ -5,7 +5,7 @@ date: 2025-10-13T03:00:00.000Z
 slug: data-governance-custo-dados-nao-confiaveis
 cover: img/data-governance-custo-dados-nao-confiaveis/capa.jpg
 type: newsletter
-topics: [implantacao-de-ia-legados-e-arquitetura]
+topics: [implantacao-de-ia]
 ---
 
 ## Frameworks Para Garantir Confiabilidade, Compliance e Valor de Longo Prazo dos Dados

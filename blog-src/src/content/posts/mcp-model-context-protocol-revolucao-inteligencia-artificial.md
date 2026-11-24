@@ -7,7 +7,7 @@ updated: 2025-11-24T20:06:10.226Z
 slug: mcp-model-context-protocol-revolucao-inteligencia-artificial
 cover: img/mcp-model-context-protocol-revolucao-inteligencia-artificial/capa.jpg
 type: newsletter
-topics: [agentes-de-ia-em-producao]
+topics: [agentes-de-ia]
 ---
 
 <figure>

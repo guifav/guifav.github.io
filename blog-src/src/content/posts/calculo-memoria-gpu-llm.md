@@ -6,7 +6,7 @@ updated: 2024-11-04T11:15:19.534Z
 slug: calculo-memoria-gpu-llm
 cover: img/calculo-memoria-gpu-llm/capa.jpg
 type: newsletter
-topics: [custos-roi-e-escolha-de-modelo]
+topics: [custos-e-modelos-de-ia]
 ---
 
 Em quase todas as conversas de LLM que tenho, há uma pergunta que surge consistentemente: *“Quanta memória GPU é necessária para rodar um Large Language Model (LLM)?”*
