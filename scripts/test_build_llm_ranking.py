@@ -370,7 +370,11 @@ class BlocosTest(unittest.TestCase):
         orig = B.URL
         try:
             B.URL = "https://guifav.dev/</script>"
-            self.assertNotIn("</script><", B.bloco_jsonld(date(2026, 11, 22))[:-9])
+            j = B.bloco_jsonld(date(2026, 11, 22))
+            inner = j[len('<script type="application/ld+json">'):-len("</script>")]
+            self.assertNotIn("<", inner)
+            self.assertIn("https://guifav.dev/\\u003c/script>", inner)
+            self.assertEqual(json.loads(inner)["@graph"][0]["url"], "https://guifav.dev/</script>")
         finally:
             B.URL = orig
 
