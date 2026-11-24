@@ -78,25 +78,42 @@ export interface PostLdInput {
   updated?: Date;
   url: string;
   image?: string;
-  authorId: string;
+  /** A Person da home (mesmo @id), com nome e URL para o Google resolver o autor na própria página. */
+  author: { id: string; name: string; url: string };
+  /** @id do WebSite da home (index.html). */
+  websiteId: string;
+  /** Níveis acima do post na trilha (home e blog); o post entra por último, com o título. */
+  crumbs: { name: string; url: string }[];
 }
 
-/** JSON-LD BlogPosting básico; o grafo completo fica para a issue #28. */
-export function blogPostingLd(p: PostLdInput): Record<string, unknown> {
-  const ld: Record<string, unknown> = {
-    '@context': 'https://schema.org',
+/**
+ * JSON-LD do post (#105): um @graph com o BlogPosting, a BreadcrumbList e um nó Person mínimo.
+ * A Person completa (sameAs, worksFor) continua só na home; aqui vão @id, nome e URL, para que o avaliador
+ * do Google, que lê uma página por vez, resolva author.name e author.url sem seguir o @id até a home.
+ * O publisher é a própria Person: o blog é pessoal, não de uma organização.
+ */
+export function postLdGraph(p: PostLdInput): Record<string, unknown> {
+  const posting: Record<string, unknown> = {
     '@type': 'BlogPosting',
     headline: p.title,
     description: p.description,
     datePublished: p.date.toISOString(),
     dateModified: (p.updated ?? p.date).toISOString(),
-    author: { '@id': p.authorId },
+    author: { '@id': p.author.id },
+    publisher: { '@id': p.author.id },
+    isPartOf: { '@id': p.websiteId },
     mainEntityOfPage: p.url,
     url: p.url,
     inLanguage: 'pt-BR',
   };
-  if (p.image) ld.image = p.image;
-  return ld;
+  if (p.image) posting.image = p.image;
+  const trail = [...p.crumbs, { name: p.title, url: p.url }];
+  const breadcrumb = {
+    '@type': 'BreadcrumbList',
+    itemListElement: trail.map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: c.name, item: c.url })),
+  };
+  const person = { '@type': 'Person', '@id': p.author.id, name: p.author.name, url: p.author.url };
+  return { '@context': 'https://schema.org', '@graph': [posting, breadcrumb, person] };
 }
 
 /** Serializa JSON-LD para dentro de <script>, sem permitir fechar a tag. */

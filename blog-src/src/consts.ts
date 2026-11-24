@@ -10,6 +10,10 @@ export const CONTENT_GROUPS = ['home', 'portfolio', 'insights-lista', 'insights-
 export type ContentGroup = (typeof CONTENT_GROUPS)[number];
 export const AUTHOR_NAME = 'Guilherme Favaron';
 export const AUTHOR_ID = 'https://guifav.dev/#person';
+// URL da Person no JSON-LD dos posts (#105), com a barra final, como no sitemap.
+export const AUTHOR_URL = 'https://guifav.dev/';
+// @id do WebSite da home (index.html); o BlogPosting aponta para ele em isPartOf. O check_site confere os dois.
+export const WEBSITE_ID = 'https://guifav.dev/#website';
 export const BLOG_DESCRIPTION =
   'Artigos de Guilherme Favaron sobre IA aplicada, dados e engenharia de software, com código, arquitetura e decisões técnicas.';
 export const GA4_ID = 'G-K7Y87QNCX8';

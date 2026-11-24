@@ -1930,7 +1930,8 @@ class SeoTest(unittest.TestCase):
         self.post(slug="antigo", date="2024-03-01", desc="curta")  # importado: só aviso, agrupado na CI
         # isola a regra da #103 das demais; o formato do aviso depende de GITHUB_ACTIONS, que a CI define
         with mock.patch.object(C, "check", lambda *a, **k: []), \
-                mock.patch.object(C, "check_related", lambda *a, **k: []):  # bloco Leia também (#104)
+                mock.patch.object(C, "check_related", lambda *a, **k: []), \
+                mock.patch.object(C, "check_post_ld", lambda *a, **k: []):  # Leia também (#104), JSON-LD (#105)
             for gh, new_mark, group in (("", "AVISO: ", None), ("true", "::warning title=check_site (#103)::", "::group::")):
                 for desc, code in (("d" * 69, 1), ("d" * 165, 0), (self.OK_DESC, 0)):
                     with self.subTest(gh=gh, desc=len(desc)), mock.patch.dict(os.environ, {"GITHUB_ACTIONS": gh}):
@@ -1944,6 +1945,237 @@ class SeoTest(unittest.TestCase):
                         if group:
                             self.assertIn(group + "Avisos dos posts importados (1)", out.getvalue())
                             self.assertIn("::endgroup::", out.getvalue())
+
+
+def post_graph(slug: str = "p", title: str = "Um post") -> dict:
+    """O @graph que o [slug].astro emite (#105), para os testes partirem de um post válido."""
+    url = f"https://guifav.dev/blog/{slug}/"
+    return {"@context": "https://schema.org", "@graph": [
+        {"@type": "BlogPosting", "headline": title, "description": "d", "datePublished": "2026-01-01T00:00:00.000Z",
+         "dateModified": "2026-01-01T00:00:00.000Z", "author": {"@id": "https://guifav.dev/#person"},
+         "publisher": {"@id": "https://guifav.dev/#person"}, "isPartOf": {"@id": "https://guifav.dev/#website"},
+         "mainEntityOfPage": url, "url": url, "inLanguage": "pt-BR"},
+        {"@type": "BreadcrumbList", "itemListElement": [
+            {"@type": "ListItem", "position": 1, "name": "Guilherme Favaron", "item": "https://guifav.dev/"},
+            {"@type": "ListItem", "position": 2, "name": "Insights", "item": "https://guifav.dev/blog/"},
+            {"@type": "ListItem", "position": 3, "name": title, "item": url}]},
+        {"@type": "Person", "@id": "https://guifav.dev/#person", "name": "Guilherme Favaron", "url": "https://guifav.dev/"},
+    ]}
+
+
+def ld_script(data) -> str:
+    return f'<script data-site-script type="application/ld+json">{json.dumps(data, ensure_ascii=False)}</script>'
+
+
+class PostLdTest(unittest.TestCase):
+    """#105: todo post indexável sai com o @graph de BlogPosting, BreadcrumbList e Person mínima."""
+
+    HOME = ('<script type="application/ld+json">{"@context":"https://schema.org","@type":"Person",'
+            '"@id":"https://guifav.dev/#person","name":"Guilherme de Mauro Favaron","url":"https://guifav.dev"}</script>'
+            '<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite",'
+            '"@id":"https://guifav.dev/#website","name":"Guilherme Favaron","url":"https://guifav.dev/",'
+            '"publisher":{"@id":"https://guifav.dev/#person"}}</script>')
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        r = Path(self.tmp.name)
+        self.site, self.posts = r / "_site", r / "posts"
+        self.posts.mkdir()
+        self.home(self.HOME)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def home(self, head):
+        self.site.mkdir(exist_ok=True)
+        (self.site / "index.html").write_text(f"<html><head>{head}</head><body></body></html>", encoding="utf-8")
+
+    def post(self, head, slug="p", index=True):
+        fm = f"---\ntitle: x\nslug: {slug}\n" + ("" if index else "index: false\n") + "---\n"
+        (self.posts / f"{slug}.md").write_text(fm, encoding="utf-8")
+        d = self.site / "blog" / slug
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "index.html").write_text(f"<html><head>{head}</head><body><h1>x</h1></body></html>", encoding="utf-8")
+
+    def ld(self):
+        return C.check_post_ld(self.site, self.posts)
+
+    def test_valid_post_passes(self):
+        self.post(ld_script(post_graph()))
+        self.assertEqual(self.ld(), [])
+
+    def test_escaped_lt_from_jsonldscript_is_read(self):
+        # O jsonLdScript do blog troca "<" por \u003c; o título com "<" continua batendo com a trilha.
+        self.post(ld_script(post_graph(title="A < B")).replace("A < B", "A \\u003c B"))
+        self.assertEqual(self.ld(), [])
+
+    def test_indexable_post_without_graph_fails(self):
+        self.post("")
+        self.assertEqual(self.ld(), ["blog/p/index.html: post indexável sem o JSON-LD do post (#105): nenhum BlogPosting"])
+
+    def test_noindex_post_is_not_judged(self):
+        self.post("", index=False)
+        self.assertEqual(self.ld(), [])
+
+    def test_post_without_page_is_left_to_check(self):
+        (self.posts / "sem-pagina.md").write_text("---\ntitle: x\nslug: sem-pagina\n---\n", encoding="utf-8")
+        self.assertEqual(self.ld(), [])
+
+    def _mutate(self, fn):
+        g = post_graph()
+        fn(g)
+        return g
+
+    def test_each_broken_piece_fails_with_its_reason(self):
+        def node(g, t):
+            return next(n for n in g["@graph"] if n.get("@type") == t)
+
+        def drop(g, t):
+            g["@graph"] = [n for n in g["@graph"] if n.get("@type") != t]
+
+        def crumbs(g):
+            return node(g, "BreadcrumbList")["itemListElement"]
+
+        cases = {
+            "sem Person": (lambda g: drop(g, "Person"), "0 nós Person"),
+            "Person com outro nome": (lambda g: node(g, "Person").update(name="Guilherme de Mauro Favaron"),
+                                      "a Person do @graph"),
+            "Person com url sem barra": (lambda g: node(g, "Person").update(url="https://guifav.dev"), "a Person do @graph"),
+            "Person com outro @id": (lambda g: node(g, "Person").update({"@id": "https://guifav.dev/#autor"}), "0 nós Person"),
+            "Person sem @type": (lambda g: node(g, "Person").pop("@type"), "a Person do @graph"),
+            "author de outro @id": (lambda g: node(g, "BlogPosting").update(author={"@id": "https://x.org/#p"}),
+                                    "author não aponta"),
+            "author ausente": (lambda g: node(g, "BlogPosting").pop("author"), "author não aponta"),
+            "author em texto": (lambda g: node(g, "BlogPosting").update(author="Guilherme Favaron"), "author não aponta"),
+            "publisher ausente": (lambda g: node(g, "BlogPosting").pop("publisher"), "publisher não aponta"),
+            "publisher GRI": (lambda g: node(g, "BlogPosting").update(
+                publisher={"@type": "Organization", "name": "GRI Institute", "url": "https://www.griinstitute.org/"}),
+                "publisher não aponta"),
+            "isPartOf ausente": (lambda g: node(g, "BlogPosting").pop("isPartOf"), "isPartOf não aponta"),
+            "isPartOf de outro @id": (lambda g: node(g, "BlogPosting").update(isPartOf={"@id": "https://guifav.dev/#blog"}),
+                                      "isPartOf não aponta"),
+            "url de outro post": (lambda g: node(g, "BlogPosting").update(url="https://guifav.dev/blog/q/"),
+                                  "url diferente"),
+            "mainEntityOfPage de outro post": (
+                lambda g: node(g, "BlogPosting").update(mainEntityOfPage="https://guifav.dev/blog/q/"),
+                "mainEntityOfPage diferente"),
+            # o último nível da trilha também em branco: só a regra do headline pode acusar
+            "headline em branco": (lambda g: (node(g, "BlogPosting").update(headline=" "), crumbs(g)[2].update(name=" ")),
+                                   "headline vazio"),
+            "sem BreadcrumbList": (lambda g: drop(g, "BreadcrumbList"), "0 BreadcrumbList"),
+            "trilha com 2 níveis": (lambda g: crumbs(g).pop(1), "BreadcrumbList fora da trilha"),
+            "trilha com 4 níveis": (lambda g: crumbs(g).insert(2, {"@type": "ListItem", "position": 3, "name": "Tema",
+                                                                   "item": "https://guifav.dev/blog/tema/x/"}),
+                                    "BreadcrumbList fora da trilha"),
+            "nível a mais depois do post": (lambda g: crumbs(g).append(dict(crumbs(g)[2], position=4)),
+                                            "BreadcrumbList fora da trilha"),
+            "posição fora de ordem": (lambda g: crumbs(g)[1].update(position=3), "BreadcrumbList fora da trilha"),
+            "posição em texto": (lambda g: crumbs(g)[0].update(position="1"), "BreadcrumbList fora da trilha"),
+            "blog sem barra": (lambda g: crumbs(g)[1].update(item="https://guifav.dev/blog"), "BreadcrumbList fora da trilha"),
+            "home sem barra": (lambda g: crumbs(g)[0].update(item="https://guifav.dev"), "BreadcrumbList fora da trilha"),
+            "último nível de outro post": (lambda g: crumbs(g)[2].update(item="https://guifav.dev/blog/q/"),
+                                           "BreadcrumbList fora da trilha"),
+            "último nível com outro nome": (lambda g: crumbs(g)[2].update(name="Outro"), "BreadcrumbList fora da trilha"),
+            "nível sem nome": (lambda g: crumbs(g)[1].update(name=""), "BreadcrumbList fora da trilha"),
+            "nível que não é ListItem": (lambda g: crumbs(g)[0].update({"@type": "Thing"}), "BreadcrumbList fora da trilha"),
+            "duas BreadcrumbList": (lambda g: g["@graph"].append(dict(node(g, "BreadcrumbList"))), "2 BreadcrumbList"),
+            "duas Person com o @id": (lambda g: g["@graph"].append(dict(node(g, "Person"))), "2 nós Person"),
+        }
+        for name, (fn, reason) in cases.items():
+            with self.subTest(name=name):
+                self.post(ld_script(self._mutate(fn)))
+                got = self.ld()
+                self.assertEqual(len(got), 1, got)
+                self.assertTrue(got[0].startswith("blog/p/index.html: "), got)
+                self.assertIn(reason, got[0])
+
+    def test_graph_shape(self):
+        g = post_graph()
+        flat = [dict(n, **{"@context": "https://schema.org"}) for n in g["@graph"]]
+        cases = {
+            "nós em scripts separados, sem @graph": ("".join(ld_script(n) for n in flat), "não está num @graph"),
+            "lista de raízes sem @graph": (ld_script(flat), "não está num @graph"),
+            "comentado": (f"<!-- {ld_script(g)} -->", "nenhum BlogPosting"),
+            "@context errado": (ld_script(dict(g, **{"@context": "https://example.org"})), "nenhum BlogPosting"),
+            "sem @context": (ld_script({"@graph": g["@graph"]}), "nenhum BlogPosting"),
+            "@graph que não é lista": (ld_script({"@context": "https://schema.org", "@graph": g["@graph"][0]}),
+                                       "nenhum BlogPosting"),
+            "json inválido": (ld_script(g).replace("}", "", 1), "nenhum BlogPosting"),
+            "dois BlogPosting": (ld_script(g) + ld_script(dict(g["@graph"][0], **{"@context": "https://schema.org"})),
+                                 "2 BlogPosting"),
+            "Person em outro script": (ld_script(dict(g, **{"@graph": g["@graph"][:2]}))
+                                       + ld_script(dict(g["@graph"][2], **{"@context": "https://schema.org"})),
+                                       "0 nós Person"),
+            "outro tipo": (ld_script(g).replace('"BlogPosting"', '"Article"'), "nenhum BlogPosting"),
+        }
+        for name, (head, reason) in cases.items():
+            with self.subTest(name=name):
+                self.post(head)
+                got = self.ld()
+                self.assertEqual(len(got), 1, got)
+                self.assertTrue(got[0].startswith("blog/p/index.html: post indexável sem o JSON-LD do post (#105): "), got)
+                self.assertIn(reason, got[0])
+
+    def test_ispartof_follows_the_home_website_id(self):
+        # O @id do isPartOf é conferido contra o WebSite da home, não contra uma constante solta.
+        self.home(self.HOME.replace("https://guifav.dev/#website", "https://guifav.dev/#site"))
+        self.post(ld_script(post_graph()))
+        got = self.ld()
+        self.assertEqual(len(got), 1, got)
+        self.assertIn("isPartOf", got[0])
+        self.assertIn("https://guifav.dev/#site", got[0])
+        g = post_graph()
+        g["@graph"][0]["isPartOf"] = {"@id": "https://guifav.dev/#site"}
+        self.post(ld_script(g))
+        self.assertEqual(self.ld(), [])
+
+    def test_home_website_without_id_fails_once(self):
+        self.home(self.HOME.replace('"@id":"https://guifav.dev/#website",', ""))
+        self.post(ld_script(post_graph()))
+        self.post(ld_script(post_graph("q")), slug="q")
+        got = self.ld()
+        self.assertEqual(got, ["index.html: sem o WebSite com @id para o isPartOf dos posts (#105)"])
+
+    def test_home_website_id_ignores_other_websites(self):
+        # Só vale o WebSite que o check_seo reconhece (nome e URL da home), e o @id da Person nunca serve.
+        other = ('<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite",'
+                 '"@id":"https://guifav.dev/#outro","name":"Outro","url":"https://guifav.dev/"}</script>')
+        self.assertEqual(C._home_website_id(other + self.HOME), "https://guifav.dev/#website")
+        self.assertIsNone(C._home_website_id(other))
+        self.assertIsNone(C._home_website_id(self.HOME.replace("https://guifav.dev/#website", "https://guifav.dev/#person")))
+        self.assertIsNone(C._home_website_id(self.HOME.replace('"https://guifav.dev/#website"', "1")))
+
+    def test_repo_home_and_blog_consts_agree_on_the_website_id(self):
+        root = Path(__file__).resolve().parent.parent
+        home_id = C._home_website_id((root / "index.html").read_text(encoding="utf-8"))
+        self.assertEqual(home_id, "https://guifav.dev/#website")
+        consts = (root / "blog-src/src/consts.ts").read_text(encoding="utf-8")
+        self.assertIn(f"export const WEBSITE_ID = '{home_id}';", consts)
+        self.assertIn("export const AUTHOR_ID = 'https://guifav.dev/#person';", consts)
+        self.assertIn("export const AUTHOR_URL = 'https://guifav.dev/';", consts)
+        self.assertIn("export const AUTHOR_NAME = 'Guilherme Favaron';", consts)
+
+    def test_slug_template_builds_the_graph(self):
+        src = (Path(__file__).resolve().parent.parent / "blog-src/src/pages/[slug].astro").read_text(encoding="utf-8")
+        self.assertIn("const ld = postLdGraph({", src)
+        self.assertIn("jsonLd={ld}", src)
+
+    def test_main_runs_the_rule(self):
+        consts = Path(self.tmp.name) / "consts.ts"
+        consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
+        args = ["--site", str(self.site), "--posts", str(self.posts), "--consts", str(consts)]
+        from unittest import mock
+        with mock.patch.object(C, "check", lambda *a, **k: []), \
+                mock.patch.object(C, "check_related", lambda *a, **k: []), \
+                mock.patch.object(C, "check_contrast", lambda *a, **k: []), \
+                mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])):
+            for head, code in (("", 1), (ld_script(post_graph()), 0)):
+                with self.subTest(code=code):
+                    self.post(head)
+                    out, err = io.StringIO(), io.StringIO()
+                    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                        self.assertEqual(C.main(args), code)
+                    self.assertEqual("JSON-LD do post (#105)" in err.getvalue(), code == 1)
 
 
 TOKENS_CSS = (":root{--bg:#fafafa;--text:#171717;--hl:#FFBE00;--hl-text:#8a6400}"
