@@ -1531,7 +1531,7 @@ class ToolsSourcesTest(unittest.TestCase):
             m = re.search(r'<nav class="footer-tools".*?</nav>', text, flags=re.S)
             self.assertTrue(m)
             # A home traduz por data-i18n; o blog só tem português. O resto da linha é igual.
-            return re.sub(r' data-i18n="[^"]*"', "", m.group(0))
+            return re.sub(r' data-i18n(?:-aria)?="[^"]*"', "", m.group(0))
         self.assertEqual(tools_nav(self.read("index.html")), tools_nav(self.read("blog-src/src/layouts/Base.astro")))
 
     def test_targets_exist_in_sources(self):
