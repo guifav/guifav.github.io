@@ -1,6 +1,6 @@
 """Testes do sync das conversões do site com o Twenty (issue #97, fase 2). Rodar em blog-src/: python3 scripts/test_conversoes_sync.py
 
-O D1 falso é um SQLite em memória com as migrações reais do painel (0004 e 0005), e o Twenty falso guarda estado como o
+O D1 falso é um SQLite em memória com as migrações reais do painel (0004 em diante), e o Twenty falso guarda estado como o
 servidor: devolve cópias, recusa eventoId repetido (campo único, 400 como no Twenty 2.32) e cria o campo inverso da relação.
 """
 import contextlib
@@ -10,7 +10,9 @@ import tempfile
 import io
 import json
 import os
+import shutil
 import sqlite3
+import subprocess
 import sys
 import unittest
 import urllib.parse
@@ -38,7 +40,7 @@ class Fake:
     def __init__(self, people=(), schema=False, fail=None, listing=None):
         self.db = sqlite3.connect(":memory:")
         self.db.row_factory = sqlite3.Row
-        for name in ("0004_conversions.sql", "0005_conversions_pedido.sql"):
+        for name in sorted(n for n in os.listdir(MIGRATIONS) if n.endswith(".sql") and n >= "0004"):
             with open(os.path.join(MIGRATIONS, name), encoding="utf-8") as fh:
                 self.db.executescript(fh.read())
         self.people = {p["id"]: copy.deepcopy(p) for p in people}
@@ -60,16 +62,17 @@ class Fake:
 
     # ---- D1 ----
     def add(self, n, email, action="material_download", material="planilha-custos-ia", interests=(CUSTO,), when="2026-11-24T10:00:00.000Z",
-            verified=None, ga=None, request_id=None, file=None, synced=None, raw_interests=None):
+            verified=None, ga=None, request_id=None, file=None, synced=None, raw_interests=None, origem=None):
         if verified is None:
             verified = 0 if action == "material_request" else 1
         if action == "material_download" and file is None:
             file = material
+        o = origem or {}  # colunas da migração 0006 (issue #114), pelo nome da coluna
         self.db.execute("INSERT INTO conversions (id, email, action, material, interests, occurred_at, synced_at, verified, "
-                        "ga_client_id, request_id, file) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                        "ga_client_id, request_id, file, " + ", ".join(S.ORIGEM_COLS) + ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                         (hexid(n) if isinstance(n, int) else n, email, action, material,
                          raw_interests if raw_interests is not None else json.dumps(list(interests)), when, synced, verified,
-                         ga, request_id, file))
+                         ga, request_id, file, *(o.get(k) for k in S.ORIGEM_COLS)))
 
     def __del__(self):
         self.db_close()
@@ -235,7 +238,7 @@ class SyncTest(unittest.TestCase):
         self.assertEqual((f.twenty_writes(), f.d1_writes()), ([], []))
         self.assertEqual((counts["objeto_a_criar"], counts["pessoas_a_criar"], counts["pessoas_a_atualizar"], counts["conversoes_a_criar"]),
                          (1, 1, 1, 2))
-        self.assertEqual(counts["campos_a_criar"], 4 + 9 + 1)
+        self.assertEqual(counts["campos_a_criar"], 4 + 15 + 1)
         self.assertEqual(counts["opcoes_a_criar"], 2)  # CUSTO_IA nas duas multi-seleções
         self.assertEqual(len(f.pending()), 2)
         self.assertIn("simulação", out)
@@ -249,7 +252,8 @@ class SyncTest(unittest.TestCase):
         self.assertEqual({k: v["type"] for k, v in f.conv_fields.items()},
                          {"name": "TEXT", "acao": "SELECT", "comprovado": "BOOLEAN", "material": "TEXT", "arquivo": "TEXT",
                           "interesses": "MULTI_SELECT", "ocorreuEm": "DATE_TIME", "eventoId": "TEXT", "pedidoId": "TEXT",
-                          "gaClientId": "TEXT", "pessoa": "RELATION"})
+                          "gaClientId": "TEXT", "origemCanal": "SELECT", "origemFonte": "SELECT", "utmSource": "TEXT",
+                          "utmMedium": "TEXT", "utmCampaign": "TEXT", "paginaEntrada": "TEXT", "pessoa": "RELATION"})
         self.assertTrue(f.conv_fields["eventoId"]["_spec"]["isUnique"])
         self.assertEqual([o["value"] for o in f.conv_fields["acao"]["options"]], ["MATERIAL_REQUEST", "MATERIAL_DOWNLOAD", "NEWSLETTER_CONFIRM"])
         for name, t in (("siteInteresses", "MULTI_SELECT"), ("siteUltimaConversao", "DATE_TIME"), ("siteEmailComprovado", "BOOLEAN"),
@@ -266,7 +270,8 @@ class SyncTest(unittest.TestCase):
         self.assertEqual(c, {"id": c["id"], "name": "Download de material: planilha-custos-ia", "acao": "MATERIAL_DOWNLOAD",
                              "comprovado": True, "material": "planilha-custos-ia", "arquivo": "planilha-custos-ia",
                              "interesses": ["CUSTO_IA"], "ocorreuEm": "2026-11-24T10:00:00.000Z", "eventoId": hexid(1),
-                             "pedidoId": hexid(99), "gaClientId": "123.456", "pessoaId": p["id"]})
+                             "pedidoId": hexid(99), "gaClientId": "123.456", "origemCanal": None, "origemFonte": None,
+                             "utmSource": None, "utmMedium": None, "utmCampaign": None, "paginaEntrada": None, "pessoaId": p["id"]})
         self.assertEqual(f.pending(), [])
         self.assertRegex(f.row(1)["synced_at"], r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$")
         self.assertEqual((counts["pessoas_a_criar"], counts["conversoes_a_criar"], counts["linhas_marcadas"]), (1, 1, 1))
@@ -709,6 +714,169 @@ class ForgetTest(unittest.TestCase):
             with self.assertRaisesRegex(S.SyncError, "email inválido"):
                 forget(f, bad, apply=True)
         self.assertEqual(len(f.convs), 4)
+
+
+# ---------------------------------------------------------------- Origem da visita (issue #114)
+
+ORIGEM = {"origin_channel": "assistente", "origin_source": "chatgpt", "utm_source": "chatgpt.com", "utm_medium": None,
+          "utm_campaign": "lancamento", "landing_path": "/mapa-decisao-ia/"}
+NEWSLETTER = os.path.join(HERE, "..", "..", "workers", "newsletter")
+ORIGEM_TWENTY = ("origemCanal", "origemFonte", "utmSource", "utmMedium", "utmCampaign", "paginaEntrada")
+
+
+def ponta_a_ponta() -> dict:
+    """Roda o roteiro do Worker (workers/newsletter/tests/ponta-a-ponta.ts): track.js, formulário, Worker e D1 de verdade."""
+    node = shutil.which("node")
+    if not node:
+        raise AssertionError("o teste ponta a ponta precisa do node (o mesmo dos testes do Worker)")
+    r = subprocess.run([node, "--no-warnings", "tests/ponta-a-ponta.ts"], cwd=NEWSLETTER, capture_output=True, text=True, timeout=120)
+    if r.returncode != 0:
+        raise AssertionError(f"ponta-a-ponta.ts falhou: {r.stderr[-2000:]}")
+    return json.loads(r.stdout)
+
+
+class OrigemTest(unittest.TestCase):
+    def test_origin_goes_to_the_conversion_and_never_to_the_person(self):
+        f = Fake(people=[person("p1", "a@x.com")])
+        f.add(1, "a@x.com", origem=ORIGEM)
+        f.add(2, "nova@x.com", action="newsletter_confirm", material=None, interests=(EXPERT,),
+              origem={"origin_channel": "direto"})
+        run(f, apply=True)
+        ev = conv_by_event(f)
+        self.assertEqual({k: ev[hexid(1)][k] for k in ORIGEM_TWENTY},
+                         {"origemCanal": "ASSISTENTE", "origemFonte": "CHATGPT", "utmSource": "chatgpt.com", "utmMedium": None,
+                          "utmCampaign": "lancamento", "paginaEntrada": "/mapa-decisao-ia/"})
+        self.assertEqual({k: ev[hexid(2)][k] for k in ORIGEM_TWENTY},
+                         {"origemCanal": "DIRETO", "origemFonte": None, "utmSource": None, "utmMedium": None, "utmCampaign": None,
+                          "paginaEntrada": None})
+        # Na Pessoa, só os campos site* de antes: nenhuma origem (decisão do Gui na #114).
+        for m, path, d, _ in f.calls:
+            if path.startswith("/rest/people") and m in ("POST", "PATCH"):
+                self.assertLessEqual(set(d) - {"emails"}, set(S.PERSON_FIELDS), path)
+        self.assertNotIn("chatgpt", json.dumps(list(f.people.values())))
+        opts = lambda n: [(o["value"], o["label"]) for o in f.conv_fields[n]["options"]]  # noqa: E731
+        self.assertEqual([v for v, _ in opts("origemCanal")], [v for v, _ in S.CANAIS.values()])
+        self.assertEqual(opts("origemFonte")[-1], ("OUTRO", "Outro"))
+
+    def test_lists_match_the_worker_and_the_migration(self):
+        # As listas são as mesmas nos quatro lugares (origem.ts, track.js, migração 0006 e aqui): conferidas pelo texto.
+        with open(os.path.join(NEWSLETTER, "src", "origem.ts"), encoding="utf-8") as fh:
+            ts = fh.read()
+        with open(os.path.join(MIGRATIONS, "0006_conversions_origem.sql"), encoding="utf-8") as fh:
+            sql = fh.read()
+        with open(os.path.join(HERE, "..", "..", "assets", "track.js"), encoding="utf-8") as fh:
+            js = fh.read()
+        lst = lambda keys: ", ".join(f"'{k}'" for k in keys)  # noqa: E731
+        self.assertIn(f"CANAIS = [{lst(S.CANAIS)}]", " ".join(ts.split()))
+        self.assertIn(f"FONTES = [{lst(S.FONTES)}]", " ".join(ts.replace("[\n", "[").split()).replace("[ ", "["))
+        self.assertIn(f"IN ({lst(S.CANAIS)})", " ".join(sql.split()))
+        self.assertIn(f"IN ({lst(S.FONTES)})", " ".join(sql.split()).replace("( ", "("))
+        self.assertIn(f"var CANAIS = [{lst(S.CANAIS)}]", js)
+        for fonte in S.FONTES:
+            self.assertIn(f"{fonte}: ", js.split("var FONTE_CANAL")[1].split("};")[0])
+
+    def test_row_before_114_syncs_with_empty_origin(self):
+        f = Fake()
+        f.add(1, "a@x.com")  # sem origem: linha gravada antes da migração 0006
+        counts, _ = run(f, apply=True)
+        self.assertEqual(counts["linha_invalida"], 0)
+        (c,) = f.convs.values()
+        self.assertTrue(all(c[k] is None for k in ORIGEM_TWENTY))
+
+    def test_malformed_origin_is_an_invalid_row_not_written(self):
+        # O CHECK da 0006 já barra lista e padrão no D1; estas combinações ele aceita, e o sync recusa.
+        f = Fake()
+        f.add(1, "a@x.com", origem={"origin_source": "google"})  # fonte sem canal
+        f.add(2, "a@x.com", origem={"origin_channel": "direto", "origin_source": "google"})  # direto não tem fonte
+        f.add(3, "a@x.com", origem={"utm_source": "google"})  # UTM sem canal
+        counts, _ = run(f, apply=True)
+        self.assertEqual((counts["linha_invalida"], f.convs, len(f.pending())), (3, {}, 3))
+        # E as que o CHECK barra, se algum dia chegarem por outro caminho:
+        base = {k: None for k in S.ORIGEM_COLS}
+        for bad in ({"origin_channel": "buscador"}, {"origin_channel": "busca", "origin_source": "altavista"},
+                    {"origin_channel": "busca", "utm_campaign": "https://google.com/search?q=termo"},
+                    {"origin_channel": "busca", "utm_source": "Google"}, {"origin_channel": "busca", "utm_medium": "x" * 65},
+                    {"origin_channel": "busca", "landing_path": "/blog/?q=termo"},
+                    {"origin_channel": "busca", "landing_path": "https://guifav.dev/"},
+                    {"origin_channel": "busca", "landing_path": "//evil.example"},
+                    {"origin_channel": "busca", "landing_path": "/" + "a" * 200}):
+            self.assertIsNone(S.parse_origem({**base, **bad}), bad)
+        self.assertEqual(S.parse_origem({**base, "origin_channel": "busca", "landing_path": "/" + "a" * 199})["landing_path"],
+                         "/" + "a" * 199)
+
+    def test_d1_check_refuses_full_url_and_search_term(self):
+        f = Fake()
+        for bad in ({"landing_path": "/blog/?q=termo"}, {"utm_campaign": "https://google.com/search?q=termo"},
+                    {"origin_channel": "x"}, {"origin_source": "altavista"}, {"utm_source": "A B"}):
+            with self.assertRaises(sqlite3.IntegrityError, msg=str(bad)):
+                f.add(9, "a@x.com", origem={"origin_channel": "busca", **bad})
+
+    def test_crm_from_before_114_gets_only_the_origin_fields(self):
+        f = Fake(schema=True)
+        for k in ORIGEM_TWENTY:
+            del f.conv_fields[k]
+        f.add(1, "a@x.com", origem=ORIGEM)
+        counts, _ = run(f, apply=True)
+        created = [d["variables"]["input"]["field"]["name"] for m, p, d, _ in f.calls
+                   if p == "/metadata" and "createOneField" in d["query"]]
+        self.assertEqual(created, list(ORIGEM_TWENTY))
+        self.assertEqual(counts["campos_a_criar"], 6)
+        self.assertEqual(conv_by_event(f)[hexid(1)]["origemFonte"], "CHATGPT")
+
+    def test_select_without_an_option_is_refused_before_any_write(self):
+        f = Fake(schema=True)
+        f.conv_fields["origemCanal"]["options"] = [o for o in f.conv_fields["origemCanal"]["options"] if o["value"] != "PAGO"]
+        f.add(1, "a@x.com", origem=ORIGEM)
+        with self.assertRaisesRegex(S.SyncError, "origemCanal existe sem as opções PAGO"):
+            run(f, apply=True)
+        self.assertEqual((f.twenty_writes(), f.d1_writes(), f.convs), ([], [], {}))
+
+    def test_forget_removes_the_origin_from_d1_and_twenty(self):
+        f = Fake(people=[person("p1", "a@x.com")])
+        f.add(1, "a@x.com", origem=ORIGEM)
+        f.add(2, "a@x.com", action="material_request", origem=ORIGEM)
+        f.add(3, "b@x.com", origem={"origin_channel": "busca", "origin_source": "google", "landing_path": "/blog/"})
+        run(f, apply=True)
+        self.assertEqual(len(f.convs), 3)
+        forget(f, "a@x.com", apply=True)
+        self.assertEqual(f.db.execute("SELECT count(*) FROM conversions WHERE email = 'a@x.com'").fetchone()[0], 0)
+        state = json.dumps([list(f.convs.values()), list(f.people.values()),
+                            [dict(r) for r in f.db.execute("SELECT * FROM conversions")]])
+        for v in ("chatgpt", "CHATGPT", "lancamento", "/mapa-decisao-ia/", "ASSISTENTE"):
+            self.assertNotIn(v, state, f"a origem do email apagado sobrou: {v}")
+        self.assertEqual([c["origemFonte"] for c in f.convs.values()], ["GOOGLE"])  # a de outro email fica
+
+    def test_end_to_end_signup_and_material_request_record_only_the_agreed_fields(self):
+        e2e = ponta_a_ponta()
+        linhas = e2e["linhas"]
+        f = Fake(people=[person("p1", "leitora@exemplo.com")])
+        cols = list(linhas[0])
+        for ln in linhas:
+            f.db.execute(f"INSERT INTO conversions ({', '.join(cols)}) VALUES ({', '.join('?' * len(cols))})", [ln[k] for k in cols])
+        counts, out = run(f, apply=True)
+        self.assertEqual((counts["linha_invalida"], counts["conversoes_a_criar"], f.pending()), (0, 5, []))
+        got = sorted((c["acao"], *(c[k] for k in ORIGEM_TWENTY)) for c in f.convs.values())
+        self.assertEqual(got, sorted([
+            ("NEWSLETTER_CONFIRM", "PAGO", "GOOGLE", None, None, None, "/blog/rag-em-producao/"),
+            ("MATERIAL_REQUEST", "ASSISTENTE", "CHATGPT", "chatgpt.com", None, None, "/mapa-decisao-ia/"),
+            ("MATERIAL_DOWNLOAD", "ASSISTENTE", "CHATGPT", "chatgpt.com", None, None, "/mapa-decisao-ia/"),
+            ("MATERIAL_DOWNLOAD", "ASSISTENTE", "CHATGPT", "chatgpt.com", None, None, "/mapa-decisao-ia/"),
+            ("NEWSLETTER_CONFIRM", "ASSISTENTE", "CHATGPT", "chatgpt.com", None, None, "/mapa-decisao-ia/"),
+        ]))
+        # Nada além dos campos combinados: as chaves de cada Conversão são as de antes mais as seis da origem.
+        antes = {"name", "acao", "comprovado", "material", "arquivo", "interesses", "ocorreuEm", "eventoId", "pedidoId", "gaClientId",
+                 "pessoaId"}
+        for c in f.convs.values():
+            self.assertEqual(set(c) - {"id"}, antes | set(ORIGEM_TWENTY))
+        crm = json.dumps([list(f.convs.values()), list(f.people.values())])
+        for p in ("termo", "secreto", "GCLIDSECRETO", "search", "http", "?", "#", "=", "203.0.113", "Mozilla"):
+            self.assertNotIn(p, crm, f"o Twenty não guarda {p}")
+        self.assertNotIn("@", out)
+        # E o --forget de cada email apaga a origem nos dois lugares.
+        for email in ("inscrita@exemplo.com", "leitora@exemplo.com"):
+            forget(f, email, apply=True)
+        self.assertEqual((f.convs, f.db.execute("SELECT count(*) FROM conversions").fetchone()[0]), ({}, 0))
+        self.assertNotIn("CHATGPT", json.dumps(list(f.people.values())))
 
 
 class CliTest(unittest.TestCase):

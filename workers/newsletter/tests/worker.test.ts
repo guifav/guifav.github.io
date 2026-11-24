@@ -7,7 +7,7 @@ import { handle, contactPath, normalizeEmail, type Env } from '../src/index.ts';
 import { signLink, verifyLink } from '../src/token.ts';
 import { confirmationEmail } from '../src/email.ts';
 import { createHash } from 'node:crypto';
-import { d1, rows, capturaErros, variantes } from './d1.ts';
+import { d1, rows, capturaErros, variantes, SEM_ORIGEM } from './d1.ts';
 
 const NOW = Date.UTC(2026, 10, 11, 12, 0, 0);
 const SECRET = 'segredo-de-teste-com-tamanho-suficiente-0123456789';
@@ -615,6 +615,7 @@ test('C7: /confirm concluído grava uma conversão newsletter_confirm; o mesmo l
     id: createHash('sha256').update(`newsletter_confirm\n${new URLSearchParams(q).get('s')}`).digest('hex'), email: 'leitor@exemplo.com',
     action: 'newsletter_confirm', material: null, interests: JSON.stringify([{ id: 'EXPERT_INSIGHTS', rotulo: 'Expert Insights' }]),
     occurred_at: new Date(NOW).toISOString(), synced_at: null, verified: 1, ga_client_id: null, request_id: null, file: null,
+    ...SEM_ORIGEM, // link v1, sem origem (emitido antes da #114)
   });
   assert.ok(!JSON.stringify(c).includes(new URLSearchParams(q).get('s')!), 'o D1 nunca guarda a assinatura do link');
 });

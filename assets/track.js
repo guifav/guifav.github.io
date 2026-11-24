@@ -14,6 +14,12 @@
 // - Formulário com data-ga-client-id: no envio, o campo oculto ga_cid recebe o client_id do cookie _ga, só com
 //   o consentimento aceito (consent-v1, a mesma regra do snippet do GA4); sem ele, o campo vai vazio. O Worker
 //   guarda esse id com o pedido e manda o evento de download com ele, ligando pedido e download no GA4 (#99).
+// - Origem da visita (issue #114): na primeira página da aba, um rótulo da origem (canal, fonte de uma lista fixa, UTM
+//   que casa com [a-z0-9._-]{1,64} e o caminho da página de entrada, sem query) vai para o sessionStorage, e nenhuma
+//   navegação depois o troca. Não é cookie e some ao fechar a aba. No envio dos formulários de inscrição e de material
+//   (action em insights.guifav.dev), ele vai em campos ocultos, com ou sem o aceite dos cookies; o Worker revalida tudo
+//   (workers/newsletter/src/origem.ts, com as mesmas listas). contact_click e schedule_click levam origin_channel e
+//   origin_source. Nunca guarda nem envia a URL de onde a pessoa veio, o termo buscado, gclid e afins nem id algum.
 //
 // Carregado depois do site.js (ou do script de tema do blog): o ouvinte fica no document e roda
 // depois do handler do próprio botão, então já lê o idioma e o tema novos.
@@ -27,6 +33,41 @@
   var SIGNUP_KEY = 'ga_sign_up_sent';
   var LEAD_KEY = 'ga_generate_lead_sent:';
   var CONSENT_TTL = 31536e6;
+  var ORIGIN_KEY = 'site_origin_v1';
+  var WORKER_HOST = 'insights.guifav.dev';
+  var ORIGIN_FORMS = { '/subscribe': 1, '/material': 1 };
+
+  // ---- Origem da visita (issue #114). Listas iguais às de workers/newsletter/src/origem.ts e da migração 0006. ----
+  var CANAIS = ['busca', 'assistente', 'social', 'email', 'pago', 'outro_site', 'direto', 'desconhecida'];
+  var UTM_RE = /^[a-z0-9._-]{1,64}$/;
+  var PATH_RE = /^\/(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]*$/; // segmentos não vazios; até 200 caracteres (pathOk)
+  // Canal de cada fonte da lista fixa, quando nada mais (utm_medium, clique pago) diz outra coisa.
+  var FONTE_CANAL = { google: 'busca', bing: 'busca', chatgpt: 'assistente', perplexity: 'assistente', claude: 'assistente',
+    copilot: 'assistente', gemini: 'assistente', linkedin: 'social', youtube: 'social', github: 'outro_site', outro: '' };
+  // Host de onde a visita veio (sem www.), na ordem: o primeiro que casar vale. [expressão, fonte, canal]
+  var HOSTS = [
+    [/^(?:chatgpt\.com|chat\.openai\.com)$/, 'chatgpt', 'assistente'],
+    [/^perplexity\.ai$/, 'perplexity', 'assistente'],
+    [/^claude\.ai$/, 'claude', 'assistente'],
+    [/^(?:copilot\.microsoft\.com|edgeservices\.bing\.com|copilot\.cloud\.microsoft|m365\.cloud\.microsoft)$/, 'copilot', 'assistente'],
+    [/^(?:gemini|bard)\.google\.com$/, 'gemini', 'assistente'],
+    [/^(?:mail\.google\.com|com\.google\.android\.gm|outlook\.(?:live|office|office365)\.com|mail\.yahoo\.com)$/, 'outro', 'email'],
+    [/^(?:google\.(?:[a-z]{2,3}|com?\.[a-z]{2})|com\.google\.android\.googlequicksearchbox)$/, 'google', 'busca'],
+    [/^(?:cn\.)?bing\.com$/, 'bing', 'busca'],
+    [/^(?:duckduckgo\.com|search\.yahoo\.com|ecosia\.org|search\.brave\.com|yandex\.[a-z]{2,3}|baidu\.com)$/, 'outro', 'busca'],
+    [/^(?:[a-z0-9-]+\.)?linkedin\.com$|^lnkd\.in$/, 'linkedin', 'social'],
+    [/^(?:m\.)?youtube\.com$|^youtu\.be$/, 'youtube', 'social'],
+    [/^(?:[a-z0-9-]+\.)?github\.com$/, 'github', 'outro_site'],
+    [/^(?:x\.com|t\.co|twitter\.com|(?:[a-z]+\.)?facebook\.com|instagram\.com|(?:old\.)?reddit\.com|news\.ycombinator\.com|bsky\.app|threads\.net|threads\.com)$/, 'outro', 'social']
+  ];
+  // utm_source com o nome do serviço (sem o domínio): o que não está aqui passa pelos HOSTS (chatgpt.com, por exemplo).
+  var SOURCE_NAMES = { google: 'google', bing: 'bing', chatgpt: 'chatgpt', openai: 'chatgpt', perplexity: 'perplexity',
+    claude: 'claude', copilot: 'copilot', gemini: 'gemini', linkedin: 'linkedin', youtube: 'youtube', github: 'github' };
+  // Clique de anúncio: só classifica como pago; o valor nunca é guardado.
+  var PAID_IDS = ['gclid', 'gbraid', 'wbraid', 'dclid', 'msclkid', 'li_fat_id', 'ttclid'];
+  var PAID_MEDIUM = /^(?:cpc|ppc|cpm|cpv|cpa|paid|paidsearch|paid[._-]?(?:search|social|media)|display|banner|ads?)$/;
+  var MEDIUM_CANAL = [[/^(?:e-?mail|newsletter)$/, 'email'], [/^(?:social|social[._-]?(?:media|network)|sm)$/, 'social'],
+    [/^organic$/, 'busca'], [/^referral$/, 'outro_site']];
 
   function send() {
     if (typeof window.gtag === 'function') window.gtag.apply(window, arguments);
@@ -61,11 +102,108 @@
     return HOST_LABELS[host] || host;
   }
 
+  function pathOk(p) { return typeof p === 'string' && p.length <= 200 && PATH_RE.test(p); }
+
+  function host(h) { return String(h || '').toLowerCase().replace(/\.$/, '').replace(/^www\./, ''); }
+
+  function matchHost(h) {
+    for (var i = 0; i < HOSTS.length; i++) if (HOSTS[i][0].test(h)) return { fonte: HOSTS[i][1], canal: HOSTS[i][2] };
+    return null;
+  }
+
+  function utm(params, k) {
+    var v = params.get(k);
+    v = v === null ? '' : v.toLowerCase();
+    return UTM_RE.test(v) ? v : null;
+  }
+
+  // Classifica a visita a partir do referrer e da URL da página de entrada. Só o host do referrer é lido, e da URL
+  // só o caminho, os três utm_* e a presença de um id de clique pago. Exposta para os testes.
+  function classify(referrer, href, selfHost) {
+    var url, params;
+    try { url = new URL(href); params = url.searchParams; } catch (e) { return null; }
+    var o = { canal: 'direto', fonte: null, utm_source: utm(params, 'utm_source'), utm_medium: utm(params, 'utm_medium'),
+      utm_campaign: utm(params, 'utm_campaign'), entrada: pathOk(url.pathname) ? url.pathname : null };
+    var ref = '';
+    if (referrer) {
+      try {
+        var r = new URL(referrer);
+        ref = r.protocol === 'android-app:' ? host(r.hostname || r.href.replace(/^android-app:\/\//, '').split('/')[0]) : host(r.hostname);
+      } catch (e) { ref = ''; }
+    }
+    var internal = ref !== '' && ref === host(selfHost);
+    var refHit = ref && !internal ? matchHost(ref) : null;
+    var src = o.utm_source;
+    var srcName = src ? (SOURCE_NAMES[src] || (matchHost(host(src)) || {}).fonte || null) : null;
+    var paid = false;
+    for (var i = 0; i < PAID_IDS.length; i++) if (params.has(PAID_IDS[i])) paid = true;
+    if (o.utm_medium && PAID_MEDIUM.test(o.utm_medium)) paid = true;
+    var mediumCanal = null;
+    for (var j = 0; o.utm_medium && j < MEDIUM_CANAL.length; j++) if (MEDIUM_CANAL[j][0].test(o.utm_medium)) mediumCanal = MEDIUM_CANAL[j][1];
+    var srcCanal = src ? (SOURCE_NAMES[src] ? FONTE_CANAL[srcName] : (matchHost(host(src)) || {}).canal || null) : null;
+    if (paid) o.canal = 'pago';
+    else if (mediumCanal) o.canal = mediumCanal;
+    else if (srcCanal) o.canal = srcCanal;
+    else if (refHit) o.canal = refHit.canal;
+    else if (ref && !internal) o.canal = 'outro_site';
+    else if (o.utm_source || o.utm_medium || o.utm_campaign || internal) o.canal = 'desconhecida';
+    if (o.canal !== 'direto' && o.canal !== 'desconhecida') {
+      o.fonte = srcName || (refHit && refHit.fonte) || 'outro';
+    }
+    return o;
+  }
+
+  function validOrigin(o) {
+    if (!o || typeof o !== 'object' || CANAIS.indexOf(o.canal) < 0) return null;
+    var fonte = o.canal === 'direto' || o.canal === 'desconhecida' ? null : (o.fonte in FONTE_CANAL ? o.fonte : null);
+    var keep = function (rx, v) { return typeof v === 'string' && rx.test(v) ? v : null; };
+    return { canal: o.canal, fonte: fonte, utm_source: keep(UTM_RE, o.utm_source), utm_medium: keep(UTM_RE, o.utm_medium),
+      utm_campaign: keep(UTM_RE, o.utm_campaign), entrada: pathOk(o.entrada) ? o.entrada : null };
+  }
+
+  // Primeira página da aba: classifica e grava. Nas seguintes, só lê. Sem storage, vale a classificação desta página.
+  function sessionOrigin() {
+    var saved = null;
+    try { saved = validOrigin(JSON.parse(window.sessionStorage.getItem(ORIGIN_KEY) || 'null')); } catch (e) { saved = null; }
+    if (saved) return saved;
+    var o = validOrigin(classify(d.referrer || '', window.location.href, window.location.hostname)) ||
+      { canal: 'desconhecida', fonte: null, utm_source: null, utm_medium: null, utm_campaign: null, entrada: null };
+    try { window.sessionStorage.setItem(ORIGIN_KEY, JSON.stringify(o)); } catch (e) { /* sem storage: só não lembra */ }
+    return o;
+  }
+
+  var origin;
+  try { origin = sessionOrigin(); } catch (e) { origin = null; } // a origem nunca derruba o resto da medição
+  origin = origin || { canal: 'desconhecida', fonte: null, utm_source: null, utm_medium: null, utm_campaign: null, entrada: null };
+  window.guifavOrigin = { classify: classify, current: function () { return origin; } };
+
+  function originForm(f) {
+    var a = f.getAttribute('action');
+    var u;
+    try { u = new URL(a || '', d.baseURI); } catch (e) { return false; }
+    return u.protocol === 'https:' && u.hostname === WORKER_HOST && ORIGIN_FORMS[u.pathname] === 1;
+  }
+
+  function setHidden(f, name, value) {
+    var input = f.querySelector('input[name="' + name + '"]');
+    if (!input) {
+      input = d.createElement('input');
+      input.setAttribute('type', 'hidden');
+      input.setAttribute('name', name);
+      f.appendChild(input);
+    }
+    input.value = value === null ? '' : value;
+  }
+
   function onLink(a) {
     var u = parse(a);
     if (!u) return; // href que o navegador não interpreta: nenhum evento, nem de rodapé
     var ev = ctaEvent(u);
-    if (ev) send('event', ev, { cta_location: ctaLocation(a), transport_type: 'beacon' });
+    if (ev) {
+      var p = { cta_location: ctaLocation(a), origin_channel: origin.canal, transport_type: 'beacon' };
+      if (origin.fonte) p.origin_source = origin.fonte;
+      send('event', ev, p);
+    }
     if (a.closest('footer')) send('event', 'footer_click', { link_label: footerLabel(u), transport_type: 'beacon' });
   }
 
@@ -120,6 +258,16 @@
     var f = t && typeof t.closest === 'function' ? t.closest('form[data-ga-client-id]') : null;
     var input = f && typeof f.querySelector === 'function' ? f.querySelector('input[name="ga_cid"]') : null;
     if (input) input.value = consentGranted() ? gaClientId() : '';
+    // Origem (issue #114): só nos formulários do Worker, com ou sem o aceite dos cookies (legítimo interesse).
+    var of = t && typeof t.closest === 'function' ? t.closest('form') : null;
+    if (of && typeof of.querySelector === 'function' && originForm(of)) {
+      setHidden(of, 'origem_canal', origin.canal);
+      setHidden(of, 'origem_fonte', origin.fonte);
+      setHidden(of, 'utm_source', origin.utm_source);
+      setHidden(of, 'utm_medium', origin.utm_medium);
+      setHidden(of, 'utm_campaign', origin.utm_campaign);
+      setHidden(of, 'origem_entrada', origin.entrada);
+    }
   }, true);
 
   d.addEventListener('click', handle);

@@ -3,11 +3,13 @@
 //   GET  /confirm            link assinado do email: cria o contato no segmento do Resend
 //   POST /material           formulário das páginas de material: Turnstile, validação e email com o link
 //   GET  /material/download  link assinado do email (7 dias): entrega o arquivo e grava a conversão (issue #97)
+// Desde a issue #114, a inscrição e o pedido de material levam a origem da visita (src/origem.ts) até a conversão.
 // As garantias A1 a A9 estão no PR e em tests/worker.test.ts; as dos materiais, em tests/material.test.ts.
-import { signLink, verifyLink, signMaterialLink, verifyMaterialLink, materialExp, MIN_SECRET } from './token.ts';
+import { signLink, verifyConfirmLink, signMaterialLink, verifyMaterialLink, materialExp, MIN_SECRET } from './token.ts';
 import { confirmationEmail, materialEmail } from './email.ts';
 import { material, arquivo, INTERESSES } from './materiais.ts';
-import { recordConversion, conversionId, requestId, requestClientId, type D1Like } from './conversoes.ts';
+import { recordConversion, conversionId, requestId, requestInfo, type D1Like } from './conversoes.ts';
+import { parseOrigem } from './origem.ts';
 import { parseGaClientId, sendDownloadEvent } from './ga4.ts';
 
 export interface RateLimit {
@@ -108,7 +110,8 @@ async function subscribe(req: Request, env: Env, deps: Deps): Promise<Response> 
   if (!email) return sent;
   if (!(await env.RL_EMAIL.limit({ key: email })).success) return sent;
 
-  const link = `${env.WORKER_URL}/confirm?${await signLink(email, deps.now(), env.CONFIRM_SECRET)}`;
+  // A origem da visita vai dentro do link assinado: a conversão newsletter_confirm só nasce no clique (issue #114).
+  const link = `${env.WORKER_URL}/confirm?${await signLink(email, deps.now(), env.CONFIRM_SECRET, parseOrigem(form))}`;
   const mail = confirmationEmail(email, link);
   try {
     const r = await deps.fetch(`${RESEND}/emails`, {
@@ -124,8 +127,9 @@ async function subscribe(req: Request, env: Env, deps: Deps): Promise<Response> 
 }
 
 async function confirm(url: URL, env: Env, deps: Deps): Promise<Response> {
-  const email = await verifyLink(url.searchParams, env.CONFIRM_SECRET, deps.now());
-  if (!email) return redirect(`${env.BLOG_URL}/inscricao-invalida/`);
+  const ok = await verifyConfirmLink(url.searchParams, env.CONFIRM_SECRET, deps.now());
+  if (!ok) return redirect(`${env.BLOG_URL}/inscricao-invalida/`);
+  const { email, origem } = ok;
   // Falha de rede ou resposta que não é JSON também é falha temporária (A5): 502, nunca exceção.
   let res: Response;
   try {
@@ -137,7 +141,7 @@ async function confirm(url: URL, env: Env, deps: Deps): Promise<Response> {
   if (res.headers.get('location') === `${env.BLOG_URL}/inscricao-confirmada/`) {
     const nowMs = deps.now();
     deps.waitUntil((async () => recordConversion(env.DB, { id: await conversionId('newsletter_confirm', url.searchParams.get('s') ?? ''),
-      acao: 'newsletter_confirm', email, material: null, interesses: [INTERESSES.EXPERT_INSIGHTS], nowMs, verified: true }))());
+      acao: 'newsletter_confirm', email, material: null, interesses: [INTERESSES.EXPERT_INSIGHTS], nowMs, verified: true, origem }))());
   }
   return res;
 }
@@ -227,14 +231,18 @@ async function requestMaterial(req: Request, env: Env, deps: Deps): Promise<Resp
   // O pedido entra no registro com o email ainda não comprovado (issue #99), e com o client_id do GA4 quando o navegador
   // o mandou (só com os cookies aceitos). O id é o mesmo que o download recalcula a partir do link.
   const gaClientId = parseGaClientId(form.get('ga_cid'));
+  // A origem da visita (issue #114) vai na linha do pedido; o download a herda dele, e a confirmação pela caixa dos
+  // Expert Insights, pelo link assinado.
+  const origem = parseOrigem(form);
   deps.waitUntil((async () => recordConversion(env.DB, { id: await requestId(m.id, email, materialExp(now)), acao: 'material_request',
-    email, material: m.id, interesses: m.interesses, nowMs: now, verified: false, gaClientId }))());
+    email, material: m.id, interesses: m.interesses, nowMs: now, verified: false, gaClientId, origem }))());
   const links = await Promise.all(m.arquivos.map(async (a) => ({
     rotulo: a.rotulo,
     url: `${env.WORKER_URL}/material/download?${await signMaterialLink(a.id, email, now, env.CONFIRM_SECRET)}`,
   })));
   // A inscrição nos Expert Insights só entra com a caixa marcada, e continua dependendo do clique de confirmação.
-  const confirmLink = form.get('insights') === 'sim' ? `${env.WORKER_URL}/confirm?${await signLink(email, now, env.CONFIRM_SECRET)}` : null;
+  const confirmLink = form.get('insights') === 'sim'
+    ? `${env.WORKER_URL}/confirm?${await signLink(email, now, env.CONFIRM_SECRET, origem)}` : null;
   const mail = materialEmail(email, m.titulo, links, confirmLink);
   try {
     const r = await deps.fetch(`${RESEND}/emails`, {
@@ -257,17 +265,18 @@ async function download(url: URL, env: Env, deps: Deps): Promise<Response> {
   if (!ok || !found) return expired;
   const bytes = deps.file ? await deps.file(found.arquivo.id) : null;
   if (!bytes) return plain(500, 'arquivo indisponível');
-  // O clique no link prova o email (issue #97). A conversão aponta para o pedido que gerou o link, e o evento do GA4 sai
-  // com o client_id guardado nesse pedido, ligando pedido e download no GA4; sem ele, vai como contagem anônima (#99).
+  // O clique no link prova o email (issue #97). A conversão aponta para o pedido que gerou o link e herda dele a origem da
+  // visita (issue #114), e o evento do GA4 sai com o client_id guardado nesse pedido, ligando pedido e download no GA4;
+  // sem ele, vai como contagem anônima (#99).
   const nowMs = deps.now();
   const material = found.material;
   const file = found.arquivo.id;
   deps.waitUntil((async () => {
     const reqId = await requestId(material.id, ok.email, Number(url.searchParams.get('x')));
+    const { clientId, origem } = await requestInfo(env.DB, reqId);
     await recordConversion(env.DB, { id: await conversionId('material_download', url.searchParams.get('s') ?? ''),
       acao: 'material_download', email: ok.email, material: material.id, interesses: material.interesses, nowMs, verified: true,
-      requestId: reqId, file });
-    const clientId = await requestClientId(env.DB, reqId);
+      requestId: reqId, file, origem });
     await sendDownloadEvent({ measurementId: env.GA4_MEASUREMENT_ID, apiSecret: env.GA4_API_SECRET }, deps.fetch,
       { clientId, material: material.id, file, nowMs });
   })());

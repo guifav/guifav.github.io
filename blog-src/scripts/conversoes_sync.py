@@ -5,8 +5,9 @@ Simulação por padrão: lê o D1 e o Twenty e mostra só contagens. Grava apena
 
 No Twenty, criados se faltarem (metadata API):
 - Objeto `siteConversion` ("Conversão do site"): acao (SELECT), comprovado (BOOLEAN), material e arquivo (TEXT), interesses
-  (MULTI_SELECT), ocorreuEm (DATE_TIME), eventoId (TEXT único, o `id` do D1), pedidoId e gaClientId (TEXT) e a relação N:1
-  `pessoa` com Person.
+  (MULTI_SELECT), ocorreuEm (DATE_TIME), eventoId (TEXT único, o `id` do D1), pedidoId e gaClientId (TEXT), a origem da
+  visita (issue #114: origemCanal e origemFonte, SELECT; utmSource, utmMedium, utmCampaign e paginaEntrada, TEXT) e a
+  relação N:1 `pessoa` com Person.
 - Na Person: siteInteresses (MULTI_SELECT, união dos interesses das conversões), siteUltimaConversao (DATE_TIME),
   siteEmailComprovado (BOOLEAN: alguma conversão com o email comprovado por link) e siteGaClientId (TEXT, o client_id do
   GA4 da conversão mais recente que trouxe um).
@@ -27,6 +28,11 @@ Regras:
 - Linha malformada (ação, email, datas, interesses ou ids fora do formato que o Worker grava; o email com a mesma regra
   do `normalizeEmail` do Worker) não é gravada nem marcada, e é contada em `linha_invalida` (o wrapper alerta).
 - Lê e valida tudo (D1, metadados, Pessoas e Conversões) antes de qualquer escrita. A saída tem só contagens, nunca emails.
+  Um campo SELECT que já existe no Twenty sem todas as opções que o sync grava é recusado antes de qualquer escrita.
+- Origem (issue #114): vai na Conversão, nunca na Pessoa, com as listas e os padrões do Worker
+  (workers/newsletter/src/origem.ts) e do CHECK da migração 0006. Linha anterior à #114 tem a origem toda nula e vira
+  Conversão com os campos de origem vazios. Origem fora do formato (canal ou fonte fora da lista, UTM ou página de
+  entrada que não casam, fonte sem canal) é linha inválida. O --forget apaga a Conversão inteira, e a origem sai junto.
 - Lixeira do Twenty: a listagem padrão da REST esconde registros apagados pela interface, mas os campos únicos (eventoId
   e o email principal da Pessoa) continuam valendo para eles. Por isso Pessoas e Conversões são lidas com a lixeira.
   Conversão na lixeira conta como já existente (não é recriada; a linha é marcada). Email cuja única Pessoa está na
@@ -76,6 +82,19 @@ ACOES = {
     "material_download": ("MATERIAL_DOWNLOAD", "Download de material"),
     "newsletter_confirm": ("NEWSLETTER_CONFIRM", "Inscrição confirmada"),
 }
+# Origem da visita (issue #114): valor no D1 -> (opção no Twenty, rótulo). As mesmas listas do Worker e da migração 0006.
+CANAIS = OrderedDict([
+    ("busca", ("BUSCA", "Busca")), ("assistente", ("ASSISTENTE", "Assistente de IA")), ("social", ("SOCIAL", "Rede social")),
+    ("email", ("EMAIL", "Email")), ("pago", ("PAGO", "Pago")), ("outro_site", ("OUTRO_SITE", "Outro site")),
+    ("direto", ("DIRETO", "Direto")), ("desconhecida", ("DESCONHECIDA", "Desconhecida")),
+])
+FONTES = OrderedDict([
+    ("google", ("GOOGLE", "Google")), ("bing", ("BING", "Bing")), ("chatgpt", ("CHATGPT", "ChatGPT")),
+    ("perplexity", ("PERPLEXITY", "Perplexity")), ("claude", ("CLAUDE", "Claude")), ("copilot", ("COPILOT", "Copilot")),
+    ("gemini", ("GEMINI", "Gemini")), ("linkedin", ("LINKEDIN", "LinkedIn")), ("youtube", ("YOUTUBE", "YouTube")),
+    ("github", ("GITHUB", "GitHub")), ("outro", ("OUTRO", "Outro")),
+])
+SEM_FONTE = {"direto", "desconhecida"}
 COLORS = ("blue", "purple", "green", "orange", "turquoise", "pink", "yellow", "red", "sky", "gray")
 CONV_FIELDS = OrderedDict([
     ("acao", {"type": "SELECT", "label": "Ação", "icon": "IconClick", "options": [
@@ -88,7 +107,16 @@ CONV_FIELDS = OrderedDict([
     ("eventoId", {"type": "TEXT", "label": "Id do evento (D1)", "icon": "IconHash", "isUnique": True}),
     ("pedidoId", {"type": "TEXT", "label": "Id do pedido (D1)", "icon": "IconLink"}),
     ("gaClientId", {"type": "TEXT", "label": "client_id do GA4", "icon": "IconChartLine"}),
+    ("origemCanal", {"type": "SELECT", "label": "Origem: canal", "icon": "IconRoute", "options": [
+        {"value": v, "label": lbl, "color": COLORS[i % 10], "position": i} for i, (v, lbl) in enumerate(CANAIS.values())]}),
+    ("origemFonte", {"type": "SELECT", "label": "Origem: fonte", "icon": "IconWorld", "options": [
+        {"value": v, "label": lbl, "color": COLORS[i % 10], "position": i} for i, (v, lbl) in enumerate(FONTES.values())]}),
+    ("utmSource", {"type": "TEXT", "label": "utm_source", "icon": "IconTag"}),
+    ("utmMedium", {"type": "TEXT", "label": "utm_medium", "icon": "IconTag"}),
+    ("utmCampaign", {"type": "TEXT", "label": "utm_campaign", "icon": "IconTag"}),
+    ("paginaEntrada", {"type": "TEXT", "label": "Página de entrada", "icon": "IconDoorEnter"}),
 ])
+ORIGEM_COLS = ("origin_channel", "origin_source", "utm_source", "utm_medium", "utm_campaign", "landing_path")
 RELATION = {"name": "pessoa", "type": "RELATION", "label": "Pessoa", "icon": "IconUser",
             "inverse_label": "Conversões do site", "inverse_icon": "IconTargetArrow"}
 PERSON_FIELDS = OrderedDict([
@@ -108,6 +136,9 @@ MAX_EMAIL = 254
 SLUG = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 INTEREST = re.compile(r"[A-Z][A-Z0-9_]{0,62}")
 GA_CID = re.compile(r"[0-9]{1,20}\.[0-9]{1,20}")  # o parseGaClientId de workers/newsletter/src/ga4.ts
+UTM = re.compile(r"[a-z0-9._-]{1,64}")  # o UTM de workers/newsletter/src/origem.ts
+ENTRADA = re.compile(r"/(?:[A-Za-z0-9._-]+/)*[A-Za-z0-9._-]*")  # o ENTRADA de origem.ts: segmentos não vazios
+MAX_ENTRADA = 200
 MAX_LABEL = 120
 MARK_CHUNK = 50  # ids por UPDATE no D1 (limite de 100 parâmetros por consulta)
 FORGET_MARK = "conversões apagadas"
@@ -151,6 +182,26 @@ def _now() -> datetime:  # relógio do synced_at (substituível nos testes)
     return datetime.now(timezone.utc)
 
 
+def parse_origem(r: dict) -> dict | None:
+    """Origem da linha (issue #114) validada: dict com os seis campos (todos None numa linha anterior à #114) ou None se
+    algo estiver fora do formato que o Worker grava e o CHECK do D1 aceita."""
+    o = {k: r.get(k) for k in ORIGEM_COLS}
+    if o["origin_channel"] is None:
+        return o if all(v is None for v in o.values()) else None
+    if o["origin_channel"] not in CANAIS:
+        return None
+    src = o["origin_source"]
+    if src is not None and (src not in FONTES or o["origin_channel"] in SEM_FONTE):
+        return None
+    for k in ("utm_source", "utm_medium", "utm_campaign"):
+        if o[k] is not None and not _full(UTM, o[k]):
+            return None
+    path = o["landing_path"]
+    if path is not None and (not _full(ENTRADA, path) or len(path) > MAX_ENTRADA):
+        return None
+    return o
+
+
 def parse_row(r: dict) -> dict | None:
     """Linha do D1 validada e normalizada, ou None se algo estiver fora do formato que o Worker grava."""
     try:
@@ -177,6 +228,9 @@ def parse_row(r: dict) -> dict | None:
         when = iso_ms(r.get("occurred_at") or "")
         if not when:
             return None
+        origem = parse_origem(r)
+        if origem is None:
+            return None
         raw = json.loads(r.get("interests") or "")
         if not isinstance(raw, list):
             return None
@@ -190,7 +244,7 @@ def parse_row(r: dict) -> dict | None:
             interests.setdefault(it["id"], label.strip())
         return {"id": r["id"], "email": r["email"], "action": action, "verified": verified == 1, "material": material,
                 "file": r.get("file"), "request_id": r.get("request_id"), "ga": r.get("ga_client_id"), "when": when,
-                "interests": interests}
+                "interests": interests, "origem": origem}
     except (ValueError, TypeError, AttributeError, OverflowError):
         return None
 
@@ -216,6 +270,12 @@ def read_metadata(c: TS.Clients) -> dict:
         for k, f in spec.items():
             if k in have and have[k]["type"] != f["type"]:
                 raise SyncError(f"campo {k} existe com outro tipo")
+            # SELECT que já existe precisa ter todas as opções que o sync grava: senão o Twenty recusaria a Conversão no
+            # meio da rodada, depois de outras escritas.
+            if k in have and f["type"] == "SELECT":
+                missing = {o["value"] for o in f["options"]} - set(_option_values(have[k]))
+                if missing:
+                    raise SyncError(f"campo {k} existe sem as opções {', '.join(sorted(missing))}")
     if RELATION["name"] in meta["conv"] and meta["conv"][RELATION["name"]]["type"] != "RELATION":
         raise SyncError("campo pessoa existe com outro tipo")
     return meta
@@ -293,9 +353,14 @@ def person_patch(p: dict | None, rows: list[dict]) -> dict:
 
 def conversion_body(r: dict, person_id: str) -> dict:
     code, label = ACOES[r["action"]]
+    o = r["origem"]
     return {"name": f"{label}: {r['material']}" if r["material"] else label, "acao": code, "comprovado": r["verified"],
             "material": r["material"], "arquivo": r["file"], "interesses": list(r["interests"]), "ocorreuEm": r["when"],
-            "eventoId": r["id"], "pedidoId": r["request_id"], "gaClientId": r["ga"], "pessoaId": person_id}
+            "eventoId": r["id"], "pedidoId": r["request_id"], "gaClientId": r["ga"],
+            "origemCanal": CANAIS[o["origin_channel"]][0] if o["origin_channel"] else None,
+            "origemFonte": FONTES[o["origin_source"]][0] if o["origin_source"] else None,
+            "utmSource": o["utm_source"], "utmMedium": o["utm_medium"], "utmCampaign": o["utm_campaign"],
+            "paginaEntrada": o["landing_path"], "pessoaId": person_id}
 
 
 def ensure_schema(c: TS.Clients, meta: dict, labels: dict[str, str]) -> None:
@@ -346,8 +411,8 @@ def run(c: TS.Clients, *, apply: bool = False, out=None) -> Counter:
     out = out or sys.stdout
     counts: Counter = Counter()
     # 1) Leituras e validações. Nenhuma escrita antes de a fonte e o CRM estarem lidos por inteiro.
-    raw = c.d1("SELECT id, email, action, material, interests, occurred_at, verified, ga_client_id, request_id, file "
-               "FROM conversions WHERE synced_at IS NULL ORDER BY occurred_at, id")
+    raw = c.d1("SELECT id, email, action, material, interests, occurred_at, verified, ga_client_id, request_id, file, "
+               + ", ".join(ORIGEM_COLS) + " FROM conversions WHERE synced_at IS NULL ORDER BY occurred_at, id")
     rows = []
     for r in raw:
         p = parse_row(r)
