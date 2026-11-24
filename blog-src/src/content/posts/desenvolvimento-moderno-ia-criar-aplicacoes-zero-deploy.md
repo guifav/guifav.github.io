@@ -17,8 +17,6 @@ Abaixo você encontra mais informações sobre o projeto desenvolvido no vídeo.
 
 <div class="video"><iframe src="https://www.youtube-nocookie.com/embed/RJQSgaTjUK0?rel=0" title="Vídeo do YouTube" loading="lazy" allow="fullscreen; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>
 
-Você pode testar o Resume Raccoon aqui (link original).
-
 Acesse e baixe os códigos do app aqui: [https<!---->://huggingface.co/spaces/guifav/resume\_raccoon/tree/main](https://huggingface.co/spaces/guifav/resume_raccoon/tree/main)
 
 ## Por que Usar IA no Desenvolvimento?

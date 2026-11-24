@@ -119,4 +119,4 @@ Não fique para trás. [Adquira seu exemplar hoje](https://www.amazon.com.br/dp/
 
 - **O conteúdo do livro ficará desatualizado rapidamente, dada a rápida evolução da IA?**
 
-  Embora a IA esteja evoluindo rapidamente, os princípios fundamentais e estratégias discutidos no livro são projetados para serem duradouros. Além disso, o autor mantém um site com atualizações regulares para os leitores. Acesse aqui: [https<!---->://www<!---->.guilhermefavaron.com.br/livro-ia-guia-estrategico-empresarios-era-digital](/blog/livro-ia-inteligencia-artificial-portugues-gratuito/)
+  Embora a IA esteja evoluindo rapidamente, os princípios fundamentais e estratégias discutidos no livro são projetados para serem duradouros. Além disso, o autor mantém um site com atualizações regulares para os leitores. Acesse aqui: [https<!---->://guifav.dev/blog/livro-ia-inteligencia-artificial-portugues-gratuito/](/blog/livro-ia-inteligencia-artificial-portugues-gratuito/)

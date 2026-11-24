@@ -12,7 +12,7 @@ topics: [custos-e-modelos-de-ia]
 
 ## Além do Custo: Como Escolher a Arquitetura Certa para Cada Caso de Uso
 
-Quando desenvolvi mais de 22 aplicações de IA para o portfólio MindApps.ai, uma das decisões mais críticas não foi qual tecnologia usar, mas **quando** usar cada uma. A escolha entre OpenAI e modelos open-source como Llama 4.0 vai muito além do custo por token - envolve estratégia de produto, compliance, performance e sustentabilidade a longo prazo.
+Quando desenvolvi mais de 22 aplicações de IA, uma das decisões mais críticas não foi qual tecnologia usar, mas **quando** usar cada uma. A escolha entre OpenAI e modelos open-source como Llama 4.0 vai muito além do custo por token - envolve estratégia de produto, compliance, performance e sustentabilidade a longo prazo.
 
 Este artigo compartilha as lições aprendidas ao implementar ambas as abordagens em cenários reais de produção, oferecendo um framework de decisão baseado em casos práticos e métricas reais de performance.
 
@@ -183,5 +183,3 @@ Para os CTOs tomarem estas decisões: comece com uma compreensão clara de seus 
 ***
 
 *No próximo artigo da série, exploraremos RAG (Retrieval Augmented Generation) para knowledge bases corporativas, mostrando como implementar sistemas que combinam informação proprietária com capacidades de reasoning avançadas.*
-
-Artigo originalmente publicado em [www<!---->.guilhermefavaron.com.br](/blog/)

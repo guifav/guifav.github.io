@@ -668,8 +668,6 @@ Essa abordagem é especialmente relevante para equipes que gerenciam múltiplos 
 
 O [MCP (Model Context Protocol)](/blog/mcp-model-context-protocol-revolucao-inteligencia-artificial/) está se tornando um padrão importante para integração entre ferramentas de IA e sistemas externos. Ao dominar essa tecnologia agora, você estará preparado para aproveitar as evoluções futuras do ecossistema, sem configurações adicionais.
 
-Se você quer se aprofundar mais no universo da automação e inteligência artificial aplicada aos negócios, convido você a conhecer o MindApps.ai, meu laboratório de inovação em IA, onde desenvolvo aplicativos práticos que demonstram casos de uso reais dessa tecnologia.
-
 ***
 
 ## Referências e Recursos

@@ -306,5 +306,3 @@ Sucesso no negócio moderno cada vez mais depende da capacidade de tomar melhore
 ***
 
 *Continue acompanhando para mais insights sobre como implementar soluções de data science que transformam capacidades analíticas em vantagens competitivas sustentáveis através de melhores processos de tomada de decisão que aproveitam incerteza ao invés de ignorá-la.*
-
-Conteúdo originalmente publicado em [www<!---->.guilhermefavaron.com.br](/blog/)

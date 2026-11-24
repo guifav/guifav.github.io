@@ -261,4 +261,4 @@ Aos meus amigos nerds, uma das coisas que mais me impressionou foi o quanto tudo
 
 ***
 
-*Guilherme Favaron é VP de Tecnologia e escreve sobre IA aplicada em ia-aplicada.substack.com*
+*Guilherme Favaron é CTO do GRI Institute e escreve sobre IA aplicada em [guifav.dev](/blog/).*

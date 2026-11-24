@@ -15,7 +15,7 @@ Hoje eu quero te contar de uma coisa que vinha rascunhando há meses e que final
 
 <figure>
 <img src="/blog/img/por-onde-comecar-com-ia/d8430f4366-1456.webp" srcset="/blog/img/por-onde-comecar-com-ia/d8430f4366-728.webp 728w, /blog/img/por-onde-comecar-com-ia/d8430f4366-1456.webp 1456w" sizes="(max-width: 760px) 100vw, 720px" width="1456" height="776" alt="academia de ia" loading="lazy" decoding="async">
-<figcaption>academia-ia.mindapps.ai</figcaption>
+<figcaption>academia-ia</figcaption>
 </figure>
 
 ## A cena
@@ -85,8 +85,6 @@ A terceira, e essa é a de verdade, é uma frase da minha mãe que eu cresci ouv
 Sem cadastro de cartão. Sem upsell. Sem “premium” escondido atrás de paywall. É o curso inteiro, pra sempre, na unha.
 
 ## Bora?
-
-A academia tá no ar em academia-ia.mindapps.ai.
 
 Se você é a pessoa que sempre se prometeu “*esse mês eu começo a entender IA pra valer*”, esse mês é esse mês. Você se inscreve, recebe o Dia 1 no email, e começa amanhã de manhã. Se travar, me responde por aqui mesmo, eu leio. Eu fiz esse curso nos momentos de calmaria nos cuidados com meu pai acamado. Então, se tiver algum bug, só responder esse email que corrijo.
 

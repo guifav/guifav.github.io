@@ -204,7 +204,3 @@ O que não podemos fazer é ficar paralisados pelo debate definicional enquanto 
 - As questões de distribuição econômica se tornam cada vez mais urgentes
 
 **A verdadeira questão não é “a AGI chegou?” — é “como nos preparamos para um mundo onde essa distinção pode não importar mais?”**
-
-***
-
-*Publicado originalmente em [guilhermefavaron.com.br](/blog/)*

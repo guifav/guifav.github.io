@@ -246,5 +246,3 @@ A IA generativa não é só mais uma tecnologia de nicho, mas uma nova utilidade
 Mas no nível micro, qualquer um que busque moldar um futuro impulsionado pela IA precisa começar o quão antes explorando os espaços de possibilidades abertos por modelos generativos. Construir uma base sólida em seus princípios de operação e aplicações práticas prepara para aproveitar as melhorias contínuas em seus poderes de raciocínio, criação e aprendizado.
 
 A IA generativa certamente traz riscos em potencial à medida que amadurece. Mas adotá-la cedo, amplamente e com sabedoria pode produzir infindáveis recompensas para atividades humanas em todos os campos. Esta é uma corrida que todos nós venceríamos. O momento para dominar essa nova alfabetização que transformará os ambientes de trabalho e de vida em todos os lugares é agora.
-
-Artigo originalmente publicado no site https<!---->://www<!---->.guilhermefavaron.com.br/post/ia-generativa-qual-e-a-revolucao-que-esta-em-andamento

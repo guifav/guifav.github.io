@@ -12,8 +12,6 @@ type: newsletter
 
 *Unidades de Processamento Gráfico (GPUs) revolucionaram o campo da inteligência artificial, permitindo avanços sem precedentes em uma variedade de aplicativos. Este artigo explora o papel fundamental desempenhado pelas GPUs no progresso da IA, ao mesmo tempo em que oferece informações valiosas para empresas que buscam aproveitar o poder computacional da GPU.*
 
-*Artigo originalmente publicado em: [https<!---->://www<!---->.guilhermefavaron.com.br/post/desmistificando-gpus-em-ia](/blog/desmistificando-gpus-em-ia-79e168b03ccd/)*
-
 *Conteúdo inspirado em publicações de [https<!---->://twitter.com/armand\_ruiz](https://twitter.com/armand_ruiz)*
 
 ### Uma Introdução a GPUs

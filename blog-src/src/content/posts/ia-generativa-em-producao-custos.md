@@ -231,5 +231,3 @@ O futuro da IA empresarial pertence a organizações que podem com sucesso fazer
 ***
 
 *No próximo artigo da série, concluiremos explorando como construir times de IA e estratégias de liderança técnica para organizações embarcando em jornadas de transformação de IA, incluindo contratação, treinamento, e considerações de estrutura organizacional para sucesso em iniciativas de IA a longo prazo.*
-
-Artigo originalmente publicado em [www<!---->.guilhermefavaron.com.br](/blog/)

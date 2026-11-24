@@ -312,6 +312,6 @@ A metodologia apresentada funciona igualmente com dados de banco de dados SQL, P
 
 ***
 
-**Sobre o autor:**<br>Guilherme Favaron é Executivo de Tecnologia com 18+ anos de experiência em transformação digital, especialista em IA aplicada a negócios, criador de 22+ aplicações de IA no MindApps.ai e autor do livro “[Desbloqueando a Inteligência Artificial](/blog/livro-ia-inteligencia-artificial-portugues-gratuito/)”. Mais sobre sua produção técnica: [clique aqui](https://guifav.github.io/).
+**Sobre o autor:**<br>Guilherme Favaron é Executivo de Tecnologia com 18+ anos de experiência em transformação digital, especialista em IA aplicada a negócios e autor do livro “[Desbloqueando a Inteligência Artificial](/blog/livro-ia-inteligencia-artificial-portugues-gratuito/)”. Mais sobre sua produção técnica: [clique aqui](https://guifav.dev/).
 
 **Data de publicação:** Janeiro 2026
