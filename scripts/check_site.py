@@ -1227,7 +1227,10 @@ class _ArticleImages(HTMLParser):
 
 
 def _ld_blocks(html: str) -> list[tuple[list, bool]]:
-    """Cada raiz de JSON-LD fora de comentário, com o @context do schema.org: (nós, se veio de um @graph)."""
+    """Cada raiz de JSON-LD com o @context do schema.org: (nós, se veio de um @graph).
+
+    Ignora o que não roda na página: comentário, <template>, <noscript> e <script> com data-type em vez de type
+    (#136). Vale para a home, para a /consultoria/ e para os posts (#105): JSON-LD só nesses lugares não conta."""
     html = re.sub(r"<!--.*?-->", "", html, flags=re.S)
     html = re.sub(r"<(template|noscript)\b[^>]*>.*?</\1\s*>", "", html, flags=re.S | re.I)
     scripts = re.findall(r"""<script\b[^>]*(?<![\w-])type\s*=\s*["']application/ld\+json["'][^>]*>(.*?)</script\s*>""",
@@ -1262,7 +1265,7 @@ def _home_websites(html: str) -> list[dict]:
 
 
 def _home_has_website(html: str) -> bool:
-    """Algum JSON-LD da home (fora de comentário) traz um WebSite com HOME_WEBSITE."""
+    """Algum JSON-LD da home (o que _ld_blocks lê) traz um WebSite com HOME_WEBSITE."""
     return bool(_home_websites(html))
 
 

@@ -2028,6 +2028,17 @@ class PostLdTest(unittest.TestCase):
         self.post("", index=False)
         self.assertEqual(self.ld(), [])
 
+    def test_graph_that_does_not_run_is_not_counted(self):
+        # #136: o _ld_blocks ignora JSON-LD que o navegador não lê como dado; o post precisa do @graph de verdade
+        script = ld_script(post_graph())
+        for nome, head in (("noscript", f"<noscript>{script}</noscript>"),
+                           ("template", f"<template>{script}</template>"),
+                           ("comentário", f"<!-- {script} -->"),
+                           ("data-type", script.replace(' type="application/ld+json"', ' data-type="application/ld+json"'))):
+            with self.subTest(onde=nome):
+                self.post(head)
+                self.assertEqual(self.ld(), ["blog/p/index.html: post indexável sem o JSON-LD do post (#105): nenhum BlogPosting"])
+
     def test_post_without_page_is_left_to_check(self):
         (self.posts / "sem-pagina.md").write_text("---\ntitle: x\nslug: sem-pagina\n---\n", encoding="utf-8")
         self.assertEqual(self.ld(), [])
@@ -2672,6 +2683,8 @@ class ConsultingTest(unittest.TestCase):
         with mock.patch.object(C, "check", lambda *a, **k: []), \
                 mock.patch.object(C, "check_related", lambda *a, **k: []), \
                 mock.patch.object(C, "check_contrast", lambda *a, **k: []), \
+                mock.patch.object(C, "check_home", lambda *a, **k: []), \
+                mock.patch.object(C, "check_post_ld", lambda *a, **k: []), \
                 mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
                 contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
             code = C.main(["--site", str(site), "--posts", str(self.tmp.name), "--consts", str(consts)])
