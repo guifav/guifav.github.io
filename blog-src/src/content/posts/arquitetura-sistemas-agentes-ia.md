@@ -2,7 +2,6 @@
 title: "Agentes de IA como Componentes de Sistema: Um Novo Paradigma Arquitetural"
 description: "Entenda como a arquitetura de agentes de IA está transformando o design de sistemas e aprenda a projetar soluções que integrem agentes como componentes ativos."
 date: 2024-11-13T03:00:00.000Z
-updated: 2026-11-24
 slug: arquitetura-sistemas-agentes-ia
 cover: img/arquitetura-sistemas-agentes-ia/capa.jpg
 type: newsletter

@@ -2,7 +2,6 @@
 title: "Agentes de IA: Por onde começar?"
 description: "Descubra como iniciar sua jornada com agentes de IA: conceitos básicos, ferramentas essenciais e primeiros passos para criar e implementar agentes inteligentes."
 date: 2024-09-22T03:00:00.000Z
-updated: 2026-11-24
 slug: agentes-ia-por-onde-comecar
 cover: img/agentes-ia-por-onde-comecar/capa.jpg
 type: newsletter
@@ -241,7 +240,7 @@ O desenvolvimento de agentes de IA representa um salto significativo na automaç
 
 O futuro dos agentes de IA promete transformar radicalmente a forma como interagimos com a tecnologia, automatizamos processos e tomamos decisões, abrindo novas possibilidades em praticamente todos os setores da indústria e da sociedade. Com as ferramentas adequadas e uma compreensão profunda de suas capacidades e limitações, desenvolvedores e organizações podem criar agentes de IA que não apenas aumentam a eficiência, mas também abrem novas fronteiras na resolução de problemas complexos e na criação de valor.
 
-Perguntas e Respostas sobre Agentes de IA
+## Perguntas e Respostas sobre Agentes de IA
 
 ### O que são exatamente agentes de IA?
 

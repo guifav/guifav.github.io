@@ -2,7 +2,6 @@
 title: "Como Criar Agentes de IA: Um guia passo-a-passo"
 description: "Guia completo sobre criação de agentes de IA: etapas detalhadas, melhores práticas e dicas de especialistas para desenvolver agentes inteligentes eficazes."
 date: 2024-09-22T03:00:00.000Z
-updated: 2026-11-24
 slug: como-criar-agentes-ia-guia-passo-a-passo
 cover: img/como-criar-agentes-ia-guia-passo-a-passo/capa.jpg
 type: newsletter

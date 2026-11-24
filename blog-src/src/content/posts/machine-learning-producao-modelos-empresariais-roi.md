@@ -2,7 +2,6 @@
 title: "Machine Learning em Produção: Como transformei modelos experimentais em motores de crescimento empresarial"
 description: "Aprenda como transformar modelos de machine learning experimentais em soluções empresariais que geram ROI real, com case prático e framework para produção."
 date: 2025-09-09T03:00:00.000Z
-updated: 2026-11-24
 slug: machine-learning-producao-modelos-empresariais-roi
 cover: img/machine-learning-producao-modelos-empresariais-roi/capa.jpg
 type: newsletter

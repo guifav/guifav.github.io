@@ -2,7 +2,6 @@
 title: "Análise de ligações de vendas com IA: Um guia completo para otimizar seu time de vendas"
 description: "Aprenda a otimizar seu time de vendas com IA: guia passo a passo para analisar ligações, identificar objeções e melhorar a performance do time."
 date: 2024-09-10T03:00:00.000Z
-updated: 2026-11-24
 slug: analise-vendas-ia-guia-completo
 cover: img/analise-vendas-ia-guia-completo/capa.jpg
 type: newsletter
