@@ -150,7 +150,7 @@ class BuildHomeCycleTest(unittest.TestCase):
             self.assertIn('data-theme="light"', pagina)
 
     def test_botao_de_baixar_e_fonte(self):
-        self.assertIn(f'<a class="dflow-dl" href="{bhc.GIF}" download="{bhc.GIF_NAME}">', self.html)
+        self.assertIn(f'<a class="dflow-dl" href="{bhc.GIF}" download="{bhc.GIF_NAME}" data-ga-download="{bhc.GIF_GA_DOWNLOAD}">', self.html)
         self.assertEqual(self.html.count('data-i18n="cy_src">Fonte: guifav.dev<'), 2)
         # no layout do celular o botão sai do canto e entra no fluxo, para não cobrir o desenho
         self.assertIn('@media(max-width:999px){.dflow-dl{position:static;', bhc.CSS)
