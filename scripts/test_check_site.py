@@ -2162,6 +2162,65 @@ class ContrastReviewR2Test(unittest.TestCase):
         self.assertTrue(C.contrast_problems([".x{color:#fff !IMPORTANT;background:#fff}"]))
 
 
+class ContrastReviewR3Test(unittest.TestCase):
+    """Achados da rodada 3 do #131 (Claude P2/P3, agy P3/P4): cascata por especificidade, ordem e !important."""
+
+    def test_dark_override_after_a_hover_with_equal_specificity(self):
+        # Claude P2: .x:hover e [data-theme=dark] .x têm (0,2,0); vence a que vem depois.
+        css = ".x{color:#000;background:#fff}.x:hover{color:#000}[data-theme=dark] .x{background:#000;color:#fff}"
+        self.assertEqual(C.contrast_problems([css]), [])
+        self.assertEqual(C.css_cascade([css])["escuro"][".x:hover"], ((255, 255, 255), (0, 0, 0)))
+        self.assertEqual(C.css_cascade([css])["claro"][".x:hover"], ((0, 0, 0), (255, 255, 255)))
+
+    def test_more_specific_rule_wins_regardless_of_order(self):
+        css = "#a .x{color:#000;background:#fff}.x{color:#fff}"
+        self.assertEqual(C.contrast_problems([css]), [])
+        # o :hover (0,2,0) vence o base (0,1,0) mesmo vindo antes no texto
+        css = ".x:hover{color:#000}.x{color:#fff;background:#000}"
+        self.assertEqual(C.css_cascade([css])["claro"][".x:hover"], ((0, 0, 0), (0, 0, 0)))
+        self.assertTrue(C.contrast_problems([".x{color:#000;background:#fff}.x{color:#fff}"]))
+
+    def test_important_beats_a_later_normal_declaration(self):
+        # Claude P3.
+        self.assertEqual(C.contrast_problems([".x{color:#000!important;background:#fff}.x{color:#fff}"]), [])
+        self.assertTrue(C.contrast_problems([".x{color:#000!important;background:#fff}.x{color:#fff!important}"]))
+        self.assertEqual(C.contrast_problems([".x{color:#000 !IMPORTANT;background:#fff}.x{color:#fff}"]), [])
+
+    def test_braces_and_semicolons_inside_strings(self):
+        # Claude P3, agy P4: content:"{" não engole a regra seguinte; ";" numa string não parte a declaração.
+        self.assertTrue(C.contrast_problems(['.a::before{content:"{"}.x{color:#fff;background:#fff}']))
+        self.assertTrue(C.contrast_problems(['.a::before{content:"}"}.x{color:#fff;background:#fff}']))
+        self.assertTrue(C.contrast_problems(['.a{content:"a;b";color:#fff;background:#fff}']))
+        self.assertTrue(C.contrast_problems(['.x{color:#fff;background:#fff;content:"a;color:#000"}']))
+
+    def test_selector_lists_inside_functional_pseudo_classes(self):
+        # agy P4: a vírgula de :is(.a, .b) não separa seletores.
+        cascade = C.css_cascade([":is(.a, .b) .x{color:#000;background:#fff}"])
+        self.assertEqual(list(cascade["claro"]), [":is(.a, .b) .x"])
+
+    def test_compound_theme_selector_is_only_in_its_theme(self):
+        # agy P3: [data-theme=dark].x só existe no escuro, e não se mistura com .x.
+        css = ":root{--t:#000}[data-theme=dark]{--t:#fff}[data-theme=dark].x{color:var(--t);background:#000}"
+        self.assertEqual(C.contrast_problems([css]), [])
+        cascade = C.css_cascade([css])
+        self.assertNotIn("[data-theme=dark].x", cascade["claro"])
+        self.assertIn("[data-theme=dark].x", cascade["escuro"])
+
+    def test_colors_on_the_theme_element_itself(self):
+        # agy P3: body[data-theme=dark] com cor fixa sobrescreve body no escuro, e um par ruim ali é acusado.
+        css = "body{color:#000;background:#fff}body[data-theme=dark]{color:#fff;background:#000}"
+        self.assertEqual(C.contrast_problems([css]), [])
+        self.assertEqual(C.css_cascade([css])["escuro"]["body"], ((255, 255, 255), (0, 0, 0)))
+        self.assertEqual(C.contrast_problems(["body{color:#000;background:#fff}[data-theme=dark]{background:#000}"])[0][:2],
+                         ("body", "escuro"))
+
+    def test_specificity(self):
+        self.assertEqual([C._specificity(s) for s in ("*", "a", ".x", "#a", ".x:hover", "[data-theme=dark] .x",
+                                                     "body[data-theme=dark] .x", "a::before", ":root", "#a .b c")],
+                         [(0, 0, 0), (0, 0, 1), (0, 1, 0), (1, 0, 0), (0, 2, 0), (0, 2, 0), (0, 2, 1), (0, 0, 2),
+                          (0, 1, 0), (1, 1, 1)])
+
+
 class ContrastSiteTest(Base):
     """A regra lê as folhas de cada página na ordem do documento: <link> internos e <style>."""
 

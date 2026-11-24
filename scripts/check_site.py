@@ -1310,12 +1310,12 @@ def _gh_escape(msg: str) -> str:
 # sem body/html na frente: o site.js põe o atributo no body e o Astro minifica as aspas), e todo seletor que declara
 # color e fundo opaco, nas suas regras ou nas do mesmo seletor sem o estado (:hover, :focus-visible etc. herdam do
 # seletor base), precisa de CONTRAST_MIN nos dois temas. background e background-color são o mesmo fundo: vale o
-# último na cascata.
+# vencedor da cascata.
 # Alarme de integridade sobre o CSS do próprio site: só entram as páginas que carregam SITE_CSS (os mockups do
 # portfólio e o /llm-ranking/ têm paleta própria e ficam de fora). Não avalia cor herdada de outro elemento, fundo
 # translúcido, imagem ou gradiente, style="" inline, nem cores fora de hex, rgb(), hsl() e dos nomes de _CSS_NAMED.
-# Especificidade: só a do prefixo de tema ([data-theme=dark|light] X vence X); fora isso vale a ordem do texto, e
-# !important não muda a ordem.
+# Cascata: !important, especificidade (aproximada: argumentos de :is()/:not() não contam) e ordem do texto, por
+# propriedade (color, cor de fundo, imagem de fundo).
 CONTRAST_MIN = 4.5
 SITE_CSS = "/assets/site.css"
 THEMES = ("claro", "escuro")
@@ -1324,7 +1324,7 @@ _CSS_NAMED = {"white": (255, 255, 255), "black": (0, 0, 0), "red": (255, 0, 0), 
               "blue": (0, 0, 255), "yellow": (255, 255, 0), "orange": (255, 165, 0), "gray": (128, 128, 128),
               "grey": (128, 128, 128), "silver": (192, 192, 192), "navy": (0, 0, 128), "purple": (128, 0, 128)}
 _CSS_STATE = re.compile(r":(?:hover|focus-visible|focus-within|focus|active|visited)(?![\w-])")
-_CSS_THEME = re.compile(r"""(?:html|body|:root)?\[data-theme=(?:"(dark|light)"|'(dark|light)'|(dark|light))\]""")
+_CSS_THEME = re.compile(r"""(?P<tag>html|body|:root)?\[data-theme=(?:"(?P<a>dark|light)"|'(?P<b>dark|light)'|(?P<c>dark|light))\]""")
 _THEME_OF = {"dark": "escuro", "light": "claro"}
 _CSS_ROOTS = (":root", "html", "body")
 _CSS_GROUPS = ("@media", "@supports", "@layer")
@@ -1362,11 +1362,32 @@ def _statement_end(css: str, i: int, stop: int) -> int | None:
     return None
 
 
-def _css_rules(css: str, theme: str | None = None) -> list[tuple[list[str], list[tuple[str, str]], str | None]]:
+def _split_outside(s: str, sep: str) -> list[str]:
+    """s partido em sep fora de aspas e parênteses (:is(.a, .b), content:"a;b", url(a;b))."""
+    out, cur, depth, quote = [], [], 0, ""
+    for ch in s:
+        if quote:
+            quote = "" if ch == quote else quote
+        elif ch in "\"'":
+            quote = ch
+        elif ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        elif ch == sep and depth == 0:
+            out.append("".join(cur))
+            cur = []
+            continue
+        cur.append(ch)
+    out.append("".join(cur))
+    return out
+
+
+def _css_rules(css: str, theme: str | None = None) -> list[tuple[list[str], list[tuple[str, str, bool]], str | None]]:
     """(seletores canônicos, declarações em ordem, tema só) na ordem do texto. @media/@supports/@layer com bloco entram
     (fora os só de impressão); at-rules de uma linha (@charset, @import, @layer a, b;) e @keyframes e afins não."""
     css = _CSS_COMMENT.sub("", css)
-    out: list[tuple[list[str], list[tuple[str, str]], str | None]] = []
+    out: list[tuple[list[str], list[tuple[str, str, bool]], str | None]] = []
     i, n = 0, len(css)
     while i < n:
         b = css.find("{", i)
@@ -1377,11 +1398,17 @@ def _css_rules(css: str, theme: str | None = None) -> list[tuple[list[str], list
             if semi is not None:
                 i = semi + 1
                 continue
-        head, depth, j = css[i:b].strip(), 0, b
+        head, depth, j, quote = css[i:b].strip(), 0, b, ""
         while j < n:
-            depth += {"{": 1, "}": -1}.get(css[j], 0)
-            if depth == 0:
-                break
+            ch = css[j]
+            if quote:
+                quote = "" if ch == quote else quote
+            elif ch in "\"'":
+                quote = ch
+            else:
+                depth += {"{": 1, "}": -1}.get(ch, 0)
+                if depth == 0:
+                    break
             j += 1
         body = css[b + 1:j]
         if head.startswith("@"):
@@ -1393,12 +1420,14 @@ def _css_rules(css: str, theme: str | None = None) -> list[tuple[list[str], list
                 out += _css_rules(body, only)
         else:
             decls = []
-            for d in body.split(";"):
+            for d in _split_outside(body, ";"):
                 if ":" in d:
                     k, v = d.split(":", 1)
                     k = k.strip()
-                    decls.append((k if k.startswith("--") else k.lower(), re.sub(r"!\s*important", "", v, flags=re.I).strip()))
-            out.append(([_css_selector(s) for s in head.split(",") if s.strip()], decls, theme))
+                    imp = bool(re.search(r"!\s*important\s*$", v, re.I))
+                    v = re.sub(r"!\s*important\s*$", "", v.strip(), flags=re.I).strip()
+                    decls.append((k if k.startswith("--") else k.lower(), v, imp))
+            out.append(([_css_selector(s) for s in _split_outside(head, ",") if s.strip()], decls, theme))
         i = j + 1
     return out
 
@@ -1475,74 +1504,98 @@ def contrast_ratio(a: tuple[int, int, int], b: tuple[int, int, int]) -> float:
     return (hi + 0.05) / (lo + 0.05)
 
 
-def _theme_prefix(s: str) -> tuple[str | None, str]:
-    """(tema do prefixo [data-theme=...], resto do seletor). Sem prefixo, ou com o atributo no próprio elemento
-    ([data-theme=dark].x), o tema é None e o seletor volta igual."""
+def _theme_prefix(s: str) -> tuple[str | None, str, bool]:
+    """(tema, elemento, só o elemento do tema) de um seletor:
+    - [data-theme=X] Y: (X, Y, False);
+    - [data-theme=X] ou body[data-theme=X] sozinho: (X, a tag, ou body, True). É onde moram os tokens do tema;
+    - [data-theme=X].y composto: (X, o seletor inteiro, False). O atributo está no próprio elemento, que só existe
+      nesse tema e não se mistura com .y;
+    - sem prefixo: (None, s, False)."""
     m = _CSS_THEME.match(s)
     if not m:
-        return None, s
+        return None, s, False
+    theme = _THEME_OF[m.group("a") or m.group("b") or m.group("c")]
     rest = s[m.end():]
-    if rest and rest[0] not in " >+~":
-        return None, s
-    return _THEME_OF[m.group(1) or m.group(2) or m.group(3)], rest.lstrip(" >+~")
+    if not rest:
+        return theme, {":root": "html"}.get(m.group("tag") or "body", m.group("tag") or "body"), True
+    if rest[0] not in " >+~":
+        return theme, s, False
+    return theme, rest.lstrip(" >+~"), False
 
 
-def _bg_update(picked: dict, k: str, v: str) -> None:
-    """background, background-color e background-image na ordem: o último define a cor; imagem ou gradiente marca o
-    fundo como não avaliável até um background sem imagem ou um background-image: none."""
+def _specificity(sel: str) -> tuple[int, int, int]:
+    """(ids, classes/atributos/pseudo-classes, tipos/pseudo-elementos). Aproximação: o argumento de :is()/:not()/
+    :where()/:has() não conta, e a pseudo-classe conta como uma classe."""
+    s = re.sub(r"\[[^\]]*\]", "[]", sel)
+    while re.search(r"\([^()]*\)", s):
+        s = re.sub(r"\([^()]*\)", "", s)
+    ids = len(re.findall(r"#[\w-]+", s))
+    cls = len(re.findall(r"\.[\w-]+|\[\]|(?<!:):(?!:)[\w-]+", s))
+    types = len(re.findall(r"(?:^|[\s>+~])[a-zA-Z][\w-]*", s)) + len(re.findall(r"::[\w-]+", s))
+    return ids, cls, types
+
+
+def _bg_longhands(k: str, v: str) -> list[tuple[str, object]]:
+    """O que cada declaração de fundo define: a cor ("bg", valor cru) e se há imagem ou gradiente ("img", bool).
+    background define os dois (sem imagem, o background-image volta a none)."""
     low = v.lower()
-    has_img = "url(" in low or "gradient(" in low
     if k == "background":
-        picked["img"] = has_img
-        picked["bg"] = v
-    elif k == "background-image":
-        picked["img"] = low.strip() not in ("none", "initial", "unset")
-    else:
-        picked["bg"] = v
+        return [("bg", v), ("img", "url(" in low or "gradient(" in low)]
+    if k == "background-image":
+        return [("img", low.strip() not in ("none", "initial", "unset"))]
+    return [("bg", v)]
 
 
 def _css_pairs(sheets: list[str]) -> dict[str, dict[str, tuple]]:
     """Por tema, os seletores com color e fundo opacos resolvidos: {tema: {seletor: (color, fundo, color cru, fundo cru)}}.
-    Regras com prefixo de tema ([data-theme=dark] X) são mais específicas que X: entram por cima das sem prefixo."""
+    Cascata do navegador para color, cor de fundo e imagem de fundo: !important, depois especificidade, depois ordem.
+    O seletor com estado (:hover etc.) recebe também as declarações do seletor base."""
     rules = [r for css in sheets for r in _css_rules(css)]
     base: dict[str, str] = {}
     by_theme: dict[str, dict[str, str]] = {"claro": {}, "escuro": {}}
     for sels, decls, only in rules:
-        vs = {k: v for k, v in decls if k.startswith("--")}
+        vs = {k: v for k, v, _ in decls if k.startswith("--")}
         for s in sels if vs else ():
-            theme, rest = _theme_prefix(s)
+            theme, _, root = _theme_prefix(s)
             if theme is None and s in _CSS_ROOTS:
                 (base if only is None else by_theme[only]).update(vs)
-            elif theme is not None and not rest and only in (None, theme):
+            elif root and only in (None, theme):
                 by_theme[theme].update(vs)
     tokens = {t: {**base, **by_theme[t]} for t in THEMES}
-    layers: list[dict[tuple[str, str], dict]] = [{}, {}]  # 0: sem prefixo de tema; 1: com prefixo
+    # {(tema, elemento): {propriedade: (importante, especificidade, ordem, valor)}}, já com o vencedor de cada uma.
+    won: dict[tuple[str, str], dict[str, tuple]] = {}
+    order = 0
     for sels, decls, only in rules:
-        picked: dict = {}
-        for k, v in decls:
+        props = []
+        for k, v, imp in decls:
             if k == "color":
-                picked["color"] = v
+                props.append(("color", v, imp))
             elif k in ("background", "background-color", "background-image"):
-                _bg_update(picked, k, v)
-        for s in sels if picked else ():
-            theme, rest = _theme_prefix(s)
-            if theme is not None and not rest:
-                continue  # o próprio elemento do tema (body): só tokens
+                props += [(p, x, imp) for p, x in _bg_longhands(k, v)]
+        for s in sels if props else ():
+            theme, elem, _ = _theme_prefix(s)
+            spec = _specificity(s)
             themes = THEMES if only is None else (only,)
-            if theme is not None:
-                themes = tuple(t for t in themes if t == theme)
-            for t in themes:
-                layers[theme is not None].setdefault((t, rest), {}).update(picked)
-    eff = {k: {**layers[0].get(k, {}), **layers[1].get(k, {})} for k in {*layers[0], *layers[1]}}
+            for t in themes if theme is None else tuple(x for x in themes if x == theme):
+                slot = won.setdefault((t, elem), {})
+                for p, x, imp in props:
+                    order += 1
+                    cand = (imp, spec, order, x)
+                    if p not in slot or cand[:3] > slot[p][:3]:
+                        slot[p] = cand
     out: dict[str, dict[str, tuple]] = {t: {} for t in THEMES}
-    for (t, s), d in eff.items():
+    for (t, s), d in won.items():
         base_sel = _CSS_STATE.sub("", s)
-        full = {**eff.get((t, base_sel), {}), **d} if base_sel != s else d
-        if "color" not in full or "bg" not in full or full.get("img"):
+        full = dict(won.get((t, base_sel), {})) if base_sel != s else {}
+        for p, cand in d.items():
+            if p not in full or cand[:3] > full[p][:3]:
+                full[p] = cand
+        if "color" not in full or "bg" not in full or (full.get("img") and full["img"][3]):
             continue
-        fg, bg = css_color(full["color"], tokens[t]), _css_background(full["bg"], tokens[t])
+        c_raw, b_raw = full["color"][3], full["bg"][3]
+        fg, bg = css_color(c_raw, tokens[t]), _css_background(b_raw, tokens[t])
         if fg is not None and bg is not None:
-            out[t][s] = (fg, bg, full["color"], full["bg"])
+            out[t][s] = (fg, bg, c_raw, b_raw)
     return out
 
 
