@@ -276,16 +276,19 @@ class RealSiteTest(unittest.TestCase):
 class RealSiteGuardTest(unittest.TestCase):
     """O próprio RealSiteTest: com o modo obrigatório ele falha sem _site, e o oráculo enxerga uma página que some."""
 
-    def run_real(self, env_value):
+    def run_real(self, env_value, files=None):
         with tempfile.TemporaryDirectory() as d:
             env = {k: v for k, v in os.environ.items() if k != REQUIRED_ENV}
             if env_value:
                 env[REQUIRED_ENV] = env_value
-            # Cópia do script num diretório sem _site: o REPO do teste aponta para ela.
+            # Cópia do script num repo de mentira: o REPO do teste aponta para ela (sem _site, salvo o que vier em files).
             scripts = Path(d) / "scripts"
             scripts.mkdir()
             for name in ("test_build_sitemaps.py", "build_sitemaps.py"):
                 (scripts / name).write_text((REPO / "scripts" / name).read_text(encoding="utf-8"), encoding="utf-8")
+            for rel, text in (files or {}).items():
+                (Path(d) / rel).parent.mkdir(parents=True, exist_ok=True)
+                (Path(d) / rel).write_text(text, encoding="utf-8")
             return subprocess.run([sys.executable, str(scripts / "test_build_sitemaps.py"), "RealSiteTest"],
                                   capture_output=True, text=True, env=env)
 
@@ -299,6 +302,21 @@ class RealSiteGuardTest(unittest.TestCase):
         r = self.run_real(None)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("skipped", r.stderr)
+
+    def test_swapped_page_with_the_same_count_fails(self):
+        # O sitemap troca /b.html por /c.html: mesmo número de URLs, mas a página do manifesto sumiu.
+        pages = {"index.html": html(), "a.html": html(), "b.html": html()}
+        loc = "<url><loc>https://guifav.dev{}</loc><lastmod>2026-11-24T00:00:00-03:00</lastmod></url>"
+        files = {"robots.txt": "User-agent: *\nDisallow: /tools/\n", "site-manifest.txt": "index.html\na.html\nb.html\n",
+                 **pages, **{f"_site/{k}": v for k, v in pages.items()},
+                 "_site/sitemap-site.xml": f'<urlset xmlns="{B.NS}">' + "".join(loc.format(u) for u in ("/", "/a.html", "/c.html"))
+                 + "</urlset>"}
+        r = self.run_real("required", files)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("FAIL: test_sitemap_has_every_indexable_manifest_page", r.stderr)
+        self.assertNotIn("FAIL: test_oracle_and_generator_agree", r.stderr)
+        files["_site/sitemap-site.xml"] = files["_site/sitemap-site.xml"].replace("/c.html", "/b.html")
+        self.assertEqual(self.run_real("required", files).returncode, 0)
 
     def test_workflow_runs_it_required_after_the_sitemaps(self):
         wf = (REPO / ".github/workflows/pages.yml").read_text(encoding="utf-8")
@@ -315,7 +333,8 @@ class RealSiteGuardTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             repo = Path(d)
             (repo / "robots.txt").write_text("User-agent: *\nDisallow: /p/mockups/\n", encoding="utf-8")
-            (repo / "site-manifest.txt").write_text("# c\nindex.html\n404.html\np/\nsolto.html\nimg.png\n", encoding="utf-8")
+            (repo / "site-manifest.txt").write_text("# c\n#fora/index.html\nindex.html\n404.html\np/\nsolto.html  # comentário\n"
+                                                    "img.png\n", encoding="utf-8")
             pages = {
                 "index.html": html('<link rel="canonical" href="https://guifav.dev">'),
                 "404.html": html(),
