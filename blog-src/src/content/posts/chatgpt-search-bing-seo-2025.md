@@ -10,7 +10,7 @@ cover: img/chatgpt-search-bing-seo-2025/capa.jpg
 type: newsletter
 ---
 
-Em dezembro de 2025 publiquei o guia [SEO + AEO: como ser encontrado no Google e citado por IAs](/blog/seo-aeo-geo-ias-como-ser-encontrado/). Ali eu defendia que otimização para buscadores tradicionais e citação por modelos de linguagem convergem para a mesma base técnica de clareza estrutural e rastreabilidade. Este texto nasceu antes daquele guia, quando o ChatGPT Search ainda parecia depender de um único índice, e precisava de revisão para refletir como a camada de recuperação funciona hoje.
+Em dezembro de 2025 publiquei o guia [SEO + AEO: como ser encontrado no Google e citado por IAs](/blog/seo-aeo-geo-ias-como-ser-encontrado/). Ali eu defendia que otimização para buscadores tradicionais e citação por modelos de linguagem convergem para a mesma base de clareza estrutural e informação com fonte. Este texto nasceu antes daquele guia, quando o ChatGPT Search ainda parecia depender de um único índice, e precisava de revisão para refletir como a camada de recuperação funciona hoje.
 
 Manter um site visível em respostas de IA exige cuidar de três camadas ao mesmo tempo: a saúde do índice no Microsoft Bing, a indexação no Google e o acesso direto dos rastreadores da própria OpenAI.
 
@@ -64,7 +64,7 @@ Além da camada de rastreadores e indexação, a forma como o HTML é entregue d
 | Renderização | Conteúdo principal, tabelas e respostas diretas presentes no HTML inicial | Inspeção do HTML entregue pelo servidor (SSR ou estático) |
 | Estrutura citável | Resumo direto no topo, subtítulos em pergunta, dados verificáveis e autor claro | Marcação semântica e JSON-LD (`BlogPosting`, `Person`, `WebSite`) |
 
-Para aprofundar a camada editorial e a estrutura de conteúdo para citação em múltiplos modelos, disponibilizei o [Framework de SEO e AEO](/seo-geo-aeo-framework/framework-seo-aeo.html) completo para consulta aberta. Se o seu time precisa revisar arquitetura de busca, automação de indexação e estratégia de IA com foco em demanda qualificada, veja os formatos de trabalho na página de [consultoria em IA para empresas](/consultoria/).
+Para aprofundar a camada editorial e a estrutura de conteúdo para citação em múltiplos modelos, disponibilizei o [Framework de SEO e AEO](/tools/seo-geo-aeo-framework/framework-seo-aeo.html) completo para consulta aberta. Se o seu time precisa revisar arquitetura de busca, automação de indexação e estratégia de IA com foco em demanda qualificada, veja os formatos de trabalho na página de [consultoria em IA para empresas](/consultoria/).
 
 ## Perguntas frequentes sobre ChatGPT Search, Bing e SEO
 
