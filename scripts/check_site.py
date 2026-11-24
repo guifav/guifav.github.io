@@ -568,6 +568,8 @@ def expected_content_group(rel: str) -> str | None:
         return "home"
     if rel == "portfolio/index.html":
         return "portfolio"
+    if rel == "consultoria/index.html":
+        return "consultoria"
     if (rel == "blog/index.html" or re.fullmatch(r"blog/pagina/\d+/index\.html", rel)
             or re.fullmatch(r"blog/tema/[a-z0-9][a-z0-9-]*/index\.html", rel)):
         return "insights-lista"
@@ -751,7 +753,7 @@ def check_titles_and_groups(rel: str, html: str) -> list[str]:
 # Eventos próprios do GA4 (issue #60): assets/track.js. Contrato igual ao de check_titles_and_groups: alarme de
 # integridade sobre o HTML dos três templates (index.html, portfolio/index.html e Base.astro do blog).
 TRACK_PATH = "/assets/track.js"
-CTA_LOCATIONS = ("hero", "projetos", "consultoria", "chamada-final")
+CTA_LOCATIONS = ("hero", "projetos", "consultoria", "chamada-final", "consultoria-pagina")  # a última: #136
 SIGNUP_PAGE = "blog/inscricao-confirmada/index.html"
 CONTACT_EMAIL = "contact@guifav.dev"
 SCHEDULE_HOST = "calendar.app.google"
@@ -1223,19 +1225,18 @@ class _ArticleImages(HTMLParser):
             self.depth -= 1
 
 
-def _home_has_website(html: str) -> bool:
-    """Algum JSON-LD da home (fora de comentário) traz um WebSite com HOME_WEBSITE."""
+def _ld_nodes(html: str) -> list[dict]:
+    """Os nós dos JSON-LD da página, fora de comentário: cada raiz com o @context do schema.org, ou os itens do
+    @graph dela, quando ele existe e é lista (r1 do #125, agy P3)."""
     html = re.sub(r"<!--.*?-->", "", html, flags=re.S)
     scripts = re.findall(r"""<script\b[^>]*\btype\s*=\s*["']application/ld\+json["'][^>]*>(.*?)</script\s*>""",
                          html, flags=re.S | re.I)
+    nodes: list = []
     for body in scripts:
         try:
             data = json.loads(body)
         except ValueError:
             continue
-        # r1 (agy P3): cada raiz traz o @context do schema.org; o @graph, quando existe, é lista; o WebSite não usa o
-        # @id da Person.
-        nodes = []
         for root in data if isinstance(data, list) else [data]:
             if not isinstance(root, dict) or root.get("@context") not in SCHEMA_CONTEXTS:
                 continue
@@ -1243,10 +1244,13 @@ def _home_has_website(html: str) -> bool:
                 nodes.append(root)
             elif isinstance(root["@graph"], list):
                 nodes += root["@graph"]
-        if any(isinstance(n, dict) and n.get("@type") == "WebSite" and n.get("@id") != PERSON_ID
-               and all(n.get(k) == v for k, v in HOME_WEBSITE.items()) for n in nodes):
-            return True
-    return False
+    return [n for n in nodes if isinstance(n, dict)]
+
+
+def _home_has_website(html: str) -> bool:
+    """Algum JSON-LD da home traz um WebSite com HOME_WEBSITE, que não usa o @id da Person."""
+    return any(n.get("@type") == "WebSite" and n.get("@id") != PERSON_ID
+               and all(n.get(k) == v for k, v in HOME_WEBSITE.items()) for n in _ld_nodes(html))
 
 
 def check_seo(site: Path, posts: Path) -> tuple[list[str], list[str], list[str]]:
@@ -1298,6 +1302,43 @@ def check_seo(site: Path, posts: Path) -> tuple[list[str], list[str], list[str]]
         if no_alt:
             warns.append(f"{rel}: {no_alt} de {len(imgs.alts)} imagens sem texto alternativo")
     return problems, warn_new, warn_old
+
+
+# Página de consultoria (#136, consulta 18 do mapa da #112): a página existe, com o título e o H1 aprovados e o
+# JSON-LD Service do Gui (provider pelo @id da Person) com uma Offer. Alarme de integridade da página estática.
+CONSULTING_PAGE = "consultoria/index.html"
+CONSULTING_TITLE = "Consultoria em IA para empresas" + TITLE_SEP + SITE_NAME
+CONSULTING_H1 = "Consultoria em inteligência artificial para empresas"
+
+
+def check_consulting(site: Path) -> list[str]:
+    """#136: título, H1 único e JSON-LD Service + Offer ligado a PERSON_ID na /consultoria/."""
+    rel = CONSULTING_PAGE
+    page = site / rel
+    if not page.is_file():
+        return [f"{rel}: a página de consultoria sumiu do site montado (site-manifest.txt)"]
+    html = page.read_text(encoding="utf-8")
+    visible = _visible_html(html)
+    problems = []
+    m = re.search(r"<title[^>]*>(.*?)</title\s*>", visible, flags=re.S | re.I)
+    title = unescape(m.group(1)).strip() if m else None
+    if title != CONSULTING_TITLE:
+        problems.append(f"{rel}: o título precisa ser {CONSULTING_TITLE!r}: {title!r}")
+    h1s = [re.sub(r"\s+", " ", unescape(re.sub(r"<[^>]+>", "", h))).strip()
+           for h in re.findall(r"<h1\b[^>]*>(.*?)</h1\s*>", visible, flags=re.S | re.I)]
+    if h1s != [CONSULTING_H1]:
+        problems.append(f"{rel}: a página precisa de um H1 {CONSULTING_H1!r}, tem {h1s}")
+
+    def offers(n: dict) -> list:
+        o = n.get("offers")
+        return o if isinstance(o, list) else [o]
+
+    if not any(n.get("@type") == "Service" and isinstance(n.get("provider"), dict)
+               and n["provider"].get("@id") == PERSON_ID
+               and any(isinstance(o, dict) and o.get("@type") == "Offer" for o in offers(n))
+               for n in _ld_nodes(html)):
+        problems.append(f"{rel}: sem o JSON-LD Service com provider {{'@id': {PERSON_ID!r}}} e uma Offer")
+    return problems
 
 
 def _gh_escape(msg: str) -> str:
@@ -1698,6 +1739,7 @@ def main(argv: list[str] | None = None) -> int:
         problems = check(Path(args.site), Path(args.posts), pre_cutover=pre)
         problems += check_related(Path(args.site), Path(args.posts))
         problems += check_contrast(Path(args.site))
+        problems += check_consulting(Path(args.site))
     except ResolverError as e:
         print(f"ERRO: resolvedor de URL indisponível, verificação não feita: {e}", file=sys.stderr)
         return 1

@@ -1104,7 +1104,7 @@ class TrackingTest(unittest.TestCase):
             with self.subTest(loc=loc):
                 html = self.doc(f'<main><a href="https://calendar.app.google/x" data-cta-location="{loc}">a</a></main>')
                 self.assertEqual(self.check(html), [])
-        self.assertEqual(C.CTA_LOCATIONS, ("hero", "projetos", "consultoria", "chamada-final"))
+        self.assertEqual(C.CTA_LOCATIONS, ("hero", "projetos", "consultoria", "chamada-final", "consultoria-pagina"))
         for name, a in {
             "sem atributo": '<a href="mailto:contact@guifav.dev">c</a>',
             "vazio": '<a href="mailto:contact@guifav.dev" data-cta-location="">c</a>',
@@ -1930,7 +1930,8 @@ class SeoTest(unittest.TestCase):
         self.post(slug="antigo", date="2024-03-01", desc="curta")  # importado: só aviso, agrupado na CI
         # isola a regra da #103 das demais; o formato do aviso depende de GITHUB_ACTIONS, que a CI define
         with mock.patch.object(C, "check", lambda *a, **k: []), \
-                mock.patch.object(C, "check_related", lambda *a, **k: []):  # bloco Leia também (#104)
+                mock.patch.object(C, "check_related", lambda *a, **k: []), \
+                mock.patch.object(C, "check_consulting", lambda *a, **k: []):  # bloco Leia também (#104), #136
             for gh, new_mark, group in (("", "AVISO: ", None), ("true", "::warning title=check_site (#103)::", "::group::")):
                 for desc, code in (("d" * 69, 1), ("d" * 165, 0), (self.OK_DESC, 0)):
                     with self.subTest(gh=gh, desc=len(desc)), mock.patch.dict(os.environ, {"GITHUB_ACTIONS": gh}):
@@ -2318,6 +2319,81 @@ class ContrastSourcesTest(unittest.TestCase):
                 with self.subTest(theme=theme, sel=sel):
                     fg, bg = rules[theme][sel]
                     self.assertGreaterEqual(C.contrast_ratio(fg, bg), C.CONTRAST_MIN)
+
+
+class ConsultingTest(unittest.TestCase):
+    """#136: a /consultoria/ existe, com o título, o H1 e o JSON-LD Service + Offer ligado à Person."""
+    TITLE = "<title>Consultoria em IA para empresas | Guilherme Favaron</title>"
+    H1 = "<h1>Consultoria em inteligência artificial para empresas</h1>"
+    LD = ('<script type="application/ld+json">{"@context":"https://schema.org","@type":"Service",'
+          '"provider":{"@id":"https://guifav.dev/#person"},'
+          '"offers":{"@type":"Offer","price":"500","priceCurrency":"BRL"}}</script>')
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.site = Path(self.tmp.name) / "_site"
+        (self.site / "consultoria").mkdir(parents=True)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def got(self, head=None, body=None) -> list[str]:
+        head = self.TITLE + self.LD if head is None else head
+        body = self.H1 if body is None else body
+        (self.site / "consultoria" / "index.html").write_text(
+            f"<html><head>{head}</head><body>{body}</body></html>", encoding="utf-8")
+        return C.check_consulting(self.site)
+
+    def test_complete_page_passes(self):
+        self.assertEqual(self.got(), [])
+        # @graph, offers em lista e H1 com marcação dentro também valem
+        graph = ('<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Service",'
+                 '"provider":{"@id":"https://guifav.dev/#person"},"offers":[{"@type":"Offer"}]}]}</script>')
+        self.assertEqual(self.got(head=self.TITLE + graph,
+                                  body="<h1>Consultoria em <span>inteligência artificial</span>\n para empresas</h1>"), [])
+
+    def test_missing_page_fails(self):
+        self.assertEqual(C.check_consulting(self.site), ["consultoria/index.html: a página de consultoria sumiu do "
+                                                         "site montado (site-manifest.txt)"])
+
+    def test_title_h1_and_json_ld_are_required(self):
+        commented = "<!--" + self.LD + "-->"
+        for name, head, body, needle in (
+            ("sem título", self.LD, None, "o título precisa ser"),
+            ("título trocado", "<title>Consultoria | Guilherme Favaron</title>" + self.LD, None, "o título precisa ser"),
+            ("título em comentário", "<!--" + self.TITLE + "-->" + self.LD, None, "o título precisa ser"),
+            ("sem H1", None, "<h2>Consultoria em inteligência artificial para empresas</h2>", "um H1"),
+            ("dois H1", None, self.H1 + "<h1>Outro</h1>", "um H1"),
+            ("H1 trocado", None, "<h1>Consultoria em IA</h1>", "um H1"),
+            ("sem JSON-LD", self.TITLE, None, "sem o JSON-LD Service"),
+            ("JSON-LD em comentário", self.TITLE + commented, None, "sem o JSON-LD Service"),
+            ("sem Offer", self.TITLE + self.LD.replace('"Offer"', '"Thing"'), None, "sem o JSON-LD Service"),
+            ("provider sem @id", self.TITLE + self.LD.replace('{"@id":"https://guifav.dev/#person"}',
+                                                              '{"@type":"Person","name":"x"}'), None,
+             "sem o JSON-LD Service"),
+            ("outro tipo", self.TITLE + self.LD.replace('"Service"', '"Product"'), None, "sem o JSON-LD Service"),
+            ("JSON quebrado", self.TITLE + self.LD.replace("}}", "}"), None, "sem o JSON-LD Service"),
+        ):
+            with self.subTest(name):
+                got = self.got(head=head, body=body)
+                self.assertEqual(len(got), 1, got)
+                self.assertIn(needle, got[0])
+
+    def test_main_runs_the_consulting_rule(self):
+        site = Path(self.tmp.name) / "vazio"
+        site.mkdir()
+        consts = Path(self.tmp.name) / "consts.ts"
+        consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
+        from unittest import mock
+        err = io.StringIO()
+        with mock.patch.object(C, "check", lambda *a, **k: []), \
+                mock.patch.object(C, "check_related", lambda *a, **k: []), \
+                mock.patch.object(C, "check_contrast", lambda *a, **k: []), \
+                mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
+                contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            code = C.main(["--site", str(site), "--posts", str(self.tmp.name), "--consts", str(consts)])
+        self.assertEqual(code, 1)
+        self.assertIn("consultoria/index.html: a página de consultoria sumiu", err.getvalue())
 
 
 if __name__ == "__main__":
