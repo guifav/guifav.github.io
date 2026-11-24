@@ -1,6 +1,6 @@
 ---
 title: "A mente vencedora: lições do Tênis para a vida"
-description: "Eu sou amante do esporte chamado Tênis, que se joga em quadras de saibro, cimento e grama."
+description: "Lições práticas do lado mental e estratégico do tênis aplicadas à disciplina, à tomada de decisão sob pressão e à consistência na vida profissional."
 date: 2024-02-04T03:00:00.000Z
 updated: 2024-06-25T16:27:34.344Z
 slug: a-mente-vencedora-licoes-do-tenis-para-a-vida

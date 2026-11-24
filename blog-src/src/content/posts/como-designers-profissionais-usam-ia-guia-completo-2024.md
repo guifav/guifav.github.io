@@ -1,7 +1,7 @@
 ---
 title: "Como Designers Profissionais Estão Usando IA em 2024: Um Guia Completo"
 subtitle: "Descubra como designers profissionais estão usando IA em 2024."
-description: "Descubra como designers profissionais estão usando IA em 2024."
+description: "Como designers profissionais aplicam IA no processo criativo, nas ferramentas de produto, nos casos práticos e na precificação de projetos de design."
 date: 2024-11-04T03:00:00.000Z
 updated: 2025-08-28T21:46:42.166Z
 slug: como-designers-profissionais-usam-ia-guia-completo-2024

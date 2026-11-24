@@ -1,7 +1,7 @@
 ---
 title: "RAG para Bases de Conhecimento Corporativas: Implementação Prática"
 subtitle: "Arquitetura RAG enterprise: chunking strategies, vector databases e continuous learning. Case real com 85% precisão para knowledge bases corporativas."
-description: "Arquitetura RAG enterprise: chunking strategies, vector databases e continuous learning."
+description: "Como estruturar RAG corporativo em bases de conhecimento: chunking, bancos vetoriais, busca híbrida, integração com sistemas existentes e escala."
 date: 2025-08-27T03:00:00.000Z
 updated: 2025-11-24T20:05:31.814Z
 slug: rag-knowledge-bases-corporativas-implementacao-pratica

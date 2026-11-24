@@ -1,6 +1,6 @@
 ---
 title: "Guia Definitivo: Como Exportar PDFs em Massa no Adobe InDesign"
-description: "Você já se viu diante do desafio de exportar múltiplos PDFs de um único arquivo do Adobe InDesign?"
+description: "Passo a passo para exportar múltiplos arquivos PDF em massa a partir de um único documento no Adobe InDesign, com ajustes recomendados para impressão."
 date: 2024-09-08T03:00:00.000Z
 updated: 2024-11-13T13:41:24.370Z
 slug: como-exportar-pdf-indesign

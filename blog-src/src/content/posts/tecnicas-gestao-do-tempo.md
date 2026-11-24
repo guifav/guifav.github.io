@@ -1,6 +1,6 @@
 ---
 title: "10 Técnicas de Gestão do Tempo que Realmente Funcionam"
-description: "Descubra 10 técnicas comprovadas de gestão do tempo para aumentar sua produtividade no trabalho e na vida pessoal."
+description: "Dez técnicas práticas de gestão do tempo para aumentar foco no trabalho: calendário de tarefas, regra dos dois minutos, trabalho profundo e prioridades."
 date: 2024-08-13T03:00:00.000Z
 updated: 2024-09-18T10:58:40.724Z
 slug: tecnicas-gestao-do-tempo

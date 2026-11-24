@@ -1,7 +1,7 @@
 ---
 title: "22.580: do GPT-2 ao Kimi K3, explicado"
 subtitle: "Como a arquitetura de atenção evoluiu de um modelo de 124 milhões para um sistema de 2,8 trilhões de parâmetros"
-description: "Como a arquitetura de atenção evoluiu de um modelo de 124 milhões para um sistema de 2,8 trilhões de parâmetros"
+description: "Linha do tempo técnica da evolução da atenção do GPT-2 ao Kimi K3: atenção linear, DeltaNet, Gated DeltaNet e o caminho até 2,8 trilhões de parâmetros."
 date: 2026-08-09T18:25:17.849Z
 updated: 2026-08-09T18:26:44.950Z
 slug: 22580-do-gpt-2-ao-kimi-k3-explicado

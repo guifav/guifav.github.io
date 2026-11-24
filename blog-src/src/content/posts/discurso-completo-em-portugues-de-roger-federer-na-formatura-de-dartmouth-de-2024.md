@@ -1,6 +1,6 @@
 ---
 title: "Discurso completo em Português de Roger Federer na Formatura de Dartmouth de 2024"
-description: "Abaixo você encontra a transcrição na íntegra do discurso do Federer."
+description: "Transcrição completa em português do discurso de Roger Federer na formatura de Dartmouth em 2024, com os trechos principais sobre esforço e carreira."
 date: 2024-06-24T03:00:00.000Z
 updated: 2024-09-05T21:07:13.926Z
 slug: discurso-completo-em-portugues-de-roger-federer-na-formatura-de-dartmouth-de-2024

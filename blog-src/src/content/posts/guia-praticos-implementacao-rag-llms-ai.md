@@ -1,6 +1,6 @@
 ---
 title: "Guia prático de implementação de RAG em LLMs e IA (Parte 2/2)"
-description: "Acesse a parte 1 deste artigo com o detalhamento teórico sobre o tema"
+description: "Parte 2 do guia de RAG em LLMs: aplicações corporativas, privacidade de dados, arquitetura de implementação prática e cuidados ao levar para produção."
 date: 2024-09-17T03:00:00.000Z
 updated: 2025-02-06T12:37:55.418Z
 slug: guia-praticos-implementacao-rag-llms-ai

@@ -1,7 +1,7 @@
 ---
 title: "As 10 Regras de Ouro do crescimento das empresas"
 subtitle: "As Lições da McKinsey sobre como as grandes empresas do mundo impulsionam seu crescimento"
-description: "As Lições da McKinsey sobre como as grandes empresas do mundo impulsionam seu crescimento"
+description: "Resumo prático do estudo da McKinsey com 10 regras adotadas por grandes empresas para sustentar crescimento de receita e rentabilidade no longo prazo."
 date: 2024-01-10T01:28:48.413Z
 updated: 2024-01-10T01:28:48.510Z
 slug: as-10-regras-de-ouro-do-crescimento

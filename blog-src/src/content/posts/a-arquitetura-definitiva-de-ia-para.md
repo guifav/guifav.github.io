@@ -1,7 +1,7 @@
 ---
 title: "A Arquitetura Definitiva de IA para Empresas"
 subtitle: "Por que 90% dos Projetos Falham e Como Fazer Diferente"
-description: "Por que 90% dos Projetos Falham e Como Fazer Diferente"
+description: "Por que projetos de IA corporativa travam depois do piloto e como estruturar a arquitetura em cinco camadas para entregar resultado em escala."
 date: 2025-07-26T11:10:12.593Z
 updated: 2025-11-24T20:05:10.841Z
 slug: a-arquitetura-definitiva-de-ia-para

@@ -1,6 +1,6 @@
 ---
 title: "Preparando meus filhos para o mundo da inteligência artificial"
-description: "Tenho 2 filhos, um de 9 e outro de 6 anos, Pedro e Julio."
+description: "Reflexão prática de pai sobre habilidades, curiosidade e recursos educacionais para preparar crianças para estudar e trabalhar em um mundo com IA."
 date: 2023-11-22T03:00:00.000Z
 updated: 2024-01-04T18:33:09.508Z
 slug: preparando-meus-filhos-para-o-mundo-da-inteligencia-artificial

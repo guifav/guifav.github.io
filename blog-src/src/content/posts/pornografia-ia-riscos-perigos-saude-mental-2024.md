@@ -1,7 +1,7 @@
 ---
 title: "Pornografia com Inteligência Artificial: Os Novos Perigos que Você Precisa Conhecer em 2024"
 subtitle: "Descubra por que a pornografia com IA é mais perigosa que a tradicional em 2024."
-description: "Descubra por que a pornografia com IA é mais perigosa que a tradicional em 2024."
+description: "Análise dos riscos da pornografia gerada por IA, incluindo deepfakes, abuso digital e impactos documentados sobre saúde mental e relacionamentos."
 date: 2024-12-03T03:00:00.000Z
 updated: 2025-11-24T20:04:34.933Z
 slug: pornografia-ia-riscos-perigos-saude-mental-2024

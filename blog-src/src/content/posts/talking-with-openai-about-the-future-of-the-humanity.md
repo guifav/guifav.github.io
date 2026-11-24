@@ -1,6 +1,6 @@
 ---
 title: "Talking with OpenAI about the future of the humanity"
-description: "GUI: Hello OPEN AI: Hello!"
+description: "Conversa publicada com a OpenAI em 2023 sobre o futuro da humanidade, tomada de decisão autônoma por sistemas de IA e o papel humano diante da automação."
 date: 2023-02-07T02:14:35.000Z
 updated: 2024-01-04T18:32:58.278Z
 slug: talking-with-openai-about-the-future-of-the-humanity

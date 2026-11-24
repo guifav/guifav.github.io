@@ -1,7 +1,7 @@
 ---
 title: "IA generativa: qual é a revolução que está em andamento?"
 subtitle: "Entenda as capacidades desta tecnologia emergente e como indivíduos e organizações podem prosperar nesta nova era"
-description: "Entenda as capacidades desta tecnologia emergente e como indivíduos e organizações podem prosperar nesta nova era"
+description: "O que são modelos de IA generativa, como funcionam os principais conceitos do dicionário de IA e onde a tecnologia já gera aplicações práticas reais."
 date: 2024-02-19T09:38:01.116Z
 updated: 2024-02-19T09:38:01.186Z
 slug: ia-generativa-qual-e-a-revolucao

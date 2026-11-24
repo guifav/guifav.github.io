@@ -1,6 +1,6 @@
 ---
 title: "O que é RAG em LLMs e IA? Introdução ao tema (Parte 1/2)"
-description: "Acesse a parte 2 deste artigo com o detalhamento teórico sobre o tema"
+description: "Guia de fundamentos de RAG em LLMs: entenda como funciona a recuperação de contexto, quais são as arquiteturas principais e os desafios em produção."
 date: 2024-09-16T03:00:00.000Z
 updated: 2025-01-09T01:32:06.535Z
 slug: o-que-e-rag-llms-ia

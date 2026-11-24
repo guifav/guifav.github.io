@@ -1,6 +1,6 @@
 ---
 title: "Celebrando +2.300 assinantes na Newsletter do Linkedin."
-description: "Celebrando 1ª Semana da Newsletter diária: O Crescimento da Inteligência Artificial e o Boom de Ferramentas Inovadoras"
+description: "Retrospectiva da primeira semana da newsletter Destaque de Sites com IA no LinkedIn, com seleção inicial de ferramentas e sites de inteligência artificial."
 date: 2023-07-22T10:30:05.000Z
 updated: 2024-01-04T18:33:10.358Z
 slug: inteligencia-artificial-dicas-sites-aplicativos

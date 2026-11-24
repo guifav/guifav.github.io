@@ -1,7 +1,7 @@
 ---
 title: "Busca do ChatGPT torna Microsoft Bing uma prioridade para SEO em 2025"
 subtitle: "A paisagem das buscas acabou de mudar significativamente, e é hora de falarmos sobre um velho conhecido que talvez você tenha negligenciado: o Microsoft Bing."
-description: "Descubra por que o Microsoft Bing será essencial para SEO em 2025 com o ChatGPT Search."
+description: "Por que o índice do Microsoft Bing importa para aparecer no ChatGPT Search e o passo a passo prático de auditoria técnica no Bing Webmaster Tools."
 date: 2024-11-08T03:00:00.000Z
 updated: 2025-08-28T21:43:59.184Z
 slug: chatgpt-search-bing-seo-2025

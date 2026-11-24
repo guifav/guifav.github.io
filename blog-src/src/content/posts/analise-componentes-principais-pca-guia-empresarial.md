@@ -1,7 +1,7 @@
 ---
 title: "Análise de Componentes Principais (PCA): Um Guia Prático para Empresas e Negócios"
 subtitle: "Descubra como a Análise de Componentes Principais (PCA) revoluciona a análise de dados empresariais."
-description: "Descubra como a Análise de Componentes Principais (PCA) revoluciona a análise de dados empresariais."
+description: "O que é Análise de Componentes Principais (PCA), como reduz a complexidade de grandes bases corporativas e onde aplicá-la em problemas de negócio."
 date: 2024-12-02T03:00:00.000Z
 updated: 2025-11-24T20:07:20.747Z
 slug: analise-componentes-principais-pca-guia-empresarial

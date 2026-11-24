@@ -1,6 +1,6 @@
 ---
 title: "Livro: Desbloqueando a Inteligência Artificial"
-description: "Um Guia Estratégico para Empresários na Era da IA"
+description: "Hub gratuito do livro Desbloqueando a Inteligência Artificial, com guia estratégico e artefatos práticos para empresários decidirem onde aplicar IA."
 date: 2025-11-25T21:03:11.187Z
 updated: 2025-11-25T21:03:11.187Z
 slug: livro-ia-inteligencia-artificial-portugues-gratuito

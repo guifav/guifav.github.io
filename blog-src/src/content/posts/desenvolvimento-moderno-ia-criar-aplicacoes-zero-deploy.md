@@ -1,7 +1,7 @@
 ---
 title: "Desenvolvimento Moderno com IA: Como Criar Aplicações do Zero ao Deploy"
 subtitle: "Aprenda a desenvolver aplicações modernas usando IA como par de programação."
-description: "Aprenda a desenvolver aplicações modernas usando IA como par de programação."
+description: "Como estruturar, codificar e publicar aplicações usando IA como par de programação, do planejamento inicial ao deploy, com práticas de segurança."
 date: 2024-11-21T03:00:00.000Z
 updated: 2025-08-28T21:32:14.682Z
 slug: desenvolvimento-moderno-ia-criar-aplicacoes-zero-deploy

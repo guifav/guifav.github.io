@@ -1,6 +1,6 @@
 ---
 title: "IA generativa: qual é a revolução que está em andamento?"
-description: "Entenda as capacidades desta tecnologia emergente e como indivíduos e organizações podem prosperar nesta nova era"
+description: "Fundamentos da IA generativa explicados em linguagem direta: como redes neurais criam texto, imagem e código e o que isso muda para empresas e equipes."
 date: 2024-02-18T03:00:00.000Z
 updated: 2024-06-25T16:27:33.081Z
 slug: ia-generativa-qual-e-a-revolucao-que-esta-em-andamento

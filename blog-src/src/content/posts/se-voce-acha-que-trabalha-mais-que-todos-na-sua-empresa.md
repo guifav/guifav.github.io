@@ -1,6 +1,6 @@
 ---
 title: "Se você acha que trabalha mais que todos na sua empresa, esse texto é para você"
-description: "Esse texto pode ser um divisor de águas para você, assim como foi para mim quando isso tudo me caiu a ficha."
+description: "Por que trabalhar mais horas que os colegas gera frustração sem resultado proporcional e como direcionar esforço para impacto mensurável na empresa."
 date: 2022-03-01T03:00:00.000Z
 updated: 2024-01-04T18:32:59.091Z
 slug: se-voce-acha-que-trabalha-mais-que-todos-na-sua-empresa
