@@ -387,7 +387,7 @@ class VerifyTest(unittest.TestCase):
         final = f"https://guifav.dev/blog/{new}/"
         for url, answer in ((f"https://{WWW}/post/{old}", (301, "https://guifav.dev/blog/x/")),
                             (f"https://{APEX}/post/{old}/", (404, None)),
-                            (mid, (404, None)), (mid.rstrip("/").replace("https://", "https://"), (302, final)),
+                            (mid, (404, None)), (mid.rstrip("/"), (302, final)),
                             (final, (404, None))):
             with self.subTest(url=url):
                 rc, out = self.run_verify(self.live(url, answer))
