@@ -2722,6 +2722,56 @@ class LlmRankingTest(unittest.TestCase):
             self.assertEqual(C.main(["--site", str(self.site), "--posts", str(self.site), "--consts", str(consts)]), 0)
 
 
+class NavSourcesTest(unittest.TestCase):
+    """#113 r4 (achado P1 do agy): toda página da raiz com o menu do site, e o layout do blog, levam a /consultoria/ no
+    menu e no rodapé, e o "Agende um horário" do menu vai para /consultoria/#como-contratar (#136). O merge de um PR que
+    traz página nova com o menu antigo quebra aqui, em vez de publicar a página fora do padrão."""
+
+    ROOT = Path(__file__).resolve().parent.parent
+
+    def sources(self) -> list[Path]:
+        entries = [l.strip() for l in (self.ROOT / "site-manifest.txt").read_text(encoding="utf-8").splitlines()
+                   if l.strip() and not l.startswith("#")]
+        files: list[Path] = []
+        for e in entries:
+            p = self.ROOT / e
+            if e.endswith("/"):
+                files += sorted(f for f in p.rglob("*.html") if "mockups" not in f.parts)
+            elif e.endswith(".html"):
+                files.append(p)
+        return [f for f in files if '<div class="nav-links">' in f.read_text(encoding="utf-8")] + \
+            [self.ROOT / "blog-src/src/layouts/Base.astro"]
+
+    def test_every_menu_has_consulting_and_the_schedule_cta_goes_there(self):
+        files = self.sources()
+        rels = {str(f.relative_to(self.ROOT)) for f in files}
+        for must in ("index.html", "404.html", "portfolio/index.html", "consultoria/index.html", "llm-ranking/index.html",
+                     "blog-src/src/layouts/Base.astro"):
+            self.assertIn(must, rels)
+        for f in files:
+            rel = str(f.relative_to(self.ROOT))
+            with self.subTest(rel=rel):
+                h = f.read_text(encoding="utf-8")
+                nav = re.search(r'<div class="nav-links">(.*?)</div>', h, re.S).group(1)
+                self.assertRegex(nav, r'<a href="/consultoria/"[ >]')
+                ctas = re.findall(r'<a\b[^>]*class="nav-cta"[^>]*>', nav)
+                self.assertEqual(len(ctas), 1, ctas)
+                self.assertIn('href="/consultoria/#como-contratar"', ctas[0])
+                self.assertNotIn("target=", ctas[0])
+                if rel != "consultoria/index.html":
+                    foot = re.search(r"<footer>(.*?)</footer>", h, re.S).group(1)
+                    self.assertIn('href="/consultoria/"', foot)
+
+    def test_root_pages_load_one_version_of_site_js(self):
+        # #113 r4 (P3 do agy e do Claude): o #142 mudou o site.js e subiu o ?v=; página que entra por merge com a versão
+        # antiga cria outra chave de cache para o mesmo script.
+        versions = {}
+        for f in self.sources()[:-1]:
+            for v in re.findall(r'src="/assets/site\.js\?v=([^"]+)"', f.read_text(encoding="utf-8")):
+                versions.setdefault(v, []).append(str(f.relative_to(self.ROOT)))
+        self.assertEqual(len(versions), 1, versions)
+
+
 class ContrastSourcesTest(unittest.TestCase):
     """Fontes reais: o CSS do site e o do blog, na ordem do Base.astro (site.css por <link>, blog.css inline depois)."""
 
