@@ -535,7 +535,8 @@ def _has_clarity(html: str) -> bool:
     return any(all(k in body for k in CLARITY_MARKERS) for body in _exec_scripts(html))
 
 
-# Títulos (Gui, 13/11/2026): "Página | Guilherme Favaron"; a home leva o nome primeiro, "Guilherme Favaron | ...".
+# Títulos (Gui, 13/11/2026, PR #57): "Página | Guilherme Favaron"; a home leva o nome primeiro, "Guilherme Favaron | ...".
+# Desde 23/11/2026 (#103) o post sai sem o sufixo: o Google já mostra o nome do site, que vem do WebSite da home.
 # As telas de exemplo do portfólio (portfolio/mockups) aparecem dentro do portfólio e ficam fora da regra.
 SITE_NAME = "Guilherme Favaron"
 TITLE_SEP = " | "
@@ -696,6 +697,11 @@ def check_titles_and_groups(rel: str, html: str) -> list[str]:
                 home_title = SITE_NAME + TITLE_SEP + "Builder e CTO"
                 if title != home_title:
                     problems.append(f"{rel}: o título da home precisa ser {home_title!r}: {title!r}")
+            elif expected_content_group(rel) == "insights-artigo":
+                if not title:
+                    problems.append(f"{rel}: título do post vazio")
+                elif title.endswith(TITLE_SEP + SITE_NAME) or title.startswith(SITE_NAME + TITLE_SEP):
+                    problems.append(f"{rel}: o título do post vai sem o nome do site ('{TITLE_SEP}{SITE_NAME}'): {title!r}")
             elif not title.endswith(TITLE_SEP + SITE_NAME):
                 problems.append(f"{rel}: o título precisa terminar em '{TITLE_SEP}{SITE_NAME}': {title!r}")
             for prop in ("og:title", "twitter:title"):
@@ -1039,6 +1045,110 @@ def check_root_sitemaps(site: Path, root_pages: list[tuple[str, str, "_Page"]]) 
     return problems
 
 
+# Busca (#103): o nome do site que o Google mostra vem do WebSite da home, e cada post tem description e título
+# na medida. Falha só em post novo (date a partir do cutover) com description curta; o resto é aviso. Os posts
+# importados (Substack e os restaurados do Wix, todos com date anterior) só recebem aviso, e só os indexáveis.
+HOME_WEBSITE = {"name": SITE_NAME, "url": SITE_ORIGIN + "/"}
+NEW_POST_SINCE = "2026-11-12"
+DESCRIPTION_MIN_NEW = 70
+DESCRIPTION_RANGE = (120, 160)
+TITLE_MAX = 60
+
+
+class _ArticleImages(HTMLParser):
+    """Texto alternativo de cada <img> dentro de <article> (None quando falta o atributo)."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.depth = 0
+        self.alts: list[str | None] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "article":
+            self.depth += 1
+        elif tag == "img" and self.depth:
+            self.alts.append(dict(attrs).get("alt"))
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "img":
+            self.handle_starttag(tag, attrs)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "article" and self.depth:
+            self.depth -= 1
+
+
+def _home_has_website(html: str) -> bool:
+    """Algum JSON-LD da home (fora de comentário) traz um WebSite com HOME_WEBSITE."""
+    html = re.sub(r"<!--.*?-->", "", html, flags=re.S)
+    scripts = re.findall(r"""<script\b[^>]*\btype\s*=\s*["']application/ld\+json["'][^>]*>(.*?)</script\s*>""",
+                         html, flags=re.S | re.I)
+    for body in scripts:
+        try:
+            data = json.loads(body)
+        except ValueError:
+            continue
+        nodes = data if isinstance(data, list) else [data]
+        nodes += [n for d in nodes if isinstance(d, dict) for n in d.get("@graph", [])]
+        if any(isinstance(n, dict) and n.get("@type") == "WebSite" and all(n.get(k) == v for k, v in HOME_WEBSITE.items())
+               for n in nodes):
+            return True
+    return False
+
+
+def check_seo(site: Path, posts: Path) -> tuple[list[str], list[str], list[str]]:
+    """(problemas, avisos dos posts novos, avisos dos posts importados) da #103, sobre o HTML montado.
+
+    Description e título saem do HTML publicado (o que o buscador lê), não do frontmatter; a data sai do
+    frontmatter, que o schema do blog já valida.
+    """
+    problems: list[str] = []
+    warn_new: list[str] = []
+    warn_old: list[str] = []
+    home = site / "index.html"
+    if not home.is_file() or not _home_has_website(home.read_text(encoding="utf-8")):
+        problems.append(f"index.html: sem o JSON-LD WebSite com {HOME_WEBSITE} (nome do site no Google)")
+    lo, hi = DESCRIPTION_RANGE
+    for md in sorted(posts.glob("**/*.md")):
+        fm = frontmatter(md.read_text(encoding="utf-8"))
+        slug = fm.get("slug") or md.stem
+        rel = f"blog/{slug}/index.html"
+        page = site / rel
+        if not page.is_file():
+            continue  # check() já acusa post sem página
+        date = fm.get("date", "")[:10]
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
+            problems.append(f"{rel}: date do post ilegível no frontmatter: {fm.get('date', '')!r}")
+            continue
+        new = date >= NEW_POST_SINCE
+        if not new and fm.get("index") == "false":
+            continue
+        visible = _visible_html(page.read_text(encoding="utf-8"))
+        descs = _meta_contents(visible, "description")
+        desc = descs[0] if descs else ""
+        m = re.search(r"<title[^>]*>(.*?)</title\s*>", visible, flags=re.S | re.I)
+        title = unescape(m.group(1)).strip() if m else ""
+        warns = warn_new if new else warn_old
+        if len(desc) < DESCRIPTION_MIN_NEW and new:
+            problems.append(f"{rel}: post novo com description de {len(desc)} caracteres; o mínimo é "
+                            f"{DESCRIPTION_MIN_NEW} e o alvo, de {lo} a {hi}")
+        elif not lo <= len(desc) <= hi:
+            warns.append(f"{rel}: description com {len(desc)} caracteres, fora da faixa de {lo} a {hi}")
+        if len(title) > TITLE_MAX:
+            warns.append(f"{rel}: título com {len(title)} caracteres, acima de {TITLE_MAX}")
+        imgs = _ArticleImages()
+        imgs.feed(visible)
+        imgs.close()
+        no_alt = sum(1 for a in imgs.alts if not (a or "").strip())
+        if no_alt:
+            warns.append(f"{rel}: {no_alt} de {len(imgs.alts)} imagens sem texto alternativo")
+    return problems, warn_new, warn_old
+
+
+def _gh_escape(msg: str) -> str:
+    return msg.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Verifica o site montado em _site/ antes do deploy.")
     ap.add_argument("--site", default="_site")
@@ -1051,6 +1161,18 @@ def main(argv: list[str] | None = None) -> int:
     except ResolverError as e:
         print(f"ERRO: resolvedor de URL indisponível, verificação não feita: {e}", file=sys.stderr)
         return 1
+    seo_problems, warn_new, warn_old = check_seo(Path(args.site), Path(args.posts))
+    problems += seo_problems
+    gh = os.environ.get("GITHUB_ACTIONS") == "true"
+    for w in warn_new:
+        print(f"::warning title=check_site (#103)::{_gh_escape(w)}" if gh else f"AVISO: {w}")
+    if warn_old:
+        if gh:
+            print(f"::group::Avisos dos posts importados ({len(warn_old)})")
+        for w in warn_old:
+            print(f"AVISO (importado): {w}")
+        if gh:
+            print("::endgroup::")
     for p in problems:
         print(f"ERRO: {p}", file=sys.stderr)
     if problems:

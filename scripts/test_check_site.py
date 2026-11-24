@@ -17,10 +17,11 @@ ROBOTS_NOINDEX = '<meta name="robots" content="noindex, follow">'
 ROBOTS_INDEX = '<meta name="robots" content="index, follow">'
 
 
-# Títulos dos testes que não tratam dessa regra: a home tem texto exato; as demais páginas usam o sufixo.
-# TitleAndGroupTest testa a regra com títulos próprios.
+# Títulos dos testes que não tratam dessa regra: a home tem texto exato; o post vai sem o sufixo (#103); as demais
+# páginas usam o sufixo. TitleAndGroupTest testa a regra com títulos próprios.
 FIXTURE_TITLE = "<title>Guilherme Favaron | Teste | Guilherme Favaron</title>"
 HOME_FIXTURE_TITLE = "<title>Guilherme Favaron | Builder e CTO</title>"
+POST_FIXTURE_TITLE = "<title>Teste</title>"
 
 
 def page(body: str = "", robots: str = ROBOTS_NOINDEX, title: str = FIXTURE_TITLE) -> str:
@@ -74,6 +75,8 @@ class Base(unittest.TestCase):
     def w(self, rel: str, text: str) -> None:
         if rel == "index.html":
             text = text.replace(FIXTURE_TITLE, HOME_FIXTURE_TITLE)
+        elif C.expected_content_group(rel) == "insights-artigo":
+            text = text.replace(FIXTURE_TITLE, POST_FIXTURE_TITLE)
         p = self.site / rel
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(text, encoding="utf-8")
@@ -743,7 +746,7 @@ class ClarityTest(Base):
 
 
 class TitleAndGroupTest(unittest.TestCase):
-    """Títulos "Página | Guilherme Favaron" (home com o nome primeiro) e content_group do GA4 por tipo de página."""
+    """Títulos "Página | Guilherme Favaron" (home com o nome primeiro, post sem o nome) e content_group do GA4 por tipo."""
 
     GA = '<script async src="https://www.googletagmanager.com/gtag/js?id=G-K7Y87QNCX8"></script>'
 
@@ -765,16 +768,26 @@ class TitleAndGroupTest(unittest.TestCase):
                  ("portfolio/index.html", "Portfólio | Guilherme Favaron", True),
                  ("portfolio/index.html", "Portfólio, Guilherme Favaron", False),
                  ("llm-ranking/index.html", "Ranking: Qual é o Melhor LLM?", False),
-                 ("blog/um-post/index.html", "Um post | Guilherme Favaron", True),
-                 ("blog/um-post/index.html", "Um post | Guilherme Favaron ", True),  # espaço em volta não conta
+                 # Post (#103, Gui em 23/11): sem o nome do site, nem no fim nem no começo.
+                 ("blog/um-post/index.html", "Um post", True),
+                 ("blog/um-post/index.html", "Um post sobre Guilherme Favaron", True),
+                 ("blog/um-post/index.html", "Um post | Guilherme Favaron", False),
+                 ("blog/um-post/index.html", "Um post | Guilherme Favaron ", False),  # espaço em volta não conta
                  ("blog/um-post/index.html", "Guilherme Favaron | Um post", False),
+                 ("blog/um-post/index.html", "", False),
+                 # As outras páginas do blog mantêm o sufixo.
+                 ("blog/index.html", "Insights | Guilherme Favaron", True),
+                 ("blog/index.html", "Insights", False),
+                 ("blog/pagina/2/index.html", "Insights, página 2 | Guilherme Favaron", True),
+                 ("blog/assinar/index.html", "Assine os Expert Insights", False),
                  ("404.html", "Página não encontrada | Guilherme Favaron", True)]
         for rel, title, ok in cases:
             with self.subTest(rel=rel, title=title):
                 self.assertEqual(self.check(rel, self.doc(f"<title>{title}</title>")) == [], ok)
 
     def test_entities_are_decoded(self):
-        self.assertEqual(self.check("blog/x/index.html", self.doc("<title>A &amp; B &#124; Guilherme Favaron</title>")), [])
+        self.assertEqual(self.check("portfolio/index.html", self.doc("<title>A &amp; B &#124; Guilherme Favaron</title>")), [])
+        self.assertTrue(self.check("blog/x/index.html", self.doc("<title>A &amp; B &#124; Guilherme Favaron</title>")))
 
     def test_missing_or_commented_title(self):
         fake_title = '<script type="application/ld+json">{"x":"<title>X | Guilherme Favaron</title>"}</script>'
@@ -825,7 +838,7 @@ class TitleAndGroupTest(unittest.TestCase):
         self.assertEqual(self.check("index.html", self.doc(title, self.GA + self.cfg(",{content_group:'home'}"))), [])
         astro = ('<script>(function(){const GA4_ID = "G-K7Y87QNCX8";\nconst CONTENT_GROUP = "insights-artigo";\n'
                  "gtag('config', GA4_ID, { content_group: CONTENT_GROUP });})();</script>")
-        self.assertEqual(self.check("blog/um-post/index.html", self.doc("<title>X | Guilherme Favaron</title>", self.GA + astro)), [])
+        self.assertEqual(self.check("blog/um-post/index.html", self.doc("<title>X</title>", self.GA + astro)), [])
 
     def test_group_missing_wrong_duplicated_or_inert(self):
         title = "<title>Guilherme Favaron | Builder e CTO</title>"
@@ -886,9 +899,12 @@ class TitleAndGroupTest(unittest.TestCase):
     def test_check_runs_the_rule_on_every_page(self):
         with tempfile.TemporaryDirectory() as d:
             site = Path(d) / "_site"; (site / "blog" / "um").mkdir(parents=True)
-            (site / "blog" / "um" / "index.html").write_text(self.doc("<title>Sem barra</title>"), encoding="utf-8")
+            (site / "blog" / "um" / "index.html").write_text(self.doc("<title>Um | Guilherme Favaron</title>"), encoding="utf-8")
+            (site / "blog" / "index.html").write_text(self.doc("<title>Sem barra</title>"), encoding="utf-8")
             posts = Path(d) / "posts"; posts.mkdir()
-            self.assertTrue(any("precisa terminar em" in p for p in C.check(site, posts, pre_cutover=False)))
+            problems = C.check(site, posts, pre_cutover=False)
+            self.assertTrue(any("blog/index.html: o título precisa terminar em" in p for p in problems))
+            self.assertTrue(any("blog/um/index.html: o título do post vai sem o nome do site" in p for p in problems))
 
 
 class TitleAndGroupSourcesTest(unittest.TestCase):
@@ -1578,6 +1594,134 @@ class ToolsSourcesTest(unittest.TestCase):
                     "blog-src/src/content/posts/livro-ia-inteligencia-artificial-portugues-gratuito.md"):
             with self.subTest(rel=rel):
                 self.assertTrue((self.REPO / rel).is_file())
+
+
+
+class SeoTest(unittest.TestCase):
+    """#103: WebSite na home; description, título e alt dos posts (falha só em post novo com description curta)."""
+
+    WEBSITE = ('<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebSite",'
+               '"name":"Guilherme Favaron","url":"https://guifav.dev/"}</script>')
+    OK_DESC = "d" * 140
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        r = Path(self.tmp.name)
+        self.site, self.posts = r / "_site", r / "posts"
+        self.posts.mkdir()
+        self.home(self.WEBSITE)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def home(self, head):
+        (self.site).mkdir(exist_ok=True)
+        (self.site / "index.html").write_text(f"<html><head>{head}</head><body></body></html>", encoding="utf-8")
+
+    def post(self, slug="p", date="2026-11-20T12:00:00Z", desc=OK_DESC, title="Um título curto", body="", index=True):
+        fm = f"---\ntitle: x\nslug: {slug}\ndate: {date}\n" + ("" if index else "index: false\n") + "---\n"
+        (self.posts / f"{slug}.md").write_text(fm, encoding="utf-8")
+        d = self.site / "blog" / slug
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "index.html").write_text(
+            f'<html><head><title>{title}</title><meta name="description" content="{desc}"></head>'
+            f'<body><img src="/logo.png"><article class="post">{body}</article></body></html>', encoding="utf-8")
+
+    def seo(self):
+        return C.check_seo(self.site, self.posts)
+
+    def test_new_post_with_short_description_fails(self):
+        self.post(desc="d" * 69)
+        problems, warn_new, _ = self.seo()
+        self.assertEqual(len(problems), 1)
+        self.assertIn("post novo com description de 69 caracteres", problems[0])
+        self.assertEqual(warn_new, [])  # a falha não se repete como aviso
+
+    def test_new_post_limits(self):
+        for n, fails, warns in ((70, False, True), (119, False, True), (120, False, False), (160, False, False),
+                                (161, False, True), (0, True, False)):
+            with self.subTest(n=n):
+                self.post(desc="d" * n)
+                problems, warn_new, _ = self.seo()
+                self.assertEqual(bool(problems), fails)
+                self.assertEqual(bool(warn_new), warns)
+
+    def test_cutover_date_is_the_boundary(self):
+        self.post(date="2026-11-12", desc="curta")
+        self.assertTrue(self.seo()[0])
+        self.post(date="2026-11-11T23:00:00Z", desc="curta")
+        problems, warn_new, warn_old = self.seo()
+        self.assertEqual((problems, warn_new), ([], []))
+        self.assertEqual(len(warn_old), 1)
+
+    def test_imported_post_only_warns(self):
+        self.post(date="2024-03-01T10:00:00.000Z", desc="Introdução", title="t" * 61, body='<img src="a.webp" alt="">')
+        problems, warn_new, warn_old = self.seo()
+        self.assertEqual((problems, warn_new), ([], []))
+        self.assertEqual(len(warn_old), 3)
+
+    def test_imported_noindex_post_is_skipped_but_new_is_not(self):
+        self.post(date="2024-03-01", desc="x", index=False)
+        self.assertEqual(self.seo(), ([], [], []))
+        self.post(date="2026-11-20", desc="x", index=False)
+        self.assertTrue(self.seo()[0])
+
+    def test_title_and_alt_warnings(self):
+        body = '<p><img src="a.webp" alt="Gráfico"><img src="b.webp" alt=" "><img src="c.webp"></p>'
+        self.post(title="t" * 61, body=body)
+        _, warn_new, _ = self.seo()
+        self.assertTrue(any("título com 61 caracteres" in w for w in warn_new))
+        self.assertTrue(any("2 de 3 imagens sem texto alternativo" in w for w in warn_new))
+        self.post(title="t" * 60, body='<img src="a.webp" alt="Gráfico">')
+        self.assertEqual(self.seo(), ([], [], []))
+
+    def test_description_comes_from_the_published_html(self):
+        self.post(desc="A &amp; " + "d" * 132)  # 140 caracteres depois de decodificar a entidade
+        self.assertEqual(self.seo(), ([], [], []))
+
+    def test_unreadable_date_fails(self):
+        self.post(date="ontem")
+        self.assertTrue(any("date do post ilegível" in p for p in self.seo()[0]))
+
+    def test_home_needs_the_website_json_ld(self):
+        self.assertEqual(self.seo(), ([], [], []))
+        bad = {"sem": "",
+               "comentado": f"<!-- {self.WEBSITE} -->",
+               "nome errado": self.WEBSITE.replace("Guilherme Favaron", "guifav"),
+               "url sem barra": self.WEBSITE.replace('"https://guifav.dev/"', '"https://guifav.dev"'),
+               "outro tipo": self.WEBSITE.replace("WebSite", "Person"),
+               "json inválido": self.WEBSITE.replace("}", "")}
+        for name, head in bad.items():
+            with self.subTest(name=name):
+                self.home(head)
+                self.assertTrue(any("WebSite" in p for p in self.seo()[0]), name)
+        self.home(self.WEBSITE.replace('{"@context":"https://schema.org",', '{"@context":"https://schema.org","@graph":[{')
+                  .replace("</script>", "]}</script>"))
+        self.assertEqual(self.seo()[0], [])
+
+    def test_repo_home_has_the_website(self):
+        home = (Path(__file__).resolve().parent.parent / "index.html").read_text(encoding="utf-8")
+        self.assertTrue(C._home_has_website(home))
+
+    def test_main_fails_only_on_new_post_and_prints_warnings(self):
+        import contextlib
+        import io
+        consts = Path(self.tmp.name) / "consts.ts"
+        consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
+        args = ["--site", str(self.site), "--posts", str(self.posts), "--consts", str(consts)]
+        real_check = C.check
+        C.check = lambda *a, **k: []  # isola a regra da #103 das demais
+        try:
+            for desc, code in (("d" * 69, 1), ("d" * 165, 0), (self.OK_DESC, 0)):
+                with self.subTest(desc=len(desc)):
+                    self.post(desc=desc)
+                    out, err = io.StringIO(), io.StringIO()
+                    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                        self.assertEqual(C.main(args), code)
+                    self.assertEqual("ERRO" in err.getvalue(), code == 1)
+                    self.assertEqual("AVISO: " in out.getvalue(), len(desc) == 165)
+        finally:
+            C.check = real_check
 
 
 if __name__ == "__main__":
