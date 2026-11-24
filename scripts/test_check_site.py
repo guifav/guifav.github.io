@@ -3307,7 +3307,8 @@ def _with_item_mocks(expr: ast.AST, rules: set[str]) -> set[str]:
 
 
 def _unisolated_main_tests(source: str, rules: set[str]) -> dict[str, set[str]]:
-    """Retorna {Classe.metodo: regras_nao_isoladas} para cada chamada a C.main() em teste sem isolar as outras regras."""
+    """Retorna {escopo: regras_nao_isoladas} para qualquer chamada a C.main() no arquivo sem isolar as outras regras.
+    Cobre métodos test_*, métodos auxiliares em classes, funções de módulo e closures/lambdas (que podem rodar fora do with)."""
     tree = ast.parse(source)
     bad: dict[str, set[str]] = {}
 
@@ -3321,6 +3322,11 @@ def _unisolated_main_tests(source: str, rules: set[str]) -> dict[str, set[str]]:
             for stmt in node.body:
                 walk(stmt, inner, label)
             return
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            # Função interna ou lambda pode ser executada depois do fim do bloco with: reinicia os mocks ativos.
+            for child in ast.iter_child_nodes(node):
+                walk(child, frozenset(), label)
+            return
         if isinstance(node, ast.Call):
             f = node.func
             if isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name) and f.value.id == "C" and f.attr == "main":
@@ -3330,9 +3336,17 @@ def _unisolated_main_tests(source: str, rules: set[str]) -> dict[str, set[str]]:
         for child in ast.iter_child_nodes(node):
             walk(child, active, label)
 
-    for cls in (n for n in tree.body if isinstance(n, ast.ClassDef)):
-        for fn in (n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name.startswith("test_")):
-            walk(fn, frozenset(), f"{cls.name}.{fn.name}")
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef):
+            for item in node.body:
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    for stmt in item.body:
+                        walk(stmt, frozenset(), f"{node.name}.{item.name}")
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for stmt in node.body:
+                walk(stmt, frozenset(), node.name)
+        else:
+            walk(node, frozenset(), "<module>")
     return bad
 
 
@@ -3348,14 +3362,20 @@ class MainRuleIsolationTest(unittest.TestCase):
         self.assertEqual(_unisolated_main_tests(src, rules), {})
 
     def test_isolate_main_rule_patches_every_other_rule(self):
-        real_home = C.check_home
-        real_post_ld = C.check_post_ld
-        with isolate_main_rule("check_home"):
-            self.assertIs(C.check_home, real_home)
-            self.assertIsNot(C.check_post_ld, real_post_ld)
-            self.assertEqual(C.check_post_ld(Path("."), Path(".")), [])
-            self.assertEqual(C.check_seo(Path("."), Path(".")), ([], [], []))
-        self.assertIs(C.check_post_ld, real_post_ld)
+        originals = {name: getattr(C, name) for name in MAIN_RULES}
+        for keep in MAIN_RULES:
+            with self.subTest(keep=keep):
+                with isolate_main_rule(keep):
+                    self.assertIs(getattr(C, keep), originals[keep])
+                    for other in MAIN_RULES:
+                        if other == keep:
+                            continue
+                        patched = getattr(C, other)
+                        self.assertIsNot(patched, originals[other], f"{other} não foi substituída ao isolar {keep}")
+                        expected = ([], [], []) if other == "check_seo" else []
+                        self.assertEqual(patched(Path("."), Path(".")), expected, other)
+                for name, orig in originals.items():
+                    self.assertIs(getattr(C, name), orig, f"{name} não foi restaurada após sair do with")
         with self.assertRaises(KeyError):
             with isolate_main_rule("check_inexistente"):
                 pass
@@ -3368,7 +3388,11 @@ class MainRuleIsolationTest(unittest.TestCase):
         self.assertIn("check_nova", _main_rules_in_source(fake_main) - set(MAIN_RULES))
 
         sample = (
+            "def top_helper():\n"
+            "    return C.main([])\n"
             "class T:\n"
+            "    def _helper(self):\n"
+            "        return C.main([])\n"
             "    def test_incomplete(self):\n"
             "        with mock.patch.object(C, 'check', lambda *a, **k: []):\n"
             "            C.main([])\n"
@@ -3376,15 +3400,25 @@ class MainRuleIsolationTest(unittest.TestCase):
             "        with isolate_main_rule('check_home'):\n"
             "            pass\n"
             "        C.main([])\n"
+            "    def test_deferred_lambda(self):\n"
+            "        with isolate_main_rule('check_home'):\n"
+            "            fn = lambda: C.main([])\n"
+            "        return fn\n"
             "    def test_ok_helper(self):\n"
             "        with isolate_main_rule('check_home'):\n"
             "            C.main([])\n"
         )
         rules = set(MAIN_RULES)
         got = _unisolated_main_tests(sample, rules)
-        self.assertEqual(set(got.keys()), {"T.test_incomplete", "T.test_outside_with"})
+        self.assertEqual(
+            set(got.keys()),
+            {"top_helper", "T._helper", "T.test_incomplete", "T.test_outside_with", "T.test_deferred_lambda"},
+        )
+        self.assertEqual(got["top_helper"], rules)
+        self.assertEqual(got["T._helper"], rules)
         self.assertEqual(got["T.test_incomplete"], rules - {"check"})
         self.assertEqual(got["T.test_outside_with"], rules)
+        self.assertEqual(got["T.test_deferred_lambda"], rules)
 
 
 if __name__ == "__main__":
