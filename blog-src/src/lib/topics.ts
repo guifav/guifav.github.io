@@ -71,7 +71,7 @@ export const TOPICS: Topic[] = [
     description:
       'Artigos de Guilherme Favaron sobre como fazer a IA responder com os dados da empresa: RAG, Text-to-SQL, MCP e análise de planilhas com LLMs.',
     intro:
-      'Quase todo projeto de IA que acompanho precisa que o modelo responda com os dados da própria empresa, com cada número conferido na fonte. Os caminhos são vários (RAG sobre documentos, Text-to-SQL sobre o banco, MCP e análise de planilhas), e cada um acerta num tipo de pergunta e falha em outro. Comece pelos cinco primeiros artigos, que tratam da escolha de arquitetura, de RAG e de Text-to-SQL. Os seguintes descem para planilhas e modelos preditivos, e a lista termina nos casos que construí.',
+      'Quase todo projeto de IA que acompanho precisa que o modelo responda com os dados da própria empresa, com cada número conferido na fonte. Os caminhos são vários (RAG sobre documentos, Text-to-SQL sobre o banco, MCP e análise de planilhas), e cada um acerta num tipo de pergunta e falha em outro. Os seis primeiros artigos tratam da escolha de arquitetura, da série de RAG e de Text-to-SQL. Depois vêm as planilhas, os modelos preditivos e o valor do dado da empresa, e a lista termina em aplicações: segmentação de clientes, análise de ligações de vendas e um radar de mercado que construí.',
     pageCta: [
       'Antes de escolher a arquitetura, use o ',
       { text: 'mapa de decisão', href: MAPA },
@@ -81,21 +81,19 @@ export const TOPICS: Topic[] = [
     blockCta: ['Vai escolher a arquitetura? Use o ', { text: 'mapa de decisão de IA', href: MAPA }, '.'],
     posts: [
       { slug: 'mcp-ou-aplicacao-dados-da-empresa-na-ia', question: 'Servidor MCP aberto ou aplicação própria: quem garante a resposta da IA sobre os dados da empresa?' },
+      { slug: 'rag-llm-ai-o-que-e', question: 'Quais são os primeiros passos para implementar RAG?' },
       { slug: 'o-que-e-rag-llms-ia', question: 'O que é RAG e quando ele resolve a pergunta sobre os documentos da empresa?' },
       { slug: 'guia-praticos-implementacao-rag-llms-ai', question: 'Como implementar RAG na prática, a segunda parte da série?' },
       { slug: 'rag-knowledge-bases-corporativas-implementacao-pratica', question: 'Como montar RAG sobre a base de conhecimento corporativa?' },
       { slug: 'llm-sql-nosql-guia-integracao', question: 'Como ligar um LLM aos bancos SQL e NoSQL da empresa?' },
       { slug: 'ferramentas-ia-excel-google-sheets-analise-dados', question: 'Quais ferramentas de IA analisam planilhas do Excel e do Google Sheets?' },
       { slug: 'ia-google-sheets-integracao-llm-codigo-aberto', question: 'Como levar um LLM para dentro da planilha que o time já usa?' },
-      { slug: 'tutorial-analise-de-dados-colab-python-ia', question: 'Como um gestor que não programa analisa dados com IA?' },
-      { slug: 'como-criar-um-modelo-de-machine-learning', question: 'Como sair de uma planilha bruta para um modelo preditivo?' },
       { slug: 'analise-preditiva-tomada-decisao-producao', question: 'Como usar análise preditiva nas decisões, com a incerteza medida?' },
       { slug: 'machine-learning-producao-modelos-empresariais-roi', question: 'Como levar um modelo de machine learning do experimento para a produção?' },
+      { slug: 'o-ativo-invisivel-dados-como-vantagem-competitiva', question: 'Quanto valem os dados de uma empresa, segundo 116 mil relatórios anuais?' },
       { slug: 'customer-analytics-e-segmentacao', question: 'Como segmentar clientes com os dados que a empresa já tem?' },
       { slug: 'analise-vendas-ia-guia-completo', question: 'Como analisar as ligações do time de vendas com IA?' },
       { slug: 'radar-inteligencia-mercado-open-source', question: 'Como cruzar fontes públicas com o CRM usando um LLM?' },
-      { slug: 'o-ativo-invisivel-dados-como-vantagem-competitiva', question: 'Quanto valem os dados de uma empresa, segundo 116 mil relatórios anuais?' },
-      { slug: 'rag-llm-ai-o-que-e', question: 'Quais são os primeiros passos para implementar RAG?' },
     ],
   },
   {
@@ -192,6 +190,8 @@ export const WAITING_TOPICS: WaitingTopic[] = [
   {
     id: 'engenharia-de-software-com-ia',
     name: 'Engenharia de software com IA',
+    // Contagem do PR da #104: 3 fortes. A do agy chegava a 5 com o radar (aqui no tema 1) e com dois de fronteira
+    // (o-prompt-virou-contrato e o n8n); aqui o n8n conta como forte, e o radar e o prompt ficam fora.
     reason:
       'só 3 posts fortes (o-fim-do-codigo-como-ativo-o-novo, self-improvement-architecture-aplicacoes-que-aprendem-com-uso-real e integrar-vscode-cursor-n8n-automacao-workflows); a regra da #104 pede 5 sem contar post curto de 2024 nem de fronteira',
   },

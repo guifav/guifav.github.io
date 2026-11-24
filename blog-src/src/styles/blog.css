@@ -13,7 +13,8 @@
 .post-item-meta{font-size:13px;color:var(--text-secondary);display:flex;gap:10px;align-items:center}
 .post-item-meta .pill{margin:0}
 
-.topic-nav{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;margin-top:20px;font-size:14px}
+/* nav herda display, justify-content, padding e borda do nav global do site.css (cabeçalho): neutralizados aqui */
+.topic-nav{display:flex;flex-wrap:wrap;justify-content:flex-start;align-items:baseline;gap:6px 14px;margin-top:20px;padding:0;border:0;font-size:14px}
 .topic-nav-label{font-weight:700;color:var(--text-secondary)}
 .topic-nav ul{list-style:none;display:flex;flex-wrap:wrap;gap:6px 14px}
 .topic-nav a{color:var(--hl-text);text-decoration:none;font-weight:600;line-height:28px}

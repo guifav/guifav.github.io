@@ -74,6 +74,8 @@ FORBIDDEN_TAGS = {"object", "embed", "applet", "base", "frame", "frameset"}
 # data-site-form, POST e com destino no Worker. Fora disso, e dentro do conteúdo do post, é alarme.
 SITE_FORM_ATTR = "data-site-form"
 SITE_FORM_ACTIONS = {"https://insights.guifav.dev/subscribe"}
+# Páginas de tema (#104), /blog/tema/<id>/: indexáveis, com canonical próprio e no sitemap do blog.
+TOPIC_PAGE = re.compile(r"blog/tema/[a-z0-9][a-z0-9-]*/index\.html")
 # Páginas da newsletter (#21): noindex e fora do sitemap sempre, também depois do cutover (A10).
 BLOG_PRIVATE_PAGES = frozenset({"assinar", "inscricao-enviada", "inscricao-confirmada", "inscricao-invalida", "privacidade"})
 IFRAME_HOSTS = {
@@ -423,6 +425,7 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
     unique = list(dict.fromkeys(pairs))  # sem repetição, mantendo a ordem
     resolved = dict(zip(unique, resolve_urls(unique)))
 
+    topic_urls: list[str] = []
     for rel, url, in_blog, p in pages:
         base = SITE_ORIGIN + url
         if in_blog:
@@ -443,6 +446,14 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
                 problems.append(f"{rel}: post com index: false sem noindex")
             if len(parts) == 1 and parts[0] in BLOG_PRIVATE_PAGES and not has_noindex:
                 problems.append(f"{rel}: página da newsletter sem noindex")
+        # Páginas de tema (#104): no sitemap (completude, abaixo), com canonical para si mesmas e, depois do
+        # cutover, indexáveis.
+        if TOPIC_PAGE.fullmatch(rel):
+            topic_urls.append(url)
+            if not pre_cutover and has_noindex:
+                problems.append(f"{rel}: página de tema com noindex")
+            if not p.canonicals or not canonical_is_self(p.canonicals, url):
+                problems.append(f"{rel}: página de tema sem canonical para si mesma: {p.canonicals}")
         if not pre_cutover:
             # Fora do blog, qualquer menção literal conta (inclusive JSON-LD e texto): o código é do site.
             if not in_blog and OLD_DOMAIN in (site / rel).read_text(encoding="utf-8").lower():
@@ -487,9 +498,10 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
             problems.append(f"sitemap: lista página da newsletter: {href}")
         if path.startswith(BLOG_PREFIX + "pagina/"):
             problems.append(f"sitemap: lista página de paginação: {href}")
-    # Completude do blog: a capa e todo post indexável, uma vez cada.
+    # Completude do blog: a capa, toda página de tema (#104) e todo post indexável, uma vez cada.
     if sitemap_locs is not None:
         want_blog = {SITE_ORIGIN + BLOG_PREFIX} | {f"{SITE_ORIGIN}{BLOG_PREFIX}{s}/" for s in indexable_slugs}
+        want_blog |= {SITE_ORIGIN + u for u in topic_urls}
         for loc in sorted(want_blog - set(sitemap_locs)):
             problems.append(f"sitemap: falta página indexável do blog: {loc}")
         if len(sitemap_locs) != len(set(sitemap_locs)):
@@ -1035,7 +1047,7 @@ def check_tools(rel: str, html: str) -> list[str]:
 
 
 # "Leia também" (issue #104): todo post indexável (fora os podcasts) leva o bloco <aside class="related"> com pelo
-# menos RELATED_MIN posts indexáveis e, quando o post tem tema, o link para a página do tema principal (o primeiro de
+# menos RELATED_MIN posts indexáveis na lista (<ul>) e, quando o post tem tema, o link para a página do tema principal (o primeiro de
 # topics). Podcast e post com index: false ficam sem o bloco. Alarme de integridade do [slug].astro, como as regras de
 # cima; a lista e a ordem dos posts são do blog-src/src/lib/topics.ts, testadas lá.
 RELATED_CLASS = "related"
@@ -1044,12 +1056,14 @@ TOPIC_PREFIX = "/blog/tema/"
 
 
 class _RelatedBlocks(HTMLParser):
-    """Os <aside class="related"> da página, cada um com os hrefs dos seus links (comentário não conta)."""
+    """Os <aside class="related"> da página. De cada um: os hrefs dos links da lista (<ul>), que são os posts
+    relacionados, e os de todos os links do bloco, que incluem o do tema no título. Comentário não conta."""
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.depth = 0  # profundidade de <aside> dentro do bloco aberto; 0 fora dele
-        self.blocks: list[list[str]] = []
+        self.ul = 0  # profundidade de <ul> dentro do bloco aberto
+        self.blocks: list[dict[str, list[str]]] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         a = dict(attrs)
@@ -1057,14 +1071,21 @@ class _RelatedBlocks(HTMLParser):
             if self.depth:
                 self.depth += 1
             elif RELATED_CLASS in (a.get("class") or "").split():
-                self.depth = 1
-                self.blocks.append([])
+                self.depth, self.ul = 1, 0
+                self.blocks.append({"posts": [], "links": []})
+        elif tag == "ul" and self.depth:
+            self.ul += 1
         elif tag == "a" and self.depth and (a.get("href") or "").strip():
-            self.blocks[-1].append((a["href"] or "").strip())
+            href = (a["href"] or "").strip()
+            self.blocks[-1]["links"].append(href)
+            if self.ul:
+                self.blocks[-1]["posts"].append(href)
 
     def handle_endtag(self, tag: str) -> None:
         if tag == "aside" and self.depth:
             self.depth -= 1
+        elif tag == "ul" and self.depth and self.ul:
+            self.ul -= 1
 
 
 def post_topics(fm: dict[str, str]) -> list[str]:
@@ -1100,8 +1121,8 @@ def check_related(site: Path, posts: Path) -> list[str]:
         if len(p.blocks) != 1:
             problems.append(f"{rel}: post indexável precisa de um bloco Leia também, tem {len(p.blocks)}")
             continue
-        hrefs = p.blocks[0]
-        linked = {m.group(1) for h in hrefs if (m := re.fullmatch(r"/blog/([a-z0-9-]+)/", h))}
+        hrefs = p.blocks[0]["links"]
+        linked = {m.group(1) for h in p.blocks[0]["posts"] if (m := re.fullmatch(r"/blog/([a-z0-9-]+)/", h))}
         good = {s for s in linked if s in listed and s != slug}
         if len(good) < RELATED_MIN:
             problems.append(f"{rel}: bloco Leia também com {len(good)} posts indexáveis, o mínimo é {RELATED_MIN}")

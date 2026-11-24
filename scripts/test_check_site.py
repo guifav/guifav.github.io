@@ -1587,6 +1587,7 @@ class RelatedTest(unittest.TestCase):
         self.post("tem-tema", "topics: [agentes-de-ia, ia-sobre-dados-da-empresa]")
         self.post("podcast", "type: podcast\nindex: false", block=None)
         self.post("fora", "index: false", block=None)
+        self.post("ep-indexavel", "type: podcast", block=None)  # podcast sem index: false também fica sem o bloco
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -1655,10 +1656,73 @@ class RelatedTest(unittest.TestCase):
             "blog/podcast/index.html: podcast ou post com index: false com o bloco Leia também",
         ])
 
+    def test_podcast_without_index_false_has_no_block_and_does_not_count(self):
+        # O tipo sozinho já tira o post do bloco e da lista de relacionados (revisão do agy no #129).
+        self.page("ep-indexavel", self.block())
+        self.assertEqual(self.problems(), ["blog/ep-indexavel/index.html: podcast ou post com index: false com o "
+                                           "bloco Leia também"])
+        self.page("ep-indexavel", "")
+        self.page("a", self.block(("b", "c", "ep-indexavel")))
+        self.assertIn("blog/a/index.html: bloco Leia também com 2 posts indexáveis, o mínimo é 3", self.problems())
+
+    def test_only_links_in_the_list_count_as_posts(self):
+        # Link de post fora do <ul> (no título ou num parágrafo) não completa os 3 (revisão do Claude no #129).
+        extra = '<p><a href="/blog/d/">d</a></p>'
+        self.page("a", self.block(("b", "c"), extra).replace("<h2>Leia também</h2>", '<h2><a href="/blog/d/">x</a></h2>'))
+        self.assertEqual(self.problems(), ["blog/a/index.html: bloco Leia também com 2 posts indexáveis, o mínimo é 3"])
+        # O link do tema vale no título, fora do <ul>.
+        self.page("a", self.block(("b", "c", "d")))
+        self.page("tem-tema", self.block(("a", "b", "c")).replace(
+            "<h2>Leia também</h2>", '<h2>Mais artigos sobre <a href="/blog/tema/agentes-de-ia/">t</a></h2>'))
+        self.assertEqual(self.problems(), [])
+
     def test_post_topics_reads_only_the_simple_format(self):
         self.assertEqual(C.post_topics({"topics": "[a, b-c]"}), ["a", "b-c"])
         for raw in ("", "a", "[a,b]", "[A]", "[]"):
             self.assertEqual(C.post_topics({"topics": raw}), [], raw)
+
+
+class TopicPagesTest(Base):
+    """Issue #104: as páginas de tema no sitemap do blog, sem noindex depois do cutover e com canonical próprio."""
+
+    URL = "https://guifav.dev/blog/tema/agentes-de-ia/"
+
+    def setUp(self):
+        super().setUp()
+        self.tema()
+        self.sitemap(with_topic=True)
+
+    def tema(self, robots=ROBOTS_INDEX, canonical=URL):
+        link = "" if canonical is None else f'<link rel="canonical" href="{canonical}">'
+        self.w("blog/tema/agentes-de-ia/index.html",
+               f"<!DOCTYPE html><html><head>{FIXTURE_TITLE}{robots}{link}</head><body>"
+               '<a href="/blog/um-post/">p</a></body></html>')
+
+    def sitemap(self, with_topic):
+        extra = f"<url><loc>{self.URL}</loc></url>" if with_topic else ""
+        self.w("blog/sitemap.xml", SITEMAP.format(
+            "<url><loc>https://guifav.dev/blog/</loc></url>" + extra +
+            "<url><loc>https://guifav.dev/blog/um-post/</loc></url>"))
+
+    def test_complete_passes(self):
+        self.assertEqual(self.problems(pre_cutover=False), [])
+
+    def test_topic_page_missing_from_sitemap_fails(self):
+        self.sitemap(with_topic=False)
+        self.assertEqual(self.problems(pre_cutover=False), [f"sitemap: falta página indexável do blog: {self.URL}"])
+
+    def test_topic_page_with_noindex_fails_after_cutover(self):
+        self.tema(robots=ROBOTS_NOINDEX)
+        self.assertEqual(self.problems(pre_cutover=False),
+                         ["blog/tema/agentes-de-ia/index.html: página de tema com noindex"])
+
+    def test_topic_page_needs_its_own_canonical(self):
+        for canonical in (None, "https://guifav.dev/blog/", "https://guifav.dev/blog/tema/agentes-de-ia"):
+            with self.subTest(canonical=canonical):
+                self.tema(canonical=canonical)
+                got = self.problems(pre_cutover=False)
+                self.assertTrue(any(p.startswith("blog/tema/agentes-de-ia/index.html: página de tema sem canonical")
+                                    for p in got), got)
 
 
 class RelatedWiredTest(Base):

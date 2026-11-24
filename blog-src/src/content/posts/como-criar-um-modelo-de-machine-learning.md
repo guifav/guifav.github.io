@@ -7,7 +7,6 @@ updated: 2026-01-07T18:11:31.710Z
 slug: como-criar-um-modelo-de-machine-learning
 cover: img/como-criar-um-modelo-de-machine-learning/capa.jpg
 type: newsletter
-topics: [ia-sobre-dados-da-empresa]
 ---
 
 **Transformar dados de planilhas em modelos preditivos de machine learning é mais acessível do que parece. O processo envolve 5 etapas principais: análise exploratória, engenharia de features, preparação dos dados, modelagem supervisionada (classificação e regressão) e implantação. Com cerca de 5 milhões de registros de voos dos EUA, é possível construir um modelo que prevê atrasos com ROC-AUC de 0,75 e erro médio de 18 minutos na estimativa de tempo.**
