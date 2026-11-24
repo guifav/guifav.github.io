@@ -51,6 +51,10 @@ DUPS = {
         "sabia-2-o-novo-modelo-de-linguagem-em-portugues-que-rivaliza-com-gpt-4-maritaca-ai",
 }
 # #151: as quatro ferramentas movidas para /tools/, escrita à parte.
+PDF_OLD_PATH = "/seo-geo-aeo-framework/Framework-SEO-AEO_GEO_ GuilhermeFavaron(20251201).pdf"
+PDF_NEW_PATH = "/tools/seo-geo-aeo-framework/Framework-SEO-AEO_GEO_ GuilhermeFavaron(20251201).pdf"
+PDF_OLD_ENCODED = "/seo-geo-aeo-framework/Framework-SEO-AEO_GEO_%20GuilhermeFavaron(20251201).pdf"
+PDF_NEW_ENCODED = "/tools/seo-geo-aeo-framework/Framework-SEO-AEO_GEO_%20GuilhermeFavaron(20251201).pdf"
 TOOLS = {
     "/mapa-decisao-ia/": "/tools/mapa-decisao-ia/",
     "/mapa-decisao-ia/enviado/": "/tools/mapa-decisao-ia/enviado/",
@@ -59,12 +63,13 @@ TOOLS = {
     "/llm-ranking/": "/tools/llm-ranking/",
     "/seo-geo-aeo-framework/": "/tools/seo-geo-aeo-framework/framework-seo-aeo.html",
     "/seo-geo-aeo-framework/framework-seo-aeo.html": "/tools/seo-geo-aeo-framework/framework-seo-aeo.html",
+    PDF_OLD_PATH: PDF_NEW_PATH,
 }
 # Mudanças de endereço do próprio site (#146), escritas à parte: origem -> destino.
 MOVES = {
     "/blog/privacidade/": "/privacidade/",
 }
-TOTAL = 17 * 2 + 2 * 2 + 1 * 2 + 6 * 2 + 1  # 53 itens na lista
+TOTAL = 17 * 2 + 2 * 2 + 1 * 2 + 6 * 2 + 2  # 54 itens na lista
 # Grupo C da #120 (decisão do Gui): fica em 404, fora da lista.
 GROUP_C_ENCODED = "como-a-intelig%c3%aancia-artificial-vai-transformar-a-lideran%c3%a7a-e-os-neg%c3%b3cios-no-futuro"
 # Location que a zona antiga devolveu ao vivo em 24/11 para o caminho com acentos (curl -I).
@@ -92,8 +97,10 @@ class PlanTest(unittest.TestCase):
         self.assertEqual(dict(S.MOVED_TOOLS), TOOLS)
         repo = Path(__file__).resolve().parent.parent
         for old_path, new_path in TOOLS.items():
-            want = f"https://guifav.dev{new_path}"
-            forms = (old_path, old_path.rstrip("/")) if old_path.endswith("/") else (old_path,)
+            enc_old = PDF_OLD_ENCODED if old_path == PDF_OLD_PATH else old_path
+            enc_new = PDF_NEW_ENCODED if new_path == PDF_NEW_PATH else new_path
+            want = f"https://guifav.dev{enc_new}"
+            forms = (enc_old, enc_old.rstrip("/")) if enc_old.endswith("/") else (enc_old,)
             for path in forms:
                 for scheme in ("https", "http"):
                     url = f"{scheme}://guifav.dev{path}"
@@ -103,6 +110,46 @@ class PlanTest(unittest.TestCase):
             self.assertTrue(S._repo_page(repo, new_path).is_file(), new_path)
         self.assertIsNone(S.simulate("https://guifav.dev/tools/"))
         self.assertIsNone(S.simulate("https://guifav.dev/tools"))
+
+    def test_framework_pdf_redirect_is_encoded_for_cloudflare_and_unique(self):
+        repo = Path(__file__).resolve().parent.parent
+        self.assertTrue((repo / PDF_NEW_PATH.lstrip("/")).is_file())
+        self.assertFalse((repo / PDF_OLD_PATH.lstrip("/")).exists())
+        expected_source = f"guifav.dev{PDF_OLD_ENCODED}"
+        expected_target = f"https://guifav.dev{PDF_NEW_ENCODED}"
+        # Normalização RFC 3986 da Cloudflare (http.request.full_uri): espaço vira %20, () são sub-delims e ficam literais.
+        self.assertEqual(C.normalize(PDF_OLD_PATH), PDF_OLD_ENCODED)
+        self.assertEqual(C.normalize(PDF_NEW_PATH), PDF_NEW_ENCODED)
+        reds = S.redirects()
+        sources = [r.source for r in reds]
+        self.assertEqual(len(set(sources)), len(sources))
+        self.assertEqual(sources.count(expected_source), 1)
+        self.assertNotIn(expected_source + "/", sources)
+        items = S.list_items(reds)
+        by_src = {it["redirect"]["source_url"]: it["redirect"] for it in items}
+        self.assertIn(expected_source, by_src)
+        self.assertEqual(by_src[expected_source], {
+            "source_url": expected_source,
+            "target_url": expected_target,
+            "status_code": 301,
+            "preserve_query_string": False,
+            "include_subdomains": False,
+            "subpath_matching": False,
+        })
+        self.assertNotIn(" ", expected_source)
+        self.assertNotIn(" ", expected_target)
+        self.assertNotIn("%28", expected_source)
+        self.assertNotIn("%29", expected_source)
+        self.assertNotIn("%28", expected_target)
+        self.assertNotIn("%29", expected_target)
+        for it in items:
+            self.assertNotIn(" ", it["redirect"]["source_url"])
+            self.assertNotIn(" ", it["redirect"]["target_url"])
+        for url in (f"https://{expected_source}", f"http://{expected_source}",
+                    f"https://GUIFAV.DEV{PDF_OLD_ENCODED}", f"https://{expected_source}?utm_source=x"):
+            self.assertEqual(S.simulate(url), expected_target, url)
+        for non_match in (expected_target, f"https://{expected_source}/", f"https://guifav.dev{PDF_OLD_PATH}"):
+            self.assertIsNone(S.simulate(non_match), non_match)
 
     def test_site_moves_are_separate_from_posts_and_carry_privacy(self):
         self.assertEqual(dict(S.SITE_MOVES), MOVES)
@@ -188,9 +235,11 @@ class PlanTest(unittest.TestCase):
             self.assertEqual(got, {src: f"https://guifav.dev/blog/{new}/",
                                    src.rstrip("/"): f"https://guifav.dev/blog/{new}/"})
         for old_path, new_path in TOOLS.items():
-            src = f"guifav.dev{old_path}"
-            want = f"https://guifav.dev{new_path}"
-            expected = {src: want, src.rstrip("/"): want} if old_path.endswith("/") else {src: want}
+            enc_old = PDF_OLD_ENCODED if old_path == PDF_OLD_PATH else old_path
+            enc_new = PDF_NEW_ENCODED if new_path == PDF_NEW_PATH else new_path
+            src = f"guifav.dev{enc_old}"
+            want = f"https://guifav.dev{enc_new}"
+            expected = {src: want, src.rstrip("/"): want} if enc_old.endswith("/") else {src: want}
             got = {r.source: r.target for r in reds if r.source in expected}
             self.assertEqual(got, expected)
         for old, new in MOVES.items():
@@ -370,6 +419,65 @@ class ProblemsTest(unittest.TestCase):
                 got = S.problems(posts_dir=posts, repo=repo)
             self.assertTrue(any("já está em MOVED_TOOLS" in p for p in got), got)
             self.assertTrue(any("origem repetida na lista" in p for p in got), got)
+
+    def test_framework_pdf_exception_does_not_loosen_other_tool_paths(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            (root / "posts").mkdir()
+            posts = _posts(root / "posts", {"novo": ""})
+            repo = root / "repo"
+            pdf = repo / PDF_NEW_PATH.lstrip("/")
+            pdf.parent.mkdir(parents=True)
+            pdf.write_bytes(b"%PDF-1.4\n")
+            with mock.patch.object(S, "OLD_POSTS", (("velho", "novo"),)), \
+                    mock.patch.object(S, "DUPLICATES", ()), \
+                    mock.patch.object(S, "SITE_MOVES", ()), \
+                    mock.patch.object(S, "MOVED_TOOLS", ((PDF_OLD_PATH, PDF_NEW_PATH),)):
+                self.assertEqual(S.problems(posts_dir=posts, repo=repo), [])
+                old_pdf = repo / PDF_OLD_PATH.lstrip("/")
+                old_pdf.parent.mkdir(parents=True)
+                old_pdf.write_bytes(b"%PDF-1.4\n")
+                got = S.problems(posts_dir=posts, repo=repo)
+                self.assertTrue(any("ainda existe no repo" in p for p in got), got)
+                old_pdf.unlink()
+                pdf.unlink()
+                got = S.problems(posts_dir=posts, repo=repo)
+                self.assertTrue(any("não existe no repo" in p for p in got), got)
+                pdf.write_bytes(b"%PDF-1.4\n")
+            # Outros caminhos com espaço, parênteses, maiúsculas ou .pdf continuam recusados.
+            bad_pairs = (
+                (("/ferramenta com espaco/", "/tools/ferramenta com espaco/"), "fora do formato"),
+                (("/ferramenta(1)/", "/tools/ferramenta(1)/"), "fora do formato"),
+                (("/seo-geo-aeo-framework/Arquivo.html", "/tools/seo-geo-aeo-framework/Arquivo.html"), "fora do formato"),
+                (("/seo-geo-aeo-framework/Outro Arquivo(20251201).pdf",
+                  "/tools/seo-geo-aeo-framework/Outro Arquivo(20251201).pdf"), "fora do formato"),
+                ((PDF_NEW_PATH, PDF_NEW_PATH), "fora do formato"),
+                (("/ferramenta/", "/tools/outro/arquivo.pdf"), "destino fora de /tools/"),
+                ((PDF_OLD_PATH, "/tools/seo-geo-aeo-framework/Outro(20251201).pdf"), "destino fora de /tools/"),
+            )
+            for pair, word in bad_pairs:
+                with self.subTest(pair=pair):
+                    with mock.patch.object(S, "OLD_POSTS", (("velho", "novo"),)), \
+                            mock.patch.object(S, "DUPLICATES", ()), \
+                            mock.patch.object(S, "SITE_MOVES", ()), \
+                            mock.patch.object(S, "MOVED_TOOLS", (pair,)):
+                        got = S.problems([], posts_dir=posts, repo=repo)
+                    self.assertTrue(any(word in p for p in got), got)
+            # Lista final recusa espaço literal na origem ou destino, .pdf arbitrário e origem codificada que existe no repo.
+            bad_reds = (
+                ([S.Redirect(f"guifav.dev{PDF_OLD_PATH}", f"https://guifav.dev{PDF_NEW_ENCODED}")], "não codificado"),
+                ([S.Redirect(f"guifav.dev{PDF_OLD_ENCODED}", f"https://guifav.dev{PDF_NEW_PATH}")], "destino fora"),
+                ([S.Redirect("guifav.dev/x.pdf", "https://guifav.dev/tools/x.pdf")], "destino fora"),
+                ([S.Redirect(f"guifav.dev{PDF_NEW_ENCODED}", "https://guifav.dev/tools/ferramenta/")], "esconderia a página"),
+            )
+            for reds, word in bad_reds:
+                with self.subTest(reds=reds):
+                    with mock.patch.object(S, "OLD_POSTS", (("velho", "novo"),)), \
+                            mock.patch.object(S, "DUPLICATES", ()), \
+                            mock.patch.object(S, "SITE_MOVES", ()), \
+                            mock.patch.object(S, "MOVED_TOOLS", ()):
+                        got = S.problems(reds, posts_dir=posts, repo=repo)
+                    self.assertTrue(any(word in p for p in got), got)
 
     def test_limit_of_the_free_plan_counts_both_lists_of_the_pair(self):
         def reds(n):
@@ -679,6 +787,9 @@ class CliTest(unittest.TestCase):
             self.assertEqual(by_src[src]["target_url"], "https://guifav.dev/privacidade/")
             self.assertEqual(by_src[src]["status_code"], 301)
             self.assertNotIn("#", by_src[src]["target_url"])
+        pdf_src = f"guifav.dev{PDF_OLD_ENCODED}"
+        self.assertEqual(by_src[pdf_src]["target_url"], f"https://guifav.dev{PDF_NEW_ENCODED}")
+        self.assertEqual(by_src[pdf_src]["status_code"], 301)
 
 
 class VerifyTest(unittest.TestCase):
@@ -701,7 +812,7 @@ class VerifyTest(unittest.TestCase):
     def test_all_good_passes_and_counts_every_check(self):
         rc, out = self.run_verify(self.live())
         self.assertEqual(rc, 0, out)
-        self.assertIn(f"ok: {17 * 4 + 17 + 2 + 6 + 1 + TOTAL}; falhas: 0", out)
+        self.assertIn(f"ok: {17 * 4 + 17 + 2 + 7 + 1 + TOTAL}; falhas: 0", out)
 
     def test_each_hop_is_checked(self):
         old, new = S.OLD_POSTS[0]
@@ -713,6 +824,8 @@ class VerifyTest(unittest.TestCase):
                             (final, (404, None)),
                             ("https://guifav.dev/llm-ranking", (404, None)),
                             ("https://guifav.dev/tools/llm-ranking/", (404, None)),
+                            (f"https://guifav.dev{PDF_OLD_ENCODED}", (404, None)),
+                            (f"https://guifav.dev{PDF_NEW_ENCODED}", (404, None)),
                             ("https://guifav.dev/blog/privacidade/", (404, None)),
                             ("https://guifav.dev/blog/privacidade", (302, "https://guifav.dev/privacidade/")),
                             ("https://guifav.dev/privacidade/", (404, None))):

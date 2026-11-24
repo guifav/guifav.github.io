@@ -47,7 +47,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote, unquote, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cutover_redirects as cutover  # noqa: E402
@@ -111,8 +111,15 @@ DUPLICATES: tuple[tuple[str, str], ...] = (
      "sabia-2-o-novo-modelo-de-linguagem-em-portugues-que-rivaliza-com-gpt-4-maritaca-ai"),
 )
 
+# Exceção única de nome legado (#151): o PDF antigo tem maiúsculas, "_", espaço e parênteses no arquivo. Fica fora de
+# _TOOL_PATH para não afrouxar a validação dos demais pares; na lista vai codificado como a Cloudflare compara
+# http.request.full_uri após a normalização RFC 3986 (espaço -> %20; parênteses são sub-delims reservados e ficam literais).
+_FRAMEWORK_PDF = "seo-geo-aeo-framework/Framework-SEO-AEO_GEO_ GuilhermeFavaron(20251201).pdf"
+_TOOL_LEGACY_OLD = f"/{_FRAMEWORK_PDF}"
+_TOOL_LEGACY_NEW = f"/tools/{_FRAMEWORK_PDF}"
+
 # #151: as quatro ferramentas passaram a morar em /tools/. Diretórios (com "/" no fim) geram origem com e sem barra
-# final; arquivos (.html) geram o caminho exato.
+# final; arquivos (.html e o PDF legado do framework) geram o caminho exato.
 MOVED_TOOLS: tuple[tuple[str, str], ...] = (
     ("/mapa-decisao-ia/", "/tools/mapa-decisao-ia/"),
     ("/mapa-decisao-ia/enviado/", "/tools/mapa-decisao-ia/enviado/"),
@@ -121,6 +128,7 @@ MOVED_TOOLS: tuple[tuple[str, str], ...] = (
     ("/llm-ranking/", "/tools/llm-ranking/"),
     ("/seo-geo-aeo-framework/", "/tools/seo-geo-aeo-framework/framework-seo-aeo.html"),
     ("/seo-geo-aeo-framework/framework-seo-aeo.html", "/tools/seo-geo-aeo-framework/framework-seo-aeo.html"),
+    (_TOOL_LEGACY_OLD, _TOOL_LEGACY_NEW),
 )
 
 # #146: mudanças de endereço do próprio site (fora dos posts). Cada par leva (com e sem barra) em 301 para o endereço
@@ -146,12 +154,18 @@ def post_url(slug: str) -> str:
 
 
 def _repo_page(repo: Path, path: str) -> Path:
-    rel = path.lstrip("/")
-    return repo / rel / "index.html" if path.endswith("/") else repo / rel
+    unquoted = unquote(path)
+    rel = unquoted.lstrip("/")
+    return repo / rel / "index.html" if unquoted.endswith("/") else repo / rel
+
+
+def _encode_url_path(path: str) -> str:
+    """Codifica o caminho como a Cloudflare compara http.request.full_uri (RFC 3986: espaço -> %20; () literais)."""
+    return cutover.normalize(path)
 
 
 def site_url(path: str) -> str:
-    return f"https://{HOST}{path}"
+    return f"https://{HOST}{_encode_url_path(path)}"
 
 
 def first_hop(old: str) -> str:
@@ -172,7 +186,7 @@ def redirects() -> list[Redirect]:
         for s in (src, src.rstrip("/")):  # com e sem barra: a lista casa o caminho exato
             out.append(Redirect(s, target))
     for old_path, new_path in MOVED_TOOLS:
-        src = HOST + old_path
+        src = HOST + _encode_url_path(old_path)
         target = site_url(new_path)
         forms = (src, src.rstrip("/")) if old_path.endswith("/") else (src,)
         for s in forms:
@@ -226,9 +240,11 @@ def problems(reds: list[Redirect] | None = None, posts_dir: Path = POSTS, repo: 
     if len(set(tool_olds)) != len(tool_olds):
         out.append("caminho antigo repetido em MOVED_TOOLS")
     for old_path, new_path in MOVED_TOOLS:
-        if not _TOOL_PATH.fullmatch(old_path) or old_path.startswith(("/blog/", "/tools/")):
+        old_ok = bool(_TOOL_PATH.fullmatch(old_path)) or old_path == _TOOL_LEGACY_OLD
+        new_ok = bool(_TOOL_PATH.fullmatch(new_path)) or new_path == _TOOL_LEGACY_NEW
+        if not old_ok or old_path.startswith(("/blog/", "/tools/")):
             out.append(f"caminho antigo fora do formato em MOVED_TOOLS: {old_path!r}")
-        if not new_path.startswith("/tools/") or not _TOOL_PATH.fullmatch(new_path):
+        if not new_path.startswith("/tools/") or not new_ok:
             out.append(f"{old_path}: destino fora de /tools/: {new_path!r}")
         if _repo_page(repo, old_path).exists():
             out.append(f"{old_path}: origem ainda existe no repo")
@@ -263,6 +279,7 @@ def problems(reds: list[Redirect] | None = None, posts_dir: Path = POSTS, repo: 
     if len(set(sources)) != len(sources):
         out.append("origem repetida na lista")
     targets = {r.target for r in reds}
+    pdf_target = site_url(_TOOL_LEGACY_NEW)
     for r in reds:
         if "/" not in r.source:
             out.append(f"origem fora de {HOST}/: {r.source}")
@@ -277,11 +294,16 @@ def problems(reds: list[Redirect] | None = None, posts_dir: Path = POSTS, repo: 
         elif _repo_page(repo, path).is_file() or (
                 not path.endswith("/") and _repo_page(repo, path + "/").is_file()):
             out.append(f"origem {r.source} existe no repo: o redirect esconderia a página")
+        if any(c.isspace() for c in r.source) or "?" in r.source or "#" in r.source:
+            out.append(f"origem com caractere não codificado ou inválido: {r.source}")
         if "https://" + r.source in targets or "https://" + r.source + "/" in targets:
             out.append(f"origem {r.source} também é destino: cadeia de redirects")
-        valid_end = r.target.endswith("/") or (r.target.startswith(TOOLS) and r.target.endswith(".html"))
+        valid_end = (r.target.endswith("/")
+                     or (r.target.startswith(TOOLS) and r.target.endswith(".html"))
+                     or r.target == pdf_target)
         if (not r.target.startswith(f"https://{HOST}/") or not valid_end
-                or r.target == f"https://{HOST}/" or "?" in r.target or "#" in r.target):
+                or r.target == f"https://{HOST}/" or "?" in r.target or "#" in r.target
+                or any(c.isspace() for c in r.target)):
             out.append(f"destino fora de https://{HOST}/.../: {r.target}")
     if len(reds) * len(LISTS) > MAX_ITEMS:
         out.append(f"{len(reds)} itens em {len(LISTS)} listas: o plano Free aceita {MAX_ITEMS} somando as listas")
