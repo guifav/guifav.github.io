@@ -104,7 +104,7 @@ export const TOPICS: Topic[] = [
     description:
       'Artigos de Guilherme Favaron sobre quanto custa a IA generativa em produção e como escolher o modelo: fronteira, aberto, fine-tuning e GPU própria.',
     intro:
-      'Escolher o modelo é uma decisão de custo antes de ser uma decisão técnica, e a conta muda a cada lançamento. Os cinco primeiros artigos comparam API, assinatura por usuário e GPU própria, tratam do custo de manter IA generativa em produção, da escolha entre fine-tuning e prompt, do uso do Claude na empresa e do dimensionamento de GPU para quem roda o próprio modelo. Os três últimos discutem quando o modelo de fronteira deixa de compensar e um modelo aberto ou especializado resolve melhor.',
+      'Escolher o modelo é uma decisão de custo antes de ser uma decisão técnica, e a conta muda a cada lançamento. O primeiro artigo compara API, assinatura por usuário e GPU própria, e os quatro seguintes tratam do custo de manter IA generativa em produção, da escolha entre fine-tuning e prompt, do uso do Claude na empresa e do dimensionamento de GPU para quem roda o próprio modelo. Os três últimos discutem quando o modelo de fronteira deixa de compensar e um modelo aberto ou especializado resolve melhor.',
     pageCta: [
       'A ',
       { text: 'planilha de custos de IA', href: PLANILHA },
