@@ -190,12 +190,15 @@ class PayloadTest(unittest.TestCase):
                               r["subpath_matching"]), (301, False, False, False))
             self.assertFalse(r["source_url"].startswith("http"))
 
-    def test_rule_enables_exactly_this_list(self):
-        r = S.rule()
-        self.assertEqual(r["expression"], "http.request.full_uri in $guifav_redirects")
-        self.assertEqual(r["action_parameters"], {"from_list": {"name": "guifav_redirects",
-                                                                "key": "http.request.full_uri"}})
-        self.assertEqual((r["action"], r["enabled"]), ("redirect", True))
+    def test_rule_enables_exactly_the_given_list_of_the_pair(self):
+        self.assertEqual(S.LISTS, ("guifav_redirects_a", "guifav_redirects_b"))
+        for name in S.LISTS:
+            r = S.rule(name)
+            self.assertEqual(r["expression"], f"http.request.full_uri in ${name}")
+            self.assertEqual(r["action_parameters"], {"from_list": {"name": name, "key": "http.request.full_uri"}})
+            self.assertEqual((r["action"], r["enabled"], r["description"]), ("redirect", True, S.RULE_DESCRIPTION))
+        with self.assertRaises(ValueError):
+            S.rule("guifav_redirects")
 
 
 class _Resp(io.BytesIO):
@@ -210,10 +213,10 @@ class FakeCF:
     """Conta Cloudflare em memória, com o registro das chamadas."""
 
     def __init__(self, phase=None, lists=None, op_status=("pending", "completed"), echo_items=True,
-                 echo_rule=True, page=20):
+                 echo_rule=True, page=20, items=None):
         self.phase = phase  # None = fase sem ruleset
         self.lists = lists if lists is not None else []
-        self.items: list[dict] = []
+        self.items: dict[str, list[dict]] = dict(items or {})  # itens por id de lista
         self.op_status = list(op_status)
         self.echo_items, self.echo_rule, self.page = echo_items, echo_rule, page
         self.calls: list[tuple[str, str]] = []
@@ -233,20 +236,22 @@ class FakeCF:
         if url.split("?")[0].endswith("/rules/lists") and m == "GET":
             return ok(self.lists)
         if url.endswith("/rules/lists") and m == "POST":
-            self.lists.append({"id": "L1", **body})
-            return ok({"id": "L1", **body})
+            new = {"id": "L-" + body["name"][-1], **body}
+            self.lists.append(new)
+            return ok(new)
         if "/items" in url and m == "PUT":
-            self.items = body if self.echo_items else body[:-1]
+            self.items[url.split("/lists/")[1].split("/")[0]] = body if self.echo_items else body[:-1]
             return ok({"operation_id": "op1"})
         if "/bulk_operations/" in url:
             st = self.op_status.pop(0) if len(self.op_status) > 1 else self.op_status[0]
             return ok({"status": st, "error": "boom" if st == "failed" else None})
         if "/items" in url and m == "GET":
             start = int(url.split("cursor=")[1]) if "cursor=" in url else 0
+            items = self.items.get(url.split("/lists/")[1].split("/")[0], [])
             chunk = [{"id": str(i), "created_on": "x", "redirect": {**it["redirect"], "preserve_path_suffix": True}}
-                     for i, it in enumerate(self.items[start:start + self.page], start)]
+                     for i, it in enumerate(items[start:start + self.page], start)]
             after = start + self.page
-            cursors = {"after": str(after)} if after < len(self.items) else {}
+            cursors = {"after": str(after)} if after < len(items) else {}
             return ok(chunk, result_info={"cursors": cursors})
         raise AssertionError(f"chamada inesperada {m} {url}")
 
@@ -259,37 +264,85 @@ class ApplyTest(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             return S.apply("tok", "acc", opener=cf, sleep=lambda s: None)
 
-    def test_creates_list_fills_it_reads_it_back_then_enables_the_rule(self):
+    A, B = S.LISTS
+    OLD = [{"redirect": {"source_url": "guifav.dev/blog/velho/", "target_url": "https://guifav.dev/blog/x/",
+                         "status_code": 301, "preserve_query_string": False, "include_subdomains": False,
+                         "subpath_matching": False}}]
+
+    def live(self, on=None):
+        """Conta com a regra ativa na lista `on` (que tem OLD) e a outra lista do par já criada."""
+        lists = [{"id": "LA", "name": self.A, "kind": "redirect"}, {"id": "LB", "name": self.B, "kind": "redirect"}]
+        rule = S.rule(on)
+        return FakeCF(phase=[{"id": "r", **rule}], lists=lists,
+                      items={"LA" if on == self.A else "LB": list(self.OLD)})
+
+    def test_first_apply_creates_list_a_fills_it_reads_it_back_then_enables_the_rule(self):
         cf = FakeCF()
         self.assertEqual(self.apply(cf), 0)
         self.assertEqual(cf.writes(), [("POST", "/accounts/acc/rules/lists"),
-                                       ("PUT", "/accounts/acc/rules/lists/L1/items"),
+                                       ("PUT", "/accounts/acc/rules/lists/L-a/items"),
                                        ("PUT", f"/accounts/acc/rulesets/phases/{S.PHASE}/entrypoint")])
-        put_items = cf.calls.index(("PUT", "/accounts/acc/rules/lists/L1/items"))
-        reads = [i for i, c in enumerate(cf.calls) if c == ("GET", "/accounts/acc/rules/lists/L1/items")]
+        put_items = cf.calls.index(("PUT", "/accounts/acc/rules/lists/L-a/items"))
+        reads = [i for i, c in enumerate(cf.calls) if c == ("GET", "/accounts/acc/rules/lists/L-a/items")]
         self.assertGreaterEqual(len(reads), 2)  # 32 itens em páginas de 20: o cursor foi seguido
         self.assertTrue(put_items < reads[0] and reads[-1] < len(cf.calls) - 1)
-        self.assertEqual(cf.phase, [S.rule()])
-        self.assertEqual(len(cf.items), 32)
+        self.assertEqual(cf.phase, [S.rule(self.A)])
+        self.assertEqual(len(cf.items["L-a"]), 32)
 
-    def test_existing_list_and_own_rule_are_reused(self):
-        cf = FakeCF(phase=[{"description": S.RULE_DESCRIPTION, "id": "r"}],
-                    lists=[{"id": "L9", "name": S.LIST_NAME, "kind": "redirect"}])
-        self.assertEqual(self.apply(cf), 0)
-        self.assertNotIn("POST", [m for m, _ in cf.calls])
-        self.assertIn(("PUT", "/accounts/acc/rules/lists/L9/items"), cf.calls)
+    def test_update_writes_only_the_inactive_list_and_then_switches_the_rule(self):
+        for on, other, other_id, on_id in ((self.A, self.B, "LB", "LA"), (self.B, self.A, "LA", "LB")):
+            with self.subTest(on=on):
+                cf = self.live(on)
+                self.assertEqual(self.apply(cf), 0)
+                self.assertEqual(cf.writes(), [("PUT", f"/accounts/acc/rules/lists/{other_id}/items"),
+                                               ("PUT", f"/accounts/acc/rulesets/phases/{S.PHASE}/entrypoint")])
+                self.assertEqual(cf.phase, [S.rule(other)])
+                self.assertEqual(cf.items[on_id], self.OLD)  # a lista ativa antes não foi tocada
+                self.assertEqual(len(cf.items[other_id]), 32)
+
+    def test_failed_update_keeps_the_active_rule_on_the_untouched_list(self):
+        # Achado P1 da revisão de beb73ac: com a regra ativa, a falha de validação não pode deixá-la sobre uma
+        # lista alterada e não conferida.
+        for kw in ({"echo_items": False}, {"op_status": ("failed",)}, {"op_status": ("pending",)}):
+            with self.subTest(**kw):
+                cf = self.live(self.A)
+                cf.echo_items = kw.get("echo_items", True)
+                cf.op_status = list(kw.get("op_status", ("pending", "completed")))
+                with self.assertRaises(SystemExit) as e:
+                    self.apply(cf)
+                self.assertIn(self.A, str(e.exception))
+                self.assertEqual(cf.phase, [{"id": "r", **S.rule(self.A)}])
+                self.assertEqual(cf.items["LA"], self.OLD)
+                self.assertNotIn(("PUT", f"/accounts/acc/rulesets/phases/{S.PHASE}/entrypoint"), cf.calls)
+                self.assertNotIn(("PUT", "/accounts/acc/rules/lists/LA/items"), cf.calls)
+
+    def test_own_rule_on_an_unknown_list_or_two_own_rules_are_refused(self):
+        weird = {**S.rule(self.A), "action_parameters": {"from_list": {"name": "outra", "key": "http.request.full_uri"}}}
+        for phase in ([weird], [S.rule(self.A), S.rule(self.B)]):
+            with self.subTest(phase=phase):
+                cf = FakeCF(phase=phase)
+                with self.assertRaises(SystemExit):
+                    self.apply(cf)
+                self.assertEqual(cf.writes(), [])
 
     def test_foreign_rule_in_the_phase_stops_before_any_write(self):
-        cf = FakeCF(phase=[{"description": "outra lista", "id": "r"}])
-        with self.assertRaises(SystemExit):
-            self.apply(cf)
-        self.assertEqual(cf.writes(), [])
+        # Inclusive regra alheia que liga uma lista do par: o PUT da fase a apagaria.
+        for foreign in ({"description": "outra lista", "id": "r"},
+                        {**S.rule(self.A), "description": "regra feita no painel", "id": "r"}):
+            with self.subTest(foreign=foreign["description"]):
+                cf = FakeCF(phase=[foreign])
+                with self.assertRaises(SystemExit) as e:
+                    self.apply(cf)
+                self.assertIn("não são deste script", str(e.exception))
+                self.assertEqual(cf.writes(), [])
 
     def test_list_with_the_same_name_of_another_kind_is_refused(self):
-        cf = FakeCF(lists=[{"id": "L9", "name": S.LIST_NAME, "kind": "ip"}])
-        with self.assertRaises(SystemExit):
-            self.apply(cf)
-        self.assertEqual(cf.writes(), [])
+        for name in S.LISTS:
+            with self.subTest(name=name):
+                cf = FakeCF(lists=[{"id": "L9", "name": name, "kind": "ip"}])
+                with self.assertRaises(SystemExit):
+                    self.apply(cf)
+                self.assertEqual(cf.writes(), [])
 
     def test_list_problems_stop_before_any_call(self):
         cf = FakeCF()
@@ -315,7 +368,7 @@ class RemoveTest(unittest.TestCase):
             return S.remove("tok", "acc", opener=cf)
 
     def test_own_rule_is_removed_and_the_list_is_kept(self):
-        cf = FakeCF(phase=[{"description": S.RULE_DESCRIPTION}], lists=[{"id": "L1", "name": S.LIST_NAME}])
+        cf = FakeCF(phase=[S.rule(S.LISTS[0])], lists=[{"id": "L1", "name": S.LISTS[0]}])
         self.assertEqual(self.run_remove(cf), 0)
         self.assertEqual(cf.writes(), [("PUT", f"/accounts/acc/rulesets/phases/{S.PHASE}/entrypoint")])
         self.assertEqual(cf.phase, [])
@@ -356,7 +409,7 @@ class CliTest(unittest.TestCase):
         with contextlib.redirect_stdout(out):
             self.assertEqual(S.main(["rules"]), 0)
         data = json.loads(out.getvalue())
-        self.assertEqual((data["list"], len(data["items"]), data["rule"]), (S.LIST_NAME, 32, S.rule()))
+        self.assertEqual((data["lists"], len(data["items"])), (list(S.LISTS), 32))
 
 
 class VerifyTest(unittest.TestCase):

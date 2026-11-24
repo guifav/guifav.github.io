@@ -1,21 +1,25 @@
 """Redirects de URLs antigas para posts do guifav.dev, por Bulk Redirects da conta Cloudflare (#102, #106).
 
-Fonte única da lista de Bulk Redirects `guifav_redirects` e da regra da conta que a liga. Ninguém edita essa
-lista ou a fase de redirects da conta pelo painel: o `apply` substitui a lista inteira e a fase inteira.
+Fonte única do par de listas de Bulk Redirects `guifav_redirects_a` e `guifav_redirects_b` e da regra da conta que
+liga uma delas. Ninguém edita essas listas ou a fase de redirects da conta pelo painel: o `apply` substitui a lista
+inativa inteira e a fase inteira.
 
     python3 scripts/site_redirects.py rules
         Imprime os itens da lista e a regra, como vão para a Cloudflare.
 
     python3 scripts/site_redirects.py apply --yes
         1. Lê a fase http_request_redirect da conta e recusa se houver regra que não seja deste script
-           (o PUT da fase a apagaria).
-        2. Cria a lista se ela não existir, substitui todos os itens e espera a operação assíncrona terminar.
-        3. Lê os itens de volta e compara com os do código. Só então grava a regra que liga a lista.
+           (o PUT da fase a apagaria). A regra deste script diz qual lista do par está ativa.
+        2. Escreve só na outra lista do par (criada se não existir): substitui todos os itens e espera a operação
+           assíncrona terminar. A lista ativa nunca é tocada.
+        3. Lê os itens de volta e compara com os do código. Só então grava a regra apontando para a lista nova.
+        Qualquer falha antes do passo 3 deixa a regra como estava, sobre a lista ativa e intacta: a configuração no
+        ar continua a última conferida.
         Lê CLOUDFLARE_API_TOKEN e CLOUDFLARE_ACCOUNT_ID do ambiente (permissões: Mass URL Redirects Write e
         Account Rule Lists Write).
 
     python3 scripts/site_redirects.py remove --yes
-        Rollback: grava a fase de redirects da conta sem regras. A lista fica, sem efeito.
+        Rollback: grava a fase de redirects da conta sem regras. As listas ficam, sem efeito.
 
     python3 scripts/site_redirects.py verify
         Confere no ar cada caminho antigo do domínio antigo (www e apex, com e sem barra): 301 para o endereço que a
@@ -53,7 +57,8 @@ POSTS = REPO / "blog-src/src/content/posts"
 
 HOST = "guifav.dev"
 BLOG = f"https://{HOST}/blog/"
-LIST_NAME = "guifav_redirects"
+# Par azul/verde: o apply escreve e confere a lista inativa e só então troca a regra para ela.
+LISTS = ("guifav_redirects_a", "guifav_redirects_b")
 LIST_DESCRIPTION = "guifav.dev: URLs antigas para posts (scripts/site_redirects.py, #102 e #106)"
 PHASE = "http_request_redirect"
 RULE_DESCRIPTION = "site_redirects: lista guifav_redirects"
@@ -179,11 +184,25 @@ def list_items(reds: list[Redirect] | None = None) -> list[dict]:
                           "subpath_matching": False}} for r in reds]
 
 
-def rule() -> dict:
-    return {"description": RULE_DESCRIPTION, "expression": f"http.request.full_uri in ${LIST_NAME}",
+def rule(list_name: str) -> dict:
+    if list_name not in LISTS:
+        raise ValueError(list_name)
+    return {"description": RULE_DESCRIPTION, "expression": f"http.request.full_uri in ${list_name}",
             "action": "redirect",
-            "action_parameters": {"from_list": {"name": LIST_NAME, "key": "http.request.full_uri"}},
+            "action_parameters": {"from_list": {"name": list_name, "key": "http.request.full_uri"}},
             "enabled": True}
+
+
+def active_list(rules: list[dict]) -> str | None:
+    """Lista do par ligada pela regra deste script (None sem regra). Recusa estado que o script não produz."""
+    if not rules:
+        return None
+    if len(rules) > 1:
+        raise SystemExit(f"a fase {PHASE} da conta tem {len(rules)} regras deste script; o script grava uma só")
+    name = ((rules[0].get("action_parameters") or {}).get("from_list") or {}).get("name")
+    if name not in LISTS:
+        raise SystemExit(f"a regra deste script liga a lista {name!r}, fora do par {LISTS}: conferir no painel")
+    return name
 
 
 def simulate(url: str, reds: list[Redirect] | None = None) -> str | None:
@@ -268,36 +287,44 @@ def apply(token: str, account: str, opener=urllib.request.urlopen, sleep=time.sl
     bad = problems()
     if bad:
         raise SystemExit("lista recusada:\n  " + "\n  ".join(bad))
-    _phase_rules(account, token, opener)  # recusa antes de qualquer escrita
+    active = active_list(_phase_rules(account, token, opener))  # recusa antes de qualquer escrita
+    target = LISTS[1] if active == LISTS[0] else LISTS[0]
     lists = _cf("GET", f"/accounts/{account}/rules/lists", token, opener=opener)["result"] or []
-    same = [x for x in lists if x.get("name") == LIST_NAME]
-    if same and same[0].get("kind") != "redirect":
-        raise SystemExit(f"já existe uma lista {LIST_NAME} de tipo {same[0].get('kind')!r}")
+    for x in lists:
+        if x.get("name") in LISTS and x.get("kind") != "redirect":
+            raise SystemExit(f"já existe uma lista {x.get('name')} de tipo {x.get('kind')!r}")
+    same = [x for x in lists if x.get("name") == target]
     if same:
         list_id = same[0]["id"]
     else:
         list_id = _cf("POST", f"/accounts/{account}/rules/lists", token,
-                      {"name": LIST_NAME, "description": LIST_DESCRIPTION, "kind": "redirect"},
+                      {"name": target, "description": LIST_DESCRIPTION, "kind": "redirect"},
                       opener=opener)["result"]["id"]
+    kept = (f"a regra segue na lista {active}, intacta" if active else "nenhuma regra foi gravada")
     sent = list_items()
     op = _cf("PUT", f"/accounts/{account}/rules/lists/{list_id}/items", token, sent, opener=opener)["result"]
-    _wait(account, op["operation_id"], token, opener, sleep)
+    try:
+        _wait(account, op["operation_id"], token, opener, sleep)
+    except SystemExit as e:
+        raise SystemExit(f"{e}; {kept}") from None
     got = sorted((_norm_item(i) for i in _items(account, list_id, token, opener)), key=lambda d: d["source_url"])
     want = sorted((_norm_item(i) for i in sent), key=lambda d: d["source_url"])
     if got != want:
-        raise SystemExit(f"a lista lida de volta não confere com a enviada ({len(got)} de {len(want)} itens); "
-                         "a regra não foi gravada: rodar apply de novo")
+        raise SystemExit(f"a lista {target} lida de volta não confere com a enviada ({len(got)} de {len(want)} "
+                         f"itens); {kept}: rodar apply de novo")
     entry = f"/accounts/{account}/rulesets/phases/{PHASE}/entrypoint"
-    res = _cf("PUT", entry, token, {"rules": [rule()]}, opener=opener)["result"]
+    res = _cf("PUT", entry, token, {"rules": [rule(target)]}, opener=opener)["result"]
     back = [{k: r.get(k) for k in _RULE_KEYS} for r in res.get("rules") or []]
-    if back != [rule()]:
-        raise SystemExit("a regra gravada não confere com a enviada: rodar apply de novo")
-    print(f"lista {LIST_NAME}: {len(got)} itens; regra ligada na fase {PHASE} da conta (ruleset {res.get('id')})")
+    if back != [rule(target)]:
+        raise SystemExit(f"a regra gravada não confere com a enviada (lista {target}): conferir no painel")
+    print(f"lista {target}: {len(got)} itens; regra ligada a ela na fase {PHASE} da conta (ruleset {res.get('id')})"
+          + (f"; a lista {active} ficou sem efeito" if active else ""))
     return 0
 
 
 def remove(token: str, account: str, opener=urllib.request.urlopen) -> int:
     rules = _phase_rules(account, token, opener)
+    active_list(rules)
     if not rules:
         print(f"a fase {PHASE} da conta já está sem regras deste script: nada a remover")
         return 0
@@ -305,7 +332,7 @@ def remove(token: str, account: str, opener=urllib.request.urlopen) -> int:
     res = _cf("PUT", entry, token, {"rules": []}, opener=opener)["result"]
     if res.get("rules"):
         raise SystemExit("a fase ainda tem regras depois do PUT: conferir no painel")
-    print(f"regra removida da fase {PHASE} da conta; a lista {LIST_NAME} ficou, sem efeito")
+    print(f"regra removida da fase {PHASE} da conta; as listas {LISTS} ficaram, sem efeito")
     return 0
 
 
@@ -352,7 +379,8 @@ def main(argv: list[str] | None = None) -> int:
         if bad:
             print("\n".join(bad), file=sys.stderr)
             return 1
-        print(json.dumps({"list": LIST_NAME, "items": list_items(), "rule": rule()}, ensure_ascii=False, indent=2))
+        print(json.dumps({"lists": list(LISTS), "items": list_items(), "rules": [rule(n) for n in LISTS]},
+                         ensure_ascii=False, indent=2))
         return 0
     if args.cmd in ("apply", "remove"):
         if not args.yes:
