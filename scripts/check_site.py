@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import colorsys
 import json
+import math
 import os
 import re
 import shutil
@@ -45,20 +46,6 @@ SITE_HOST = "guifav.dev"
 # Domínio antigo do Substack (#24): depois do cutover, nada no site aponta para ele.
 OLD_DOMAIN = "guilhermefavaron.com.br"
 OLD_HOSTS = {OLD_DOMAIN, "www." + OLD_DOMAIN}
-# Links de posts importados que já davam 404 no Substack antes do cutover (caminhos da era Wix, conferidos em
-# 2026-11-12). A importação não altera texto, então eles ficam; o 301 genérico os leva à raiz do blog.
-_W = "https://www." + OLD_DOMAIN
-OLD_DOMAIN_DEAD_LINKS = (
-    ("blog/desbloqueando-a-inteligencia-artificial-o-guia-definitivo-para-empresarios-na-era-da-ia-livro-da-ia/index.html",
-     _W + "/livro-ia-guia-estrategico-empresarios-era-digital"),
-    ("blog/decifrando-o-codigo-da-ia-estrategias-para-mitigar-vieses-em-negocios-inteligentes/index.html",
-     _W + "/livro-ia-guia-estrategico-empresarios-era-digital"),
-    ("blog/microservices-vs-monolith-decisoes/index.html", _W + "/post/modernizacao-sistemas-legados-vantagem-competitiva"),
-    ("blog/como-designers-profissionais-usam-ia-guia-completo-2024/index.html", _W + "/pagina-inicial/hashtags/FF0000"),
-    ("blog/como-designers-profissionais-usam-ia-guia-completo-2024/index.html", _W + "/pagina-inicial/hashtags/000000"),
-    ("blog/modernizacao-de-sistemas-legados/index.html", _W + "/pagina-inicial"),
-    ("blog/data-pipelines-empresariais-como/index.html", _W + "/post/machine-learning-producao-modelos-empresariais-roi"),
-)
 BLOG_PREFIX = "/blog/"
 # Toda página com o GA4 do site também carrega o Microsoft Clarity (mesmo escopo de medição).
 GA4_TAG = "googletagmanager.com/gtag/js?id=G-K7Y87QNCX8"
@@ -461,10 +448,10 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
             if not in_blog and OLD_DOMAIN in (site / rel).read_text(encoding="utf-8").lower():
                 problems.append(f"{rel}: menciona o domínio antigo ({OLD_DOMAIN})")
             # Em todo o site, links e embeds pela URL resolvida: pega entidade HTML, percent-encoding e ponto final,
-            # que a busca literal não vê. No blog, menção em texto corrido de post importado fica, e só os links
-            # mortos conhecidos passam, cada um na sua página (todas do blog; o teste confere contra os fontes).
+            # que a busca literal não vê. No blog, menção em texto corrido de post importado fica, mas todo link ou
+            # embed para o domínio antigo é apontado, sem exceção (a lista de links mortos da importação saiu na #105).
             for u in dict.fromkeys(list(p.refs) + [v for _, v in p.url_values]):
-                if _old_host(resolved[(base, u)]) and (rel, u) not in OLD_DOMAIN_DEAD_LINKS:
+                if _old_host(resolved[(base, u)]):
                     problems.append(f"{rel}: link para o domínio antigo: {u[:80]}")
         for ref in p.refs:
             path = _internal(resolved[(base, ref)])
@@ -556,7 +543,7 @@ SITE_NAME = "Guilherme Favaron"
 TITLE_SEP = " | "
 TITLE_EXEMPT_PREFIXES = ("portfolio/mockups/",)
 # Grupos de conteúdo do GA4 (content_group), um por tipo de página; espelha CONTENT_GROUPS do consts.ts do blog.
-CONTENT_GROUPS = ("home", "portfolio", "insights-lista", "insights-artigo", "expert-insights", "materiais", "ferramentas")
+CONTENT_GROUPS = ("home", "portfolio", "insights-lista", "insights-artigo", "expert-insights", "materiais", "consultoria", "ferramentas")
 # Páginas dos materiais do canal (issue #99): o formulário e a página de enviado de cada material do catálogo do Worker.
 MATERIALS = ("planilha-custos-ia", "mapa-decisao-ia")
 MATERIAL_PAGES = {f"{m}/{p}index.html" for m in MATERIALS for p in ("", "enviado/")}
@@ -571,6 +558,8 @@ def expected_content_group(rel: str) -> str | None:
         return "home"
     if rel == "portfolio/index.html":
         return "portfolio"
+    if rel == "consultoria/index.html":
+        return "consultoria"
     if (rel == "blog/index.html" or re.fullmatch(r"blog/pagina/\d+/index\.html", rel)
             or re.fullmatch(r"blog/tema/[a-z0-9][a-z0-9-]*/index\.html", rel)):
         return "insights-lista"
@@ -756,7 +745,7 @@ def check_titles_and_groups(rel: str, html: str) -> list[str]:
 # Eventos próprios do GA4 (issue #60): assets/track.js. Contrato igual ao de check_titles_and_groups: alarme de
 # integridade sobre o HTML dos três templates (index.html, portfolio/index.html e Base.astro do blog).
 TRACK_PATH = "/assets/track.js"
-CTA_LOCATIONS = ("hero", "projetos", "consultoria", "chamada-final")
+CTA_LOCATIONS = ("hero", "projetos", "consultoria", "chamada-final", "consultoria-pagina", "como-contratar")  # as duas últimas: #136
 SIGNUP_PAGE = "blog/inscricao-confirmada/index.html"
 CONTACT_EMAIL = "contact@guifav.dev"
 SCHEDULE_HOST = "calendar.app.google"
@@ -1229,9 +1218,13 @@ class _ArticleImages(HTMLParser):
 
 
 def _ld_blocks(html: str) -> list[tuple[list, bool]]:
-    """Cada raiz de JSON-LD fora de comentário, com o @context do schema.org: (nós, se veio de um @graph)."""
+    """Cada raiz de JSON-LD com o @context do schema.org: (nós, se veio de um @graph).
+
+    Ignora o que não roda na página: comentário, <template>, <noscript> e <script> com data-type em vez de type
+    (#136). Vale para a home, para a /consultoria/ e para os posts (#105): JSON-LD só nesses lugares não conta."""
     html = re.sub(r"<!--.*?-->", "", html, flags=re.S)
-    scripts = re.findall(r"""<script\b[^>]*\btype\s*=\s*["']application/ld\+json["'][^>]*>(.*?)</script\s*>""",
+    html = re.sub(r"<(template|noscript)\b[^>]*>.*?</\1\s*>", "", html, flags=re.S | re.I)
+    scripts = re.findall(r"""<script\b[^>]*(?<![\w-])type\s*=\s*["']application/ld\+json["'][^>]*>(.*?)</script\s*>""",
                          html, flags=re.S | re.I)
     blocks: list[tuple[list, bool]] = []
     for body in scripts:
@@ -1250,6 +1243,11 @@ def _ld_blocks(html: str) -> list[tuple[list, bool]]:
     return blocks
 
 
+def _ld_nodes(html: str) -> list[dict]:
+    """Os nós dos JSON-LD da página: as raízes e os itens de @graph de _ld_blocks, só os objetos (#136)."""
+    return [n for nodes, _ in _ld_blocks(html) for n in nodes if isinstance(n, dict)]
+
+
 def _home_websites(html: str) -> list[dict]:
     """Os WebSite da home com HOME_WEBSITE (nome e URL); o WebSite não usa o @id da Person."""
     return [n for nodes, _ in _ld_blocks(html) for n in nodes
@@ -1258,7 +1256,7 @@ def _home_websites(html: str) -> list[dict]:
 
 
 def _home_has_website(html: str) -> bool:
-    """Algum JSON-LD da home (fora de comentário) traz um WebSite com HOME_WEBSITE."""
+    """Algum JSON-LD da home (o que _ld_blocks lê) traz um WebSite com HOME_WEBSITE."""
     return bool(_home_websites(html))
 
 
@@ -1401,6 +1399,131 @@ def check_seo(site: Path, posts: Path) -> tuple[list[str], list[str], list[str]]
         if no_alt:
             warns.append(f"{rel}: {no_alt} de {len(imgs.alts)} imagens sem texto alternativo")
     return problems, warn_new, warn_old
+
+
+# Página de consultoria (#136, consulta 18 do mapa da #112): a página existe, com o título e o H1 aprovados e o
+# JSON-LD Service do Gui (provider pelo @id da Person) com uma Offer. Alarme de integridade da página estática.
+CONSULTING_PAGE = "consultoria/index.html"
+CONSULTING_TITLE = "Consultoria em IA para empresas" + TITLE_SEP + SITE_NAME
+CONSULTING_H1 = "Consultoria em inteligência artificial para empresas"
+
+
+def check_consulting(site: Path) -> list[str]:
+    """#136: título, H1 único e JSON-LD Service (provider: a Person, com tipo, nome e url) com Offer de preço em BRL na
+    /consultoria/, sem FAQPage (#108)."""
+    rel = CONSULTING_PAGE
+    page = site / rel
+    if not page.is_file():
+        return [f"{rel}: a página de consultoria sumiu do site montado (site-manifest.txt)"]
+    html = page.read_text(encoding="utf-8")
+    visible = _visible_html(html)
+    problems = []
+    m = re.search(r"<title[^>]*>(.*?)</title\s*>", visible, flags=re.S | re.I)
+    title = unescape(m.group(1)).strip() if m else None
+    if title != CONSULTING_TITLE:
+        problems.append(f"{rel}: o título precisa ser {CONSULTING_TITLE!r}: {title!r}")
+    h1s = [re.sub(r"\s+", " ", unescape(re.sub(r"<[^>]+>", "", h))).strip()
+           for h in re.findall(r"<h1\b[^>]*>(.*?)</h1\s*>", visible, flags=re.S | re.I)]
+    if h1s != [CONSULTING_H1]:
+        problems.append(f"{rel}: a página precisa de um H1 {CONSULTING_H1!r}, tem {h1s}")
+
+    def offers(n: dict) -> list:
+        o = n.get("offers")
+        return o if isinstance(o, list) else [o]
+
+    def priced(o) -> bool:
+        # Preço numérico, finito e não negativo (0 vale: a primeira conversa é gratuita), em número ou texto; null,
+        # booleano, "abc", negativo, NaN e Infinity não.
+        price = o.get("price") if isinstance(o, dict) else None
+        numeric = (isinstance(price, (int, float)) and not isinstance(price, bool) and math.isfinite(price)
+                   and price >= 0) or (
+            isinstance(price, str) and re.fullmatch(r"\d+(?:\.\d+)?", price.strip()) is not None)
+        return isinstance(o, dict) and o.get("@type") == "Offer" and numeric and o.get("priceCurrency") == "BRL"
+
+    def person(pr) -> bool:
+        return (isinstance(pr, dict) and pr.get("@id") == PERSON_ID and pr.get("@type") == "Person"
+                and isinstance(pr.get("name"), str) and bool(pr["name"].strip())
+                and pr.get("url") in (SITE_ORIGIN, SITE_ORIGIN + "/"))
+
+    nodes = _ld_nodes(html)
+    if not any(n.get("@type") == "Service" and n.get("@id") != PERSON_ID and person(n.get("provider"))
+               and any(priced(o) for o in offers(n)) for n in nodes):
+        problems.append(f"{rel}: sem o JSON-LD Service com provider Person ({PERSON_ID!r}, name e url) e uma Offer "
+                        "com price e priceCurrency BRL")
+    if any(n.get("@type") == "FAQPage" for n in nodes):
+        problems.append(f"{rel}: FAQPage fora da decisão da #108 (perguntas só em texto visível)")
+    return problems
+
+
+# Home como hub (#136): os últimos artigos, que o scripts/assemble_site.py escreve a partir do build do blog, batem com
+# os posts listados (indexáveis e fora dos podcasts) mais recentes segundo o frontmatter, na ordem do blog; e a seção
+# de temas da home linka cada página de tema publicada, uma vez. Leitura independente do build: pega lista velha,
+# vazia ou com a regra de seleção trocada.
+HOME_TOPICS_ID = "temas"
+
+
+def read_home_latest(consts: Path) -> int | None:
+    """Quantos artigos a home lista: HOME_LATEST do consts.ts do blog, a mesma constante que o build usa."""
+    m = re.search(r"^export const HOME_LATEST = (\d+);", consts.read_text(encoding="utf-8"), flags=re.M)
+    return int(m.group(1)) if m else None
+
+
+def _post_when(fm: dict[str, str]) -> datetime | None:
+    try:
+        d = datetime.fromisoformat(fm.get("date", "").replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return d.replace(tzinfo=timezone.utc) if d.tzinfo is None else d.astimezone(timezone.utc)
+
+
+def _listed_posts(posts: Path) -> tuple[list[tuple[datetime, str]], list[str]]:
+    """(data, slug) dos posts listados (indexáveis e fora dos podcasts) e os arquivos com data ilegível."""
+    listed, bad = [], []
+    for md in sorted(posts.glob("**/*.md")):
+        fm = frontmatter(md.read_text(encoding="utf-8"))
+        if fm.get("index", "").lower() == "false" or fm.get("type") == "podcast":
+            continue
+        when = _post_when(fm)
+        if when is None:
+            bad.append(md.name)
+            continue
+        listed.append((when, fm.get("slug") or md.stem))
+    listed.sort(key=lambda x: (-x[0].timestamp(), x[1]))
+    return listed, bad
+
+
+def expected_home_latest(posts: Path, n: int) -> list[str]:
+    """Caminhos dos n posts listados mais recentes: data decrescente e, na mesma data, slug crescente."""
+    return [f"/blog/{slug}/" for _, slug in _listed_posts(posts)[0][:n]]
+
+
+def check_home(site: Path, posts: Path, n: int | None) -> list[str]:
+    """#136: a lista de últimos artigos e os links das páginas de tema na home montada."""
+    rel = "index.html"
+    page = site / rel
+    if not page.is_file():
+        return [f"{rel}: home ausente no site montado"]
+    if not n:
+        return ["blog-src/src/consts.ts: sem export const HOME_LATEST = <n>; (quantos artigos a home lista)"]
+    html = re.sub(r"<!--(?! /?ultimos-artigos -->).*?-->", "", page.read_text(encoding="utf-8"), flags=re.S)
+    problems = [f"posts: {name} com date ilegível no frontmatter" for name in _listed_posts(posts)[1]]
+    m = re.search(r"<!-- ultimos-artigos -->(.*?)<!-- /ultimos-artigos -->", html, flags=re.S)
+    got = re.findall(r"""<a\b[^>]*\bhref\s*=\s*["']([^"']*)["']""", m.group(1), flags=re.I) if m else None
+    want = expected_home_latest(posts, n)
+    if got != want:
+        problems.append(f"{rel}: os últimos artigos da home precisam ser {want}, são {got}")
+    sec = re.search(r"""<section\b[^>]*\bid\s*=\s*["']%s["'][^>]*>(.*?)</section\s*>""" % HOME_TOPICS_ID, html,
+                    flags=re.S | re.I)
+    links = re.findall(r"""<a\b[^>]*\bhref\s*=\s*["']([^"']*)["']""", sec.group(1), flags=re.I) if sec else []
+    topics = sorted((site / "blog" / "tema").glob("*/index.html"))
+    if not topics:
+        problems.append("blog/tema/: nenhuma página de tema publicada para a home linkar")
+    for t in topics:
+        href = f"/blog/tema/{t.parent.name}/"
+        if links.count(href) != 1:
+            problems.append(f'{rel}: a seção id="{HOME_TOPICS_ID}" precisa linkar {href} uma vez, linka '
+                            f"{links.count(href)}")
+    return problems
 
 
 def _gh_escape(msg: str) -> str:
@@ -1931,6 +2054,8 @@ def main(argv: list[str] | None = None) -> int:
         problems = check(Path(args.site), Path(args.posts), pre_cutover=pre)
         problems += check_related(Path(args.site), Path(args.posts))
         problems += check_contrast(Path(args.site))
+        problems += check_consulting(Path(args.site))
+        problems += check_home(Path(args.site), Path(args.posts), read_home_latest(Path(args.consts)))
         problems += check_post_ld(Path(args.site), Path(args.posts))
         problems += check_llm_ranking(Path(args.site))
     except ResolverError as e:

@@ -91,6 +91,22 @@ _OLD_URL_IN_SOURCE = re.compile(
     r"""(?:https?://(?:www\.)?|(?<![\w./-])www\.)guilhermefavaron\.com\.br[^\s)"'<>\]]*""", re.I)
 
 
+_LEGACY_URL_IN_SOURCE = re.compile(
+    r"""(?:(?:https?:)?//|(?<![\w./-])www\.)(?:[\w-]+\.)*(?:mindapps\.ai|ia-aplicada\.substack\.com)(?![\w-])[^\s)"'<>\]]*""",
+    re.I)
+
+
+def legacy_links_in_sources(posts: Path) -> list[tuple[str, str]]:
+    """Links para mindapps.ai (e subdomínios) e ia-aplicada.substack.com nos posts indexáveis (#105)."""
+    out = []
+    for f in sorted(posts.glob("*.md*")):
+        text = f.read_text(encoding="utf-8")
+        if C.frontmatter(text).get("index") == "false":
+            continue
+        out += [(f"blog/{f.stem}/index.html", m.group(0).rstrip(".,;:!?*_~")) for m in _LEGACY_URL_IN_SOURCE.finditer(text)]
+    return out
+
+
 def old_links_in_sources(posts: Path) -> list[tuple[str, str]]:
     """Toda URL do domínio antigo nos fontes (inline, referência, autolink, solta, www.), com a página de destino."""
     # Pontuação final fica fora do link, como no GFM.
@@ -158,18 +174,14 @@ class OldDomainTest(Base):
         html = page('<meta http-equiv="refresh" content="0; url=https://www.guilhermefavaron.com.br/p/x">', robots=ROBOTS_INDEX)
         self.assertEqual(len(self.flagged("blog/um-post/index.html", html)), 1)
 
-    def test_known_dead_links_from_the_import_are_allowed_only_on_their_page(self):
-        rel, url = C.OLD_DOMAIN_DEAD_LINKS[0]
-        self.w("blog/" + rel.split("/")[1] + "/index.html", "")
-        self.assertEqual(self.flagged(rel, page(f'<a href="{url}">x</a>', robots=ROBOTS_INDEX)), [])
-        self.assertEqual(len(self.flagged("blog/um-post/index.html", page(f'<a href="{url}">x</a>', robots=ROBOTS_INDEX))), 1)
-
-    def test_other_old_link_on_an_allowed_page_is_flagged(self):
-        rel, url = C.OLD_DOMAIN_DEAD_LINKS[0]
-        for other in ("https://www.guilhermefavaron.com.br", url + "/", url.replace("https://www.", "https://")):
-            with self.subTest(other=other):
+    def test_links_once_allowed_from_the_import_are_flagged_on_their_own_page(self):
+        # #105 (PR B): os 8 links da era Wix saíram dos posts, e a lista de exceção da importação acabou.
+        for rel, url in (("blog/data-pipelines-empresariais-como/index.html",
+                          "https://www.guilhermefavaron.com.br/post/machine-learning-producao-modelos-empresariais-roi"),
+                         ("blog/modernizacao-de-sistemas-legados/index.html", "https://www.guilhermefavaron.com.br/pagina-inicial")):
+            with self.subTest(rel=rel):
                 self.setUp()
-                self.assertEqual(len(self.flagged(rel, page(f'<a href="{other}">x</a>', robots=ROBOTS_INDEX))), 1)
+                self.assertEqual(len(self.flagged(rel, page(f'<a href="{url}">x</a>', robots=ROBOTS_INDEX))), 1)
 
     def test_source_scan_catches_every_markdown_link_form(self):
         # #50 r2: link por referência, autolink, URL solta e www. (o GFM transforma os dois últimos em link).
@@ -183,15 +195,32 @@ class OldDomainTest(Base):
                                "https://GuilhermeFavaron.com.br/d", "www.guilhermefavaron.com.br/e",
                                "https://www.guilhermefavaron.com.br/b"])
 
-    def test_known_dead_list_matches_the_post_sources(self):
-        # Referência independente da lista: toda URL do domínio antigo nos fontes dos posts importados.
-        # 7 pares (8 ocorrências: um deles aparece duas vezes no mesmo post) que já davam 404 no Substack antes do
-        # cutover (caminhos da era Wix); a importação não altera texto.
+    def test_post_sources_have_no_old_domain_link(self):
+        # #105 (PR B): nenhum post, indexável ou não, linka o domínio antigo (inline, referência, autolink, URL solta
+        # ou www.). Menção em texto sem esquema nem www. não é link e fica para a tabela de aprovação do Gui.
         found = old_links_in_sources(Path(__file__).resolve().parent.parent / "blog-src/src/content/posts")
-        self.assertEqual(len(found), 8)
-        self.assertEqual(set(found), set(C.OLD_DOMAIN_DEAD_LINKS))
-        self.assertTrue(all(rel.startswith("blog/") for rel, _ in C.OLD_DOMAIN_DEAD_LINKS))
-        self.assertEqual(len(C.OLD_DOMAIN_DEAD_LINKS), len(set(C.OLD_DOMAIN_DEAD_LINKS)))
+        self.assertEqual(found, [])
+        self.assertFalse(hasattr(C, "OLD_DOMAIN_DEAD_LINKS"))
+
+    def test_indexable_post_sources_have_no_legacy_project_link(self):
+        # #105 (PR B, achado P3 do Claude): mindapps.ai (e subdomínios) e o Substack antigo não são o domínio do
+        # cutover, então o check_site não os vê; a guarda fica nos fontes dos posts indexáveis. Só conta o que vira
+        # link (esquema, // ou www.); "via mindapps.ai" em texto corrido fica para a tabela do Gui.
+        found = legacy_links_in_sources(Path(__file__).resolve().parent.parent / "blog-src/src/content/posts")
+        self.assertEqual(found, [])
+
+    def test_legacy_scan_catches_link_forms_and_skips_text_and_noindex(self):
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "p.md").write_text(
+                "---\ntitle: x\n---\n[a](https://mindapps.ai/lab) <http://academia-ia.mindapps.ai/> www.mindapps.ai/x "
+                "https://ia-aplicada.substack.com/p/y [b][r]\ntexto via mindapps.ai e ia-aplicada.substack.com "
+                '[c](//academia-ia.mindapps.ai) <a href="//mindapps.ai/x">d</a>\n\n'
+                "[r]: https://IA-APLICADA.substack.com/\n", encoding="utf-8")
+            Path(d, "pod.md").write_text("---\ntitle: x\nindex: false\n---\n[a](https://mindapps.ai/)\n", encoding="utf-8")
+            got = [u for _, u in legacy_links_in_sources(Path(d))]
+        self.assertEqual(got, ["https://mindapps.ai/lab", "http://academia-ia.mindapps.ai/", "www.mindapps.ai/x",
+                               "https://ia-aplicada.substack.com/p/y", "//academia-ia.mindapps.ai", "//mindapps.ai/x",
+                               "https://IA-APLICADA.substack.com/"])
 
     def test_not_checked_before_the_cutover(self):
         self.w("index.html", page('<a href="https://guilhermefavaron.com.br">n</a>', robots=""))
@@ -828,6 +857,7 @@ class TitleAndGroupTest(unittest.TestCase):
                        ("blog/inscricao-invalida/index.html", "expert-insights"),
                        ("blog/o-exame-virou-conspiracao/index.html", "insights-artigo"),
                        ("planilha-custos-ia/index.html", "materiais"), ("mapa-decisao-ia/enviado/index.html", "materiais"),
+                       ("consultoria/index.html", "consultoria"), ("consultoria/x/index.html", None),
                        ("planilha-custos-ia/x/index.html", None),
                        ("llm-ranking/index.html", "ferramentas"), ("llm-ranking/x/index.html", None),
                        ("blog/pagina/x/index.html", None),
@@ -836,8 +866,8 @@ class TitleAndGroupTest(unittest.TestCase):
                        ("blog/tema/a/b/index.html", None), ("blog/tema/Maiuscula/index.html", None)):
             with self.subTest(rel=rel):
                 self.assertEqual(E(rel), g)
-        self.assertEqual(set(C.CONTENT_GROUPS), {"home", "portfolio", "insights-lista", "insights-artigo", "expert-insights", "materiais",
-                                                 "ferramentas"})
+        self.assertEqual(set(C.CONTENT_GROUPS), {"home", "portfolio", "insights-lista", "insights-artigo", "expert-insights",
+                                                 "materiais", "consultoria", "ferramentas"})
 
     def test_group_literal_and_define_vars(self):
         title = "<title>Guilherme Favaron | Builder e CTO</title>"
@@ -959,7 +989,7 @@ class ClaritySourcesTest(unittest.TestCase):
         return (self.REPO / rel).read_text(encoding="utf-8")
 
     def test_root_pages(self):
-        for rel in ("index.html", "portfolio/index.html", *sorted(C.MATERIAL_PAGES), C.LLM_RANKING_PAGE):
+        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES), C.LLM_RANKING_PAGE):
             with self.subTest(rel=rel):
                 t = self.read(rel)
                 self.assertIn(C.GA4_TAG, t)
@@ -995,7 +1025,7 @@ class NamingSourcesTest(unittest.TestCase):
     """
 
     REPO = Path(__file__).resolve().parent.parent
-    FILES = ("index.html", "portfolio/index.html", "404.html", "blog-src/src/layouts/Base.astro",
+    FILES = ("index.html", "portfolio/index.html", "consultoria/index.html", "404.html", "blog-src/src/layouts/Base.astro",
              "blog-src/src/layouts/PostList.astro", "blog-src/src/components/SubscribeForm.astro",
              "blog-src/src/pages/[slug].astro", "blog-src/src/pages/assinar.astro",
              "blog-src/src/pages/inscricao-enviada.astro", "blog-src/src/pages/inscricao-confirmada.astro",
@@ -1112,7 +1142,8 @@ class TrackingTest(unittest.TestCase):
             with self.subTest(loc=loc):
                 html = self.doc(f'<main><a href="https://calendar.app.google/x" data-cta-location="{loc}">a</a></main>')
                 self.assertEqual(self.check(html), [])
-        self.assertEqual(C.CTA_LOCATIONS, ("hero", "projetos", "consultoria", "chamada-final"))
+        self.assertEqual(C.CTA_LOCATIONS, ("hero", "projetos", "consultoria", "chamada-final", "consultoria-pagina",
+                                           "como-contratar"))
         for name, a in {
             "sem atributo": '<a href="mailto:contact@guifav.dev">c</a>',
             "vazio": '<a href="mailto:contact@guifav.dev" data-cta-location="">c</a>',
@@ -1266,6 +1297,7 @@ class GaHostGuardTest(unittest.TestCase):
         root = Path(__file__).resolve().parent.parent
         for rel, config in (("index.html", "gtag('config','G-K7Y87QNCX8'"),
                             ("portfolio/index.html", "gtag('config','G-K7Y87QNCX8'"),
+                            (C.CONSULTING_PAGE, "gtag('config','G-K7Y87QNCX8'"),
                             *((p, "gtag('config','G-K7Y87QNCX8'") for p in sorted(C.MATERIAL_PAGES)),
                             (C.LLM_RANKING_PAGE, "gtag('config','G-K7Y87QNCX8'"),
                             ("blog-src/src/layouts/Base.astro", "gtag('config', GA4_ID")):
@@ -1364,7 +1396,7 @@ class ConsentSourcesTest(unittest.TestCase):
     def test_consent_js_same_version_everywhere(self):
         src = re.search(r"CONSENT_SRC = '([^']+)'", self.read("blog-src/src/consts.ts")).group(1)
         self.assertRegex(src, r"^/assets/consent\.js\?v=\d{12}$")
-        for rel in ("index.html", "portfolio/index.html", *sorted(C.MATERIAL_PAGES), C.LLM_RANKING_PAGE):
+        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES), C.LLM_RANKING_PAGE):
             with self.subTest(rel=rel):
                 self.assertEqual(self.read(rel).count(f'<script src="{src}"></script>'), 1)
         self.assertEqual(self.read("blog-src/src/layouts/Base.astro").count(
@@ -1410,7 +1442,7 @@ class TrackingSourcesTest(unittest.TestCase):
         self.assertTrue(m)
         src = m.group(1)
         self.assertTrue(src.startswith(C.TRACK_PATH + "?v="))
-        for rel in ("index.html", "portfolio/index.html", *sorted(C.MATERIAL_PAGES), C.LLM_RANKING_PAGE):
+        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES), C.LLM_RANKING_PAGE):
             with self.subTest(rel=rel):
                 t = self.read(rel)
                 self.assertEqual(t.count(f'<script src="{src}"></script>'), 1)
@@ -1422,9 +1454,14 @@ class TrackingSourcesTest(unittest.TestCase):
 
     def test_cta_locations_in_sources(self):
         home = self.read("index.html")
-        for loc in ("hero", "projetos", "consultoria"):
-            self.assertEqual(home.count(f'data-cta-location="{loc}"'), 1, loc)
+        # #136: a home nova não tem CTA no hero nem o carrossel (foi para a /consultoria/); agendar e escrever ficam na
+        # /consultoria/.
+        for loc, n in (("hero", 0), ("projetos", 0), ("consultoria", 1)):
+            self.assertEqual(home.count(f'data-cta-location="{loc}"'), n, loc)
         self.assertEqual(self.read("portfolio/index.html").count('data-cta-location="chamada-final"'), 2)
+        consulting = self.read(C.CONSULTING_PAGE)
+        for loc, n in (("consultoria-pagina", 1), ("como-contratar", 2), ("projetos", 1), ("chamada-final", 2)):
+            self.assertEqual(consulting.count(f'data-cta-location="{loc}"'), n, loc)
 
     def test_signup_marker_in_source(self):
         self.assertIn('<article class="post page" data-ga-event="sign_up">',
@@ -1940,8 +1977,10 @@ class SeoTest(unittest.TestCase):
         # isola a regra da #103 das demais; o formato do aviso depende de GITHUB_ACTIONS, que a CI define
         with mock.patch.object(C, "check", lambda *a, **k: []), \
                 mock.patch.object(C, "check_related", lambda *a, **k: []), \
+                mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
+                mock.patch.object(C, "check_home", lambda *a, **k: []), \
                 mock.patch.object(C, "check_post_ld", lambda *a, **k: []), \
-                mock.patch.object(C, "check_llm_ranking", lambda *a, **k: []):  # Leia também (#104), JSON-LD (#105), #113
+                mock.patch.object(C, "check_llm_ranking", lambda *a, **k: []):  # Leia também (#104), JSON-LD (#105), /consultoria/ e home (#136), #113
             for gh, new_mark, group in (("", "AVISO: ", None), ("true", "::warning title=check_site (#103)::", "::group::")):
                 for desc, code in (("d" * 69, 1), ("d" * 165, 0), (self.OK_DESC, 0)):
                     with self.subTest(gh=gh, desc=len(desc)), mock.patch.dict(os.environ, {"GITHUB_ACTIONS": gh}):
@@ -2026,6 +2065,17 @@ class PostLdTest(unittest.TestCase):
     def test_noindex_post_is_not_judged(self):
         self.post("", index=False)
         self.assertEqual(self.ld(), [])
+
+    def test_graph_that_does_not_run_is_not_counted(self):
+        # #136: o _ld_blocks ignora JSON-LD que o navegador não lê como dado; o post precisa do @graph de verdade
+        script = ld_script(post_graph())
+        for nome, head in (("noscript", f"<noscript>{script}</noscript>"),
+                           ("template", f"<template>{script}</template>"),
+                           ("comentário", f"<!-- {script} -->"),
+                           ("data-type", script.replace(' type="application/ld+json"', ' data-type="application/ld+json"'))):
+            with self.subTest(onde=nome):
+                self.post(head)
+                self.assertEqual(self.ld(), ["blog/p/index.html: post indexável sem o JSON-LD do post (#105): nenhum BlogPosting"])
 
     def test_post_without_page_is_left_to_check(self):
         (self.posts / "sem-pagina.md").write_text("---\ntitle: x\nslug: sem-pagina\n---\n", encoding="utf-8")
@@ -2178,6 +2228,8 @@ class PostLdTest(unittest.TestCase):
         with mock.patch.object(C, "check", lambda *a, **k: []), \
                 mock.patch.object(C, "check_related", lambda *a, **k: []), \
                 mock.patch.object(C, "check_contrast", lambda *a, **k: []), \
+                mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
+                mock.patch.object(C, "check_home", lambda *a, **k: []), \
                 mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
                 mock.patch.object(C, "check_llm_ranking", lambda *a, **k: []):  # #113 isolada; ver LlmRankingTest
             for head, code in (("", 1), (ld_script(post_graph()), 0)):
@@ -2652,6 +2704,8 @@ class LlmRankingTest(unittest.TestCase):
                 mock.patch.object(C, "check_contrast", lambda *a, **k: []), \
                 mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
                 mock.patch.object(C, "check_post_ld", lambda *a, **k: []), \
+                mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
+                mock.patch.object(C, "check_home", lambda *a, **k: []), \
                 contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
             code = C.main(["--site", str(self.site), "--posts", str(self.site), "--consts", str(consts)])
         self.assertEqual(code, 1)
@@ -2662,6 +2716,8 @@ class LlmRankingTest(unittest.TestCase):
                 mock.patch.object(C, "check_contrast", lambda *a, **k: []), \
                 mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
                 mock.patch.object(C, "check_post_ld", lambda *a, **k: []), \
+                mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
+                mock.patch.object(C, "check_home", lambda *a, **k: []), \
                 contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(C.main(["--site", str(self.site), "--posts", str(self.site), "--consts", str(consts)]), 0)
 
@@ -2685,6 +2741,238 @@ class ContrastSourcesTest(unittest.TestCase):
                 with self.subTest(theme=theme, sel=sel):
                     fg, bg = rules[theme][sel]
                     self.assertGreaterEqual(C.contrast_ratio(fg, bg), C.CONTRAST_MIN)
+
+
+class ConsultingTest(unittest.TestCase):
+    """#136: a /consultoria/ existe, com o título, o H1 e o JSON-LD Service + Offer ligado à Person."""
+    TITLE = "<title>Consultoria em IA para empresas | Guilherme Favaron</title>"
+    H1 = "<h1>Consultoria em inteligência artificial para empresas</h1>"
+    PROVIDER = '{"@type":"Person","@id":"https://guifav.dev/#person","name":"G","url":"https://guifav.dev/"}'
+    LD = ('<script type="application/ld+json">{"@context":"https://schema.org","@type":"Service",'
+          '"provider":' + PROVIDER + ','
+          '"offers":{"@type":"Offer","price":"0","priceCurrency":"BRL"}}</script>')
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.site = Path(self.tmp.name) / "_site"
+        (self.site / "consultoria").mkdir(parents=True)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def got(self, head=None, body=None) -> list[str]:
+        head = self.TITLE + self.LD if head is None else head
+        body = self.H1 if body is None else body
+        (self.site / "consultoria" / "index.html").write_text(
+            f"<html><head>{head}</head><body>{body}</body></html>", encoding="utf-8")
+        return C.check_consulting(self.site)
+
+    def test_complete_page_passes(self):
+        self.assertEqual(self.got(), [])
+        # @graph, offers em lista e H1 com marcação dentro também valem
+        graph = ('<script type="application/ld+json">[{"@context":"https://schema.org","@graph":[{"@type":"Service",'
+                 '"provider":' + self.PROVIDER + ',"offers":[{"@type":"Offer","price":0,"priceCurrency":"BRL"}]}]}]'
+                 '</script>')
+        self.assertEqual(self.got(head=self.TITLE + graph,
+                                  body="<h1>Consultoria em <span>inteligência artificial</span>\n para empresas</h1>"), [])
+
+    def test_missing_page_fails(self):
+        self.assertEqual(C.check_consulting(self.site), ["consultoria/index.html: a página de consultoria sumiu do "
+                                                         "site montado (site-manifest.txt)"])
+
+    def test_title_h1_and_json_ld_are_required(self):
+        commented = "<!--" + self.LD + "-->"
+        for name, head, body, needle in (
+            ("sem título", self.LD, None, "o título precisa ser"),
+            ("título trocado", "<title>Consultoria | Guilherme Favaron</title>" + self.LD, None, "o título precisa ser"),
+            ("título em comentário", "<!--" + self.TITLE + "-->" + self.LD, None, "o título precisa ser"),
+            ("sem H1", None, "<h2>Consultoria em inteligência artificial para empresas</h2>", "um H1"),
+            ("dois H1", None, self.H1 + "<h1>Outro</h1>", "um H1"),
+            ("H1 trocado", None, "<h1>Consultoria em IA</h1>", "um H1"),
+            ("sem JSON-LD", self.TITLE, None, "sem o JSON-LD Service"),
+            ("JSON-LD em comentário", self.TITLE + commented, None, "sem o JSON-LD Service"),
+            ("sem Offer", self.TITLE + self.LD.replace('"Offer"', '"Thing"'), None, "sem o JSON-LD Service"),
+            ("provider sem @id", self.TITLE + self.LD.replace('"@id":"https://guifav.dev/#person",', ''), None,
+             "sem o JSON-LD Service"),
+            ("provider sem nome", self.TITLE + self.LD.replace('"name":"G",', ''), None, "sem o JSON-LD Service"),
+            ("provider sem tipo", self.TITLE + self.LD.replace('"@type":"Person",', ''), None, "sem o JSON-LD Service"),
+            ("provider com url de outro site", self.TITLE + self.LD.replace('"url":"https://guifav.dev/"',
+                                                                            '"url":"https://guifav.dev.evil/"'), None,
+             "sem o JSON-LD Service"),
+            ("Offer sem preço", self.TITLE + self.LD.replace('"price":"0",', ''), None, "sem o JSON-LD Service"),
+            ("Offer com preço null", self.TITLE + self.LD.replace('"price":"0"', '"price":null'), None, "sem o JSON-LD Service"),
+            ("Offer com preço booleano", self.TITLE + self.LD.replace('"price":"0"', '"price":false'), None,
+             "sem o JSON-LD Service"),
+            ("Offer com preço em texto solto", self.TITLE + self.LD.replace('"price":"0"', '"price":"grátis"'), None,
+             "sem o JSON-LD Service"),
+            ("Offer com preço negativo", self.TITLE + self.LD.replace('"price":"0"', '"price":-1'), None,
+             "sem o JSON-LD Service"),
+            ("Offer com preço NaN", self.TITLE + self.LD.replace('"price":"0"', '"price":NaN'), None,
+             "sem o JSON-LD Service"),
+            ("Offer com preço infinito", self.TITLE + self.LD.replace('"price":"0"', '"price":1e309'), None,
+             "sem o JSON-LD Service"),
+            ("Offer com preço texto negativo", self.TITLE + self.LD.replace('"price":"0"', '"price":"-1"'), None,
+             "sem o JSON-LD Service"),
+            ("provider com nome null", self.TITLE + self.LD.replace('"name":"G"', '"name":null'), None,
+             "sem o JSON-LD Service"),
+            ("Offer em outra moeda", self.TITLE + self.LD.replace('"BRL"', '"USD"'), None, "sem o JSON-LD Service"),
+            ("Service com o @id da Person", self.TITLE + self.LD.replace('"@type":"Service",',
+                                                                         '"@type":"Service","@id":"https://guifav.dev/#person",'),
+             None, "sem o JSON-LD Service"),
+            ("JSON-LD em data-type", self.TITLE + self.LD.replace(' type=', ' data-type='), None,
+             "sem o JSON-LD Service"),
+            ("JSON-LD em template", self.TITLE + "<template>" + self.LD + "</template>", None, "sem o JSON-LD Service"),
+            ("contexto de outro vocabulário", self.TITLE + self.LD.replace("https://schema.org", "https://x.org"), None,
+             "sem o JSON-LD Service"),
+            ("FAQPage", self.TITLE + self.LD + '<script type="application/ld+json">{"@context":"https://schema.org",'
+             '"@type":"FAQPage"}</script>', None, "FAQPage"),
+            ("outro tipo", self.TITLE + self.LD.replace('"Service"', '"Product"'), None, "sem o JSON-LD Service"),
+            ("JSON quebrado", self.TITLE + self.LD.replace("}}", "}"), None, "sem o JSON-LD Service"),
+        ):
+            with self.subTest(name):
+                got = self.got(head=head, body=body)
+                self.assertEqual(len(got), 1, got)
+                self.assertIn(needle, got[0])
+
+    def test_repo_page_passes(self):
+        # A página do repo, como vai ao ar (o assemble_site a copia sem mudança).
+        (self.site / "consultoria" / "index.html").write_bytes(
+            (Path(__file__).resolve().parent.parent / C.CONSULTING_PAGE).read_bytes())
+        self.assertEqual(C.check_consulting(self.site), [])
+
+    def test_main_runs_the_consulting_rule(self):
+        site = Path(self.tmp.name) / "vazio"
+        site.mkdir()
+        consts = Path(self.tmp.name) / "consts.ts"
+        consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
+        from unittest import mock
+        err = io.StringIO()
+        with mock.patch.object(C, "check", lambda *a, **k: []), \
+                mock.patch.object(C, "check_related", lambda *a, **k: []), \
+                mock.patch.object(C, "check_contrast", lambda *a, **k: []), \
+                mock.patch.object(C, "check_home", lambda *a, **k: []), \
+                mock.patch.object(C, "check_post_ld", lambda *a, **k: []), \
+                mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
+                mock.patch.object(C, "check_llm_ranking", lambda *a, **k: []), \
+                contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            code = C.main(["--site", str(site), "--posts", str(self.tmp.name), "--consts", str(consts)])
+        self.assertEqual(code, 1)
+        self.assertIn("consultoria/index.html: a página de consultoria sumiu", err.getvalue())
+
+
+class HomeHubTest(unittest.TestCase):
+    """#136: a home montada lista os últimos artigos listados do blog e linka cada página de tema publicada."""
+
+    # 8 listados (mais que os 6 da home), um podcast indexável, um fora do índice e um "False" do YAML.
+    POSTS = (("a", "2026-11-20", ""), ("b", "2026-11-22T10:00:00Z", ""),
+             ("c", "2026-11-22T07:00:00-03:00", ""),  # 10h UTC: empata com b e vem depois pelo slug
+             ("pod", "2026-11-23", "type: podcast\n"), ("fora", "2026-11-24", "index: false\n"),
+             ("fora2", "2026-11-25", "index: False\n"), ("d", "2026-11-19", ""), ("e", "2026-11-18", ""),
+             ("f", "2026-11-17", ""), ("g", "2026-11-16", ""), ("velho", "2025-01-01", ""))
+    WANT6 = ("/blog/b/", "/blog/c/", "/blog/a/", "/blog/d/", "/blog/e/", "/blog/f/")
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        r = Path(self.tmp.name)
+        self.site, self.posts = r / "_site", r / "posts"
+        self.posts.mkdir()
+        for slug, date, extra in self.POSTS:
+            (self.posts / f"{slug}.md").write_text(f"---\ntitle: t\nslug: {slug}\ndate: {date}\n{extra}---\nx\n",
+                                                   encoding="utf-8")
+        for t in ("t1", "t2"):
+            d = self.site / "blog" / "tema" / t
+            d.mkdir(parents=True)
+            (d / "index.html").write_text("<html></html>", encoding="utf-8")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def home(self, latest=WANT6, topics=("/blog/tema/t1/", "/blog/tema/t2/"), extra="", n=6) -> list[str]:
+        lis = "".join(f'<li><a href="{h}">x</a></li>' for h in latest)
+        tl = "".join(f'<a href="{h}">t</a>' for h in topics)
+        (self.site / "index.html").write_text(
+            f'<html><body><!-- ultimos-artigos --><ul class="latest-list">{lis}</ul><!-- /ultimos-artigos -->'
+            f'<section id="temas">{tl}</section>{extra}</body></html>', encoding="utf-8")
+        return C.check_home(self.site, self.posts, n)
+
+    def test_expected_list_order_and_selection(self):
+        self.assertEqual(C.expected_home_latest(self.posts, 6), list(self.WANT6))
+        self.assertEqual(C.expected_home_latest(self.posts, 2), ["/blog/b/", "/blog/c/"])
+        self.assertEqual(len(C.expected_home_latest(self.posts, 100)), 8)
+
+    def test_complete_home_passes(self):
+        self.assertEqual(self.home(), [])
+
+    def test_latest_list_wrong_fails(self):
+        for name, latest in (("vazia", ()), ("ordem", ("/blog/c/", "/blog/b/") + self.WANT6[2:]),
+                             ("com podcast indexável", ("/blog/pod/",) + self.WANT6[:5]),
+                             ("com index False", ("/blog/fora2/",) + self.WANT6[:5]),
+                             ("faltando um", self.WANT6[:5]), ("um a mais", self.WANT6 + ("/blog/g/",))):
+            with self.subTest(name):
+                got = self.home(latest=latest)
+                self.assertEqual(len(got), 1, got)
+                self.assertIn("os últimos artigos da home precisam ser", got[0])
+
+    def test_count_comes_from_the_argument(self):
+        self.assertEqual(self.home(latest=self.WANT6[:3], n=3), [])
+        self.assertTrue(self.home(latest=self.WANT6, n=7))
+
+    def test_read_home_latest_from_consts(self):
+        consts = Path(self.tmp.name) / "consts.ts"
+        consts.write_text("export const RSS_LIMIT = 50;\nexport const HOME_LATEST = 6;\n", encoding="utf-8")
+        self.assertEqual(C.read_home_latest(consts), 6)
+        consts.write_text("// export const HOME_LATEST = 6;\n", encoding="utf-8")
+        self.assertIsNone(C.read_home_latest(consts))
+        self.assertIn("sem export const HOME_LATEST", self.home(n=None)[0])
+        repo = Path(__file__).resolve().parent.parent / "blog-src" / "src" / "consts.ts"
+        self.assertEqual(C.read_home_latest(repo), 6)
+
+    def test_unreadable_date_is_reported(self):
+        (self.posts / "ruim.md").write_text("---\ntitle: t\nslug: ruim\ndate: ontem\n---\nx\n", encoding="utf-8")
+        self.assertEqual(self.home(), ["posts: ruim.md com date ilegível no frontmatter"])
+
+    def test_list_without_markers_or_commented_fails(self):
+        (self.site / "index.html").write_text('<section id="temas"><a href="/blog/tema/t1/">t</a>'
+                                              '<a href="/blog/tema/t2/">t</a></section>', encoding="utf-8")
+        self.assertIn("são None", C.check_home(self.site, self.posts, 6)[0])
+        self.assertEqual(self.home(), [])
+        html = (self.site / "index.html").read_text(encoding="utf-8")
+        (self.site / "index.html").write_text(html.replace('<ul class="latest-list">', '<!--<ul class="latest-list">')
+                                              .replace("</ul>", "</ul>-->"), encoding="utf-8")
+        self.assertIn("são []", C.check_home(self.site, self.posts, 6)[0])
+
+    def test_topics_each_published_page_once(self):
+        for name, topics, n in (("faltando", ("/blog/tema/t1/",), 0), ("repetido", ("/blog/tema/t1/",) * 2 +
+                                ("/blog/tema/t2/",), 2)):
+            with self.subTest(name):
+                got = self.home(topics=topics)
+                self.assertEqual(len(got), 1, got)
+                self.assertIn(f"linka {n}", got[0])
+        # tema linkado fora da seção não conta
+        got = self.home(topics=("/blog/tema/t1/",), extra='<a href="/blog/tema/t2/">t</a>')
+        self.assertIn("/blog/tema/t2/ uma vez, linka 0", got[0])
+
+    def test_no_published_topic_page_fails(self):
+        import shutil
+        shutil.rmtree(self.site / "blog" / "tema")
+        self.assertEqual(self.home(topics=()), ["blog/tema/: nenhuma página de tema publicada para a home linkar"])
+
+    def test_missing_home_fails_and_main_runs_the_rule(self):
+        self.assertEqual(C.check_home(self.site, self.posts, 6), ["index.html: home ausente no site montado"])
+        consts = Path(self.tmp.name) / "consts.ts"
+        consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\nexport const HOME_LATEST = 6;\n", encoding="utf-8")
+        from unittest import mock
+        err = io.StringIO()
+        with mock.patch.object(C, "check", lambda *a, **k: []), \
+                mock.patch.object(C, "check_related", lambda *a, **k: []), \
+                mock.patch.object(C, "check_contrast", lambda *a, **k: []), \
+                mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
+                mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
+                mock.patch.object(C, "check_llm_ranking", lambda *a, **k: []), \
+                contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            code = C.main(["--site", str(self.site), "--posts", str(self.posts), "--consts", str(consts)])
+        self.assertEqual(code, 1)
+        self.assertIn("index.html: home ausente", err.getvalue())
 
 
 if __name__ == "__main__":

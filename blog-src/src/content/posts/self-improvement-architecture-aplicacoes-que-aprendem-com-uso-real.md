@@ -360,4 +360,4 @@ Com as ferramentas disponíveis hoje: observabilidade moderna, modelos de lingua
 
 ***
 
-*Guilherme Favaron é CTO do GRI Institute e autor de “Desbloqueando a Inteligência Artificial”. Escreve sobre IA aplicada a negócios na newsletter IA Aplicada.*
+*Guilherme Favaron é builder e CTO do GRI Institute. Transforma problemas de negócio em aplicações reais de dados e IA: produtos, plataformas e automações. É autor de “[Desbloqueando a Inteligência Artificial](/blog/livro-ia-inteligencia-artificial-portugues-gratuito/)” e escreve sobre IA aplicada a negócios nos [Expert Insights](/blog/assinar/).*

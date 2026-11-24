@@ -230,5 +230,3 @@ Para CTOs que consideram implementar o RAG: comece com uma compreensão clara de
 ***
 
 *No próximo artigo da série, exploraremos fine-tuning versus prompt engineering, analisando quando cada abordagem oferece diferente ROI e como tomar decisões estratégicas baseadas em restrições de negócio e capabilidades técnicas.*
-
-Artigo originalmente publicado em [www<!---->.guilhermefavaron.com.br](/blog/)

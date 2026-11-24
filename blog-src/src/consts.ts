@@ -6,7 +6,7 @@ export const BLOG_NAME = 'Insights';
 // Nome da lista de email (Gui, 12/11/2026), sempre associado a Guilherme Favaron. Em frase: "os Expert Insights".
 export const EMAIL_LIST_NAME = 'Expert Insights';
 // Grupos de conteúdo do GA4 (parâmetro content_group), um por tipo de página (Gui, 13/11/2026).
-export const CONTENT_GROUPS = ['home', 'portfolio', 'insights-lista', 'insights-artigo', 'expert-insights', 'materiais', 'ferramentas'] as const;
+export const CONTENT_GROUPS = ['home', 'portfolio', 'insights-lista', 'insights-artigo', 'expert-insights', 'materiais', 'consultoria', 'ferramentas'] as const;
 export type ContentGroup = (typeof CONTENT_GROUPS)[number];
 export const AUTHOR_NAME = 'Guilherme Favaron';
 export const AUTHOR_ID = 'https://guifav.dev/#person';
@@ -28,6 +28,8 @@ export const CONSENT_SRC = '/assets/consent.js?v=202611140300';
 export const DRAFT_PREVIEW = process.env.DRAFT_PREVIEW === '1';
 export const POSTS_PER_PAGE = 20;
 export const RSS_LIMIT = 50;
+// Quantos artigos a home do site mostra (issue #136), em /blog/ultimos-artigos.json.
+export const HOME_LATEST = 6;
 
 // Antes do cutover (issue #24) o blog inteiro saía com noindex e nada no site apontava para ele. Em 2026-11-11
 // o Gui antecipou essa parte: o blog entra no menu da home e do portfólio e passa a ser indexável. Podcasts

@@ -171,7 +171,7 @@ O mundo do trabalho está mudando. As ações da Accenture caíram quase 10% em 
 
 ***
 
-*Guilherme Favaron é CTO do GRI Institute, uma organização global de inteligência imobiliária e de infraestrutura. Escreve sobre inteligência artificial aplicada em ia-aplicada.substack.com e é autor do livro “Desbloqueando a Inteligência Artificial”.*
+*Guilherme Favaron é CTO do GRI Institute, uma organização global de inteligência imobiliária e de infraestrutura. Escreve sobre inteligência artificial aplicada em [guifav.dev](/blog/) e é autor do livro “Desbloqueando a Inteligência Artificial”.*
 
 ***
 

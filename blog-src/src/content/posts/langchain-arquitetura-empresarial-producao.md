@@ -209,5 +209,3 @@ Para CTOs e líderes técnicos considerando LangChain: foquem na **arquitetura d
 ***
 
 *Este artigo faz parte de uma série sobre implementação prática de Generative AI em ambientes empresariais. No próximo artigo, vamos explorar as decisões estratégicas entre OpenAI e modelos open-source para diferentes casos de uso.*
-
-Artigo originalmente publicado em [www<!---->.guilhermefavaron.com.br](/blog/)

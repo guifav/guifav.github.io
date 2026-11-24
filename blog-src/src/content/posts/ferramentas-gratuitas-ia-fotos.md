@@ -294,7 +294,7 @@ Com a generosa alocação de 40 imagens por dia no plano gratuito, o Ideogram se
 
 O Image Ibex, criado por mim, Guilherme Favaron, representa um especial caso de estudo em inovação pessoal no campo de IA para criar imagens. Baseado no modelo Stable Diffusion, conhecido por sua sofisticação e versatilidade, o Image Ibex demonstra como desenvolvedores individuais podem contribuir significativamente para o ecossistema de ferramentas de IA fotos.
 
-Exemplo de imagens geradas via [mindapps.ai](http://mindapps.ai) Clique para expandi-las ou baixá-las:
+Exemplo de imagens geradas pelo Image Ibex. Clique para expandi-las ou baixá-las:
 
 <figure>
 <img src="/blog/img/ferramentas-gratuitas-ia-fotos/42f60fb048-1000.webp" srcset="/blog/img/ferramentas-gratuitas-ia-fotos/42f60fb048-728.webp 728w, /blog/img/ferramentas-gratuitas-ia-fotos/42f60fb048-1000.webp 1000w" sizes="(max-width: 760px) 100vw, 720px" width="1000" height="1000" alt="" loading="lazy" decoding="async">
@@ -320,7 +320,7 @@ Exemplo de imagens geradas via [mindapps.ai](http://mindapps.ai) Clique para ex
 <img src="/blog/img/ferramentas-gratuitas-ia-fotos/c59a1956e5-1000.webp" srcset="/blog/img/ferramentas-gratuitas-ia-fotos/c59a1956e5-728.webp 728w, /blog/img/ferramentas-gratuitas-ia-fotos/c59a1956e5-1000.webp 1000w" sizes="(max-width: 760px) 100vw, 720px" width="1000" height="1000" alt="" loading="lazy" decoding="async">
 </figure>
 
-Imagens geradas via [mindapps.ai](http://mindapps.ai) - click para expandir ou baixá-las
+Imagens geradas pelo Image Ibex - click para expandir ou baixá-las
 
 O que torna o **Image Ibex** particularmente interessante é sua acessibilidade. A interface amigável, otimizada tanto para desktop quanto para dispositivos móveis, torna a ferramenta acessível a um amplo espectro de usuários, desde iniciantes curiosos até profissionais experientes em busca de uma solução rápida e eficiente.
 

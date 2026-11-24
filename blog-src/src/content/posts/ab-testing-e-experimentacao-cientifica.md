@@ -330,7 +330,3 @@ Sucesso em ambientes de negócios cada vez mais complexos e competitivos depende
 ***
 
 *Continue acompanhando para mais insights sobre como implementar capacidades de data science que transformam tomada de decisão organizacional através de abordagens analíticas rigorosas que criam valor mensurável de negócio.*
-
-***
-
-Artigo originalmente publicado em [www<!---->.guilhermefavaron.com.br](/blog/)
