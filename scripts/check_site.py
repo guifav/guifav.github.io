@@ -23,6 +23,7 @@ Uso:
 from __future__ import annotations
 
 import argparse
+import colorsys
 import json
 import os
 import re
@@ -1303,6 +1304,389 @@ def _gh_escape(msg: str) -> str:
     return msg.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
 
 
+# Contraste (#119): o botão "Assinar" do blog saiu com color e fundo iguais no modo escuro. Para cada página, as folhas
+# de estilo entram na ordem do documento (<link rel="stylesheet"> internos e <style>, fora os só de impressão), os tokens
+# de cor vêm de :root/html/body (tema claro) e do seletor do tema escuro ([data-theme=dark], com ou sem aspas, com ou
+# sem body/html na frente: o site.js põe o atributo no body e o Astro minifica as aspas), e todo seletor que declara
+# color e fundo opaco, nas suas regras ou nas do mesmo seletor sem o estado (:hover, :focus-visible etc. herdam do
+# seletor base), precisa de CONTRAST_MIN nos dois temas. background e background-color são o mesmo fundo: vale o
+# vencedor da cascata.
+# Alarme de integridade sobre o CSS do próprio site: só entram as páginas que carregam SITE_CSS (os mockups do
+# portfólio e o /llm-ranking/ têm paleta própria e ficam de fora). Não avalia cor herdada de outro elemento, fundo
+# translúcido, imagem ou gradiente, style="" inline, nem cores fora de hex, rgb(), hsl() e dos nomes de _CSS_NAMED.
+# Cascata: !important, especificidade (aproximada: argumentos de :is()/:not() não contam) e ordem do texto, por
+# propriedade (color, cor de fundo, imagem de fundo).
+CONTRAST_MIN = 4.5
+SITE_CSS = "/assets/site.css"
+THEMES = ("claro", "escuro")
+_CSS_COMMENT = re.compile(r"/\*.*?\*/", re.S)
+_CSS_NAMED = {"white": (255, 255, 255), "black": (0, 0, 0), "red": (255, 0, 0), "green": (0, 128, 0),
+              "blue": (0, 0, 255), "yellow": (255, 255, 0), "orange": (255, 165, 0), "gray": (128, 128, 128),
+              "grey": (128, 128, 128), "silver": (192, 192, 192), "navy": (0, 0, 128), "purple": (128, 0, 128)}
+_CSS_STATE = re.compile(r":(?:hover|focus-visible|focus-within|focus|active|visited)(?![\w-])")
+_CSS_THEME = re.compile(r"""(?P<tag>html|body|:root)?\[data-theme=(?:"(?P<a>dark|light)"|'(?P<b>dark|light)'|(?P<c>dark|light))\]""")
+_THEME_OF = {"dark": "escuro", "light": "claro"}
+_CSS_ROOTS = (":root", "html", "body")
+_CSS_GROUPS = ("@media", "@supports", "@layer")
+
+
+def _print_only(media: str) -> bool:
+    """A lista de consultas só vale na impressão: toda consulta é print (com ou sem only) e nenhuma é negada."""
+    qs = [q.strip().lower() for q in media.split(",") if q.strip()]
+    return bool(qs) and all(re.match(r"(?:only\s+)?print\b", q) for q in qs)
+
+
+def _css_selector(s: str) -> str:
+    """Forma canônica de um seletor: espaços colapsados, sem espaço em volta de > + ~, valor de atributo sem aspas."""
+    s = re.sub(r"\s+", " ", s.strip())
+    s = re.sub(r"\s*([>+~])\s*", r"\1", s)
+    return re.sub(r"""\[([\w-]+)([~|^$*]?=)(["'])([\w-]+)\3\]""", r"[\1\2\4]", s)
+
+
+def _statement_end(css: str, i: int, stop: int) -> int | None:
+    """Posição do ";" que encerra uma at-rule de uma linha antes de stop, fora de aspas e parênteses."""
+    depth, quote = 0, ""
+    for j in range(i, stop):
+        ch = css[j]
+        if quote:
+            if ch == quote:
+                quote = ""
+        elif ch in "\"'":
+            quote = ch
+        elif ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        elif ch == ";" and depth == 0:
+            return j
+    return None
+
+
+def _split_outside(s: str, sep: str) -> list[str]:
+    """s partido em sep fora de aspas e parênteses (:is(.a, .b), content:"a;b", url(a;b))."""
+    out, cur, depth, quote = [], [], 0, ""
+    for ch in s:
+        if quote:
+            quote = "" if ch == quote else quote
+        elif ch in "\"'":
+            quote = ch
+        elif ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        elif ch == sep and depth == 0:
+            out.append("".join(cur))
+            cur = []
+            continue
+        cur.append(ch)
+    out.append("".join(cur))
+    return out
+
+
+def _css_rules(css: str, theme: str | None = None) -> list[tuple[list[str], list[tuple[str, str, bool]], str | None]]:
+    """(seletores canônicos, declarações em ordem, tema só) na ordem do texto. @media/@supports/@layer com bloco entram
+    (fora os só de impressão); at-rules de uma linha (@charset, @import, @layer a, b;) e @keyframes e afins não."""
+    css = _CSS_COMMENT.sub("", css)
+    out: list[tuple[list[str], list[tuple[str, str, bool]], str | None]] = []
+    i, n = 0, len(css)
+    while i < n:
+        b = css.find("{", i)
+        if b < 0:
+            break
+        if css[i:b].lstrip().startswith("@"):
+            semi = _statement_end(css, i, b)
+            if semi is not None:
+                i = semi + 1
+                continue
+        head, depth, j, quote = css[i:b].strip(), 0, b, ""
+        while j < n:
+            ch = css[j]
+            if quote:
+                quote = "" if ch == quote else quote
+            elif ch in "\"'":
+                quote = ch
+            else:
+                depth += {"{": 1, "}": -1}.get(ch, 0)
+                if depth == 0:
+                    break
+            j += 1
+        body = css[b + 1:j]
+        if head.startswith("@"):
+            if head.startswith(_CSS_GROUPS) and not (head.startswith("@media") and _print_only(head[6:])):
+                only = theme
+                m = re.search(r"prefers-color-scheme\s*:\s*(dark|light)", head)
+                if m:
+                    only = "escuro" if m.group(1) == "dark" else "claro"
+                out += _css_rules(body, only)
+        else:
+            decls = []
+            for d in _split_outside(body, ";"):
+                if ":" in d:
+                    k, v = d.split(":", 1)
+                    k = k.strip()
+                    imp = bool(re.search(r"!\s*important\s*$", v, re.I))
+                    v = re.sub(r"!\s*important\s*$", "", v.strip(), flags=re.I).strip()
+                    decls.append((k if k.startswith("--") else k.lower(), v, imp))
+            out.append(([_css_selector(s) for s in _split_outside(head, ",") if s.strip()], decls, theme))
+        i = j + 1
+    return out
+
+
+def _split_top(v: str) -> list[str]:
+    """Tokens separados por espaço fora de parênteses."""
+    out, depth, cur = [], 0, ""
+    for ch in v:
+        depth += {"(": 1, ")": -1}.get(ch, 0)
+        if ch.isspace() and depth == 0:
+            if cur:
+                out.append(cur)
+            cur = ""
+        else:
+            cur += ch
+    return out + ([cur] if cur else [])
+
+
+def css_color(value: str | None, tokens: dict[str, str], _depth: int = 0) -> tuple[int, int, int] | None:
+    """Cor opaca em RGB, resolvendo var() pelos tokens; None para translúcido, desconhecido ou não-cor."""
+    if value is None or _depth > 16:
+        return None
+    v = value.strip()
+    m = re.fullmatch(r"var\(\s*(--[\w-]+)\s*(?:,\s*(.+))?\)", v)
+    if m:
+        if m.group(1) in tokens:
+            return css_color(tokens[m.group(1)], tokens, _depth + 1)
+        return css_color(m.group(2), tokens, _depth + 1)
+    if v.lower() in _CSS_NAMED:
+        return _CSS_NAMED[v.lower()]
+    m = re.fullmatch(r"#([0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})", v)
+    if m:
+        h = m.group(1)
+        if len(h) in (3, 4):
+            h = "".join(c * 2 for c in h)
+        if len(h) == 8:
+            if h[6:].lower() != "ff":
+                return None
+            h = h[:6]
+        return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
+    m = re.fullmatch(r"rgba?\(\s*(\d+)\s*,?\s*(\d+)\s*,?\s*(\d+)\s*(?:[,/]\s*(\d+(?:\.\d+)?|\.\d+)(%?))?\s*\)", v, re.I)
+    if m:
+        if m.group(4) is not None and float(m.group(4)) != (100.0 if m.group(5) else 1.0):
+            return None
+        return (int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    num = r"(\d+(?:\.\d+)?|\.\d+)"
+    m = re.fullmatch(rf"hsla?\(\s*{num}(?:deg)?\s*,?\s*{num}%\s*,?\s*{num}%\s*(?:[,/]\s*{num}(%?))?\s*\)", v, re.I)
+    if m:
+        if m.group(4) is not None and float(m.group(4)) != (100.0 if m.group(5) else 1.0):
+            return None
+        h, s, l = float(m.group(1)) % 360 / 360, float(m.group(2)) / 100, float(m.group(3)) / 100
+        return tuple(round(c * 255) for c in colorsys.hls_to_rgb(h, l, s))
+    return None
+
+
+def _css_background(raw: str, tokens: dict[str, str]) -> tuple[int, int, int] | None:
+    """Cor do fundo de um valor de background/background-color (atalho com um só componente de cor)."""
+    if "url(" in raw.lower() or "gradient(" in raw.lower():
+        return None
+    whole = css_color(raw, tokens)
+    if whole is not None:
+        return whole
+    found = [c for c in (css_color(tok, tokens) for tok in _split_top(raw)) if c is not None]
+    return found[0] if len(found) == 1 else None
+
+
+def contrast_ratio(a: tuple[int, int, int], b: tuple[int, int, int]) -> float:
+    """Razão de contraste da WCAG 2 entre duas cores RGB."""
+    def lum(rgb):
+        c = [x / 255 for x in rgb]
+        c = [x / 12.92 if x <= 0.04045 else ((x + 0.055) / 1.055) ** 2.4 for x in c]
+        return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]
+    hi, lo = sorted((lum(a), lum(b)), reverse=True)
+    return (hi + 0.05) / (lo + 0.05)
+
+
+def _theme_prefix(s: str) -> tuple[str | None, str, bool]:
+    """(tema, elemento, só o elemento do tema) de um seletor:
+    - [data-theme=X] Y: (X, Y, False);
+    - [data-theme=X] ou body[data-theme=X] sozinho: (X, a tag, ou body, True). É onde moram os tokens do tema;
+    - [data-theme=X].y composto: (X, o seletor inteiro, False). O atributo está no próprio elemento, que só existe
+      nesse tema e não se mistura com .y;
+    - sem prefixo: (None, s, False)."""
+    m = _CSS_THEME.match(s)
+    if not m:
+        return None, s, False
+    theme = _THEME_OF[m.group("a") or m.group("b") or m.group("c")]
+    rest = s[m.end():]
+    if not rest:
+        return theme, {":root": "html"}.get(m.group("tag") or "body", m.group("tag") or "body"), True
+    if rest[0] not in " >+~":
+        return theme, s, False
+    return theme, rest.lstrip(" >+~"), False
+
+
+def _specificity(sel: str) -> tuple[int, int, int]:
+    """(ids, classes/atributos/pseudo-classes, tipos/pseudo-elementos). Aproximação: o argumento de :is()/:not()/
+    :where()/:has() não conta, e a pseudo-classe conta como uma classe."""
+    s = re.sub(r"\[[^\]]*\]", "[]", sel)
+    while re.search(r"\([^()]*\)", s):
+        s = re.sub(r"\([^()]*\)", "", s)
+    ids = len(re.findall(r"#[\w-]+", s))
+    cls = len(re.findall(r"\.[\w-]+|\[\]|(?<!:):(?!:)[\w-]+", s))
+    types = len(re.findall(r"(?:^|[\s>+~])[a-zA-Z][\w-]*", s)) + len(re.findall(r"::[\w-]+", s))
+    return ids, cls, types
+
+
+def _bg_longhands(k: str, v: str) -> list[tuple[str, object]]:
+    """O que cada declaração de fundo define: a cor ("bg", valor cru) e se há imagem ou gradiente ("img", bool).
+    background define os dois (sem imagem, o background-image volta a none)."""
+    low = v.lower()
+    if k == "background":
+        return [("bg", v), ("img", "url(" in low or "gradient(" in low)]
+    if k == "background-image":
+        return [("img", low.strip() not in ("none", "initial", "unset"))]
+    return [("bg", v)]
+
+
+def _css_pairs(sheets: list[str]) -> dict[str, dict[str, tuple]]:
+    """Por tema, os seletores com color e fundo opacos resolvidos: {tema: {seletor: (color, fundo, color cru, fundo cru)}}.
+    Cascata do navegador para color, cor de fundo e imagem de fundo: !important, depois especificidade, depois ordem.
+    O seletor com estado (:hover etc.) recebe também as declarações do seletor base."""
+    rules = [r for css in sheets for r in _css_rules(css)]
+    base: dict[str, str] = {}
+    by_theme: dict[str, dict[str, str]] = {"claro": {}, "escuro": {}}
+    for sels, decls, only in rules:
+        vs = {k: v for k, v, _ in decls if k.startswith("--")}
+        for s in sels if vs else ():
+            theme, _, root = _theme_prefix(s)
+            if theme is None and s in _CSS_ROOTS:
+                (base if only is None else by_theme[only]).update(vs)
+            elif root and only in (None, theme):
+                by_theme[theme].update(vs)
+    tokens = {t: {**base, **by_theme[t]} for t in THEMES}
+    # {(tema, elemento): {propriedade: (importante, especificidade, ordem, valor)}}, já com o vencedor de cada uma.
+    won: dict[tuple[str, str], dict[str, tuple]] = {}
+    order = 0
+    for sels, decls, only in rules:
+        props = []
+        for k, v, imp in decls:
+            if k == "color":
+                props.append(("color", v, imp))
+            elif k in ("background", "background-color", "background-image"):
+                props += [(p, x, imp) for p, x in _bg_longhands(k, v)]
+        for s in sels if props else ():
+            theme, elem, _ = _theme_prefix(s)
+            spec = _specificity(s)
+            themes = THEMES if only is None else (only,)
+            for t in themes if theme is None else tuple(x for x in themes if x == theme):
+                slot = won.setdefault((t, elem), {})
+                for p, x, imp in props:
+                    order += 1
+                    cand = (imp, spec, order, x)
+                    if p not in slot or cand[:3] > slot[p][:3]:
+                        slot[p] = cand
+    out: dict[str, dict[str, tuple]] = {t: {} for t in THEMES}
+    for (t, s), d in won.items():
+        base_sel = _CSS_STATE.sub("", s)
+        full = dict(won.get((t, base_sel), {})) if base_sel != s else {}
+        for p, cand in d.items():
+            if p not in full or cand[:3] > full[p][:3]:
+                full[p] = cand
+        if "color" not in full or "bg" not in full or (full.get("img") and full["img"][3]):
+            continue
+        c_raw, b_raw = full["color"][3], full["bg"][3]
+        fg, bg = css_color(c_raw, tokens[t]), _css_background(b_raw, tokens[t])
+        if fg is not None and bg is not None:
+            out[t][s] = (fg, bg, c_raw, b_raw)
+    return out
+
+
+def css_cascade(sheets: list[str]) -> dict[str, dict[str, tuple[tuple[int, int, int], tuple[int, int, int]]]]:
+    """Por tema, os seletores com color e fundo opacos resolvidos: {tema: {seletor: (color, fundo)}}."""
+    return {t: {s: p[:2] for s, p in ps.items()} for t, ps in _css_pairs(sheets).items()}
+
+
+def contrast_problems(sheets: list[str], minimum: float = CONTRAST_MIN) -> list[tuple[str, str, float, str, str]]:
+    """(seletor, tema, razão, color, fundo) de cada par abaixo do mínimo, em ordem estável."""
+    pairs = _css_pairs(sheets)
+    out = []
+    for t, s in sorted((t, s) for t in THEMES for s in pairs[t]):
+        fg, bg, fg_raw, bg_raw = pairs[t][s]
+        r = contrast_ratio(fg, bg)
+        if r < minimum:
+            out.append((s, t, r, fg_raw, bg_raw))
+    return out
+
+
+class _Sheets(HTMLParser):
+    """<link rel="stylesheet"> (sem alternate) e <style>, em ordem, fora os só de impressão. O conteúdo de <script> é
+    texto para o parser, então um "<style>" dentro de uma string de JS não conta."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.items: list[tuple[str, str]] = []  # ("link", href) ou ("style", css)
+        self._style: list[str] | None = None
+
+    def handle_starttag(self, tag, attrs):
+        a: dict[str, str] = {}
+        for k, v in attrs:
+            a.setdefault(k, v or "")
+        if _print_only(a.get("media", "") or "all"):
+            return
+        if tag == "link":
+            rel = a.get("rel", "").lower().split()
+            if "stylesheet" in rel and "alternate" not in rel and a.get("href"):
+                self.items.append(("link", a["href"]))
+        elif tag == "style":
+            self._style = []
+
+    def handle_data(self, data):
+        if self._style is not None:
+            self._style.append(data)
+
+    def handle_endtag(self, tag):
+        if tag == "style" and self._style is not None:
+            self.items.append(("style", "".join(self._style)))
+            self._style = None
+
+
+def _page_sheets(site: Path, f: Path, html: str) -> tuple[list[str], bool]:
+    """As folhas da página, na ordem do documento (<link rel=stylesheet> internos, lidos do _site, e <style>), e se
+    uma delas é o SITE_CSS."""
+    p = _Sheets()
+    p.feed(html)
+    p.close()
+    sheets, uses_site_css = [], False
+    for kind, value in p.items:
+        if kind == "style":
+            sheets.append(value)
+            continue
+        path = urlsplit(value)
+        if path.scheme or path.netloc:
+            continue
+        target = (site / path.path.lstrip("/")) if path.path.startswith("/") else (f.parent / path.path)
+        if target.is_file():
+            sheets.append(target.read_text(encoding="utf-8"))
+            uses_site_css |= target.resolve() == (site / SITE_CSS.lstrip("/")).resolve()
+    return sheets, uses_site_css
+
+
+def check_contrast(site: Path) -> list[str]:
+    """Contraste de color sobre fundo nas páginas do _site que usam o SITE_CSS, uma mensagem por conjunto de folhas."""
+    groups: dict[tuple[str, ...], list[str]] = {}
+    for f in html_files(site):
+        sheets, uses_site_css = _page_sheets(site, f, f.read_text(encoding="utf-8"))
+        if uses_site_css:
+            sheets = tuple(sheets)
+            groups.setdefault(sheets, []).append(f.relative_to(site).as_posix())
+    problems = []
+    for sheets, pages in groups.items():
+        extra = len(pages) - 1
+        tail = f" (e mais {extra} página{'s' if extra > 1 else ''} com as mesmas folhas)" if extra else ""
+        for sel, theme, r, fg, bg in contrast_problems(list(sheets)):
+            problems.append(f"{pages[0]}: contraste {r:.2f}:1 abaixo de {CONTRAST_MIN}:1 no tema {theme} em "
+                            f"'{sel}' (color {fg}, fundo {bg}){tail}")
+    return problems
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Verifica o site montado em _site/ antes do deploy.")
     ap.add_argument("--site", default="_site")
@@ -1313,6 +1697,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         problems = check(Path(args.site), Path(args.posts), pre_cutover=pre)
         problems += check_related(Path(args.site), Path(args.posts))
+        problems += check_contrast(Path(args.site))
     except ResolverError as e:
         print(f"ERRO: resolvedor de URL indisponível, verificação não feita: {e}", file=sys.stderr)
         return 1
