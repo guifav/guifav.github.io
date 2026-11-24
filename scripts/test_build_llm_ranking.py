@@ -569,6 +569,12 @@ class SorterTest(unittest.TestCase):
         self.assertEqual(out[6], {"ordem": [4, 3, 2, 1], "aria": [D, None, None]})
         self.assertEqual(out[7], {"botoes": ["Posição|button", "Modelo|button", "Votos|button"]})
 
+    def test_tie_is_broken_by_source_position_not_by_current_order(self):
+        # Modelo de Z a A deixa gama (3) antes de Alfa (2); empatados em votos, voltam à ordem da fonte (2, 3).
+        out = self.run_clicks([1, 1, 2])
+        self.assertEqual(out[2]["ordem"], [3, 1, 2, 4])
+        self.assertEqual(out[3], {"ordem": [2, 3, 1, 4], "aria": [None, None, "descending"]})
+
 
 class TemplateTest(unittest.TestCase):
     """O template: navegação do site sem o botão PT/EN, sem os arquivos da versão antiga, com o ordenar.js."""
