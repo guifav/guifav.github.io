@@ -1314,6 +1314,8 @@ def _gh_escape(msg: str) -> str:
 # Alarme de integridade sobre o CSS do próprio site: só entram as páginas que carregam SITE_CSS (os mockups do
 # portfólio e o /llm-ranking/ têm paleta própria e ficam de fora). Não avalia cor herdada de outro elemento, fundo
 # translúcido, imagem ou gradiente, style="" inline, nem cores fora de hex, rgb(), hsl() e dos nomes de _CSS_NAMED.
+# Especificidade: só a do prefixo de tema ([data-theme=dark|light] X vence X); fora isso vale a ordem do texto, e
+# !important não muda a ordem.
 CONTRAST_MIN = 4.5
 SITE_CSS = "/assets/site.css"
 THEMES = ("claro", "escuro")
@@ -1322,14 +1324,16 @@ _CSS_NAMED = {"white": (255, 255, 255), "black": (0, 0, 0), "red": (255, 0, 0), 
               "blue": (0, 0, 255), "yellow": (255, 255, 0), "orange": (255, 165, 0), "gray": (128, 128, 128),
               "grey": (128, 128, 128), "silver": (192, 192, 192), "navy": (0, 0, 128), "purple": (128, 0, 128)}
 _CSS_STATE = re.compile(r":(?:hover|focus-visible|focus-within|focus|active|visited)(?![\w-])")
-_CSS_DARK = re.compile(r"""(?:html|body|:root)?\[data-theme=(?:"dark"|'dark'|dark)\]""")
+_CSS_THEME = re.compile(r"""(?:html|body|:root)?\[data-theme=(?:"(dark|light)"|'(dark|light)'|(dark|light))\]""")
+_THEME_OF = {"dark": "escuro", "light": "claro"}
 _CSS_ROOTS = (":root", "html", "body")
 _CSS_GROUPS = ("@media", "@supports", "@layer")
 
 
 def _print_only(media: str) -> bool:
-    m = media.lower()
-    return bool(re.search(r"\bprint\b", m)) and not re.search(r"\b(?:screen|all)\b", m)
+    """A lista de consultas só vale na impressão: toda consulta é print (com ou sem only) e nenhuma é negada."""
+    qs = [q.strip().lower() for q in media.split(",") if q.strip()]
+    return bool(qs) and all(re.match(r"(?:only\s+)?print\b", q) for q in qs)
 
 
 def _css_selector(s: str) -> str:
@@ -1337,6 +1341,25 @@ def _css_selector(s: str) -> str:
     s = re.sub(r"\s+", " ", s.strip())
     s = re.sub(r"\s*([>+~])\s*", r"\1", s)
     return re.sub(r"""\[([\w-]+)([~|^$*]?=)(["'])([\w-]+)\3\]""", r"[\1\2\4]", s)
+
+
+def _statement_end(css: str, i: int, stop: int) -> int | None:
+    """Posição do ";" que encerra uma at-rule de uma linha antes de stop, fora de aspas e parênteses."""
+    depth, quote = 0, ""
+    for j in range(i, stop):
+        ch = css[j]
+        if quote:
+            if ch == quote:
+                quote = ""
+        elif ch in "\"'":
+            quote = ch
+        elif ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        elif ch == ";" and depth == 0:
+            return j
+    return None
 
 
 def _css_rules(css: str, theme: str | None = None) -> list[tuple[list[str], list[tuple[str, str]], str | None]]:
@@ -1347,12 +1370,13 @@ def _css_rules(css: str, theme: str | None = None) -> list[tuple[list[str], list
     i, n = 0, len(css)
     while i < n:
         b = css.find("{", i)
-        semi = css.find(";", i)
         if b < 0:
             break
-        if 0 <= semi < b and css[i:semi].strip().startswith("@"):
-            i = semi + 1
-            continue
+        if css[i:b].lstrip().startswith("@"):
+            semi = _statement_end(css, i, b)
+            if semi is not None:
+                i = semi + 1
+                continue
         head, depth, j = css[i:b].strip(), 0, b
         while j < n:
             depth += {"{": 1, "}": -1}.get(css[j], 0)
@@ -1373,7 +1397,7 @@ def _css_rules(css: str, theme: str | None = None) -> list[tuple[list[str], list
                 if ":" in d:
                     k, v = d.split(":", 1)
                     k = k.strip()
-                    decls.append((k if k.startswith("--") else k.lower(), v.replace("!important", "").strip()))
+                    decls.append((k if k.startswith("--") else k.lower(), re.sub(r"!\s*important", "", v, flags=re.I).strip()))
             out.append(([_css_selector(s) for s in head.split(",") if s.strip()], decls, theme))
         i = j + 1
     return out
@@ -1415,12 +1439,13 @@ def css_color(value: str | None, tokens: dict[str, str], _depth: int = 0) -> tup
                 return None
             h = h[:6]
         return (int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
-    m = re.fullmatch(r"rgba?\(\s*(\d+)\s*,?\s*(\d+)\s*,?\s*(\d+)\s*(?:[,/]\s*([\d.]+)(%?))?\s*\)", v)
+    m = re.fullmatch(r"rgba?\(\s*(\d+)\s*,?\s*(\d+)\s*,?\s*(\d+)\s*(?:[,/]\s*(\d+(?:\.\d+)?|\.\d+)(%?))?\s*\)", v, re.I)
     if m:
         if m.group(4) is not None and float(m.group(4)) != (100.0 if m.group(5) else 1.0):
             return None
         return (int(m.group(1)), int(m.group(2)), int(m.group(3)))
-    m = re.fullmatch(r"hsla?\(\s*([\d.]+)(?:deg)?\s*,?\s*([\d.]+)%\s*,?\s*([\d.]+)%\s*(?:[,/]\s*([\d.]+)(%?))?\s*\)", v)
+    num = r"(\d+(?:\.\d+)?|\.\d+)"
+    m = re.fullmatch(rf"hsla?\(\s*{num}(?:deg)?\s*,?\s*{num}%\s*,?\s*{num}%\s*(?:[,/]\s*{num}(%?))?\s*\)", v, re.I)
     if m:
         if m.group(4) is not None and float(m.group(4)) != (100.0 if m.group(5) else 1.0):
             return None
@@ -1431,7 +1456,7 @@ def css_color(value: str | None, tokens: dict[str, str], _depth: int = 0) -> tup
 
 def _css_background(raw: str, tokens: dict[str, str]) -> tuple[int, int, int] | None:
     """Cor do fundo de um valor de background/background-color (atalho com um só componente de cor)."""
-    if "url(" in raw or "gradient(" in raw:
+    if "url(" in raw.lower() or "gradient(" in raw.lower():
         return None
     whole = css_color(raw, tokens)
     if whole is not None:
@@ -1450,42 +1475,70 @@ def contrast_ratio(a: tuple[int, int, int], b: tuple[int, int, int]) -> float:
     return (hi + 0.05) / (lo + 0.05)
 
 
+def _theme_prefix(s: str) -> tuple[str | None, str]:
+    """(tema do prefixo [data-theme=...], resto do seletor). Sem prefixo, ou com o atributo no próprio elemento
+    ([data-theme=dark].x), o tema é None e o seletor volta igual."""
+    m = _CSS_THEME.match(s)
+    if not m:
+        return None, s
+    rest = s[m.end():]
+    if rest and rest[0] not in " >+~":
+        return None, s
+    return _THEME_OF[m.group(1) or m.group(2) or m.group(3)], rest.lstrip(" >+~")
+
+
+def _bg_update(picked: dict, k: str, v: str) -> None:
+    """background, background-color e background-image na ordem: o último define a cor; imagem ou gradiente marca o
+    fundo como não avaliável até um background sem imagem ou um background-image: none."""
+    low = v.lower()
+    has_img = "url(" in low or "gradient(" in low
+    if k == "background":
+        picked["img"] = has_img
+        picked["bg"] = v
+    elif k == "background-image":
+        picked["img"] = low.strip() not in ("none", "initial", "unset")
+    else:
+        picked["bg"] = v
+
+
 def _css_pairs(sheets: list[str]) -> dict[str, dict[str, tuple]]:
-    """Por tema, os seletores com color e fundo opacos resolvidos: {tema: {seletor: (color, fundo, color cru, fundo cru)}}."""
+    """Por tema, os seletores com color e fundo opacos resolvidos: {tema: {seletor: (color, fundo, color cru, fundo cru)}}.
+    Regras com prefixo de tema ([data-theme=dark] X) são mais específicas que X: entram por cima das sem prefixo."""
     rules = [r for css in sheets for r in _css_rules(css)]
-    light: dict[str, str] = {}
-    dark: dict[str, str] = {}
+    base: dict[str, str] = {}
+    by_theme: dict[str, dict[str, str]] = {"claro": {}, "escuro": {}}
     for sels, decls, only in rules:
         vs = {k: v for k, v in decls if k.startswith("--")}
         for s in sels if vs else ():
-            if s in _CSS_ROOTS and only != "escuro":
-                light.update(vs)
-            if (s in _CSS_ROOTS and only == "escuro") or _CSS_DARK.fullmatch(s):
-                dark.update(vs)
-    tokens = {"claro": light, "escuro": {**light, **dark}}
-    eff: dict[tuple[str, str], dict[str, str]] = {}
+            theme, rest = _theme_prefix(s)
+            if theme is None and s in _CSS_ROOTS:
+                (base if only is None else by_theme[only]).update(vs)
+            elif theme is not None and not rest and only in (None, theme):
+                by_theme[theme].update(vs)
+    tokens = {t: {**base, **by_theme[t]} for t in THEMES}
+    layers: list[dict[tuple[str, str], dict]] = [{}, {}]  # 0: sem prefixo de tema; 1: com prefixo
     for sels, decls, only in rules:
-        picked = {}
+        picked: dict = {}
         for k, v in decls:
             if k == "color":
                 picked["color"] = v
-            elif k in ("background", "background-color"):
-                picked["bg"] = v
+            elif k in ("background", "background-color", "background-image"):
+                _bg_update(picked, k, v)
         for s in sels if picked else ():
+            theme, rest = _theme_prefix(s)
+            if theme is not None and not rest:
+                continue  # o próprio elemento do tema (body): só tokens
             themes = THEMES if only is None else (only,)
-            m = _CSS_DARK.match(s)
-            if m:
-                rest = s[m.end():].lstrip(" >+~")
-                if not rest:
-                    continue  # o próprio elemento do tema (body): só tokens
-                s, themes = rest, tuple(t for t in themes if t == "escuro")
+            if theme is not None:
+                themes = tuple(t for t in themes if t == theme)
             for t in themes:
-                eff.setdefault((t, s), {}).update(picked)
+                layers[theme is not None].setdefault((t, rest), {}).update(picked)
+    eff = {k: {**layers[0].get(k, {}), **layers[1].get(k, {})} for k in {*layers[0], *layers[1]}}
     out: dict[str, dict[str, tuple]] = {t: {} for t in THEMES}
     for (t, s), d in eff.items():
-        base = _CSS_STATE.sub("", s)
-        full = {**eff.get((t, base), {}), **d} if base != s else d
-        if "color" not in full or "bg" not in full:
+        base_sel = _CSS_STATE.sub("", s)
+        full = {**eff.get((t, base_sel), {}), **d} if base_sel != s else d
+        if "color" not in full or "bg" not in full or full.get("img"):
             continue
         fg, bg = css_color(full["color"], tokens[t]), _css_background(full["bg"], tokens[t])
         if fg is not None and bg is not None:

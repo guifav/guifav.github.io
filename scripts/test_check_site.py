@@ -2058,7 +2058,7 @@ class ContrastReviewR1Test(unittest.TestCase):
         # agy P1 / Claude P3: background e background-color são o mesmo fundo; vale o último da cascata.
         self.assertTrue(C.contrast_problems(["a{background-color:#fff;color:#000}a{background:#000}"]))
         self.assertEqual(C.contrast_problems(["a{background-color:#fff;color:#000}a:hover{background:#000;color:#fff}"]), [])
-        self.assertTrue(C.contrast_problems(["a{background:#000;color:#000;background-color:#000}"]))
+        self.assertTrue(C.contrast_problems(["a{background:#fff;color:#000;background-color:#000}"]))  # r2 (agy P2)
         self.assertEqual(C.contrast_problems(["a{background-color:#000;background:#fff;color:#000}"]), [])
         # Fundo que não se resolve depois de um que se resolve: não é avaliado.
         self.assertEqual(C.contrast_problems(["a{background:#000;color:#000}a{background:url(x.png)}"]), [])
@@ -2098,6 +2098,68 @@ class ContrastReviewR1Test(unittest.TestCase):
         self.assertIsNone(C.css_color("hsl(0 0% 100% / .5)", toks))
         self.assertEqual(C.css_color("Red", toks), (255, 0, 0))
         self.assertIsNone(C.css_color("transparent", toks))
+
+
+class ContrastReviewR2Test(unittest.TestCase):
+    """Achados da rodada 2 do #131 (Claude P2, agy P2/P3)."""
+
+    def test_dark_rule_wins_over_a_later_unprefixed_rule(self):
+        # Claude P2: [data-theme=dark] .x é mais específico que .x; no navegador vence mesmo vindo antes.
+        css = (":root{--bg:#fff}[data-theme=dark]{--bg:#000}.x{background:var(--bg)}"
+               "[data-theme=dark] .x{color:#fff}")
+        self.assertEqual(C.contrast_problems([css, ".x{color:#000}"]), [])
+        self.assertEqual(C.css_cascade([css, ".x{color:#000}"])["escuro"][".x"], ((255, 255, 255), (0, 0, 0)))
+
+    def test_light_prefixed_rules_and_tokens_only_in_light(self):
+        # agy P2: o site.js grava data-theme="light" no body.
+        css = ':root{--f:#fff}[data-theme=light]{--f:#000}body[data-theme="light"] .x{color:var(--f);background:#fff}'
+        self.assertEqual(C.contrast_problems([css]), [])
+        self.assertNotIn(".x", C.css_cascade([css])["escuro"])
+
+    def test_prefers_light_tokens_do_not_leak_into_dark(self):
+        # agy P2: folha dark-first com ajuste para o claro.
+        css = (":root{--f:#fff;--b:#000}@media (prefers-color-scheme: light){:root{--f:#000;--b:#fff}}"
+               ".x{color:var(--f);background:var(--b)}")
+        self.assertEqual(C.contrast_problems([css]), [])
+        self.assertEqual(C.css_cascade([css])["escuro"][".x"], ((255, 255, 255), (0, 0, 0)))
+
+    def test_background_image_is_not_judged(self):
+        # agy P2: fundo com imagem, mesmo com cor de reserva, fica fora do contrato.
+        for css in (".x{background:url(a.png);background-color:#fff;color:#fff}",
+                    ".x{background-color:#fff;background-image:linear-gradient(red,blue);color:#fff}",
+                    ".x{background:URL(a.png) #fff;color:#fff}",
+                    ".x{background-image:url(a.png);background-color:#fff;color:#fff}"):
+            with self.subTest(css=css):
+                self.assertEqual(C.contrast_problems([css]), [])
+        self.assertTrue(C.contrast_problems([".x{background:url(a.png)}.x{background:#fff;color:#fff}"]))
+        self.assertTrue(C.contrast_problems([".x{background-image:url(a.png)}.x{background-image:none;background-color:#fff;color:#fff}"]))
+
+    def test_compound_theme_selector_is_not_a_descendant(self):
+        # Claude P4: [data-theme=dark].x é o próprio elemento com o tema, não um descendente .x.
+        css = ".x{background:#fff;color:#000}[data-theme=dark].x{color:#fff}"
+        self.assertEqual(C.contrast_problems([css]), [])
+
+    def test_import_with_semicolon_inside_the_url(self):
+        # agy P3: o CSS2 do Google Fonts tem ";" na URL.
+        css = ('@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;700");'
+               ":root{--f:#000;--b:#000}.x{color:var(--f);background:var(--b)}")
+        self.assertTrue(C.contrast_problems([css]))
+
+    def test_print_only_media_queries(self):
+        # agy P3: "not print" e listas com outra consulta valem na tela.
+        self.assertTrue(C._print_only("print"))
+        self.assertTrue(C._print_only("only print"))
+        for media in ("not print", "print, (max-width: 600px)", "screen", "all", "print and (min-width:1px), screen"):
+            with self.subTest(media=media):
+                self.assertFalse(C._print_only(media))
+
+    def test_bad_numbers_and_uppercase_functions(self):
+        # agy P3: "." ou "1.2.3" não derrubam o verificador; RGB() e HSL() valem.
+        self.assertIsNone(C.css_color("rgba(0,0,0,.)", {}))
+        self.assertIsNone(C.css_color("rgb(0,0,0 / 1.2.3)", {}))
+        self.assertEqual(C.css_color("RGB(255, 0, 0)", {}), (255, 0, 0))
+        self.assertEqual(C.css_color("HSL(0, 0%, 0%)", {}), (0, 0, 0))
+        self.assertTrue(C.contrast_problems([".x{color:#fff !IMPORTANT;background:#fff}"]))
 
 
 class ContrastSiteTest(Base):
