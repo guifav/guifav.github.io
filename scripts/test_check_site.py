@@ -2042,6 +2042,12 @@ class ContrastSiteTest(Base):
                                        '<link rel="stylesheet" href="/assets/site.css"><link href="x.css" rel="stylesheet">'))
         self.assertTrue(any(p.startswith("blog/index.html:") for p in C.check_contrast(self.site)))
 
+    def test_external_url_with_the_same_path_is_not_the_site_css(self):
+        # Um CSS de outro host com o mesmo caminho não é o do site: a página não entra na regra.
+        self.w("blog/um-post/index.html", page('<link rel="stylesheet" href="https://cdn.example/assets/site.css">'
+                                               '<style>.subscribe-row button{color:var(--hl-text)}</style>'))
+        self.assertEqual(C.check_contrast(self.site), [])
+
     def test_same_sheets_reported_once_with_page_count(self):
         bad = page('<link rel="stylesheet" href="/assets/site.css"><style>.subscribe-row button{color:var(--hl-text)}</style>')
         self.w("blog/index.html", bad)
