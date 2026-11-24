@@ -29,7 +29,7 @@
   var CONTACT = 'contact@guifav.dev';
   var SCHEDULE_HOST = 'calendar.app.google';
   var HOST_LABELS = { 'github.com': 'github', 'linkedin.com': 'linkedin', 'huggingface.co': 'huggingface', 'youtube.com': 'youtube' };
-  var PATH_LABELS = { '/': 'inicio', '/blog/assinar/': 'expert-insights', '/blog/privacidade/': 'cookies' };
+  var PATH_LABELS = { '/': 'inicio', '/blog/assinar/': 'expert-insights', '/privacidade/': 'privacidade', '/privacidade/#cookies': 'cookies', '/termos/': 'termos' };
   var SIGNUP_KEY = 'ga_sign_up_sent';
   var LEAD_KEY = 'ga_generate_lead_sent:';
   var CONSENT_TTL = 31536e6;
@@ -107,7 +107,7 @@
   function footerLabel(u) {
     if (!u) return 'outro';
     if (u.protocol === 'mailto:') return ctaEvent(u) === 'contact_click' ? 'contato' : 'email';
-    if (u.origin === new URL(d.baseURI).origin) return PATH_LABELS[u.pathname] || u.pathname;
+    if (u.origin === new URL(d.baseURI).origin) return own(PATH_LABELS, u.pathname + u.hash) || own(PATH_LABELS, u.pathname) || u.pathname;
     var host = u.hostname.replace(/^www\./, '');
     return HOST_LABELS[host] || host;
   }

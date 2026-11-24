@@ -178,7 +178,7 @@ class EnvelopeTest(unittest.TestCase):
         html, text = conv("<p>Corpo.</p>")
         for s in ("Um post", "Subtítulo do post", "https://guifav.dev/blog/img/um-post/capa.jpg",
                   "Ler no site", 'href="https://guifav.dev/blog/um-post/"', "{{{RESEND_UNSUBSCRIBE_URL}}}",
-                  'href="https://guifav.dev/blog/privacidade/"', "Você recebe este email porque assinou"):
+                  'href="https://guifav.dev/privacidade/"', "Você recebe este email porque assinou"):
             self.assertIn(s, html)
         for s in ("Um post", "Corpo.", "https://guifav.dev/blog/um-post/", "{{{RESEND_UNSUBSCRIBE_URL}}}"):
             self.assertIn(s, text)
@@ -493,7 +493,7 @@ class TextFidelityTest(unittest.TestCase):
 
     def test_text_has_subtitle_reason_and_privacy(self):
         _, text = conv("<p>Corpo.</p>")
-        for s in ("Subtítulo do post", "Você recebe este email porque assinou", "Privacidade: https://guifav.dev/blog/privacidade/"):
+        for s in ("Subtítulo do post", "Você recebe este email porque assinou", "Privacidade: https://guifav.dev/privacidade/"):
             self.assertIn(s, text)
 
 
