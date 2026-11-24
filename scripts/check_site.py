@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import colorsys
 import json
+import math
 import os
 import re
 import shutil
@@ -541,7 +542,7 @@ SITE_NAME = "Guilherme Favaron"
 TITLE_SEP = " | "
 TITLE_EXEMPT_PREFIXES = ("portfolio/mockups/",)
 # Grupos de conteúdo do GA4 (content_group), um por tipo de página; espelha CONTENT_GROUPS do consts.ts do blog.
-CONTENT_GROUPS = ("home", "portfolio", "insights-lista", "insights-artigo", "expert-insights", "materiais")
+CONTENT_GROUPS = ("home", "portfolio", "insights-lista", "insights-artigo", "expert-insights", "materiais", "consultoria")
 # Páginas dos materiais do canal (issue #99): o formulário e a página de enviado de cada material do catálogo do Worker.
 MATERIALS = ("planilha-custos-ia", "mapa-decisao-ia")
 MATERIAL_PAGES = {f"{m}/{p}index.html" for m in MATERIALS for p in ("", "enviado/")}
@@ -554,6 +555,8 @@ def expected_content_group(rel: str) -> str | None:
         return "home"
     if rel == "portfolio/index.html":
         return "portfolio"
+    if rel == "consultoria/index.html":
+        return "consultoria"
     if (rel == "blog/index.html" or re.fullmatch(r"blog/pagina/\d+/index\.html", rel)
             or re.fullmatch(r"blog/tema/[a-z0-9][a-z0-9-]*/index\.html", rel)):
         return "insights-lista"
@@ -737,7 +740,7 @@ def check_titles_and_groups(rel: str, html: str) -> list[str]:
 # Eventos próprios do GA4 (issue #60): assets/track.js. Contrato igual ao de check_titles_and_groups: alarme de
 # integridade sobre o HTML dos três templates (index.html, portfolio/index.html e Base.astro do blog).
 TRACK_PATH = "/assets/track.js"
-CTA_LOCATIONS = ("hero", "projetos", "consultoria", "chamada-final")
+CTA_LOCATIONS = ("hero", "projetos", "consultoria", "chamada-final", "consultoria-pagina", "como-contratar")  # as duas últimas: #136
 SIGNUP_PAGE = "blog/inscricao-confirmada/index.html"
 CONTACT_EMAIL = "contact@guifav.dev"
 SCHEDULE_HOST = "calendar.app.google"
@@ -1212,7 +1215,8 @@ class _ArticleImages(HTMLParser):
 def _ld_blocks(html: str) -> list[tuple[list, bool]]:
     """Cada raiz de JSON-LD fora de comentário, com o @context do schema.org: (nós, se veio de um @graph)."""
     html = re.sub(r"<!--.*?-->", "", html, flags=re.S)
-    scripts = re.findall(r"""<script\b[^>]*\btype\s*=\s*["']application/ld\+json["'][^>]*>(.*?)</script\s*>""",
+    html = re.sub(r"<(template|noscript)\b[^>]*>.*?</\1\s*>", "", html, flags=re.S | re.I)
+    scripts = re.findall(r"""<script\b[^>]*(?<![\w-])type\s*=\s*["']application/ld\+json["'][^>]*>(.*?)</script\s*>""",
                          html, flags=re.S | re.I)
     blocks: list[tuple[list, bool]] = []
     for body in scripts:
@@ -1229,6 +1233,11 @@ def _ld_blocks(html: str) -> list[tuple[list, bool]]:
             elif isinstance(root["@graph"], list):
                 blocks.append((root["@graph"], True))
     return blocks
+
+
+def _ld_nodes(html: str) -> list[dict]:
+    """Os nós dos JSON-LD da página: as raízes e os itens de @graph de _ld_blocks, só os objetos (#136)."""
+    return [n for nodes, _ in _ld_blocks(html) for n in nodes if isinstance(n, dict)]
 
 
 def _home_websites(html: str) -> list[dict]:
@@ -1382,6 +1391,60 @@ def check_seo(site: Path, posts: Path) -> tuple[list[str], list[str], list[str]]
         if no_alt:
             warns.append(f"{rel}: {no_alt} de {len(imgs.alts)} imagens sem texto alternativo")
     return problems, warn_new, warn_old
+
+
+# Página de consultoria (#136, consulta 18 do mapa da #112): a página existe, com o título e o H1 aprovados e o
+# JSON-LD Service do Gui (provider pelo @id da Person) com uma Offer. Alarme de integridade da página estática.
+CONSULTING_PAGE = "consultoria/index.html"
+CONSULTING_TITLE = "Consultoria em IA para empresas" + TITLE_SEP + SITE_NAME
+CONSULTING_H1 = "Consultoria em inteligência artificial para empresas"
+
+
+def check_consulting(site: Path) -> list[str]:
+    """#136: título, H1 único e JSON-LD Service (provider: a Person, com tipo, nome e url) com Offer de preço em BRL na
+    /consultoria/, sem FAQPage (#108)."""
+    rel = CONSULTING_PAGE
+    page = site / rel
+    if not page.is_file():
+        return [f"{rel}: a página de consultoria sumiu do site montado (site-manifest.txt)"]
+    html = page.read_text(encoding="utf-8")
+    visible = _visible_html(html)
+    problems = []
+    m = re.search(r"<title[^>]*>(.*?)</title\s*>", visible, flags=re.S | re.I)
+    title = unescape(m.group(1)).strip() if m else None
+    if title != CONSULTING_TITLE:
+        problems.append(f"{rel}: o título precisa ser {CONSULTING_TITLE!r}: {title!r}")
+    h1s = [re.sub(r"\s+", " ", unescape(re.sub(r"<[^>]+>", "", h))).strip()
+           for h in re.findall(r"<h1\b[^>]*>(.*?)</h1\s*>", visible, flags=re.S | re.I)]
+    if h1s != [CONSULTING_H1]:
+        problems.append(f"{rel}: a página precisa de um H1 {CONSULTING_H1!r}, tem {h1s}")
+
+    def offers(n: dict) -> list:
+        o = n.get("offers")
+        return o if isinstance(o, list) else [o]
+
+    def priced(o) -> bool:
+        # Preço numérico, finito e não negativo (0 vale: a primeira conversa é gratuita), em número ou texto; null,
+        # booleano, "abc", negativo, NaN e Infinity não.
+        price = o.get("price") if isinstance(o, dict) else None
+        numeric = (isinstance(price, (int, float)) and not isinstance(price, bool) and math.isfinite(price)
+                   and price >= 0) or (
+            isinstance(price, str) and re.fullmatch(r"\d+(?:\.\d+)?", price.strip()) is not None)
+        return isinstance(o, dict) and o.get("@type") == "Offer" and numeric and o.get("priceCurrency") == "BRL"
+
+    def person(pr) -> bool:
+        return (isinstance(pr, dict) and pr.get("@id") == PERSON_ID and pr.get("@type") == "Person"
+                and isinstance(pr.get("name"), str) and bool(pr["name"].strip())
+                and pr.get("url") in (SITE_ORIGIN, SITE_ORIGIN + "/"))
+
+    nodes = _ld_nodes(html)
+    if not any(n.get("@type") == "Service" and n.get("@id") != PERSON_ID and person(n.get("provider"))
+               and any(priced(o) for o in offers(n)) for n in nodes):
+        problems.append(f"{rel}: sem o JSON-LD Service com provider Person ({PERSON_ID!r}, name e url) e uma Offer "
+                        "com price e priceCurrency BRL")
+    if any(n.get("@type") == "FAQPage" for n in nodes):
+        problems.append(f"{rel}: FAQPage fora da decisão da #108 (perguntas só em texto visível)")
+    return problems
 
 
 def _gh_escape(msg: str) -> str:
@@ -1782,6 +1845,7 @@ def main(argv: list[str] | None = None) -> int:
         problems = check(Path(args.site), Path(args.posts), pre_cutover=pre)
         problems += check_related(Path(args.site), Path(args.posts))
         problems += check_contrast(Path(args.site))
+        problems += check_consulting(Path(args.site))
         problems += check_post_ld(Path(args.site), Path(args.posts))
     except ResolverError as e:
         print(f"ERRO: resolvedor de URL indisponível, verificação não feita: {e}", file=sys.stderr)

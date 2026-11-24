@@ -17,6 +17,7 @@ og-image.png
 og-image.svg
 assets/
 portfolio/
+consultoria/
 llm-ranking/
 seo-geo-aeo-framework/
 planilha-custos-ia/
