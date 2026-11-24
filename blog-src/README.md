@@ -44,7 +44,7 @@ Um markdown por post em `src/content/posts/<slug>.md`, direto na pasta e com o n
 | `spotify_url` | só em podcast | link https de episódio do Spotify (open.spotify.com ou Spotify for Creators); vira o player embutido |
 | `index` | não | padrão `true`; com `false`, a página sai com `noindex, follow` e fica fora do sitemap |
 | `newsletter` | não | padrão `false`; marca o post para o rascunho de envio (#21) |
-| `topics` | não | lista de temas da #104, sem repetição, dentre `ia-sobre-dados-da-empresa`, `custos-roi-e-escolha-de-modelo`, `agentes-de-ia-em-producao`, `implantacao-de-ia-legados-e-arquitetura` e `engenharia-de-software-com-ia` (`TOPIC_IDS` em `schema.ts`); o primeiro é o tema principal. Post fora do foco fica sem tema |
+| `topics` | não | lista de temas da #104, com pelo menos 1 tema quando presente (a lista vazia é recusada, tanto `topics: []` quanto `topics:` sem valor), sem repetição, dentre `ia-sobre-dados-da-empresa`, `custos-roi-e-escolha-de-modelo`, `agentes-de-ia-em-producao`, `implantacao-de-ia-legados-e-arquitetura` e `engenharia-de-software-com-ia` (`TOPIC_IDS` em `schema.ts`); o primeiro é o tema principal. Post fora do foco fica sem tema |
 | `summary` | não | resumo de 2 ou 3 frases para o topo do post (#108), até 500 caracteres; independente da `description`, que continua obrigatória |
 
 Imagens ficam em `public/img/<slug>/`, publicadas em `/blog/img/<slug>/`.

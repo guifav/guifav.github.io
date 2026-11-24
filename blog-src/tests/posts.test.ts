@@ -66,14 +66,18 @@ test('esquema: topics é opcional e só aceita os 5 temas da #104, sem repetiç�
   const sem = postSchema.safeParse(base);
   assert.ok(sem.success);
   assert.equal(sem.data.topics, undefined);
-  for (const topics of [['agentes-de-ia-em-producao'], ['ia-sobre-dados-da-empresa', 'custos-roi-e-escolha-de-modelo']]) {
+  // Cada um dos 5 temas sozinho e uma lista com dois (revisão do #124: um mutante que aceitava só os 3 primeiros
+  // sobrevivia ao teste antigo).
+  for (const topics of [...TOPIC_IDS.map((t) => [t]), ['ia-sobre-dados-da-empresa', 'custos-roi-e-escolha-de-modelo']]) {
     const r = postSchema.safeParse({ ...base, topics });
     assert.ok(r.success, JSON.stringify(topics));
     assert.deepEqual(r.data.topics, topics);
   }
-  for (const topics of [[], ['fundamentos'], ['Agentes-de-IA-em-producao'], 'agentes-de-ia-em-producao', ['agentes-de-ia-em-producao', 'agentes-de-ia-em-producao'], [null]]) {
+  for (const topics of [[], ['fundamentos'], ['Agentes-de-IA-em-producao'], 'agentes-de-ia-em-producao', ['agentes-de-ia-em-producao', 'agentes-de-ia-em-producao'], [null], null]) {
     assert.equal(postSchema.safeParse({ ...base, topics }).success, false, JSON.stringify(topics));
   }
+  // topics: null (o YAML de "topics:" sem valor) é recusado; um .nullish() no esquema sobrevivia (revisão do #124).
+  assert.equal(postSchema.safeParse({ ...base, topics: null }).success, false);
 });
 
 test('esquema: summary é opcional, curto e independente da description', () => {
