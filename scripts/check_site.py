@@ -1226,33 +1226,134 @@ class _ArticleImages(HTMLParser):
             self.depth -= 1
 
 
-def _ld_nodes(html: str) -> list[dict]:
-    """Os nós dos JSON-LD da página, fora de comentário, <template> e <noscript>: cada raiz com o @context do schema.org, ou os itens do
-    @graph dela, quando ele existe e é lista (r1 do #125, agy P3)."""
+def _ld_blocks(html: str) -> list[tuple[list, bool]]:
+    """Cada raiz de JSON-LD fora de comentário, com o @context do schema.org: (nós, se veio de um @graph)."""
     html = re.sub(r"<!--.*?-->", "", html, flags=re.S)
     html = re.sub(r"<(template|noscript)\b[^>]*>.*?</\1\s*>", "", html, flags=re.S | re.I)
     scripts = re.findall(r"""<script\b[^>]*(?<![\w-])type\s*=\s*["']application/ld\+json["'][^>]*>(.*?)</script\s*>""",
                          html, flags=re.S | re.I)
-    nodes: list = []
+    blocks: list[tuple[list, bool]] = []
     for body in scripts:
         try:
             data = json.loads(body)
         except ValueError:
             continue
+        # r1 (agy P3): cada raiz traz o @context do schema.org; o @graph, quando existe, é lista.
         for root in data if isinstance(data, list) else [data]:
             if not isinstance(root, dict) or root.get("@context") not in SCHEMA_CONTEXTS:
                 continue
             if "@graph" not in root:
-                nodes.append(root)
+                blocks.append(([root], False))
             elif isinstance(root["@graph"], list):
-                nodes += root["@graph"]
-    return [n for n in nodes if isinstance(n, dict)]
+                blocks.append((root["@graph"], True))
+    return blocks
+
+
+def _ld_nodes(html: str) -> list[dict]:
+    """Os nós dos JSON-LD da página: as raízes e os itens de @graph de _ld_blocks, só os objetos (#136)."""
+    return [n for nodes, _ in _ld_blocks(html) for n in nodes if isinstance(n, dict)]
+
+
+def _home_websites(html: str) -> list[dict]:
+    """Os WebSite da home com HOME_WEBSITE (nome e URL); o WebSite não usa o @id da Person."""
+    return [n for nodes, _ in _ld_blocks(html) for n in nodes
+            if isinstance(n, dict) and n.get("@type") == "WebSite" and n.get("@id") != PERSON_ID
+            and all(n.get(k) == v for k, v in HOME_WEBSITE.items())]
 
 
 def _home_has_website(html: str) -> bool:
-    """Algum JSON-LD da home traz um WebSite com HOME_WEBSITE, que não usa o @id da Person."""
-    return any(n.get("@type") == "WebSite" and n.get("@id") != PERSON_ID
-               and all(n.get(k) == v for k, v in HOME_WEBSITE.items()) for n in _ld_nodes(html))
+    """Algum JSON-LD da home (fora de comentário) traz um WebSite com HOME_WEBSITE."""
+    return bool(_home_websites(html))
+
+
+def _home_website_id(html: str) -> str | None:
+    """@id do WebSite da home, para o isPartOf dos posts (#105)."""
+    ids = [n["@id"] for n in _home_websites(html) if isinstance(n.get("@id"), str) and n["@id"]]
+    return ids[0] if ids else None
+
+
+# JSON-LD dos posts (#105): o @graph que o [slug].astro emite. A Person mínima (nome e URL) deixa o avaliador do
+# Google, que lê uma página por vez, resolver author.name e author.url sem seguir o @id até a home.
+POST_PERSON = {"@type": "Person", "@id": PERSON_ID, "name": SITE_NAME, "url": SITE_ORIGIN + "/"}
+POST_LD_RULE = "post indexável sem o JSON-LD do post (#105)"
+
+
+def post_ld_problems(html: str, url: str, website_id: str | None) -> list[str]:
+    """Motivos pelos quais a página do post não traz o @graph do #105; vazio quando traz.
+
+    Contrato: um único BlogPosting na página, dentro de um @graph com a BreadcrumbList (home, blog, post) e a Person
+    mínima; author e publisher são a Person; isPartOf é o WebSite da home (website_id, lido do index.html; None
+    quando a home não tem, caso acusado à parte). É alarme de integridade do template, não barreira contra HTML forjado.
+    """
+    postings = [(n, nodes, graph) for nodes, graph in _ld_blocks(html) for n in nodes
+                if isinstance(n, dict) and n.get("@type") == "BlogPosting"]
+    if not postings:
+        return ["nenhum BlogPosting"]
+    if len(postings) > 1:
+        return [f"{len(postings)} BlogPosting na página"]
+    post, nodes, graph = postings[0]
+    if not graph:
+        return ["o BlogPosting não está num @graph"]
+
+    def ref(v: object) -> object:
+        return v.get("@id") if isinstance(v, dict) else None
+
+    why: list[str] = []
+    if ref(post.get("author")) != PERSON_ID:
+        why.append(f"author não aponta para {PERSON_ID}")
+    if ref(post.get("publisher")) != PERSON_ID:
+        why.append(f"publisher não aponta para {PERSON_ID}")
+    if website_id is not None and ref(post.get("isPartOf")) != website_id:
+        why.append(f"isPartOf não aponta para o WebSite da home ({website_id})")
+    for k in ("url", "mainEntityOfPage"):
+        if post.get(k) != url:
+            why.append(f"{k} diferente de {url}")
+    headline = post.get("headline")
+    if not isinstance(headline, str) or not headline.strip():
+        why.append("headline vazio")
+    persons = [n for n in nodes if isinstance(n, dict) and n.get("@id") == PERSON_ID]
+    if len(persons) != 1:
+        why.append(f"{len(persons)} nós Person com @id {PERSON_ID} no @graph, em vez de 1")
+    elif any(persons[0].get(k) != v for k, v in POST_PERSON.items()):
+        why.append(f"a Person do @graph não tem @type, name e url {POST_PERSON}")
+    lists = [n for n in nodes if isinstance(n, dict) and n.get("@type") == "BreadcrumbList"]
+    want = [SITE_ORIGIN + "/", SITE_ORIGIN + BLOG_PREFIX, url]
+    if len(lists) != 1:
+        why.append(f"{len(lists)} BreadcrumbList no @graph, em vez de 1")
+    else:
+        items = lists[0].get("itemListElement")
+        ok = isinstance(items, list) and len(items) == len(want) and all(
+            isinstance(it, dict) and it.get("@type") == "ListItem" and type(it.get("position")) is int
+            and it["position"] == i + 1 and it.get("item") == want[i]
+            and isinstance(it.get("name"), str) and it["name"].strip() != ""
+            for i, it in enumerate(items))
+        if ok and items[-1]["name"] != headline:
+            ok = False
+        if not ok:
+            why.append(f"BreadcrumbList fora da trilha {' > '.join(want)}, com o headline no último nível")
+    return why
+
+
+def check_post_ld(site: Path, posts: Path) -> list[str]:
+    """#105: todo post indexável sai com o @graph de BlogPosting, BreadcrumbList e Person mínima."""
+    problems: list[str] = []
+    home = site / "index.html"
+    website_id = _home_website_id(home.read_text(encoding="utf-8")) if home.is_file() else None
+    if website_id is None:
+        problems.append("index.html: sem o WebSite com @id para o isPartOf dos posts (#105)")
+    for md in sorted(posts.glob("**/*.md")):
+        fm = frontmatter(md.read_text(encoding="utf-8"))
+        if fm.get("index") == "false":
+            continue
+        slug = fm.get("slug") or md.stem
+        rel = f"blog/{slug}/index.html"
+        page = site / rel
+        if not page.is_file():
+            continue  # check() já acusa post sem página
+        why = post_ld_problems(page.read_text(encoding="utf-8"), f"{SITE_ORIGIN}{BLOG_PREFIX}{slug}/", website_id)
+        if why:
+            problems.append(f"{rel}: {POST_LD_RULE}: {'; '.join(why)}")
+    return problems
 
 
 def check_seo(site: Path, posts: Path) -> tuple[list[str], list[str], list[str]]:
@@ -1759,6 +1860,7 @@ def main(argv: list[str] | None = None) -> int:
         problems += check_related(Path(args.site), Path(args.posts))
         problems += check_contrast(Path(args.site))
         problems += check_consulting(Path(args.site))
+        problems += check_post_ld(Path(args.site), Path(args.posts))
     except ResolverError as e:
         print(f"ERRO: resolvedor de URL indisponível, verificação não feita: {e}", file=sys.stderr)
         return 1
