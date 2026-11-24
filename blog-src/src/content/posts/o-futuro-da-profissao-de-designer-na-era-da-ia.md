@@ -5,6 +5,7 @@ date: 2023-10-25T13:16:04.000Z
 updated: 2024-01-04T18:32:57.982Z
 slug: o-futuro-da-profissao-de-designer-na-era-da-ia
 type: newsletter
+index: false
 ---
 
 Com o surgimento de ferramentas de IA voltadas para o design, como o Mid Journey e o DALL-E, muitos profissionais da área temeram o fim de suas carreiras. Eu mesmo, a princípio, achei que essas soluções tomariam o lugar dos designers. Porém, depois de analisar melhor, entendi que essas ferramentas vêm na verdade para acelerar e aprimorar nosso trabalho.

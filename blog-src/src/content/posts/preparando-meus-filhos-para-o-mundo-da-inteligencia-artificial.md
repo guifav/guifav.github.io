@@ -6,6 +6,7 @@ updated: 2024-01-04T18:33:09.508Z
 slug: preparando-meus-filhos-para-o-mundo-da-inteligencia-artificial
 cover: img/preparando-meus-filhos-para-o-mundo-da-inteligencia-artificial/capa.jpg
 type: newsletter
+index: false
 ---
 
 <em>Tenho 2 filhos, um de 9 e outro de 6 anos, Pedro e Julio. Ambos são muito curiosos e muito diferentes um do outro. Neste conjunto de mudanças que estamos vivendo a pergunta que me faço: **como preparar meus filhos para o mundo daqui a 10 anos?**</em>

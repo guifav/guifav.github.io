@@ -5,6 +5,7 @@ date: 2021-12-13T03:00:00.000Z
 updated: 2024-01-04T18:32:59.024Z
 slug: como-crescer-na-empresa-ouvindo-seus-colegas-de-trabalho
 type: newsletter
+index: false
 ---
 
 ## Me responda em 1 segundo: dentre as pessoas que você convive, quem você realmente admira e acha que é um profissional espetacular? Não pode pensar… fala de bate pronto.

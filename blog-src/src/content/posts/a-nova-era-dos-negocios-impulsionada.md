@@ -7,6 +7,7 @@ updated: 2024-01-04T00:33:32.195Z
 slug: a-nova-era-dos-negocios-impulsionada
 cover: img/a-nova-era-dos-negocios-impulsionada/capa.jpg
 type: newsletter
+index: false
 ---
 
 <figure>

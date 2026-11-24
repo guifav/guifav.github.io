@@ -7,6 +7,7 @@ updated: 2024-03-19T20:49:30.694Z
 slug: inteligencia-artificial-revolucionando
 cover: img/inteligencia-artificial-revolucionando/capa.jpg
 type: newsletter
+index: false
 ---
 
 <figure>

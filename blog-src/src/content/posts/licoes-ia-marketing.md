@@ -7,6 +7,7 @@ updated: 2024-03-26T10:40:58.298Z
 slug: licoes-ia-marketing
 cover: img/licoes-ia-marketing/capa.jpg
 type: newsletter
+index: false
 ---
 
 *No cenário altamente competitivo do marketing digital, a inteligência artificial (IA) surgiu como uma força transformadora, redefinindo a maneira como as empresas se envolvem com os clientes e impulsionam o crescimento dos negócios. O artigo científico "Aplicação da inteligência artificial no marketing digital" de fevereiro de 2024 explora as diversas maneiras pelas quais a IA está revolucionando as estratégias de marketing digital, desde a otimização de mecanismos de busca (SEO) e marketing de mecanismos de busca (SEM) até redes sociais e marketing de conteúdo*. [Clique aqui para acessar o artigo na íntegra](https://8897d737-0d12-4d46-9a18-89e2eb99a82e.usrfiles.com/ugd/8897d7_4112e3585d4c42cba10a59ea47512dcd.pdf).

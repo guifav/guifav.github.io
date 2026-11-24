@@ -6,6 +6,7 @@ updated: 2024-10-02T23:49:06.443Z
 slug: ferramentas-gratuitas-ia-fotos
 cover: img/ferramentas-gratuitas-ia-fotos/capa.jpg
 type: newsletter
+index: false
 ---
 
 A inteligência artificial (IA) está redefinindo os limites da criatividade em diversas áreas, e a criação de imagens não é exceção. Com o avanço vertiginoso da tecnologia, surgiram ferramentas impressionantes de IA que cria imagens, permitindo que qualquer pessoa, independentemente de suas habilidades artísticas tradicionais, possa criar imagens deslumbrantes com apenas alguns cliques.

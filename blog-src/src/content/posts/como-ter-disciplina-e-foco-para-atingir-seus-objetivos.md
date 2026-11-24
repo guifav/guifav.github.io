@@ -5,6 +5,7 @@ date: 2022-02-01T03:00:00.000Z
 updated: 2024-01-04T18:32:59.062Z
 slug: como-ter-disciplina-e-foco-para-atingir-seus-objetivos
 type: newsletter
+index: false
 ---
 
 ## Já li artigos, livros, já ouvi músicas, assisti filmes… todos dizendo a mesma coisa: disciplina e foco para atingir os objetivos. E tenho certeza que se eu te perguntasse… como faço para passar no vestibular? … como aprendo uma nova linguagem de programação? … como me torno especialista em um tema?... talvez sua resposta seja parecida.

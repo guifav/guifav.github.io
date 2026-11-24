@@ -6,6 +6,7 @@ updated: 2024-09-18T10:58:40.724Z
 slug: tecnicas-gestao-do-tempo
 cover: img/tecnicas-gestao-do-tempo/capa.jpg
 type: newsletter
+index: false
 ---
 
 *Descubra 10 técnicas comprovadas de gestão do tempo para aumentar sua produtividade no trabalho e na vida pessoal. Aprenda a otimizar seu dia e alcançar mais com menos estresse.*

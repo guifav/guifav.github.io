@@ -7,6 +7,7 @@ updated: 2025-11-24T20:04:34.427Z
 slug: da-revolucao-do-computador-a-era-da-ia-1982-2024
 cover: img/da-revolucao-do-computador-a-era-da-ia-1982-2024/capa.jpg
 type: newsletter
+index: false
 ---
 
 **Texto traduzido do artigo original publicado pela revista Time em 5 de outubro de 1983.**

@@ -5,6 +5,7 @@ date: 2022-11-22T03:00:00.000Z
 updated: 2024-01-04T18:32:58.286Z
 slug: 4-razoes-porque-a-abordagem-de-growth-e-vencedora
 type: newsletter
+index: false
 ---
 
 #### Entender o porque growth tem feito a diferença nas empresas que as adotam é fundamental para explorar todas suas potencialidades. Consolidei abaixo os 4 principais motivos porque a abordagem growth é vencedora!

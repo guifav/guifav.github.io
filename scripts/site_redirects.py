@@ -182,16 +182,18 @@ def problems(reds: list[Redirect] | None = None, posts_dir: Path = POSTS, repo: 
     olds = [o for o, _ in OLD_POSTS]
     if len(set(olds)) != len(olds):
         out.append("caminho antigo repetido em OLD_POSTS")
+    dups = [d for d, _ in DUPLICATES]
+    if len(set(dups)) != len(dups) or set(dups) & set(olds):
+        out.append("duplicata repetida ou também em OLD_POSTS")
+    dup_set = set(dups)
     for old, new in OLD_POSTS:
         if not _OLD.fullmatch(old) or old != old.lower():
             out.append(f"caminho antigo fora do formato: {old!r}")
         if old in every:
             out.append(f"{old}: já é um post; o cutover leva direto a ele")
-        if not _SLUG.fullmatch(new) or new not in live:
-            out.append(f"{old}: destino {new!r} não é post indexável")
-    dups = [d for d, _ in DUPLICATES]
-    if len(set(dups)) != len(dups) or set(dups) & set(olds):
-        out.append("duplicata repetida ou também em OLD_POSTS")
+        # Destino precisa existir como post publicado e não ser duplicata absorvida (pode ter index: false pela #107).
+        if not _SLUG.fullmatch(new) or new not in every or new in dup_set:
+            out.append(f"{old}: destino {new!r} não é post publicado")
     for dup, new in DUPLICATES:
         if dup not in every or dup in live:
             out.append(f"{dup}: a duplicata absorvida precisa ficar no repo com index: false")
