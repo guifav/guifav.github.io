@@ -74,6 +74,7 @@ da-rota-da-seda-a-rota-digital-como-0c1
 dados-o-combustivel-da-revolucao-f07
 data-governance-custo-dados-nao-confiaveis
 data-pipelines-empresariais-como
+data-pipelines-etl-business-intelligence-tempo-real
 datacenters-movidos-a-energia-nuclear-o-futuro-da-computacao-sustentavel-na-era-da-ia
 decifrando-o-codigo-da-ia-estrategias-para-mitigar-vieses-em-negocios-inteligentes
 deepseek-r1-inovacoes-tecnicas-ia-simplificado
