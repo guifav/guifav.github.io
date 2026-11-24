@@ -26,10 +26,10 @@ const base = import.meta.env.BASE_URL;
 ---
 <Base title={`Artigos sobre ${topic.about} | ${AUTHOR_NAME}`} contentGroup="insights-lista" description={topic.description}>
   <header class="blog-head topic-head">
-    <nav class="post-crumb" aria-label="Trilha">
+    <p class="post-crumb">
       <a href="/">{AUTHOR_NAME}</a> <span aria-hidden="true">/</span> <a href={base}>{BLOG_NAME}</a>{' '}
       <span aria-hidden="true">/</span> <span aria-current="page">{topic.name}</span>
-    </nav>
+    </p>
     <h1>{topic.name}</h1>
     <p class="subtitle">{topic.intro}</p>
     <p class="topic-cta"><CtaLine parts={topic.pageCta} location={CTA_LOCATION_TOP} /></p>
