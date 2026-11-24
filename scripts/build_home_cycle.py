@@ -19,6 +19,8 @@ STAGES = [
     ('apps', ('Aplicações', 'Applications'), [('dashboards', 'dashboards'), ('analista de dados com IA', 'AI data analyst'), ('chatbot e automações', 'chatbot and automations')]),
 ]
 TITLE = ('Ciclo de dados e de IA de uma empresa, que se retroalimenta', 'A company data and AI cycle that feeds back into itself')
+DESC = ('Fontes, integração, dados, acesso com permissão, IA e aplicações, em sequência. O uso das aplicações gera dados que voltam às fontes e aprimora as ferramentas, e a governança cobre todo o ciclo.',
+        'Sources, integration, data, permissioned access, AI and applications, in sequence. Using the applications creates data that flows back into the sources and improves the tools, and governance covers the whole cycle.')
 GOV = (('GOVERNANÇA', 'GOVERNANCE'), [('permissões e auditoria', 'permissions and audit'), ('avaliação e LGPD', 'evaluation and data privacy'), ('custo sob controle', 'cost under control')])
 GOV_M = [('permissões, auditoria e avaliação', 'permissions, audit and evaluation'), ('LGPD e custo sob controle', 'data privacy and cost under control')]
 FB_T = ('RETROALIMENTAÇÃO', 'FEEDBACK LOOP')
@@ -29,8 +31,14 @@ FB_M = [('o uso gera dados novos e aprimora', 'use creates new data and improves
         ('ajustam modelos, prompts e agentes', 'tune models, prompts and agents')]
 
 EN = {}
+def en(key, value):
+    """Registra a tradução; a mesma chave não pode ter dois textos em inglês."""
+    if EN.get(key, value) != value:
+        raise SystemExit(f'build_home_cycle: a chave {key} tem dois textos em inglês')
+    EN[key] = value
+
 def T(cls, x, y, key, pair, anchor='middle', extra=''):
-    EN[key] = pair[1]
+    en(key, pair[1])
     a = '' if anchor == 'start' else f' text-anchor="{anchor}"'
     return f'<text class="{cls}" x="{x:.1f}" y="{y:.1f}"{a}{extra} data-i18n="{key}">{pair[0]}</text>'
 
@@ -87,6 +95,7 @@ def icon(key, cx, cy):
         for k in range(3):
             o.append(f'<circle class="i-chat-d" style="animation-delay:{k * .2:.1f}s" cx="{cx + 7.5 + k * 4}" cy="{cy - 6}" r="1.2"/>')
         return ''.join(o)
+    raise ValueError(f'ícone desconhecido: {key!r}')
 
 def card(stage, cx, cy, delay, w, h, ty, ly, lstep):
     key, name, lines = stage
@@ -124,6 +133,7 @@ class Track:
                 a = a0 + (a1 - a0) * s / L
                 return (c[0] + r * math.cos(math.radians(a)), c[1] + r * math.sin(math.radians(a))), a + 90
             s -= sg[-1]
+        return self.at(0)  # sobra de arredondamento no fim da volta: é o ponto de partida
     def find(self, pt):
         best = (1e9, 0); n = 2000
         for k in range(n):
@@ -172,8 +182,8 @@ def desktop():
     t = rrect(x0, y0, x1, y1, r, (500, y1))
     my = (y0 + y1) / 2
     centers = [(330, y1), (x0, my), (330, y0), (670, y0), (x1, my), (670, y1)]
-    o = [f'<svg class="cy-d" viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="cy-t-d" focusable="false">',
-         f'<title id="cy-t-d" data-i18n="cy_title">{TITLE[0]}</title>']
+    o = [f'<svg class="cy-d" viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="cy-t-d" aria-describedby="cy-x-d" focusable="false">',
+         f'<title id="cy-t-d" data-i18n="cy_title">{TITLE[0]}</title><desc id="cy-x-d" data-i18n="cy_desc">{DESC[0]}</desc>']
     trk, pos = common(t, centers, 'cy-trk-d', (0.5,))
     o += trk[:3]
     gx0, gx1, gy0, gy1 = 330, 670, my - 112, my + 112
@@ -210,8 +220,8 @@ def mobile():
     t.line((cxm, yt))
     H = int(yb + 140)
     centers = [(cxm, c) for c in cys]
-    o = [f'<svg class="cy-m" viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="cy-t-m" focusable="false">',
-         f'<title id="cy-t-m" data-i18n="cy_title">{TITLE[0]}</title>']
+    o = [f'<svg class="cy-m" viewBox="0 0 {W} {H}" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="cy-t-m" aria-describedby="cy-x-m" focusable="false">',
+         f'<title id="cy-t-m" data-i18n="cy_title">{TITLE[0]}</title><desc id="cy-x-m" data-i18n="cy_desc">{DESC[0]}</desc>']
     o.append(f'<rect class="d-gov-o" x="6" y="8" width="{W - 12}" height="{H - 16}" rx="28"/>')
     o.append(lock(28, 37))
     o.append(T('d-gov-t', 44, 42, 'cy_gov_t', GOV[0], 'start'))
@@ -237,6 +247,7 @@ CSS = f'''    .dflow{{margin:12px 0 32px}}
     .dflow .d-c{{font-size:12.5px;fill:var(--text-secondary)}}
     .dflow .cy-m .d-t{{font-size:18px}}
     .dflow .cy-m .d-c{{font-size:15px}}
+    .dflow .cy-m .d-gov-t,.dflow .cy-m .d-fb-t{{font-size:15px}}
     .dflow .d-card{{fill:var(--bg);stroke:var(--border);stroke-width:1.2}}
     .dflow .d-glow{{fill:none;stroke:var(--hl);stroke-width:3;opacity:0;animation:d-glow {PERIOD / TOKENS:g}s ease-out infinite}}
     .dflow .d-ico-bg{{fill:var(--hl);fill-opacity:.1}}
@@ -246,7 +257,7 @@ CSS = f'''    .dflow{{margin:12px 0 32px}}
     .dflow .d-token{{fill:var(--hl);stroke:var(--bg-card);stroke-width:2.5}}
     .dflow .d-gov{{fill:var(--bg);stroke:var(--border);stroke-width:1.2}}
     .dflow .d-gov-o{{fill:none;stroke:var(--border);stroke-width:1;stroke-dasharray:1 7}}
-    .dflow .d-orbit{{fill:none;stroke:var(--hl);stroke-width:2.2;stroke-dasharray:2 16;stroke-linecap:round;opacity:.8;animation:d-run 6s linear infinite}}
+    .dflow .d-orbit{{fill:none;stroke:var(--hl);stroke-width:2.2;stroke-dasharray:2 19;stroke-linecap:round;opacity:.8;animation:d-run 6s linear infinite}}
     .dflow .d-gov-t{{font-size:13px;font-weight:800;letter-spacing:2.2px;fill:var(--text)}}
     .dflow .d-fb-t{{font-size:12.5px;font-weight:800;letter-spacing:2.2px;fill:var(--hl-text)}}
     .dflow .d-leader{{stroke:var(--hl);stroke-opacity:.6;stroke-width:1.2;stroke-dasharray:2 3}}
@@ -254,7 +265,7 @@ CSS = f'''    .dflow{{margin:12px 0 32px}}
     .dflow .i-db-r{{fill:var(--bg);stroke:var(--text-secondary);stroke-width:1.3;animation:i-fill 1.5s ease-in-out infinite}}
     .dflow .i-db-top{{fill:var(--bg);stroke:var(--text-secondary);stroke-width:1.3}}
     .dflow .i-pipe-b{{fill:none;stroke:var(--text-secondary);stroke-width:1.4;opacity:.55}}
-    .dflow .i-pipe-r{{fill:none;stroke:var(--hl);stroke-width:2;stroke-linecap:round;stroke-dasharray:3 9;animation:d-run 1.6s linear infinite}}
+    .dflow .i-pipe-r{{fill:none;stroke:var(--hl);stroke-width:2;stroke-linecap:round;stroke-dasharray:3 11;animation:d-run 1.6s linear infinite}}
     .dflow .i-pipe-end{{fill:var(--hl)}}
     .dflow .i-vc-f{{fill:var(--bg-card);fill-opacity:.6}}
     .dflow .i-vc-t{{fill:var(--hl);fill-opacity:.14}}
@@ -269,7 +280,7 @@ CSS = f'''    .dflow{{margin:12px 0 32px}}
     .dflow .i-lock-k{{fill:var(--hl);animation:d-live 3s ease-in-out infinite}}
     .dflow .i-net-e{{stroke:var(--text-secondary);stroke-width:1;opacity:.45}}
     .dflow .i-net-n{{fill:var(--hl);animation:d-live 1.4s ease-in-out infinite}}
-    .dflow .i-bar{{fill:var(--hl);transform-box:fill-box;transform-origin:50% 100%;animation:f-bar 3.4s ease-in-out infinite}}
+    .dflow .i-bar{{fill:var(--hl);transform-box:fill-box;transform-origin:50% 100%;animation:i-grow 3.4s ease-in-out infinite}}
     .dflow .i-chat{{fill:var(--bg);stroke:var(--text-secondary);stroke-width:1.3}}
     .dflow .i-chat-d{{fill:var(--text-secondary);animation:d-live 1.2s ease-in-out infinite}}
     @keyframes d-run{{to{{stroke-dashoffset:-42}}}}
@@ -277,13 +288,14 @@ CSS = f'''    .dflow{{margin:12px 0 32px}}
     @keyframes d-glow{{0%{{opacity:0}}6%{{opacity:.9}}30%,100%{{opacity:0}}}}
     @keyframes i-fill{{0%,100%{{fill:var(--bg)}}40%{{fill:var(--hl)}}}}
     @keyframes i-shackle{{0%,55%,100%{{transform:translateY(0)}}70%,85%{{transform:translateY(-3px)}}}}
+    @keyframes i-grow{{0%,100%{{transform:scaleY(.55)}}50%{{transform:scaleY(1)}}}}
     @keyframes i-swing{{from{{transform:rotate(-24deg)}}to{{transform:rotate(24deg)}}}}
     .dflow-legend{{list-style:none;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px 32px}}
     .dflow-legend li{{border-top:2px solid var(--hl);padding-top:12px}}
     .dflow-legend a{{font-size:15px;font-weight:650;line-height:1.35;color:var(--text);text-decoration:none}}
     .dflow-legend a:hover{{color:var(--hl-text);text-decoration:underline;text-underline-offset:2px}}
     .dflow-legend p{{font-size:13.5px;line-height:1.55;color:var(--text-secondary);margin-top:4px}}
-    @media(max-width:980px){{.dflow-legend{{grid-template-columns:repeat(2,minmax(0,1fr))}}}}
+    @media(max-width:999px){{.dflow-legend{{grid-template-columns:repeat(2,minmax(0,1fr))}}}}
     @media(max-width:560px){{.dflow-legend{{grid-template-columns:1fr}}}}
     @media(prefers-reduced-motion:reduce){{.dflow *{{animation:none!important}}.dflow .d-token{{display:none}}}}
 '''
@@ -303,7 +315,8 @@ def dump(dd):
 def render(html):
     EN.clear()
     d, m = desktop(), mobile()
-    EN['cy_title'] = TITLE[1]
+    en('cy_title', TITLE[1])
+    en('cy_desc', DESC[1])
     fig = '      <figure class="dflow">\n        <div class="dflow-wrap">\n          ' + d + '\n          ' + m + '\n        </div>\n      </figure>\n'
     for rx in (FIG_RE, CSS_RE, EN_RE):
         n = len(rx.findall(html))
@@ -323,17 +336,22 @@ def render(html):
         raise SystemExit(f'build_home_cycle: chaves cy_ sem par: {sorted(used ^ set(EN))}')
     return html
 
-def main(argv):
-    path = Path(__file__).resolve().parent.parent / 'index.html'
-    cur = path.read_text()
+HOME = Path(__file__).resolve().parent.parent / 'index.html'
+
+def main(argv, path=HOME):
+    import argparse
+    ap = argparse.ArgumentParser(description='Gera o ciclo de dados e de IA da home.')
+    ap.add_argument('--check', action='store_true', help='só confere; falha se o index.html estiver diferente do gerador')
+    args = ap.parse_args(argv)
+    cur = path.read_text(encoding='utf-8')
     new = render(cur)
-    if '--check' in argv:
+    if args.check:
         if new != cur:
-            print('build_home_cycle: index.html difere do gerador; rode python3 scripts/build_home_cycle.py')
+            print('build_home_cycle: index.html difere do gerador; rode python3 scripts/build_home_cycle.py', file=sys.stderr)
             return 1
         print('build_home_cycle: index.html em dia com o gerador')
         return 0
-    path.write_text(new)
+    path.write_text(new, encoding='utf-8')
     print('build_home_cycle: index.html atualizado')
     return 0
 
