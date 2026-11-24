@@ -1,0 +1,52 @@
+---
+// Página de tema (#104): /blog/tema/<id>/. Abertura, chamada da conversão, posts em ordem de leitura e o quadro
+// da chamada no fim. Desenho decidido com o Fable 5.2 (registro no PR da #104).
+import Base from '../../layouts/Base.astro';
+import CtaLine from '../../components/CtaLine.astro';
+import { AUTHOR_NAME, BLOG_NAME } from '../../consts';
+import { formatDate, postPath } from '../../lib/blog';
+import { sortedPosts, type Post } from '../../lib/posts';
+import { CTA_LOCATION_END, CTA_LOCATION_TOP, TOPICS, topicPosts, topicProblems, type Topic } from '../../lib/topics';
+
+export async function getStaticPaths() {
+  const all = await sortedPosts();
+  const problems = topicProblems(all);
+  if (problems.length) throw new Error(`temas do blog (src/lib/topics.ts):\n${problems.join('\n')}`);
+  return TOPICS.map((topic) => ({ params: { tema: topic.id }, props: { topic, posts: topicPosts(all, topic) } }));
+}
+
+interface Props {
+  topic: Topic;
+  posts: Post[];
+}
+
+const { topic, posts } = Astro.props;
+const base = import.meta.env.BASE_URL;
+---
+<Base title={`${topic.name} | ${AUTHOR_NAME}`} contentGroup="insights-lista" description={topic.description}>
+  <header class="blog-head topic-head">
+    <p class="post-crumb"><a href={base}>{BLOG_NAME}</a> <span aria-hidden="true">/</span> Tema</p>
+    <h1>{topic.name}</h1>
+    <p class="subtitle">{topic.intro}</p>
+    <p class="topic-cta"><CtaLine parts={topic.pageCta} location={CTA_LOCATION_TOP} /></p>
+  </header>
+  <ol class="post-list topic-list">
+    {posts.map((p) => (
+      <li class="post-item">
+        <a href={postPath(base, p.id)}>
+          <h2>{p.data.title}</h2>
+          <p class="post-item-sub">{p.data.subtitle ?? p.data.description}</p>
+          <p class="post-item-meta">
+            <time datetime={p.data.date.toISOString()}>{formatDate(p.data.date)}</time>
+          </p>
+        </a>
+      </li>
+    ))}
+  </ol>
+  <aside class="topic-cta-box" aria-label="Próximo passo">
+    <p>
+      <CtaLine parts={topic.pageCta} location={CTA_LOCATION_END} />
+      {topic.pageCtaExtra && <> <CtaLine parts={topic.pageCtaExtra} location={CTA_LOCATION_END} /></>}
+    </p>
+  </aside>
+</Base>

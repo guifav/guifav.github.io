@@ -5,10 +5,11 @@ import { DRAFT_PREVIEW, INDEXABLE_SINCE } from '../consts';
 import { POSTS_DIR, gitPostDates } from '../lib/lastmod';
 import { sortedPosts } from '../lib/posts';
 import { sitemapEntries, sitemapXml } from '../lib/sitemap';
+import { TOPICS } from '../lib/topics';
 
 export async function GET(context: APIContext) {
   // Na prévia de rascunho (issue #62) o build roda numa cópia sem git e o sitemap é descartado: sem datas do git.
   const entries = sitemapEntries(context.site!.href, import.meta.env.BASE_URL, await sortedPosts(),
-    DRAFT_PREVIEW ? new Map() : gitPostDates(POSTS_DIR, INDEXABLE_SINCE));
+    DRAFT_PREVIEW ? new Map() : gitPostDates(POSTS_DIR, INDEXABLE_SINCE), TOPICS.map((t) => t.id));
   return new Response(sitemapXml(entries), { headers: { 'Content-Type': 'application/xml; charset=utf-8' } });
 }

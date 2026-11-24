@@ -7,6 +7,7 @@ updated: 2025-11-24T20:04:46.519Z
 slug: curso-ia-negocios-gratuito-youtube
 cover: img/curso-ia-negocios-gratuito-youtube/capa.jpg
 type: newsletter
+topics: [implantacao-de-ia-legados-e-arquitetura]
 ---
 
 A inteligência artificial deixou de ser exclusividade das grandes corporações. Hoje, pequenas e médias empresas têm acesso às mesmas ferramentas que antes eram privilégio apenas dos gigantes tecnológicos. Porém, muitas ainda enfrentam dificuldades para saber por onde começar.

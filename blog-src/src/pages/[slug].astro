@@ -4,19 +4,26 @@ import { render } from 'astro:content';
 import Base from '../layouts/Base.astro';
 import SubscribeForm from '../components/SubscribeForm.astro';
 import { AUTHOR_ID, AUTHOR_NAME, BLOG_NAME, EMAIL_LIST_NAME, NEWSLETTER_FORM_ENABLED } from '../consts';
-import { absoluteUrl, blogPostingLd, formatDate, spotifyEmbedUrl, withBase } from '../lib/blog';
+import { absoluteUrl, blogPostingLd, formatDate, postPath, spotifyEmbedUrl, withBase } from '../lib/blog';
 import { sortedPosts, type Post } from '../lib/posts';
+import CtaLine from '../components/CtaLine.astro';
+import { CTA_LOCATION_END, relatedPosts, topicById, topicPath, topicProblems } from '../lib/topics';
 
 export async function getStaticPaths() {
   const all = await sortedPosts();
-  return all.map((post) => ({ params: { slug: post.id }, props: { post } }));
+  // Temas (#104): o build falha com post do tema fora da ordem de leitura, tema com menos de 5 posts etc.
+  const problems = topicProblems(all);
+  if (problems.length) throw new Error(`temas do blog (src/lib/topics.ts):\n${problems.join('\n')}`);
+  return all.map((post) => ({ params: { slug: post.id }, props: { post, related: relatedPosts(post, all) } }));
 }
 
 interface Props {
   post: Post;
+  // Posts do bloco "Leia também"; vazio nos podcasts e nos posts fora do índice, que ficam sem o bloco.
+  related: Post[];
 }
 
-const { post } = Astro.props;
+const { post, related } = Astro.props;
 const { Content } = await render(post);
 const d = post.data;
 const base = import.meta.env.BASE_URL;
@@ -25,6 +32,7 @@ const url = absoluteUrl(site, Astro.url.pathname);
 const coverPath = d.cover ? withBase(base, d.cover) : undefined;
 const coverUrl = coverPath ? absoluteUrl(site, coverPath) : undefined;
 const embed = d.spotify_url ? spotifyEmbedUrl(d.spotify_url) : null;
+const topic = d.topics?.[0] ? topicById(d.topics[0]) : undefined;
 const updatedShown = d.updated && formatDate(d.updated) !== formatDate(d.date);
 const ld = blogPostingLd({
   title: d.title,
@@ -39,7 +47,7 @@ const ld = blogPostingLd({
 <Base title={`${d.title} | ${AUTHOR_NAME}`} contentGroup="insights-artigo" description={d.description} index={d.index} image={coverUrl} ogType="article" jsonLd={ld} turnstile={NEWSLETTER_FORM_ENABLED}>
   <article class="post">
     <header class="post-head">
-      <p class="post-crumb"><a href={base}>{BLOG_NAME}</a></p>
+      <p class="post-crumb"><a href={base}>{BLOG_NAME}</a>{topic && <> <span aria-hidden="true">/</span> <a href={topicPath(base, topic.id)}>{topic.short}</a></>}</p>
       <h1>{d.title}</h1>
       {d.subtitle && <p class="post-sub">{d.subtitle}</p>}
       <p class="post-meta">
@@ -58,6 +66,16 @@ const ld = blogPostingLd({
     <div class="post-body">
       <Content />
     </div>
+    {related.length > 0 && (
+      <aside class="related" aria-label="Leia também">
+        <h2>Leia também</h2>
+        <ul>
+          {related.map((r) => <li><a href={postPath(base, r.id)}>{r.data.title}</a></li>)}
+        </ul>
+        {topic && <p class="related-topic">Tema: <a href={topicPath(base, topic.id)}>{topic.name}</a></p>}
+        {topic?.blockCta && <p class="related-cta"><CtaLine parts={topic.blockCta} location={CTA_LOCATION_END} /></p>}
+      </aside>
+    )}
     {NEWSLETTER_FORM_ENABLED && (
       <aside class="subscribe" id="assinar" aria-label="Inscrição por email">
         <h2>{EMAIL_LIST_NAME}: receba os próximos artigos por email</h2>

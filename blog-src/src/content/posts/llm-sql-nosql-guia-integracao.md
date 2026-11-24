@@ -5,6 +5,7 @@ date: 2024-10-09T03:00:00.000Z
 slug: llm-sql-nosql-guia-integracao
 cover: img/llm-sql-nosql-guia-integracao/capa.jpg
 type: newsletter
+topics: [ia-sobre-dados-da-empresa]
 ---
 
 A integração de Modelos de Linguagem de Grande Escala (LLMs) com bancos de dados SQL e NoSQL representa uma convergência transformadora no cenário tecnológico atual. Esta sinergia entre inteligência artificial avançada e sistemas de gerenciamento de dados oferece um potencial sem precedentes para revolucionar a forma como as organizações interagem com seus dados, extraem insights valiosos e automatizam processos complexos de tomada de decisão.

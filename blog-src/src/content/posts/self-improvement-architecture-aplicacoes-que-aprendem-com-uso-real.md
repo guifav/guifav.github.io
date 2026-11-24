@@ -7,6 +7,7 @@ updated: 2026-03-23T00:59:32.528Z
 slug: self-improvement-architecture-aplicacoes-que-aprendem-com-uso-real
 cover: img/self-improvement-architecture-aplicacoes-que-aprendem-com-uso-real/capa.jpg
 type: newsletter
+topics: [engenharia-de-software-com-ia]
 ---
 
 <figure>

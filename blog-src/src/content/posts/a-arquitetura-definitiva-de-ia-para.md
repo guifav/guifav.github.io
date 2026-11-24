@@ -7,6 +7,7 @@ updated: 2025-11-24T20:05:10.841Z
 slug: a-arquitetura-definitiva-de-ia-para
 cover: img/a-arquitetura-definitiva-de-ia-para/capa.jpg
 type: newsletter
+topics: [implantacao-de-ia-legados-e-arquitetura]
 ---
 
 Se você já investiu em IA para sua empresa, certamente enfrentou este paradoxo: as demonstrações, MVPs e POCs eram impressionantes, os casos de uso pareciam óbvios, mas quando foi medir o ROI real, a replicabilidade com flexibilidade... cadê o resultado? A IA estava ali, funcionando, mas você não conseguia provar que estava movendo o ponteiro do negócio.

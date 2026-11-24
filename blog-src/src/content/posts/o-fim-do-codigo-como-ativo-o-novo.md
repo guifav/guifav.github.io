@@ -7,6 +7,7 @@ updated: 2026-04-23T15:03:22.081Z
 slug: o-fim-do-codigo-como-ativo-o-novo
 cover: img/o-fim-do-codigo-como-ativo-o-novo/capa.jpg
 type: newsletter
+topics: [engenharia-de-software-com-ia]
 ---
 
 Se a sua empresa constrói software, mesmo que em pequena escala, o seu time de desenvolvimento está mudando mais rápido do que você percebe. As pessoas continuam as mesmas. O que mudou foi o trabalho em si.

@@ -7,6 +7,7 @@ updated: 2026-03-29T21:13:50.374Z
 slug: arquitetura-consolidacao-dados-ia-sem-reescrever-sistemas-legados
 cover: img/arquitetura-consolidacao-dados-ia-sem-reescrever-sistemas-legados/capa.jpg
 type: newsletter
+topics: [implantacao-de-ia-legados-e-arquitetura]
 ---
 
 <figure>

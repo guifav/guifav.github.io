@@ -7,6 +7,7 @@ updated: 2026-09-02T14:29:14.967Z
 slug: o-exame-virou-conspiracao-o-incidente
 cover: img/o-exame-virou-conspiracao-o-incidente/capa.jpg
 type: newsletter
+topics: [agentes-de-ia-em-producao]
 ---
 
 <figure>

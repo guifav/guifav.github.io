@@ -7,6 +7,7 @@ updated: 2026-04-27T15:19:00.440Z
 slug: radar-inteligencia-mercado-open-source
 cover: img/radar-inteligencia-mercado-open-source/capa.jpg
 type: newsletter
+topics: [ia-sobre-dados-da-empresa]
 ---
 
 <figure>

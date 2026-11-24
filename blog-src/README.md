@@ -49,6 +49,14 @@ Um markdown por post em `src/content/posts/<slug>.md`, direto na pasta e com o n
 
 Imagens ficam em `public/img/<slug>/`, publicadas em `/blog/img/<slug>/`.
 
+## Temas e "Leia também" (#104)
+
+Os temas ficam em `src/lib/topics.ts`: nome, abertura, description, chamada da conversão e a **ordem de leitura** de cada um. Cada tema tem a página `/blog/tema/<id>/` (`src/pages/tema/[tema].astro`), no sitemap, e aparece na linha "Temas" da lista do blog e na migalha dos posts dele.
+
+- Para pôr um post num tema, acrescente `topics: [<id>]` no frontmatter **e** o slug na `order` do tema, na posição de leitura. O build falha se as duas listas divergirem, se um post fora do índice ou podcast tiver tema ou se um tema ficar com menos de 5 posts indexáveis (`topicProblems`).
+- Todo post indexável tem o bloco "Leia também" (3 posts): com tema, os seguintes na ordem de leitura do primeiro tema; sem tema, os indexáveis mais próximos por data. Podcasts e posts com `index: false` ficam sem o bloco.
+- Os textos dos temas saem em nome do Gui: mudança neles passa pela aprovação dele no PR.
+
 ## HTML no corpo dos posts
 
 O que cada barreira garante, e como classificar achados de revisão, está em [`CONTRATO-DE-CONTEUDO.md`](CONTRATO-DE-CONTEUDO.md).

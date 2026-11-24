@@ -7,6 +7,7 @@ updated: 2026-02-13T16:05:58.723Z
 slug: claude-o-guia-definitivo-ia-consultoria
 cover: img/claude-o-guia-definitivo-ia-consultoria/capa.jpg
 type: newsletter
+topics: [custos-roi-e-escolha-de-modelo]
 ---
 
 <figure>

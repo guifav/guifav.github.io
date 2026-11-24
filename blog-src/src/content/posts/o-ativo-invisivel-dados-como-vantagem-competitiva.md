@@ -7,6 +7,7 @@ updated: 2026-06-15T11:46:46.709Z
 slug: o-ativo-invisivel-dados-como-vantagem-competitiva
 cover: img/o-ativo-invisivel-dados-como-vantagem-competitiva/capa.jpg
 type: newsletter
+topics: [ia-sobre-dados-da-empresa]
 ---
 
 Há pouco mais de um ano, escrevi aqui que o verdadeiro ativo estratégico das organizações seria a composição única de dados proprietários combinados com modelos de IA treinados especificamente sobre eles ([O Futuro das Organizações](/blog/o-futuro-das-organizacoes-alem-da/)). Era uma tese. Esta semana revisitei um estudo que dá a essa tese o que ela mais precisava: números.

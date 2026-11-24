@@ -7,6 +7,7 @@ updated: 2025-12-07T20:46:03.651Z
 slug: analise-preditiva-tomada-decisao-producao
 cover: img/analise-preditiva-tomada-decisao-producao/capa.jpg
 type: newsletter
+topics: [ia-sobre-dados-da-empresa]
 ---
 
 Quando uma empresa parceira me procurou enfrentando 30% de variabilidade nas previsões de demanda que resultava em R$ 12 milhões anuais em excesso de estoque e rupturas críticas, percebi que o desafio transcendia técnicas estatísticas tradicionais. A organização possuía décadas de dados históricos, equipes de analytics competentes e ferramentas modernas, mas ainda lutava para converter insights em decisões que realmente impactassem a performance operacional.

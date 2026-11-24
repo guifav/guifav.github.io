@@ -7,6 +7,7 @@ updated: 2025-11-24T20:05:38.501Z
 slug: langgraph-orquestrando-workflows
 cover: img/langgraph-orquestrando-workflows/capa.jpg
 type: newsletter
+topics: [agentes-de-ia-em-producao]
 ---
 
 ## Casos de Uso Avançados Para Além de Chains Simples

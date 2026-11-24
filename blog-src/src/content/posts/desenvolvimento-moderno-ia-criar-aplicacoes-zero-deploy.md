@@ -7,6 +7,7 @@ updated: 2025-08-28T21:32:14.682Z
 slug: desenvolvimento-moderno-ia-criar-aplicacoes-zero-deploy
 cover: img/desenvolvimento-moderno-ia-criar-aplicacoes-zero-deploy/capa.jpg
 type: newsletter
+topics: [engenharia-de-software-com-ia]
 ---
 
 A inteligência artificial está revolucionando a forma como desenvolvemos software. Com o advento de modelos de linguagem avançados como assistentes de programação, podemos acelerar significativamente o processo de desenvolvimento mantendo alta qualidade no código. Neste artigo, vou mostrar como utilizar a IA como seu par de programação para criar aplicações modernas do zero.

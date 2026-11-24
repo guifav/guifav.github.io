@@ -6,6 +6,7 @@ updated: 2024-10-02T23:49:08.731Z
 slug: tutorial-analise-de-dados-colab-python-ia
 cover: img/tutorial-analise-de-dados-colab-python-ia/capa.jpg
 type: newsletter
+topics: [ia-sobre-dados-da-empresa]
 ---
 
 Acesse as ferramentas e arquivos utilizados neste tutorial

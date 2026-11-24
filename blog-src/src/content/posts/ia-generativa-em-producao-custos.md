@@ -7,6 +7,7 @@ updated: 2025-11-24T20:05:42.736Z
 slug: ia-generativa-em-producao-custos
 cover: img/ia-generativa-em-producao-custos/capa.jpg
 type: newsletter
+topics: [custos-roi-e-escolha-de-modelo]
 ---
 
 ## Realidade Operacional Para Além dos Experimentos

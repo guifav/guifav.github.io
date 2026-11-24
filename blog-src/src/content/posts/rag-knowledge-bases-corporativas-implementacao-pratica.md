@@ -7,6 +7,7 @@ updated: 2025-11-24T20:05:31.814Z
 slug: rag-knowledge-bases-corporativas-implementacao-pratica
 cover: img/rag-knowledge-bases-corporativas-implementacao-pratica/capa.jpg
 type: newsletter
+topics: [ia-sobre-dados-da-empresa]
 ---
 
 ## Transformando Conhecimento Corporativo em Inteligência Acessível

@@ -7,6 +7,7 @@ updated: 2025-12-09T06:01:51.367Z
 slug: arquitetura-dados-analytics-ai
 cover: img/arquitetura-dados-analytics-ai/capa.jpg
 type: newsletter
+topics: [implantacao-de-ia-legados-e-arquitetura]
 ---
 
 Em 2023, John May, CEO da John Deere, fez algo inédito na história do Consumer Electronics Show: uma fabricante de tratores [apresentou o keynote de abertura](https://www.cta.tech/press-releases/ces-2023-will-focus-on-how-innovation-is-addressing-global-challenges). A razão estava nos números que sustentavam a transformação da empresa. Um único trator modelo 8RX com plantadora de 24 linhas carrega mais de 300 sensores IoT e 140 controladores, processando 15 mil medições por segundo durante a operação. Entre 2021 e 2024, a frota conectada da empresa saltou de 440 mil para 750 mil máquinas, um crescimento de 70%, enquanto a área engajada expandiu de 315 milhões para 468 milhões de acres.

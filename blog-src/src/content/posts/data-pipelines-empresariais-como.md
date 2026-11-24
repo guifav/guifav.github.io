@@ -7,6 +7,7 @@ updated: 2025-11-24T20:05:13.987Z
 slug: data-pipelines-empresariais-como
 cover: img/data-pipelines-empresariais-como/capa.jpg
 type: newsletter
+topics: [implantacao-de-ia-legados-e-arquitetura]
 ---
 
 Quando uma empresa parceira me procurou com o desafio de unificar dados espalhados em 14 sistemas diferentes para criar uma visão única da jornada do cliente, sabia que enfrentaríamos um dos problemas mais complexos da era digital: a fragmentação de dados empresariais. A organização possuía informações valiosas sobre clientes, vendas, operações e marketing, mas estas residiam em silos isolados que impossibilitavam análises integradas e tomada de decisão baseada em dados.

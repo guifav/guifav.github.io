@@ -1,14 +1,16 @@
 // Entradas do sitemap do blog (/blog/sitemap.xml), separadas da rota para serem testadas.
 //
-// Entram a capa e os posts indexáveis. A paginação (/blog/pagina/N/) fica de fora: continua publicada e
+// Entram a capa, as páginas de tema (#104) e os posts indexáveis. A paginação (/blog/pagina/N/) fica de fora: continua publicada e
 // rastreável pelos links, mas não é destino de busca.
 // lastmod:
 // - post: o mais recente entre o frontmatter (updated ?? date) e o último commit do .md depois de
 //   INDEXABLE_SINCE (lib/lastmod.ts);
-// - capa: sem lastmod. Ela mostra só a primeira página e muda com o template, a ordem e as remoções;
+// - capa e páginas de tema: sem lastmod. Ela mostra só a primeira página e muda com o template, a ordem e as remoções;
 //   nenhuma data de post representa isso. O IndexNow compara o HTML publicado com o do build (scripts/indexnow.py).
 import { absoluteUrl, pagePath, postPath } from './blog.ts';
 import { postLastmod } from './lastmod.ts';
+import { topicPath } from './topics.ts';
+import type { TopicId } from './schema.ts';
 
 export interface SitemapPost {
   id: string;
@@ -21,8 +23,15 @@ export interface SitemapEntry {
 }
 
 /** `git` mapeia o nome do arquivo (<slug>.md, regra do lib/postfiles) para a data ISO do último commit. */
-export function sitemapEntries(site: string, base: string, posts: SitemapPost[], git: Map<string, string>): SitemapEntry[] {
+export function sitemapEntries(
+  site: string,
+  base: string,
+  posts: SitemapPost[],
+  git: Map<string, string>,
+  topics: readonly TopicId[] = [],
+): SitemapEntry[] {
   const out: SitemapEntry[] = [{ loc: absoluteUrl(site, pagePath(base, 1)) }];
+  for (const t of topics) out.push({ loc: absoluteUrl(site, topicPath(base, t)) });
   for (const p of posts) {
     if (!p.data.index) continue;
     out.push({ loc: absoluteUrl(site, postPath(base, p.id)), lastmod: postLastmod(p.data.updated ?? p.data.date, git.get(`${p.id}.md`)) });

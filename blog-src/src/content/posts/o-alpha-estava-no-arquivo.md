@@ -7,6 +7,7 @@ updated: 2026-07-27T14:23:17.242Z
 slug: o-alpha-estava-no-arquivo
 cover: img/o-alpha-estava-no-arquivo/capa.jpg
 type: newsletter
+topics: [custos-roi-e-escolha-de-modelo]
 ---
 
 *A Bridgewater levou Gemini, Claude e GPT ao teto do prompt e parou abaixo do corte de 80%. Um modelo aberto fine-tunado nos exemplos dos próprios investidores chegou a 84,7% com custo 13,8 vezes menor. O ingrediente decisivo estava guardado dentro de casa.*

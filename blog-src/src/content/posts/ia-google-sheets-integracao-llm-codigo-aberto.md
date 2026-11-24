@@ -7,6 +7,7 @@ updated: 2025-12-15T08:30:51.564Z
 slug: ia-google-sheets-integracao-llm-codigo-aberto
 cover: img/ia-google-sheets-integracao-llm-codigo-aberto/capa.jpg
 type: newsletter
+topics: [ia-sobre-dados-da-empresa]
 ---
 
 Nos últimos meses, tenho observado um padrão curioso nas empresas: existe um abismo entre o entusiasmo com inteligência artificial e sua aplicação real no trabalho cotidiano.

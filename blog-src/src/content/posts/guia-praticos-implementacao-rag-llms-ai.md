@@ -6,6 +6,7 @@ updated: 2025-02-06T12:37:55.418Z
 slug: guia-praticos-implementacao-rag-llms-ai
 cover: img/guia-praticos-implementacao-rag-llms-ai/capa.jpg
 type: newsletter
+topics: [ia-sobre-dados-da-empresa]
 ---
 
 [Acesse a parte 1 deste artigo com o detalhamento teórico sobre o tema](/blog/o-que-e-rag-llms-ia/)

@@ -5,6 +5,7 @@ date: 2024-09-10T03:00:00.000Z
 slug: analise-vendas-ia-guia-completo
 cover: img/analise-vendas-ia-guia-completo/capa.jpg
 type: newsletter
+topics: [ia-sobre-dados-da-empresa]
 ---
 
 No competitivo mundo das vendas, cada interação com um cliente potencial é uma oportunidade valiosa. Mas como podemos garantir que estamos aproveitando ao máximo essas oportunidades? A resposta está na análise detalhada das ligações de vendas, e graças aos avanços na Inteligência Artificial (IA), esse processo se tornou mais acessível e eficiente do que nunca.
