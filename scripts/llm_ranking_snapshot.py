@@ -1,4 +1,4 @@
-"""Grava na KVM o snapshot da arena de texto da Arena que o build do /llm-ranking/ lê (issue #113).
+"""Grava na KVM o snapshot da arena de texto da Arena que o build do /tools/llm-ranking/ lê (issue #113).
 
 Fonte: o dataset oficial `lmarena-ai/leaderboard-dataset` no Hugging Face (CC BY 4.0), subconjunto
 `text_style_control`, lido pela API pública do datasets-server (sem login e sem chave). O snapshot tem:
@@ -36,7 +36,7 @@ API = "https://datasets-server.huggingface.co/filter"
 ARQUIVO = "arena-texto.json"
 RAMO = "main"
 PAGINA = 100
-UA = "guifav-llm-ranking/1.0 (+https://guifav.dev/llm-ranking/)"
+UA = f"guifav-llm-ranking/1.0 (+{B.URL})"
 PAUSA = 1.0
 TENTATIVAS = 5
 
@@ -195,7 +195,7 @@ def gravar(dados: Path, texto: str, pub: str, git=_git) -> bool:
 
 
 def main(argv: list[str] | None = None, fonte: Fonte | None = None, git=_git) -> int:
-    ap = argparse.ArgumentParser(description="Snapshot da arena de texto da Arena para o /llm-ranking/.")
+    ap = argparse.ArgumentParser(description="Snapshot da arena de texto da Arena para o /tools/llm-ranking/.")
     ap.add_argument("--dados", required=True, type=Path, help="clone do guifav/llm-ranking-data")
     ap.add_argument("--apply", action="store_true", help="grava, faz commit e push quando mudou")
     args = ap.parse_args(argv)

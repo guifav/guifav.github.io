@@ -1,4 +1,4 @@
-"""Testes do snapshot da Arena para o /llm-ranking/ (scripts/llm_ranking_snapshot.py, issue #113).
+"""Testes do snapshot da Arena para o /tools/llm-ranking/ (scripts/llm_ranking_snapshot.py, issue #113).
 
 Rodar: python3 scripts/test_llm_ranking_snapshot.py
 """
