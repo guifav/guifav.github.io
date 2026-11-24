@@ -9,6 +9,7 @@
   não lista posts com index: false nem as páginas da newsletter. Depois do cutover, esses
   posts e as páginas da newsletter continuam precisando de noindex.
 - Sob /blog/ só há .html, .xml e mídia da lista.
+- Ferramentas e guias (#104): a home (seção e rodapé) e o rodapé do blog levam os links das quatro ferramentas.
 - Alarme secundário de conteúdo ativo nas páginas do blog (ver blog-src/CONTRATO-DE-CONTEUDO.md:
   a barreira de segurança é a limpeza no render e a lista de extensões, não este verificador).
 
@@ -400,6 +401,7 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
         problems += check_tracking(f.relative_to(site).as_posix(), text)
         problems += check_ga_host_guard(f.relative_to(site).as_posix(), text)
         problems += check_consent(f.relative_to(site).as_posix(), text)
+        problems += check_tools(f.relative_to(site).as_posix(), text)
         p.feed(text)
         p.close()
         url = _page_url(site, f)
@@ -928,6 +930,59 @@ def check_tracking(rel: str, html: str) -> list[str]:
         elif not re.match(r"<form\b[^>]*\sdata-ga-client-id[\s>=]", forms[0]) or \
                 forms[0].count('<input type="hidden" name="ga_cid" value="">') != 1:
             problems.append(f"{rel}: formulário de material sem data-ga-client-id ou sem o campo oculto ga_cid")
+    return problems
+
+
+# "Ferramentas e guias" (issue #104, item 1): as ferramentas no caminho do rastreador e do leitor. A home leva os
+# quatro links na seção própria e no rodapé; toda página do blog, no rodapé (o mesmo da home, do Base.astro). Alarme
+# de integridade dos templates, como os de cima: só nas páginas com GA4, que são as que os templates geram.
+TOOLS_LINKS = ("/mapa-decisao-ia/", "/planilha-custos-ia/",
+               "/blog/livro-ia-inteligencia-artificial-portugues-gratuito/",
+               "/seo-geo-aeo-framework/framework-seo-aeo.html")
+TOOLS_SECTION_ID = "ferramentas"
+
+
+class _ToolsLinks(HTMLParser):
+    """hrefs dentro do <footer> e dentro da <section id="ferramentas"> (comentário não conta)."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.stack: list[str | None] = []  # bloco aberto por <footer> ou pela seção; None nas demais <section>
+        self.found: dict[str, list[str]] = {"footer": [], "section": []}
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        a = dict(attrs)
+        if tag == "footer":
+            self.stack.append("footer")
+        elif tag == "section":
+            self.stack.append("section" if a.get("id") == TOOLS_SECTION_ID else None)
+        elif tag == "a" and a.get("href"):
+            for where in dict.fromkeys(w for w in self.stack if w):
+                self.found[where].append((a["href"] or "").strip())
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in ("footer", "section") and self.stack:
+            self.stack.pop()
+
+
+def check_tools(rel: str, html: str) -> list[str]:
+    """#104: os quatro links de TOOLS_LINKS, uma vez cada, no rodapé da home e do blog e na seção da home."""
+    if GA4_TAG not in html or not (rel == "index.html" or rel.startswith("blog/")):
+        return []
+    p = _ToolsLinks()
+    p.feed(html)
+    p.close()
+    blocks = {"rodapé": p.found["footer"]}
+    if rel == "index.html":
+        blocks[f'seção id="{TOOLS_SECTION_ID}"'] = p.found["section"]
+    problems = []
+    for name, hrefs in blocks.items():
+        for href in TOOLS_LINKS:
+            n = hrefs.count(href)
+            if n == 0:
+                problems.append(f"{rel}: {name} sem o link de Ferramentas e guias {href}")
+            elif n > 1:
+                problems.append(f"{rel}: {name} com o link de Ferramentas e guias {href} {n} vezes")
     return problems
 
 
