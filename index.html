@@ -49,6 +49,42 @@
     @keyframes f-draw{0%{stroke-dashoffset:160}45%,80%{stroke-dashoffset:0}100%{stroke-dashoffset:-160}}
     @media(prefers-reduced-motion:reduce){.flow *{animation:none!important}.flow .f-spark{stroke-dasharray:none}}
     @media(max-width:820px){.hero-split{grid-template-columns:1fr;gap:28px}.flow{justify-self:start;max-width:420px}}
+    .dflow{margin:8px 0 28px}
+    .dflow-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:16px;background:var(--bg-card);padding:12px 8px}
+    .dflow svg{display:block;width:100%;height:auto;min-width:880px;font-family:inherit}
+    .dflow .d-h{font-size:12.5px;font-weight:700;letter-spacing:1.4px;fill:var(--text-secondary)}
+    .dflow .d-t{font-size:16px;font-weight:650;fill:var(--text)}
+    .dflow .d-s{font-size:13.5px;fill:var(--text-secondary)}
+    .dflow .d-src,.dflow .d-use,.dflow .d-layer{fill:var(--text)}
+    .dflow .d-cap{font-size:12px}
+    .dflow .d-card{fill:var(--bg);stroke:var(--border);stroke-width:1.2}
+    .dflow .d-gold{stroke:var(--hl)}
+    .dflow .d-dot{fill:var(--hl)}
+    .dflow .d-line{fill:none;stroke:var(--border);stroke-width:1.6}
+    .dflow .d-run{fill:none;stroke:var(--hl);stroke-width:2;stroke-linecap:round;stroke-dasharray:3 18;opacity:.9;animation:d-run 3s linear infinite}
+    .dflow .d-zone{fill:var(--hl);fill-opacity:.07;stroke:var(--hl);stroke-width:1.5;stroke-dasharray:6 6;animation:d-zone 4s ease-in-out infinite}
+    .dflow .d-badge circle{fill:var(--hl)}
+    .dflow .d-badge text{font-size:13px;font-weight:800;fill:#171717}
+    .dflow .d-gov{fill:none;stroke:var(--border);stroke-width:1.2;stroke-dasharray:4 4}
+    .dflow .d-gov-line{stroke:var(--border);stroke-width:1.2;stroke-dasharray:2 4}
+    .dflow .d-pipe{fill:var(--hl);opacity:.35;animation:d-pipe 2.4s ease-in-out infinite}
+    .dflow .d-bar{fill:var(--hl);transform-box:fill-box;transform-origin:50% 100%;animation:f-bar 3.4s ease-in-out infinite}
+    .dflow .d-live{fill:var(--hl);animation:d-live 2s ease-in-out infinite}
+    @keyframes d-run{to{stroke-dashoffset:-42}}
+    @keyframes d-zone{0%,100%{fill-opacity:.05}50%{fill-opacity:.12}}
+    @keyframes d-pipe{0%,100%{opacity:.25}50%{opacity:.9}}
+    @keyframes d-live{0%,100%{opacity:.35}50%{opacity:1}}
+    .dflow-hint{display:none;font-size:12px;color:var(--text-secondary);margin-top:8px}
+    .dflow-legend{list-style:none;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px 28px}
+    .dflow-legend li{display:flex;gap:12px;align-items:flex-start}
+    .dflow-legend .n{flex:none;display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--hl);color:#171717;font-size:13px;font-weight:800}
+    .dflow-legend a{font-size:15px;font-weight:650;line-height:1.35;color:var(--text);text-decoration:none}
+    .dflow-legend a:hover{color:var(--hl-text);text-decoration:underline;text-underline-offset:2px}
+    .dflow-legend p{font-size:13.5px;line-height:1.55;color:var(--text-secondary);margin-top:4px}
+    @media(max-width:980px){.dflow-legend{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:820px){.dflow-hint{display:block}.dflow-wrap{padding:14px}}
+    @media(max-width:560px){.dflow-legend{grid-template-columns:1fr}}
+    @media(prefers-reduced-motion:reduce){.dflow *{animation:none!important}}
     .card-ico{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:10px;border:1px solid var(--border);margin-bottom:14px;color:var(--hl-text)}
     .card-ico svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
   </style>
@@ -125,12 +161,115 @@
 
     <section id="temas">
       <div class="section-label" data-i18n="section_topics">Temas</div>
-      <div class="grid-2 cols-2">
-        <div class="card"><span class="card-ico" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><ellipse cx="12" cy="5.5" rx="7" ry="2.5"/><path d="M5 5.5v13c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5v-13"/><path d="M5 12c0 1.4 3.1 2.5 7 2.5s7-1.1 7-2.5"/></svg></span><h3 data-i18n="tp_dados_t">IA sobre os dados da empresa</h3><p data-i18n="tp_dados_d">Como fazer a IA responder com os dados da empresa: RAG, Text-to-SQL, MCP e análise de planilhas com LLMs.</p><a href="/blog/tema/ia-sobre-dados-da-empresa/" hreflang="pt-BR" data-i18n="tp_a">Ver os artigos do tema &#8594;</a></div>
-        <div class="card"><span class="card-ico" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M4 19V5"/><path d="M4 19h16"/><path d="M7 15l4-4 3 3 5-6"/><path d="M16 8h3v3"/></svg></span><h3 data-i18n="tp_custos_t">Custos, ROI e escolha de modelo</h3><p data-i18n="tp_custos_d">Quanto custa a IA generativa em produção e como escolher o modelo: fronteira, aberto, fine-tuning e GPU própria.</p><a href="/blog/tema/custos-e-modelos-de-ia/" hreflang="pt-BR" data-i18n="tp_a">Ver os artigos do tema &#8594;</a></div>
-        <div class="card"><span class="card-ico" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="12" cy="18" r="2.5"/><path d="M8.3 7.2l2.6 8.6M15.7 7.2l-2.6 8.6M8.5 6h7"/></svg></span><h3 data-i18n="tp_agentes_t">Agentes de IA em produção</h3><p data-i18n="tp_agentes_d">Como criar agentes de IA para a empresa: arquitetura, MCP, LangChain, LangGraph e memória.</p><a href="/blog/tema/agentes-de-ia/" hreflang="pt-BR" data-i18n="tp_a">Ver os artigos do tema &#8594;</a></div>
-        <div class="card"><span class="card-ico" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 12.5l9 5 9-5"/><path d="M3 16.5l9 5 9-5"/></svg></span><h3 data-i18n="tp_impl_t">Implantação de IA: sistemas legados e arquitetura de dados</h3><p data-i18n="tp_impl_d">Como implementar IA numa empresa com sistemas legados: plano, integração, time e arquitetura de dados.</p><a href="/blog/tema/implantacao-de-ia/" hreflang="pt-BR" data-i18n="tp_a">Ver os artigos do tema &#8594;</a></div>
-      </div>
+      <p class="section-intro" data-i18n="topics_intro">Um fluxo de dados completo de uma empresa. Os destaques numerados marcam onde eu atuo, e cada número leva aos artigos do tema.</p>
+      <figure class="dflow">
+        <div class="dflow-wrap">
+          <svg viewBox="0 0 1200 430" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="dflow-t" focusable="false">
+          <title id="dflow-t" data-i18n="df_title">Fluxo de dados de uma empresa, com os pontos onde atuo destacados</title>
+          <text class="d-h" x="116" y="28" text-anchor="middle" data-i18n="df_h1">FONTES</text>
+          <text class="d-h" x="330" y="28" text-anchor="middle" data-i18n="df_h2">INTEGRAÇÃO</text>
+          <text class="d-h" x="570" y="28" text-anchor="middle" data-i18n="df_h3">DADOS</text>
+          <text class="d-h" x="829" y="28" text-anchor="middle" data-i18n="df_h4">IA</text>
+          <text class="d-h" x="1090" y="28" text-anchor="middle" data-i18n="df_h5">USO</text>
+          <rect class="d-zone" x="236" y="118" width="438" height="206" rx="16" style="animation-delay:-2.8s"/>
+          <rect class="d-zone" x="712" y="58" width="234" height="88" rx="16" style="animation-delay:-0.7s"/>
+          <rect class="d-zone" x="712" y="168" width="234" height="88" rx="16" style="animation-delay:-1.4s"/>
+          <rect class="d-zone" x="712" y="278" width="234" height="88" rx="16" style="animation-delay:-2.1s"/>
+          <path class="d-line" d="M212 72 C 232 72, 232 205, 250 205"/>
+          <path class="d-line" d="M212 124 C 232 124, 232 205, 250 205"/>
+          <path class="d-line" d="M212 176 C 232 176, 232 205, 250 205"/>
+          <path class="d-line" d="M212 228 C 232 228, 232 205, 250 205"/>
+          <path class="d-line" d="M212 280 C 232 280, 232 205, 250 205"/>
+          <path class="d-line" d="M212 332 C 232 332, 232 205, 250 205"/>
+          <path class="d-line" d="M410 205 C 445 205, 445 220, 480 220"/>
+          <path class="d-line" d="M660 220 C 694 220, 694 102, 724 102"/>
+          <path class="d-line" d="M660 220 C 694 220, 694 212, 724 212"/>
+          <path class="d-line" d="M660 220 C 694 220, 694 322, 724 322"/>
+          <path class="d-line" d="M934 102 C 968 102, 968 84, 1000 84"/>
+          <path class="d-line" d="M934 102 C 968 102, 968 152, 1000 152"/>
+          <path class="d-line" d="M934 212 C 968 212, 968 152, 1000 152"/>
+          <path class="d-line" d="M934 322 C 968 322, 968 220, 1000 220"/>
+          <path class="d-line" d="M934 322 C 968 322, 968 288, 1000 288"/>
+          <path class="d-run" d="M212 72 C 232 72, 232 205, 250 205" style="animation-delay:-0.00s"/>
+          <path class="d-run" d="M212 124 C 232 124, 232 205, 250 205" style="animation-delay:-0.35s"/>
+          <path class="d-run" d="M212 176 C 232 176, 232 205, 250 205" style="animation-delay:-0.70s"/>
+          <path class="d-run" d="M212 228 C 232 228, 232 205, 250 205" style="animation-delay:-1.05s"/>
+          <path class="d-run" d="M212 280 C 232 280, 232 205, 250 205" style="animation-delay:-1.40s"/>
+          <path class="d-run" d="M212 332 C 232 332, 232 205, 250 205" style="animation-delay:-1.75s"/>
+          <path class="d-run" d="M410 205 C 445 205, 445 220, 480 220" style="animation-delay:-0.20s"/>
+          <path class="d-run" d="M660 220 C 694 220, 694 102, 724 102" style="animation-delay:-0.50s"/>
+          <path class="d-run" d="M660 220 C 694 220, 694 212, 724 212" style="animation-delay:-0.90s"/>
+          <path class="d-run" d="M660 220 C 694 220, 694 322, 724 322" style="animation-delay:-1.30s"/>
+          <path class="d-run" d="M934 102 C 968 102, 968 84, 1000 84" style="animation-delay:-0.30s"/>
+          <path class="d-run" d="M934 102 C 968 102, 968 152, 1000 152" style="animation-delay:-0.90s"/>
+          <path class="d-run" d="M934 212 C 968 212, 968 152, 1000 152" style="animation-delay:-1.30s"/>
+          <path class="d-run" d="M934 322 C 968 322, 968 220, 1000 220" style="animation-delay:-0.60s"/>
+          <path class="d-run" d="M934 322 C 968 322, 968 288, 1000 288" style="animation-delay:-1.10s"/>
+          <path class="d-gov-line" d="M330 372 V 324"/>
+          <path class="d-gov-line" d="M570 372 V 324"/>
+          <path class="d-gov-line" d="M829 372 V 360"/>
+          <rect class="d-gov" x="250" y="372" width="684" height="40" rx="12"/>
+          <text class="d-s d-gov-t" x="592" y="397" text-anchor="middle" data-i18n="df_gov">Governança: permissões, auditoria, LGPD e custo sob controle</text>
+          <rect class="d-card" x="20" y="52" width="192" height="40" rx="10"/><circle class="d-dot" cx="36" cy="72" r="3.5"/>
+          <text class="d-s d-src" x="48" y="76" data-i18n="df_s1">CRM e vendas</text>
+          <rect class="d-card" x="20" y="104" width="192" height="40" rx="10"/><circle class="d-dot" cx="36" cy="124" r="3.5"/>
+          <text class="d-s d-src" x="48" y="128" data-i18n="df_s2">ERP e financeiro</text>
+          <rect class="d-card" x="20" y="156" width="192" height="40" rx="10"/><circle class="d-dot" cx="36" cy="176" r="3.5"/>
+          <text class="d-s d-src" x="48" y="180" data-i18n="df_s3">Planilhas</text>
+          <rect class="d-card" x="20" y="208" width="192" height="40" rx="10"/><circle class="d-dot" cx="36" cy="228" r="3.5"/>
+          <text class="d-s d-src" x="48" y="232" data-i18n="df_s4">Documentos e contratos</text>
+          <rect class="d-card" x="20" y="260" width="192" height="40" rx="10"/><circle class="d-dot" cx="36" cy="280" r="3.5"/>
+          <text class="d-s d-src" x="48" y="284" data-i18n="df_s5">Site e marketing</text>
+          <rect class="d-card" x="20" y="312" width="192" height="40" rx="10"/><circle class="d-dot" cx="36" cy="332" r="3.5"/>
+          <text class="d-s d-src" x="48" y="336" data-i18n="df_s6">Sistemas legados</text>
+          <rect class="d-card" x="250" y="150" width="160" height="110" rx="14"/>
+          <text class="d-t" x="330" y="190" text-anchor="middle" data-i18n="df_i_t">Integração</text>
+          <text class="d-s" x="330" y="210" text-anchor="middle" data-i18n="df_i_s">ETL, APIs e CDC</text>
+          <rect class="d-pipe" x="276" y="228" width="30" height="6" rx="3" style="animation-delay:-0.0s"/>
+          <rect class="d-pipe" x="314" y="228" width="30" height="6" rx="3" style="animation-delay:-0.5s"/>
+          <rect class="d-pipe" x="352" y="228" width="30" height="6" rx="3" style="animation-delay:-1.0s"/>
+          <rect class="d-card d-gold" x="480" y="150" width="180" height="40" rx="10"/>
+          <text class="d-s d-layer" x="570" y="175" text-anchor="middle" data-i18n="df_d1">Ouro: dado de negócio</text>
+          <rect class="d-card" x="480" y="200" width="180" height="40" rx="10"/>
+          <text class="d-s d-layer" x="570" y="225" text-anchor="middle" data-i18n="df_d2">Prata: limpo e único</text>
+          <rect class="d-card" x="480" y="250" width="180" height="40" rx="10"/>
+          <text class="d-s d-layer" x="570" y="275" text-anchor="middle" data-i18n="df_d3">Bronze: dado bruto</text>
+          <text class="d-s d-cap" x="570" y="310" text-anchor="middle" data-i18n="df_d_s">Contratos de dados e linhagem</text>
+          <rect class="d-card" x="724" y="70" width="210" height="64" rx="12"/>
+          <text class="d-t" x="829" y="98" text-anchor="middle" data-i18n="df_a1">RAG, Text-to-SQL e MCP</text>
+          <text class="d-s" x="829" y="118" text-anchor="middle" data-i18n="df_a1s">respostas com a fonte à vista</text>
+          <rect class="d-card" x="724" y="180" width="210" height="64" rx="12"/>
+          <text class="d-t" x="829" y="208" text-anchor="middle" data-i18n="df_a2">Modelos</text>
+          <text class="d-s" x="829" y="228" text-anchor="middle" data-i18n="df_a2s">fronteira, aberto ou ajustado</text>
+          <rect class="d-card" x="724" y="290" width="210" height="64" rx="12"/>
+          <text class="d-t" x="829" y="318" text-anchor="middle" data-i18n="df_a3">Agentes</text>
+          <text class="d-s" x="829" y="338" text-anchor="middle" data-i18n="df_a3s">executam com revisão</text>
+          <rect class="d-card" x="1000" y="60" width="180" height="48" rx="12"/>
+          <text class="d-s d-use" x="1016" y="89" data-i18n="df_u1">Dashboards</text>
+          <rect class="d-card" x="1000" y="128" width="180" height="48" rx="12"/>
+          <text class="d-s d-use" x="1016" y="157" data-i18n="df_u2">Assistente de dados</text>
+          <rect class="d-card" x="1000" y="196" width="180" height="48" rx="12"/>
+          <text class="d-s d-use" x="1016" y="225" data-i18n="df_u3">Automações</text>
+          <rect class="d-card" x="1000" y="264" width="180" height="48" rx="12"/>
+          <text class="d-s d-use" x="1016" y="293" data-i18n="df_u4">Decisões da diretoria</text>
+          <rect class="d-bar" x="1150" y="86" width="5" height="14" rx="1.5" style="animation-delay:-0.0s"/>
+          <rect class="d-bar" x="1158" y="78" width="5" height="22" rx="1.5" style="animation-delay:-0.8s"/>
+          <rect class="d-bar" x="1166" y="90" width="5" height="10" rx="1.5" style="animation-delay:-1.6s"/>
+          <circle class="d-live" cx="1168" cy="276" r="4"/>
+          <g class="d-badge"><circle cx="240" cy="122" r="13"/><text x="240" y="126.5" text-anchor="middle">4</text></g>
+          <g class="d-badge"><circle cx="716" cy="62" r="13"/><text x="716" y="66.5" text-anchor="middle">1</text></g>
+          <g class="d-badge"><circle cx="716" cy="172" r="13"/><text x="716" y="176.5" text-anchor="middle">2</text></g>
+          <g class="d-badge"><circle cx="716" cy="282" r="13"/><text x="716" y="286.5" text-anchor="middle">3</text></g>
+          </svg>
+        </div>
+        <figcaption class="dflow-hint" data-i18n="df_hint">Arraste para ver o fluxo inteiro.</figcaption>
+      </figure>
+      <ol class="dflow-legend">
+        <li><span class="n" aria-hidden="true">1</span><div><a href="/blog/tema/ia-sobre-dados-da-empresa/" hreflang="pt-BR" data-i18n="tp_dados_t">IA sobre os dados da empresa</a><p data-i18n="tp_dados_d">RAG, Text-to-SQL e MCP para a IA responder com os dados da empresa.</p></div></li>
+        <li><span class="n" aria-hidden="true">2</span><div><a href="/blog/tema/custos-e-modelos-de-ia/" hreflang="pt-BR" data-i18n="tp_custos_t">Custos, ROI e escolha de modelo</a><p data-i18n="tp_custos_d">Quanto custa a IA em produção e qual modelo usar em cada caso.</p></div></li>
+        <li><span class="n" aria-hidden="true">3</span><div><a href="/blog/tema/agentes-de-ia/" hreflang="pt-BR" data-i18n="tp_agentes_t">Agentes de IA em produção</a><p data-i18n="tp_agentes_d">Agentes que executam tarefas na empresa, com arquitetura, memória e revisão.</p></div></li>
+        <li><span class="n" aria-hidden="true">4</span><div><a href="/blog/tema/implantacao-de-ia/" hreflang="pt-BR" data-i18n="tp_impl_t">Implantação de IA: sistemas legados e arquitetura de dados</a><p data-i18n="tp_impl_d">A integração com os sistemas que já existem e as camadas de dados que vêm antes do modelo.</p></div></li>
+      </ol>
     </section>
 
     <section id="ferramentas">
@@ -270,16 +409,46 @@
       "latest_all": "See all articles &#8594;",
       "section_topics": "Topics",
       "tp_dados_t": "AI on company data",
-      "tp_dados_d": "How to make AI answer with company data: RAG, Text-to-SQL, MCP and spreadsheet analysis with LLMs. In Portuguese.",
+      "tp_dados_d": "RAG, Text-to-SQL and MCP so AI answers with company data. In Portuguese.",
       "tp_custos_t": "Costs, ROI and model choice",
-      "tp_custos_d": "How much generative AI costs in production and how to choose the model: frontier, open, fine-tuning and your own GPU. In Portuguese.",
+      "tp_custos_d": "How much AI costs in production and which model to use in each case. In Portuguese.",
       "tp_agentes_t": "AI agents in production",
-      "tp_agentes_d": "How to build AI agents for the company: architecture, MCP, LangChain, LangGraph and memory. In Portuguese.",
+      "tp_agentes_d": "Agents that carry out company tasks, with architecture, memory and review. In Portuguese.",
       "tp_impl_t": "AI implementation: legacy systems and data architecture",
-      "tp_impl_d": "How to implement AI in a company with legacy systems: plan, integration, team and data architecture. In Portuguese.",
-      "tp_a": "See the topic's articles &#8594;",
+      "tp_impl_d": "Integration with the systems already in place and the data layers that come before the model. In Portuguese.",
       "consulting_short": "I work in five formats, and all of them start with a free 1-hour conversation.",
-      "projects_intro": "22 data and AI systems for companies, clients and my own products, each with the problem it solves and what changed."
+      "projects_intro": "22 data and AI systems for companies, clients and my own products, each with the problem it solves and what changed.",
+      "df_title": "A company data flow, with the points where I work highlighted",
+      "df_h1": "SOURCES",
+      "df_h2": "INTEGRATION",
+      "df_h3": "DATA",
+      "df_h4": "AI",
+      "df_h5": "USE",
+      "df_gov": "Governance: permissions, audit, data privacy and cost under control",
+      "df_s1": "CRM and sales",
+      "df_s2": "ERP and finance",
+      "df_s3": "Spreadsheets",
+      "df_s4": "Documents and contracts",
+      "df_s5": "Website and marketing",
+      "df_s6": "Legacy systems",
+      "df_i_t": "Integration",
+      "df_i_s": "ETL, APIs and CDC",
+      "df_d1": "Gold: business data",
+      "df_d2": "Silver: clean and unique",
+      "df_d3": "Bronze: raw data",
+      "df_d_s": "Data contracts and lineage",
+      "df_a1": "RAG, Text-to-SQL and MCP",
+      "df_a1s": "answers with the source in view",
+      "df_a2": "Models",
+      "df_a2s": "frontier, open or fine-tuned",
+      "df_a3": "Agents",
+      "df_a3s": "execute with review",
+      "df_u1": "Dashboards",
+      "df_u2": "Data assistant",
+      "df_u3": "Automations",
+      "df_u4": "Leadership decisions",
+      "topics_intro": "A complete company data flow. The numbered highlights mark where I work, and each number leads to the topic's articles, in Portuguese.",
+      "df_hint": "Swipe to see the whole flow."
   }</script>
   <script src="/assets/site.js?v=202611072213"></script>
   <script src="/assets/track.js?v=202611241800"></script>
