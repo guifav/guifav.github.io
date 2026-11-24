@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LLM Ranking: qual é o melhor LLM? | Guilherme Favaron</title>
+    <meta name="description" content="Ranking de 277 modelos de IA por categoria, tipo e empresa. Dados do LM Arena de 3 de dezembro de 2025, sem os modelos lançados depois dessa data.">
+    <link rel="canonical" href="https://guifav.dev/llm-ranking/">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -35,7 +37,7 @@
         <header class="header">
             <div class="header-content">
                 <h1>Ranking: Qual é o Melhor LLM?</h1>
-                <p class="subtitle">Análise completa de 277 modelos de linguagem</p>
+                <p class="subtitle">Análise de 277 modelos de linguagem</p>
             </div>
             <div class="header-actions">
                 <nav class="breadcrumb header-breadcrumb" aria-label="Breadcrumb">
@@ -45,6 +47,13 @@
                 </nav>
             </div>
         </header>
+
+        <!-- Aviso provisório da data dos dados (#113, item 1). A data está fixa aqui, no card, no rodapé
+             e em script.js (updateLastUpdate); a revitalização da #113 passa a ler de uma fonte só. -->
+        <p class="data-notice" role="note">
+            Os dados são do LM Arena de <time datetime="2025-12-03">3 de dezembro de 2025</time>.
+            A página está em atualização e ainda não inclui os modelos lançados depois dessa data.
+        </p>
 
         <!-- Stats Cards -->
         <div class="stats-grid" id="statsCards">
