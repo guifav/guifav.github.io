@@ -1138,6 +1138,88 @@ def check_related(site: Path, posts: Path) -> list[str]:
     return problems
 
 
+# "Em resumo" (issue #108): quando o post declara summary no frontmatter, a página renderiza um único bloco
+# <section class="post-summary"> com o rótulo "Em resumo" e texto não vazio logo acima de <div class="post-body">.
+# Quando não declara, o bloco não aparece. Alarme de integridade do [slug].astro.
+SUMMARY_CLASS = "post-summary"
+SUMMARY_LABEL = "Em resumo"
+
+
+class _SummaryBlocks(HTMLParser):
+    """Blocos <section class="post-summary"> visíveis e sua posição relativa a <div class="post-body">."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.stack: list[tuple[str, bool, bool]] = []  # (tag, é post-summary visível, torna inerte)
+        self.saw_body = False
+        self.blocks: list[tuple[bool, str]] = []  # (antes de .post-body, texto coletado)
+        self._buf: list[str] | None = None
+        self._before = False
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+        if tag not in VOID_TAGS:
+            self.handle_endtag(tag)
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        a: dict[str, str] = {}
+        for k, v in attrs:
+            a.setdefault(k, v or "")
+        classes = a.get("class", "").split()
+        inert = any(i for _, _, i in self.stack) or tag in ("template", "noscript") or "hidden" in a
+        if not inert and tag == "div" and "post-body" in classes:
+            self.saw_body = True
+        is_summary = not inert and tag == "section" and SUMMARY_CLASS in classes and self._buf is None
+        if is_summary:
+            self._buf = []
+            self._before = not self.saw_body
+        if tag not in VOID_TAGS:
+            self.stack.append((tag, is_summary, tag in ("template", "noscript") or "hidden" in a))
+
+    def handle_data(self, data: str) -> None:
+        if self._buf is not None and not any(i for _, _, i in self.stack):
+            self._buf.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        for i in range(len(self.stack) - 1, -1, -1):
+            if self.stack[i][0] == tag:
+                closed = self.stack[i:]
+                del self.stack[i:]
+                if any(is_s for _, is_s, _ in closed) and self._buf is not None:
+                    self.blocks.append((self._before, " ".join("".join(self._buf).split())))
+                    self._buf = None
+                return
+
+
+def check_summary(site: Path, posts: Path) -> list[str]:
+    """#108: bloco 'Em resumo' acima de .post-body em todo post com summary, e em nenhum sem summary."""
+    problems: list[str] = []
+    for md in sorted(posts.glob("*.md")):
+        fm = frontmatter(md.read_text(encoding="utf-8"))
+        slug = fm.get("slug") or md.stem
+        rel = f"blog/{slug}/index.html"
+        page = site / rel
+        if not page.is_file():
+            continue  # check() já acusa post sem página
+        has_summary = bool(fm.get("summary", "").strip())
+        p = _SummaryBlocks()
+        p.feed(page.read_text(encoding="utf-8"))
+        p.close()
+        if not has_summary:
+            if p.blocks:
+                problems.append(f"{rel}: post sem summary com bloco {SUMMARY_CLASS}")
+            continue
+        if len(p.blocks) != 1:
+            problems.append(f"{rel}: post com summary precisa de um bloco {SUMMARY_CLASS}, tem {len(p.blocks)}")
+            continue
+        before_body, text = p.blocks[0]
+        if not before_body:
+            problems.append(f"{rel}: bloco {SUMMARY_CLASS} precisa vir antes de .post-body")
+        if not text.startswith(SUMMARY_LABEL) or not text[len(SUMMARY_LABEL):].strip():
+            problems.append(f"{rel}: bloco {SUMMARY_CLASS} sem o rótulo {SUMMARY_LABEL!r} ou sem texto de resumo")
+    return problems
+
+
 ROOT_INDEX_CHILDREN = [SITE_ORIGIN + "/sitemap-site.xml", SITE_ORIGIN + "/blog/sitemap.xml"]
 
 
@@ -2208,6 +2290,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         problems = check(Path(args.site), Path(args.posts), pre_cutover=pre)
         problems += check_related(Path(args.site), Path(args.posts))
+        problems += check_summary(Path(args.site), Path(args.posts))
         problems += check_contrast(Path(args.site))
         problems += check_consulting(Path(args.site))
         problems += check_home(Path(args.site), Path(args.posts), read_home_latest(Path(args.consts)))

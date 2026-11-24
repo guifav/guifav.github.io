@@ -3307,5 +3307,60 @@ class LegalSourcesTest(unittest.TestCase):
                 self.assertNotIn("/termos/", form, rel)
 
 
+class SummaryTest(Base):
+    """#108: bloco 'Em resumo' acima de .post-body quando há summary e ausente quando não há, com contraste AA."""
+
+    SUMMARY_HTML = (
+        '<section class="post-summary" aria-label="Em resumo">'
+        '<p class="post-summary-label">Em resumo</p>'
+        '<p>Resposta direta em duas frases. Sem repetir a description.</p>'
+        '</section><div class="post-body"><figure><img src="/blog/img/um-post/a.webp" alt="x"></figure></div>'
+    )
+
+    def write_post(self, slug: str, summary: str | None, html_body: str) -> None:
+        lines = ["---", "title: Teste", "description: Descricao propria do post", f"slug: {slug}"]
+        if summary is not None:
+            lines.append(f'summary: "{summary}"')
+        lines += ["---", "corpo", ""]
+        (self.posts / f"{slug}.md").write_text("\n".join(lines), encoding="utf-8")
+        self.w(f"blog/{slug}/index.html", page(html_body))
+
+    def test_valid_with_and_without_summary(self):
+        self.write_post("com-resumo", "Resposta direta em duas frases.", self.SUMMARY_HTML)
+        self.write_post("sem-resumo", None, '<div class="post-body"><p>texto</p></div>')
+        self.assertEqual(C.check_summary(self.site, self.posts), [])
+
+    def test_missing_or_misplaced_or_inert_summary_fails(self):
+        cases = {
+            "ausente": '<div class="post-body"><p>texto</p></div>',
+            "depois do body": '<div class="post-body"><p>x</p></div>' + self.SUMMARY_HTML.split("<div")[0],
+            "dentro do body": '<div class="post-body">' + self.SUMMARY_HTML.split("<div")[0] + "</div>",
+            "sem rotulo": '<section class="post-summary"><p>So o texto.</p></section><div class="post-body"></div>',
+            "sem texto": '<section class="post-summary"><p class="post-summary-label">Em resumo</p></section><div class="post-body"></div>',
+            "em template": '<template>' + self.SUMMARY_HTML.split("<div")[0] + '</template><div class="post-body"></div>',
+            "hidden": self.SUMMARY_HTML.replace('class="post-summary"', 'class="post-summary" hidden'),
+            "duplicado": self.SUMMARY_HTML.split("<div")[0] * 2 + '<div class="post-body"></div>',
+        }
+        for name, body in cases.items():
+            with self.subTest(case=name):
+                self.setUp()
+                self.write_post("com-resumo", "Resposta direta.", body)
+                self.assertTrue(C.check_summary(self.site, self.posts), name)
+
+    def test_post_without_summary_cannot_render_block(self):
+        self.write_post("sem-resumo", None, self.SUMMARY_HTML)
+        got = C.check_summary(self.site, self.posts)
+        self.assertTrue(any("sem summary" in p for p in got), got)
+
+    def test_blog_summary_contrast_in_light_and_dark(self):
+        repo = Path(__file__).resolve().parent.parent
+        site_css = (repo / "assets/site.css").read_text(encoding="utf-8")
+        blog_css = (repo / "blog-src/src/styles/blog.css").read_text(encoding="utf-8")
+        self.assertEqual(C.contrast_problems([site_css, blog_css]), [])
+        # Confere também .post-summary-label (cor herdando fundo --tag-bg de .post-summary) nos dois temas.
+        extra = ".post-summary-label{background:var(--tag-bg)}"
+        self.assertEqual(C.contrast_problems([site_css, blog_css, extra]), [])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
