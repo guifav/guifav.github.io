@@ -420,7 +420,12 @@ def _norm_item(it: dict) -> dict:
     r = it.get("redirect") or {}
     defaults = {"status_code": 301, "preserve_query_string": False, "include_subdomains": False,
                 "subpath_matching": False}
-    return {k: r.get(k, defaults.get(k)) for k in _ITEM_KEYS}
+    out = {k: r.get(k, defaults.get(k)) for k in _ITEM_KEYS}
+    # A Cloudflare aceita %20 no PUT, mas devolve source_url com %20 decodificado para espaço literal no GET
+    # (mantendo target_url com %20). Normalizamos só %20 em source_url para conferir sem afrouxar os outros campos.
+    if isinstance(out["source_url"], str):
+        out["source_url"] = out["source_url"].replace("%20", " ")
+    return out
 
 
 def apply(token: str, account: str, opener=urllib.request.urlopen, sleep=time.sleep) -> int:
@@ -450,8 +455,9 @@ def apply(token: str, account: str, opener=urllib.request.urlopen, sleep=time.sl
         _wait(account, op["operation_id"], token, opener, sleep)
     except SystemExit as e:
         raise SystemExit(f"{e}; {kept}") from None
-    got = sorted((_norm_item(i) for i in _items(account, list_id, token, opener)), key=lambda d: d["source_url"])
-    want = sorted((_norm_item(i) for i in sent), key=lambda d: d["source_url"])
+    got = sorted((_norm_item(i) for i in _items(account, list_id, token, opener)),
+                 key=lambda d: str(d["source_url"] or ""))
+    want = sorted((_norm_item(i) for i in sent), key=lambda d: str(d["source_url"] or ""))
     if got != want:
         raise SystemExit(f"a lista {target} lida de volta não confere com a enviada ({len(got)} de {len(want)} "
                          f"itens); {kept}: rodar apply de novo")
