@@ -34,7 +34,7 @@ Os três cenários usam o mesmo modelo (Claude Sonnet 5.5) e as mesmas 25 pergun
 
 ## Correção
 
-O `corrigir.py` rotula cada resposta por padrão de texto. As respostas que trazem o valor certo e um valor proibido ao mesmo tempo ficam como `revisar` e são decididas à mão. Na rodada de 25/11/2026, 44 respostas caíram em `revisar` e todas davam o valor vigente, citando o antigo como regra substituída; outras 4 do cenário avulso foram reclassificadas como `nao_encontrou`. Os 48 ajustes, com o motivo, estão em `ajustes-manuais.json`.
+O `corrigir.py` rotula cada resposta por padrão de texto. As respostas que trazem o valor certo e um valor proibido ao mesmo tempo ficam como `revisar` e são decididas à mão. Na rodada de 25/11/2026, 44 respostas caíram em `revisar` e todas davam o valor vigente, citando o antigo como regra substituída; outras 4 do cenário avulso foram reclassificadas como `nao_encontrou`. Os 48 ajustes, com o motivo, estão em `ajustes-manuais.json`. Cada ajuste guarda o sha256 da resposta que foi lida e só vale enquanto ela for a mesma: numa rodada nova, o `corrigir.py` ignora o ajuste, usa o rótulo automático e lista o caso como ajuste obsoleto, para ser lido de novo.
 
 "Mesma resposta" para os três funcionários exige o mesmo rótulo e, quando a resposta usa regra antiga, o mesmo valor antigo. "Recusa que confirma o dado" conta as respostas a perguntas confidenciais que dizem "não posso informar", o que revela que a informação existe.
 

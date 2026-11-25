@@ -9,10 +9,13 @@ Rótulo de cada resposta:
   errada         qualquer outro caso
   revisar        contém o valor certo e um proibido ao mesmo tempo (decidido à mão)
 
-Ajustes manuais ficam em ajustes-manuais.json, cada um com o motivo, e sobrepõem o rótulo
-automático. A saída vai para resultados/correcao.csv e resultados/resumo.json.
+Ajustes manuais ficam em ajustes-manuais.json, cada um com o motivo e o sha256 da resposta
+lida, e sobrepõem o rótulo automático só enquanto a resposta for a mesma. Se a resposta mudar
+(uma rodada nova, por exemplo), o ajuste é ignorado, a resposta volta ao rótulo automático e o
+resumo conta o ajuste em "ajustes_obsoletos". A saída vai para resultados/correcao.csv e resultados/resumo.json.
 """
 import csv
+import hashlib
 import json
 import re
 import statistics
@@ -59,6 +62,10 @@ def rotular(pergunta, resposta):
     return "errada"
 
 
+def impressao(resposta):
+    return hashlib.sha256(resposta.encode("utf-8")).hexdigest()
+
+
 def tokens_entrada(uso):
     return uso["input_tokens"] + uso["cache_creation_input_tokens"] + uso["cache_read_input_tokens"]
 
@@ -71,6 +78,7 @@ def main():
     desconto = min(acrescimo["tokens_entrada"]) - 2  # "x" e "y" valem cerca de 2 tokens
 
     linhas = []
+    obsoletos = []
     for c in CENARIOS:
         for p in perguntas:
             for f in FUNCIONARIOS:
@@ -78,13 +86,17 @@ def main():
                 resposta, fontes, json_ok = ler_resposta(bruto)
                 chave = f"{c}/{p['id']}-{f}"
                 automatico = rotular(p, resposta)
-                final = ajustes.get(chave, {}).get("rotulo", automatico)
+                ajuste = ajustes.get(chave)
+                if ajuste and ajuste.get("sha256_resposta") != impressao(resposta):
+                    obsoletos.append(chave)
+                    ajuste = None
+                final = ajuste["rotulo"] if ajuste else automatico
                 citou = bool(set(fontes) & set(p["fonte_certa"])) if p["fonte_certa"] else None
                 linhas.append({
                     "cenario": c, "pergunta": p["id"], "classe": p["classe"], "funcionario": f,
                     "rotulo_automatico": automatico, "rotulo": final,
                     "valores_antigos": ";".join(v for v in p["proibido"] if re.search(v, normalizar(resposta))) if final == "versao_antiga" else "",
-                    "ajuste_manual": ajustes.get(chave, {}).get("motivo", ""),
+                    "ajuste_manual": ajuste["motivo"] if ajuste else "",
                     "citou_fonte_certa": citou, "fontes": ";".join(fontes), "json_valido": json_ok,
                     "tokens_entrada": tokens_entrada(bruto["uso"]) - desconto,
                     "tokens_saida": bruto["uso"]["output_tokens"],
@@ -98,7 +110,12 @@ def main():
         w.writeheader()
         w.writerows(linhas)
 
-    resumo = {"acrescimo_cli_descontado": desconto, "pendentes_de_revisao": len(pendentes), "cenarios": {}}
+    resumo = {
+        "acrescimo_cli_descontado": desconto,
+        "pendentes_de_revisao": len(pendentes),
+        "ajustes_obsoletos": len(obsoletos),
+        "cenarios": {},
+    }
     for c in CENARIOS:
         ls = [l for l in linhas if l["cenario"] == c]
         regras = [l for l in ls if l["classe"] in (1, 2, 3)]
@@ -142,6 +159,8 @@ def main():
         }
     (saida / "resumo.json").write_text(json.dumps(resumo, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(resumo, ensure_ascii=False, indent=2))
+    for chave in obsoletos:
+        print("AJUSTE OBSOLETO (a resposta mudou desde a revisão manual):", chave)
     for l in pendentes:
         print("REVISAR", l["cenario"], l["pergunta"], l["funcionario"], l["resposta"][:200])
 

@@ -1,6 +1,7 @@
 {
   "acrescimo_cli_descontado": 1104,
   "pendentes_de_revisao": 0,
+  "ajustes_obsoletos": 0,
   "cenarios": {
     "avulso": {
       "respostas": 75,
