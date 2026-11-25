@@ -5,6 +5,7 @@ date: 2021-07-01T03:00:00.000Z
 updated: 2024-01-04T18:32:59.176Z
 slug: o-que-faz-a-sua-estrategia-de-marketing-e-comunicacao-ser-um-sucesso
 type: newsletter
+index: false
 ---
 
 ## O que faz uma campanha de marketing ser bem sucedida? Qual o "pulo do gato"? Ao contrário do que parece, existe sim um "pulo do gato" nesta história.

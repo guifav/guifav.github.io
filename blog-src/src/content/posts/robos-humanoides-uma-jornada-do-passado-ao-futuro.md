@@ -6,6 +6,7 @@ updated: 2024-08-14T00:53:53.994Z
 slug: robos-humanoides-uma-jornada-do-passado-ao-futuro
 cover: img/robos-humanoides-uma-jornada-do-passado-ao-futuro/capa.jpg
 type: newsletter
+index: false
 ---
 
 *Os robôs têm sido um tema fascinante para a humanidade há décadas, capturando nossa imaginação através da ficção científica e impulsionando avanços tecnológicos no mundo real. Dentre as várias formas de robôs, os humanoides têm um lugar especial, pois sua semelhança com os seres humanos cria uma conexão única e levanta questões profundas sobre a relação entre homem e máquina.*

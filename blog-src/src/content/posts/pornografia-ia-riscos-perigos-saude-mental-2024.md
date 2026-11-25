@@ -7,6 +7,7 @@ updated: 2025-11-24T20:04:34.933Z
 slug: pornografia-ia-riscos-perigos-saude-mental-2024
 cover: img/pornografia-ia-riscos-perigos-saude-mental-2024/capa.jpg
 type: newsletter
+index: false
 ---
 
 A pornografia gerada por inteligência artificial está transformando drasticamente o cenário do conteúdo adulto online, trazendo consigo riscos sem precedentes para usuários e sociedade. Este artigo analisa em profundidade por que a pornografia com IA representa uma ameaça muito maior que suas formas tradicionais e como isso pode afetar sua saúde mental e relacionamentos.

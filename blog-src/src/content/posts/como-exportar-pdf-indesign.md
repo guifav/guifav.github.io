@@ -6,6 +6,7 @@ updated: 2024-11-13T13:41:24.370Z
 slug: como-exportar-pdf-indesign
 cover: img/como-exportar-pdf-indesign/capa.jpg
 type: newsletter
+index: false
 ---
 
 Você já se viu diante do desafio de exportar múltiplos PDFs de um único arquivo do Adobe InDesign? Se sim, você não está sozinho. Muitos profissionais de design e publicação enfrentam essa tarefa regularmente. Neste guia completo, vamos explorar uma solução eficiente e poderosa para exportar PDFs em massa no InDesign, usando scripts personalizados.

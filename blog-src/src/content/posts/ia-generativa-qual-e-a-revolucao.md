@@ -7,6 +7,7 @@ updated: 2024-02-19T09:38:01.186Z
 slug: ia-generativa-qual-e-a-revolucao
 cover: img/ia-generativa-qual-e-a-revolucao/capa.jpg
 type: newsletter
+index: false
 ---
 
 Resumo: *A inteligência artificial generativa representa uma mudança de paradigma, com modelos de IA capazes de produzir conteúdo original. Este artigo explica seus fundamentos, como redes neurais e aprendizado de máquina, além de impressionantes aplicações emergentes. Ao passo que discute impactos no emprego e produtividade, também destaca imenso potencial para aprimorar o trabalho humano. Propõe uma mentalidade de abundância, na qual humanos e IA são vistos como parceiros em potencial. Oferece roteiro prático para desenvolver expertise nestas tecnologias, essencial para indivíduos e organizações saírem na frente. Conclui que dominar esta nova capacidade revolucionária é chave para moldar um futuro de prosperidade compartilhada entre humanos e máquinas.*

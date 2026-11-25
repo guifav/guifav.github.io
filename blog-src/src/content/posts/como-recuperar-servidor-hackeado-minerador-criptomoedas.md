@@ -7,6 +7,7 @@ updated: 2026-01-07T19:58:07.610Z
 slug: como-recuperar-servidor-hackeado-minerador-criptomoedas
 cover: img/como-recuperar-servidor-hackeado-minerador-criptomoedas/capa.jpg
 type: newsletter
+index: false
 ---
 
 ## O Problema

@@ -6,6 +6,7 @@ updated: 2024-08-01T09:40:48.175Z
 slug: relatorio-2024-digital-media-trends-da-deloitte-principais-insights-e-takeaways
 cover: img/relatorio-2024-digital-media-trends-da-deloitte-principais-insights-e-takeaways/capa.jpg
 type: newsletter
+index: false
 ---
 
 *A Deloitte lançou recentemente seu relatório anual "Digital Media Trends", que explora as principais tendências e disrupções no setor de mídia e entretenimento digital. O relatório de 2024 destaca a contínua convergência entre streaming, mídia social e jogos, bem como a necessidade de as empresas desenvolverem estratégias abrangentes para definir o futuro da mídia e do entretenimento. Neste texto, vou nos aprofundar nos principais insights e takeaways apresentados no relatório. [O Estudo completo pode ser acessado aqui](https://8897d737-0d12-4d46-9a18-89e2eb99a82e.usrfiles.com/ugd/8897d7_d88a17ba8033454ab8bf5532d3ab31e2.pdf).*

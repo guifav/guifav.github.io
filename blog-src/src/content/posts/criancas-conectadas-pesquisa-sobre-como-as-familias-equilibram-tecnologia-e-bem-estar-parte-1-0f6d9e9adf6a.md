@@ -6,6 +6,7 @@ updated: 2024-01-27T02:41:25.482Z
 slug: criancas-conectadas-pesquisa-sobre-como-as-familias-equilibram-tecnologia-e-bem-estar-parte-1-0f6d9e9adf6a
 cover: img/criancas-conectadas-pesquisa-sobre-como-as-familias-equilibram-tecnologia-e-bem-estar-parte-1-0f6d9e9adf6a/capa.jpg
 type: newsletter
+index: false
 ---
 
 ### Estudo com mais de 400.000 famílias em 2023 ajuda a responder perguntas-chaves: como as gerações mais jovens veem o mundo digital e as mudanças que ele enfrenta atualmente? Quais desafios as famílias enfrentam ao manter seus filhos seguros em uma sociedade online?

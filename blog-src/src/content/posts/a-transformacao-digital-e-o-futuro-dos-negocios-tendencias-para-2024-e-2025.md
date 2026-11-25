@@ -5,6 +5,7 @@ date: 2023-11-12T03:00:00.000Z
 updated: 2024-01-04T18:32:57.982Z
 slug: a-transformacao-digital-e-o-futuro-dos-negocios-tendencias-para-2024-e-2025
 type: newsletter
+index: false
 ---
 
 Vivemos em uma era de profunda transformação que está redesenhando os modelos de negócios em praticamente todos os setores. Acelerada pelo contexto da pandemia, a adoção de tecnologias digitais e o lançamento ao público dos grandes modelos de inteligência artificial conversacional, a mudança de mentalidade necessária para prosperar nesse novo ambiente passaram a ser questões de sobrevivência para as empresas.

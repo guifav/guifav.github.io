@@ -6,6 +6,7 @@ updated: 2024-01-04T18:33:10.358Z
 slug: inteligencia-artificial-dicas-sites-aplicativos
 cover: img/inteligencia-artificial-dicas-sites-aplicativos/capa.jpg
 type: newsletter
+index: false
 ---
 
 Celebrando 1ª Semana da Newsletter diária: O Crescimento da Inteligência Artificial e o Boom de Ferramentas Inovadoras

@@ -6,6 +6,7 @@ updated: 2024-06-25T16:27:34.344Z
 slug: a-mente-vencedora-licoes-do-tenis-para-a-vida
 cover: img/a-mente-vencedora-licoes-do-tenis-para-a-vida/capa.jpg
 type: newsletter
+index: false
 ---
 
 <figure>

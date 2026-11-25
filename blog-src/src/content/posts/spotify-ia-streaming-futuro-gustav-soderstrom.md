@@ -7,6 +7,7 @@ updated: 2025-08-28T21:36:53.063Z
 slug: spotify-ia-streaming-futuro-gustav-soderstrom
 cover: img/spotify-ia-streaming-futuro-gustav-soderstrom/capa.jpg
 type: newsletter
+index: false
 ---
 
 Em uma era onde a Inteligência Artificial está revolucionando todas as indústrias, o Spotify emerge como um caso fascinante de como uma empresa de tecnologia pode navegar na intersecção entre inovação tecnológica e experiência humana.

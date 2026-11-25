@@ -7,6 +7,7 @@ updated: 2026-01-06T04:17:21.125Z
 slug: robotica-no-brasil-2028-guia-completo
 cover: img/robotica-no-brasil-2028-guia-completo/capa.jpg
 type: newsletter
+index: false
 ---
 
 A robótica vai transformar o mercado de trabalho brasileiro nos próximos dois anos. Assim como agentes de IA dominam as conversas hoje, robôs acessíveis dominarão a partir de 2028. Este guia mostra o caminho prático — mês a mês — para você se preparar, independente da sua formação atual. Detalho abaixo os passos concretos, com custos reais e habilidades específicas que o mercado já começa a demandar.

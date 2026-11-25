@@ -7,6 +7,7 @@ updated: 2024-01-10T01:28:48.510Z
 slug: as-10-regras-de-ouro-do-crescimento
 cover: img/as-10-regras-de-ouro-do-crescimento/capa.jpg
 type: newsletter
+index: false
 ---
 
 Recentemente, a conceituada consultoria **McKinsey** publicou um estudo identificando 10 regras fundamentais para as empresas alcançarem um crescimento sólido e rentável ao longo do tempo. Esta pesquisa, baseada na análise do desempenho de milhares de companhias globais, revelou padrões surpreendentemente consistentes entre aquelas com melhor desempenho (link da pesquisa no final deste artigo).

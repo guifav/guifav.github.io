@@ -457,14 +457,22 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
                 problems.append(f"{rel}: post com index: false sem noindex")
             if len(parts) == 1 and parts[0] in BLOG_PRIVATE_PAGES and not has_noindex:
                 problems.append(f"{rel}: página da newsletter sem noindex")
-        # Páginas de tema (#104): no sitemap (completude, abaixo), com canonical para si mesmas e, depois do
-        # cutover, indexáveis.
+        # Páginas de tema (#104): no sitemap (completude, abaixo), com canonical para si mesmas, sem link para
+        # post fora do índice (#107) e, depois do cutover, indexáveis.
         if TOPIC_PAGE.fullmatch(rel):
             topic_urls.append(url)
             if not pre_cutover and has_noindex:
                 problems.append(f"{rel}: página de tema com noindex")
             if not p.canonicals or not canonical_is_self(p.canonicals, url):
                 problems.append(f"{rel}: página de tema sem canonical para si mesma: {p.canonicals}")
+            bad_topic_posts: set[str] = set()
+            for ref in p.refs:
+                path = _internal(resolved[(base, ref)])
+                if path and path.startswith(BLOG_PREFIX):
+                    parts = path[len(BLOG_PREFIX):].strip("/").split("/")
+                    if len(parts) == 1 and parts[0] in noindex_slugs and parts[0] not in bad_topic_posts:
+                        bad_topic_posts.add(parts[0])
+                        problems.append(f"{rel}: página de tema lista post com index: false: {parts[0]}")
         if not pre_cutover:
             # Fora do blog, qualquer menção literal conta (inclusive JSON-LD e texto): o código é do site.
             if not in_blog and OLD_DOMAIN in (site / rel).read_text(encoding="utf-8").lower():

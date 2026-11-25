@@ -5,6 +5,7 @@ date: 2023-10-29T02:52:02.000Z
 updated: 2024-01-04T18:32:57.827Z
 slug: o-futuro-do-growth-hacking-combinando-inovacao-e-inteligencia-artificial
 type: newsletter
+index: false
 ---
 
 ## O growth hacking surgiu na última década como uma nova abordagem para impulsionar o crescimento de negócios digitais de forma rápida e escalável. Combinando técnicas de marketing, dados e tecnologia, o growth hacking busca "hackear" o crescimento identificando gargalos e alavancas que podem ser otimizados.

@@ -5,6 +5,7 @@ date: 2022-03-01T03:00:00.000Z
 updated: 2024-01-04T18:32:59.091Z
 slug: se-voce-acha-que-trabalha-mais-que-todos-na-sua-empresa
 type: newsletter
+index: false
 ---
 
 ## Esse texto pode ser um divisor de águas para você, assim como foi para mim quando isso tudo me caiu a ficha.

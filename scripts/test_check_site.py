@@ -1717,8 +1717,8 @@ class RelatedTest(unittest.TestCase):
         self.assertEqual(self.problems(), ["blog/a/index.html: post indexável precisa de um bloco Leia também, tem 2"])
 
     def test_fewer_than_three_indexable_posts_fail(self):
-        for slugs, bad in ((("b", "c"), []), (("b", "c", "podcast"), ["podcast"]), (("b", "c", "a"), ["a"]),
-                           (("b", "c", "b"), [])):
+        for slugs, bad in ((("b", "c"), []), (("b", "c", "podcast"), ["podcast"]), (("b", "c", "fora"), ["fora"]),
+                           (("b", "c", "a"), ["a"]), (("b", "c", "b"), [])):
             with self.subTest(slugs=slugs):
                 self.page("a", self.block(slugs))
                 got = self.problems()
@@ -1810,6 +1810,19 @@ class TopicPagesTest(Base):
                 got = self.problems(pre_cutover=False)
                 self.assertTrue(any(p.startswith("blog/tema/agentes-de-ia/index.html: página de tema sem canonical")
                                     for p in got), got)
+
+    def test_topic_page_cannot_link_to_index_false_post(self):
+        # #107: post com index: false fica fora das páginas de tema, tanto com link relativo quanto absoluto.
+        (self.posts / "podado.md").write_text("---\ntitle: p\nslug: podado\nindex: false\n---\n", encoding="utf-8")
+        self.w("blog/podado/index.html", page('<a href="/blog/">blog</a>', robots=ROBOTS_NOINDEX))
+        for href in ("/blog/podado/", "https://guifav.dev/blog/podado/", "../../podado/"):
+            with self.subTest(href=href):
+                self.w("blog/tema/agentes-de-ia/index.html",
+                       f"<!DOCTYPE html><html><head>{FIXTURE_TITLE}{ROBOTS_INDEX}"
+                       f'<link rel="canonical" href="{self.URL}"></head><body>'
+                       f'<a href="/blog/um-post/">p</a><a href="{href}">podado</a></body></html>')
+                got = self.problems(pre_cutover=False)
+                self.assertEqual(got, ["blog/tema/agentes-de-ia/index.html: página de tema lista post com index: false: podado"])
 
 
 class RelatedWiredTest(Base):

@@ -192,11 +192,12 @@ class PlanTest(unittest.TestCase):
     def test_real_repo_has_no_problems(self):
         self.assertEqual(S.problems(), [])
 
-    def test_every_target_is_an_indexable_post_file(self):
+    def test_every_target_is_a_published_post_file_outside_duplicates(self):
+        # Posts podados na #107 continuam publicados com HTTP 200 e noindex (sem apagar a URL nem quebrar o 301).
         for new in PLAN.values():
             f = POSTS / f"{new}.md"
             self.assertTrue(f.is_file(), new)
-            self.assertNotRegex(f.read_text(encoding="utf-8").split("---")[1], r"(?m)^index:\s*false")
+            self.assertNotIn(new, DUPS)
 
     def test_no_old_path_is_a_post_today(self):
         for old in PLAN:
@@ -327,11 +328,15 @@ class ProblemsTest(unittest.TestCase):
                 got = self.run_with((("velho", "novo"),), posts, dups=dups)
                 self.assertTrue(any(word in x for x in got), got)
 
-    def test_target_must_be_an_indexable_post(self):
+    def test_target_must_be_a_published_post_outside_duplicates(self):
         self.assertEqual(self.run_with((("velho", "novo"),), {"novo": ""}), [])
-        for posts in ({}, {"novo": "index: false\n"}, {"outro": ""}):
+        # Post com index: false (#107) continua publicado (200) e pode receber 301 de URL antiga sem virar 404.
+        self.assertEqual(self.run_with((("velho", "novo"),), {"novo": "index: false\n"}), [])
+        for posts in ({}, {"outro": ""}):
             with self.subTest(posts=posts):
-                self.assertTrue(any("não é post indexável" in p for p in self.run_with((("velho", "novo"),), posts)))
+                self.assertTrue(any("não é post publicado" in p for p in self.run_with((("velho", "novo"),), posts)))
+        got = self.run_with((("velho", "novo"),), {"novo": "index: false\n", "orig": ""}, dups=(("novo", "orig"),))
+        self.assertTrue(any("não é post publicado" in p for p in got), got)
 
     def test_noindex_detection_ignores_body_and_other_keys(self):
         with tempfile.TemporaryDirectory() as d:

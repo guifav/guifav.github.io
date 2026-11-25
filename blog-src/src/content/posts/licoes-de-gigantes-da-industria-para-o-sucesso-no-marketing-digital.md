@@ -6,6 +6,7 @@ updated: 2024-07-21T04:11:16.071Z
 slug: licoes-de-gigantes-da-industria-para-o-sucesso-no-marketing-digital
 cover: img/licoes-de-gigantes-da-industria-para-o-sucesso-no-marketing-digital/capa.jpg
 type: newsletter
+index: false
 ---
 
 <figure>

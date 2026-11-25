@@ -6,6 +6,7 @@ updated: 2024-09-05T21:07:13.926Z
 slug: discurso-completo-em-portugues-de-roger-federer-na-formatura-de-dartmouth-de-2024
 cover: img/discurso-completo-em-portugues-de-roger-federer-na-formatura-de-dartmouth-de-2024/capa.jpg
 type: newsletter
+index: false
 ---
 
 *Abaixo você encontra a transcrição na íntegra do discurso do Federer. Assinalei algumas partes que chamam mais atenção, mas ele todo é uma primazia.*
