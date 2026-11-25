@@ -307,12 +307,34 @@ def frontmatter(text: str) -> dict[str, str]:
 
 
 def _yaml_scalar(raw: str) -> str:
-    """Valor escalar simples: entre aspas, ou sem aspas e sem o comentário ' #...'."""
+    """Valor escalar simples: entre aspas (com escapes \\" e ''), ou sem aspas e sem o comentário ' #...'."""
     raw = raw.strip()
-    if raw[:1] in ("'", '"'):
-        end = raw.find(raw[0], 1)
-        if end > 0:
-            return raw[1:end]
+    if raw[:1] == '"':
+        out: list[str] = []
+        i = 1
+        while i < len(raw):
+            ch = raw[i]
+            if ch == "\\" and i + 1 < len(raw):
+                out.append(raw[i + 1])
+                i += 2
+                continue
+            if ch == '"':
+                return "".join(out)
+            out.append(ch)
+            i += 1
+    elif raw[:1] == "'":
+        out = []
+        i = 1
+        while i < len(raw):
+            ch = raw[i]
+            if ch == "'":
+                if i + 1 < len(raw) and raw[i + 1] == "'":
+                    out.append("'")
+                    i += 2
+                    continue
+                return "".join(out)
+            out.append(ch)
+            i += 1
     return re.sub(r"\s+#.*$", "", raw).strip()
 
 
@@ -1165,6 +1187,133 @@ def check_related(site: Path, posts: Path) -> list[str]:
             problems.append(f"{rel}: bloco Leia também aponta para {s}, que é o próprio post ou está fora do índice")
         if listed[slug] and f"{TOPIC_PREFIX}{listed[slug][0]}/" not in hrefs:
             problems.append(f"{rel}: bloco Leia também sem o link para o tema {listed[slug][0]}")
+    return problems
+
+
+# "Em resumo" (issue #108): quando o post declara summary no frontmatter, a página renderiza um único bloco
+# <section class="post-summary"> com o rótulo "Em resumo" e texto não vazio logo acima de <div class="post-body">.
+# Quando não declara, o bloco não aparece. Alarme de integridade do [slug].astro.
+SUMMARY_CLASS = "post-summary"
+SUMMARY_LABEL = "Em resumo"
+_YAML_BLOCK_INDICATOR = re.compile(r"^[>|](?:[+-]?\d?|\d[+-]?)(?:\s+#.*)?$")
+# YAML 1.2 Core Schema (o mesmo do Astro): só estes quatro tokens sem aspas são nulos; "nUll" é string.
+_YAML_NULLS = frozenset({"null", "Null", "NULL", "~"})
+
+
+def _has_frontmatter_summary(text: str) -> bool:
+    """True quando o frontmatter declara summary com valor não vazio, na mesma linha, na seguinte ou em bloco >/|."""
+    m = re.match(r"^---\r?\n(.*?)\r?\n(?:---|\.\.\.)(?:\r?\n|$)", text, re.S)
+    if not m:
+        return False
+    lines = m.group(1).splitlines()
+    found: bool | None = None
+    i = 0
+    while i < len(lines):
+        km = re.match(r"""^(?:summary|"summary"|'summary')[ \t]*:[ \t]*(.*)$""", lines[i])
+        if not km:
+            i += 1
+            continue
+        raw = km.group(1).strip()
+        block = bool(_YAML_BLOCK_INDICATOR.fullmatch(raw))
+        i += 1
+        cont: list[str] = []
+        while i < len(lines) and (lines[i] == "" or lines[i][0] in " \t"):
+            cont.append(lines[i])
+            i += 1
+        if block:
+            found = any(ln.strip() for ln in cont)
+        elif raw and not raw.startswith("#"):
+            val = _yaml_scalar(raw)
+            if raw[0] in ("'", '"'):
+                found = bool(val.strip())
+            else:
+                found = bool(val.strip()) and val.strip() not in _YAML_NULLS
+        else:
+            cleaned = [ln.strip() for ln in cont if ln.strip() and not ln.strip().startswith("#")]
+            if not cleaned:
+                found = False
+            else:
+                first = cleaned[0]
+                if first[0] in ("'", '"'):
+                    found = bool(_yaml_scalar(first).strip()) or len(cleaned) > 1
+                else:
+                    found = _yaml_scalar(first).strip() not in _YAML_NULLS or len(cleaned) > 1
+    return bool(found)
+
+
+class _SummaryBlocks(HTMLParser):
+    """Blocos <section class="post-summary"> visíveis e sua posição relativa a <div class="post-body">."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.stack: list[tuple[str, bool, bool]] = []  # (tag, é post-summary visível, torna inerte)
+        self.saw_body = False
+        self.blocks: list[tuple[bool, str]] = []  # (antes de .post-body, texto coletado)
+        self._buf: list[str] | None = None
+        self._before = False
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+        if tag not in VOID_TAGS:
+            self.handle_endtag(tag)
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        a: dict[str, str] = {}
+        for k, v in attrs:
+            a.setdefault(k, v or "")
+        classes = a.get("class", "").split()
+        inert = any(i for _, _, i in self.stack) or tag in ("template", "noscript") or "hidden" in a
+        if not inert and tag == "div" and "post-body" in classes:
+            self.saw_body = True
+        is_summary = not inert and tag == "section" and SUMMARY_CLASS in classes and self._buf is None
+        if is_summary:
+            self._buf = []
+            self._before = not self.saw_body
+        if tag not in VOID_TAGS:
+            self.stack.append((tag, is_summary, tag in ("template", "noscript") or "hidden" in a))
+
+    def handle_data(self, data: str) -> None:
+        if self._buf is not None and not any(i for _, _, i in self.stack):
+            self._buf.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        for i in range(len(self.stack) - 1, -1, -1):
+            if self.stack[i][0] == tag:
+                closed = self.stack[i:]
+                del self.stack[i:]
+                if any(is_s for _, is_s, _ in closed) and self._buf is not None:
+                    self.blocks.append((self._before, " ".join("".join(self._buf).split())))
+                    self._buf = None
+                return
+
+
+def check_summary(site: Path, posts: Path) -> list[str]:
+    """#108: bloco 'Em resumo' acima de .post-body em todo post com summary, e em nenhum sem summary."""
+    problems: list[str] = []
+    for md in sorted(posts.glob("*.md")):
+        md_text = md.read_text(encoding="utf-8")
+        fm = frontmatter(md_text)
+        slug = fm.get("slug") or md.stem
+        rel = f"blog/{slug}/index.html"
+        page = site / rel
+        if not page.is_file():
+            continue  # check() já acusa post sem página
+        has_summary = _has_frontmatter_summary(md_text)
+        p = _SummaryBlocks()
+        p.feed(page.read_text(encoding="utf-8"))
+        p.close()
+        if not has_summary:
+            if p.blocks:
+                problems.append(f"{rel}: post sem summary com bloco {SUMMARY_CLASS}")
+            continue
+        if len(p.blocks) != 1:
+            problems.append(f"{rel}: post com summary precisa de um bloco {SUMMARY_CLASS}, tem {len(p.blocks)}")
+            continue
+        before_body, text = p.blocks[0]
+        if not before_body:
+            problems.append(f"{rel}: bloco {SUMMARY_CLASS} precisa vir antes de .post-body")
+        if not text.startswith(SUMMARY_LABEL) or not text[len(SUMMARY_LABEL):].strip():
+            problems.append(f"{rel}: bloco {SUMMARY_CLASS} sem o rótulo {SUMMARY_LABEL!r} ou sem texto de resumo")
     return problems
 
 
@@ -2361,6 +2510,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         problems = check(Path(args.site), Path(args.posts), pre_cutover=pre)
         problems += check_related(Path(args.site), Path(args.posts))
+        problems += check_summary(Path(args.site), Path(args.posts))
         problems += check_contrast(Path(args.site))
         problems += check_consulting(Path(args.site))
         problems += check_home(Path(args.site), Path(args.posts), read_home_latest(Path(args.consts)))

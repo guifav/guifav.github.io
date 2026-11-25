@@ -3399,10 +3399,134 @@ class LegalSourcesTest(unittest.TestCase):
                 self.assertNotIn("/termos/", form, rel)
 
 
+class SummaryTest(Base):
+    """#108: bloco 'Em resumo' acima de .post-body quando há summary e ausente quando não há, com contraste AA."""
+
+    SUMMARY_HTML = (
+        '<section class="post-summary" aria-label="Em resumo">'
+        '<p class="post-summary-label">Em resumo</p>'
+        '<p>Resposta direta em duas frases. Sem repetir a description.</p>'
+        '</section><div class="post-body"><figure><img src="/blog/img/um-post/a.webp" alt="x"></figure></div>'
+    )
+
+    def write_post(self, slug: str, summary: str | None, html_body: str) -> None:
+        lines = ["---", "title: Teste", "description: Descricao propria do post", f"slug: {slug}"]
+        if summary is not None:
+            lines.append(f'summary: "{summary}"')
+        lines += ["---", "corpo", ""]
+        (self.posts / f"{slug}.md").write_text("\n".join(lines), encoding="utf-8")
+        self.w(f"blog/{slug}/index.html", page(html_body))
+
+    def test_valid_with_and_without_summary(self):
+        self.write_post("com-resumo", "Resposta direta em duas frases.", self.SUMMARY_HTML)
+        self.write_post("sem-resumo", None, '<div class="post-body"><p>texto</p></div>')
+        self.assertEqual(C.check_summary(self.site, self.posts), [])
+
+    def test_yaml_multiline_and_indented_summary_are_recognized(self):
+        # Regressão da revisão do PR #158 (Roger P1 / Codex P2): YAML válido com valor indentado na linha seguinte
+        # ou em bloco >/| é aceito pelo Astro e precisa ser reconhecido como post com summary.
+        yaml_with = {
+            "indentado": "summary:\n  Resposta direta na linha seguinte.\n  Segunda frase.",
+            "indentado com comentario": "summary: # nota\n  # comentario interno\n  Resposta valida.",
+            "bloco dobrado": "summary: >\n  Resposta dobrada em duas linhas.",
+            "bloco literal": "summary: |-\n  Resposta literal.",
+            "bloco indentado": "summary: >2-\n  Resposta com indicador numerico.",
+            "aspas multilinha": 'summary:\n  "Resposta entre aspas\n  quebrada em duas linhas."',
+            "espaco antes de dois-pontos": 'summary : "Resposta com espaco antes do separador."',
+            "chave com aspas duplas": '"summary": "Resposta com chave entre aspas duplas."',
+            "chave com aspas simples": "'summary' : 'Resposta com chave entre aspas simples.'",
+            "aspas duplas escapadas": 'summary: "\\"Resposta\\" entre aspas escapadas."',
+            "misto nUll e string no YAML 1.2": "summary: nUll",
+            "indentado nUll e string no YAML 1.2": "summary:\n  nUll",
+            "null entre aspas e string": 'summary: "null"',
+        }
+        for name, fm_line in yaml_with.items():
+            with self.subTest(case=name):
+                self.setUp()
+                (self.posts / "ml.md").write_text(
+                    f"---\ntitle: Teste\ndescription: Desc\nslug: ml\n{fm_line}\n---\ncorpo\n", encoding="utf-8"
+                )
+                self.w("blog/ml/index.html", page(self.SUMMARY_HTML))
+                self.assertEqual(C.check_summary(self.site, self.posts), [], name)
+                self.w("blog/ml/index.html", page('<div class="post-body"><p>sem bloco</p></div>'))
+                self.assertTrue(C.check_summary(self.site, self.posts), name)
+
+        yaml_without = {
+            "chave vazia": "summary:",
+            "so comentario": "summary: # nada\n  # ainda nada",
+            "aspas vazias": 'summary: ""',
+            "null": "summary: null",
+            "Null": "summary: Null",
+            "NULL": "summary: NULL",
+            "til": "summary: ~",
+            "bloco vazio": "summary: >\n   ",
+            "indentado null": "summary:\n  null",
+            "indentado Null": "summary:\n  Null",
+            "indentado NULL": "summary:\n  NULL",
+            "indentado til com comentario": "summary:\n  ~ # vazio",
+        }
+        for name, fm_line in yaml_without.items():
+            with self.subTest(empty=name):
+                self.setUp()
+                (self.posts / "vazio.md").write_text(
+                    f"---\ntitle: Teste\ndescription: Desc\nslug: vazio\n{fm_line}\n---\ncorpo\n", encoding="utf-8"
+                )
+                self.w("blog/vazio/index.html", page('<div class="post-body"><p>texto</p></div>'))
+                self.assertEqual(C.check_summary(self.site, self.posts), [], name)
+
+    def test_missing_or_misplaced_or_inert_summary_fails(self):
+        cases = {
+            "ausente": '<div class="post-body"><p>texto</p></div>',
+            "depois do body": '<div class="post-body"><p>x</p></div>' + self.SUMMARY_HTML.split("<div")[0],
+            "dentro do body": '<div class="post-body">' + self.SUMMARY_HTML.split("<div")[0] + "</div>",
+            "sem rotulo": '<section class="post-summary"><p>So o texto.</p></section><div class="post-body"></div>',
+            "sem texto": '<section class="post-summary"><p class="post-summary-label">Em resumo</p></section><div class="post-body"></div>',
+            "texto so em template": '<section class="post-summary"><p class="post-summary-label">Em resumo</p><template><p>Oculto</p></template></section><div class="post-body"></div>',
+            "em template": '<template>' + self.SUMMARY_HTML.split("<div")[0] + '</template><div class="post-body"></div>',
+            "hidden": self.SUMMARY_HTML.replace('class="post-summary"', 'class="post-summary" hidden'),
+            "duplicado": self.SUMMARY_HTML.split("<div")[0] * 2 + '<div class="post-body"></div>',
+        }
+        for name, body in cases.items():
+            with self.subTest(case=name):
+                self.setUp()
+                self.write_post("com-resumo", "Resposta direta.", body)
+                self.assertTrue(C.check_summary(self.site, self.posts), name)
+        # .post-body dentro de <template> antes do summary é inerte e não conta como .post-body real.
+        self.setUp()
+        self.write_post("com-resumo", "Resposta direta.", '<template><div class="post-body"></div></template>' + self.SUMMARY_HTML)
+        self.assertEqual(C.check_summary(self.site, self.posts), [])
+
+    def test_main_runs_check_summary(self):
+        consts = Path(self.tmp.name) / "consts.ts"
+        consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
+        self.write_post("com-resumo", "Resposta direta.", '<div class="post-body"><p>sem bloco</p></div>')
+        err = io.StringIO()
+        with isolate_main_rule("check_summary"), \
+                contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            code = C.main(["--site", str(self.site), "--posts", str(self.posts), "--consts", str(consts)])
+        self.assertEqual(code, 1)
+        self.assertIn("post-summary", err.getvalue())
+
+    def test_post_without_summary_cannot_render_block(self):
+        self.write_post("sem-resumo", None, self.SUMMARY_HTML)
+        got = C.check_summary(self.site, self.posts)
+        self.assertTrue(any("sem summary" in p for p in got), got)
+
+    def test_blog_summary_contrast_in_light_and_dark(self):
+        repo = Path(__file__).resolve().parent.parent
+        site_css = (repo / "assets/site.css").read_text(encoding="utf-8")
+        blog_css = (repo / "blog-src/src/styles/blog.css").read_text(encoding="utf-8")
+        self.assertEqual(C.contrast_problems([site_css, blog_css]), [])
+        # Confere também .post-summary-label (cor herdando fundo --tag-bg de .post-summary) nos dois temas.
+        extra = ".post-summary-label{background:var(--tag-bg)}"
+        self.assertEqual(C.contrast_problems([site_css, blog_css, extra]), [])
+
+
 # Regras chamadas por C.main() e o retorno neutro usado ao isolar uma delas (#147).
 MAIN_RULES = {
     "check": lambda *a, **k: [],
     "check_related": lambda *a, **k: [],
+    "check_summary": lambda *a, **k: [],
     "check_contrast": lambda *a, **k: [],
     "check_consulting": lambda *a, **k: [],
     "check_home": lambda *a, **k: [],
