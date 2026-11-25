@@ -14,9 +14,9 @@ Se a sua empresa constrói software, mesmo que em pequena escala, o seu time de 
 
 Quero explicar isso de um jeito que serve tanto para o CEO que tem duzentos engenheiros em folha quanto para o fundador que contratou dois devs e uma assinatura de Claude Code. A confusão no ar é parecida nos dois casos: produtividade prometida que não chega, sênior reclamando de sobrecarga, júnior entregando rápido demais para o conforto de quem revisa, e uma sensação geral de que o time virou uma caixa preta que engole IA de um lado e cospe código do outro, sem que ninguém, inclusive o CTO, consiga dizer com precisão o que está acontecendo lá dentro.
 
-Vou ser direto: **essa confusão tem nome, tem causa e tem um caminho de saída**. Entender tudo isso virou diligência básica de qualquer liderança que tenha software dentro do negócio, e não mais um luxo reservado a executivo de tecnologia.
+Com agentes de IA gerando código mais rápido do que o time consegue revisar, o gargalo do software saiu da escrita de código e foi para a especificação, e o valor do time passou para o trabalho de orientar agentes e avaliar o que eles entregam. Entender isso virou diligência básica de qualquer liderança que tenha software dentro do negócio, inclusive fora da área de tecnologia.
 
-## O gargalo migrou para a especificação
+## Para onde foi o gargalo do desenvolvimento de software com IA?
 
 Durante vinte anos, a engenharia de software funcionou assim: você contrata pessoas para escrever código, mede a entrega por linhas *commitadas*, features enviadas, story points fechados. O code review é o portão de qualidade. Se passou na revisão, vai para produção. O ofício era o código em si.
 
@@ -39,7 +39,7 @@ Um caso que se tornou emblemático: um dev pede para um agente construir um sist
 
 A especificação está virando o produto; código, descartável. Essa é a inversão mais completa de como o software foi construído nos últimos cinquenta anos.
 
-## A camada que ainda não tem nome
+## Que trabalho surge entre a especificação e o código?
 
 Entre a especificação e o código que vai para produção, existe agora uma camada de trabalho inteira que nenhum organograma sabe descrever. Alguém precisa quebrar o problema em pedaços do tamanho certo para o agente resolver. Alguém precisa saber quando deixar o agente correr e quando segurar a rédea. Alguém precisa corrigir a saída não reescrevendo o código, e sim ajustando o prompt, o contexto ou a restrição.
 
@@ -47,7 +47,7 @@ Vejo isso sendo chamado de trabalho supervisório… De arquitetura executável.
 
 Esse trabalho supervisório é onde mora o novo valor. A habilidade crítica mudou da velocidade de digitação para a capacidade de carregar um modelo mental do sistema inteiro, antecipar onde a IA vai errar, definir fronteiras claras e avaliar saídas não-determinísticas sem ingenuidade.
 
-## A fratura invisível: seniores afogados, juniores decolando, mid-levels na zona de perigo
+## Por que a IA afeta seniores, juniores e mid-levels de formas diferentes?
 
 Em qualquer time real que adotou IA de forma séria nos últimos meses, ocorre a mesma fratura. O time se divide em três grupos, e os três estão vivendo realidades completamente diferentes.
 
@@ -57,9 +57,15 @@ Em qualquer time real que adotou IA de forma séria nos últimos meses, ocorre a
 
 **Os mid-levels estão na zona de perigo.** Três a cinco anos de experiência. Habilidade suficiente para ter vícios, insuficiente para ser arquiteto de verdade. Re-treinar um mid-level, tirando-o da lógica de escrever sintaxe e colocando-o na lógica de supervisionar agentes, é o desafio organizacional mais duro que líderes de tech estão encontrando em 2026. O problema costuma aparecer em conversas de corredor e em reuniões fechadas de liderança, mas raramente desce para o plano de carreira, para a política de compensação ou para a estrutura de contratação que a empresa pratica de fato.
 
+| Grupo | O que está acontecendo | Risco para a empresa |
+|---|---|---|
+| Seniores | Viram controladores de tráfego aéreo, revisando a saída de juniores e agentes; produzem menos linhas e decidem mais | Burnout |
+| Juniores | Tratam a IA como colega e entregam código útil na primeira semana | Volume de código acima do que o time consegue revisar |
+| Mid-levels | Três a cinco anos de experiência, com vícios de quem escreve sintaxe; re-treinar é o desafio mais duro | Obsolescência |
+
 Para o CEO, a implicação é estratégica. Se você só enxerga o time como um bloco, você vai tratar seniores e mid-levels com a mesma remuneração, as mesmas metas, o mesmo plano de carreira. E vai perder os seniores para o burnout e os mid-levels para a obsolescência, não necessariamente "ganhando” bons juniores.
 
-## O problema do conhecimento "tribal"
+## Por que o agente de IA falha sem o conhecimento "tribal" da empresa?
 
 Aqui mora uma armadilha específica, do tipo que só aparece depois que a empresa já apostou pesado em IA. O agente não tem contexto organizacional, mesmo você criando infinitas skills, plugins e MCPs. Não sabe que o job de marketing roda toda terça à meia-noite e satura o pool de conexões do banco. Não sabe que aquele microserviço mal-documentado foi escrito com pressa antes das férias de Natal e nunca mais foi tocado. Não sabe que o cliente X tem um contrato especial que impede um determinado comportamento do sistema.
 
@@ -76,13 +82,13 @@ A consequência é direta. Toda aquela promessa de “sistemas auto-cicatrizante
 
 Construir isso parece investimento não urgente até o dia em que se torna(rá) o único investimento que importa.
 
-## Agentes obedientes demais
+## Por que agentes obedientes demais são um risco num incidente?
 
 Há outro ponto pouco discutido. Agentes de IA são treinados para serem prestativos. São puxa-sacos por construção. Querem te manter engajado na conversa, são propositivos mesmo quando não são necessários. Durante um incidente, o último que você quer no comando é um puxa-saco. Você quer alguém que desafie a hipótese, que force o humano a olhar para o que ele não quer olhar.
 
 A resposta emergente dentro de times que já sofreram com isso é o que está sendo chamado de “agente bravo” (*angry agent*): um agente configurado especificamente para furar a teoria em curso, apontar contradições, exigir evidência. Trata-se de higiene de operação, ainda que muita gente trate como luxo dispensável. Porque dois agentes concordando entre si, o humano cansado e a IA obediente, é a receita perfeita para um servidor queimando enquanto todo mundo bate cabeça.
 
-## Contratação: você está comprando a habilidade errada
+## Que habilidade contratar em desenvolvedores agora?
 
 Se você está contratando desenvolvedor agora com a descrição de vaga que usava há dois anos, você está comprando a habilidade errada. Velocidade para teclar código virou commodity, e deixou de funcionar como diferencial real.
 
@@ -92,7 +98,13 @@ Isso é uma pessoa completamente diferente da que você contratava em 2023-4. E 
 
 Um teste mais útil em 2026 que tenho aplicado nos processos de recrutamento é: *aqui está uma especificação \[vaga\], um sistema legado indo a meia-boca e um agente de IA à sua disposição. O que você faz?*
 
-## Dívida cognitiva e compreensão contínua
+| Dimensão | Vaga de dois anos atrás | Vaga com agentes de IA no time |
+|---|---|---|
+| Habilidade que diferencia | Velocidade para escrever código | Pensamento arquitetural e julgamento sob incerteza |
+| Qualidade | Code review depois que o código existe | Especificação precisa a ponto de a IA não interpretar errado e testes que capturem alucinações antes da produção |
+| Teste técnico | Escrever uma busca binária em trinta minutos | Especificação vaga, sistema legado indo a meia-boca e um agente de IA à disposição |
+
+## O que é dívida cognitiva e como evitá-la?
 
 Por décadas, o code review serviu para caçar bug e também, de quebra, para ensinar o sistema aos desenvolvedores. Se os agentes passam a escrever todo o código e o time para de ler, o time vira estrangeiro dentro do próprio produto.
 
@@ -102,7 +114,7 @@ Isso é **dívida cognitiva**. Ela se acumula silenciosamente, sem aparecer em n
 
 A contramedida é **agendar compreensão**. Rituais semanais de arquitetura conjunta, mesmo que o código venha dos agentes. Ferramentas que resumem mudanças arquiteturais para humanos. Sessões deliberadas de leitura de código, como se fossem sessões de leitura coletiva. Soa analógico em um mundo que vende autonomia total. É justamente por isso que funciona.
 
-## O que fazer como CEO
+## O que um CEO deve fazer nas próximas semanas?
 
 Três movimentos concretos para as próximas semanas.
 
@@ -121,3 +133,25 @@ A analogia final que eu gosto é a da placa gráfica. Em 1992, engenheiros calcu
 A engenharia de software está vivendo exatamente esse momento. Ninguém mais vai codar polígono à mão em 2028. A pergunta é se o seu time vai estar entre os que escalaram para a nova camada ou entre os que insistiram na antiga até ficarem obsoletos.
 
 Os melhores fundadores e CEOs que eu conheço não estão em pânico com isso. Estão adaptando. Silenciosamente, metodicamente, reescrevendo cargos, planos de carreira e processos. Seja um deles.
+
+## Perguntas frequentes sobre desenvolvimento de software com IA
+
+### Por que a IA sobrecarrega os seniores e ameaça os mid-levels?
+
+Juniores e agentes geram código dez vezes mais rápido, e todo esse código precisa de revisão arquitetural antes de ir para produção, o que transforma o sênior em controlador de tráfego aéreo e leva ao burnout. O mid-level, com três a cinco anos de experiência, tem vícios de quem escreve sintaxe e ainda não é arquiteto, e re-treiná-lo para supervisionar agentes é o desafio organizacional mais duro. Tratar os dois grupos com as mesmas metas, remuneração e plano de carreira perde os seniores para o burnout e os mid-levels para a obsolescência.
+
+### Como fazer o agente de IA respeitar o conhecimento tribal da empresa?
+
+Registrando esse conhecimento num formato que o agente consiga consumir. Todo incidente vira aprendizado documentado, toda regra implícita vira regra explícita e toda decisão arquitetural ganha o porquê registrado. Sem esse registro, o agente segue o manual oficial e trata o sintoma, como reiniciar o servidor várias vezes quando a causa é um job batch que satura o banco.
+
+### Como evitar que o time deixe de entender o código escrito por agentes?
+
+Agendando compreensão: rituais semanais de arquitetura conjunta, mesmo que o código venha dos agentes, ferramentas que resumem mudanças arquiteturais para humanos e sessões deliberadas de leitura de código. Sem isso, a dívida cognitiva se acumula até o time não conseguir mais tomar decisão arquitetural.
+
+### O que é um agente bravo (angry agent)?
+
+É um agente configurado para furar a teoria em curso durante um incidente, apontar contradições e exigir evidência. Ele compensa a tendência dos agentes de concordar com quem está no comando, que num incidente deixa o humano cansado e a IA obediente reforçando a mesma hipótese errada.
+
+### Como mudar o processo seletivo de desenvolvedores?
+
+Troque o teste que mede velocidade de escrita, como uma busca binária em trinta minutos, por um que reproduza o trabalho real: uma especificação vaga, um sistema legado funcionando mal e um agente de IA à disposição, e observe como a pessoa resolve.
