@@ -1,6 +1,7 @@
 ---
 title: "Desmistificando GPUs em IA"
 description: "Entenda o papel das GPUs no treinamento e na inferência de modelos de IA e por que o processamento paralelo viabiliza os LLMs atuais nas empresas."
+summary: "GPUs aceleram o treinamento e a inferência de modelos de IA porque têm milhares de pequenos núcleos que processam dados matriciais e vetoriais em paralelo, com ganhos de 10 a 100 vezes sobre sistemas só com CPU. Para escolher a GPU, o texto recomenda alinhar a escolha à carga de trabalho e comparar o custo total de propriedade entre nuvem e infraestrutura própria."
 date: 2024-01-03T23:42:15.000Z
 updated: 2024-01-04T00:40:56.330Z
 slug: desmistificando-gpus-em-ia-79e168b03ccd

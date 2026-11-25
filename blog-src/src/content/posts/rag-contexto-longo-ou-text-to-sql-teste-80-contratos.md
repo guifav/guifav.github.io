@@ -2,6 +2,7 @@
 title: "RAG, contexto longo ou Text-to-SQL: o teste em 80 contratos"
 subtitle: "Fiz a mesma pergunta de contagem a um RAG, a uma consulta SQL e a um modelo com os 80 contratos inteiros na janela. O RAG respondeu que nenhum contrato vencia em março, quando eram 17. Aqui estão o método, os números e o critério que uso para escolher a arquitetura."
 description: "Medi RAG, contexto longo e Text-to-SQL em 80 contratos e numa planilha de 5 mil linhas: quem acertou, quanto cada um custou em tokens e quando usar cada um."
+summary: "Para contar registros, a arquitetura indicada é Text-to-SQL: num teste com 80 contratos, o RAG respondeu que nenhum vencia em março de 2027, quando eram 17, e a consulta SQL devolveu os 17. O contexto longo também acertou, ao custo de US$ 1,81 de entrada por pergunta e 35 segundos até a primeira palavra, e a pergunta que mistura número e documento pede consulta e leitura encadeadas."
 date: 2026-11-24T12:00:00Z
 slug: rag-contexto-longo-ou-text-to-sql-teste-80-contratos
 type: newsletter

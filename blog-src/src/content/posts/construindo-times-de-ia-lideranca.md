@@ -2,6 +2,7 @@
 title: "Construindo Times de IA: Liderança Técnica para Transformação Empresarial"
 subtitle: "Aprenda como construir times de IA eficazes: do recrutamento à governança. Guia completo com estratégias reais para escalar de 3 para 25 profissionais e implementar 40+ soluções."
 description: "Aprenda como construir times de IA eficazes: do recrutamento à governança. Guia completo com estratégias reais para escalar de 3 para 25 profissionais e implementar 40+ soluções."
+summary: "Em dois anos numa empresa parceira, um time de IA cresceu de 3 para 25 profissionais e colocou mais de 40 soluções em produção. O modelo que funcionou combina um time central de IA com especialistas embutidos nas unidades de negócio, e a contratação avalia como o candidato resolveria problemas reais de negócio com IA."
 date: 2025-09-08T00:07:04.926Z
 updated: 2025-11-24T20:06:03.507Z
 slug: construindo-times-de-ia-lideranca

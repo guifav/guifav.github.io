@@ -1,6 +1,7 @@
 ---
 title: "Inteligência Artificial: Revolucionando os Processos Empresariais"
 description: "Exemplos práticos de inteligência artificial aplicada a processos empresariais: atendimento ao cliente, automação operacional, personalização e saúde."
+summary: "Empresas já usam IA em chatbots de atendimento, como a HealthJoy, na detecção de fraude em pagamentos, como a Stripe, e em recomendação personalizada, como a Stitch Fix e o Duolingo, além de análise de imagens médicas, logística e geração de conteúdo. A adoção exige proteger os dados dos clientes e combater o viés dos algoritmos, e também investir na capacitação das equipes."
 date: 2024-03-18T03:00:00.000Z
 updated: 2024-07-09T20:13:20.978Z
 slug: inteligencia-artificial-revolucionando-os-processos-empresariais

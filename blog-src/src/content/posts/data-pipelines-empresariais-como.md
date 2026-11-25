@@ -2,6 +2,7 @@
 title: "Data Pipelines Empresariais: Como Transformar Silos de Dados em Inteligência de Negócio Estratégica"
 subtitle: "Análise detalhada sobre integração de dados empresariais fragmentados. Desafios, arquitetura de data pipelines, governança e transformação de silos isolados em sistemas unificados inteligentes"
 description: "Análise detalhada sobre integração de dados empresariais fragmentados. Desafios, arquitetura de data pipelines, governança e transformação de silos isolados em sistemas unificados inteligentes"
+summary: "Numa empresa parceira com dados espalhados em 14 sistemas, uma arquitetura de data pipelines em quatro camadas (ingestão, processamento, armazenamento e business intelligence) unificou as fontes em oito meses. O tempo de geração de insights caiu de 14 dias para 4 horas e o EBITDA melhorou 28% no primeiro ano, com governança de dados definida desde o desenho inicial e implantação incremental."
 date: 2025-09-14T22:03:30.778Z
 updated: 2025-11-24T20:05:13.987Z
 slug: data-pipelines-empresariais-como

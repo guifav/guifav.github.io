@@ -1,6 +1,7 @@
 ---
 title: "Data Governance e Quality Management: O Custo Oculto de Dados Não Confiáveis"
 description: "Como dados não confiáveis custam 15-25% da receita: frameworks de governance, quality management, automação de qualidade e estruturas de compliance."
+summary: "Estudos citados no texto estimam que dados de baixa qualidade custam às organizações de 15% a 25% da receita e consomem de 20% a 30% do tempo de analistas com limpeza e validação. A resposta proposta trata governança de dados como iniciativa de negócio, com papéis e responsabilidades definidos e monitoramento automatizado de qualidade, implantada primeiro nos domínios de maior valor."
 date: 2025-10-13T03:00:00.000Z
 slug: data-governance-custo-dados-nao-confiaveis
 cover: img/data-governance-custo-dados-nao-confiaveis/capa.jpg
