@@ -218,6 +218,9 @@ class BuildLlmsTxtTest(Fixture):
         lines = text.splitlines()
         self.assertTrue(lines[0].startswith("# "))
         self.assertTrue(any(ln.startswith("> ") for ln in lines[:5]))
+        self.assertIn(L.SITE_INTRO, text)
+        self.assertIn("mais de 20 sistemas construídos no portfólio", L.SITE_INTRO)
+        self.assertNotIn("22 sistemas em operação no portfólio", text)
         for heading in ("## Consultoria", "## Ferramentas", "## Temas", "## Portfólio e Expert Insights"):
             self.assertIn(heading, lines)
 

@@ -481,7 +481,22 @@ class RealSiteTest(unittest.TestCase):
 
 
 class RealRobotsTest(unittest.TestCase):
-    """Confere o robots.txt versionado do repositório contra /admin/, /portfolio/mockups/ e páginas do manifesto."""
+    """Confere o robots.txt versionado do repositório contra /admin/, /portfolio/mockups/, robôs de IA e páginas do manifesto."""
+
+    AI_AGENTS = (
+        "OAI-SearchBot",
+        "ChatGPT-User",
+        "PerplexityBot",
+        "Perplexity-User",
+        "Claude-SearchBot",
+        "Claude-User",
+        "Applebot",
+        "GPTBot",
+        "ClaudeBot",
+        "CCBot",
+        "Google-Extended",
+        "Applebot-Extended",
+    )
 
     def test_repo_robots_rules(self):
         robots_txt = (REPO / "robots.txt").read_text(encoding="utf-8")
@@ -489,6 +504,16 @@ class RealRobotsTest(unittest.TestCase):
         self.assertTrue(B.robots_blocks(robots_txt, "/admin/assinantes"))
         if (REPO / "portfolio/mockups").is_dir():
             self.assertTrue(B.robots_blocks(robots_txt, "/portfolio/mockups/a.html"))
+        # Decisão #174 C.1 (Opção A): sem bloqueio por robô; robôs de busca, citação e treino liberados via User-agent: *.
+        for agent in self.AI_AGENTS:
+            self.assertFalse(B.robots_blocks(robots_txt, "/", agent), f"{agent} bloqueou /")
+            self.assertFalse(B.robots_blocks(robots_txt, "/blog/", agent), f"{agent} bloqueou /blog/")
+            self.assertTrue(B.robots_blocks(robots_txt, "/admin/", agent), f"{agent} não bloqueou /admin/")
+            if (REPO / "portfolio/mockups").is_dir():
+                self.assertTrue(
+                    B.robots_blocks(robots_txt, "/portfolio/mockups/a.html", agent),
+                    f"{agent} não bloqueou /portfolio/mockups/a.html",
+                )
         for url in manifest_pages(REPO):
             for agent in ("*", "googlebot", "bingbot"):
                 self.assertFalse(B.robots_blocks(robots_txt, url, agent), f"{agent} bloqueou {url}")

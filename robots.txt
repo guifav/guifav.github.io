@@ -1,3 +1,4 @@
+# Decisao de 2026-11-24 (issue #174, C.1): robos de busca, de citacao e de treino de IA liberados; sem bloqueio por robo.
 User-agent: *
 Disallow: /admin/
 Disallow: /portfolio/mockups/

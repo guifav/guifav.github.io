@@ -37,7 +37,7 @@ POST_HREF_RE = re.compile(r"^/blog/([a-z0-9][a-z0-9-]*)/$")
 _YAML_BLOCK_INDICATOR = re.compile(r"^[|>][+-]?(?:\d+)?(?:\s+#.*)?$")
 _YAML_NULLS = {"~", "null", "Null", "NULL"}
 
-# Abertura fixa (proposta para aprovação do Gui no PR da #174, seguindo voz-gui).
+# Abertura fixa (aprovada pelo Gui na #174, seguindo voz-gui).
 SITE_TITLE = "Guilherme Favaron"
 SITE_QUOTE = (
     "Site oficial de Guilherme Favaron (guifav.dev), builder e CTO do GRI Institute: "
@@ -46,8 +46,8 @@ SITE_QUOTE = (
 SITE_INTRO = (
     "Guilherme Favaron é builder e CTO do GRI Institute, com mais de 18 anos liderando tecnologia.\n"
     "Este site reúne artigos técnicos sobre IA aplicada e dados, ferramentas abertas para decisões de "
-    "arquitetura e custo, 22 sistemas em operação no portfólio e cinco formatos de consultoria conduzidos "
-    "pessoalmente por ele para CEOs, CFOs e CTOs.\n"
+    "arquitetura e custo, mais de 20 sistemas construídos no portfólio e cinco formatos de consultoria "
+    "conduzidos pessoalmente por ele para CEOs, CFOs e CTOs.\n"
     "O trabalho documentado aqui começa pelo problema do negócio e escolhe a ferramenta por último, com "
     "dono, custo e métrica definidos desde o início."
 )
