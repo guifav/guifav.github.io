@@ -2,6 +2,7 @@
 title: "Como pequenas e médias empresas podem implementar inteligência artificial"
 subtitle: "Este curso, aplicado diversas vezes no modo ao vivo e presencial, está agora gratuito no YouTube e oferece conhecimento prático sobre IA para negócios"
 description: "Este curso, aplicado diversas vezes no modo ao vivo e presencial, está agora gratuito no YouTube e oferece conhecimento prático sobre IA para negócios"
+summary: "O curso Inteligência Artificial Aplicada a Negócios está disponível gratuitamente no YouTube em 6 módulos voltados a pequenas e médias empresas: fundamentos, IA generativa no dia a dia, implementação estratégica, arquitetura de soluções, casos práticos com gestão de mudança e ROI. O curso recomenda começar por projetos pequenos e de baixo risco, em processos específicos, usando ferramentas já disponíveis como ChatGPT, Claude, Gemini e n8n."
 date: 2025-06-10T03:00:00.000Z
 updated: 2025-11-24T20:04:46.519Z
 slug: curso-ia-negocios-gratuito-youtube

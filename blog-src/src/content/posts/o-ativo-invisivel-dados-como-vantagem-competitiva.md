@@ -2,6 +2,7 @@
 title: "O ativo invisível: o que 116 mil relatórios anuais ensinam sobre o valor dos dados"
 subtitle: "Empresas intensivas em dados valem até 35% mais que concorrentes do mesmo nicho, mas o lucro demora anos para aparecer, e quem não construiu a base cedo não compra o atraso depois."
 description: "Estudo com 116 mil relatórios mostra: empresas intensivas em dados valem até 35% mais que concorrentes diretas. O retorno demora anos e a sequência importa."
+summary: "Saunders e Tambe leram por mineração de texto 116 mil relatórios 10-K entre 1996 e 2012 e mediram quanto cada empresa fala de dados: no decil mais intensivo, o Tobin's q fica 35,3% acima da base, e o lucro só responde anos depois, com +3,2 pontos de ROA em cinco anos. Segurança e padronização só geram prêmio para empresas que construíram antes a base de coleta, então a vantagem é cumulativa e quem chegou tarde não conseguiu comprar o atraso."
 date: 2026-06-12T19:56:40.358Z
 updated: 2026-06-15T11:46:46.709Z
 slug: o-ativo-invisivel-dados-como-vantagem-competitiva

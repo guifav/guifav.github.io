@@ -2,6 +2,7 @@
 title: "Análise Preditiva em Produção: Como Implementar Decisões Orientadas por Dados"
 subtitle: "Guia sobre análise preditiva empresarial: modelos de tomada de decisão, quantificação de incerteza, implementação estratégica e transformação de dados em vantagem competitiva."
 description: "Guia sobre análise preditiva empresarial: modelos de tomada de decisão, quantificação de incerteza, implementação estratégica e transformação de dados em vantagem competitiva."
+summary: "Análise preditiva gera valor de negócio quando entrega previsões probabilísticas que mostram a incerteza e entram no fluxo de decisão que já existe, com espaço para override humano. Numa empresa parceira com 30% de variabilidade nas previsões de demanda, essa abordagem, combinando features de negócio, métodos ensemble, inferência causal e simulação de cenários, reduziu o erro de predição em 65% e melhorou a rotatividade de estoque em 40%."
 date: 2025-09-29T14:40:02.071Z
 updated: 2025-12-07T20:46:03.651Z
 slug: analise-preditiva-tomada-decisao-producao

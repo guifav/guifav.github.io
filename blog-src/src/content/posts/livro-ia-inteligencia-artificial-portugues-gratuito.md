@@ -1,6 +1,7 @@
 ---
 title: "Livro: Desbloqueando a Inteligência Artificial"
 description: "Hub gratuito do livro Desbloqueando a Inteligência Artificial, com guia estratégico e artefatos práticos para empresários decidirem onde aplicar IA."
+summary: "Desbloqueando a Inteligência Artificial é um livro gratuito, com download pelo Google Drive, escrito como guia estratégico para empresários decidirem onde aplicar IA no negócio. A página também reúne artefatos práticos: o guia para mapear oportunidades de IA já está disponível, e os de escolha de fornecedor, primeiro protótipo, ROI, escala, equipe e roadmap estão em desenvolvimento."
 date: 2025-11-25T21:03:11.187Z
 updated: 2025-11-25T21:03:11.187Z
 slug: livro-ia-inteligencia-artificial-portugues-gratuito

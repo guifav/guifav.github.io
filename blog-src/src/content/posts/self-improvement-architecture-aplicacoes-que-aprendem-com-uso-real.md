@@ -2,6 +2,7 @@
 title: "Self-Improvement Architecture: um padrão para aplicações que aprendem com uso real"
 subtitle: "A maioria das aplicações recebe feedback dos usuários e não faz nada com ele. Este padrão fecha essa lacuna com agentes, guardrails e humano no loop onde importa."
 description: "A maioria das aplicações recebe feedback dos usuários e não faz nada com ele. Este padrão fecha essa lacuna com agentes, guardrails e humano no loop onde importa."
+summary: "A Self-Improvement Architecture liga o problema em produção à correção em cinco camadas: captura de sinais, triagem, gestão de issues, um agente de IA que diagnostica e abre pull requests, e revisão humana. O agente só age sozinho em problemas delimitados e de baixo risco, depois que um humano aplica o gate de elegibilidade, e o merge é sempre humano. No exemplo do post, um bug foi corrigido em 6 horas com cerca de 10 minutos de atenção humana."
 date: 2026-03-23T00:55:55.454Z
 updated: 2026-03-23T00:59:32.528Z
 slug: self-improvement-architecture-aplicacoes-que-aprendem-com-uso-real

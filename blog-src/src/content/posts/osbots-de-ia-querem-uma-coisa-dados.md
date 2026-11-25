@@ -2,6 +2,7 @@
 title: "78% dos bots de IA querem uma coisa: seus dados"
 subtitle: "Analisei o tráfego global da internet para entender quem está coletando, quem está citando e quem está ignorando as regras"
 description: "Analisei o tráfego global da internet para entender quem está coletando, quem está citando e quem está ignorando as regras"
+summary: "Entre 6 de novembro e 6 de dezembro de 2025, dados do Cloudflare e do Promptwatch mostram que 78% do tráfego de bots de IA serve para treinar modelos, contra 15,5% para busca, e que a Anthropic faz 31.600 coletas para cada referência devolvida, enquanto o Google faz 7,3. O texto recomenda permitir os bots que se verificam por IP, separam finalidades e respeitam o robots.txt, e bloquear os que falham nos três critérios, como o Bytespider da ByteDance."
 date: 2025-12-09T16:46:37.514Z
 updated: 2025-12-09T16:51:27.615Z
 slug: osbots-de-ia-querem-uma-coisa-dados

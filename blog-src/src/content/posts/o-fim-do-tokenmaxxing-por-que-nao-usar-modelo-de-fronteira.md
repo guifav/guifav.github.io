@@ -2,6 +2,7 @@
 title: "O fim do tokenmaxxing: por que usar modelo de fronteira para tudo acabou"
 subtitle: "Quando o modelo capaz fica barato e o protocolo de agente fica trivial de escalar, a vantagem migra de qual modelo voce usa para qual arquitetura de custo voce desenha."
 description: "Quando o modelo capaz fica barato e o protocolo de agente fica trivial de escalar, a vantagem migra de qual modelo voce usa para qual arquitetura de custo voce desenha."
+summary: "Tokenmaxxing, o hábito de mandar toda tarefa para o modelo mais caro, ficou caro demais: a Uber pôs teto de gasto por funcionário, o Claude Sonnet 5 chegou ao terceiro lugar independente no GDPval-AA a USD 3 por milhão de tokens de input e o MCP stateless barateou operar agentes em produção. O texto propõe uma política de tiers com custo por fluxo medido, em que cada tarefa vai para o modelo mais barato que a resolve e o topo fica para o raciocínio mais difícil."
 date: 2026-07-01T15:00:41.070Z
 updated: 2026-07-01T15:05:17.948Z
 slug: o-fim-do-tokenmaxxing-por-que-nao-usar-modelo-de-fronteira

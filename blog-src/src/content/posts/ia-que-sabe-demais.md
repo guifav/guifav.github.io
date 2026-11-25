@@ -2,6 +2,7 @@
 title: "A IA que sabe demais (mas nem sempre sabe certo)"
 subtitle: "Transparência, memória invisível e a confiança que ainda falta nos chatbots de inteligência artificial"
 description: "Uso chatbots de IA diariamente. Mas entre memórias invisíveis, dados sem destino claro e certezas inventadas, a transparência ainda está em falta."
+summary: "Chatbots de IA guardam memórias do usuário sem deixar claro o que armazenam, não dizem para onde vão os dados pessoais compartilhados e inventam referências e estatísticas com o mesmo tom de certeza das respostas corretas. O texto pede respostas que indiquem o grau de certeza e controle real sobre os dados guardados, e defende usar essas ferramentas com ceticismo, verificando as informações e tomando cuidado com o que se compartilha."
 date: 2025-12-04T22:49:20.008Z
 updated: 2025-12-04T22:50:35.773Z
 slug: ia-que-sabe-demais

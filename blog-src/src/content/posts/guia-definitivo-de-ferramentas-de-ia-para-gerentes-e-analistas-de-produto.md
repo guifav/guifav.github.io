@@ -1,6 +1,7 @@
 ---
 title: "Turbine sua Produtividade: Guia Definitivo de Ferramentas de IA para Gerentes e Analistas de Produtos e Marketing"
 description: "Todas as áreas estão sendo impactadas pela onda de Inteligência Artificial nas ferramentas porém, marketing digital e gestão de produto já vivem um mundo novo, em que a IA já faz toda a diferença."
+summary: "O guia reúne ferramentas de IA e de dados para gestores de produto e profissionais de marketing, organizadas por categoria, entre elas pesquisa de mercado, criação de conteúdo, automação, CRM, testes A/B, conformidade e gestão do ciclo de vida do produto. Cada ferramenta vem com link e uma linha sobre o uso, como Perplexity para pesquisa de mercado, Visily para converter esboços em wireframes e Riverside com Opus Clip para editar podcasts."
 date: 2024-07-09T03:00:00.000Z
 updated: 2024-09-05T21:07:11.363Z
 slug: guia-definitivo-de-ferramentas-de-ia-para-gerentes-e-analistas-de-produto

@@ -2,6 +2,7 @@
 title: "LangChain na Prática: Da POC à Produção Empresarial"
 subtitle: "LangChain além do básico: arquitetura empresarial completa, do protótipo à produção. Case real com 50% melhoria em performance. Guia para líderes técnicos."
 description: "LangChain além do básico: arquitetura empresarial completa, do protótipo à produção. Case real com 50% melhoria em performance. Guia para líderes técnicos."
+summary: "Numa empresa parceira, o LangChain orquestrou um sistema de pré-vendas em três camadas: ingestão de dados de CRM, LinkedIn e mercado; cadeias que preparam e apoiam cada ligação; e um ciclo pós-ligação que atualiza a base de conhecimento automaticamente. A taxa de conversão melhorou 50% e o tempo de preparação por ligação caiu 70%, e 95% do sucesso veio da qualidade dos dados e dos prompts, com chains modulares, fallbacks e humano no loop."
 date: 2025-08-24T03:00:00.000Z
 updated: 2025-11-24T20:05:06.195Z
 slug: langchain-arquitetura-empresarial-producao
