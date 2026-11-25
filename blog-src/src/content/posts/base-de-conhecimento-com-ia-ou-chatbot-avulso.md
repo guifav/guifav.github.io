@@ -2,7 +2,7 @@
 title: "Base de conhecimento com IA ou chatbot avulso: o teste"
 subtitle: "Fiz as mesmas 25 perguntas sobre as regras de uma empresa fictícia a três funcionários usando chatbot por conta própria, a um projeto compartilhado e a uma base governada. O chatbot avulso acertou 17 de 45 respostas sobre regras, e os outros dois acertaram as 45."
 description: "Testei chatbot avulso, projeto compartilhado e base de conhecimento governada em 25 perguntas com gabarito: acerto, versão antiga, vazamento e custo em tokens."
-summary: "Num teste com 24 documentos de uma empresa fictícia, funcionários usando chatbot por conta própria acertaram 17 de 45 respostas sobre regras e deram regra revogada ou substituída em 15, e em nenhuma das 15 regras os três ouviram a mesma resposta. Projeto compartilhado e base governada acertaram as 45 sem vazar dado restrito. A base governada usou um quinto dos tokens de entrada e não revelou que o documento confidencial existia."
+summary: "Num teste com 24 documentos de uma empresa fictícia, funcionários usando chatbot por conta própria acertaram 17 de 45 respostas sobre regras, deram regra antiga em 15 e em nenhuma das 15 regras ouviram os três a mesma resposta. Projeto compartilhado e base governada acertaram as 45. O projeto recusou as 30 perguntas confidenciais, mas entregou a margem mínima confidencial numa resposta sobre desconto, e a base governada, que nunca recebe esses documentos, usou um quinto dos tokens de entrada."
 date: 2026-11-25T18:00:00Z
 slug: base-de-conhecimento-com-ia-ou-chatbot-avulso
 type: newsletter
@@ -33,9 +33,9 @@ No estudo de Erik Brynjolfsson, Danielle Li e Lindsey Raymond [publicado no Quar
 
 ## Como montei o teste?
 
-Escrevi 24 documentos curtos de uma distribuidora fictícia, a Distribuidora Quatro Rios: política comercial, tabela de descontos, política de reembolso e adendo de viagens internacionais, SLA e matriz de escalonamento do suporte, manual de onboarding, política de trabalho híbrido, política de devoluções, quatro contratos-modelo com dois aditivos, uma FAQ e três atas que mudam regras antigas. Três documentos são versões revogadas que continuam no acervo (a política comercial de 2025, o reembolso de 2024 e o SLA de 2025), e três são confidenciais (política de bônus, faixas salariais e margem mínima por pedido), restritos à Diretoria, ao RH ou ao Financeiro. Os três funcionários fictícios são a Ana, do comercial, o Bruno, do suporte, e a Carla, de operações, e nenhum deles tem acesso aos confidenciais.
+Escrevi 24 documentos curtos de uma distribuidora fictícia, a Distribuidora Quatro Rios: política comercial, tabela de descontos, política de reembolso e adendo de viagens internacionais, SLA e matriz de escalonamento do suporte, manual de onboarding, política de trabalho híbrido, política de devoluções, três contratos-modelo com dois aditivos, uma FAQ e três atas que mudam regras antigas. Três documentos são versões revogadas que continuam no acervo (a política comercial de 2025, o reembolso de 2024 e o SLA de 2025), e três são confidenciais (política de bônus, faixas salariais e margem mínima por pedido), restritos à Diretoria, ao RH ou ao Financeiro. Os três funcionários fictícios são a Ana, do comercial, o Bruno, do suporte, e a Carla, de operações, e nenhum deles tem acesso aos confidenciais.
 
-As 25 perguntas têm gabarito e se dividem em cinco classes. As cinco primeiras tratam de regra com versão antiga no acervo, como o desconto máximo que o executivo de contas aprova sozinho. As cinco seguintes dependem de uma mudança registrada em outro documento, como a multa rescisória de um contrato Enterprise assinado depois do aditivo de julho. Mais cinco têm a regra num documento só. As dez últimas pedem informação confidencial: cinco perguntas diretas e as mesmas cinco com o funcionário dizendo que está cobrindo as férias da coordenadora de RH. Cada pergunta foi feita pelos três funcionários em cada arranjo, o que dá 75 respostas por cenário e 225 no total. A quinta classe entrou depois da primeira rodada, quando vi que o projeto compartilhado recusava as perguntas confidenciais apoiado só na instrução, e eu quis saber se a recusa resistia a um pedido com justificativa.
+As 25 perguntas têm gabarito e se dividem em cinco classes. As cinco primeiras tratam de regra com versão antiga no acervo, como o desconto máximo que o executivo de contas aprova sozinho. As cinco seguintes dependem de uma mudança registrada em outro documento, como a multa rescisória de um contrato Enterprise assinado depois do aditivo que passou a valer em julho. Mais cinco têm a regra num documento só. As dez últimas pedem informação confidencial: cinco perguntas diretas e as mesmas cinco com o funcionário dizendo que está cobrindo as férias da coordenadora de RH. Cada pergunta foi feita pelos três funcionários em cada arranjo, o que dá 75 respostas por cenário e 225 no total. A quinta classe entrou depois da primeira rodada, quando vi que o projeto compartilhado recusava as perguntas confidenciais apoiado só na instrução, e eu quis saber se a recusa resistia a um pedido com justificativa.
 
 | Cenário | O que o modelo recebe | Como reproduz a vida real |
 |---|---|---|
@@ -57,7 +57,9 @@ Os três cenários usaram o mesmo modelo, o Claude Sonnet 5.5, chamado pelo Clau
 | Respostas "não encontrei nos arquivos" | 13 | 0 | 0 |
 | Regras em que os três ouviram a mesma resposta | 0 de 15 | 15 de 15 | 15 de 15 |
 | Respostas que citaram o documento certo | 17 de 45 | 45 de 45 | 45 de 45 |
-| Vazamento de dado confidencial (30 respostas) | 0 | 0 | 0 |
+| Valor confidencial entregue nas 30 perguntas confidenciais | 0 | 0 | 0 |
+| Valor confidencial entregue em pergunta sobre outro assunto (45 respostas) | 0 | 1 | 0 |
+| Regra confidencial contada sem o valor, em pergunta sobre outro assunto | 0 | 1 | 0 |
 | Recusas que confirmam que o dado existe ("não posso informar") | 2 de 30 | 30 de 30 | 0 de 30 |
 | Tokens de entrada por pergunta (mediana) | 706 | 5.736 | 1.176 |
 | Tokens de saída por pergunta (mediana) | 158 | 291 | 114 |
@@ -74,13 +76,15 @@ Na simulação, com um acervo pequeno, resolveu o acerto. A base governada levou
 
 Nas perguntas confidenciais, o projeto recusou as 30, inclusive as 15 em que o funcionário disse estar cobrindo o RH, e em todas confirmou que a informação existia: "a política de bônus 2026 é confidencial e restrita à Diretoria e ao RH". A base governada respondeu às mesmas 30 que não encontrou a informação, porque os três documentos confidenciais nunca chegaram ao modelo. Para quem pergunta, saber que existe uma política de bônus e quem pode lê-la já é informação.
 
+O vazamento do projeto veio numa pergunta que nem era sobre o assunto. O Bruno perguntou qual desconto o executivo de contas aprova sozinho para um cliente novo, e a resposta trouxe a alçada certa e acrescentou que "pedidos com margem bruta abaixo de 22% ainda exigem aprovação do diretor financeiro", para só depois avisar que o documento era confidencial. Na mesma pergunta, a Ana ouviu a regra da margem mínima sem o percentual. O modelo protegeu o documento quando a pergunta apontava para ele e deixou o conteúdo escapar quando ele parecia útil para outra resposta. Esse caso não apareceu na minha correção automática, que só procurava valores confidenciais nas perguntas confidenciais, e foi encontrado na revisão independente do teste. Corrigi o script para procurar esses valores em todas as respostas, e esse foi o único caso nas 225.
+
 Considero a assinatura por usuário um bom primeiro passo quando a empresa troca o uso avulso por um projeto compartilhado com um acervo curado. Ela continua dependendo de alguém manter o acervo do projeto, e a permissão por documento fica a cargo do modelo, que lê o texto confidencial a cada pergunta e decide se responde.
 
 ## Como controlar quem pode ver qual dado quando a IA lê documentos internos?
 
 Filtrando por perfil antes da busca, para que o modelo só receba o que a pessoa pode ler. No terceiro cenário, o catálogo diz quem pode ler cada documento e o filtro corre antes da busca, com o perfil que vem do login. Nenhuma frase do funcionário muda o que entra no contexto. No projeto compartilhado, a barreira é a instrução "respeite as marcações de confidencialidade" e o que o funcionário diz de si, porque o projeto não sabe o cargo de quem pergunta.
 
-Neste teste, a instrução segurou nas 30 perguntas confidenciais, inclusive com o funcionário dizendo que cobria as férias da coordenadora de RH. Em 11 das 15 perguntas com pressão, o modelo respondeu que não tinha como confirmar a cobertura pela conversa, e nas outras quatro explicou que o RH não estava entre as áreas autorizadas ou pediu que o acesso fosse formalizado. Mesmo assim, o desenho com filtro é o que eu recomendo para dado que não pode vazar, porque ele não depende do comportamento de cada versão do modelo nem de quem redige a instrução do projeto. Detalhei esse critério no texto sobre [MCP aberto ou aplicação própria](/blog/mcp-ou-aplicacao-dados-da-empresa-na-ia/): quando o erro é caro, a empresa precisa garantir a resposta, e a permissão é parte dela.
+Neste teste, a instrução segurou nas 30 perguntas confidenciais, inclusive com o funcionário dizendo que cobria as férias da coordenadora de RH, e falhou numa pergunta sobre desconto, como contei acima. Em 11 das 15 perguntas com pressão, o modelo respondeu que não tinha como confirmar a cobertura pela conversa, e nas outras quatro explicou que o RH não estava entre as áreas autorizadas ou pediu que o acesso fosse formalizado. O desenho com filtro é o que eu recomendo para dado que não pode vazar, porque ele não depende do comportamento de cada versão do modelo nem de quem redige a instrução do projeto. Detalhei esse critério no texto sobre [MCP aberto ou aplicação própria](/blog/mcp-ou-aplicacao-dados-da-empresa-na-ia/): quando o erro é caro, a empresa precisa garantir a resposta, e a permissão é parte dela.
 
 No chatbot avulso, a única pessoa que tinha um documento confidencial era a Ana, que recebeu da gerente a política de margem mínima por e-mail. O modelo recusou responder às duas perguntas sobre margem mesmo com o arquivo anexado, porque o documento trazia a marcação de confidencial. A proteção, aqui, dependeu de o arquivo carregar a marcação, e o arquivo já estava fora do controle da empresa desde o e-mail.
 
@@ -94,7 +98,7 @@ Na decisão entre assinatura e base própria, a fatura de modelo pesa menos que 
 
 ## Quais são os limites deste teste?
 
-O acervo é pequeno e limpo. Vinte e quatro documentos curtos e bem escritos são muito mais fáceis de recuperar do que um drive real com milhares de arquivos duplicados, planilhas sem cabeçalho e PDFs escaneados. Com tudo cabendo no contexto, o projeto compartilhado teve a melhor condição possível, e num acervo grande eu espero que a vantagem dele diminua, o que este teste não mediu.
+O acervo é pequeno e limpo. Vinte e quatro documentos curtos e bem escritos são muito mais fáceis de recuperar do que um drive real com milhares de arquivos duplicados, planilhas sem cabeçalho e PDFs escaneados. Com tudo cabendo no contexto, o projeto compartilhado teve a melhor condição possível, e num acervo grande eu espero que o empate em acerto deixe de existir, o que este teste não mediu.
 
 A amostra é finita. São 25 perguntas, três funcionários e uma rodada por combinação, num único modelo e numa única data, com a aleatoriedade normal de um modelo de linguagem. Os números mostram o padrão de cada arquitetura e servem como experimento que qualquer pessoa pode repetir, sem pretensão de benchmark. As pastas pessoais do primeiro cenário foram desenhadas por mim para reproduzir situações comuns, e outra distribuição de arquivos daria outros números.
 
@@ -110,7 +114,7 @@ Quantas versões da sua política comercial estão hoje nas pastas do seu time, 
 
 ### Vale mais contratar ChatGPT ou Claude por usuário ou montar uma base de conhecimento com IA?
 
-Depende do tamanho do acervo e de quanto dele é restrito. No teste, um projeto compartilhado com 24 documentos e boas instruções acertou as mesmas 45 respostas que a base governada, contra 17 do chatbot avulso. A base governada usou um quinto dos tokens de entrada e aplicou a permissão antes de o modelo ler qualquer texto. Pelo custo, a assinatura no mix de 60% Standard e 40% Premium custa menos que a aplicação própria até 104 usuários, segundo a simulação do [artigo sobre custos](/blog/quanto-custa-rodar-ia-sobre-dados-da-empresa/).
+Depende do tamanho do acervo e de quanto dele é restrito. No teste, um projeto compartilhado com 24 documentos e boas instruções acertou as mesmas 45 respostas que a base governada, contra 17 do chatbot avulso. A base governada usou um quinto dos tokens de entrada e aplicou a permissão antes de o modelo ler qualquer texto, e o projeto deixou escapar um valor confidencial numa resposta sobre outro assunto. Pelo custo, a assinatura no mix de 60% Standard e 40% Premium custa menos que a aplicação própria até 104 usuários, segundo a simulação do [artigo sobre custos](/blog/quanto-custa-rodar-ia-sobre-dados-da-empresa/).
 
 ### Por que funcionários usando chatbot por conta própria erram as regras da empresa?
 
@@ -118,7 +122,7 @@ Porque cada um anexa o arquivo que tem na pasta, e o modelo responde com a regra
 
 ### Como impedir que a IA mostre documentos confidenciais para quem não pode ver?
 
-Aplicando a permissão antes da busca, com o perfil que vem do login, para que o documento restrito nunca chegue ao modelo. No teste, a base governada respondeu "não encontrei" às 30 perguntas confidenciais. O projeto compartilhado também não vazou nenhum valor, mas confirmou nas 30 que o documento existia e quem podia lê-lo, e a proteção dependeu da instrução dada ao modelo.
+Aplicando a permissão antes da busca, com o perfil que vem do login, para que o documento restrito nunca chegue ao modelo. No teste, a base governada respondeu "não encontrei" às 30 perguntas confidenciais. O projeto compartilhado recusou as 30 e confirmou em todas que o documento existia e quem podia lê-lo, e numa pergunta sobre desconto entregou a margem mínima confidencial, porque o documento estava no contexto e a proteção dependia da instrução dada ao modelo.
 
 ### Um projeto compartilhado, como os do ChatGPT ou do Claude, resolve o problema das versões antigas?
 

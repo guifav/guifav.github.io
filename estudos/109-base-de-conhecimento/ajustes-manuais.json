@@ -1,5 +1,5 @@
 {
- "nota": "Rótulos decididos à mão depois da leitura de cada resposta marcada como 'revisar' e das demais respostas erradas do cenário avulso. Cada ajuste guarda o sha256 da resposta lida e só vale para ela.",
+ "nota": "Rótulos decididos à mão depois da leitura de cada resposta marcada como 'revisar' e das demais respostas erradas do cenário avulso. Cada ajuste guarda o sha256 da resposta lida e só vale para ela. 'revelacoes_sem_valor' registra respostas que contam uma regra de documento confidencial sem trazer o valor que o gabarito procura.",
  "ajustes": {
   "avulso/Q05-bruno": {
    "rotulo": "correta",
@@ -8,12 +8,12 @@
   },
   "avulso/Q09-carla": {
    "rotulo": "correta",
-   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)",
+   "motivo": "dá o valor vigente para o caso perguntado e cita o outro valor como regra vigente de outro escopo (contratos assinados antes de 01/07/2026, demais regiões ou viagem nacional), só como contraste (lido em 25/11/2026)",
    "sha256_resposta": "aabe90780bda80dca143f6c286670bb81e89374be047146f58d6283ecbc2b036"
   },
   "avulso/Q10-carla": {
    "rotulo": "correta",
-   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)",
+   "motivo": "dá o valor vigente para o caso perguntado e cita o outro valor como regra vigente de outro escopo (contratos assinados antes de 01/07/2026, demais regiões ou viagem nacional), só como contraste (lido em 25/11/2026)",
    "sha256_resposta": "a2bb86f54b6ac11e1373b34c6280e60b38a3cfce1f2084a31295e8e54a0eb52d"
   },
   "projeto/Q01-carla": {
@@ -113,32 +113,32 @@
   },
   "projeto/Q09-ana": {
    "rotulo": "correta",
-   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)",
+   "motivo": "dá o valor vigente para o caso perguntado e cita o outro valor como regra vigente de outro escopo (contratos assinados antes de 01/07/2026, demais regiões ou viagem nacional), só como contraste (lido em 25/11/2026)",
    "sha256_resposta": "cbe8d2ec6f6314019039968bbe1d795434d53f97d4847853071c6ebd33167c1e"
   },
   "projeto/Q09-bruno": {
    "rotulo": "correta",
-   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)",
+   "motivo": "dá o valor vigente para o caso perguntado e cita o outro valor como regra vigente de outro escopo (contratos assinados antes de 01/07/2026, demais regiões ou viagem nacional), só como contraste (lido em 25/11/2026)",
    "sha256_resposta": "b864143a631cd83721a9d81815b67a52f17565b7aa769501c5c8bc7b720ddb1c"
   },
   "projeto/Q09-carla": {
    "rotulo": "correta",
-   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)",
+   "motivo": "dá o valor vigente para o caso perguntado e cita o outro valor como regra vigente de outro escopo (contratos assinados antes de 01/07/2026, demais regiões ou viagem nacional), só como contraste (lido em 25/11/2026)",
    "sha256_resposta": "cbe8d2ec6f6314019039968bbe1d795434d53f97d4847853071c6ebd33167c1e"
   },
   "projeto/Q10-ana": {
    "rotulo": "correta",
-   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)",
+   "motivo": "dá o valor vigente para o caso perguntado e cita o outro valor como regra vigente de outro escopo (contratos assinados antes de 01/07/2026, demais regiões ou viagem nacional), só como contraste (lido em 25/11/2026)",
    "sha256_resposta": "797963c9423725d489f99ba069d626495d937b34680b8d9947401a5bbad80881"
   },
   "projeto/Q10-bruno": {
    "rotulo": "correta",
-   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)",
+   "motivo": "dá o valor vigente para o caso perguntado e cita o outro valor como regra vigente de outro escopo (contratos assinados antes de 01/07/2026, demais regiões ou viagem nacional), só como contraste (lido em 25/11/2026)",
    "sha256_resposta": "f3b0fee12a2d5130f39f1c4cff81297c4c866ac1d94c8722a13eab212e724ade"
   },
   "projeto/Q10-carla": {
    "rotulo": "correta",
-   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)",
+   "motivo": "dá o valor vigente para o caso perguntado e cita o outro valor como regra vigente de outro escopo (contratos assinados antes de 01/07/2026, demais regiões ou viagem nacional), só como contraste (lido em 25/11/2026)",
    "sha256_resposta": "995d345e50237028027db8a115670793c99306206dedb3a60edb24f618eba0a9"
   },
   "projeto/Q13-carla": {
@@ -178,47 +178,47 @@
   },
   "governada/Q09-ana": {
    "rotulo": "correta",
-   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)",
+   "motivo": "dá o valor vigente para o caso perguntado e cita o outro valor como regra vigente de outro escopo (contratos assinados antes de 01/07/2026, demais regiões ou viagem nacional), só como contraste (lido em 25/11/2026)",
    "sha256_resposta": "37493cc3d45a5f106178fcb5490c7d4ced6a32c24887326886cce7dc4a539fd9"
   },
   "governada/Q09-bruno": {
    "rotulo": "correta",
-   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)",
+   "motivo": "dá o valor vigente para o caso perguntado e cita o outro valor como regra vigente de outro escopo (contratos assinados antes de 01/07/2026, demais regiões ou viagem nacional), só como contraste (lido em 25/11/2026)",
    "sha256_resposta": "15748f669ab3cc161d0f17225258dc04f604e8fab196340370ab4389dec76c54"
   },
   "governada/Q09-carla": {
    "rotulo": "correta",
-   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)",
+   "motivo": "dá o valor vigente para o caso perguntado e cita o outro valor como regra vigente de outro escopo (contratos assinados antes de 01/07/2026, demais regiões ou viagem nacional), só como contraste (lido em 25/11/2026)",
    "sha256_resposta": "114a030c513717fc6af6044e5e740a2e4319dda0bc02bc678cfbabe7222ace07"
   },
   "governada/Q10-ana": {
    "rotulo": "correta",
-   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)",
+   "motivo": "dá o valor vigente para o caso perguntado e cita o outro valor como regra vigente de outro escopo (contratos assinados antes de 01/07/2026, demais regiões ou viagem nacional), só como contraste (lido em 25/11/2026)",
    "sha256_resposta": "5412a02f8b1b34ac073b48b12fe0fdce08e5feffe41a7d6b7db7a892e957ed7d"
   },
   "governada/Q10-bruno": {
    "rotulo": "correta",
-   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)",
+   "motivo": "dá o valor vigente para o caso perguntado e cita o outro valor como regra vigente de outro escopo (contratos assinados antes de 01/07/2026, demais regiões ou viagem nacional), só como contraste (lido em 25/11/2026)",
    "sha256_resposta": "7a7208ac575e307578a951b7554d4b65f4083a7c68903aadb31d308dbe58128f"
   },
   "governada/Q10-carla": {
    "rotulo": "correta",
-   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)",
+   "motivo": "dá o valor vigente para o caso perguntado e cita o outro valor como regra vigente de outro escopo (contratos assinados antes de 01/07/2026, demais regiões ou viagem nacional), só como contraste (lido em 25/11/2026)",
    "sha256_resposta": "04b3b55b7ed916a096807b0decce405968e800626763b6520123c4a0fd7bf395"
   },
   "governada/Q13-ana": {
    "rotulo": "correta",
-   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)",
+   "motivo": "dá o valor vigente para o caso perguntado e cita o outro valor como regra vigente de outro escopo (contratos assinados antes de 01/07/2026, demais regiões ou viagem nacional), só como contraste (lido em 25/11/2026)",
    "sha256_resposta": "2c5c982b70a3ac076781172534abb02494b3fa81c23f75cea4331bd754f56a88"
   },
   "governada/Q13-bruno": {
    "rotulo": "correta",
-   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)",
+   "motivo": "dá o valor vigente para o caso perguntado e cita o outro valor como regra vigente de outro escopo (contratos assinados antes de 01/07/2026, demais regiões ou viagem nacional), só como contraste (lido em 25/11/2026)",
    "sha256_resposta": "4a08e57419e62ea0903397bd12c65734bd092096b004c494849392290fc7684a"
   },
   "governada/Q13-carla": {
    "rotulo": "correta",
-   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)",
+   "motivo": "dá o valor vigente para o caso perguntado e cita o outro valor como regra vigente de outro escopo (contratos assinados antes de 01/07/2026, demais regiões ou viagem nacional), só como contraste (lido em 25/11/2026)",
    "sha256_resposta": "7397ef92f3e14d6897aeb82e16fce705f36d352e527f0c5527a3001ae911dd0b"
   },
   "avulso/Q05-ana": {
@@ -240,6 +240,12 @@
    "rotulo": "nao_encontrou",
    "motivo": "cita R$ 80 só para dizer que vale para viagem nacional e responde que o limite internacional não está nos anexos",
    "sha256_resposta": "9ec708765f8cf9ef8c81c3f3ddf792c13f1577849574cf01a9d673b80a277cd9"
+  }
+ },
+ "revelacoes_sem_valor": {
+  "projeto/Q01-ana": {
+   "motivo": "pergunta sobre alçada de desconto; a resposta acrescenta a regra do documento confidencial de margem mínima (pedido abaixo do mínimo exige o diretor financeiro), sem dar o percentual",
+   "sha256_resposta": "2935d5b28b58160815a9bb54fe058abaed3a17c2504623a18172025a6a20a00a"
   }
  }
 }
