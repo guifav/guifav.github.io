@@ -124,6 +124,22 @@ test('checkPostFiles: slug e index só em formato simples (o check_site.py lê e
     assert.ok(t(`slug: a\n${fm}`).some((p) => p.includes('topics')), fm);
   }
   assert.ok(t('slug: a\nslug: b').some((p) => p.includes('mais de uma')));
+  // summary e chaves de topo (#108, revisão do #158): rejeitar antes do build grafias YAML que desviam do formato
+  // simples (espaço antes de :, chave entre aspas, escape, chave explícita ?, flow mapping ou duplicata).
+  assert.deepEqual(t('slug: a\nsummary: "Resposta direta."'), []);
+  assert.deepEqual(t('slug: a\nsummary: >\n  Resposta dobrada.'), []);
+  assert.deepEqual(t('slug: a\nsummary:\n  Resposta na linha seguinte.'), []);
+  for (const fm of [
+    'summary : "Resposta."',
+    '"summary": "Resposta."',
+    "'summary': 'Resposta.'",
+    '"\\x73ummary": "Resposta."',
+    '? summary\n: "Resposta."',
+    '{slug: a, summary: "Resposta."}',
+    'summary: "A"\nsummary: "B"',
+  ]) {
+    assert.ok(t(`slug: a\n${fm}`).length > 0, fm);
+  }
 });
 
 test('checkPostFiles: data inexistente no calendário falha antes do YAML virar outra data', () => {

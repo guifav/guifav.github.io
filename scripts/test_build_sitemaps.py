@@ -36,12 +36,12 @@ class Repo(unittest.TestCase):
         self.repo.mkdir()
         self.git("init", "-q")
         self.commit({"index.html": html('<link rel="canonical" href="https://guifav.dev">'),
-                     "robots.txt": "User-agent: *\nDisallow: /portfolio/mockups/\nDisallow: /tools/\n"},
+                     "robots.txt": "User-agent: *\nDisallow: /portfolio/mockups/\nDisallow: /_mockups/\n"},
                     "2026-01-10T10:00:00-03:00")
         self.commit({"portfolio/index.html": html('<link rel="canonical" href="https://guifav.dev/portfolio/">'),
                      "portfolio/mockups/a.html": html(),
                      "404.html": html('<meta name="robots" content="noindex">')}, "2026-03-05T12:00:00-03:00")
-        self.commit({"llm-ranking/index.html": html(), "fw/f.html": html('<link rel="canonical" href="https://guifav.dev/fw/f.html">'),
+        self.commit({"tools/llm-ranking/index.html": html(), "fw/f.html": html('<link rel="canonical" href="https://guifav.dev/fw/f.html">'),
                      "rascunho/index.html": html('<meta name="robots" content="noindex, follow">'),
                      "outra/index.html": html('<link rel="canonical" href="https://guifav.github.io/outra">')},
                     "2026-06-20T08:30:00-03:00")
@@ -88,8 +88,8 @@ class BuildTest(Repo):
         self.assertEqual(self.entries("sitemap-site.xml", "url"), [
             ("https://guifav.dev/", "2026-01-10T10:00:00-03:00"),
             ("https://guifav.dev/fw/f.html", "2026-06-20T08:30:00-03:00"),
-            ("https://guifav.dev/llm-ranking/", "2026-06-20T08:30:00-03:00"),
             ("https://guifav.dev/portfolio/", "2026-03-05T12:00:00-03:00"),
+            ("https://guifav.dev/tools/llm-ranking/", "2026-06-20T08:30:00-03:00"),
         ])
 
     def test_lastmod_follows_the_last_commit_of_each_file(self):
@@ -102,20 +102,20 @@ class BuildTest(Repo):
         self.assertEqual(got["https://guifav.dev/"], "2026-01-10T10:00:00-03:00")
 
     def test_data_meta_is_the_lastmod_of_a_generated_page(self):
-        """#113: o /llm-ranking/ é gerado no build e declara a data dos dados; o lastmod é ela, não o commit."""
-        (self.site / "llm-ranking/index.html").write_text(html('<meta name="dados-publicados-em" content="2026-11-22">'),
-                                                         encoding="utf-8")
+        """#113: o /tools/llm-ranking/ é gerado no build e declara a data dos dados; o lastmod é ela, não o commit."""
+        (self.site / "tools/llm-ranking/index.html").write_text(html('<meta name="dados-publicados-em" content="2026-11-22">'),
+                                                               encoding="utf-8")
         B.build(self.repo, self.site)
         got = dict(self.entries("sitemap-site.xml", "url"))
-        self.assertEqual(got["https://guifav.dev/llm-ranking/"], "2026-11-22T00:00:00+00:00")
+        self.assertEqual(got["https://guifav.dev/tools/llm-ranking/"], "2026-11-22T00:00:00+00:00")
         self.assertEqual(got["https://guifav.dev/portfolio/"], "2026-03-05T12:00:00-03:00")
 
     def test_data_meta_newer_commit_does_not_move_the_lastmod(self):
-        self.commit({"llm-ranking/index.html": html('<meta name="dados-publicados-em" content="2026-11-11"><b>novo</b>')},
+        self.commit({"tools/llm-ranking/index.html": html('<meta name="dados-publicados-em" content="2026-11-11"><b>novo</b>')},
                     "2026-11-24T09:00:00-03:00")
         self.copy_site()
         B.build(self.repo, self.site)
-        self.assertEqual(dict(self.entries("sitemap-site.xml", "url"))["https://guifav.dev/llm-ranking/"], "2026-11-11T00:00:00+00:00")
+        self.assertEqual(dict(self.entries("sitemap-site.xml", "url"))["https://guifav.dev/tools/llm-ranking/"], "2026-11-11T00:00:00+00:00")
 
     def test_bad_data_meta_stops_the_build(self):
         for head, trecho in (('<meta name="dados-publicados-em" content="2026-11-22">'
@@ -125,7 +125,7 @@ class BuildTest(Repo):
                              ('<meta name="dados-publicados-em" content="2026-02-30">', "inválida"),
                              ('<meta name="dados-publicados-em" content="">', "fora do formato")):
             with self.subTest(head=head):
-                (self.site / "llm-ranking/index.html").write_text(html(head), encoding="utf-8")
+                (self.site / "tools/llm-ranking/index.html").write_text(html(head), encoding="utf-8")
                 for f in (B.SITE_SITEMAP, B.INDEX):
                     (self.site / f).unlink(missing_ok=True)
                 with self.assertRaises(B.SitemapError) as cm:
@@ -182,7 +182,7 @@ class BuildTest(Repo):
 
     def test_lastmod_is_commit_date_not_author_date(self):
         # Squash merge: o autor escreveu antes, mas a página entrou na main na data do commit.
-        (self.repo / "llm-ranking/index.html").write_text(html("<b>v2</b>"), encoding="utf-8")
+        (self.repo / "tools/llm-ranking/index.html").write_text(html("<b>v2</b>"), encoding="utf-8")
         self.git("add", "-A")
         env_date = "2026-11-12T18:00:00-03:00"
         subprocess.run(["git", "-C", str(self.repo), "commit", "-q", "-m", "squash"], check=True, capture_output=True,
@@ -191,7 +191,7 @@ class BuildTest(Repo):
                                 GIT_COMMITTER_DATE=env_date))
         self.copy_site()
         B.build(self.repo, self.site)
-        self.assertEqual(dict(self.entries("sitemap-site.xml", "url"))["https://guifav.dev/llm-ranking/"], env_date)
+        self.assertEqual(dict(self.entries("sitemap-site.xml", "url"))["https://guifav.dev/tools/llm-ranking/"], env_date)
 
     def test_refuses_site_without_indexable_pages(self):
         for f in list(self.site.rglob("*.html")):
@@ -463,7 +463,7 @@ class RealSiteGuardTest(unittest.TestCase):
         # O sitemap troca /b.html por /c.html: mesmo número de URLs, mas a página do manifesto sumiu.
         pages = {"index.html": html(), "a.html": html(), "b.html": html()}
         loc = "<url><loc>https://guifav.dev{}</loc><lastmod>2026-11-24T00:00:00-03:00</lastmod></url>"
-        files = {"robots.txt": "User-agent: *\nDisallow: /tools/\n", "site-manifest.txt": "index.html\na.html\nb.html\n",
+        files = {"robots.txt": "User-agent: *\nDisallow: /_mockups/\n", "site-manifest.txt": "index.html\na.html\nb.html\n",
                  **pages, **{f"_site/{k}": v for k, v in pages.items()},
                  "_site/sitemap-site.xml": f'<urlset xmlns="{B.NS}">' + "".join(loc.format(u) for u in ("/", "/a.html", "/c.html"))
                  + "</urlset>"}
@@ -478,7 +478,7 @@ class RealSiteGuardTest(unittest.TestCase):
         pages = {"index.html": html(), "a.html": html(), "b.html": html()}
         loc = "<url><loc>{}</loc><lastmod>2026-11-24T00:00:00-03:00</lastmod></url>"
         site = pages if site_pages is None else site_pages
-        return {"robots.txt": "User-agent: *\nDisallow: /tools/\n", "site-manifest.txt": "index.html\na.html\nb.html\n",
+        return {"robots.txt": "User-agent: *\nDisallow: /_mockups/\n", "site-manifest.txt": "index.html\na.html\nb.html\n",
                 **pages, **{f"_site/{k}": v for k, v in site.items()},
                 "_site/sitemap-site.xml": f'<urlset xmlns="{B.NS}">' + "".join(loc.format(u) for u in sitemap_paths)
                 + "</urlset>"}
@@ -588,7 +588,7 @@ class RealSiteGuardTest(unittest.TestCase):
                     with self.assertRaisesRegex(AssertionError, "curinga"):
                         manifest_pages(repo)
             # Curinga em grupo de outro robô não afeta o grupo '*'.
-            (repo / "robots.txt").write_text("User-agent: GPTBot\nDisallow: /*.pdf$\n\nUser-agent: *\nDisallow: /tools/\n",
+            (repo / "robots.txt").write_text("User-agent: GPTBot\nDisallow: /*.pdf$\n\nUser-agent: *\nDisallow: /_mockups/\n",
                                              encoding="utf-8")
             self.assertEqual(manifest_pages(repo), ["/"])
 

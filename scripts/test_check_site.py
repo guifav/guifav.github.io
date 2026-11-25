@@ -2,7 +2,9 @@
 
 Rodar: python3 scripts/test_check_site.py
 """
+import ast
 import contextlib
+import inspect
 import io
 import json
 import os
@@ -10,8 +12,10 @@ import shutil
 import subprocess
 import re
 import tempfile
+import textwrap
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import check_site as C
 
@@ -61,7 +65,7 @@ class Base(unittest.TestCase):
             "<url><loc>https://guifav.dev/blog/um-post/</loc></url>"
         ))
         (self.posts / "um-post.md").write_text("---\ntitle: x\nslug: um-post\n---\ntexto\n", encoding="utf-8")
-        self.w("robots.txt", "User-agent: *\nDisallow: /tools/\n\nSitemap: https://guifav.dev/sitemap.xml\n")
+        self.w("robots.txt", "User-agent: *\nDisallow: /_mockups/\n\nSitemap: https://guifav.dev/sitemap.xml\n")
         self.w("sitemap.xml", SITEMAP_INDEX.format(
             "<sitemap><loc>https://guifav.dev/sitemap-site.xml</loc></sitemap>"
             "<sitemap><loc>https://guifav.dev/blog/sitemap.xml</loc></sitemap>"
@@ -656,10 +660,10 @@ class RootSitemapTest(Base):
     def test_excluded_pages_must_stay_out(self):
         cases = {
             "404.html": ("404.html", page("x", robots="")),
-            "disallow": ("tools/x.html", page("x", robots="")),
+            "disallow": ("_mockups/x.html", page("x", robots="")),
             "noindex": ("rascunho/index.html", page("x", robots=ROBOTS_NOINDEX)),
         }
-        url = {"404.html": "https://guifav.dev/404.html", "disallow": "https://guifav.dev/tools/x.html",
+        url = {"404.html": "https://guifav.dev/404.html", "disallow": "https://guifav.dev/_mockups/x.html",
                "noindex": "https://guifav.dev/rascunho/"}
         for name, (rel, html) in cases.items():
             with self.subTest(name=name):
@@ -798,7 +802,7 @@ class TitleAndGroupTest(unittest.TestCase):
                  ("index.html", "Guilherme Favaron | Subtítulo errado", False),
                  ("portfolio/index.html", "Portfólio | Guilherme Favaron", True),
                  ("portfolio/index.html", "Portfólio, Guilherme Favaron", False),
-                 ("llm-ranking/index.html", "Ranking: Qual é o Melhor LLM?", False),
+                 ("tools/llm-ranking/index.html", "Ranking: Qual é o Melhor LLM?", False),
                  # Post (#103, Gui em 23/11): sem o nome do site, nem no fim nem no começo.
                  ("blog/um-post/index.html", "Um post", True),
                  ("blog/um-post/index.html", "Um post sobre Guilherme Favaron", True),
@@ -858,10 +862,11 @@ class TitleAndGroupTest(unittest.TestCase):
                        ("blog/inscricao-confirmada/index.html", "expert-insights"),
                        ("blog/inscricao-invalida/index.html", "expert-insights"),
                        ("blog/o-exame-virou-conspiracao/index.html", "insights-artigo"),
-                       ("planilha-custos-ia/index.html", "materiais"), ("mapa-decisao-ia/enviado/index.html", "materiais"),
+                       ("tools/planilha-custos-ia/index.html", "materiais"), ("tools/mapa-decisao-ia/enviado/index.html", "materiais"),
                        ("consultoria/index.html", "consultoria"), ("consultoria/x/index.html", None),
-                       ("planilha-custos-ia/x/index.html", None),
-                       ("llm-ranking/index.html", "ferramentas"), ("llm-ranking/x/index.html", None),
+                       ("tools/planilha-custos-ia/x/index.html", None),
+                       ("tools/index.html", "ferramentas"),
+                       ("tools/llm-ranking/index.html", "ferramentas"), ("tools/llm-ranking/x/index.html", None),
                        ("blog/pagina/x/index.html", None),
                        ("blog/a/b/index.html", None),
                        ("blog/tema/ia-sobre-dados-da-empresa/index.html", "insights-lista"),
@@ -931,14 +936,15 @@ class TitleAndGroupTest(unittest.TestCase):
         html = self.doc("<title>Ferramenta | Guilherme Favaron</title>", self.GA + self.cfg(",{content_group:'home'}"))
         self.assertTrue(any("sem grupo de conteúdo previsto" in p for p in self.check("ferramenta-nova/index.html", html)))
 
-    def test_llm_ranking_is_ferramentas(self):
-        html = self.doc("<title>Ranking | Guilherme Favaron</title>", self.GA + self.cfg(",{content_group:'ferramentas'}"))
-        self.assertEqual(self.check("llm-ranking/index.html", html), [])
-        html = self.doc("<title>Ranking | Guilherme Favaron</title>", self.GA + self.cfg(",{content_group:'materiais'}"))
-        self.assertTrue(any("esperado ['ferramentas']" in p for p in self.check("llm-ranking/index.html", html)))
+    def test_llm_ranking_and_tools_index_are_ferramentas(self):
+        for rel in ("tools/index.html", "tools/llm-ranking/index.html"):
+            html = self.doc("<title>Ferramentas | Guilherme Favaron</title>", self.GA + self.cfg(",{content_group:'ferramentas'}"))
+            self.assertEqual(self.check(rel, html), [], rel)
+            html = self.doc("<title>Ferramentas | Guilherme Favaron</title>", self.GA + self.cfg(",{content_group:'materiais'}"))
+            self.assertTrue(any("esperado ['ferramentas']" in p for p in self.check(rel, html)), rel)
 
     def test_no_ga_no_group_needed(self):
-        self.assertEqual(self.check("llm-ranking/index.html", self.doc("<title>LLM Ranking | Guilherme Favaron</title>")), [])
+        self.assertEqual(self.check("tools/llm-ranking/index.html", self.doc("<title>LLM Ranking | Guilherme Favaron</title>")), [])
 
     def test_check_runs_the_rule_on_every_page(self):
         with tempfile.TemporaryDirectory() as d:
@@ -990,7 +996,7 @@ class ClaritySourcesTest(unittest.TestCase):
         return (self.REPO / rel).read_text(encoding="utf-8")
 
     def test_root_pages(self):
-        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES), C.LLM_RANKING_PAGE, *C.LEGAL_PAGES):
+        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES), *sorted(C.TOOLS_PAGES), *C.LEGAL_PAGES):
             with self.subTest(rel=rel):
                 t = self.read(rel)
                 self.assertIn(C.GA4_TAG, t)
@@ -1006,7 +1012,7 @@ class ClaritySourcesTest(unittest.TestCase):
     def test_forms_masked(self):
         self.assertIn('action="https://insights.guifav.dev/subscribe" data-clarity-mask="true"', self.read("index.html"))
         for m in C.MATERIALS:
-            self.assertIn('data-ga-client-id data-clarity-mask="true"', self.read(f"{m}/index.html"))
+            self.assertIn('data-ga-client-id data-clarity-mask="true"', self.read(f"tools/{m}/index.html"))
         self.assertIn('data-clarity-mask="true"', self.read("blog-src/src/components/SubscribeForm.astro"))
 
     def test_privacy_mentions_clarity(self):
@@ -1026,7 +1032,8 @@ class NamingSourcesTest(unittest.TestCase):
     """
 
     REPO = Path(__file__).resolve().parent.parent
-    FILES = ("index.html", "portfolio/index.html", "consultoria/index.html", "404.html", "blog-src/src/layouts/Base.astro",
+    FILES = ("index.html", "portfolio/index.html", "consultoria/index.html", "tools/index.html", "404.html",
+             "blog-src/src/layouts/Base.astro",
              "blog-src/src/layouts/PostList.astro", "blog-src/src/components/SubscribeForm.astro",
              "blog-src/src/pages/[slug].astro", "blog-src/src/pages/assinar.astro",
              "blog-src/src/pages/inscricao-enviada.astro", "blog-src/src/pages/inscricao-confirmada.astro",
@@ -1194,7 +1201,7 @@ class TrackingTest(unittest.TestCase):
 
     def test_material_form_carries_ga_client_id(self):
         # Issue #99: o formulário de material leva data-ga-client-id e o campo oculto ga_cid, uma vez.
-        rel = "planilha-custos-ia/index.html"
+        rel = "tools/planilha-custos-ia/index.html"
         form = ('<form id="receber" {attr}method="post" action="https://insights.guifav.dev/material">'
                 '<input type="hidden" name="material" value="planilha-custos-ia">{cid}</form>')
         cid = '<input type="hidden" name="ga_cid" value="">'
@@ -1214,14 +1221,14 @@ class TrackingTest(unittest.TestCase):
         # Issue #99: generate_lead na página de enviado de cada material, com data-material-id igual ao da pasta.
         lead = lambda m: f'<header data-ga-event="generate_lead" data-material-id="{m}">x</header>'
         for m in C.MATERIALS:
-            self.assertEqual(self.check(self.doc(lead(m)), rel=f"{m}/enviado/index.html"), [], m)
-        enviado = "planilha-custos-ia/enviado/index.html"
+            self.assertEqual(self.check(self.doc(lead(m)), rel=f"tools/{m}/enviado/index.html"), [], m)
+        enviado = "tools/planilha-custos-ia/enviado/index.html"
         for name, (rel, body) in {
             "falta": (enviado, ""),
             "duas vezes": (enviado, lead("planilha-custos-ia") * 2),
             "outro material": (enviado, lead("mapa-decisao-ia")),
             "sem id": (enviado, '<header data-ga-event="generate_lead">x</header>'),
-            "fora do enviado": ("planilha-custos-ia/index.html", lead("planilha-custos-ia")),
+            "fora do enviado": ("tools/planilha-custos-ia/index.html", lead("planilha-custos-ia")),
             "home": ("index.html", lead("planilha-custos-ia")),
         }.items():
             with self.subTest(name=name):
@@ -1300,7 +1307,7 @@ class GaHostGuardTest(unittest.TestCase):
                             ("portfolio/index.html", "gtag('config','G-K7Y87QNCX8'"),
                             (C.CONSULTING_PAGE, "gtag('config','G-K7Y87QNCX8'"),
                             *((p, "gtag('config','G-K7Y87QNCX8'") for p in sorted(C.MATERIAL_PAGES)),
-                            (C.LLM_RANKING_PAGE, "gtag('config','G-K7Y87QNCX8'"),
+                            *((p, "gtag('config','G-K7Y87QNCX8'") for p in sorted(C.TOOLS_PAGES)),
                             *((p, "gtag('config','G-K7Y87QNCX8'") for p in C.LEGAL_PAGES),
                             ("blog-src/src/layouts/Base.astro", "gtag('config', GA4_ID")):
             with self.subTest(rel=rel):
@@ -1398,7 +1405,7 @@ class ConsentSourcesTest(unittest.TestCase):
     def test_consent_js_same_version_everywhere(self):
         src = re.search(r"CONSENT_SRC = '([^']+)'", self.read("blog-src/src/consts.ts")).group(1)
         self.assertRegex(src, r"^/assets/consent\.js\?v=\d{12}$")
-        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES), C.LLM_RANKING_PAGE, *C.LEGAL_PAGES):
+        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES), *sorted(C.TOOLS_PAGES), *C.LEGAL_PAGES):
             with self.subTest(rel=rel):
                 self.assertEqual(self.read(rel).count(f'<script src="{src}"></script>'), 1)
         self.assertEqual(self.read("blog-src/src/layouts/Base.astro").count(
@@ -1444,7 +1451,7 @@ class TrackingSourcesTest(unittest.TestCase):
         self.assertTrue(m)
         src = m.group(1)
         self.assertTrue(src.startswith(C.TRACK_PATH + "?v="))
-        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES), C.LLM_RANKING_PAGE, *C.LEGAL_PAGES):
+        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES), *sorted(C.TOOLS_PAGES), *C.LEGAL_PAGES):
             with self.subTest(rel=rel):
                 t = self.read(rel)
                 self.assertEqual(t.count(f'<script src="{src}"></script>'), 1)
@@ -1469,10 +1476,19 @@ class TrackingSourcesTest(unittest.TestCase):
         self.assertIn('<article class="post page" data-ga-event="sign_up">',
                       self.read("blog-src/src/pages/inscricao-confirmada.astro"))
 
+    def test_home_gif_download_marker_in_source(self):
+        # #148: o link do GIF do ciclo na home leva data-ga-download para o track.js emitir file_download.
+        self.assertIn(
+            '<a class="dflow-dl" href="/assets/ciclo-dados-ia.gif" download="ciclo-de-dados-e-ia-guifav.gif" '
+            'data-ga-download="ciclo-dados-ia">',
+            self.read("index.html"),
+        )
+
     def test_privacy_mentions_events(self):
         t = self.read("privacidade/index.html")
         self.assertIn("alguns cliques: contato, agendamento, links do rodapé, troca de idioma e de tema, a "
-                      "confirmação da inscrição e o pedido e o download de materiais (sem o email)", t)
+                      "confirmação da inscrição, o pedido e o download de materiais e o download do GIF do "
+                      "diagrama da home (sem o email)", t)
 
     def test_privacy_discloses_google_ads(self):
         # #64: GA4 vinculado ao Google Ads com publicidade personalizada (Gui, 13/11/2026). A política diz o recurso,
@@ -1631,7 +1647,18 @@ class ToolsTest(unittest.TestCase):
         self.assertEqual(C.check_tools("index.html", self.doc(ga=False)), [])
         self.assertEqual(C.check_tools("blog/um-post/index.html", self.doc(ga=False)), [])
         self.assertEqual(C.check_tools("portfolio/index.html", self.doc()), [])
-        self.assertEqual(C.check_tools("mapa-decisao-ia/index.html", self.doc()), [])
+        self.assertEqual(C.check_tools("tools/mapa-decisao-ia/index.html", self.doc()), [])
+
+    def test_tools_index_requires_four_links_and_collection_page(self):
+        ld = ('<script type="application/ld+json">{"@context":"https://schema.org","@type":"CollectionPage",'
+              '"url":"https://guifav.dev/tools/","isPartOf":{"@id":"https://guifav.dev/#website"}}</script>')
+        body = "<main>" + self.links(C.TOOLS_INDEX_LINKS) + "</main>"
+        ok = f"<!DOCTYPE html><html><head>{TrackingTest.GA}{ld}</head><body>{body}</body></html>"
+        self.assertEqual(C.check_tools("tools/index.html", ok), [])
+        self.assertTrue(any("CollectionPage" in p for p in C.check_tools(
+            "tools/index.html", f"<!DOCTYPE html><html><head>{TrackingTest.GA}</head><body>{body}</body></html>")))
+        self.assertTrue(any(C.TOOLS_INDEX_LINKS[0] in p for p in C.check_tools(
+            "tools/index.html", f"<!DOCTYPE html><html><head>{TrackingTest.GA}{ld}</head><body><main></main></body></html>")))
 
 
 class RelatedTest(unittest.TestCase):
@@ -1804,7 +1831,7 @@ class RelatedWiredTest(Base):
         consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
         self.assertEqual(self.problems(pre_cutover=False), [])  # check() sozinho não tem a regra
         err = io.StringIO()
-        with contextlib.redirect_stderr(err):
+        with isolate_main_rule("check_related"), contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
             code = C.main(["--site", str(self.site), "--posts", str(self.posts), "--consts", str(consts)])
         self.assertEqual(code, 1)
         self.assertIn("blog/um-post/index.html: post indexável precisa de um bloco Leia também, tem 0", err.getvalue())
@@ -1857,8 +1884,9 @@ class ToolsSourcesTest(unittest.TestCase):
         self.assertEqual(tools_nav(self.read("index.html")), tools_nav(self.read("blog-src/src/layouts/Base.astro")))
 
     def test_targets_exist_in_sources(self):
-        for rel in ("mapa-decisao-ia/index.html", "planilha-custos-ia/index.html",
-                    "seo-geo-aeo-framework/framework-seo-aeo.html",
+        self.assertEqual(C.check_tools("tools/index.html", self.read("tools/index.html")), [])
+        for rel in ("tools/index.html", "tools/mapa-decisao-ia/index.html", "tools/planilha-custos-ia/index.html",
+                    "tools/llm-ranking/index.html", "tools/seo-geo-aeo-framework/framework-seo-aeo.html",
                     "blog-src/src/content/posts/livro-ia-inteligencia-artificial-portugues-gratuito.md"):
             with self.subTest(rel=rel):
                 self.assertTrue((self.REPO / rel).is_file())
@@ -2002,13 +2030,7 @@ class SeoTest(unittest.TestCase):
         from unittest import mock
         self.post(slug="antigo", date="2024-03-01", desc="curta")  # importado: só aviso, agrupado na CI
         # isola a regra da #103 das demais; o formato do aviso depende de GITHUB_ACTIONS, que a CI define
-        with mock.patch.object(C, "check", lambda *a, **k: []), \
-                mock.patch.object(C, "check_related", lambda *a, **k: []), \
-                mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
-                mock.patch.object(C, "check_home", lambda *a, **k: []), \
-                mock.patch.object(C, "check_post_ld", lambda *a, **k: []), \
-                mock.patch.object(C, "check_llm_ranking", lambda *a, **k: []), \
-                mock.patch.object(C, "check_legal", lambda *a, **k: []):  # Leia também (#104), JSON-LD (#105), /consultoria/ e home (#136), #113, #146
+        with isolate_main_rule("check_seo"):
             for gh, new_mark, group in (("", "AVISO: ", None), ("true", "::warning title=check_site (#103)::", "::group::")):
                 for desc, code in (("d" * 69, 1), ("d" * 165, 0), (self.OK_DESC, 0)):
                     with self.subTest(gh=gh, desc=len(desc)), mock.patch.dict(os.environ, {"GITHUB_ACTIONS": gh}):
@@ -2252,15 +2274,7 @@ class PostLdTest(unittest.TestCase):
         consts = Path(self.tmp.name) / "consts.ts"
         consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
         args = ["--site", str(self.site), "--posts", str(self.posts), "--consts", str(consts)]
-        from unittest import mock
-        with mock.patch.object(C, "check", lambda *a, **k: []), \
-                mock.patch.object(C, "check_related", lambda *a, **k: []), \
-                mock.patch.object(C, "check_contrast", lambda *a, **k: []), \
-                mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
-                mock.patch.object(C, "check_home", lambda *a, **k: []), \
-                mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
-                mock.patch.object(C, "check_llm_ranking", lambda *a, **k: []), \
-                mock.patch.object(C, "check_legal", lambda *a, **k: []):  # #113 e #146 isoladas; ver LlmRankingTest e LegalTest
+        with isolate_main_rule("check_post_ld"):
             for head, code in (("", 1), (ld_script(post_graph()), 0)):
                 with self.subTest(code=code):
                     self.post(head)
@@ -2497,18 +2511,37 @@ class ContrastReviewR3Test(unittest.TestCase):
         self.assertEqual(C.css_cascade([css])["claro"][".x:hover"], ((0, 0, 0), (255, 255, 255)))
 
     def test_more_specific_rule_wins_regardless_of_order(self):
-        css = "#a .x{color:#000;background:#fff}.x{color:#fff}"
+        # Mesma chave (".x" no escuro) com especificidades diferentes: body[data-theme=dark] .x (0,2,1) vence [data-theme=dark] .x (0,2,0).
+        css = "body[data-theme=dark] .x{color:#fff;background:#000}[data-theme=dark] .x{color:#000}"
         self.assertEqual(C.contrast_problems([css]), [])
+        self.assertEqual(C.css_cascade([css])["escuro"][".x"], ((255, 255, 255), (0, 0, 0)))
+        css_bad = "body[data-theme=dark] .x{color:#fff;background:#fff}[data-theme=dark] .x{color:#000}"
+        self.assertEqual([(s, t) for s, t, *_ in C.contrast_problems([css_bad])], [(".x", "escuro")])
         # o :hover (0,2,0) vence o base (0,1,0) mesmo vindo antes no texto
         css = ".x:hover{color:#000}.x{color:#fff;background:#000}"
         self.assertEqual(C.css_cascade([css])["claro"][".x:hover"], ((0, 0, 0), (0, 0, 0)))
         self.assertTrue(C.contrast_problems([".x{color:#000;background:#fff}.x{color:#fff}"]))
 
     def test_important_beats_a_later_normal_declaration(self):
-        # Claude P3.
+        # Claude P3 e #138 (agy P2): !important vence empate e também seletor mais específico.
         self.assertEqual(C.contrast_problems([".x{color:#000!important;background:#fff}.x{color:#fff}"]), [])
         self.assertTrue(C.contrast_problems([".x{color:#000!important;background:#fff}.x{color:#fff!important}"]))
         self.assertEqual(C.contrast_problems([".x{color:#000 !IMPORTANT;background:#fff}.x{color:#fff}"]), [])
+        # !important em seletor menos específico vencendo seletor mais específico (herança de estado e mesma chave).
+        css = ".x{color:#000!important;background:#fff}.x:hover{color:#fff}"
+        self.assertEqual(C.contrast_problems([css]), [])
+        self.assertEqual(C.css_cascade([css])["claro"][".x:hover"], ((0, 0, 0), (255, 255, 255)))
+        self.assertIn((".x:hover", "claro"),
+                      {(s, t) for s, t, *_ in C.contrast_problems([".x{color:#fff!important;background:#fff}.x:hover{color:#000}"])})
+        self.assertEqual(C.contrast_problems([
+            "[data-theme=dark] .x{color:#fff!important;background:#000}body[data-theme=dark] .x{color:#000}"
+        ]), [])
+        self.assertEqual(
+            [(s, t) for s, t, *_ in C.contrast_problems([
+                "[data-theme=dark] .x{color:#000!important;background:#000}body[data-theme=dark] .x{color:#fff}"
+            ])],
+            [(".x", "escuro")],
+        )
 
     def test_braces_and_semicolons_inside_strings(self):
         # Claude P3, agy P4: content:"{" não engole a regra seguinte; ";" numa string não parte a declaração.
@@ -2543,6 +2576,109 @@ class ContrastReviewR3Test(unittest.TestCase):
                                                      "body[data-theme=dark] .x", "a::before", ":root", "#a .b c")],
                          [(0, 0, 0), (0, 0, 1), (0, 1, 0), (1, 0, 0), (0, 2, 0), (0, 2, 0), (0, 2, 1), (0, 0, 2),
                           (0, 1, 0), (1, 1, 1)])
+
+
+class ContrastFollowup138Test(unittest.TestCase):
+    """#138: 7 ajustes menores da rodada 4 do #131 (itens 2 a 7; item 1 está em ContrastReviewR3Test)."""
+
+    def test_body_tokens_beat_root_and_html_tokens(self):
+        # Item 2 (Claude P3): body é filho de html/:root, então os tokens de body vencem mesmo vindo antes.
+        css = "body{--t:#fff}:root{--t:#000}.x{color:var(--t);background:#000}"
+        self.assertEqual(C.contrast_problems([css]), [])
+        for theme in C.THEMES:
+            self.assertEqual(C.css_cascade([css])[theme][".x"], ((255, 255, 255), (0, 0, 0)))
+        css_bad = "body{--t:#000}html{--t:#fff}.x{color:var(--t);background:#000}"
+        self.assertEqual([(s, t) for s, t, *_ in C.contrast_problems([css_bad])], [(".x", "claro"), (".x", "escuro")])
+        # Dentro da mesma camada, especificidade e tema continuam valendo.
+        css_theme = "body[data-theme=dark]{--t:#fff}body{--t:#000}.x{color:var(--t);background:#000}"
+        self.assertEqual([(s, t) for s, t, *_ in C.contrast_problems([css_theme])], [(".x", "claro")])
+        css_root_vs_html = ":root{--t:#fff}html{--t:#000}.x{color:var(--t);background:#000}"
+        self.assertEqual(C.contrast_problems([css_root_vs_html]), [])
+        # html/:root não herda tokens definidos em body.
+        css_no_leak = ":root{--t:#000;color:var(--t);background:#fff}body{--t:#fff;color:var(--t);background:#000}"
+        self.assertEqual(C.contrast_problems([css_no_leak]), [])
+
+    def test_root_and_html_theme_share_the_same_key(self):
+        # Item 3 (agy P3): :root puro e html[data-theme]/:root[data-theme] caem na mesma chave "html".
+        css_ok = ":root{--text:#000;color:var(--text);background:#fff}:root[data-theme=dark]{--text:#fff;background:#000}"
+        self.assertEqual(C.contrast_problems([css_ok]), [])
+        self.assertEqual(C.css_cascade([css_ok])["escuro"]["html"], ((255, 255, 255), (0, 0, 0)))
+        css_bad = ":root{color:#000;background:#fff}html[data-theme=dark]{background:#000}"
+        self.assertEqual([(s, t) for s, t, *_ in C.contrast_problems([css_bad])], [("html", "escuro")])
+        # :root (0,1,0) vence html (0,0,1) na mesma chave "html".
+        self.assertEqual(C.contrast_problems([":root{color:#fff;background:#000}html{color:#000}"]), [])
+
+    def test_escaped_quotes_and_braces_inside_quoted_selectors(self):
+        # Item 4 (agy P3): escapes com barra invertida em strings e "{" dentro de aspas no seletor ou @import.
+        for css, want in (
+            ('.a::before{content:"\\"}"}.x{color:#fff;background:#fff}', ".x"),
+            (".a::before{content:'\\'}'}.x{color:#fff;background:#fff}", ".x"),
+            ('.a::before{content:"\\\\\\"{" }.x{color:#fff;background:#fff}', ".x"),
+            ('.a::before{content:"\\\\"}.x{color:#fff;background:#fff}', ".x"),
+            ('.a{content:"a\\";color:#000";color:#fff;background:#fff}', ".a"),
+            ('.a{content:"a\\\\";color:#fff;background:#fff}', ".a"),
+            ('a[data-x="{"]{color:#fff;background:#fff}', 'a[data-x="{"]'),
+            ('a[data-x="\\"{"].z{color:#fff;background:#fff}', 'a[data-x="\\"{"].z'),
+            ('@import url("https://example.com/a{b;c\\";d");.x{color:#fff;background:#fff}', ".x"),
+        ):
+            with self.subTest(css=css):
+                self.assertEqual({s for s, *_ in C.contrast_problems([css])}, {want}, css)
+        # Vírgula escapada dentro de aspas no seletor não parte o seletor.
+        probs = C.contrast_problems(['[data-x="a\\",b"],.y{color:#fff;background:#fff}'])
+        self.assertEqual({s for s, *_ in probs}, {'[data-x="a\\",b"]', ".y"})
+
+    def test_compound_states_inherit_intermediate_states(self):
+        # Item 5 (agy P3): estados compostos (:hover:active) herdam dos estados intermediários pela cascata.
+        css_ok = ".btn{color:#000;background:#fff}.btn:hover{color:#fff;background:#000}.btn:hover:active{background:#111}"
+        self.assertEqual(C.contrast_problems([css_ok]), [])
+        self.assertEqual(C.css_cascade([css_ok])["claro"][".btn:hover:active"], ((255, 255, 255), (17, 17, 17)))
+        css_bad = ".btn{color:#000;background:#fff}.btn:hover{color:#fff;background:#000}.btn:hover:active{background:#fff}"
+        self.assertEqual({s for s, *_ in C.contrast_problems([css_bad])}, {".btn:hover:active"})
+        # Desempate por ordem entre intermediários de mesma especificidade.
+        css_order_bad = ".btn{background:#fff}.btn:hover{color:#fff;background:#000}.btn:active{color:#000;background:#fff}.btn:hover:active{background:#000}"
+        self.assertEqual({s for s, *_ in C.contrast_problems([css_order_bad])}, {".btn:hover:active"})
+        css_order_ok = ".btn{background:#fff}.btn:active{color:#000;background:#fff}.btn:hover{color:#fff;background:#000}.btn:hover:active{background:#000}"
+        self.assertEqual(C.contrast_problems([css_order_ok]), [])
+        # !important no intermediário vence o estado composto.
+        css_imp = ".btn{background:#fff}.btn:hover{color:#fff!important}.btn:hover:active{color:#000;background:#fff}"
+        self.assertIn(".btn:hover:active", {s for s, *_ in C.contrast_problems([css_imp])})
+        # Estados intermediários em ordem diferente (.btn:active:hover) e em partes diferentes do seletor.
+        css_perm = ".btn{background:#fff}.btn:active:hover{color:#fff;background:#000}.btn:hover:active:focus{background:#111}"
+        self.assertEqual(C.contrast_problems([css_perm]), [])
+        css_split = ".card .btn{color:#000;background:#fff}.card:hover .btn{color:#fff;background:#000}.card:hover .btn:active{background:#111}"
+        self.assertEqual(C.contrast_problems([css_split]), [])
+
+    def test_var_followed_by_another_token(self):
+        # Item 6 (agy P4): var(...) só vale como cor única quando o ")" correspondente encerra a string.
+        toks = {"--a": "#fff", "--b": "#000"}
+        self.assertIsNone(C.css_color("var(--a, #fff) var(--b)", toks))
+        self.assertIsNone(C.css_color("var(--a, #000) rgb(0, 0, 0)", toks))
+        self.assertIsNone(C.css_color("var(--a, #000) calc(1px)", toks))
+        self.assertEqual(C.css_color("var(--a, var(--b, rgb(0, 0, 0)))", {}), (0, 0, 0))
+        self.assertIsNone(C._css_background("var(--a, #fff) var(--b)", toks))
+        self.assertEqual(C.contrast_problems([":root{--a:#fff;--b:#000}.x{color:#fff;background:var(--a, #fff) var(--b)}"]), [])
+        self.assertEqual(C.contrast_problems([":root{--a:#fff}.x{color:var(--a, #fff) calc(1px);background:#fff}"]), [])
+
+    def test_ancestor_before_data_theme(self):
+        # Item 7 (Claude P4): ancestral html/:root antes de [data-theme] sobrescreve o seletor e os tokens do tema.
+        for prefix in ("html body[data-theme=dark]", "html > body[data-theme=dark]",
+                       ":root body[data-theme=dark]", ":root > body[data-theme=dark]",
+                       "html [data-theme=dark]"):
+            with self.subTest(prefix=prefix):
+                css_ok = f".x{{color:#000;background:#fff}}{prefix} .x{{color:#fff;background:#000}}"
+                self.assertEqual(C.contrast_problems([css_ok]), [])
+                self.assertEqual(C.css_cascade([css_ok])["escuro"][".x"], ((255, 255, 255), (0, 0, 0)))
+                css_bad = f".x{{color:#000;background:#fff}}{prefix} .x{{background:#000}}"
+                self.assertEqual([(s, t) for s, t, *_ in C.contrast_problems([css_bad])], [(".x", "escuro")])
+        # Tokens e cores no próprio body com ancestral html.
+        css_tok = ":root{--f:#000;--b:#fff}html body[data-theme=dark]{--f:#fff;--b:#000}.x{color:var(--f);background:var(--b)}"
+        self.assertEqual(C.contrast_problems([css_tok]), [])
+        self.assertEqual(C.css_cascade([css_tok])["escuro"][".x"], ((255, 255, 255), (0, 0, 0)))
+        css_body = "body{color:#000;background:#fff}html body[data-theme=dark]{background:#000}"
+        self.assertEqual([(s, t) for s, t, *_ in C.contrast_problems([css_body])], [("body", "escuro")])
+        # Ancestral arbitrário não-raiz não se mistura com .x global.
+        css_scoped = ".x{color:#000;background:#fff}.card [data-theme=dark] .x{background:#000}"
+        self.assertEqual(C.contrast_problems([css_scoped]), [])
 
 
 class ContrastSiteTest(Base):
@@ -2617,19 +2753,19 @@ class ContrastSiteTest(Base):
                                 '<style>.subscribe-row button{color:var(--hl-text)}</style>',
                                 robots='<meta name="robots" content="noindex">'))
         err = io.StringIO()
-        with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+        with isolate_main_rule("check_contrast"), contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
             code = C.main(["--site", str(self.site), "--posts", str(self.posts), "--consts", str(consts)])
         self.assertEqual(code, 1)
         self.assertIn("404.html: contraste 1.00:1", err.getvalue())
 
 
 class LlmRankingTest(unittest.TestCase):
-    """#113: a regra que falha se o /llm-ranking/ sair sem a tabela, a data dos dados, o JSON-LD ou a atribuição."""
+    """#113: a regra que falha se o /tools/llm-ranking/ sair sem a tabela, a data dos dados, o JSON-LD ou a atribuição."""
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.site = Path(self.tmp.name)
-        (self.site / "llm-ranking").mkdir()
+        (self.site / "tools/llm-ranking").mkdir(parents=True)
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -2650,7 +2786,7 @@ class LlmRankingTest(unittest.TestCase):
         html = (f"<!DOCTYPE html><html><head>{meta}{versao}<script type=\"application/ld+json\">{ld}</script></head><body>"
                 f'<table id="ranking"><caption>x</caption><thead><tr><th>Posição</th></tr></thead><tbody>{"".join(trs)}'
                 f"</tbody></table><p>{att}</p>{extra}</body></html>")
-        (self.site / "llm-ranking/index.html").write_text(html, encoding="utf-8")
+        (self.site / "tools/llm-ranking/index.html").write_text(html, encoding="utf-8")
         return C.check_llm_ranking(self.site)
 
     def test_good_page(self):
@@ -2668,11 +2804,11 @@ class LlmRankingTest(unittest.TestCase):
                                     for p in self.page(versao=f'<meta name="dados-versao" content="{ruim}">')))
 
     def test_missing_page(self):
-        (self.site / "llm-ranking").rmdir()
-        self.assertEqual(C.check_llm_ranking(self.site), ["llm-ranking/index.html: página não existe no _site"])
+        (self.site / "tools/llm-ranking").rmdir()
+        self.assertEqual(C.check_llm_ranking(self.site), ["tools/llm-ranking/index.html: página não existe no _site"])
 
     def test_without_the_table(self):
-        (self.site / "llm-ranking/index.html").write_text(
+        (self.site / "tools/llm-ranking/index.html").write_text(
             '<html><head><meta name="dados-publicados-em" content="2026-11-22"></head><body></body></html>', encoding="utf-8")
         self.assertTrue(any('esperava uma <table id="ranking">, achou 0' in p for p in C.check_llm_ranking(self.site)))
 
@@ -2685,12 +2821,12 @@ class LlmRankingTest(unittest.TestCase):
     def test_empty_cell(self):
         probs = self.page(extra="")
         self.assertEqual(probs, [])
-        html = (self.site / "llm-ranking/index.html").read_text(encoding="utf-8").replace("<td><span>c0</span></td>", "<td></td>", 1)
-        (self.site / "llm-ranking/index.html").write_text(html, encoding="utf-8")
+        html = (self.site / "tools/llm-ranking/index.html").read_text(encoding="utf-8").replace("<td><span>c0</span></td>", "<td></td>", 1)
+        (self.site / "tools/llm-ranking/index.html").write_text(html, encoding="utf-8")
         self.assertTrue(any("célula vazia" in p for p in C.check_llm_ranking(self.site)))
 
     def test_nested_table_rows_do_not_count(self):
-        html = (self.site / "llm-ranking/index.html")
+        html = (self.site / "tools/llm-ranking/index.html")
         self.page()
         t = html.read_text(encoding="utf-8").replace("<td><span>c0</span></td>", "<td><table><tbody><tr><td>x</td></tr></tbody></table>c</td>", 1)
         html.write_text(t, encoding="utf-8")
@@ -2698,7 +2834,7 @@ class LlmRankingTest(unittest.TestCase):
 
     def test_nested_empty_cell_does_not_close_the_outer_one(self):
         # r1 (agy P3): o </td> da tabela aninhada não fecha a célula de fora; a célula de fora tem o texto "c".
-        html = (self.site / "llm-ranking/index.html")
+        html = (self.site / "tools/llm-ranking/index.html")
         self.page()
         t = html.read_text(encoding="utf-8").replace("<td><span>c0</span></td>", "<td><table><tbody><tr><td></td></tr></tbody></table>c</td>", 1)
         html.write_text(t, encoding="utf-8")
@@ -2736,31 +2872,16 @@ class LlmRankingTest(unittest.TestCase):
         self.assertTrue(any("marcador do template" in p for p in self.page(extra="<!--LLM:tabela-->")))
 
     def test_main_runs_the_rule(self):
-        from unittest import mock
         consts = Path(self.tmp.name) / "consts.ts"
         consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
         err = io.StringIO()
-        with mock.patch.object(C, "check", lambda *a, **k: []), \
-                mock.patch.object(C, "check_related", lambda *a, **k: []), \
-                mock.patch.object(C, "check_contrast", lambda *a, **k: []), \
-                mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
-                mock.patch.object(C, "check_post_ld", lambda *a, **k: []), \
-                mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
-                mock.patch.object(C, "check_home", lambda *a, **k: []), \
-                mock.patch.object(C, "check_legal", lambda *a, **k: []), \
+        with isolate_main_rule("check_llm_ranking"), \
                 contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
             code = C.main(["--site", str(self.site), "--posts", str(self.site), "--consts", str(consts)])
         self.assertEqual(code, 1)
-        self.assertIn("ERRO: llm-ranking/index.html: página não existe no _site", err.getvalue())
+        self.assertIn("ERRO: tools/llm-ranking/index.html: página não existe no _site", err.getvalue())
         self.page()
-        with mock.patch.object(C, "check", lambda *a, **k: []), \
-                mock.patch.object(C, "check_related", lambda *a, **k: []), \
-                mock.patch.object(C, "check_contrast", lambda *a, **k: []), \
-                mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
-                mock.patch.object(C, "check_post_ld", lambda *a, **k: []), \
-                mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
-                mock.patch.object(C, "check_home", lambda *a, **k: []), \
-                mock.patch.object(C, "check_legal", lambda *a, **k: []), \
+        with isolate_main_rule("check_llm_ranking"), \
                 contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(C.main(["--site", str(self.site), "--posts", str(self.site), "--consts", str(consts)]), 0)
 
@@ -2788,8 +2909,11 @@ class NavSourcesTest(unittest.TestCase):
     def test_every_menu_has_consulting_and_the_schedule_cta_goes_there(self):
         files = self.sources()
         rels = {str(f.relative_to(self.ROOT)) for f in files}
-        for must in ("index.html", "404.html", "portfolio/index.html", "consultoria/index.html", "llm-ranking/index.html",
-                     "privacidade/index.html", "termos/index.html", "blog-src/src/layouts/Base.astro"):
+        for must in ("index.html", "404.html", "portfolio/index.html", "consultoria/index.html",
+                     "tools/index.html", "tools/llm-ranking/index.html",
+                     "tools/mapa-decisao-ia/index.html", "tools/planilha-custos-ia/index.html",
+                     "privacidade/index.html", "termos/index.html",
+                     "blog-src/src/layouts/Base.astro"):
             self.assertIn(must, rels)
         for f in files:
             rel = str(f.relative_to(self.ROOT))
@@ -2811,7 +2935,7 @@ class NavSourcesTest(unittest.TestCase):
         # site.js exatamente uma vez, sempre com ?v= de 12 dígitos, como nos testes do consent.js e do track.js.
         versions = {}
         pages = self.sources()[:-1]
-        self.assertIn("llm-ranking/index.html", {str(f.relative_to(self.ROOT)) for f in pages})
+        self.assertIn("tools/llm-ranking/index.html", {str(f.relative_to(self.ROOT)) for f in pages})
         for f in pages:
             rel = str(f.relative_to(self.ROOT))
             with self.subTest(rel=rel):
@@ -2946,17 +3070,8 @@ class ConsultingTest(unittest.TestCase):
         site.mkdir()
         consts = Path(self.tmp.name) / "consts.ts"
         consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
-        from unittest import mock
         err = io.StringIO()
-        with mock.patch.object(C, "check", lambda *a, **k: []), \
-                mock.patch.object(C, "check_related", lambda *a, **k: []), \
-                mock.patch.object(C, "check_contrast", lambda *a, **k: []), \
-                mock.patch.object(C, "check_home", lambda *a, **k: []), \
-                mock.patch.object(C, "check_post_ld", lambda *a, **k: []), \
-                mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
-                mock.patch.object(C, "check_llm_ranking", lambda *a, **k: []), \
-                mock.patch.object(C, "check_legal", lambda *a, **k: []), \
-                contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+        with isolate_main_rule("check_consulting"), contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
             code = C.main(["--site", str(site), "--posts", str(self.tmp.name), "--consts", str(consts)])
         self.assertEqual(code, 1)
         self.assertIn("consultoria/index.html: a página de consultoria sumiu", err.getvalue())
@@ -3063,19 +3178,11 @@ class HomeHubTest(unittest.TestCase):
         self.assertEqual(C.check_home(self.site, self.posts, 6), ["index.html: home ausente no site montado"])
         consts = Path(self.tmp.name) / "consts.ts"
         consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\nexport const HOME_LATEST = 6;\n", encoding="utf-8")
-        from unittest import mock
         err = io.StringIO()
-        with mock.patch.object(C, "check", lambda *a, **k: []), \
-                mock.patch.object(C, "check_related", lambda *a, **k: []), \
-                mock.patch.object(C, "check_contrast", lambda *a, **k: []), \
-                mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
-                mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
-                mock.patch.object(C, "check_llm_ranking", lambda *a, **k: []), \
-                mock.patch.object(C, "check_legal", lambda *a, **k: []), \
-                contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+        with isolate_main_rule("check_home"), contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
             code = C.main(["--site", str(self.site), "--posts", str(self.posts), "--consts", str(consts)])
         self.assertEqual(code, 1)
-        self.assertIn("index.html: home ausente", err.getvalue())
+        self.assertEqual(err.getvalue().splitlines(), ["ERRO: index.html: home ausente no site montado"])
 
 
 class LegalTest(unittest.TestCase):
@@ -3207,29 +3314,14 @@ class LegalTest(unittest.TestCase):
     def test_main_runs_the_legal_rule(self):
         consts = Path(self.tmp.name) / "consts.ts"
         consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
-        from unittest import mock
         err = io.StringIO()
-        with mock.patch.object(C, "check", lambda *a, **k: []), \
-                mock.patch.object(C, "check_related", lambda *a, **k: []), \
-                mock.patch.object(C, "check_contrast", lambda *a, **k: []), \
-                mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
-                mock.patch.object(C, "check_home", lambda *a, **k: []), \
-                mock.patch.object(C, "check_post_ld", lambda *a, **k: []), \
-                mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
-                mock.patch.object(C, "check_llm_ranking", lambda *a, **k: []), \
+        with isolate_main_rule("check_legal"), \
                 contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
             code = C.main(["--site", str(self.site), "--posts", str(self.tmp.name), "--consts", str(consts)])
         self.assertEqual(code, 1)
         self.assertIn("privacidade/index.html: página legal ausente", err.getvalue())
         self.build_valid_site()
-        with mock.patch.object(C, "check", lambda *a, **k: []), \
-                mock.patch.object(C, "check_related", lambda *a, **k: []), \
-                mock.patch.object(C, "check_contrast", lambda *a, **k: []), \
-                mock.patch.object(C, "check_consulting", lambda *a, **k: []), \
-                mock.patch.object(C, "check_home", lambda *a, **k: []), \
-                mock.patch.object(C, "check_post_ld", lambda *a, **k: []), \
-                mock.patch.object(C, "check_seo", lambda *a, **k: ([], [], [])), \
-                mock.patch.object(C, "check_llm_ranking", lambda *a, **k: []), \
+        with isolate_main_rule("check_legal"), \
                 contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(C.main(["--site", str(self.site), "--posts", str(self.tmp.name), "--consts", str(consts)]), 0)
 
@@ -3314,10 +3406,305 @@ class LegalSourcesTest(unittest.TestCase):
     def test_terms_not_in_forms_or_cookie_banner(self):
         self.assertNotIn("/termos/", (self.REPO / "assets/consent.js").read_text(encoding="utf-8"))
         self.assertNotIn("/termos/", (self.REPO / "blog-src/src/components/SubscribeForm.astro").read_text(encoding="utf-8"))
-        for rel in ("index.html", "planilha-custos-ia/index.html", "mapa-decisao-ia/index.html"):
+        for rel in ("index.html", "tools/planilha-custos-ia/index.html", "tools/mapa-decisao-ia/index.html"):
             html = (self.REPO / rel).read_text(encoding="utf-8")
             for form in re.findall(r"<form\b[^>]*>.*?</form>", html, flags=re.S | re.I):
                 self.assertNotIn("/termos/", form, rel)
+
+
+class SummaryTest(Base):
+    """#108: bloco 'Em resumo' acima de .post-body quando há summary e ausente quando não há, com contraste AA."""
+
+    SUMMARY_HTML = (
+        '<section class="post-summary" aria-label="Em resumo">'
+        '<p class="post-summary-label">Em resumo</p>'
+        '<p>Resposta direta em duas frases. Sem repetir a description.</p>'
+        '</section><div class="post-body"><figure><img src="/blog/img/um-post/a.webp" alt="x"></figure></div>'
+    )
+
+    def write_post(self, slug: str, summary: str | None, html_body: str) -> None:
+        lines = ["---", "title: Teste", "description: Descricao propria do post", f"slug: {slug}"]
+        if summary is not None:
+            lines.append(f'summary: "{summary}"')
+        lines += ["---", "corpo", ""]
+        (self.posts / f"{slug}.md").write_text("\n".join(lines), encoding="utf-8")
+        self.w(f"blog/{slug}/index.html", page(html_body))
+
+    def test_valid_with_and_without_summary(self):
+        self.write_post("com-resumo", "Resposta direta em duas frases.", self.SUMMARY_HTML)
+        self.write_post("sem-resumo", None, '<div class="post-body"><p>texto</p></div>')
+        self.assertEqual(C.check_summary(self.site, self.posts), [])
+
+    def test_yaml_multiline_and_indented_summary_are_recognized(self):
+        # Regressão da revisão do PR #158 (Roger P1 / Codex P2): YAML válido com valor indentado na linha seguinte
+        # ou em bloco >/| é aceito pelo Astro e precisa ser reconhecido como post com summary.
+        yaml_with = {
+            "indentado": "summary:\n  Resposta direta na linha seguinte.\n  Segunda frase.",
+            "indentado com comentario": "summary: # nota\n  # comentario interno\n  Resposta valida.",
+            "bloco dobrado": "summary: >\n  Resposta dobrada em duas linhas.",
+            "bloco literal": "summary: |-\n  Resposta literal.",
+            "bloco indentado": "summary: >2-\n  Resposta com indicador numerico.",
+            "aspas multilinha": 'summary:\n  "Resposta entre aspas\n  quebrada em duas linhas."',
+            "espaco antes de dois-pontos": 'summary : "Resposta com espaco antes do separador."',
+            "chave com aspas duplas": '"summary": "Resposta com chave entre aspas duplas."',
+            "chave com aspas simples": "'summary' : 'Resposta com chave entre aspas simples.'",
+            "aspas duplas escapadas": 'summary: "\\"Resposta\\" entre aspas escapadas."',
+            "misto nUll e string no YAML 1.2": "summary: nUll",
+            "indentado nUll e string no YAML 1.2": "summary:\n  nUll",
+            "null entre aspas e string": 'summary: "null"',
+        }
+        for name, fm_line in yaml_with.items():
+            with self.subTest(case=name):
+                self.setUp()
+                (self.posts / "ml.md").write_text(
+                    f"---\ntitle: Teste\ndescription: Desc\nslug: ml\n{fm_line}\n---\ncorpo\n", encoding="utf-8"
+                )
+                self.w("blog/ml/index.html", page(self.SUMMARY_HTML))
+                self.assertEqual(C.check_summary(self.site, self.posts), [], name)
+                self.w("blog/ml/index.html", page('<div class="post-body"><p>sem bloco</p></div>'))
+                self.assertTrue(C.check_summary(self.site, self.posts), name)
+
+        yaml_without = {
+            "chave vazia": "summary:",
+            "so comentario": "summary: # nada\n  # ainda nada",
+            "aspas vazias": 'summary: ""',
+            "null": "summary: null",
+            "Null": "summary: Null",
+            "NULL": "summary: NULL",
+            "til": "summary: ~",
+            "bloco vazio": "summary: >\n   ",
+            "indentado null": "summary:\n  null",
+            "indentado Null": "summary:\n  Null",
+            "indentado NULL": "summary:\n  NULL",
+            "indentado til com comentario": "summary:\n  ~ # vazio",
+        }
+        for name, fm_line in yaml_without.items():
+            with self.subTest(empty=name):
+                self.setUp()
+                (self.posts / "vazio.md").write_text(
+                    f"---\ntitle: Teste\ndescription: Desc\nslug: vazio\n{fm_line}\n---\ncorpo\n", encoding="utf-8"
+                )
+                self.w("blog/vazio/index.html", page('<div class="post-body"><p>texto</p></div>'))
+                self.assertEqual(C.check_summary(self.site, self.posts), [], name)
+
+    def test_missing_or_misplaced_or_inert_summary_fails(self):
+        cases = {
+            "ausente": '<div class="post-body"><p>texto</p></div>',
+            "depois do body": '<div class="post-body"><p>x</p></div>' + self.SUMMARY_HTML.split("<div")[0],
+            "dentro do body": '<div class="post-body">' + self.SUMMARY_HTML.split("<div")[0] + "</div>",
+            "sem rotulo": '<section class="post-summary"><p>So o texto.</p></section><div class="post-body"></div>',
+            "sem texto": '<section class="post-summary"><p class="post-summary-label">Em resumo</p></section><div class="post-body"></div>',
+            "texto so em template": '<section class="post-summary"><p class="post-summary-label">Em resumo</p><template><p>Oculto</p></template></section><div class="post-body"></div>',
+            "em template": '<template>' + self.SUMMARY_HTML.split("<div")[0] + '</template><div class="post-body"></div>',
+            "hidden": self.SUMMARY_HTML.replace('class="post-summary"', 'class="post-summary" hidden'),
+            "duplicado": self.SUMMARY_HTML.split("<div")[0] * 2 + '<div class="post-body"></div>',
+        }
+        for name, body in cases.items():
+            with self.subTest(case=name):
+                self.setUp()
+                self.write_post("com-resumo", "Resposta direta.", body)
+                self.assertTrue(C.check_summary(self.site, self.posts), name)
+        # .post-body dentro de <template> antes do summary é inerte e não conta como .post-body real.
+        self.setUp()
+        self.write_post("com-resumo", "Resposta direta.", '<template><div class="post-body"></div></template>' + self.SUMMARY_HTML)
+        self.assertEqual(C.check_summary(self.site, self.posts), [])
+
+    def test_main_runs_check_summary(self):
+        consts = Path(self.tmp.name) / "consts.ts"
+        consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
+        self.write_post("com-resumo", "Resposta direta.", '<div class="post-body"><p>sem bloco</p></div>')
+        err = io.StringIO()
+        with isolate_main_rule("check_summary"), \
+                contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            code = C.main(["--site", str(self.site), "--posts", str(self.posts), "--consts", str(consts)])
+        self.assertEqual(code, 1)
+        self.assertIn("post-summary", err.getvalue())
+
+    def test_post_without_summary_cannot_render_block(self):
+        self.write_post("sem-resumo", None, self.SUMMARY_HTML)
+        got = C.check_summary(self.site, self.posts)
+        self.assertTrue(any("sem summary" in p for p in got), got)
+
+    def test_blog_summary_contrast_in_light_and_dark(self):
+        repo = Path(__file__).resolve().parent.parent
+        site_css = (repo / "assets/site.css").read_text(encoding="utf-8")
+        blog_css = (repo / "blog-src/src/styles/blog.css").read_text(encoding="utf-8")
+        self.assertEqual(C.contrast_problems([site_css, blog_css]), [])
+        # Confere também .post-summary-label (cor herdando fundo --tag-bg de .post-summary) nos dois temas.
+        extra = ".post-summary-label{background:var(--tag-bg)}"
+        self.assertEqual(C.contrast_problems([site_css, blog_css, extra]), [])
+
+
+# Regras chamadas por C.main() e o retorno neutro usado ao isolar uma delas (#147).
+MAIN_RULES = {
+    "check": lambda *a, **k: [],
+    "check_related": lambda *a, **k: [],
+    "check_summary": lambda *a, **k: [],
+    "check_contrast": lambda *a, **k: [],
+    "check_consulting": lambda *a, **k: [],
+    "check_home": lambda *a, **k: [],
+    "check_post_ld": lambda *a, **k: [],
+    "check_llm_ranking": lambda *a, **k: [],
+    "check_legal": lambda *a, **k: [],
+    "check_seo": lambda *a, **k: ([], [], []),
+}
+
+
+@contextlib.contextmanager
+def isolate_main_rule(keep: str):
+    """Faz mock de todas as regras de C.main(), exceto `keep`, para o teste depender só dela."""
+    if keep not in MAIN_RULES:
+        raise KeyError(f"regra fora de MAIN_RULES: {keep!r}")
+    with contextlib.ExitStack() as stack:
+        for name, stub in MAIN_RULES.items():
+            if name != keep:
+                stack.enter_context(mock.patch.object(C, name, stub))
+        yield
+
+
+def _main_rules_in_source(fn) -> set[str]:
+    """Extrai via AST todas as chamadas a check / check_* dentro de C.main()."""
+    tree = ast.parse(textwrap.dedent(inspect.getsource(fn)))
+    out: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name) and (node.func.id == "check" or node.func.id.startswith("check_")):
+                out.add(node.func.id)
+    return out
+
+
+def _with_item_mocks(expr: ast.AST, rules: set[str]) -> set[str]:
+    """Quais regras de `rules` um item de `with` isola (via isolate_main_rule ou mock.patch.object)."""
+    if not isinstance(expr, ast.Call):
+        return set()
+    f = expr.func
+    if isinstance(f, ast.Name) and f.id == "isolate_main_rule":
+        arg = expr.args[0] if expr.args else next((kw.value for kw in expr.keywords if kw.arg == "keep"), None)
+        if isinstance(arg, ast.Constant) and isinstance(arg.value, str) and arg.value in rules:
+            return set(MAIN_RULES) - {arg.value}
+        return set()
+    if (isinstance(f, ast.Attribute) and f.attr == "object"
+            and isinstance(f.value, ast.Attribute) and f.value.attr == "patch"
+            and len(expr.args) >= 2
+            and isinstance(expr.args[0], ast.Name) and expr.args[0].id == "C"
+            and isinstance(expr.args[1], ast.Constant) and isinstance(expr.args[1].value, str)):
+        return {expr.args[1].value}
+    return set()
+
+
+def _unisolated_main_tests(source: str, rules: set[str]) -> dict[str, set[str]]:
+    """Retorna {escopo: regras_nao_isoladas} para qualquer chamada a C.main() no arquivo sem isolar as outras regras.
+    Cobre métodos test_*, métodos auxiliares em classes, funções de módulo e closures/lambdas (que podem rodar fora do with)."""
+    tree = ast.parse(source)
+    bad: dict[str, set[str]] = {}
+
+    def walk(node: ast.AST, active: frozenset[str], label: str) -> None:
+        if isinstance(node, ast.With):
+            added: set[str] = set()
+            for item in node.items:
+                walk(item.context_expr, active, label)
+                added |= _with_item_mocks(item.context_expr, rules)
+            inner = active | added
+            for stmt in node.body:
+                walk(stmt, inner, label)
+            return
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            # Função interna ou lambda pode ser executada depois do fim do bloco with: reinicia os mocks ativos.
+            for child in ast.iter_child_nodes(node):
+                walk(child, frozenset(), label)
+            return
+        if isinstance(node, ast.Call):
+            f = node.func
+            if isinstance(f, ast.Attribute) and isinstance(f.value, ast.Name) and f.value.id == "C" and f.attr == "main":
+                unmocked = rules - active
+                if len(unmocked) > 1:
+                    bad.setdefault(label, set()).update(unmocked)
+        for child in ast.iter_child_nodes(node):
+            walk(child, active, label)
+
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef):
+            for item in node.body:
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    for stmt in item.body:
+                        walk(stmt, frozenset(), f"{node.name}.{item.name}")
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for stmt in node.body:
+                walk(stmt, frozenset(), node.name)
+        else:
+            walk(node, frozenset(), "<module>")
+    return bad
+
+
+class MainRuleIsolationTest(unittest.TestCase):
+    """#147: garante que MAIN_RULES acompanha C.main() e que todo teste de C.main() isola todas as outras regras."""
+
+    def test_main_rules_registry_matches_c_main(self):
+        self.assertEqual(set(MAIN_RULES), _main_rules_in_source(C.main))
+
+    def test_every_main_test_isolates_all_other_rules(self):
+        src = Path(__file__).read_text(encoding="utf-8")
+        rules = _main_rules_in_source(C.main)
+        self.assertEqual(_unisolated_main_tests(src, rules), {})
+
+    def test_isolate_main_rule_patches_every_other_rule(self):
+        originals = {name: getattr(C, name) for name in MAIN_RULES}
+        for keep in MAIN_RULES:
+            with self.subTest(keep=keep):
+                with isolate_main_rule(keep):
+                    self.assertIs(getattr(C, keep), originals[keep])
+                    for other in MAIN_RULES:
+                        if other == keep:
+                            continue
+                        patched = getattr(C, other)
+                        self.assertIsNot(patched, originals[other], f"{other} não foi substituída ao isolar {keep}")
+                        expected = ([], [], []) if other == "check_seo" else []
+                        self.assertEqual(patched(Path("."), Path(".")), expected, other)
+                for name, orig in originals.items():
+                    self.assertIs(getattr(C, name), orig, f"{name} não foi restaurada após sair do with")
+        with self.assertRaises(KeyError):
+            with isolate_main_rule("check_inexistente"):
+                pass
+
+    def test_guard_catches_new_rule_and_missing_mock(self):
+        def fake_main():
+            check()
+            check_nova()
+
+        self.assertIn("check_nova", _main_rules_in_source(fake_main) - set(MAIN_RULES))
+
+        sample = (
+            "def top_helper():\n"
+            "    return C.main([])\n"
+            "class T:\n"
+            "    def _helper(self):\n"
+            "        return C.main([])\n"
+            "    def test_incomplete(self):\n"
+            "        with mock.patch.object(C, 'check', lambda *a, **k: []):\n"
+            "            C.main([])\n"
+            "    def test_outside_with(self):\n"
+            "        with isolate_main_rule('check_home'):\n"
+            "            pass\n"
+            "        C.main([])\n"
+            "    def test_deferred_lambda(self):\n"
+            "        with isolate_main_rule('check_home'):\n"
+            "            fn = lambda: C.main([])\n"
+            "        return fn\n"
+            "    def test_ok_helper(self):\n"
+            "        with isolate_main_rule('check_home'):\n"
+            "            C.main([])\n"
+        )
+        rules = set(MAIN_RULES)
+        got = _unisolated_main_tests(sample, rules)
+        self.assertEqual(
+            set(got.keys()),
+            {"top_helper", "T._helper", "T.test_incomplete", "T.test_outside_with", "T.test_deferred_lambda"},
+        )
+        self.assertEqual(got["top_helper"], rules)
+        self.assertEqual(got["T._helper"], rules)
+        self.assertEqual(got["T.test_incomplete"], rules - {"check"})
+        self.assertEqual(got["T.test_outside_with"], rules)
+        self.assertEqual(got["T.test_deferred_lambda"], rules)
 
 
 if __name__ == "__main__":

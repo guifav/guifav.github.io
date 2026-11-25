@@ -25,14 +25,21 @@ export function frontmatterSlug(text: string): string | null {
 }
 
 /**
- * O check_site.py lê slug, index e topics do frontmatter com um parser simples. Para os dois lerem o mesmo
- * valor que o Astro, esses campos só aparecem uma vez e em formato simples, sem comentário.
+ * O check_site.py lê slug, index, topics e summary do frontmatter com um parser simples. Para os dois lerem o mesmo
+ * valor que o Astro, toda chave de topo fica no formato simples (sem aspas, sem espaço antes de :, sem mapeamento
+ * em linha ou chave explícita ?) e esses campos só aparecem uma vez.
  */
 function simpleScalarProblems(text: string): string[] {
   const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
   if (!m) return [];
   const lines = m[1].split(/\r?\n/);
   const out: string[] = [];
+  for (const l of lines) {
+    if (!l || l[0] === ' ' || l[0] === '\t' || l[0] === '#') continue;
+    if (!/^[a-z_][a-z0-9_]*:(?:[ \t].*)?$/.test(l)) {
+      out.push(`chave de frontmatter fora do formato simples: ${JSON.stringify(l)}`);
+    }
+  }
   const rules: [string, RegExp][] = [
     ['slug', /^slug: (?:[a-z0-9-]+|"[a-z0-9-]+"|'[a-z0-9-]+')$/],
     ['index', /^index: (?:true|false)$/],
@@ -43,6 +50,9 @@ function simpleScalarProblems(text: string): string[] {
     const found = lines.filter((l) => new RegExp(`^${key}\\s*:`).test(l));
     if (found.length > 1) out.push(`campo ${key} aparece mais de uma vez`);
     for (const l of found) if (!ok.test(l)) out.push(`campo ${key} fora do formato simples: ${JSON.stringify(l)}`);
+  }
+  if (lines.filter((l) => /^summary:/.test(l)).length > 1) {
+    out.push('campo summary aparece mais de uma vez');
   }
   // O parser YAML transforma "date: 2026-02-30" (sem aspas) em 2 de março antes do esquema ver;
   // por isso a data é validada aqui, no texto.

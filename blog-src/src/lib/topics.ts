@@ -58,8 +58,8 @@ export interface WaitingTopic {
   reason: string;
 }
 
-const MAPA = '/mapa-decisao-ia/';
-const PLANILHA = '/planilha-custos-ia/';
+const MAPA = '/tools/mapa-decisao-ia/';
+const PLANILHA = '/tools/planilha-custos-ia/';
 const ASSINAR = '/blog/assinar/';
 
 export const TOPICS: Topic[] = [
@@ -104,7 +104,7 @@ export const TOPICS: Topic[] = [
     description:
       'Artigos de Guilherme Favaron sobre quanto custa a IA generativa em produção e como escolher o modelo: fronteira, aberto, fine-tuning e GPU própria.',
     intro:
-      'Escolher o modelo é uma decisão de custo antes de ser uma decisão técnica, e a conta muda a cada lançamento. Os quatro primeiros artigos tratam do custo de manter IA generativa em produção, da escolha entre fine-tuning e prompt, do uso do Claude na empresa e do dimensionamento de GPU para quem roda o próprio modelo. Os três últimos discutem quando o modelo de fronteira deixa de compensar e um modelo aberto ou especializado resolve melhor.',
+      'Escolher o modelo é uma decisão de custo antes de ser uma decisão técnica, e a conta muda a cada lançamento. O primeiro artigo compara API, assinatura por usuário e GPU própria, e os quatro seguintes tratam do custo de manter IA generativa em produção, da escolha entre fine-tuning e prompt, do uso do Claude na empresa e do dimensionamento de GPU para quem roda o próprio modelo. Os três últimos discutem quando o modelo de fronteira deixa de compensar e um modelo aberto ou especializado resolve melhor.',
     pageCta: [
       'A ',
       { text: 'planilha de custos de IA', href: PLANILHA },
@@ -112,6 +112,7 @@ export const TOPICS: Topic[] = [
     ],
     blockCta: ['Faça a conta do seu caso na ', { text: 'planilha de custos de IA', href: PLANILHA }, '.'],
     posts: [
+      { slug: 'quanto-custa-rodar-ia-sobre-dados-da-empresa', question: 'Quanto custa rodar IA sobre os dados da empresa: API, assinatura por usuário ou GPU própria?' },
       { slug: 'ia-generativa-em-producao-custos', question: 'Quanto custa manter IA generativa em produção, com performance e escala?' },
       { slug: 'fine-tuning-vs-prompt-engineering', question: 'Quando investir em fine-tuning e quando o prompt basta?' },
       { slug: 'claude-o-guia-definitivo-ia-consultoria', question: 'Como usar o Claude na prática, inclusive na empresa?' },

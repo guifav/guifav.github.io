@@ -25,7 +25,7 @@ python3 scripts/verify_live.py http://127.0.0.1:8099 --local
 
 ## O que vai ao ar
 
-- Da raiz do repo, só o que está em `site-manifest.txt`. Pasta nova (por exemplo `workers/`) não é publicada sem entrar na lista. `docs/`, `_next/` e `tools/` ficam fora por decisão do Gui.
+- Da raiz do repo, só o que está em `site-manifest.txt`. Pasta nova (por exemplo `workers/`) não é publicada sem entrar na lista. `docs/`, `_next/` e `_mockups/` ficam fora por decisão do Gui.
 - O blog vai para `/blog/`. O GitHub Pages só serve o `404.html` da raiz, que atende o blog também.
 
 ## Posts

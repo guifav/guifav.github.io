@@ -621,7 +621,7 @@ test('origem: gravada na primeira página da aba e nunca trocada pela navegaçã
   setup({ storage: st, referrer: 'https://chatgpt.com/', href: 'https://guifav.dev/blog/agentes/?utm_source=chatgpt.com' });
   const primeira = st.getItem('site_origin_v1');
   // Segunda página da mesma aba: referrer interno e outra query; a origem continua a da entrada.
-  const s2 = setup({ storage: st, referrer: 'https://guifav.dev/blog/agentes/', href: 'https://guifav.dev/planilha-custos-ia/?utm_source=x' });
+  const s2 = setup({ storage: st, referrer: 'https://guifav.dev/blog/agentes/', href: 'https://guifav.dev/tools/planilha-custos-ia/?utm_source=x' });
   assert.equal(st.getItem('site_origin_v1'), primeira);
   assert.deepEqual(JSON.parse(JSON.stringify((s2.ctx.guifavOrigin as { current(): Origem }).current())),
     { canal: 'assistente', fonte: 'chatgpt', utm_source: 'chatgpt.com', utm_medium: null, utm_campaign: null, entrada: '/blog/agentes/' });
@@ -682,4 +682,83 @@ test('origem: contact_click e schedule_click levam origin_channel e origin_sourc
   // O rodapé e os outros eventos não mudam.
   s.fire('click', new El('a', { href: 'https://github.com/guifav' }, s.footer));
   assert.deepEqual(events(s.calls).at(-1), ['event', 'footer_click', { link_label: 'github', transport_type: B }]);
+});
+
+// ---------------------------------------------------------------- Download marcado com data-ga-download (issue #148)
+
+test('file_download: clique no botão Baixar GIF envia nome, extensão, URL, idioma e origem em PT e EN', () => {
+  const s = setup({ referrer: 'https://www.linkedin.com/feed/', href: 'https://guifav.dev/' });
+  const a = new El(
+    'a',
+    { class: 'dflow-dl', href: '/assets/ciclo-dados-ia.gif', download: 'ciclo-de-dados-e-ia-guifav.gif', 'data-ga-download': 'ciclo-dados-ia' },
+    s.main,
+  );
+  const label = new El('span', { 'data-i18n': 'cy_dl' }, a);
+  const lt = new El('button', { id: 'lang-toggle' }, s.nav);
+  lt.addEventListener('click', () => { s.html.lang = s.html.lang === 'en' ? 'pt-BR' : 'en'; });
+
+  // Clique em PT (no filho <span> dentro do link)
+  s.fire('click', label);
+  // Troca idioma para EN e clica de novo (no próprio <a>)
+  s.fire('click', lt);
+  s.fire('click', a);
+  // Clique do meio (auxclick) também conta; botão direito não.
+  s.fire('auxclick', a, { button: 1 });
+  s.fire('auxclick', a, { button: 2 });
+
+  const base = {
+    file_name: 'ciclo-de-dados-e-ia-guifav.gif',
+    file_extension: 'gif',
+    link_url: 'https://guifav.dev/assets/ciclo-dados-ia.gif',
+    origin_channel: 'social',
+    origin_source: 'linkedin',
+    transport_type: B,
+  };
+  assert.deepEqual(events(s.calls), [
+    ['event', 'file_download', { ...base, site_language: 'pt' }],
+    ['event', 'language_change', { site_language: 'en' }],
+    ['event', 'file_download', { ...base, site_language: 'en' }],
+    ['event', 'file_download', { ...base, site_language: 'en' }],
+  ]);
+});
+
+test('file_download: fallback pelo caminho, remove query/hash e ignora links sem data-ga-download válido', () => {
+  const s = setup({ href: 'https://guifav.dev/' });
+  // Sem atributo download: nome e extensão vêm do caminho, e query/hash não vazam para link_url.
+  s.fire('click', new El('a', { href: '/assets/guia%20ia.PDF?token=segredo#p1', 'data-ga-download': 'guia-ia' }, s.main));
+  // Sem extensão: omite file_extension.
+  s.fire('click', new El('a', { href: '/assets/arquivo', 'data-ga-download': 'sem-ext' }, s.main));
+  // Sem data-ga-download, vazio ou protocolo não HTTP(S): não dispara.
+  s.fire('click', new El('a', { href: '/assets/ciclo-dados-ia.gif', download: 'x.gif' }, s.main));
+  s.fire('click', new El('a', { href: '/assets/ciclo-dados-ia.gif', 'data-ga-download': '   ' }, s.main));
+  s.fire('click', new El('a', { href: 'mailto:outro@exemplo.com', 'data-ga-download': 'x' }, s.main));
+
+  assert.deepEqual(events(s.calls), [
+    ['event', 'file_download', {
+      file_name: 'guia ia.PDF',
+      file_extension: 'pdf',
+      link_url: 'https://guifav.dev/assets/guia%20ia.PDF',
+      site_language: 'pt',
+      origin_channel: 'direto',
+      transport_type: B,
+    }],
+    ['event', 'file_download', {
+      file_name: 'arquivo',
+      link_url: 'https://guifav.dev/assets/arquivo',
+      site_language: 'pt',
+      origin_channel: 'direto',
+      transport_type: B,
+    }],
+  ]);
+});
+
+test('file_download: sem gtag não envia nada nem quebra', () => {
+  const s = setup({ gtag: false });
+  const a = new El(
+    'a',
+    { href: '/assets/ciclo-dados-ia.gif', download: 'ciclo-de-dados-e-ia-guifav.gif', 'data-ga-download': 'ciclo-dados-ia' },
+    s.main,
+  );
+  s.fire('click', a);
+  assert.deepEqual(s.calls, []);
 });

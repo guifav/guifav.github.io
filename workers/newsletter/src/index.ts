@@ -214,7 +214,7 @@ async function requestMaterial(req: Request, env: Env, deps: Deps): Promise<Resp
   const form = new URLSearchParams(raw);
   const m = material(form.get('material') ?? '');
   if (!m) return plain(400, 'material desconhecido');
-  const page = `${env.SITE_ORIGIN}/${m.id}/`;
+  const page = `${env.SITE_ORIGIN}/tools/${m.id}/`;
   const sent = redirect(`${page}enviado/`);
   const ip = req.headers.get('cf-connecting-ip') ?? 'desconhecido';
 
@@ -261,7 +261,7 @@ async function requestMaterial(req: Request, env: Env, deps: Deps): Promise<Resp
 async function download(url: URL, env: Env, deps: Deps): Promise<Response> {
   const ok = await verifyMaterialLink(url.searchParams, env.CONFIRM_SECRET, deps.now());
   const found = ok ? arquivo(ok.file) : arquivo(url.searchParams.get('f') ?? '');
-  const expired = redirect(found ? `${env.SITE_ORIGIN}/${found.material.id}/#link-expirado` : `${env.SITE_ORIGIN}/`);
+  const expired = redirect(found ? `${env.SITE_ORIGIN}/tools/${found.material.id}/#link-expirado` : `${env.SITE_ORIGIN}/`);
   if (!ok || !found) return expired;
   const bytes = deps.file ? await deps.file(found.arquivo.id) : null;
   if (!bytes) return plain(500, 'arquivo indisponível');

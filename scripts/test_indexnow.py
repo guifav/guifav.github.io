@@ -122,9 +122,9 @@ class DiffTest(Site):
         self.assertEqual(I.plan(self.site, FakeWeb(self.built()))["urls"], [])
 
     def test_llm_ranking_is_announced_only_when_the_data_date_moves(self):
-        """#113: o lastmod do /llm-ranking/ é a data dos dados (build_sitemaps); o IndexNow avisa quando ela muda."""
-        url = "https://guifav.dev/llm-ranking/"
-        self.w("llm-ranking/index.html", b"<html>ranking</html>")
+        """#113: o lastmod do /tools/llm-ranking/ é a data dos dados (build_sitemaps); o IndexNow avisa quando ela muda."""
+        url = "https://guifav.dev/tools/llm-ranking/"
+        self.w("tools/llm-ranking/index.html", b"<html>ranking</html>")
         self.w("sitemap-site.xml", urlset(dict(SITE_NEW, **{url: "2026-11-22T00:00:00+00:00"})))
         live = dict(self.built())
         self.assertEqual(I.plan(self.site, FakeWeb(live))["urls"], [])
