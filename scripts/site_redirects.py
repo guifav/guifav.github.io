@@ -1,4 +1,4 @@
-"""Redirects de URLs antigas para posts, ferramentas movidas e mudanças de endereço do guifav.dev, por Bulk Redirects da conta Cloudflare (#102, #106, #146, #151).
+"""Redirects de URLs antigas para posts, ferramentas movidas e mudanças de endereço do guifav.dev, por Bulk Redirects da conta Cloudflare (#102, #106, #146, #151, #166).
 
 Fonte única do par de listas de Bulk Redirects `guifav_redirects_a` e `guifav_redirects_b` e da regra da conta que
 liga uma delas. Ninguém edita essas listas ou a fase de redirects da conta pelo painel: o `apply` substitui a lista
@@ -57,7 +57,7 @@ POSTS = REPO / "blog-src/src/content/posts"
 
 HOST = "guifav.dev"
 BLOG = f"https://{HOST}/blog/"
-TOOLS = f"https://{HOST}/tools/"
+TOOLS = f"https://{HOST}/ferramentas/"
 # Par azul/verde: o apply escreve e confere a lista inativa e só então troca a regra para ela.
 LISTS = ("guifav_redirects_a", "guifav_redirects_b")
 # Marca das listas do par: o apply só adota (e sobrescreve) lista com exatamente esta descrição.
@@ -111,24 +111,36 @@ DUPLICATES: tuple[tuple[str, str], ...] = (
      "sabia-2-o-novo-modelo-de-linguagem-em-portugues-que-rivaliza-com-gpt-4-maritaca-ai"),
 )
 
-# Exceção única de nome legado (#151): o PDF antigo tem maiúsculas, "_", espaço e parênteses no arquivo. Fica fora de
+# Exceção única de nome legado (#151, #166): o PDF antigo tem maiúsculas, "_", espaço e parênteses no arquivo. Fica fora de
 # _TOOL_PATH para não afrouxar a validação dos demais pares; na lista vai codificado como a Cloudflare compara
 # http.request.full_uri após a normalização RFC 3986 (espaço -> %20; parênteses são sub-delims reservados e ficam literais).
 _FRAMEWORK_PDF = "seo-geo-aeo-framework/Framework-SEO-AEO_GEO_ GuilhermeFavaron(20251201).pdf"
 _TOOL_LEGACY_OLD = f"/{_FRAMEWORK_PDF}"
-_TOOL_LEGACY_NEW = f"/tools/{_FRAMEWORK_PDF}"
+_TOOL_LEGACY_TOOLS = f"/tools/{_FRAMEWORK_PDF}"
+_TOOL_LEGACY_OLDS = (_TOOL_LEGACY_OLD, _TOOL_LEGACY_TOOLS)
+_TOOL_LEGACY_NEW = f"/ferramentas/{_FRAMEWORK_PDF}"
 
-# #151: as quatro ferramentas passaram a morar em /tools/. Diretórios (com "/" no fim) geram origem com e sem barra
-# final; arquivos (.html e o PDF legado do framework) geram o caminho exato.
+# #151 e #166: as ferramentas mudaram da raiz para /tools/ e depois para /ferramentas/. Todos os pares apontam direto
+# para /ferramentas/, sem cadeia. Diretórios (com "/" no fim) geram origem com e sem barra final; arquivos (.html e o
+# PDF legado do framework) geram o caminho exato.
 MOVED_TOOLS: tuple[tuple[str, str], ...] = (
-    ("/mapa-decisao-ia/", "/tools/mapa-decisao-ia/"),
-    ("/mapa-decisao-ia/enviado/", "/tools/mapa-decisao-ia/enviado/"),
-    ("/planilha-custos-ia/", "/tools/planilha-custos-ia/"),
-    ("/planilha-custos-ia/enviado/", "/tools/planilha-custos-ia/enviado/"),
-    ("/llm-ranking/", "/tools/llm-ranking/"),
-    ("/seo-geo-aeo-framework/", "/tools/seo-geo-aeo-framework/framework-seo-aeo.html"),
-    ("/seo-geo-aeo-framework/framework-seo-aeo.html", "/tools/seo-geo-aeo-framework/framework-seo-aeo.html"),
+    ("/mapa-decisao-ia/", "/ferramentas/mapa-decisao-ia/"),
+    ("/mapa-decisao-ia/enviado/", "/ferramentas/mapa-decisao-ia/enviado/"),
+    ("/planilha-custos-ia/", "/ferramentas/planilha-custos-ia/"),
+    ("/planilha-custos-ia/enviado/", "/ferramentas/planilha-custos-ia/enviado/"),
+    ("/llm-ranking/", "/ferramentas/llm-ranking/"),
+    ("/seo-geo-aeo-framework/", "/ferramentas/seo-geo-aeo-framework/framework-seo-aeo.html"),
+    ("/seo-geo-aeo-framework/framework-seo-aeo.html", "/ferramentas/seo-geo-aeo-framework/framework-seo-aeo.html"),
     (_TOOL_LEGACY_OLD, _TOOL_LEGACY_NEW),
+    ("/tools/", "/ferramentas/"),
+    ("/tools/mapa-decisao-ia/", "/ferramentas/mapa-decisao-ia/"),
+    ("/tools/mapa-decisao-ia/enviado/", "/ferramentas/mapa-decisao-ia/enviado/"),
+    ("/tools/planilha-custos-ia/", "/ferramentas/planilha-custos-ia/"),
+    ("/tools/planilha-custos-ia/enviado/", "/ferramentas/planilha-custos-ia/enviado/"),
+    ("/tools/llm-ranking/", "/ferramentas/llm-ranking/"),
+    ("/tools/seo-geo-aeo-framework/", "/ferramentas/seo-geo-aeo-framework/framework-seo-aeo.html"),
+    ("/tools/seo-geo-aeo-framework/framework-seo-aeo.html", "/ferramentas/seo-geo-aeo-framework/framework-seo-aeo.html"),
+    (_TOOL_LEGACY_TOOLS, _TOOL_LEGACY_NEW),
 )
 
 # #146: mudanças de endereço do próprio site (fora dos posts). Cada par leva (com e sem barra) em 301 para o endereço
@@ -242,12 +254,12 @@ def problems(reds: list[Redirect] | None = None, posts_dir: Path = POSTS, repo: 
     if len(set(tool_olds)) != len(tool_olds):
         out.append("caminho antigo repetido em MOVED_TOOLS")
     for old_path, new_path in MOVED_TOOLS:
-        old_ok = bool(_TOOL_PATH.fullmatch(old_path)) or old_path == _TOOL_LEGACY_OLD
+        old_ok = bool(_TOOL_PATH.fullmatch(old_path)) or old_path in _TOOL_LEGACY_OLDS
         new_ok = bool(_TOOL_PATH.fullmatch(new_path)) or new_path == _TOOL_LEGACY_NEW
-        if not old_ok or old_path.startswith(("/blog/", "/tools/")):
+        if not old_ok or old_path.startswith(("/blog/", "/ferramentas/")):
             out.append(f"caminho antigo fora do formato em MOVED_TOOLS: {old_path!r}")
-        if not new_path.startswith("/tools/") or not new_ok:
-            out.append(f"{old_path}: destino fora de /tools/: {new_path!r}")
+        if not new_path.startswith("/ferramentas/") or not new_ok:
+            out.append(f"{old_path}: destino fora de /ferramentas/: {new_path!r}")
         if _repo_page(repo, old_path).exists():
             out.append(f"{old_path}: origem ainda existe no repo")
         if not _repo_page(repo, new_path).is_file():

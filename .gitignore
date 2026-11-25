@@ -42,5 +42,5 @@ __pycache__/
 # Segredos locais do wrangler (Worker da newsletter)
 .dev.vars
 
-# Snapshot de dados do /tools/llm-ranking/, baixado no build (#113)
+# Snapshot de dados do /ferramentas/llm-ranking/, baixado no build (#113)
 _dados/

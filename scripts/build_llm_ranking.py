@@ -1,13 +1,13 @@
-"""Gera no build o HTML do /tools/llm-ranking/ a partir do snapshot da Arena (issue #113).
+"""Gera no build o HTML do /ferramentas/llm-ranking/ a partir do snapshot da Arena (issue #113).
 
 Fonte: o dataset oficial `lmarena-ai/leaderboard-dataset` no Hugging Face (CC BY 4.0), arena de texto com controle
 de estilo (`text_style_control`). O snapshot vem do repositório privado guifav/llm-ranking-data, gravado na KVM por
 scripts/llm_ranking_snapshot.py; o build não chama a fonte nem guarda chave nenhuma.
 
-O template é tools/llm-ranking/index.html, copiado para o _site pelo assemble_site.py. Cada bloco gerado entra no lugar de
+O template é ferramentas/llm-ranking/index.html, copiado para o _site pelo assemble_site.py. Cada bloco gerado entra no lugar de
 um marcador <!--LLM:nome--> que aparece uma vez no template. O resultado:
 
-- a tabela com os TOP primeiros modelos, legível sem JavaScript (o tools/llm-ranking/ordenar.js só reordena);
+- a tabela com os TOP primeiros modelos, legível sem JavaScript (o ferramentas/llm-ranking/ordenar.js só reordena);
 - a faixa de posições de cada modelo, calculada pelos intervalos de 95% sobre a lista inteira;
 - os destaques do topo, o "o que mudou" na janela de 7 dias, os recortes e a atribuição exigida pela CC BY 4.0;
 - a data da publicação na meta DATA_META, que o build_sitemaps.py usa como lastmod da página (e o IndexNow, por
@@ -30,8 +30,8 @@ from datetime import date, timedelta
 from html import escape
 from pathlib import Path
 
-PAGE = "tools/llm-ranking/index.html"
-URL = "https://guifav.dev/tools/llm-ranking/"
+PAGE = "ferramentas/llm-ranking/index.html"
+URL = "https://guifav.dev/ferramentas/llm-ranking/"
 PERSON_ID = "https://guifav.dev/#person"
 DATASET = "lmarena-ai/leaderboard-dataset"
 DATASET_URL = "https://huggingface.co/datasets/lmarena-ai/leaderboard-dataset"
@@ -354,7 +354,7 @@ def bloco_jsonld(pub: date) -> str:
                 "@type": "BreadcrumbList",
                 "itemListElement": [
                     {"@type": "ListItem", "position": 1, "name": "Guilherme Favaron", "item": "https://guifav.dev/"},
-                    {"@type": "ListItem", "position": 2, "name": "Ferramentas", "item": "https://guifav.dev/tools/"},
+                    {"@type": "ListItem", "position": 2, "name": "Ferramentas", "item": "https://guifav.dev/ferramentas/"},
                     {"@type": "ListItem", "position": 3, "name": "Ranking de LLMs", "item": URL},
                 ],
             },
@@ -507,7 +507,7 @@ def build(snapshot: Path, site: Path, hoje: date | None = None) -> tuple[int, st
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Gera o HTML do /tools/llm-ranking/ no _site a partir do snapshot da Arena.")
+    ap = argparse.ArgumentParser(description="Gera o HTML do /ferramentas/llm-ranking/ no _site a partir do snapshot da Arena.")
     ap.add_argument("--snapshot", required=True, type=Path)
     ap.add_argument("--site", default="_site", type=Path)
     args = ap.parse_args(argv)

@@ -66,7 +66,7 @@
       if (a) a.setAttribute('href', src);
     });
   }
-  // Página só em português (como /tools/ e /tools/llm-ranking/) não tem o botão: nada de troca de idioma nela.
+  // Página só em português (como /ferramentas/ e /ferramentas/llm-ranking/) não tem o botão: nada de troca de idioma nela.
   if (lt) {
     lt.addEventListener('click', function () {
       applyLang(lang === 'pt' ? 'en' : 'pt');

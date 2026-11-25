@@ -1,4 +1,4 @@
-"""Testes do gerador do /tools/llm-ranking/ (scripts/build_llm_ranking.py, issue #113).
+"""Testes do gerador do /ferramentas/llm-ranking/ (scripts/build_llm_ranking.py, issue #113).
 
 Rodar: python3 scripts/test_build_llm_ranking.py
 """
@@ -429,7 +429,7 @@ class BlocosTest(unittest.TestCase):
         self.assertEqual(web["isBasedOn"]["url"], B.DATASET_URL)
         self.assertEqual(doc["@graph"][1]["@type"], "BreadcrumbList")
         self.assertEqual([it["item"] for it in doc["@graph"][1]["itemListElement"]],
-                         ["https://guifav.dev/", "https://guifav.dev/tools/", B.URL])
+                         ["https://guifav.dev/", "https://guifav.dev/ferramentas/", B.URL])
         self.assertNotIn("Dataset", [n["@type"] for n in doc["@graph"]])
 
     def test_jsonld_escapes_lt(self):
@@ -484,7 +484,7 @@ class BuildTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.dir = Path(self.tmp.name)
         self.site = self.dir / "_site"
-        (self.site / "tools/llm-ranking").mkdir(parents=True)
+        (self.site / "ferramentas/llm-ranking").mkdir(parents=True)
         shutil.copy(REPO / B.PAGE, self.site / B.PAGE)
         self.snap = self.dir / "arena-texto.json"
 
@@ -582,13 +582,13 @@ console.log(JSON.stringify(out));
 
 
 class SorterTest(unittest.TestCase):
-    """O tools/llm-ranking/ordenar.js num DOM mínimo, no node (r1, agy P2: o único JavaScript da página não tinha teste)."""
+    """O ferramentas/llm-ranking/ordenar.js num DOM mínimo, no node (r1, agy P2: o único JavaScript da página não tinha teste)."""
 
     def run_clicks(self, clicks: list[int]):
         node = shutil.which("node")
         if not node:
             self.skipTest("node ausente")
-        r = subprocess.run([node, "-e", SORTER_HARNESS, str(REPO / "tools/llm-ranking/ordenar.js"), json.dumps(clicks)],
+        r = subprocess.run([node, "-e", SORTER_HARNESS, str(REPO / "ferramentas/llm-ranking/ordenar.js"), json.dumps(clicks)],
                            capture_output=True, text=True, check=True)
         return json.loads(r.stdout)
 
@@ -634,7 +634,7 @@ class TemplateTest(unittest.TestCase):
     def test_no_old_files(self):
         for old in ("script.js", "styles.css", ".csv", "chart.js", "Chart.js"):
             self.assertNotIn(old, self.t)
-        left = sorted(p.name for p in (REPO / "tools/llm-ranking").iterdir())
+        left = sorted(p.name for p in (REPO / "ferramentas/llm-ranking").iterdir())
         self.assertEqual(left, ["index.html", "ordenar.js"])
 
     def test_explanation_of_the_range_is_true(self):
@@ -644,11 +644,11 @@ class TemplateTest(unittest.TestCase):
         self.assertIn("quando os intervalos da coluna Pontuação se cruzam", self.t)
 
     def test_links_to_the_two_tools(self):
-        self.assertIn('href="/tools/mapa-decisao-ia/"', self.t)
-        self.assertIn('href="/tools/planilha-custos-ia/"', self.t)
+        self.assertIn('href="/ferramentas/mapa-decisao-ia/"', self.t)
+        self.assertIn('href="/ferramentas/planilha-custos-ia/"', self.t)
 
     def test_sorter_is_loaded_once(self):
-        self.assertEqual(self.t.count('src="/tools/llm-ranking/ordenar.js'), 1)
+        self.assertEqual(self.t.count('src="/ferramentas/llm-ranking/ordenar.js'), 1)
 
     def test_site_js_tolerates_a_page_without_the_lang_toggle(self):
         js = (REPO / "assets/site.js").read_text(encoding="utf-8")

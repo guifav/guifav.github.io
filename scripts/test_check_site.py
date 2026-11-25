@@ -802,7 +802,7 @@ class TitleAndGroupTest(unittest.TestCase):
                  ("index.html", "Guilherme Favaron | Subtítulo errado", False),
                  ("portfolio/index.html", "Portfólio | Guilherme Favaron", True),
                  ("portfolio/index.html", "Portfólio, Guilherme Favaron", False),
-                 ("tools/llm-ranking/index.html", "Ranking: Qual é o Melhor LLM?", False),
+                 ("ferramentas/llm-ranking/index.html", "Ranking: Qual é o Melhor LLM?", False),
                  # Post (#103, Gui em 23/11): sem o nome do site, nem no fim nem no começo.
                  ("blog/um-post/index.html", "Um post", True),
                  ("blog/um-post/index.html", "Um post sobre Guilherme Favaron", True),
@@ -862,11 +862,12 @@ class TitleAndGroupTest(unittest.TestCase):
                        ("blog/inscricao-confirmada/index.html", "expert-insights"),
                        ("blog/inscricao-invalida/index.html", "expert-insights"),
                        ("blog/o-exame-virou-conspiracao/index.html", "insights-artigo"),
-                       ("tools/planilha-custos-ia/index.html", "materiais"), ("tools/mapa-decisao-ia/enviado/index.html", "materiais"),
+                       ("ferramentas/planilha-custos-ia/index.html", "materiais"), ("ferramentas/mapa-decisao-ia/enviado/index.html", "materiais"),
                        ("consultoria/index.html", "consultoria"), ("consultoria/x/index.html", None),
-                       ("tools/planilha-custos-ia/x/index.html", None),
-                       ("tools/index.html", "ferramentas"),
-                       ("tools/llm-ranking/index.html", "ferramentas"), ("tools/llm-ranking/x/index.html", None),
+                       ("ferramentas/planilha-custos-ia/x/index.html", None),
+                       ("ferramentas/index.html", "ferramentas"),
+                       ("ferramentas/llm-ranking/index.html", "ferramentas"), ("ferramentas/llm-ranking/x/index.html", None),
+                       ("tools/index.html", None), ("tools/llm-ranking/index.html", None),
                        ("blog/pagina/x/index.html", None),
                        ("blog/a/b/index.html", None),
                        ("blog/tema/ia-sobre-dados-da-empresa/index.html", "insights-lista"),
@@ -937,14 +938,14 @@ class TitleAndGroupTest(unittest.TestCase):
         self.assertTrue(any("sem grupo de conteúdo previsto" in p for p in self.check("ferramenta-nova/index.html", html)))
 
     def test_llm_ranking_and_tools_index_are_ferramentas(self):
-        for rel in ("tools/index.html", "tools/llm-ranking/index.html"):
+        for rel in ("ferramentas/index.html", "ferramentas/llm-ranking/index.html"):
             html = self.doc("<title>Ferramentas | Guilherme Favaron</title>", self.GA + self.cfg(",{content_group:'ferramentas'}"))
             self.assertEqual(self.check(rel, html), [], rel)
             html = self.doc("<title>Ferramentas | Guilherme Favaron</title>", self.GA + self.cfg(",{content_group:'materiais'}"))
             self.assertTrue(any("esperado ['ferramentas']" in p for p in self.check(rel, html)), rel)
 
     def test_no_ga_no_group_needed(self):
-        self.assertEqual(self.check("tools/llm-ranking/index.html", self.doc("<title>LLM Ranking | Guilherme Favaron</title>")), [])
+        self.assertEqual(self.check("ferramentas/llm-ranking/index.html", self.doc("<title>LLM Ranking | Guilherme Favaron</title>")), [])
 
     def test_check_runs_the_rule_on_every_page(self):
         with tempfile.TemporaryDirectory() as d:
@@ -1012,7 +1013,7 @@ class ClaritySourcesTest(unittest.TestCase):
     def test_forms_masked(self):
         self.assertIn('action="https://insights.guifav.dev/subscribe" data-clarity-mask="true"', self.read("index.html"))
         for m in C.MATERIALS:
-            self.assertIn('data-ga-client-id data-clarity-mask="true"', self.read(f"tools/{m}/index.html"))
+            self.assertIn('data-ga-client-id data-clarity-mask="true"', self.read(f"ferramentas/{m}/index.html"))
         self.assertIn('data-clarity-mask="true"', self.read("blog-src/src/components/SubscribeForm.astro"))
 
     def test_privacy_mentions_clarity(self):
@@ -1032,7 +1033,7 @@ class NamingSourcesTest(unittest.TestCase):
     """
 
     REPO = Path(__file__).resolve().parent.parent
-    FILES = ("index.html", "portfolio/index.html", "consultoria/index.html", "tools/index.html", "404.html",
+    FILES = ("index.html", "portfolio/index.html", "consultoria/index.html", "ferramentas/index.html", "404.html",
              "blog-src/src/layouts/Base.astro",
              "blog-src/src/layouts/PostList.astro", "blog-src/src/components/SubscribeForm.astro",
              "blog-src/src/pages/[slug].astro", "blog-src/src/pages/assinar.astro",
@@ -1201,7 +1202,7 @@ class TrackingTest(unittest.TestCase):
 
     def test_material_form_carries_ga_client_id(self):
         # Issue #99: o formulário de material leva data-ga-client-id e o campo oculto ga_cid, uma vez.
-        rel = "tools/planilha-custos-ia/index.html"
+        rel = "ferramentas/planilha-custos-ia/index.html"
         form = ('<form id="receber" {attr}method="post" action="https://insights.guifav.dev/material">'
                 '<input type="hidden" name="material" value="planilha-custos-ia">{cid}</form>')
         cid = '<input type="hidden" name="ga_cid" value="">'
@@ -1221,14 +1222,14 @@ class TrackingTest(unittest.TestCase):
         # Issue #99: generate_lead na página de enviado de cada material, com data-material-id igual ao da pasta.
         lead = lambda m: f'<header data-ga-event="generate_lead" data-material-id="{m}">x</header>'
         for m in C.MATERIALS:
-            self.assertEqual(self.check(self.doc(lead(m)), rel=f"tools/{m}/enviado/index.html"), [], m)
-        enviado = "tools/planilha-custos-ia/enviado/index.html"
+            self.assertEqual(self.check(self.doc(lead(m)), rel=f"ferramentas/{m}/enviado/index.html"), [], m)
+        enviado = "ferramentas/planilha-custos-ia/enviado/index.html"
         for name, (rel, body) in {
             "falta": (enviado, ""),
             "duas vezes": (enviado, lead("planilha-custos-ia") * 2),
             "outro material": (enviado, lead("mapa-decisao-ia")),
             "sem id": (enviado, '<header data-ga-event="generate_lead">x</header>'),
-            "fora do enviado": ("tools/planilha-custos-ia/index.html", lead("planilha-custos-ia")),
+            "fora do enviado": ("ferramentas/planilha-custos-ia/index.html", lead("planilha-custos-ia")),
             "home": ("index.html", lead("planilha-custos-ia")),
         }.items():
             with self.subTest(name=name):
@@ -1647,18 +1648,18 @@ class ToolsTest(unittest.TestCase):
         self.assertEqual(C.check_tools("index.html", self.doc(ga=False)), [])
         self.assertEqual(C.check_tools("blog/um-post/index.html", self.doc(ga=False)), [])
         self.assertEqual(C.check_tools("portfolio/index.html", self.doc()), [])
-        self.assertEqual(C.check_tools("tools/mapa-decisao-ia/index.html", self.doc()), [])
+        self.assertEqual(C.check_tools("ferramentas/mapa-decisao-ia/index.html", self.doc()), [])
 
     def test_tools_index_requires_four_links_and_collection_page(self):
         ld = ('<script type="application/ld+json">{"@context":"https://schema.org","@type":"CollectionPage",'
-              '"url":"https://guifav.dev/tools/","isPartOf":{"@id":"https://guifav.dev/#website"}}</script>')
+              '"url":"https://guifav.dev/ferramentas/","isPartOf":{"@id":"https://guifav.dev/#website"}}</script>')
         body = "<main>" + self.links(C.TOOLS_INDEX_LINKS) + "</main>"
         ok = f"<!DOCTYPE html><html><head>{TrackingTest.GA}{ld}</head><body>{body}</body></html>"
-        self.assertEqual(C.check_tools("tools/index.html", ok), [])
+        self.assertEqual(C.check_tools("ferramentas/index.html", ok), [])
         self.assertTrue(any("CollectionPage" in p for p in C.check_tools(
-            "tools/index.html", f"<!DOCTYPE html><html><head>{TrackingTest.GA}</head><body>{body}</body></html>")))
+            "ferramentas/index.html", f"<!DOCTYPE html><html><head>{TrackingTest.GA}</head><body>{body}</body></html>")))
         self.assertTrue(any(C.TOOLS_INDEX_LINKS[0] in p for p in C.check_tools(
-            "tools/index.html", f"<!DOCTYPE html><html><head>{TrackingTest.GA}{ld}</head><body><main></main></body></html>")))
+            "ferramentas/index.html", f"<!DOCTYPE html><html><head>{TrackingTest.GA}{ld}</head><body><main></main></body></html>")))
 
 
 class RelatedTest(unittest.TestCase):
@@ -1884,12 +1885,22 @@ class ToolsSourcesTest(unittest.TestCase):
         self.assertEqual(tools_nav(self.read("index.html")), tools_nav(self.read("blog-src/src/layouts/Base.astro")))
 
     def test_targets_exist_in_sources(self):
-        self.assertEqual(C.check_tools("tools/index.html", self.read("tools/index.html")), [])
-        for rel in ("tools/index.html", "tools/mapa-decisao-ia/index.html", "tools/planilha-custos-ia/index.html",
-                    "tools/llm-ranking/index.html", "tools/seo-geo-aeo-framework/framework-seo-aeo.html",
+        self.assertFalse((self.REPO / "tools").exists())
+        self.assertEqual(C.check_tools("ferramentas/index.html", self.read("ferramentas/index.html")), [])
+        for rel in ("ferramentas/index.html", "ferramentas/mapa-decisao-ia/index.html", "ferramentas/planilha-custos-ia/index.html",
+                    "ferramentas/llm-ranking/index.html", "ferramentas/seo-geo-aeo-framework/framework-seo-aeo.html",
                     "blog-src/src/content/posts/livro-ia-inteligencia-artificial-portugues-gratuito.md"):
             with self.subTest(rel=rel):
                 self.assertTrue((self.REPO / rel).is_file())
+        for rel in ("index.html", "404.html", "portfolio/index.html", "consultoria/index.html",
+                    "privacidade/index.html", "termos/index.html",
+                    "ferramentas/index.html", "ferramentas/llm-ranking/index.html",
+                    "ferramentas/mapa-decisao-ia/index.html", "ferramentas/mapa-decisao-ia/enviado/index.html",
+                    "ferramentas/planilha-custos-ia/index.html", "ferramentas/planilha-custos-ia/enviado/index.html",
+                    "ferramentas/seo-geo-aeo-framework/framework-seo-aeo.html",
+                    "blog-src/src/layouts/Base.astro", "blog-src/src/lib/topics.ts"):
+            with self.subTest(no_old_tools=rel):
+                self.assertNotIn("/tools/", self.read(rel))
 
 
 class SeoTest(unittest.TestCase):
@@ -2760,12 +2771,12 @@ class ContrastSiteTest(Base):
 
 
 class LlmRankingTest(unittest.TestCase):
-    """#113: a regra que falha se o /tools/llm-ranking/ sair sem a tabela, a data dos dados, o JSON-LD ou a atribuição."""
+    """#113: a regra que falha se o /ferramentas/llm-ranking/ sair sem a tabela, a data dos dados, o JSON-LD ou a atribuição."""
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.site = Path(self.tmp.name)
-        (self.site / "tools/llm-ranking").mkdir(parents=True)
+        (self.site / "ferramentas/llm-ranking").mkdir(parents=True)
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -2786,7 +2797,7 @@ class LlmRankingTest(unittest.TestCase):
         html = (f"<!DOCTYPE html><html><head>{meta}{versao}<script type=\"application/ld+json\">{ld}</script></head><body>"
                 f'<table id="ranking"><caption>x</caption><thead><tr><th>Posição</th></tr></thead><tbody>{"".join(trs)}'
                 f"</tbody></table><p>{att}</p>{extra}</body></html>")
-        (self.site / "tools/llm-ranking/index.html").write_text(html, encoding="utf-8")
+        (self.site / "ferramentas/llm-ranking/index.html").write_text(html, encoding="utf-8")
         return C.check_llm_ranking(self.site)
 
     def test_good_page(self):
@@ -2804,11 +2815,11 @@ class LlmRankingTest(unittest.TestCase):
                                     for p in self.page(versao=f'<meta name="dados-versao" content="{ruim}">')))
 
     def test_missing_page(self):
-        (self.site / "tools/llm-ranking").rmdir()
-        self.assertEqual(C.check_llm_ranking(self.site), ["tools/llm-ranking/index.html: página não existe no _site"])
+        (self.site / "ferramentas/llm-ranking").rmdir()
+        self.assertEqual(C.check_llm_ranking(self.site), ["ferramentas/llm-ranking/index.html: página não existe no _site"])
 
     def test_without_the_table(self):
-        (self.site / "tools/llm-ranking/index.html").write_text(
+        (self.site / "ferramentas/llm-ranking/index.html").write_text(
             '<html><head><meta name="dados-publicados-em" content="2026-11-22"></head><body></body></html>', encoding="utf-8")
         self.assertTrue(any('esperava uma <table id="ranking">, achou 0' in p for p in C.check_llm_ranking(self.site)))
 
@@ -2821,12 +2832,12 @@ class LlmRankingTest(unittest.TestCase):
     def test_empty_cell(self):
         probs = self.page(extra="")
         self.assertEqual(probs, [])
-        html = (self.site / "tools/llm-ranking/index.html").read_text(encoding="utf-8").replace("<td><span>c0</span></td>", "<td></td>", 1)
-        (self.site / "tools/llm-ranking/index.html").write_text(html, encoding="utf-8")
+        html = (self.site / "ferramentas/llm-ranking/index.html").read_text(encoding="utf-8").replace("<td><span>c0</span></td>", "<td></td>", 1)
+        (self.site / "ferramentas/llm-ranking/index.html").write_text(html, encoding="utf-8")
         self.assertTrue(any("célula vazia" in p for p in C.check_llm_ranking(self.site)))
 
     def test_nested_table_rows_do_not_count(self):
-        html = (self.site / "tools/llm-ranking/index.html")
+        html = (self.site / "ferramentas/llm-ranking/index.html")
         self.page()
         t = html.read_text(encoding="utf-8").replace("<td><span>c0</span></td>", "<td><table><tbody><tr><td>x</td></tr></tbody></table>c</td>", 1)
         html.write_text(t, encoding="utf-8")
@@ -2834,7 +2845,7 @@ class LlmRankingTest(unittest.TestCase):
 
     def test_nested_empty_cell_does_not_close_the_outer_one(self):
         # r1 (agy P3): o </td> da tabela aninhada não fecha a célula de fora; a célula de fora tem o texto "c".
-        html = (self.site / "tools/llm-ranking/index.html")
+        html = (self.site / "ferramentas/llm-ranking/index.html")
         self.page()
         t = html.read_text(encoding="utf-8").replace("<td><span>c0</span></td>", "<td><table><tbody><tr><td></td></tr></tbody></table>c</td>", 1)
         html.write_text(t, encoding="utf-8")
@@ -2879,7 +2890,7 @@ class LlmRankingTest(unittest.TestCase):
                 contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
             code = C.main(["--site", str(self.site), "--posts", str(self.site), "--consts", str(consts)])
         self.assertEqual(code, 1)
-        self.assertIn("ERRO: tools/llm-ranking/index.html: página não existe no _site", err.getvalue())
+        self.assertIn("ERRO: ferramentas/llm-ranking/index.html: página não existe no _site", err.getvalue())
         self.page()
         with isolate_main_rule("check_llm_ranking"), \
                 contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
@@ -2910,8 +2921,8 @@ class NavSourcesTest(unittest.TestCase):
         files = self.sources()
         rels = {str(f.relative_to(self.ROOT)) for f in files}
         for must in ("index.html", "404.html", "portfolio/index.html", "consultoria/index.html",
-                     "tools/index.html", "tools/llm-ranking/index.html",
-                     "tools/mapa-decisao-ia/index.html", "tools/planilha-custos-ia/index.html",
+                     "ferramentas/index.html", "ferramentas/llm-ranking/index.html",
+                     "ferramentas/mapa-decisao-ia/index.html", "ferramentas/planilha-custos-ia/index.html",
                      "privacidade/index.html", "termos/index.html",
                      "blog-src/src/layouts/Base.astro"):
             self.assertIn(must, rels)
@@ -2935,7 +2946,7 @@ class NavSourcesTest(unittest.TestCase):
         # site.js exatamente uma vez, sempre com ?v= de 12 dígitos, como nos testes do consent.js e do track.js.
         versions = {}
         pages = self.sources()[:-1]
-        self.assertIn("tools/llm-ranking/index.html", {str(f.relative_to(self.ROOT)) for f in pages})
+        self.assertIn("ferramentas/llm-ranking/index.html", {str(f.relative_to(self.ROOT)) for f in pages})
         for f in pages:
             rel = str(f.relative_to(self.ROOT))
             with self.subTest(rel=rel):
@@ -3406,7 +3417,7 @@ class LegalSourcesTest(unittest.TestCase):
     def test_terms_not_in_forms_or_cookie_banner(self):
         self.assertNotIn("/termos/", (self.REPO / "assets/consent.js").read_text(encoding="utf-8"))
         self.assertNotIn("/termos/", (self.REPO / "blog-src/src/components/SubscribeForm.astro").read_text(encoding="utf-8"))
-        for rel in ("index.html", "tools/planilha-custos-ia/index.html", "tools/mapa-decisao-ia/index.html"):
+        for rel in ("index.html", "ferramentas/planilha-custos-ia/index.html", "ferramentas/mapa-decisao-ia/index.html"):
             html = (self.REPO / rel).read_text(encoding="utf-8")
             for form in re.findall(r"<form\b[^>]*>.*?</form>", html, flags=re.S | re.I):
                 self.assertNotIn("/termos/", form, rel)

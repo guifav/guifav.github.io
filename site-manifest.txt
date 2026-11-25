@@ -18,6 +18,6 @@ og-image.svg
 assets/
 portfolio/
 consultoria/
-tools/
+ferramentas/
 privacidade/
 termos/

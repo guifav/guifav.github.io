@@ -51,7 +51,7 @@ test('O2: a página de entrada só vale como caminho, sem query, fragmento, esqu
     '/' + 'a'.repeat(200), '']) {
     assert.equal(parseOrigem(form({ ...BOA, origem_entrada: ruim })).entrada, null, ruim);
   }
-  for (const bom of ['/', '/blog/', '/blog/x', '/tools/seo-geo-aeo-framework/framework-seo-aeo.html', '/' + 'a'.repeat(199)]) {
+  for (const bom of ['/', '/blog/', '/blog/x', '/ferramentas/seo-geo-aeo-framework/framework-seo-aeo.html', '/' + 'a'.repeat(199)]) {
     assert.equal(parseOrigem(form({ ...BOA, origem_entrada: bom })).entrada, bom);
   }
 });
@@ -119,15 +119,15 @@ test('P1: ponta a ponta, uma inscrição e um pedido de material gravam canal, f
   assert.deepEqual(campos.inscricao, { origem_canal: 'pago', origem_fonte: 'google', utm_source: '', utm_medium: '', utm_campaign: '',
     origem_entrada: '/blog/rag-em-producao/' });
   assert.deepEqual(campos.material, { origem_canal: 'assistente', origem_fonte: 'chatgpt', utm_source: 'chatgpt.com', utm_medium: '',
-    utm_campaign: '', origem_entrada: '/tools/mapa-decisao-ia/' });
+    utm_campaign: '', origem_entrada: '/ferramentas/mapa-decisao-ia/' });
   const origem = (l: Record<string, unknown>) => [l.action, l.origin_channel, l.origin_source, l.utm_source, l.utm_medium, l.utm_campaign,
     l.landing_path];
   assert.deepEqual(linhas.map(origem), [
     ['newsletter_confirm', 'pago', 'google', null, null, null, '/blog/rag-em-producao/'],
-    ['material_request', 'assistente', 'chatgpt', 'chatgpt.com', null, null, '/tools/mapa-decisao-ia/'],
-    ['material_download', 'assistente', 'chatgpt', 'chatgpt.com', null, null, '/tools/mapa-decisao-ia/'],
-    ['material_download', 'assistente', 'chatgpt', 'chatgpt.com', null, null, '/tools/mapa-decisao-ia/'],
-    ['newsletter_confirm', 'assistente', 'chatgpt', 'chatgpt.com', null, null, '/tools/mapa-decisao-ia/'],
+    ['material_request', 'assistente', 'chatgpt', 'chatgpt.com', null, null, '/ferramentas/mapa-decisao-ia/'],
+    ['material_download', 'assistente', 'chatgpt', 'chatgpt.com', null, null, '/ferramentas/mapa-decisao-ia/'],
+    ['material_download', 'assistente', 'chatgpt', 'chatgpt.com', null, null, '/ferramentas/mapa-decisao-ia/'],
+    ['newsletter_confirm', 'assistente', 'chatgpt', 'chatgpt.com', null, null, '/ferramentas/mapa-decisao-ia/'],
   ]);
   // Só as colunas de antes e as seis da origem: nenhuma coluna nova além delas.
   assert.deepEqual(Object.keys(linhas[0]), ['id', 'email', 'action', 'material', 'interests', 'occurred_at', 'synced_at', 'verified',
@@ -140,12 +140,12 @@ test('O6: o download herda a origem do pedido revalidada; direto e desconhecida 
   const db = d1();
   const ins = (id: string, canal: string, fonte: string | null) => db.raw.prepare(`INSERT INTO conversions (id, email, action, material,
     interests, occurred_at, verified, origin_channel, origin_source, landing_path) VALUES (?, 'leitor@exemplo.com', 'material_request',
-    'planilha-custos-ia', '[]', '2026-11-24T12:00:00.000Z', 0, ?, ?, '/tools/planilha-custos-ia/')`).run(id, canal, fonte);
+    'planilha-custos-ia', '[]', '2026-11-24T12:00:00.000Z', 0, ?, ?, '/ferramentas/planilha-custos-ia/')`).run(id, canal, fonte);
   ins('p-direto', 'direto', 'google'); // o CHECK aceita a combinação; a regra, não
   ins('p-desconhecida', 'desconhecida', 'chatgpt');
   ins('p-busca', 'busca', 'google');
   assert.deepEqual((await requestInfo(db, 'p-direto')).origem,
-    { canal: 'direto', fonte: null, utmSource: null, utmMedium: null, utmCampaign: null, entrada: '/tools/planilha-custos-ia/' });
+    { canal: 'direto', fonte: null, utmSource: null, utmMedium: null, utmCampaign: null, entrada: '/ferramentas/planilha-custos-ia/' });
   assert.equal((await requestInfo(db, 'p-desconhecida')).origem?.fonte, null);
   assert.equal((await requestInfo(db, 'p-busca')).origem?.fonte, 'google');
   assert.deepEqual(await requestInfo(db, 'sem-pedido'), { clientId: null, origem: null });
