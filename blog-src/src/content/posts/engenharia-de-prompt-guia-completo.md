@@ -1,6 +1,7 @@
 ---
 title: "Engenharia de Prompt: Guia Completo para Dominar a Arte de Interagir com IA"
 description: "Guia prático de engenharia de prompt para ChatGPT, Claude e Gemini: fundamentos, padrões para tarefas específicas e técnicas para elevar a precisão."
+summary: "Engenharia de prompt é formular instruções para sistemas de IA como ChatGPT e Claude de modo a obter respostas mais precisas e úteis. Os fundamentos são declarar a tarefa com clareza e contexto, dar exemplos do resultado esperado, pedir raciocínio passo a passo, refinar a resposta com feedback específico e atribuir um papel ao modelo. Em tarefas complexas, dividir o trabalho em etapas e permitir que o modelo admita incerteza melhora o resultado."
 date: 2024-08-18T03:00:00.000Z
 updated: 2024-10-02T23:49:09.505Z
 slug: engenharia-de-prompt-guia-completo

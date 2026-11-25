@@ -1,6 +1,7 @@
 ---
 title: "A Resolução de Problemas utilizando Inteligência Artificial"
 description: "A resolução de problemas é uma habilidade fundamental em todos os aspectos da vida, desde questões pessoais até desafios profissionais complexos."
+summary: "Técnicas estruturadas como Análise de Causa Raiz, 5 Porquês, Diagrama de Ishikawa, PDCA, Análise SWOT e Pirâmide de Minto organizam a resolução de problemas, e o artigo explica onze delas com funcionamento e exemplo. LLMs como ChatGPT e Claude ajudam a gerar ideias, analisar dados, simular cenários e sintetizar conhecimento, e funcionam melhor quando pessoas definem o problema, fazem as perguntas certas, dão o contexto ético e aplicam julgamento."
 date: 2024-06-03T03:00:00.000Z
 updated: 2024-08-26T10:40:55.854Z
 slug: resolucao-de-problemas-utilizando-inteligencia-artificial

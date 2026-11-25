@@ -1,6 +1,7 @@
 ---
 title: "A Crise silenciosa que ameaça revolucionar a IA"
 description: "Como a escassez global de GPUs afeta o custo de computação em nuvem, o prazo dos projetos de IA e as alternativas de infraestrutura para empresas."
+summary: "A escassez global de GPUs combina interrupções na cadeia de suprimentos na pandemia de COVID-19, a demanda de mineradores de criptomoedas, o crescimento acelerado da IA e uma capacidade de produção que leva anos para crescer. O resultado é hardware mais caro e atraso em pesquisas e produtos, sobretudo para startups e pequenas empresas. As respostas incluem GPUs em nuvem, otimização de software, computação distribuída e chips alternativos como TPUs e FPGAs."
 date: 2024-08-07T03:00:00.000Z
 updated: 2024-09-18T10:58:42.223Z
 slug: a-crise-silenciosa-que-ameaca-revolucionar-a-ia

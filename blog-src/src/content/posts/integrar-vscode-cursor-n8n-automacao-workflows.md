@@ -2,6 +2,7 @@
 title: "Integre o VS Code (ou Cursor) com o N8N: Simplifique a Criação e Edição de Automações com MCPs"
 subtitle: "Versionamento, redundância, controle e compartilhamento de workflows usando ferramentas gratuitas"
 description: "Aprenda a integrar o VS Code ou Cursor com o N8N usando MCP Server. Configure versionamento com Git, controle de fluxos com IA e automatize a criação de workflows. Guia completo e gratuito."
+summary: "O VS Code ou o Cursor se conectam a uma instância N8N pelo MCP Server, disponível a partir da versão 1.50.0, o que permite gerenciar e versionar workflows com Git usando assistentes como o Claude Code. A configuração exige habilitar o MCP nas configurações da instância, gerar um token MCP e uma chave de API e criar no projeto os arquivos .vscode/mcp.json, .env e .gitignore, com as credenciais fora do repositório."
 date: 2026-01-20T22:18:13.224Z
 updated: 2026-01-20T22:23:43.092Z
 slug: integrar-vscode-cursor-n8n-automacao-workflows

@@ -1,6 +1,7 @@
 ---
 title: "Os Invernos da IA: Ciclos de Ascensão e Queda na História da Inteligência Artificial"
 description: "Explore a fascinante história dos Invernos da IA, períodos de declínio na pesquisa de inteligência artificial, suas causas, consequências e o impacto duradouro no desenvolvimento da tecnologia de IA moderna."
+summary: "Invernos da IA são períodos de corte de financiamento e perda de interesse na pesquisa em inteligência artificial, que vieram depois de promessas não cumpridas. O primeiro ocorreu entre 1974 e 1980 e teve entre as causas o Relatório Lighthill, de 1973, e os cortes de financiamento da DARPA. O segundo, entre 1987 e 2000, começou com o colapso do mercado de máquinas LISP e se agravou com as limitações dos sistemas especialistas."
 date: 2024-07-05T03:00:00.000Z
 updated: 2024-09-05T21:07:12.840Z
 slug: os-invernos-da-ia-ciclos-de-ascensao-e-queda-na-historia-da-inteligencia-artificial

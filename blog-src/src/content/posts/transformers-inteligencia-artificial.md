@@ -1,6 +1,7 @@
 ---
 title: "O que é um GPT? Introdução aos Transformers na Inteligência Artificial"
 description: "Explore como os Transformers estão redefinindo os limites da Inteligência Artificial, desde o processamento de linguagem natural até aplicações inovadoras em diversas áreas."
+summary: "Transformers são a arquitetura de rede neural apresentada em 2017 no artigo “Attention Is All You Need” e servem de base para modelos como o GPT. O mecanismo de auto-atenção processa todos os elementos de uma sequência em paralelo e captura relações entre elementos distantes, o que resolve duas limitações das redes recorrentes. A arquitetura também é aplicada em visão computacional, áudio, biologia molecular e finanças."
 date: 2024-09-11T03:00:00.000Z
 updated: 2024-12-02T11:31:30.914Z
 slug: transformers-inteligencia-artificial

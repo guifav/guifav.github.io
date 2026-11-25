@@ -1,6 +1,7 @@
 ---
 title: "Inteligência Artificial: Guia Completo para Iniciantes e Entusiastas"
 description: "Guia introdutório de inteligência artificial para iniciantes: fundamentos, principais plataformas e aplicações práticas no trabalho e no dia a dia."
+summary: "Inteligência artificial é a simulação de processos da inteligência humana, como aprendizado e raciocínio, por máquinas, e a maioria das aplicações atuais é de IA fraca, voltada a uma tarefa específica. Com machine learning e deep learning, a IA já atua em educação, saúde, direito e indústria, além de assistentes virtuais e recomendações. Viés algorítmico, privacidade, impacto no emprego e responsabilidade por decisões autônomas estão entre os desafios éticos."
 date: 2024-07-06T03:00:00.000Z
 updated: 2024-09-05T21:07:12.287Z
 slug: inteligencia-artificial-guia-completo-para-iniciantes-e-entusiastas
