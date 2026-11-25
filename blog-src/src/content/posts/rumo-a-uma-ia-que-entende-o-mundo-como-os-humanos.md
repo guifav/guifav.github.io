@@ -1,6 +1,7 @@
 ---
 title: "Rumo a uma IA que entende o mundo como os humanos"
 description: "O recente gerador de imagens a partir de texto Sora da OpenAI exibiu capacidades impressionantes, mas um novo artigo de pesquisa da Meta chamado V-JEPA (Video Joint Embedding Predictive Architecture) poderia provar ainda mais monumental a longo prazo no caminho em direção à inteligência artificial geral (AGI)."
+summary: "O V-JEPA, da Meta, aprende com vídeos dos quais trechos inteiros foram removidos, e o modelo precisa adivinhar de forma ampla o que falta na cena. Yann LeCun, cientista-chefe de IA da Meta, aposta nessa abordagem, inspirada em como bebês aprendem observando o mundo físico, para formar um modelo de mundo. A próxima fase incorporará áudio, o que pode ser o primeiro passo para uma compreensão robusta com menos dados."
 date: 2024-02-16T03:00:00.000Z
 updated: 2024-06-25T16:27:33.565Z
 slug: rumo-a-uma-ia-que-entende-o-mundo-como-os-humanos

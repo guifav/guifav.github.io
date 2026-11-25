@@ -1,6 +1,7 @@
 ---
 title: "O Papel dos Analistas de Negócios e Projetos na Era da IA Generativa"
 description: "Enquanto startups de IA enfrentam desafios financeiros significativos, novas oportunidades emergem na camada de aplicação, redefinindo o papel dos analistas nas organizações."
+summary: "Com os LLMs entrando nos fluxos de trabalho, o analista de negócios e projetos passa a atuar como orquestrador estratégico de IA, que cura os dados que alimentam os modelos e interpreta os insights gerados à luz dos objetivos do negócio. Em vagas recentes nos EUA, geração de texto e compreensão de linguagem natural aparecem em cerca de um terço dos anúncios, e IA conversacional e análise de dados em cerca de um quinto."
 date: 2024-09-04T03:00:00.000Z
 updated: 2024-11-10T16:04:59.263Z
 slug: inteligencia-artificial-trabalho

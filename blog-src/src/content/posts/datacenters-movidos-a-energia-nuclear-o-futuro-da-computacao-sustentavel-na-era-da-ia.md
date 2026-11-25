@@ -1,6 +1,7 @@
 ---
 title: "Datacenters Movidos a Energia Nuclear: O Futuro da Computação Sustentável na Era da IA"
 description: "Descubra como os datacenters movidos a energia nuclear estão revolucionando a computação sustentável, oferecendo eficiência energética e baixa emissão de carbono para atender às crescentes demandas da era digital."
+summary: "Datacenters nucleares recebem energia de uma usina adjacente ou de pequenos reatores modulares (SMRs), com carga base estável, fator de capacidade acima de 90% e emissões de carbono próximas de zero na operação. Os obstáculos são o licenciamento, a gestão de resíduos, a percepção pública e a necessidade de unir TI e engenharia nuclear. A AWS pagou US$ 650 milhões por um campus de 960 megawatts na Pensilvânia, alimentado pela usina nuclear de Susquehanna."
 date: 2024-07-07T03:00:00.000Z
 updated: 2024-09-05T21:07:11.941Z
 slug: datacenters-movidos-a-energia-nuclear-o-futuro-da-computacao-sustentavel-na-era-da-ia

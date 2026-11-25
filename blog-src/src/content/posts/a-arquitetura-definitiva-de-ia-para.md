@@ -2,6 +2,7 @@
 title: "A Arquitetura Definitiva de IA para Empresas"
 subtitle: "Por que 90% dos Projetos Falham e Como Fazer Diferente"
 description: "Por que projetos de IA corporativa travam depois do piloto e como estruturar a arquitetura em cinco camadas para entregar resultado em escala."
+summary: "Projetos de IA corporativa travam depois do piloto quando a empresa escolhe a ferramenta antes de definir a arquitetura. A proposta organiza a IA em cinco camadas: fontes de dados consolidadas, governança e qualidade, MLOps e processamento (com embeddings e vector store), modelos com registry, e monitoramento e compliance. A implantação segue em fases, começando pela organização dos dados e deixando modelos próprios e MLOps automatizado para os meses 7 a 12."
 date: 2025-07-26T11:10:12.593Z
 updated: 2025-11-24T20:05:10.841Z
 slug: a-arquitetura-definitiva-de-ia-para

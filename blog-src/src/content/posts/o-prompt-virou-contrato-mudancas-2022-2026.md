@@ -2,6 +2,7 @@
 title: "O prompt virou contrato: o que quatro anos de papers e documentação oficial ensinam sobre conversar com a IA"
 subtitle: "O que em 2022 era acurácia, hoje é desperdício documentado: o raciocínio entrou para dentro do modelo, o controle fino virou parâmetro de API e a engenharia migrou do texto para o contexto"
 description: "O que em 2022 era acurácia, hoje é desperdício documentado: o raciocínio entrou para dentro do modelo, o controle fino virou parâmetro de API e a engenharia migrou do texto para o contexto"
+summary: "Em 2026, o prompt funciona como um contrato que especifica comportamento e limites de autonomia, porque os modelos de raciocínio já pensam por conta própria, e a documentação da OpenAI e da Anthropic manda remover pedidos de chain-of-thought e de autoverificação. O controle fino virou parâmetro de API, como reasoning_effort e effort, e a engenharia migrou para o contexto, onde fica a vantagem durável de cada empresa."
 date: 2026-07-28T20:04:10.135Z
 updated: 2026-07-29T00:12:11.282Z
 slug: o-prompt-virou-contrato-mudancas-2022-2026

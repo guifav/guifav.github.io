@@ -2,6 +2,7 @@
 title: "LangGraph: Orquestrando Workflows Complexos de IA"
 subtitle: "LangGraph para workflows complexos: 85% redução de tempo, state management distribuído e human-in-the-loop. Caso real com 94% de precisão mantida."
 description: "LangGraph para workflows complexos: 85% redução de tempo, state management distribuído e human-in-the-loop. Caso real com 94% de precisão mantida."
+summary: "O LangGraph orquestra workflows de IA como grafos, com estado compartilhado entre os nós, roteamento condicional, checkpoints e pontos de intervenção humana, o que atende processos com decisões condicionais e retornos a etapas anteriores que chains lineares do LangChain não modelam bem. Num caso real de análise de clientes potenciais, o tempo caiu de 4 horas para 25 minutos, com 94% de precisão mantida."
 date: 2025-08-29T11:35:16.291Z
 updated: 2025-11-24T20:05:38.501Z
 slug: langgraph-orquestrando-workflows

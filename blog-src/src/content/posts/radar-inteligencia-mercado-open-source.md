@@ -2,6 +2,7 @@
 title: "Como construí um radar de inteligência de mercado, e por que tornei o código opensource"
 subtitle: "Um pipeline open source que varre fontes públicas, extrai pessoas, empresas e deals com LLM, cruza com seu CRM e entrega tudo num dashboard. Os desafios técnicos e onde mora a oportunidade."
 description: "Um pipeline open source que varre fontes públicas, extrai pessoas, empresas e deals com LLM, cruza com seu CRM e entrega tudo num dashboard. Os desafios técnicos e onde mora a oportunidade."
+summary: "O Market Intelligence Radar (MIR) é um pipeline open source e self-hosted, com licença MIT, que varre fontes de notícias, extrai com LLM pessoas, empresas, deals e sinais de mercado, cruza os contatos com o CRM e os enriquece via Apollo e SalesQL, exibindo tudo num dashboard Next.js. O código foi aberto porque a vantagem competitiva está na operação: fontes, taxonomia, integração com o CRM e prompt ajustados a cada setor."
 date: 2026-04-27T02:16:10.083Z
 updated: 2026-04-27T15:19:00.440Z
 slug: radar-inteligencia-mercado-open-source

@@ -2,6 +2,7 @@
 title: "O fim do código como ativo: o novo perfil do desenvolvedor que todo Executivo precisa entender"
 subtitle: "1 Ano de IA dentro de um time de engenharia expuseram uma verdade desconfortável sobre onde mora hoje o gargalo do software, como o trabalho mudou junto e por que quem só reagir depois vai pagar"
 description: "1 ano de IA dentro de um time de engenharia expuseram uma verdade desconfortável sobre onde mora hoje o gargalo do software, como o trabalho mudou junto e por que quem só reagir depois vai pagar caro."
+summary: "Com agentes de IA gerando código mais rápido do que o time consegue revisar, o gargalo do software migrou para a especificação, e o valor passa ao trabalho supervisório de orientar agentes e avaliar suas saídas. Seniores ficam afogados em revisão, e os mid-levels são o grupo mais difícil de retreinar. Para CEOs, a recomendação é registrar o conhecimento tribal num formato que agentes consumam e contratar por julgamento e clareza de especificação."
 date: 2026-04-23T15:00:51.515Z
 updated: 2026-04-23T15:03:22.081Z
 slug: o-fim-do-codigo-como-ativo-o-novo

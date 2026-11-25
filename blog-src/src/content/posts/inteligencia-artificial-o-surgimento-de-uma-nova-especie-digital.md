@@ -1,6 +1,7 @@
 ---
 title: "Inteligência Artificial: O Surgimento de uma Nova Espécie Digital"
 description: "Este texto trata-se de uma transcrição de um belissimo TED Talk com Mustafa Suleyman publicado em 22/04/2024, com pequenos ajustes para melhor fluidez."
+summary: "O texto transcreve, com pequenos ajustes, o TED Talk de Mustafa Suleyman publicado em 22/04/2024. Suleyman propõe entender a IA como uma nova espécie digital, metáfora que ajuda a decidir que limites impor e que tipo de IA construir. Ele prevê IAs com um Quociente de Ação (AQ), capazes de executar tarefas nos mundos digital e físico, e lembra que mais de um bilhão de pessoas usaram modelos de linguagem em 18 meses."
 date: 2024-04-26T03:00:00.000Z
 updated: 2024-08-26T10:40:58.575Z
 slug: inteligencia-artificial-o-surgimento-de-uma-nova-especie-digital

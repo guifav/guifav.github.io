@@ -1,6 +1,7 @@
 ---
 title: "O Que Você Precisa Saber Sobre Deepfakes: Usos, Riscos e o Futuro"
 description: "Uma das tecnologias mais impressionantes e ao mesmo tempo preocupantes que, acompanham o avanço acelerado da inteligência artificial, são os deepfakes. Com os avanços do time da Microsoft (VASA-1), o futuro parece ainda mais perto."
+summary: "Deepfakes são mídias sintéticas geradas por IA, em geral com redes adversárias generativas (GANs), que mostram pessoas reais dizendo ou fazendo o que nunca aconteceu. A tecnologia tem usos legítimos em acessibilidade, educação, entretenimento e saúde, e usos criminosos em pornografia não consensual, desinformação, golpes e extorsão. Nenhum método de detecção é 100% confiável, e a verificação combina falhas visuais e de áudio, contexto, metadados e detectores."
 date: 2024-04-23T03:00:00.000Z
 updated: 2024-08-20T22:56:08.855Z
 slug: o-que-voce-precisa-saber-sobre-deepfakes-usos-riscos-e-o-futuro

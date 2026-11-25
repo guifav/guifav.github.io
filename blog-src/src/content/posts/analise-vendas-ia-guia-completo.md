@@ -1,6 +1,7 @@
 ---
 title: "Análise de ligações de vendas com IA: Um guia completo para otimizar seu time de vendas"
 description: "Aprenda a otimizar seu time de vendas com IA: guia passo a passo para analisar ligações, identificar objeções e melhorar a performance do time."
+summary: "O tutorial usa dois notebooks no Google Colab: o primeiro transcreve as ligações de cada vendedor com a API Whisper da OpenAI, e o segundo analisa as transcrições para apontar tópicos, sentimento, objeções mais comuns, pontos fortes do time e treinamentos sugeridos. Transcrever cerca de 1000 minutos de áudio custa aproximadamente USD 2,80, e o código está no repositório calls_analyzer, no GitHub."
 date: 2024-09-10T03:00:00.000Z
 slug: analise-vendas-ia-guia-completo
 cover: img/analise-vendas-ia-guia-completo/capa.jpg

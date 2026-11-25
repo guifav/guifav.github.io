@@ -2,6 +2,7 @@
 title: "Máquinas da Graça Divina - por Dario Amodei CEO da Anthropic"
 subtitle: "Como a IA pode transformar o mundo para melhor"
 description: "Explore a visão otimista do CEO da Anthropic sobre como a IA avançada poderia revolucionar saúde, economia e governança global em apenas uma"
+summary: "O ensaio Machines of Loving Grace, de Dario Amodei, CEO da Anthropic, argumenta que uma IA poderosa, descrita como um país de gênios em um data center, poderia comprimir 50 a 100 anos de avanços em biologia e medicina em 5 a 10 anos. As cinco áreas de impacto são biologia e saúde física, neurociência e saúde mental, desenvolvimento econômico e pobreza, paz e governança, trabalho e significado. Amodei trata os riscos como o principal obstáculo para esse futuro."
 date: 2024-10-14T03:00:00.000Z
 updated: 2025-08-28T21:49:21.797Z
 slug: ia-revolucao-positiva-visao-otimista-ensaio-dario-amodei
