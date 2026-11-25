@@ -40,7 +40,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from build_sitemaps import canonical_is_self, robots_disallow  # noqa: E402
+from build_sitemaps import canonical_is_self, robots_blocks, robots_disallow  # noqa: E402
 
 SITE_HOST = "guifav.dev"
 # Domínio antigo do Substack (#24): depois do cutover, nada no site aponta para ele.
@@ -1354,10 +1354,9 @@ def check_root_sitemaps(site: Path, root_pages: list[tuple[str, str, "_Page"]]) 
     if index is not None and sorted(loc for loc, _ in index) != sorted(ROOT_INDEX_CHILDREN):
         problems.append(f"sitemap.xml: o índice precisa citar exatamente {ROOT_INDEX_CHILDREN}, cita {[l for l, _ in index]}")
     # Páginas do site que o buscador deve indexar: fora do blog, não a 404, liberadas no robots, sem noindex.
-    disallow = robots_disallow(robots_txt)
     want = set()
     for rel, url, p in root_pages:
-        if rel == "404.html" or any(url.startswith(d) for d in disallow) or any(_robots_noindex(r) for r in p.robots):
+        if rel == "404.html" or robots_blocks(robots_txt, url) or any(_robots_noindex(r) for r in p.robots):
             continue
         if not canonical_is_self(p.canonicals, url):
             problems.append(f"{rel}: canonical aponta para outra URL ({p.canonicals}); a página não entraria no sitemap")
@@ -1375,6 +1374,18 @@ def check_root_sitemaps(site: Path, root_pages: list[tuple[str, str, "_Page"]]) 
         for loc, lm in entries:
             if not _valid_datetime(lm):
                 problems.append(f"sitemap-site.xml: lastmod ausente ou inválido (data, hora e fuso, W3C): {loc} {lm!r}")
+    # #174 (C.5): nenhuma URL listada nos sitemaps (site ou blog) pode ficar bloqueada pelo robots.txt.
+    blog_entries = _sitemap(site, "blog/sitemap.xml", "urlset", "url", [])
+    for sm_name, sm_entries in (("sitemap-site.xml", entries), ("blog/sitemap.xml", blog_entries)):
+        for loc, _ in sm_entries or []:
+            u = urlsplit(loc)
+            if u.scheme != "https" or u.netloc != SITE_HOST:
+                continue
+            path = (u.path or "/") + (f"?{u.query}" if u.query else "")
+            for agent in ("*", "googlebot", "bingbot"):
+                if robots_blocks(robots_txt, path, agent):
+                    problems.append(f"{sm_name}: URL bloqueada pelo robots.txt ({agent}): {loc}")
+                    break
     return problems
 
 
@@ -2508,6 +2519,127 @@ def check_legal(site: Path) -> list[str]:
     return problems
 
 
+LLMS_TXT_NAME = "llms.txt"
+LLMS_REQUIRED_SECTIONS = ("Consultoria", "Ferramentas", "Temas", "Portfólio e Expert Insights")
+_MD_LINK_RE = re.compile(r"\[((?:\\.|[^\]])+)\]\(([^)\s]+)\)")
+
+
+def check_llms_txt(site: Path, posts: Path) -> list[str]:
+    """#174: /llms.txt existe no _site, segue o formato e aponta só para páginas existentes e indexáveis."""
+    llms = site / LLMS_TXT_NAME
+    if llms.is_symlink():
+        return [f"{LLMS_TXT_NAME}: link simbólico não permitido no _site"]
+    if not llms.is_file():
+        return [f"{LLMS_TXT_NAME}: arquivo ausente no _site (rode scripts/build_llms_txt.py)"]
+    try:
+        text = llms.read_text(encoding="utf-8")
+    except UnicodeDecodeError as e:
+        return [f"{LLMS_TXT_NAME}: UTF-8 inválido: {e}"]
+    if not text.strip():
+        return [f"{LLMS_TXT_NAME}: arquivo vazio"]
+
+    problems: list[str] = []
+    if OLD_DOMAIN in text.lower():
+        problems.append(f"{LLMS_TXT_NAME}: menciona o domínio antigo ({OLD_DOMAIN})")
+
+    lines = text.splitlines()
+    if not lines or not lines[0].startswith("# ") or not lines[0][2:].strip():
+        problems.append(f"{LLMS_TXT_NAME}: precisa abrir com título H1 (# ...)")
+    if not any(ln.startswith("> ") and ln[2:].strip() for ln in lines):
+        problems.append(f"{LLMS_TXT_NAME}: precisa de citação curta (> ...)")
+
+    section_links: dict[str, list[str]] = {}
+    current_section: str | None = None
+    all_urls: list[str] = []
+    for lineno, line in enumerate(lines, 1):
+        if line.startswith("## "):
+            current_section = line[3:].strip()
+            section_links.setdefault(current_section, [])
+            continue
+        matches = list(_MD_LINK_RE.finditer(line))
+        for m in matches:
+            url = m.group(2)
+            all_urls.append(url)
+            if current_section is not None:
+                section_links[current_section].append(url)
+        stripped = line.lstrip()
+        if stripped.startswith("- ") and matches:
+            tail = line[matches[0].end():]
+            if not tail.startswith(": ") or not tail[2:].strip():
+                problems.append(f"{LLMS_TXT_NAME}:{lineno}: item sem descrição em uma linha")
+
+    for req in LLMS_REQUIRED_SECTIONS:
+        if req not in section_links:
+            problems.append(f"{LLMS_TXT_NAME}: falta a seção obrigatória '## {req}'")
+        elif not section_links[req]:
+            problems.append(f"{LLMS_TXT_NAME}: seção '## {req}' sem links")
+    if not all_urls:
+        problems.append(f"{LLMS_TXT_NAME}: nenhum link encontrado")
+        return problems
+
+    # Frontmatter dos posts para dupla verificação de index: false e podcast.
+    non_indexable_slugs: set[str] = set()
+    if posts.is_dir():
+        for md in sorted(posts.glob("**/*.md")):
+            fm = frontmatter(md.read_text(encoding="utf-8"))
+            slug = fm.get("slug") or md.stem
+            if fm.get("index", "").lower() == "false" or fm.get("type", "").lower() == "podcast":
+                non_indexable_slugs.add(slug)
+
+    robots_path = site / "robots.txt"
+    robots_txt = robots_path.read_text(encoding="utf-8") if robots_path.is_file() else ""
+
+    pairs = [(SITE_ORIGIN + "/", u) for u in dict.fromkeys(all_urls)]
+    resolved = dict(zip([u for _, u in pairs], resolve_urls(pairs)))
+
+    for url in dict.fromkeys(all_urls):
+        res = resolved[url]
+        u = urlsplit(url)
+        if _old_host(res):
+            problems.append(f"{LLMS_TXT_NAME}: link para o domínio antigo: {url}")
+            continue
+        path = _internal(res)
+        if not res or u.scheme != "https" or u.netloc != SITE_HOST or res["protocol"] != "https:" or path is None or u.query or u.fragment:
+            problems.append(f"{LLMS_TXT_NAME}: URL precisa ser absoluta e canônica em {SITE_ORIGIN} (sem query/fragment): {url}")
+            continue
+        ok, dir_without_slash = _resolve(site, path)
+        if dir_without_slash:
+            problems.append(f"{LLMS_TXT_NAME}: link para pasta sem barra final: {url}")
+            continue
+        if not ok:
+            problems.append(f"{LLMS_TXT_NAME}: aponta para página que não existe no _site: {url}")
+            continue
+        target = (site / path.lstrip("/") / "index.html") if path.endswith("/") else (site / path.lstrip("/"))
+        rel = target.relative_to(site).as_posix()
+        if target.suffix.lower() not in HTML_SUFFIXES:
+            problems.append(f"{LLMS_TXT_NAME}: link não aponta para página HTML: {url}")
+            continue
+        if rel == "404.html":
+            problems.append(f"{LLMS_TXT_NAME}: lista a página 404: {url}")
+            continue
+        for agent in ("*", "googlebot", "bingbot"):
+            if robots_blocks(robots_txt, path, agent):
+                problems.append(f"{LLMS_TXT_NAME}: página bloqueada pelo robots.txt ({agent}): {url}")
+                break
+        p = _Page()
+        p.feed(target.read_text(encoding="utf-8"))
+        p.close()
+        if any(_robots_noindex(r) for r in p.robots):
+            problems.append(f"{LLMS_TXT_NAME}: lista página com noindex: {url}")
+        if not canonical_is_self(p.canonicals, path):
+            problems.append(f"{LLMS_TXT_NAME}: página com canonical para outra URL: {url}")
+        if path.startswith(BLOG_PREFIX):
+            if path.startswith(BLOG_PREFIX + "pagina/"):
+                problems.append(f"{LLMS_TXT_NAME}: lista página de paginação do blog: {url}")
+            parts = path[len(BLOG_PREFIX):].strip("/").split("/")
+            if len(parts) == 1 and parts[0]:
+                if parts[0] in BLOG_PRIVATE_PAGES:
+                    problems.append(f"{LLMS_TXT_NAME}: lista página privada da newsletter: {url}")
+                if parts[0] in non_indexable_slugs:
+                    problems.append(f"{LLMS_TXT_NAME}: lista post não indexável ou podcast: {url}")
+    return problems
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Verifica o site montado em _site/ antes do deploy.")
     ap.add_argument("--site", default="_site")
@@ -2525,6 +2657,7 @@ def main(argv: list[str] | None = None) -> int:
         problems += check_post_ld(Path(args.site), Path(args.posts))
         problems += check_llm_ranking(Path(args.site))
         problems += check_legal(Path(args.site))
+        problems += check_llms_txt(Path(args.site), Path(args.posts))
     except ResolverError as e:
         print(f"ERRO: resolvedor de URL indisponível, verificação não feita: {e}", file=sys.stderr)
         return 1

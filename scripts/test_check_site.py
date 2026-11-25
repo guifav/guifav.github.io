@@ -740,6 +740,24 @@ class RootSitemapTest(Base):
         (self.site / "robots.txt").unlink()
         self.assertTrue(self.has("robots.txt", "só o índice"))
 
+    def test_robots_cannot_block_sitemap_urls(self):
+        # Bloquear /blog/ ou um post em blog/sitemap.xml falha.
+        for robots in (
+            "User-agent: *\nDisallow: /blog/\n\nSitemap: https://guifav.dev/sitemap.xml\n",
+            "User-agent: *\nDisallow: /blog/um-post/\n\nSitemap: https://guifav.dev/sitemap.xml\n",
+            "User-agent: Googlebot\nDisallow: /blog/\n\nUser-agent: *\nDisallow: /admin/\n\nSitemap: https://guifav.dev/sitemap.xml\n",
+            "User-agent: bingbot\nDisallow: /portfolio/\n\nUser-agent: *\nDisallow: /admin/\n\nSitemap: https://guifav.dev/sitemap.xml\n",
+        ):
+            with self.subTest(robots=robots):
+                self.w("robots.txt", robots)
+                self.assertTrue(self.has("bloqueada pelo robots.txt"), self.problems(pre_cutover=False))
+        # Allow mais específico que Disallow libera a URL do sitemap.
+        self.w(
+            "robots.txt",
+            "User-agent: *\nDisallow: /portfolio/\nAllow: /portfolio/\n\nSitemap: https://guifav.dev/sitemap.xml\n",
+        )
+        self.assertFalse(self.has("bloqueada pelo robots.txt"))
+
 
 class ClarityTest(Base):
     """Toda página com o GA4 do site também tem o Microsoft Clarity."""
@@ -3546,6 +3564,125 @@ class SummaryTest(Base):
         self.assertEqual(C.contrast_problems([site_css, blog_css, extra]), [])
 
 
+class LlmsTxtTest(Base):
+    """#174: /llms.txt precisa existir no _site, seguir o formato e apontar só para páginas existentes e indexáveis."""
+
+    VALID_LLMS = (
+        "# Guilherme Favaron\n\n"
+        "> Site oficial de Guilherme Favaron.\n\n"
+        "Abertura curta sobre o site.\n\n"
+        "## Consultoria\n\n"
+        "- [Consultoria](https://guifav.dev/consultoria/): Consultoria em IA.\n\n"
+        "## Ferramentas\n\n"
+        "- [Ferramentas](https://guifav.dev/ferramentas/): Lista de ferramentas.\n\n"
+        "## Temas\n\n"
+        "- [Tema](https://guifav.dev/blog/tema/ia-sobre-dados-da-empresa/): Artigos sobre dados.\n"
+        "  - [Um post](https://guifav.dev/blog/um-post/): Resumo do post.\n\n"
+        "## Portfólio e Expert Insights\n\n"
+        "- [Portfólio](https://guifav.dev/portfolio/): Projetos.\n"
+        "- [Insights](https://guifav.dev/blog/): Artigos.\n"
+    )
+
+    def setUp(self):
+        super().setUp()
+        self.w("consultoria/index.html", page("c", robots=""))
+        self.w("ferramentas/index.html", page("f", robots=""))
+        self.w("ferramentas/enviado/index.html", page("e", robots=ROBOTS_NOINDEX))
+        self.w("blog/index.html", page("b", robots=""))
+        self.w("blog/um-post/index.html", page("p", robots=""))
+        self.w("blog/tema/ia-sobre-dados-da-empresa/index.html", page("t", robots=""))
+        self.w("blog/assinar/index.html", page("a", robots=ROBOTS_NOINDEX))
+        self.w("llms.txt", self.VALID_LLMS)
+
+    def test_valid_llms_txt_passes(self):
+        self.assertEqual(C.check_llms_txt(self.site, self.posts), [])
+
+    def test_missing_empty_or_symlink_llms_txt_fails(self):
+        (self.site / "llms.txt").unlink()
+        got = C.check_llms_txt(self.site, self.posts)
+        self.assertTrue(any("llms.txt" in p and "ausente" in p for p in got), got)
+
+        self.w("llms.txt", "   \n")
+        got = C.check_llms_txt(self.site, self.posts)
+        self.assertTrue(any("llms.txt" in p for p in got), got)
+
+        target = Path(self.tmp.name) / "fora.txt"
+        target.write_text(self.VALID_LLMS, encoding="utf-8")
+        (self.site / "llms.txt").unlink()
+        os.symlink(target, self.site / "llms.txt")
+        got = C.check_llms_txt(self.site, self.posts)
+        self.assertTrue(any("symlink" in p or "simbólico" in p for p in got), got)
+
+    def test_missing_structure_or_required_section_fails(self):
+        cases = {
+            "sem H1": self.VALID_LLMS.replace("# Guilherme Favaron\n", ""),
+            "sem citacao": self.VALID_LLMS.replace("> Site oficial de Guilherme Favaron.\n", ""),
+            "sem secao Consultoria": self.VALID_LLMS.replace("## Consultoria\n\n- [Consultoria](https://guifav.dev/consultoria/): Consultoria em IA.\n\n", ""),
+            "secao vazia": self.VALID_LLMS.replace("- [Consultoria](https://guifav.dev/consultoria/): Consultoria em IA.\n", ""),
+        }
+        for name, content in cases.items():
+            with self.subTest(case=name):
+                self.w("llms.txt", content)
+                self.assertTrue(C.check_llms_txt(self.site, self.posts), name)
+
+    def test_broken_page_or_dir_without_slash_fails(self):
+        for bad_url in ("https://guifav.dev/nao-existe/", "https://guifav.dev/consultoria", "https://guifav.dev/assets/a.png"):
+            with self.subTest(url=bad_url):
+                self.w("llms.txt", self.VALID_LLMS + f"- [Ruim]({bad_url}): Quebrado.\n")
+                got = C.check_llms_txt(self.site, self.posts)
+                self.assertTrue(got, bad_url)
+
+    def test_noindex_page_in_llms_txt_fails(self):
+        # Página estática com noindex e página privada /blog/assinar/ com noindex.
+        for bad_url in ("https://guifav.dev/ferramentas/enviado/", "https://guifav.dev/blog/assinar/"):
+            with self.subTest(url=bad_url):
+                self.w("llms.txt", self.VALID_LLMS + f"- [Noindex]({bad_url}): Não pode entrar.\n")
+                got = C.check_llms_txt(self.site, self.posts)
+                self.assertTrue(any("noindex" in p or "privada" in p for p in got), got)
+
+    def test_index_false_or_podcast_post_in_llms_txt_fails(self):
+        # Mesmo se o HTML perdeu a meta noindex, o frontmatter index: false ou type: podcast barra o link.
+        (self.posts / "podado.md").write_text("---\ntitle: p\nslug: podado\nindex: false\n---\n", encoding="utf-8")
+        self.w("blog/podado/index.html", page("podado", robots=""))
+        (self.posts / "podcast.md").write_text("---\ntitle: ep\nslug: podcast\ntype: podcast\nindex: true\n---\n", encoding="utf-8")
+        self.w("blog/podcast/index.html", page("podcast", robots=""))
+        for slug in ("podado", "podcast"):
+            with self.subTest(slug=slug):
+                self.w("llms.txt", self.VALID_LLMS + f"- [Post](https://guifav.dev/blog/{slug}/): Não pode.\n")
+                got = C.check_llms_txt(self.site, self.posts)
+                self.assertTrue(got, slug)
+
+    def test_robots_blocked_404_external_canonical_or_old_domain_fails(self):
+        self.w("portfolio/mockups/a.html", page("m", robots=""))
+        self.w("robots.txt", "User-agent: *\nDisallow: /portfolio/mockups/\nSitemap: https://guifav.dev/sitemap.xml\n")
+        self.w("outra/index.html", '<!DOCTYPE html><html><head><link rel="canonical" href="https://guifav.dev/portfolio/"></head><body>x</body></html>')
+        self.w("blog/pagina/2/index.html", page("pag2", robots=""))
+        for bad_line in (
+            "- [Mockup](https://guifav.dev/portfolio/mockups/a.html): Bloqueado.\n",
+            "- [404](https://guifav.dev/404.html): Erro.\n",
+            "- [Canonical](https://guifav.dev/outra/): Outro canonical.\n",
+            "- [Paginacao](https://guifav.dev/blog/pagina/2/): Pagina 2.\n",
+            "- [Antigo](https://guilhermefavaron.com.br/p/x): Dominio antigo.\n",
+            "- [HTTP](http://guifav.dev/portfolio/): Sem HTTPS.\n",
+            "- [Relativo](/portfolio/): URL relativa não permitida.\n",
+            "- [Titulo ): falso](https://guifav.dev/portfolio/)\n",
+        ):
+            with self.subTest(line=bad_line):
+                self.w("llms.txt", self.VALID_LLMS + bad_line)
+                self.assertTrue(C.check_llms_txt(self.site, self.posts), bad_line)
+
+    def test_main_runs_check_llms_txt(self):
+        consts = Path(self.tmp.name) / "consts.ts"
+        consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
+        (self.site / "llms.txt").unlink()
+        err = io.StringIO()
+        with isolate_main_rule("check_llms_txt"), \
+                contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            code = C.main(["--site", str(self.site), "--posts", str(self.posts), "--consts", str(consts)])
+        self.assertEqual(code, 1)
+        self.assertIn("llms.txt", err.getvalue())
+
+
 # Regras chamadas por C.main() e o retorno neutro usado ao isolar uma delas (#147).
 MAIN_RULES = {
     "check": lambda *a, **k: [],
@@ -3557,6 +3694,7 @@ MAIN_RULES = {
     "check_post_ld": lambda *a, **k: [],
     "check_llm_ranking": lambda *a, **k: [],
     "check_legal": lambda *a, **k: [],
+    "check_llms_txt": lambda *a, **k: [],
     "check_seo": lambda *a, **k: ([], [], []),
 }
 

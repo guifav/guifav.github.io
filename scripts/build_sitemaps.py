@@ -98,6 +98,68 @@ def robots_disallow(robots_txt: str) -> list[str]:
     return out
 
 
+def _robots_pattern_matches(pattern: str, path: str) -> bool:
+    """Casamento de padrão robots.txt (RFC 9309): prefixo com suporte a '*' e '$' final."""
+    anchored = pattern.endswith("$")
+    body = pattern[:-1] if anchored else pattern
+    regex = "^" + ".*".join(re.escape(part) for part in body.split("*")) + ("$" if anchored else "")
+    return re.search(regex, path) is not None
+
+
+def robots_blocks(robots_txt: str, path: str, agent: str = "*") -> bool:
+    """True se robots.txt bloqueia `path` para `agent`, seguindo a RFC 9309.
+
+    Agente específico ignora o grupo '*' quando há grupo próprio; grupos repetidos do mesmo
+    agente se combinam; vence a regra de maior comprimento e, em empate, Allow vence Disallow.
+    """
+    groups: list[tuple[set[str], list[tuple[str, str]]]] = []
+    cur_agents: set[str] = set()
+    cur_rules: list[tuple[str, str]] = []
+    seen_rule = False
+    for raw in robots_txt.splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if ":" not in line:
+            continue
+        key, val = (s.strip() for s in line.split(":", 1))
+        key = key.lower()
+        if key == "user-agent":
+            if seen_rule:
+                groups.append((cur_agents, cur_rules))
+                cur_agents, cur_rules, seen_rule = set(), [], False
+            if val:
+                cur_agents.add(val.lower())
+        elif key in ("allow", "disallow"):
+            if cur_agents:
+                seen_rule = True
+                if val:
+                    cur_rules.append((key, val))
+    if cur_agents:
+        groups.append((cur_agents, cur_rules))
+
+    target = agent.lower()
+    rules: list[tuple[str, str]] = []
+    if target != "*":
+        for agents, grules in groups:
+            if target in agents:
+                rules.extend(grules)
+    if not rules and (target == "*" or not any(target in agents for agents, _ in groups)):
+        for agents, grules in groups:
+            if "*" in agents:
+                rules.extend(grules)
+
+    best_len = -1
+    best_allow = True
+    for kind, pattern in rules:
+        if not _robots_pattern_matches(pattern, path):
+            continue
+        plen = len(pattern)
+        is_allow = kind == "allow"
+        if plen > best_len or (plen == best_len and is_allow and not best_allow):
+            best_len = plen
+            best_allow = is_allow
+    return best_len >= 0 and not best_allow
+
+
 def noindex(robots: list[str]) -> bool:
     return any({d.strip() for d in c.split(",")} & {"noindex", "none"} for c in robots)
 
@@ -115,7 +177,7 @@ def canonical_is_self(canonicals: list[str], url: str) -> bool:
 def indexable_pages(site: Path) -> list[tuple[str, str]]:
     """(arquivo relativo ao _site, caminho publicado) das páginas fora do blog que entram no sitemap."""
     robots = site / "robots.txt"
-    disallow = robots_disallow(robots.read_text(encoding="utf-8")) if robots.is_file() else []
+    robots_txt = robots.read_text(encoding="utf-8") if robots.is_file() else ""
     out = []
     for f in sorted(site.rglob("*")):
         if not f.is_file() or f.suffix.lower() not in HTML_SUFFIXES:
@@ -124,7 +186,7 @@ def indexable_pages(site: Path) -> list[tuple[str, str]]:
         if rel.startswith("blog/") or rel == "404.html":
             continue
         url = page_url(rel)
-        if any(url.startswith(p) for p in disallow):
+        if robots_blocks(robots_txt, url):
             continue
         h = _Head()
         h.feed(f.read_text(encoding="utf-8"))

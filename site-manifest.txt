@@ -8,6 +8,7 @@ CNAME
 .nojekyll
 robots.txt
 # /sitemap.xml e /sitemap-site.xml são gerados no build (scripts/build_sitemaps.py).
+# /llms.txt é gerado no build (scripts/build_llms_txt.py).
 # Chave do IndexNow (scripts/indexnow.py), pública por exigência do protocolo.
 f43d1d074f05d2e83d6b8d0189bd29b3.txt
 favicon.ico
