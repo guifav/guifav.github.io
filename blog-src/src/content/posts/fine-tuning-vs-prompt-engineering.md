@@ -11,9 +11,9 @@ type: newsletter
 topics: [custos-e-modelos-de-ia]
 ---
 
-Durante o desenvolvimento de uma aplicação de análise de documentos financeiros para uma empresa parceira, enfrentei uma decisão crítica que muitos líderes técnicos conhecem bem: investir tempo e recursos em **fine-tuning** de um modelo específico ou focar em **[prompt engineering](/blog/engenharia-de-prompt-guia-completo/)** sofisticado para maximizar a performance de foundation models existentes.
+Comece pelo **[prompt engineering](/blog/engenharia-de-prompt-guia-completo/)**, com exemplos few-shot, e reserve o **fine-tuning** para tarefas específicas de domínio, com requisitos estáveis, dados de qualidade e volume alto e previsível. Cheguei a esse critério desenvolvendo, com o time, uma aplicação de análise de documentos financeiros para uma empresa parceira, quando precisei decidir entre investir tempo e recursos em fine-tuning de um modelo específico ou em prompt engineering sofisticado sobre foundation models existentes.
 
-A resposta não foi simples nem definitiva. Após seis meses de implementação e comparação de ambas as abordagens, descobri que a escolha certa depende de fatores muito mais nuanceados que a intuição inicial sugere. O fine-tuning trouxe 23% de melhoria na precisão para tarefas específicas, enquanto prompt engineering avançado alcançou 89% dessa melhoria com investimento 10x menor.
+Após seis meses de implementação e comparação de ambas as abordagens, descobri que a escolha certa depende de fatores muito mais nuanceados que a intuição inicial sugere. O fine-tuning trouxe 23% de melhoria na precisão para tarefas específicas, enquanto prompt engineering avançado alcançou 89% dessa melhoria com investimento 10x menor.
 
 Este artigo compartilha o framework de decisão desenvolvido através dessa experiência, oferecendo critérios práticos para determinar quando cada abordagem oferece melhor retorno sobre investimento.
 
@@ -21,9 +21,9 @@ Se você tem dúvidas sobre os conceitos de fine-tuning e prompt engineering (en
 
 <div class="video"><iframe src="https://www.youtube-nocookie.com/embed/JNsPvmgOlrQ?rel=0" title="Vídeo do YouTube" loading="lazy" allow="fullscreen; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>
 
-## O espectro de customização: Entendendo as opções
+## Quais são as opções entre um prompt básico e o fine-tuning?
 
-A primeira lição importante é que fine-tuning e prompt engineering não são opções binárias, mas pontos em um espectro contínuo de customização de modelos de linguagem. Entre um prompt básico e fine-tuning completo existem várias estratégias intermediárias que podem oferecer o melhor custo-benefício.
+Fine-tuning e prompt engineering são pontos em um espectro contínuo de customização de modelos de linguagem. Entre um prompt básico e fine-tuning completo existem várias estratégias intermediárias que podem oferecer o melhor custo-benefício.
 
 ### Few-shot learning como meio-termo
 
@@ -35,11 +35,23 @@ Para a aplicação de documentos financeiros, implementamos few-shot learning co
 
 Outra estratégia intermediária que provou valiosa foi combinar prompt engineering com [retrieval](/blog/rag-knowledge-bases-corporativas-implementacao-pratica/) de exemplos dinâmico. O sistema seleciona automaticamente os exemplos mais relevantes para incluir no prompt baseado na similaridade com a query atual, oferecendo contextualização adaptativa sem sobrecarga de fine-tuning.
 
+Com os números do caso, as duas pontas do espectro se comparam assim:
+
+| Critério | Prompt engineering (com few-shot) | Fine-tuning |
+|---|---|---|
+| Tempo até produção | Dias a semanas; MVP em duas semanas no caso | 2 a 4 meses com preparação de dados; três meses no caso |
+| Melhoria de accuracy no caso | 20% com exemplos few-shot | 23% no domínio específico |
+| Quem implementa | Desenvolvedores com formação tradicional em software | Expertise especializada, infraestrutura de treinamento e MLOps |
+| Custo inicial | Menor | Significativamente maior; sem MLOps maduro, o custo oculto pode chegar a 5 a 10 vezes o aparente |
+| Custo por query | Maior | Menor, pelo uso mais eficiente de tokens |
+| Manutenção | Ajuste rápido do prompt; aproveita automaticamente modelos melhores | Re-training quando os dados mudam ou para aproveitar modelos novos |
+| Melhor cenário | Requisitos que mudam, reasoning flexível, várias áreas, volume variável | Domínio específico, requisitos estáveis, dados de qualidade, volume alto e previsível |
+
 No vídeo abaixo explico em detalhes algumas técnicas de engenharia de prompt:
 
 <div class="video"><iframe src="https://www.youtube-nocookie.com/embed/Cz-RRIui9mM?rel=0" title="Vídeo do YouTube" loading="lazy" allow="fullscreen; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>
 
-## Análise de custo-benefício: Além do investimento inicial
+## Quanto custa cada abordagem além do investimento inicial?
 
 ### Considerações de time-to-market
 
@@ -63,7 +75,7 @@ Para organizações sem MLOps maduros, o custo oculto de implementar fine-tuning
 
 Uma consideração frequentemente negligenciada é a sustentabilidade da performance ao longo do tempo. Modelos com fine-tuning podem degradar quando a distribuição dos dados muda, exigindo re-training periódico. Prompt engineering oferece mais flexibilidade para adaptações rápidas conforme os requirements evoluem.
 
-## Framework de decisão: Critérios práticos para escolha
+## Quais critérios decidem entre prompt engineering e fine-tuning?
 
 ### Especificidade da tarefa e expertise de domínio
 
@@ -86,7 +98,7 @@ A especificidade da tarefa é um dos indicadores mais confiáveis para decidir e
 
 A qualidade e quantidade de dados de treinamento disponível influencia dramaticamente a viabilidade do fine-tuning. Dados de baixa qualidade podem degradar a performance do modelo, enquanto quantidade insuficiente pode levar ao overfitting sem melhoria real.
 
-Nossa experiência mostrou que fine-tuning efetivo requer não apenas datasets grandes, mas dados que sejam representativos, bem rotulados e limpos com altos padrões. O custo da preparação de dados frequentemente excede o custo computacional do próprio treinamento.
+Nossa experiência mostrou que fine-tuning efetivo requer datasets grandes e também representativos, bem rotulados e limpos com altos padrões. O custo da preparação de dados frequentemente excede o custo computacional do próprio treinamento.
 
 Para muitos use cases empresariais, o esforço necessário para [criar datasets de treinamento de alta qualidade](/blog/tutorial-analise-de-dados-colab-python-ia/) pode ser melhor investido em prompt engineering sofisticado que aproveita documentação e exemplos existentes.
 
@@ -108,7 +120,7 @@ Modelos com fine-tuning introduzem complexidade operacional que se estende muito
 - Controle de versão mais fácil através de configurações baseadas em texto
 - Procedimentos de rollback diretos
 
-## Estratégias de implementação: Abordagens híbridas
+## Como combinar as abordagens numa estratégia híbrida?
 
 ### Caminho de aprimoramento progressivo
 
@@ -116,9 +128,16 @@ Uma estratégia particularmente efetiva é começar com prompt engineering sofis
 
 Implementamos este caminho na aplicação financeira, começando com prompts cuidadosamente elaborados, adicionando exemplos de few-shot para edge cases problemáticos, e finalmente fazendo fine-tuning apenas para tipos específicos de documentos onde o prompt engineering chegou ao limite da performance.
 
+| Situação | Próximo passo no caminho progressivo |
+|---|---|
+| Tarefa nova, requisitos ainda mudando ou reasoning flexível | Prompt engineering cuidadosamente elaborado |
+| O prompt funciona, mas falha em edge cases | Exemplos few-shot (12 exemplos representativos no caso) |
+| Os melhores exemplos variam conforme a pergunta | Retrieval-augmented prompting, com seleção automática por similaridade |
+| Vocabulário de domínio, formato estável, dados de qualidade e o prompt chegou ao limite | Fine-tuning só nos tipos de documento em que o prompt chegou ao limite |
+
 ### Metodologia de A/B testing
 
-Desenvolver capacidade para comparação sistemática entre abordagens é crucial para tomada de decisão baseada em dados. Nosso framework de testes compara não apenas métricas de accuracy, mas também latência, custo por query, overhead de manutenção e satisfação do usuário.
+Desenvolver capacidade para comparação sistemática entre abordagens é crucial para tomada de decisão baseada em dados. Nosso framework de testes compara métricas de accuracy, latência, custo por query, overhead de manutenção e satisfação do usuário.
 
 **Componentes do framework de teste:**
 
@@ -131,7 +150,7 @@ Desenvolver capacidade para comparação sistemática entre abordagens é crucia
 
 Nem prompt engineering nem fine-tuning são atividades de uma única vez. Ambas as abordagens se beneficiam de otimização contínua baseada em padrões de uso e feedback de performance. Estabelecer processos sistemáticos de melhoria é mais importante que a escolha inicial da abordagem.
 
-## Comparação de performance no mundo real
+## Como as duas abordagens se saíram no caso real?
 
 ### Case study: Pipeline de análise de documentos
 
@@ -163,7 +182,7 @@ A análise de custos ao longo de 3 meses mostrou pontos de cruzamento interessan
 
 Para aplicações com uso previsível e de alto volume, o fine-tuning eventualmente ofereceu melhor economia. Para use cases exploratórios com volume variável, prompt engineering manteve vantagens de custo durante todo o período de avaliação.
 
-## Considerações futuras: Evolução e adaptabilidade
+## Como a evolução dos modelos afeta cada abordagem?
 
 ### Impacto do avanço dos modelos
 
@@ -181,7 +200,7 @@ Conforme as aplicações escalam, os padrões de manutenção divergem significa
 - Fine-tuning: Crescimento de complexidade de infraestrutura, requisitos de expertise especializada
 - Abordagens híbridas: Complexidade balanceada com benefícios de flexibilidade
 
-## Recomendações estratégicas: Aplicação do framework
+## Como aplicar o framework de decisão?
 
 ### Desenvolvimento de matriz de decisão
 
@@ -204,13 +223,31 @@ Independentemente da abordagem principal escolhida, implementar estratégias de 
 - Projetar arquiteturas que suportem ambas as abordagens
 - Estabelecer frameworks de teste que possam comparar abordagens objetivamente
 
-## Conclusão: Alinhamento estratégico sobre preferência tecnológica
+## O que deve pesar mais na escolha?
 
-A escolha entre fine-tuning e prompt engineering deve se alinhar com capacidades organizacionais, constraints de negócio e objetivos estratégicos em vez de preferências tecnológicas ou trends da indústria. Nenhuma abordagem é inerentemente superior - a efetividade depende do contexto específico e qualidade da implementação.
+A escolha entre fine-tuning e prompt engineering deve se alinhar com capacidades organizacionais, constraints de negócio e objetivos estratégicos em vez de preferências tecnológicas ou trends da indústria. Nenhuma abordagem é inerentemente superior: a efetividade depende do contexto específico e qualidade da implementação.
 
 O framework apresentado fornece critérios práticos para tomar decisões informadas, mas igualmente importante é desenvolver capacidade organizacional para executar qualquer abordagem efetivamente. Investimento em pessoas, processos e infraestrutura frequentemente importa mais que a escolha técnica específica.
 
 Para CTOs navegando essas decisões: foquem primeiro em definir claramente critérios de sucesso, avaliem honestamente sua prontidão organizacional para cada abordagem, e projetem sistemas que possam evoluir conforme requirements e capacidades mudam. A melhor solução hoje pode não ser a melhor solução amanhã, e flexibilidade é frequentemente mais valiosa que otimização marginal de performance.
+
+## Perguntas frequentes sobre fine-tuning, RAG e prompt engineering
+
+### Fine-tuning serve para ensinar fatos novos ou documentos internos atualizados ao modelo?
+
+Para conteúdo que muda, o caminho mais seguro é buscar a informação na hora da pergunta e colocá-la no contexto, como no retrieval-augmented prompting e no [RAG](/blog/rag-knowledge-bases-corporativas-implementacao-pratica/). No caso deste texto, o fine-tuning rendeu mais em vocabulário e cálculos específicos do domínio, e um modelo treinado pode degradar quando a distribuição dos dados muda, o que exige re-training periódico.
+
+### Quantos exemplos few-shot colocar no prompt?
+
+Na aplicação de documentos financeiros, 12 exemplos representativos, cobrindo os diferentes tipos de análise necessários, produziram resultados consistentes sem dataset de treinamento. Quando os melhores exemplos mudam conforme a pergunta, vale selecioná-los automaticamente por similaridade, como no retrieval-augmented prompting.
+
+### Posso combinar prompt engineering, RAG e fine-tuning?
+
+Pode, e foi o que fizemos. A aplicação começou com prompts, ganhou exemplos few-shot para os edge cases e recebeu fine-tuning só nos tipos de documento em que o prompt chegou ao limite. Projetar a arquitetura para suportar as abordagens juntas e manter um framework de testes que as compare objetivamente reduz o risco de uma escolha errada.
+
+### Com modelos mais novos, ainda faz sentido fazer fine-tuning?
+
+O prompt engineering aproveita automaticamente cada melhoria dos foundation models; as capacidades aprimoradas do ChatGPT 5.0 melhoraram significativamente nossos resultados de prompt engineering. Um modelo com fine-tuning baseado em arquitetura mais antiga precisa de re-training para aproveitar o avanço. O fine-tuning continua compensando em uso previsível e de alto volume, em que o custo menor por query paga o investimento inicial.
 
 ***
 

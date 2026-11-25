@@ -22,9 +22,20 @@ Os dados da empresa chegam à IA por dois caminhos. No primeiro, a empresa liga 
 <figcaption><em>Fig. 1. As fontes passam por uma camada única, com a identidade de quem pergunta e o registro de cada consulta, e servem aos dois caminhos.</em></figcaption>
 </figure>
 
+Na tabela abaixo comparo os dois caminhos nos pontos que as seções seguintes detalham.
+
+| Critério | MCP aberto no assistente | Aplicação de processo |
+|---|---|---|
+| Quem escreve a pergunta | A pessoa, do jeito que quiser | A aplicação, com a pergunta fixada (um filtro faz o papel da pergunta) |
+| Quem escolhe o modelo | O usuário, a cada conversa | A aplicação, que registra o modelo e a versão de prompt de cada resultado |
+| Quando o dado não serve | O resultado depende do modelo do dia e de como a pessoa pediu | A recusa é regra escrita e vale com qualquer modelo |
+| Quem garante a resposta | A pessoa que perguntou | A empresa, na pessoa que responde pelo processo |
+| Base comum | Mesmo dado, mesma identidade e mesmo registro de consultas | Mesmo dado, mesma identidade e mesmo registro de consultas |
+| Melhor uso | Descoberta e análise consumida por quem perguntou | Saída que vai para terceiros ou erro caro e difícil de desfazer |
+
 Organizei o argumento em seis seções. As duas primeiras mostram o que cada caminho entrega, com duas aplicações que construímos internamente como exemplo: uma que centraliza as fontes da empresa e as serve com a identidade de quem pergunta, e outra que avalia as ligações do time comercial. A seção 03 traz o critério que uso para escolher o caminho de cada processo, a 04 mapeia as alternativas que ficam entre os dois extremos, a 05 trata do que dá para garantir na entrada e na saída, e a 06 descreve a ordem de investimento que recomendo.
 
-## 01. O MCP aberto é o laboratório mais barato que uma empresa pode montar
+## 01. Por que o MCP aberto é o laboratório mais barato que uma empresa pode montar?
 
 Quem tem uma pergunta nova chega à resposta no mesmo dia, sem fila de desenvolvimento e sem especificação. E cada consulta que o assistente faz fica registrada no servidor MCP, com quem perguntou e o que foi consultado.
 
@@ -42,7 +53,7 @@ A garantia do caminho aberto acaba quando o dado sai do servidor. A resposta é 
 <figcaption><em>Fig. 2. A mesma pergunta pelos dois caminhos. No Claude Desktop, quem pergunta escreve o prompt e precisa garantir que a resposta esteja correta. No app interno, o filtro faz o papel da pergunta, a receita sai pela definição oficial e a empresa garante o número.</em></figcaption>
 </figure>
 
-## 02. A aplicação pode se recusar a responder
+## 02. Por que a aplicação pode se recusar a responder?
 
 A aplicação que construímos internamente para avaliar as ligações do time comercial começa decidindo se a ligação pode ser avaliada. Quando a gravação é uma caixa postal, um silêncio, só uma saudação, um atendimento automático ou uma conversa interna entre colegas, ela devolve o motivo e nenhuma nota. Num assistente aberto via MCP, o destino dessas gravações depende do modelo do dia e de como a pessoa pediu: quem pede uma nota tende a receber uma nota, com justificativa. Na aplicação, a recusa é regra escrita e vale para toda ligação, com qualquer modelo. De tudo que essa aplicação faz, considero a recusa o que mais a separa de um assistente de uso livre.
 
@@ -56,13 +67,20 @@ A nota orienta o desenvolvimento de cada vendedor, e quem a recebe não tem como
 
 O vendedor vê uma nota e um comentário. A aplicação decidiu por ele quando avaliar e com qual régua. Se a nota estiver errada, responde a empresa, na pessoa que assina a rubrica. Toda aplicação de processo precisa desse nome: alguém que responde pelo processo e pelos critérios de aceite, e que decide o que muda quando uma correção é aceita.
 
-## 03. O critério para escolher o caminho de cada processo
+## 03. Qual critério usar para escolher o caminho de cada processo?
 
 Uso dois eixos para decidir o destino de cada processo. O primeiro é quem consome a saída. Se é a própria pessoa que perguntou, e ela sabe contestar o número e voltar à fonte, o caminho aberto serve. Se a saída vai para um cliente, para o conselho, para um regulador, para a avaliação de alguém ou para outro sistema, quem a recebe não tem como auditar como a pergunta foi feita, e a empresa precisa fixar a pergunta por ele.
 
 O segundo é o custo do erro, somado à dificuldade de percebê-lo e de desfazê-lo. Um relatório regulatório anual pede o mesmo rigor de um pagamento mensal, mesmo acontecendo doze vezes menos.
 
 Os dois eixos dão quatro destinos. Com a saída nas mãos de quem perguntou e erro barato, o MCP aberto basta. Saída para terceiros com erro barato pede instruções curadas, que fixam definição e formato. Erro caro nas mãos de quem perguntou pede aprovação humana antes da decisão. As duas coisas juntas pedem aplicação. A frequência entra depois e decide se vale investir em construir, e a maturidade decide quando um processo muda de destino.
+
+| Quem consome a saída | Custo do erro | Destino | Exemplos |
+|---|---|---|---|
+| Quem perguntou | Baixo | MCP aberto | Diretor explorando o pipeline antes de uma reunião interna; analista investigando uma queda de receita |
+| Terceiros | Baixo | MCP aberto com instruções curadas | Relatório recorrente para a liderança |
+| Quem perguntou | Alto | MCP aberto com aprovação humana antes da decisão | Gerente que vai usar os números para renegociar um contrato grande |
+| Terceiros | Alto | Aplicação de processo | Avaliação de ligações, qualificação de leads que grava no CRM, cálculo de comissão, proposta ao cliente |
 
 <figure>
 <a href="/blog/img/mcp-ou-aplicacao-dados-da-empresa-na-ia/04-criterio-1456.webp"><img src="/blog/img/mcp-ou-aplicacao-dados-da-empresa-na-ia/04-criterio-1456.webp" srcset="/blog/img/mcp-ou-aplicacao-dados-da-empresa-na-ia/04-criterio-728.webp 728w, /blog/img/mcp-ou-aplicacao-dados-da-empresa-na-ia/04-criterio-1456.webp 1456w" sizes="(max-width: 760px) 100vw, 720px" width="1456" height="816" alt="Animação de uma matriz de decisão. Eixo horizontal: quem consome a saída, da própria pessoa a cliente, conselho ou sistema. Eixo vertical: custo do erro, de baixo a alto. Quadrantes: MCP aberto, com explorar o pipeline e investigar uma queda; MCP aberto mais instruções curadas; MCP aberto mais aprovação humana, com renegociar contrato grande; e aplicação de processo, com proposta ao cliente, avaliação de ligações e cálculo de comissão. Uma pergunta avulsa sobre a semana sai do MCP aberto e chega ao quadrante das instruções curadas como relatório semanal à liderança, quando a mesma consulta aparece pela quarta semana seguida." loading="lazy" decoding="async"></a>
@@ -76,7 +94,7 @@ Não dá para codificar um processo que ninguém entende ainda, e construir a ap
 
 Os dois caminhos convivem na mesma empresa e muitas vezes no mesmo processo. O MCP é a camada de acesso e a aplicação é a camada de processo, e uma boa aplicação consome o mesmo MCP, com a mesma identidade e o mesmo registro, acrescentando as regras do processo. Quem investiu na fundação de dados e no acesso aberto já pagou boa parte da aplicação.
 
-## 04. Os caminhos entre os dois extremos
+## 04. Quais caminhos existem entre o MCP aberto e a aplicação?
 
 Entre o chat aberto e a aplicação completa existem caminhos que custam menos do que uma aplicação e garantem mais do que a pergunta livre no assistente. Instruções curadas dentro dos próprios assistentes, com prompts e arquivos de exemplo compartilhados por um time, são o meio-termo mais barato e o mais subestimado. Padronizam o modo de perguntar sem tirar as pessoas do assistente que elas já usam. Em [O prompt virou contrato](/blog/o-prompt-virou-contrato-mudancas-2022-2026/) mostrei que a instrução virou cláusula, e cláusula sem dono envelhece: sem alguém que mantenha e teste essas instruções, elas viram folclore em poucos meses.
 
@@ -94,7 +112,7 @@ Fine-tuning e modelos dedicados ficam fora dessa linha e entram por último. Em 
 <figcaption><em>Fig. 5. Cada passo para a direita troca flexibilidade por controle. As métricas certificadas valem para todos, e o modelo dedicado fica de fora até existirem tarefa estreita e avaliação pronta.</em></figcaption>
 </figure>
 
-## 05. Como garantir a entrada e a resposta
+## 05. Como garantir a entrada e a resposta?
 
 Na entrada, o controle tem quatro partes. As fontes precisam ser certificadas, com dono e data de atualização. A permissão por identidade, que descrevi na seção 01, precisa ser aplicada no servidor antes da consulta. Cada resposta precisa declarar de quando é o dado, porque uma réplica pode continuar respondendo normalmente com semanas de atraso. E documentos, emails, chamados e páginas da web que entram no contexto precisam ser tratados como conteúdo não confiável.
 
@@ -110,7 +128,7 @@ Na saída, as garantias vêm em camadas, e cada uma custa mais do que a anterior
 
 Por baixo das duas pontas fica a avaliação contínua: um conjunto de casos reais com a resposta esperada, rodado a cada troca de modelo ou de prompt e a cada fonte nova. Considero esse conjunto o ativo mais valioso de qualquer processo com IA, acima do prompt e do modelo, porque ele sobrevive a todas as trocas. Sem ele, a próxima versão do fornecedor muda o processo da empresa sem que ninguém perceba, e a aplicação passa a espalhar o erro com a mesma eficiência com que espalhava o acerto. As correções aceitas, como as das avaliações de ligações, são a melhor matéria-prima para esse conjunto.
 
-## 06. A ordem de investimento que recomendo
+## 06. Em que ordem recomendo investir?
 
 A fundação de dados vem primeiro, porque nenhum dos dois caminhos funciona sem ela. Em março deste ano descrevi [como consolidamos fontes fragmentadas numa plataforma pronta para IA](/blog/arquitetura-consolidacao-dados-ia-sem-reescrever-sistemas-legados/) sem reescrever nenhum sistema legado. Essa camada única, com identidade por usuário e registro de cada consulta, permite abrir o acesso com segurança e construir aplicações sobre o mesmo dado.
 
@@ -121,3 +139,21 @@ Um processo sobe para aplicação quando a resposta passa a ser usada por algué
 Esse conjunto continua rodando depois da entrega, a cada troca de modelo, porque é ele que avisa quando o fornecedor mudou o processo da empresa sem pedir licença.
 
 Na sua empresa, quantas das respostas que hoje saem de um chat já viraram entrega para alguém que não tem como conferi-las?
+
+## Perguntas frequentes sobre MCP aberto, RAG e aplicações de IA
+
+### RAG e MCP são concorrentes?
+
+Eles resolvem partes diferentes do problema. RAG é a técnica de buscar os trechos relevantes de uma coleção de documentos e colocá-los no contexto do modelo. O MCP é o protocolo que padroniza como o assistente chega a ferramentas e dados. Uma busca RAG pode ser exposta como ferramenta num servidor MCP, e uma aplicação de processo pode usar RAG por dentro. A decisão deste texto, sobre quem garante a resposta, vale para os dois. Para escolher entre RAG e consulta direta ao banco, comparei os dois em [RAG, contexto longo ou Text-to-SQL](/blog/rag-contexto-longo-ou-text-to-sql-teste-80-contratos/).
+
+### Quando vale começar pelo MCP aberto antes de construir uma aplicação?
+
+Quando o processo ainda não está claro. Codificar um fluxo que ninguém entende congela um fluxo ruim, e o MCP aberto, com permissão por identidade e registro de cada consulta, mostra quais perguntas voltam toda semana sobre as mesmas tabelas e com os mesmos filtros. Essas consultas recorrentes são os processos que já existem na prática e ainda não têm dono.
+
+### Como impedir que o assistente acesse dados fora do perfil de quem pergunta?
+
+A identidade de quem pergunta precisa chegar até o dado, e a permissão precisa ser aplicada no servidor, antes da consulta. Um servidor MCP que consulta tudo com uma conta técnica de acesso amplo entrega a cada usuário os dados de todos, e entrega o mesmo acesso a quem conseguir pôr uma instrução num texto que o modelo vá ler. Por isso documentos, emails, chamados e páginas da web que entram no contexto devem ser tratados como conteúdo não confiável.
+
+### Qual é o sinal de que um processo deve sair do MCP aberto e virar aplicação?
+
+O processo sobe para aplicação quando a resposta passa a ser usada por alguém que não fez a pergunta, ou quando o erro é caro ou difícil de desfazer. Antes de construir, monte o conjunto de casos reais que vai dizer se a aplicação acerta e nomeie a pessoa que responde pelo processo e pelos critérios de aceite.
