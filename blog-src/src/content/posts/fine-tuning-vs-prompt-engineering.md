@@ -243,7 +243,7 @@ Na aplicação de documentos financeiros, 12 exemplos representativos, cobrindo 
 
 ### Posso combinar prompt engineering, RAG e fine-tuning?
 
-Pode, e foi o que fizemos. A aplicação começou com prompts, ganhou exemplos few-shot para os edge cases e recebeu fine-tuning só nos tipos de documento em que o prompt chegou ao limite. Projetar a arquitetura para suportar as abordagens juntas e manter um framework de testes que as compare objetivamente reduz o risco de uma escolha errada.
+Pode. Na aplicação de documentos financeiros, combinamos prompts, exemplos few-shot para os edge cases, seleção dinâmica de exemplos por similaridade (retrieval-augmented prompting) e fine-tuning só nos tipos de documento em que o prompt chegou ao limite. O RAG entra na mesma combinação quando o modelo precisa de documentos atualizados no contexto, e funciona também sobre um modelo que passou por fine-tuning. Projetar a arquitetura para suportar as abordagens juntas e manter um framework de testes que as compare objetivamente reduz o risco de uma escolha errada.
 
 ### Com modelos mais novos, ainda faz sentido fazer fine-tuning?
 

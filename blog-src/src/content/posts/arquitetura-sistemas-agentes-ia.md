@@ -43,7 +43,7 @@ Nesta nova era de Interação Agente-Computador, os profissionais de IA devem es
 |---|---|---|
 | Como o agente age | Chamadas de função e APIs, de forma programática | Controla o cursor, insere dados e navega como um usuário humano |
 | Eficiência | Maior, porque evita renderizar interfaces | Potencialmente mais lenta |
-| Supervisão humana | Depende do que o sistema registra das chamadas | Humanos acompanham e controlam melhor as ações |
+| Supervisão humana | Menor transparência que a interface visual | Humanos acompanham e controlam melhor as ações |
 | Limitação principal | Qualidade e cobertura da API variam | Velocidade |
 | Quando usar | Tarefas bem definidas e de alto volume | Tarefas que pedem supervisão humana cuidadosa |
 

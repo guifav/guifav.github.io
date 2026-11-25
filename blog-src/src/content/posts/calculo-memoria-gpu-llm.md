@@ -12,9 +12,9 @@ topics: [custos-e-modelos-de-ia]
 
 Em quase todas as conversas sobre LLM que tenho, aparece a mesma pergunta: *“Quanta memória GPU é necessária para rodar um Large Language Model (LLM)?”*
 
-A resposta sai de uma conta curta com três entradas: o número de parâmetros do modelo, a precisão em que ele é carregado (16 ou 32 bits) e uma sobrecarga de 20% para a inferência. Por essa conta, um LLaMA de 70 bilhões de parâmetros em 16 bits pede cerca de 168 GB de memória de GPU, mais do que uma A100 de 80 GB comporta.
+A resposta sai de uma conta curta com três entradas: o número de parâmetros do modelo, a precisão em que ele é carregado (16 ou 32 bits) e uma sobrecarga de 20% para a inferência. Por essa conta, um LLaMA de 70 bilhões de parâmetros em 16 bits pede cerca de 168 GB de memória de GPU, o que exige pelo menos três A100 de 80 GB.
 
-Saber fazer essa estimativa mostra quanto você entende da implantação e da escalabilidade desses modelos em produção. Vale para GPT, LLaMA, Claude ou qualquer outro LLM, de um modelo de 7B a algo muito maior: dimensionar o hardware antes de comprar ou alugar evita gargalo caro.
+Saber fazer essa estimativa mostra quanto você entende da implantação e da escalabilidade desses modelos em produção. Vale para GPT, LLaMA, Claude ou qualquer outro LLM, seja um modelo de 7B ou muito maior: dimensionar o hardware antes de comprar ou alugar evita gargalo caro.
 
 [Para mais informações sobre o papel das GPUs nos LLMs, acesse aqui.](/blog/desmistificando-gpus-em-ia-79e168b03ccd/)
 
@@ -112,8 +112,6 @@ Cruzando esses valores com a memória das placas mais comuns:
 | 48 GB | 70B (42 GB) | L40S, RTX 6000 Ada, RTX A6000 |
 | 80 GB | 70B com folga para contexto | A100 80 GB, H100 |
 
-Ao dominar esse cálculo, você estará preparado para responder a essa pergunta e, mais importante, evitar gargalos de hardware dispendiosos em suas implantações e inovações.
-
 ## Quando usar precisão de 16 bits e quando usar 32 bits?
 
 A gestão eficiente da memória GPU tornou-se um desafio crucial para desenvolvedores e pesquisadores. Um aspecto fundamental dessa otimização envolve a escolha da precisão numérica utilizada nos cálculos do modelo.
@@ -122,7 +120,7 @@ A gestão eficiente da memória GPU tornou-se um desafio crucial para desenvolve
 |---|---|---|
 | Bytes por parâmetro | 2 | 4 |
 | Memória de um LLaMA de 70B pela fórmula | 168 GB | 336 GB |
-| Precisão | Ligeira perda, aceitável na maioria das aplicações | Referência de precisão máxima |
+| Precisão | Ligeira perda; avalie se é aceitável para a aplicação | Referência de precisão máxima |
 | Fase em que costuma ser usada | Inferência | Treinamento |
 
 A escolha entre precisão de 16 bits e 32 bits depende de vários fatores:
@@ -134,7 +132,7 @@ A escolha entre precisão de 16 bits e 32 bits depende de vários fatores:
 
 ## O que esse cálculo muda na escolha de hardware e no custo?
 
-O cálculo tem implicações no mundo real. Uma única GPU NVIDIA A100 com 80 GB de memória não comporta o LLaMA de 70B em 16 bits. Duas A100 somam 160 GB, abaixo dos 168 GB da conta, então você precisaria de pelo menos três GPUs A100 de 80 GB para lidar com a carga de memória.
+O cálculo tem implicações no mundo real. Uma única GPU NVIDIA A100 com 80 GB de memória não comporta o LLaMA de 70B em 16 bits. Duas A100 somam 160 GB, abaixo dos 168 GB da conta, então você precisaria de pelo menos três GPUs A100 de 80 GB para lidar com a carga de memória. Na prática, como o paralelismo de tensor divide o modelo entre 2, 4 ou 8 GPUs, a configuração usual para esse caso é de quatro A100.
 
 E em que isso implica?
 

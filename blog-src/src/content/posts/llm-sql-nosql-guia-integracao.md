@@ -9,7 +9,7 @@ type: newsletter
 topics: [ia-sobre-dados-da-empresa]
 ---
 
-Para integrar um Modelo de Linguagem de Grande Escala (LLM) a bancos de dados SQL e NoSQL, o modelo recebe a pergunta em linguagem natural, traduz em consulta SQL ou operação NoSQL, executa por uma camada de API com autenticação e controle de acesso, e converte o resultado em texto ou visualização. O que separa um piloto de um sistema em produção é o que vem em volta: dados preparados, validação de cada consulta gerada contra injeção SQL, limites de execução, auditoria e métricas de qualidade.
+Para integrar um Modelo de Linguagem de Grande Escala (LLM) a bancos de dados SQL e NoSQL, o modelo recebe a pergunta em linguagem natural, traduz em consulta SQL ou operação NoSQL, executa por uma camada de API com autenticação e controle de acesso, e converte o resultado em texto ou visualização. Um sistema em produção pede, além disso, dados preparados, validação de cada consulta gerada contra injeção SQL, limites de execução, auditoria e métricas de qualidade.
 
 Este guia organiza a integração em três níveis: o estratégico, que trata do porquê; o tático, com tecnologias, arquitetura e casos de uso; e o operacional, da preparação dos dados às métricas. Se a sua dúvida for entre consultar o banco e buscar em documentos, comparei Text-to-SQL, RAG e contexto longo num [teste com 80 contratos](/blog/rag-contexto-longo-ou-text-to-sql-teste-80-contratos/).
 
@@ -361,7 +361,7 @@ A camada de API serve como a interface crucial entre o LLM e os bancos de dados,
    - Estratégias de Invalidação: Desenvolver estratégias eficientes para invalidação de cache, equilibrando frescor dos dados e performance.
    - Cache Client-Side: Implementar headers de cache apropriados para permitir caching eficiente no lado do cliente.
 
-### 3.3 Como integrar o LLM com segurança?
+### 3.3 Como adaptar o LLM e validar as consultas com segurança?
 
 A integração efetiva do LLM é crucial para traduzir consultas em linguagem natural em operações de banco de dados precisas e fornecer respostas contextualizadas.
 
@@ -561,7 +561,7 @@ Com controles em camadas: sanitização da entrada e validação semântica de c
 
 ### Quando consultar o banco com SQL e quando usar RAG sobre documentos?
 
-Para contar, somar ou filtrar registros, a consulta ao banco (Text-to-SQL) é a arquitetura indicada. No [teste que fiz com 80 contratos](/blog/rag-contexto-longo-ou-text-to-sql-teste-80-contratos/), o RAG respondeu que nenhum contrato vencia em março de 2027, quando eram 17, e a consulta SQL devolveu os 17. O RAG costuma servir para localizar um trecho em documentos, e a pergunta que mistura número e documento pede a consulta e a leitura encadeadas.
+Para contar registros, a consulta ao banco (Text-to-SQL) é a arquitetura indicada. No [teste que fiz com 80 contratos](/blog/rag-contexto-longo-ou-text-to-sql-teste-80-contratos/), o RAG respondeu que nenhum contrato vencia em março de 2027, quando eram 17, e a consulta SQL devolveu os 17. O RAG costuma servir para localizar um trecho em documentos, caso que aquele teste não mediu, e a pergunta que mistura número e documento pede a consulta e a leitura encadeadas.
 
 ### Como lidar com perguntas ambíguas em linguagem natural?
 

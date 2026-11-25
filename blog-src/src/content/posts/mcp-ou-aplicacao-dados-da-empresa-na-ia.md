@@ -22,8 +22,6 @@ Os dados da empresa chegam à IA por dois caminhos. No primeiro, a empresa liga 
 <figcaption><em>Fig. 1. As fontes passam por uma camada única, com a identidade de quem pergunta e o registro de cada consulta, e servem aos dois caminhos.</em></figcaption>
 </figure>
 
-Na tabela abaixo comparo os dois caminhos nos pontos que as seções seguintes detalham.
-
 | Critério | MCP aberto no assistente | Aplicação de processo |
 |---|---|---|
 | Quem escreve a pergunta | A pessoa, do jeito que quiser | A aplicação, com a pergunta fixada (um filtro faz o papel da pergunta) |

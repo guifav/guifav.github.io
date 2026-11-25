@@ -14,7 +14,7 @@ Se a sua empresa constrói software, mesmo que em pequena escala, o seu time de 
 
 Quero explicar isso de um jeito que serve tanto para o CEO que tem duzentos engenheiros em folha quanto para o fundador que contratou dois devs e uma assinatura de Claude Code. A confusão no ar é parecida nos dois casos: produtividade prometida que não chega, sênior reclamando de sobrecarga, júnior entregando rápido demais para o conforto de quem revisa, e uma sensação geral de que o time virou uma caixa preta que engole IA de um lado e cospe código do outro, sem que ninguém, inclusive o CTO, consiga dizer com precisão o que está acontecendo lá dentro.
 
-**Essa confusão tem nome, causa e caminho de saída.** Com agentes de IA gerando código mais rápido do que o time consegue revisar, o gargalo do software saiu da escrita de código e foi para a especificação, e o valor do time passou para o trabalho de orientar agentes e avaliar o que eles entregam. Entender isso virou diligência básica de qualquer liderança que tenha software dentro do negócio, inclusive fora da área de tecnologia.
+Com agentes de IA gerando código mais rápido do que o time consegue revisar, o gargalo do software saiu da escrita de código e foi para a especificação, e o valor do time passou para o trabalho de orientar agentes e avaliar o que eles entregam. Entender isso virou diligência básica de qualquer liderança que tenha software dentro do negócio, inclusive fora da área de tecnologia.
 
 ## Para onde foi o gargalo do desenvolvimento de software com IA?
 
@@ -102,7 +102,7 @@ Um teste mais útil em 2026 que tenho aplicado nos processos de recrutamento é:
 |---|---|---|
 | Habilidade que diferencia | Velocidade para escrever código | Pensamento arquitetural e julgamento sob incerteza |
 | Qualidade | Code review depois que o código existe | Especificação precisa a ponto de a IA não interpretar errado e testes que capturem alucinações antes da produção |
-| Teste técnico | Escrever uma busca binária em trinta minutos | Especificação, sistema legado indo a meia-boca e um agente de IA à disposição |
+| Teste técnico | Escrever uma busca binária em trinta minutos | Especificação vaga, sistema legado indo a meia-boca e um agente de IA à disposição |
 
 ## O que é dívida cognitiva e como evitá-la?
 
@@ -136,9 +136,9 @@ Os melhores fundadores e CEOs que eu conheço não estão em pânico com isso. E
 
 ## Perguntas frequentes sobre desenvolvimento de software com IA
 
-### A IA diminui o time de engenharia?
+### Por que a IA sobrecarrega os seniores e ameaça os mid-levels?
 
-Nos times que adotaram IA de forma séria, o trabalho muda antes do tamanho do time. As pessoas continuam as mesmas, e o tempo delas sai da escrita de código e vai para especificação, revisão e supervisão de agentes. Seniores passam o dia revisando, juniores entregam mais rápido e mid-levels precisam ser re-treinados, e cada grupo pede plano de carreira, metas e compensação próprios.
+Juniores e agentes geram código dez vezes mais rápido, e todo esse código precisa de revisão arquitetural antes de ir para produção, o que transforma o sênior em controlador de tráfego aéreo e leva ao burnout. O mid-level, com três a cinco anos de experiência, tem vícios de quem escreve sintaxe e ainda não é arquiteto, e re-treiná-lo para supervisionar agentes é o desafio organizacional mais duro. Tratar os dois grupos com as mesmas metas, remuneração e plano de carreira perde os seniores para o burnout e os mid-levels para a obsolescência.
 
 ### Como fazer o agente de IA respeitar o conhecimento tribal da empresa?
 
@@ -154,4 +154,4 @@ Agendando compreensão: rituais semanais de arquitetura conjunta, mesmo que o c�
 
 ### Como mudar o processo seletivo de desenvolvedores?
 
-Troque o teste que mede velocidade de escrita, como uma busca binária em trinta minutos, por um que reproduza o trabalho real: uma especificação, um sistema legado funcionando mal e um agente de IA à disposição, e observe como a pessoa resolve.
+Troque o teste que mede velocidade de escrita, como uma busca binária em trinta minutos, por um que reproduza o trabalho real: uma especificação vaga, um sistema legado funcionando mal e um agente de IA à disposição, e observe como a pessoa resolve.

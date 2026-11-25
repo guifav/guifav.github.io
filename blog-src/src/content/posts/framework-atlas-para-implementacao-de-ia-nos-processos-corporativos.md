@@ -10,9 +10,9 @@ type: newsletter
 topics: [implantacao-de-ia]
 ---
 
-Para implementar IA nos processos de uma empresa, o **Framework ATLAS (Adaptive Transformation and Leveraging of AI Systems)**, que desenvolvi, organiza o trabalho em quatro blocos: os dez requisitos que a implementação precisa atender, as etapas de um projeto de IA, os cinco componentes de cada solução (input, modelo de IA, processamento, output e apresentação), cada um com as perguntas que a empresa deve responder antes de construir, e o caminho de implementação, entre oito opções como desenvolvimento interno, SaaS, consultoria e modelos híbridos.
+Para implementar IA nos processos de uma empresa, o **Framework ATLAS (Adaptive Transformation and Leveraging of AI Systems)**, que desenvolvi, organiza o trabalho em seis blocos: os dez requisitos que a implementação precisa atender, as etapas de um projeto de IA, os cinco componentes de cada solução (input, modelo de IA, processamento, output e apresentação), cada um com as perguntas que a empresa deve responder antes de construir, os nove pilares de aplicação, as dez categorias de desafios e o caminho de implementação, entre oito opções como desenvolvimento interno, SaaS, consultoria e modelos híbridos.
 
-Antes do framework, o artigo apresenta os componentes básicos e adicionais da IA nas empresas, os principais tipos de modelos e como eles funcionam. Depois dele, mapeia nove pilares de aplicação e dez categorias de desafios. O objetivo é dar a líderes empresariais e profissionais de tecnologia um roteiro para levar a IA aos processos de negócio com critério.
+Antes do framework, o artigo apresenta os componentes básicos e adicionais da IA nas empresas, os principais tipos de modelos e como eles funcionam. O objetivo é dar a líderes empresariais e profissionais de tecnologia um roteiro para levar a IA aos processos de negócio com critério.
 
 ## Quais são os componentes básicos da IA nas empresas?
 
@@ -1106,7 +1106,7 @@ Exemplo: Uma instituição financeira combina o desenvolvimento interno de algor
 
 A implementação de Inteligência Artificial nas empresas representa uma jornada complexa e multifacetada, repleta de oportunidades e desafios. À medida que a IA continua a evoluir e se tornar mais integrada aos processos de negócios, as organizações devem adotar uma abordagem estratégica e holística para sua implementação.
 
-Os pilares de aplicações de IA que destaquei neste artigo, como a automação de processos e a sustentabilidade, demonstram o vasto potencial da IA para transformar praticamente todos os aspectos das operações empresariais. No entanto, os desafios associados à implementação de IA, que vão desde questões técnicas e éticas até considerações financeiras e culturais, não podem ser subestimados.
+Os pilares de aplicações de IA que destaquei neste artigo, como a automação de processos e a sustentabilidade, demonstram o vasto potencial da IA para transformar praticamente todos os aspectos das operações empresariais. No entanto, os desafios associados à implementação de IA, como as questões técnicas, éticas, financeiras e culturais, não podem ser subestimados.
 
 A IA é um catalisador fundamental para a inovação e competitividade nos negócios do século XXI. As empresas que conseguirem navegar com sucesso pelos desafios da implementação de IA e aproveitar seu potencial transformador estarão bem posicionadas para liderar em suas respectivas indústrias.
 
@@ -1128,4 +1128,4 @@ SaaS entrega rápido e com menor custo inicial, ao preço de menos controle e pe
 
 ### Como tratar LGPD e ética na implementação de IA?
 
-O framework trata as duas como requisitos desde o primeiro dia: a empresa usa só dados permitidos e éticos, avalia as implicações de privacidade antes da coleta, cumpre a LGPD e as regras do setor, garante transparência e explicabilidade nas decisões e define quem responde pelas decisões e ações dos sistemas de IA.
+O framework trata as duas como requisitos: a empresa usa só dados permitidos e éticos, avalia as implicações de privacidade antes da coleta, cumpre a LGPD e as regras do setor, garante transparência e explicabilidade nas decisões e define quem responde pelas decisões e ações dos sistemas de IA.
