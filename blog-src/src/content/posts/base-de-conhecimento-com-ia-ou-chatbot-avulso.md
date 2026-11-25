@@ -2,14 +2,14 @@
 title: "Base de conhecimento com IA ou chatbot avulso: o teste"
 subtitle: "Fiz as mesmas 25 perguntas sobre as regras de uma empresa fictícia a três funcionários usando chatbot por conta própria, a um projeto compartilhado e a uma base governada. O chatbot avulso acertou 17 de 45 respostas sobre regras, e os outros dois acertaram as 45."
 description: "Testei chatbot avulso, projeto compartilhado e base de conhecimento governada em 25 perguntas com gabarito: acerto, versão antiga, vazamento e custo em tokens."
-summary: "Num teste com 24 documentos de uma empresa fictícia, funcionários usando chatbot por conta própria acertaram 17 de 45 respostas sobre regras, 15 delas com regra revogada, e em nenhuma das 15 regras os três ouviram a mesma resposta. Projeto compartilhado e base governada acertaram as 45 sem vazar dado restrito. A base governada usou um quinto dos tokens e não revelou que o documento confidencial existia."
+summary: "Num teste com 24 documentos de uma empresa fictícia, funcionários usando chatbot por conta própria acertaram 17 de 45 respostas sobre regras e deram regra revogada ou substituída em 15, e em nenhuma das 15 regras os três ouviram a mesma resposta. Projeto compartilhado e base governada acertaram as 45 sem vazar dado restrito. A base governada usou um quinto dos tokens e não revelou que o documento confidencial existia."
 date: 2026-11-25T18:00:00Z
 slug: base-de-conhecimento-com-ia-ou-chatbot-avulso
 type: newsletter
 topics: [ia-sobre-dados-da-empresa]
 ---
 
-Ontem publiquei aqui [quanto custa rodar IA sobre os dados da empresa](/blog/quanto-custa-rodar-ia-sobre-dados-da-empresa/). A simulação mostrou que, com 200 consultas por pessoa no mês, a assinatura por usuário do ChatGPT Business ou do Claude Team custa menos do que uma aplicação própria em API até 104 usuários. Aquela conta comparou preço e deixou de fora o que cada funcionário recebe como resposta quando pergunta a regra da empresa. Neste texto eu medi essa parte, com um teste que qualquer pessoa pode repetir.
+Ontem publiquei aqui [quanto custa rodar IA sobre os dados da empresa](/blog/quanto-custa-rodar-ia-sobre-dados-da-empresa/). A simulação mostrou que, com 200 consultas por pessoa no mês, a assinatura por usuário do ChatGPT Business ou do Claude Team, no mix de assentos Standard e Premium, custa menos do que uma aplicação própria em API até 104 usuários. Aquela conta comparou preço e deixou de fora o que cada funcionário recebe como resposta quando pergunta a regra da empresa. Neste texto eu medi essa parte, com um teste que qualquer pessoa pode repetir.
 
 Montei uma empresa fictícia com 24 documentos, entre eles versões antigas que ninguém apagou, atas que mudaram regras e três arquivos confidenciais, e fiz as mesmas 25 perguntas em três arranjos: cada funcionário usando um chatbot com os arquivos que tem na própria pasta, um projeto compartilhado com todos os arquivos, e uma base governada que só entrega o que está vigente e o que o perfil da pessoa pode ver. Organizei o resultado em sete partes: o que acontece com três funcionários sem base comum, o que os estudos públicos dizem sobre o uso avulso, o método do teste, a tabela de resultados, o que o projeto compartilhado resolve, o controle de acesso e a conta de custo. No fim ficam os limites e as perguntas frequentes.
 
@@ -64,17 +64,17 @@ Os três cenários usaram o mesmo modelo, o Claude Sonnet 5.5, chamado pelo Clau
 | Tempo de resposta da API (mediana) | 1,9 s | 2,7 s | 1,4 s |
 | Custo de modelo por mil perguntas (Sonnet 5.5, médias) | US$ 3,10 | US$ 14,33 | US$ 3,91 |
 
-O chatbot avulso perdeu em todas as classes de regra, e o pior resultado veio onde a regra tinha mudado por ata ou aditivo, com 3 acertos em 15. Quem tinha só o documento principal recebeu a regra anterior à mudança, e os três acertos vieram da Carla, que guardava a ata ou o aditivo. A distribuição por pessoa acompanhou o acervo de cada uma: a Carla, que guarda as atas e os aditivos, acertou 9 das 15 regras, o Bruno acertou 6 e a Ana, com mais arquivos antigos, acertou 2.
+O chatbot avulso perdeu em todas as classes de regra, e o pior resultado veio onde a regra tinha mudado por ata ou aditivo, com 3 acertos em 15. Quem tinha só o documento principal recebeu a regra anterior à mudança, e os três acertos vieram da Carla, que guardava a ata ou o aditivo. A distribuição por pessoa acompanhou o acervo de cada uma: a Carla acertou 9 das 15 regras, o Bruno acertou 6 e a Ana, com mais arquivos antigos, acertou 2.
 
 O projeto compartilhado e a base governada empataram em acerto, em consistência e em citação. Com 24 documentos curtos e uma instrução para seguir a vigência mais recente, o modelo leu o acervo inteiro, reconheceu as versões substituídas e aplicou as atas em todas as 45 respostas, citando o arquivo certo. O ganho grande vem de colocar todo mundo para perguntar à mesma base, e um projeto bem instruído num acervo pequeno já entrega isso.
 
 ## O projeto compartilhado do ChatGPT Business ou do Claude Team resolve?
 
-Num acervo pequeno, resolve o acerto. A base governada levou vantagem no custo por pergunta e no tratamento do que é confidencial. O projeto mandou ao modelo uma mediana de 5.736 tokens de entrada por pergunta, contra 1.176 da base governada, porque cada pergunta carrega o acervo inteiro. Esse número cresce com cada arquivo novo, e num acervo real, com centenas de documentos, os arquivos deixam de caber inteiros e o produto passa a buscar trechos, o que este teste não mediu. A resposta do projeto também saiu mais longa (291 tokens de saída contra 114) e mais lenta (2,7 segundos contra 1,4 de mediana).
+Num acervo pequeno, resolve o acerto. A base governada levou vantagem no custo por pergunta e no tratamento do que é confidencial. O projeto mandou ao modelo uma mediana de 5.736 tokens de entrada por pergunta, contra 1.176 da base governada, porque cada pergunta carrega o acervo inteiro. Esse número cresce com cada arquivo novo, e num acervo real, com centenas de documentos, os arquivos deixam de caber inteiros no contexto e a ferramenta precisa buscar trechos, caso que este teste não mediu. A resposta do projeto também saiu mais longa (291 tokens de saída contra 114) e mais lenta (2,7 segundos contra 1,4 de mediana).
 
 Nas perguntas confidenciais, o projeto recusou as 30, inclusive as 15 em que o funcionário disse estar cobrindo o RH, e em todas confirmou que a informação existia: "a política de bônus 2026 é confidencial e restrita à Diretoria e ao RH". A base governada respondeu às mesmas 30 que não encontrou a informação, porque os três documentos confidenciais nunca chegaram ao modelo. Para quem pergunta, saber que existe uma política de bônus e quem pode lê-la já é informação.
 
-Considero a assinatura por usuário um bom primeiro passo quando a empresa troca o uso avulso por um projeto compartilhado com um acervo curado. Ela continua dependendo de alguém tirar do projeto as versões revogadas, e a permissão por documento fica a cargo do modelo, que lê o texto confidencial a cada pergunta e decide se responde.
+Considero a assinatura por usuário um bom primeiro passo quando a empresa troca o uso avulso por um projeto compartilhado com um acervo curado. Ela continua dependendo de alguém manter o acervo do projeto, e a permissão por documento fica a cargo do modelo, que lê o texto confidencial a cada pergunta e decide se responde.
 
 ## Como controlar quem pode ver qual dado quando a IA lê documentos internos?
 
