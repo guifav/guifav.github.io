@@ -1,7 +1,7 @@
 ---
 title: "Como a inteligência artificial vai transformar a liderança e os negócios no futuro"
 description: "A inteligência artificial, ou AI como é mais conhecida, é uma das tecnologias mais disruptivas e com maior potencial de transformação nos negócios e na sociedade nos próximos anos."
-summary: "A IA tem potencial para mudar os negócios tão profundamente quanto a eletricidade, com decisões guiadas por análises preditivas, marketing e vendas hiper-personalizados, automação de tarefas repetitivas e novos produtos e serviços. Para aproveitar esse potencial, líderes precisam combinar intuição humana com as recomendações da IA e garantir uso ético, com governança contra vieses e apoio à requalificação dos trabalhadores."
+summary: "A IA tem potencial para mudar os negócios tão profundamente quanto a eletricidade, com decisões guiadas por análises preditivas, marketing e vendas hiper-personalizados, automação de tarefas repetitivas e novos produtos e serviços. Para isso, líderes precisam combinar intuição humana com as recomendações da IA e garantir uso ético, com governança contra vieses, enquanto empresas e governo apoiam a requalificação dos trabalhadores."
 date: 2023-10-26T11:00:14.000Z
 updated: 2024-01-04T18:32:57.826Z
 slug: como-a-inteligencia-artificial-vai-transformar-a-lideranca-e-os-negocios-no-futuro
