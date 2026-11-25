@@ -588,6 +588,17 @@ class CheckTest(Base):
         self.w("blog/um-post/index.html", page('<a href="/blog/">b</a>', robots=ROBOTS_INDEX))
         self.assertTrue(any("index: false" in p for p in self.problems(pre_cutover=False)))
 
+    def test_worker_proxied_paths_pass_and_unknown_neighbors_fail(self):
+        # #166: /cursos/chatgpt-no-dia-a-dia é servido por Worker na Cloudflare (fora do _site).
+        self.w("cursos/index.html", page('<a href="/cursos/chatgpt-no-dia-a-dia">a</a>', robots=ROBOTS_NOINDEX))
+        self.assertEqual(self.problems(pre_cutover=False), [])
+        for bad in ("/cursos/chatgpt-no-dia-a-dia-outro", "/cursos/chatgpt-no-dia-a-dia/",
+                    "/cursos/chatgpt-no-dia-a-dia/aula-1", "/cursos/academia-ia"):
+            with self.subTest(bad=bad):
+                self.w("cursos/index.html", page(f'<a href="{bad}">a</a>', robots=ROBOTS_NOINDEX))
+                self.assertTrue(any("link interno quebrado" in p and bad in p
+                                    for p in self.problems(pre_cutover=False)))
+
 
 class FrontmatterTest(unittest.TestCase):
     def test_reads_slug_and_index(self):
@@ -885,6 +896,7 @@ class TitleAndGroupTest(unittest.TestCase):
                        ("ferramentas/planilha-custos-ia/x/index.html", None),
                        ("ferramentas/index.html", "ferramentas"),
                        ("ferramentas/llm-ranking/index.html", "ferramentas"), ("ferramentas/llm-ranking/x/index.html", None),
+                       ("cursos/index.html", "cursos"), ("cursos/x/index.html", None),
                        ("tools/index.html", None), ("tools/llm-ranking/index.html", None),
                        ("blog/pagina/x/index.html", None),
                        ("blog/a/b/index.html", None),
@@ -893,7 +905,7 @@ class TitleAndGroupTest(unittest.TestCase):
             with self.subTest(rel=rel):
                 self.assertEqual(E(rel), g)
         self.assertEqual(set(C.CONTENT_GROUPS), {"home", "portfolio", "insights-lista", "insights-artigo", "expert-insights",
-                                                 "materiais", "consultoria", "ferramentas", "legal"})
+                                                 "materiais", "consultoria", "ferramentas", "legal", "cursos"})
 
     def test_group_literal_and_define_vars(self):
         title = "<title>Guilherme Favaron | Builder e CTO</title>"
@@ -962,6 +974,12 @@ class TitleAndGroupTest(unittest.TestCase):
             html = self.doc("<title>Ferramentas | Guilherme Favaron</title>", self.GA + self.cfg(",{content_group:'materiais'}"))
             self.assertTrue(any("esperado ['ferramentas']" in p for p in self.check(rel, html)), rel)
 
+    def test_courses_page_is_cursos(self):
+        html = self.doc("<title>Cursos | Guilherme Favaron</title>", self.GA + self.cfg(",{content_group:'cursos'}"))
+        self.assertEqual(self.check("cursos/index.html", html), [])
+        bad = self.doc("<title>Cursos | Guilherme Favaron</title>", self.GA + self.cfg(",{content_group:'ferramentas'}"))
+        self.assertTrue(any("esperado ['cursos']" in p for p in self.check("cursos/index.html", bad)))
+
     def test_no_ga_no_group_needed(self):
         self.assertEqual(self.check("ferramentas/llm-ranking/index.html", self.doc("<title>LLM Ranking | Guilherme Favaron</title>")), [])
 
@@ -1015,7 +1033,7 @@ class ClaritySourcesTest(unittest.TestCase):
         return (self.REPO / rel).read_text(encoding="utf-8")
 
     def test_root_pages(self):
-        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES), *sorted(C.TOOLS_PAGES), *C.LEGAL_PAGES):
+        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES), *sorted(C.TOOLS_PAGES), C.COURSES_PAGE, *C.LEGAL_PAGES):
             with self.subTest(rel=rel):
                 t = self.read(rel)
                 self.assertIn(C.GA4_TAG, t)
@@ -1051,7 +1069,7 @@ class NamingSourcesTest(unittest.TestCase):
     """
 
     REPO = Path(__file__).resolve().parent.parent
-    FILES = ("index.html", "portfolio/index.html", "consultoria/index.html", "ferramentas/index.html", "404.html",
+    FILES = ("index.html", "portfolio/index.html", "consultoria/index.html", "ferramentas/index.html", "cursos/index.html", "404.html",
              "blog-src/src/layouts/Base.astro",
              "blog-src/src/layouts/PostList.astro", "blog-src/src/components/SubscribeForm.astro",
              "blog-src/src/pages/[slug].astro", "blog-src/src/pages/assinar.astro",
@@ -1327,6 +1345,7 @@ class GaHostGuardTest(unittest.TestCase):
                             (C.CONSULTING_PAGE, "gtag('config','G-K7Y87QNCX8'"),
                             *((p, "gtag('config','G-K7Y87QNCX8'") for p in sorted(C.MATERIAL_PAGES)),
                             *((p, "gtag('config','G-K7Y87QNCX8'") for p in sorted(C.TOOLS_PAGES)),
+                            (C.COURSES_PAGE, "gtag('config','G-K7Y87QNCX8'"),
                             *((p, "gtag('config','G-K7Y87QNCX8'") for p in C.LEGAL_PAGES),
                             ("blog-src/src/layouts/Base.astro", "gtag('config', GA4_ID")):
             with self.subTest(rel=rel):
@@ -1424,7 +1443,7 @@ class ConsentSourcesTest(unittest.TestCase):
     def test_consent_js_same_version_everywhere(self):
         src = re.search(r"CONSENT_SRC = '([^']+)'", self.read("blog-src/src/consts.ts")).group(1)
         self.assertRegex(src, r"^/assets/consent\.js\?v=\d{12}$")
-        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES), *sorted(C.TOOLS_PAGES), *C.LEGAL_PAGES):
+        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES), *sorted(C.TOOLS_PAGES), C.COURSES_PAGE, *C.LEGAL_PAGES):
             with self.subTest(rel=rel):
                 self.assertEqual(self.read(rel).count(f'<script src="{src}"></script>'), 1)
         self.assertEqual(self.read("blog-src/src/layouts/Base.astro").count(
@@ -1470,7 +1489,7 @@ class TrackingSourcesTest(unittest.TestCase):
         self.assertTrue(m)
         src = m.group(1)
         self.assertTrue(src.startswith(C.TRACK_PATH + "?v="))
-        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES), *sorted(C.TOOLS_PAGES), *C.LEGAL_PAGES):
+        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES), *sorted(C.TOOLS_PAGES), C.COURSES_PAGE, *C.LEGAL_PAGES):
             with self.subTest(rel=rel):
                 t = self.read(rel)
                 self.assertEqual(t.count(f'<script src="{src}"></script>'), 1)
@@ -1907,11 +1926,12 @@ class ToolsSourcesTest(unittest.TestCase):
         self.assertEqual(C.check_tools("ferramentas/index.html", self.read("ferramentas/index.html")), [])
         for rel in ("ferramentas/index.html", "ferramentas/mapa-decisao-ia/index.html", "ferramentas/planilha-custos-ia/index.html",
                     "ferramentas/llm-ranking/index.html", "ferramentas/seo-geo-aeo-framework/framework-seo-aeo.html",
+                    "cursos/index.html",
                     "blog-src/src/content/posts/livro-ia-inteligencia-artificial-portugues-gratuito.md"):
             with self.subTest(rel=rel):
                 self.assertTrue((self.REPO / rel).is_file())
         for rel in ("index.html", "404.html", "portfolio/index.html", "consultoria/index.html",
-                    "privacidade/index.html", "termos/index.html",
+                    "cursos/index.html", "privacidade/index.html", "termos/index.html",
                     "ferramentas/index.html", "ferramentas/llm-ranking/index.html",
                     "ferramentas/mapa-decisao-ia/index.html", "ferramentas/mapa-decisao-ia/enviado/index.html",
                     "ferramentas/planilha-custos-ia/index.html", "ferramentas/planilha-custos-ia/enviado/index.html",
@@ -2941,7 +2961,7 @@ class NavSourcesTest(unittest.TestCase):
         for must in ("index.html", "404.html", "portfolio/index.html", "consultoria/index.html",
                      "ferramentas/index.html", "ferramentas/llm-ranking/index.html",
                      "ferramentas/mapa-decisao-ia/index.html", "ferramentas/planilha-custos-ia/index.html",
-                     "privacidade/index.html", "termos/index.html",
+                     "cursos/index.html", "privacidade/index.html", "termos/index.html",
                      "blog-src/src/layouts/Base.astro"):
             self.assertIn(must, rels)
         for f in files:
@@ -3441,6 +3461,227 @@ class LegalSourcesTest(unittest.TestCase):
                 self.assertNotIn("/termos/", form, rel)
 
 
+class CoursesTest(unittest.TestCase):
+    """#166: /cursos/ existe com noindex, canonical próprio, título e link para /cursos/chatgpt-no-dia-a-dia, fora do sitemap;
+    /cursos/ aparece em todos os rodapés (fora /cursos/ e mockups) e nunca no menu principal."""
+
+    GA = TrackingTest.GA
+    FOOT_COURSES = '<footer><p><a href="/cursos/">Cursos</a></p></footer>'
+    NAV = '<nav aria-label="Principal"><a href="/portfolio/">Portfólio</a><a href="/consultoria/">Consultoria</a></nav>'
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.site = Path(self.tmp.name) / "_site"
+        self.site.mkdir()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def w(self, rel: str, content: str) -> None:
+        p = self.site / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content, encoding="utf-8")
+
+    def courses_doc(self, title: str = "Cursos | Guilherme Favaron", robots: str = ROBOTS_NOINDEX,
+                    canonical: str | None = "https://guifav.dev/cursos/",
+                    body: str = '<a href="/cursos/chatgpt-no-dia-a-dia">Abrir</a>',
+                    nav: str | None = None, foot: str = '<footer><p><a href="/">Início</a></p></footer>') -> str:
+        c = "" if canonical is None else f'<link rel="canonical" href="{canonical}">'
+        return (f'<!DOCTYPE html><html lang="pt-BR"><head><title>{title}</title>{robots}{c}{self.GA}</head>'
+                f'<body>{self.NAV if nav is None else nav}<main>{body}</main>{foot}</body></html>')
+
+    def build_valid_site(self) -> None:
+        self.w("cursos/index.html", self.courses_doc())
+        self.w("index.html", f"<!DOCTYPE html><html><head>{self.GA}</head><body>{self.NAV}{self.FOOT_COURSES}</body></html>")
+        self.w("404.html", f"<!DOCTYPE html><html><head></head><body>{self.NAV}{self.FOOT_COURSES}</body></html>")
+        self.w("portfolio/mockups/crm.html", "<!DOCTYPE html><html><head></head><body>mockup</body></html>")
+        self.w("sitemap-site.xml",
+               '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+               '<url><loc>https://guifav.dev/</loc><lastmod>2026-11-24T12:00:00-03:00</lastmod></url>'
+               "</urlset>")
+
+    def test_complete_site_passes(self):
+        self.build_valid_site()
+        self.assertEqual(C.check_courses(self.site), [])
+
+    def test_missing_page_or_listed_in_sitemap_fails(self):
+        self.build_valid_site()
+        (self.site / "cursos/index.html").unlink()
+        self.assertTrue(any("cursos/index.html" in p and "ausente" in p for p in C.check_courses(self.site)))
+
+        self.build_valid_site()
+        self.w("sitemap-site.xml",
+               '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+               '<url><loc>https://guifav.dev/</loc><lastmod>2026-11-24T12:00:00-03:00</lastmod></url>'
+               '<url><loc>https://guifav.dev/cursos/</loc><lastmod>2026-11-24T12:00:00-03:00</lastmod></url>'
+               "</urlset>")
+        self.assertTrue(any("sitemap-site.xml" in p and "/cursos/" in p for p in C.check_courses(self.site)))
+
+    def test_page_requirements_noindex_canonical_title_and_course_link(self):
+        for name, kw, needle in (
+            ("sem noindex", {"robots": ROBOTS_INDEX}, "noindex"),
+            ("sem meta robots", {"robots": ""}, "noindex"),
+            ("sem canonical", {"canonical": None}, "canonical"),
+            ("canonical errado", {"canonical": "https://guifav.dev/cursos"}, "canonical"),
+            ("título errado", {"title": "Cursos de IA | Guilherme Favaron"}, "o título precisa ser"),
+            ("sem link do curso", {"body": "<p>vazio</p>"}, "/cursos/chatgpt-no-dia-a-dia"),
+            ("link antigo da academia", {"body": '<a href="/cursos/academia-ia">1</a>'}, "/cursos/chatgpt-no-dia-a-dia"),
+            ("link do curso duplicado", {"body": '<a href="/cursos/chatgpt-no-dia-a-dia">1</a><a href="/cursos/chatgpt-no-dia-a-dia">2</a>'}, "/cursos/chatgpt-no-dia-a-dia"),
+            ("link do curso comentado", {"body": '<!-- <a href="/cursos/chatgpt-no-dia-a-dia">1</a> -->'}, "/cursos/chatgpt-no-dia-a-dia"),
+            ("link do curso hidden", {"body": '<a href="/cursos/chatgpt-no-dia-a-dia" hidden>1</a>'}, "/cursos/chatgpt-no-dia-a-dia"),
+            ("link do curso nofollow", {"body": '<a href="/cursos/chatgpt-no-dia-a-dia" rel="nofollow">1</a>'}, "rel=nofollow"),
+        ):
+            with self.subTest(case=name):
+                self.build_valid_site()
+                self.w("cursos/index.html", self.courses_doc(**kw))
+                got = C.check_courses(self.site)
+                self.assertTrue(any(needle in p for p in got), got)
+
+    def test_footer_and_nav_rules(self):
+        doc = lambda body: f"<!DOCTYPE html><html><head></head><body>{body}</body></html>"
+        self.assertEqual(C.check_courses_footer("index.html", doc(self.NAV + self.FOOT_COURSES)), [])
+        # <nav class="footer-tools"> dentro de <footer> não conta como menu principal.
+        in_footer_nav = '<footer><nav class="footer-tools"><a href="/cursos/">Cursos</a></nav></footer>'
+        self.assertEqual(C.check_courses_footer("index.html", doc(self.NAV + in_footer_nav)), [])
+        # <footer> dentro de <main> (como no framework-seo-aeo.html) funciona normalmente.
+        nested_footer = f"<main>{self.FOOT_COURSES}</main>"
+        self.assertEqual(C.check_courses_footer("ferramentas/seo-geo-aeo-framework/framework-seo-aeo.html", doc(nested_footer)), [])
+        # Mockups ficam fora da regra; /cursos/ não precisa de auto-link no rodapé, mas também não pode no menu.
+        self.assertEqual(C.check_courses_footer("portfolio/mockups/crm.html", doc("<p>x</p>")), [])
+        self.assertEqual(C.check_courses_footer("cursos/index.html", doc(self.NAV + "<footer></footer>")), [])
+        self.assertTrue(any("menu principal" in p for p in C.check_courses_footer(
+            "cursos/index.html", doc('<nav><a href="/cursos/">Cursos</a></nav><footer></footer>'))))
+
+        for name, body, needle in (
+            ("sem footer", "<main></main>", "sem <footer>"),
+            ("falta link", "<footer><a href='/'>Início</a></footer>", "uma vez, tem 0"),
+            ("duplicado", '<footer><a href="/cursos/">1</a><a href="/cursos/">2</a></footer>', "uma vez, tem 2"),
+            ("fora do footer", '<main><a href="/cursos/">Cursos</a></main><footer></footer>', "uma vez, tem 0"),
+            ("comentado", '<footer><!-- <a href="/cursos/">Cursos</a> --></footer>', "uma vez, tem 0"),
+            ("em template", '<footer><template><a href="/cursos/">Cursos</a></template></footer>', "uma vez, tem 0"),
+            ("em noscript", '<footer><noscript><a href="/cursos/">Cursos</a></noscript></footer>', "uma vez, tem 0"),
+            ("hidden no link", '<footer><a href="/cursos/" hidden>Cursos</a></footer>', "uma vez, tem 0"),
+            ("hidden no pai", '<footer><div hidden><a href="/cursos/">Cursos</a></div></footer>', "uma vez, tem 0"),
+            ("nofollow", '<footer><a href="/cursos/" rel="nofollow">Cursos</a></footer>', "rel=nofollow"),
+            ("no menu principal", '<nav><a href="/cursos/">Cursos</a></nav>' + self.FOOT_COURSES, "menu principal"),
+            ("no menu principal absoluto", '<nav><a href="https://guifav.dev/cursos/">Cursos</a></nav>' + self.FOOT_COURSES, "menu principal"),
+        ):
+            with self.subTest(case=name):
+                got = C.check_courses_footer("portfolio/index.html", doc(body))
+                self.assertTrue(any(needle in p for p in got), got)
+
+    def test_worker_paths_without_node(self):
+        # Garante a cobertura de WORKER_PATHS mesmo em ambientes sem Node (mock do resolvedor WHATWG).
+        from urllib.parse import urljoin, urlsplit
+
+        def fake_resolve(pairs):
+            out = []
+            for base, ref in pairs:
+                u = urlsplit(urljoin(base, ref))
+                out.append({"protocol": u.scheme + ":", "hostname": u.hostname or "", "pathname": u.path})
+            return out
+
+        self.assertEqual(C.WORKER_PATHS, frozenset({"/cursos/chatgpt-no-dia-a-dia"}))
+        self.build_valid_site()
+        posts = Path(self.tmp.name) / "posts"
+        posts.mkdir()
+        self.w("blog/index.html", page('<a href="/cursos/">Cursos</a>'))
+        self.w("blog/rss.xml", RSS)
+        self.w("blog/sitemap.xml", SITEMAP.format("<url><loc>https://guifav.dev/blog/</loc></url>"))
+        self.w("robots.txt", "User-agent: *\nDisallow: /portfolio/mockups/\n\nSitemap: https://guifav.dev/sitemap.xml\n")
+        self.w("sitemap.xml", SITEMAP_INDEX.format(
+            "<sitemap><loc>https://guifav.dev/sitemap-site.xml</loc></sitemap>"
+            "<sitemap><loc>https://guifav.dev/blog/sitemap.xml</loc></sitemap>"))
+        self.w("index.html", page('<a href="/cursos/">Cursos</a>', robots="", title=HOME_FIXTURE_TITLE))
+        self.w("cursos/index.html", page('<a href="/cursos/chatgpt-no-dia-a-dia">Curso</a>', robots=ROBOTS_NOINDEX))
+        self.w("404.html", page('<a href="/">home</a>', robots='<meta name="robots" content="noindex">'))
+        (self.site / "portfolio/mockups/crm.html").unlink()
+        with mock.patch.object(C, "resolve_urls", fake_resolve):
+            self.assertEqual(C.check(self.site, posts, pre_cutover=False), [])
+            for bad in ("/cursos/chatgpt-no-dia-a-dia-errado", "/cursos/chatgpt-no-dia-a-dia/",
+                        "/cursos/chatgpt-no-dia-a-dia/aula-1", "/cursos/academia-ia"):
+                with self.subTest(bad=bad):
+                    self.w("cursos/index.html", page(f'<a href="{bad}">Curso</a>', robots=ROBOTS_NOINDEX))
+                    got = C.check(self.site, posts, pre_cutover=False)
+                    self.assertTrue(any(f"link interno quebrado: {bad}" in p for p in got), got)
+
+    def test_main_runs_the_courses_rule(self):
+        consts = Path(self.tmp.name) / "consts.ts"
+        consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
+        err = io.StringIO()
+        with isolate_main_rule("check_courses"), \
+                contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            code = C.main(["--site", str(self.site), "--posts", str(self.tmp.name), "--consts", str(consts)])
+        self.assertEqual(code, 1)
+        self.assertIn("cursos/index.html: página de cursos ausente", err.getvalue())
+        self.build_valid_site()
+        with isolate_main_rule("check_courses"), \
+                contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(C.main(["--site", str(self.site), "--posts", str(self.tmp.name), "--consts", str(consts)]), 0)
+
+
+class CoursesSourcesTest(unittest.TestCase):
+    """#166: fontes reais da página /cursos/, manifesto, rodapés do site, traduções em inglês e ausência no menu."""
+
+    REPO = Path(__file__).resolve().parent.parent
+
+    def root_html_files(self) -> list[tuple[str, Path]]:
+        entries = [l.strip() for l in (self.REPO / "site-manifest.txt").read_text(encoding="utf-8").splitlines()
+                   if l.strip() and not l.startswith("#")]
+        files: list[Path] = []
+        for e in entries:
+            p = self.REPO / e
+            if e.endswith("/"):
+                files += sorted(f for f in p.rglob("*.html") if "mockups" not in f.parts)
+            elif e.endswith(".html"):
+                files.append(p)
+        return [(f.relative_to(self.REPO).as_posix(), f) for f in files]
+
+    def test_courses_page_in_manifest_and_passes_all_checks(self):
+        manifest = [l.strip() for l in (self.REPO / "site-manifest.txt").read_text(encoding="utf-8").splitlines()
+                    if l.strip() and not l.startswith("#")]
+        self.assertIn("cursos/", manifest)
+        html = (self.REPO / C.COURSES_PAGE).read_text(encoding="utf-8")
+        site_css = (self.REPO / "assets/site.css").read_text(encoding="utf-8")
+        self.assertEqual(C.check_titles_and_groups(C.COURSES_PAGE, html), [])
+        self.assertEqual(C.check_tracking(C.COURSES_PAGE, html), [])
+        self.assertEqual(C.check_ga_host_guard(C.COURSES_PAGE, html), [])
+        self.assertEqual(C.check_consent(C.COURSES_PAGE, html), [])
+        self.assertEqual(C.check_legal_footer(C.COURSES_PAGE, html), [])
+        self.assertEqual(C.check_courses_footer(C.COURSES_PAGE, html), [])
+        styles = re.findall(r"<style[^>]*>(.*?)</style>", html, flags=re.S | re.I)
+        self.assertEqual(C.contrast_problems([site_css, *styles]), [])
+        self.assertEqual(C.contrast_problems([site_css, *styles, ".course-status{background:var(--bg-card)}"]), [])
+        self.assertNotIn("\u2014", html)  # sem travessão
+        self.assertNotIn("\u2013", html)  # sem meia-risca
+        with tempfile.TemporaryDirectory() as d:
+            site = Path(d)
+            dst = site / C.COURSES_PAGE
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_text(html, encoding="utf-8")
+            (site / "sitemap-site.xml").write_text(
+                '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+                '<url><loc>https://guifav.dev/</loc><lastmod>2026-11-24T12:00:00-03:00</lastmod></url>'
+                "</urlset>", encoding="utf-8")
+            self.assertEqual(C.check_courses(site), [])
+
+    def test_every_root_page_and_blog_layout_has_courses_footer_and_english_label(self):
+        for rel, f in self.root_html_files():
+            html = f.read_text(encoding="utf-8")
+            with self.subTest(rel=rel):
+                self.assertEqual(C.check_courses_footer(rel, html), [])
+                if rel != C.COURSES_PAGE and 'id="lang-toggle"' in html:
+                    self.assertIn('"ft_courses": "Courses"', html)
+                    self.assertIn('href="/cursos/" hreflang="pt-BR" data-i18n="ft_courses"', html)
+                    en = json.loads(re.search(r'<script type="application/json" id="i18n-en">(.*?)</script>', html, re.S).group(1))
+                    self.assertEqual(en["ft_courses"], "Courses")
+        home = (self.REPO / "index.html").read_text(encoding="utf-8")
+        en_home = json.loads(re.search(r'<script type="application/json" id="i18n-en">(.*?)</script>', home, re.S).group(1))
+        self.assertEqual(en_home["tools_courses"], "Courses &#8594;")
+        base = (self.REPO / "blog-src/src/layouts/Base.astro").read_text(encoding="utf-8")
+        self.assertEqual(C.check_courses_footer("blog/index.html", base), [])
+
+
 class SummaryTest(Base):
     """#108: bloco 'Em resumo' acima de .post-body quando há summary e ausente quando não há, com contraste AA."""
 
@@ -3695,6 +3936,7 @@ MAIN_RULES = {
     "check_llm_ranking": lambda *a, **k: [],
     "check_legal": lambda *a, **k: [],
     "check_llms_txt": lambda *a, **k: [],
+    "check_courses": lambda *a, **k: [],
     "check_seo": lambda *a, **k: ([], [], []),
 }
 
