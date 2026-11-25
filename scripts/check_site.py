@@ -77,7 +77,7 @@ SITE_SCRIPT_ATTR = "data-site-script"
 BLOG_EXACT_SUFFIXES = {".html", ".xml"}
 BLOG_MEDIA_SUFFIXES = {".webp", ".png", ".jpg", ".jpeg", ".gif", ".avif", ".mp4", ".webm"}
 # Rotas sob guifav.dev servidas por Workers na Cloudflare, fora do _site/ do GitHub Pages (#146, #166).
-WORKER_PATHS = frozenset({"/cursos/academia-ia"})
+WORKER_PATHS = frozenset({"/cursos/chatgpt-no-dia-a-dia"})
 
 
 class ResolverError(Exception):
@@ -585,11 +585,11 @@ MATERIAL_PAGES = {f"ferramentas/{m}/{p}index.html" for m in MATERIALS for p in (
 TOOLS_INDEX_PAGE = "ferramentas/index.html"
 LLM_RANKING_PAGE = "ferramentas/llm-ranking/index.html"
 TOOLS_PAGES = {TOOLS_INDEX_PAGE, LLM_RANKING_PAGE}
-# Página de cursos (#166): publicada com noindex e fora do sitemap enquanto a Academia da IA está em atualização.
+# Página de cursos (#166): publicada com noindex e fora do sitemap enquanto o curso ChatGPT no dia a dia está em atualização.
 COURSES_PAGE = "cursos/index.html"
 COURSES_URL = "/cursos/"
 COURSES_TITLE = "Cursos" + TITLE_SEP + SITE_NAME
-ACADEMY_URL = "/cursos/academia-ia"
+CHATGPT_COURSE_URL = "/cursos/chatgpt-no-dia-a-dia"
 # Páginas legais na raiz (#146): Política de privacidade e Termos de uso, públicas, indexáveis e no sitemap.
 LEGAL_PAGES = ("privacidade/index.html", "termos/index.html")
 LEGAL_SPECS = (
@@ -2717,7 +2717,7 @@ def check_courses_footer(rel: str, html: str) -> list[str]:
 
 
 def check_courses(site: Path) -> list[str]:
-    """#166: /cursos/ existe com noindex, canonical próprio, título e link para /cursos/academia-ia, fora do sitemap;
+    """#166: /cursos/ existe com noindex, canonical próprio, título e link para /cursos/chatgpt-no-dia-a-dia, fora do sitemap;
     /cursos/ está nos rodapés do site e fora do menu principal."""
     problems: list[str] = []
     entries = _sitemap(site, "sitemap-site.xml", "urlset", "url", problems)
@@ -2733,7 +2733,7 @@ def check_courses(site: Path) -> list[str]:
         p.feed(html)
         p.close()
         if not any(_robots_noindex(r) for r in p.robots):
-            problems.append(f"{COURSES_PAGE}: página de cursos precisa de noindex enquanto a academia está em atualização")
+            problems.append(f"{COURSES_PAGE}: página de cursos precisa de noindex enquanto o curso está em atualização")
         if not p.canonicals or not canonical_is_self(p.canonicals, COURSES_URL):
             problems.append(f"{COURSES_PAGE}: página de cursos precisa de canonical próprio "
                             f"({SITE_ORIGIN}{COURSES_URL}), tem {p.canonicals}")
@@ -2745,12 +2745,12 @@ def check_courses(site: Path) -> list[str]:
         links = _CoursesLinks()
         links.feed(html)
         links.close()
-        academy = [r for h, r in links.found["main"] if h == ACADEMY_URL]
-        if len(academy) != 1:
-            problems.append(f"{COURSES_PAGE}: página de cursos precisa do link {ACADEMY_URL} uma vez em <main>, "
-                            f"tem {len(academy)}")
-        elif "nofollow" in academy[0]:
-            problems.append(f"{COURSES_PAGE}: link {ACADEMY_URL} em rel=nofollow")
+        course = [r for h, r in links.found["main"] if h == CHATGPT_COURSE_URL]
+        if len(course) != 1:
+            problems.append(f"{COURSES_PAGE}: página de cursos precisa do link {CHATGPT_COURSE_URL} uma vez em <main>, "
+                            f"tem {len(course)}")
+        elif "nofollow" in course[0]:
+            problems.append(f"{COURSES_PAGE}: link {CHATGPT_COURSE_URL} em rel=nofollow")
     for f in html_files(site):
         rel = f.relative_to(site).as_posix()
         problems += check_courses_footer(rel, f.read_text(encoding="utf-8"))

@@ -589,12 +589,15 @@ class CheckTest(Base):
         self.assertTrue(any("index: false" in p for p in self.problems(pre_cutover=False)))
 
     def test_worker_proxied_paths_pass_and_unknown_neighbors_fail(self):
-        # #166: /cursos/academia-ia é servido pelo Worker academia-ia-proxy (fora do _site).
-        self.w("cursos/index.html", page('<a href="/cursos/academia-ia">a</a>', robots=ROBOTS_NOINDEX))
+        # #166: /cursos/chatgpt-no-dia-a-dia é servido por Worker na Cloudflare (fora do _site).
+        self.w("cursos/index.html", page('<a href="/cursos/chatgpt-no-dia-a-dia">a</a>', robots=ROBOTS_NOINDEX))
         self.assertEqual(self.problems(pre_cutover=False), [])
-        self.w("cursos/index.html", page('<a href="/cursos/academia-ia-outro">a</a>', robots=ROBOTS_NOINDEX))
-        self.assertTrue(any("link interno quebrado" in p and "/cursos/academia-ia-outro" in p
-                            for p in self.problems(pre_cutover=False)))
+        for bad in ("/cursos/chatgpt-no-dia-a-dia-outro", "/cursos/chatgpt-no-dia-a-dia/",
+                    "/cursos/chatgpt-no-dia-a-dia/aula-1", "/cursos/academia-ia"):
+            with self.subTest(bad=bad):
+                self.w("cursos/index.html", page(f'<a href="{bad}">a</a>', robots=ROBOTS_NOINDEX))
+                self.assertTrue(any("link interno quebrado" in p and bad in p
+                                    for p in self.problems(pre_cutover=False)))
 
 
 class FrontmatterTest(unittest.TestCase):
@@ -3459,7 +3462,7 @@ class LegalSourcesTest(unittest.TestCase):
 
 
 class CoursesTest(unittest.TestCase):
-    """#166: /cursos/ existe com noindex, canonical próprio, título e link para /cursos/academia-ia, fora do sitemap;
+    """#166: /cursos/ existe com noindex, canonical próprio, título e link para /cursos/chatgpt-no-dia-a-dia, fora do sitemap;
     /cursos/ aparece em todos os rodapés (fora /cursos/ e mockups) e nunca no menu principal."""
 
     GA = TrackingTest.GA
@@ -3481,7 +3484,7 @@ class CoursesTest(unittest.TestCase):
 
     def courses_doc(self, title: str = "Cursos | Guilherme Favaron", robots: str = ROBOTS_NOINDEX,
                     canonical: str | None = "https://guifav.dev/cursos/",
-                    body: str = '<a href="/cursos/academia-ia">Abrir</a>',
+                    body: str = '<a href="/cursos/chatgpt-no-dia-a-dia">Abrir</a>',
                     nav: str | None = None, foot: str = '<footer><p><a href="/">Início</a></p></footer>') -> str:
         c = "" if canonical is None else f'<link rel="canonical" href="{canonical}">'
         return (f'<!DOCTYPE html><html lang="pt-BR"><head><title>{title}</title>{robots}{c}{self.GA}</head>'
@@ -3514,18 +3517,19 @@ class CoursesTest(unittest.TestCase):
                "</urlset>")
         self.assertTrue(any("sitemap-site.xml" in p and "/cursos/" in p for p in C.check_courses(self.site)))
 
-    def test_page_requirements_noindex_canonical_title_and_academy_link(self):
+    def test_page_requirements_noindex_canonical_title_and_course_link(self):
         for name, kw, needle in (
             ("sem noindex", {"robots": ROBOTS_INDEX}, "noindex"),
             ("sem meta robots", {"robots": ""}, "noindex"),
             ("sem canonical", {"canonical": None}, "canonical"),
             ("canonical errado", {"canonical": "https://guifav.dev/cursos"}, "canonical"),
             ("título errado", {"title": "Cursos de IA | Guilherme Favaron"}, "o título precisa ser"),
-            ("sem link da academia", {"body": "<p>vazio</p>"}, "/cursos/academia-ia"),
-            ("link da academia duplicado", {"body": '<a href="/cursos/academia-ia">1</a><a href="/cursos/academia-ia">2</a>'}, "/cursos/academia-ia"),
-            ("link da academia comentado", {"body": '<!-- <a href="/cursos/academia-ia">1</a> -->'}, "/cursos/academia-ia"),
-            ("link da academia hidden", {"body": '<a href="/cursos/academia-ia" hidden>1</a>'}, "/cursos/academia-ia"),
-            ("link da academia nofollow", {"body": '<a href="/cursos/academia-ia" rel="nofollow">1</a>'}, "rel=nofollow"),
+            ("sem link do curso", {"body": "<p>vazio</p>"}, "/cursos/chatgpt-no-dia-a-dia"),
+            ("link antigo da academia", {"body": '<a href="/cursos/academia-ia">1</a>'}, "/cursos/chatgpt-no-dia-a-dia"),
+            ("link do curso duplicado", {"body": '<a href="/cursos/chatgpt-no-dia-a-dia">1</a><a href="/cursos/chatgpt-no-dia-a-dia">2</a>'}, "/cursos/chatgpt-no-dia-a-dia"),
+            ("link do curso comentado", {"body": '<!-- <a href="/cursos/chatgpt-no-dia-a-dia">1</a> -->'}, "/cursos/chatgpt-no-dia-a-dia"),
+            ("link do curso hidden", {"body": '<a href="/cursos/chatgpt-no-dia-a-dia" hidden>1</a>'}, "/cursos/chatgpt-no-dia-a-dia"),
+            ("link do curso nofollow", {"body": '<a href="/cursos/chatgpt-no-dia-a-dia" rel="nofollow">1</a>'}, "rel=nofollow"),
         ):
             with self.subTest(case=name):
                 self.build_valid_site()
@@ -3577,6 +3581,7 @@ class CoursesTest(unittest.TestCase):
                 out.append({"protocol": u.scheme + ":", "hostname": u.hostname or "", "pathname": u.path})
             return out
 
+        self.assertEqual(C.WORKER_PATHS, frozenset({"/cursos/chatgpt-no-dia-a-dia"}))
         self.build_valid_site()
         posts = Path(self.tmp.name) / "posts"
         posts.mkdir()
@@ -3588,14 +3593,17 @@ class CoursesTest(unittest.TestCase):
             "<sitemap><loc>https://guifav.dev/sitemap-site.xml</loc></sitemap>"
             "<sitemap><loc>https://guifav.dev/blog/sitemap.xml</loc></sitemap>"))
         self.w("index.html", page('<a href="/cursos/">Cursos</a>', robots="", title=HOME_FIXTURE_TITLE))
-        self.w("cursos/index.html", page('<a href="/cursos/academia-ia">Academia</a>', robots=ROBOTS_NOINDEX))
+        self.w("cursos/index.html", page('<a href="/cursos/chatgpt-no-dia-a-dia">Curso</a>', robots=ROBOTS_NOINDEX))
         self.w("404.html", page('<a href="/">home</a>', robots='<meta name="robots" content="noindex">'))
         (self.site / "portfolio/mockups/crm.html").unlink()
         with mock.patch.object(C, "resolve_urls", fake_resolve):
             self.assertEqual(C.check(self.site, posts, pre_cutover=False), [])
-            self.w("cursos/index.html", page('<a href="/cursos/academia-ia-errado">Academia</a>', robots=ROBOTS_NOINDEX))
-            got = C.check(self.site, posts, pre_cutover=False)
-            self.assertTrue(any("link interno quebrado: /cursos/academia-ia-errado" in p for p in got), got)
+            for bad in ("/cursos/chatgpt-no-dia-a-dia-errado", "/cursos/chatgpt-no-dia-a-dia/",
+                        "/cursos/chatgpt-no-dia-a-dia/aula-1", "/cursos/academia-ia"):
+                with self.subTest(bad=bad):
+                    self.w("cursos/index.html", page(f'<a href="{bad}">Curso</a>', robots=ROBOTS_NOINDEX))
+                    got = C.check(self.site, posts, pre_cutover=False)
+                    self.assertTrue(any(f"link interno quebrado: {bad}" in p for p in got), got)
 
     def test_main_runs_the_courses_rule(self):
         consts = Path(self.tmp.name) / "consts.ts"
@@ -3643,6 +3651,7 @@ class CoursesSourcesTest(unittest.TestCase):
         self.assertEqual(C.check_courses_footer(C.COURSES_PAGE, html), [])
         styles = re.findall(r"<style[^>]*>(.*?)</style>", html, flags=re.S | re.I)
         self.assertEqual(C.contrast_problems([site_css, *styles]), [])
+        self.assertEqual(C.contrast_problems([site_css, *styles, ".course-status{background:var(--bg-card)}"]), [])
         self.assertNotIn("\u2014", html)  # sem travessão
         self.assertNotIn("\u2013", html)  # sem meia-risca
         with tempfile.TemporaryDirectory() as d:

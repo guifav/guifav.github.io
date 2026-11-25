@@ -4,11 +4,11 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <meta name="robots" content="noindex, follow"/>
-  <meta name="description" content="Cursos gratuitos de IA aplicada organizados por Guilherme Favaron, para usar inteligência artificial no trabalho sem rodeios."/>
+  <meta name="description" content="Cursos de Guilherme Favaron para ganhar tempo no trabalho e viabilizar projetos com tecnologia. Cada curso informa o nível e as condições de acesso."/>
   <title>Cursos | Guilherme Favaron</title>
   <meta name="author" content="Guilherme Favaron">
   <meta property="og:title" content="Cursos | Guilherme Favaron">
-  <meta property="og:description" content="Cursos gratuitos de IA aplicada organizados por Guilherme Favaron, para usar inteligência artificial no trabalho sem rodeios.">
+  <meta property="og:description" content="Cursos de Guilherme Favaron para ganhar tempo no trabalho e viabilizar projetos com tecnologia. Cada curso informa o nível e as condições de acesso.">
   <meta property="og:url" content="https://guifav.dev/cursos/"/>
   <meta property="og:image" content="https://guifav.dev/og-image.png"/>
   <meta property="og:image:width" content="1200"/>
@@ -17,7 +17,7 @@
   <meta property="og:locale" content="pt_BR">
   <meta name="twitter:card" content="summary_large_image"/>
   <meta name="twitter:title" content="Cursos | Guilherme Favaron"/>
-  <meta name="twitter:description" content="Cursos gratuitos de IA aplicada organizados por Guilherme Favaron, para usar inteligência artificial no trabalho sem rodeios."/>
+  <meta name="twitter:description" content="Cursos de Guilherme Favaron para ganhar tempo no trabalho e viabilizar projetos com tecnologia. Cada curso informa o nível e as condições de acesso."/>
   <meta name="twitter:image" content="https://guifav.dev/og-image.png"/>
   <link rel="canonical" href="https://guifav.dev/cursos/">
   <link rel="stylesheet" href="/assets/site.css?v=202611232330">
@@ -30,8 +30,9 @@
     .courses-list .card p{flex:1}
     .card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
     .card-head .card-ico{margin-bottom:0}
-    .course-status{display:inline-block;font-size:12px;font-weight:600;padding:4px 10px;border-radius:100px;background:var(--tag-bg);color:var(--tag-text);border:1px solid var(--border);white-space:nowrap}
-    .course-note{font-size:14px;color:var(--text-secondary);margin-top:20px;max-width:720px}
+    .course-status{display:inline-block;font-size:12px;font-weight:600;padding:3px 9px;border-radius:6px;background:transparent;color:var(--text-secondary);border:1px solid var(--border);white-space:nowrap}
+    .course-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+    .course-chips .pill{margin:0}
   </style>
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-K7Y87QNCX8"></script>
   <script>window['ga-disable-G-K7Y87QNCX8']=location.hostname.replace(/\.$/,'')!=='guifav.dev';window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('consent','default',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied',analytics_storage:'denied'});gtag('set','ads_data_redaction',true);window.guifavConsent=function(){try{var c=JSON.parse(localStorage.getItem('consent-v1')||'null');return c&&c.v==='granted'&&typeof c.t==='number'&&Date.now()-c.t>=0&&Date.now()-c.t<31536e6?'granted':null}catch(e){return null}}();if(window.guifavConsent==='granted')gtag('consent','update',{ad_storage:'granted',ad_user_data:'granted',ad_personalization:'granted',analytics_storage:'granted'});gtag('js',new Date());gtag('config','G-K7Y87QNCX8',{content_group:'cursos'});</script>
@@ -58,8 +59,8 @@
     <main>
       <header class="hero">
         <div class="eyebrow">Cursos</div>
-        <h1>Cursos de IA aplicada</h1>
-        <p class="subtitle">Trilhas práticas para usar IA no trabalho do dia a dia, sem jargão nem promessa de atalho. O conteúdo é gratuito e feito para caber na rotina.</p>
+        <h1>Cursos para ganhar tempo e viabilizar projetos com tecnologia</h1>
+        <p class="subtitle">Esta página reúne os cursos que estou lançando; cada novo curso entra aqui quando abre. Todos partem do que eu uso no meu próprio trabalho e mostram o que cada tecnologia entrega e onde ela falha. O nível e as condições de acesso estão no card de cada um.</p>
       </header>
 
       <section aria-label="Lista de cursos">
@@ -69,12 +70,15 @@
               <span class="card-ico" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M2.5 9.5 12 5l9.5 4.5L12 14 2.5 9.5Z"/><path d="M6.5 11.4V16c0 1.6 2.5 3 5.5 3s5.5-1.4 5.5-3v-4.6"/><path d="M21.5 9.5V15"/></svg></span>
               <span class="course-status">Em atualização</span>
             </div>
-            <h2>Academia da IA</h2>
-            <p>Trilha gratuita de 30 dias, com uma aula curta por dia, para aplicar IA no trabalho usando as versões gratuitas do ChatGPT, do Gemini e do Copilot. O conteúdo está sendo revisto para as versões atuais dos assistentes.</p>
-            <a href="/cursos/academia-ia">Abrir a Academia da IA &#8594;</a>
+            <h2>ChatGPT no dia a dia</h2>
+            <div class="course-chips">
+              <span class="pill">Básico</span>
+              <span class="pill">Gratuito</span>
+            </div>
+            <p>Para quem já é bom no que faz e tem a agenda cheia. São 30 aulas curtas em texto, uma por dia, para tirar peso de emails, reuniões, documentos e pesquisa, feitas no ChatGPT gratuito, com o passo a passo equivalente para Gemini e Copilot.</p>
+            <a href="/cursos/chatgpt-no-dia-a-dia">Abrir o curso &#8594;</a>
           </article>
         </div>
-        <p class="course-note">O acesso é gratuito e o login é feito com conta Google ou email.</p>
       </section>
     </main>
 
