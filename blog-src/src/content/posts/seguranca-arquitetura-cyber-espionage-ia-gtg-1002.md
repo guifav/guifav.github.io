@@ -2,7 +2,7 @@
 title: "Security Architecture em Ambientes Complexos: Lições da Primeira Campanha de Cyber Espionage Orquestrada por IA"
 subtitle: "O que a campanha GTG-1002 revela sobre o futuro das ameaças automatizadas e como arquitetos de segurança devem repensar defesas corporativas"
 description: "Análise da primeira campanha de cyber espionage orquestrada por IA (GTG-1002) e suas implicações para arquiteturas de segurança corporativa: detecção comportamental, Zero-Trust e defesa com IA."
-summary: "Em novembro de 2025, a Anthropic interrompeu a campanha GTG-1002, atribuída a patrocínio estatal chinês, em que IA autônoma com Claude Code conduziu 80-90% das atividades táticas contra cerca de 30 organizações, depois que operadores convenceram o modelo de que faziam testes defensivos. Como o ataque usou ferramentas comuns de pentest, sem assinaturas a detectar, a defesa passa por detecção comportamental, Zero-Trust, IA defensiva e fundamentos como MFA universal."
+summary: "Em novembro de 2025, a Anthropic divulgou ter interrompido a campanha GTG-1002, atribuída a patrocínio estatal chinês, em que IA autônoma com Claude Code conduziu 80-90% das atividades táticas contra cerca de 30 organizações, depois que operadores convenceram o modelo de que faziam testes defensivos. Como o ataque usou ferramentas comuns de pentest, sem assinaturas a detectar, a defesa passa por detecção comportamental, Zero-Trust, IA defensiva e fundamentos como MFA universal."
 date: 2025-12-08T06:01:16.079Z
 updated: 2025-12-08T08:06:41.825Z
 slug: seguranca-arquitetura-cyber-espionage-ia-gtg-1002

@@ -1,7 +1,7 @@
 ---
 title: "A era dos protótipos acabou: como a IA está revolucionando o desenvolvimento de software e apps"
 description: "Por décadas, as empresas construíram software da mesma maneira: com longos ciclos manuais de desenvolvimento focados em protótipos, MVPs, e constantes reconstruções."
-summary: "Plataformas de desenvolvimento com IA automatizam boa parte do código, dos testes e do deploy, o que permite construir aplicativos visualmente em semanas e começar direto por uma V1 escalável, sem protótipos descartáveis. A Synthflow.ai fez isso e chegou a 7.000 usuários e 1,8 milhão de dólares de financiamento em 6 meses, e ainda é preciso entender o código, porque essas plataformas falham."
+summary: "Plataformas de desenvolvimento com IA automatizam boa parte do código, dos testes e do deploy, o que permite construir aplicativos visualmente em semanas e começar direto por uma V1 escalável, sem protótipos descartáveis. A Synthflow.ai fez isso e chegou a 7.000 usuários e 1,8 milhão de dólares de financiamento em 6 meses. Ainda é preciso entender o código, porque essas plataformas falham."
 date: 2024-02-26T03:00:00.000Z
 updated: 2024-07-08T13:20:51.086Z
 slug: a-era-dos-prototipos-acabou-como-a-ia-esta-revolucionando-o-desenvolvimento-de-software
