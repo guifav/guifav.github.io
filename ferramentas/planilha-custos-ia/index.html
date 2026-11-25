@@ -64,7 +64,7 @@
     .cost-dot{width:11px;height:11px;border-radius:3px;flex:0 0 auto;display:inline-block}
     .cost-dot-1{background:var(--c-inf)}.cost-dot-2{background:var(--c-around)}.cost-dot-3{background:var(--c-waste)}.cost-dot-4{background:var(--c-eng);box-shadow:inset 0 0 0 1px var(--c-eng-edge)}
     .cost-chart svg{display:block;width:100%;height:auto;font-family:inherit}
-    .cost-svg-m{display:none}
+    .cost-chart .cost-svg-m{display:none}
     .cost-grid{stroke:var(--border);stroke-width:1}
     .cost-axis{font-size:11.5px;fill:var(--text-secondary);font-variant-numeric:tabular-nums}
     .cost-opt{font-size:13px;font-weight:600;fill:var(--text)}
@@ -116,67 +116,51 @@
     .step-bar{display:flex;align-items:center;justify-content:space-between;height:28px;padding:0 12px;background:#1c1c1c;border-bottom:1px solid rgba(255,255,255,.08)}
     .step-dots{display:flex;gap:6px}.step-dots span{width:9px;height:9px;border-radius:50%;background:#3a3a3a}
     .step-idx{font-size:11.5px;font-weight:650;color:#b5b5b5;font-variant-numeric:tabular-nums}
-    .step-body{display:flex;align-items:center}
-    .step-pad{width:100%;padding-top:13.5%}
-    .step-pad-bot{padding-top:0;padding-bottom:13.5%}
+    .step-body{position:relative;overflow:hidden}
     .step-shot{position:relative;width:100%;line-height:0}
-    .step-shot img{width:100%;height:auto;display:block}
-    .step-hl{position:absolute;box-sizing:border-box;border:2.5px solid var(--hl);border-radius:6px;background:rgba(255,190,0,.08);box-shadow:0 0 0 1px rgba(255,190,0,.35),0 0 16px rgba(255,190,0,.45);pointer-events:none}
-    .step-tag{position:absolute;bottom:calc(100% + 8px);transform:translateX(-100%);padding:3px 9px;border-radius:999px;background:var(--hl);color:#171717;font-size:11.5px;font-weight:700;line-height:1.25;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,.4)}
-    .step-pad-bot .step-tag{bottom:auto;top:calc(100% + 8px)}
-    .step-arrow{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+    .step-shot img{width:100%;height:auto;display:block;opacity:1}
+    .step-hl{position:absolute;z-index:1;box-sizing:border-box;border:2.5px solid var(--hl);border-radius:6px;box-shadow:0 0 0 9999px rgba(0,0,0,.45);pointer-events:none}
+    .step-tag{position:absolute;z-index:2;top:var(--tag-y,44%);padding:3px 9px;border:1px solid rgba(255,190,0,.55);border-radius:999px;background:rgba(20,20,20,.82);color:#FFBE00;font-size:11.5px;font-weight:700;line-height:1.25;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.28)}
+    .step-arrow{position:absolute;z-index:2;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
     .step-arrow-path{fill:none;stroke:var(--hl);stroke-width:9;stroke-linecap:round;stroke-linejoin:round}
     .step-arrow-head{fill:none;stroke:var(--hl);stroke-width:9;stroke-linecap:round;stroke-linejoin:round}
+    @media(min-width:861px){
+      .step-tag{top:var(--tag-y-desktop,44%);font-size:11px;padding:3px 7px}
+      .step-arrow-path,.step-arrow-head{stroke-width:7}
+    }
     @media(min-width:861px) and (prefers-reduced-motion:no-preference){
-      .steps{grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr);grid-template-rows:repeat(4,auto);column-gap:28px;row-gap:10px;align-items:center}
+      .steps{grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr);grid-template-rows:repeat(4,auto);column-gap:28px;row-gap:10px;align-items:start}
       .step-item{display:contents}
       .step-item:nth-child(1) .step-text{grid-column:1;grid-row:1}
       .step-item:nth-child(2) .step-text{grid-column:1;grid-row:2}
       .step-item:nth-child(3) .step-text{grid-column:1;grid-row:3}
       .step-item:nth-child(4) .step-text{grid-column:1;grid-row:4}
-      .step-stage{grid-column:2;grid-row:1 / 5;align-self:center;opacity:0;visibility:hidden;animation:step-stage 16s ease both infinite}
-      .step-item:nth-child(1) .step-stage{opacity:1;visibility:visible}
-      .step-canvas{min-height:292px;display:flex;flex-direction:column}
-      .step-body{flex:1}
-      .step-pad{padding-top:11%}.step-pad-bot{padding-top:0;padding-bottom:11%}
-      .step-tag{bottom:calc(100% + 16px);font-size:12.5px;padding:4px 11px}
-      .step-pad-bot .step-tag{bottom:auto;top:calc(100% + 16px)}
-      .step-arrow-path{stroke-width:7;stroke-dasharray:100;stroke-dashoffset:100;animation:step-arrow 16s ease-out both infinite}
-      .step-arrow-head{stroke-width:7;opacity:0;animation:step-head 16s ease both infinite}
-      .step-hl{animation:step-hl 16s ease-in-out both infinite}
-      .step-text{animation:step-card 16s ease both infinite}
-      .step-num{animation:step-badge 16s ease both infinite}
-      .step-item:nth-child(1) .step-stage,.step-item:nth-child(1) .step-text,.step-item:nth-child(1) .step-num,.step-item:nth-child(1) .step-hl,.step-item:nth-child(1) .step-arrow-path,.step-item:nth-child(1) .step-arrow-head{animation-delay:-1.6s}
-      .step-item:nth-child(2) .step-stage,.step-item:nth-child(2) .step-text,.step-item:nth-child(2) .step-num,.step-item:nth-child(2) .step-hl,.step-item:nth-child(2) .step-arrow-path,.step-item:nth-child(2) .step-arrow-head{animation-delay:2.4s}
-      .step-item:nth-child(3) .step-stage,.step-item:nth-child(3) .step-text,.step-item:nth-child(3) .step-num,.step-item:nth-child(3) .step-hl,.step-item:nth-child(3) .step-arrow-path,.step-item:nth-child(3) .step-arrow-head{animation-delay:6.4s}
-      .step-item:nth-child(4) .step-stage,.step-item:nth-child(4) .step-text,.step-item:nth-child(4) .step-num,.step-item:nth-child(4) .step-hl,.step-item:nth-child(4) .step-arrow-path,.step-item:nth-child(4) .step-arrow-head{animation-delay:10.4s}
-      .steps:hover .step-stage,.steps:hover .step-text,.steps:hover .step-num,.steps:hover .step-hl,.steps:hover .step-arrow-path,.steps:hover .step-arrow-head,
-      .steps:focus-within .step-stage,.steps:focus-within .step-text,.steps:focus-within .step-num,.steps:focus-within .step-hl,.steps:focus-within .step-arrow-path,.steps:focus-within .step-arrow-head{animation-play-state:paused}
+      .step-stage{grid-column:2;grid-row:1 / 5;align-self:start;position:sticky;top:96px;opacity:0;visibility:hidden;animation:step-stage 16s linear both infinite}
+      .step-body{aspect-ratio:1400 / 402}
+      .step-shot{position:absolute;left:0;top:50%;transform:translateY(calc(0% - var(--origin-y))) scale(var(--zoom));transform-origin:var(--origin-x) var(--origin-y)}
+      .step-text{animation:step-card 16s linear both infinite}
+      .step-num{animation:step-badge 16s linear both infinite}
+      .step-item:nth-child(1) .step-stage,.step-item:nth-child(1) .step-text,.step-item:nth-child(1) .step-num{animation-delay:-2s}
+      .step-item:nth-child(2) .step-stage,.step-item:nth-child(2) .step-text,.step-item:nth-child(2) .step-num{animation-delay:-14s}
+      .step-item:nth-child(3) .step-stage,.step-item:nth-child(3) .step-text,.step-item:nth-child(3) .step-num{animation-delay:-10s}
+      .step-item:nth-child(4) .step-stage,.step-item:nth-child(4) .step-text,.step-item:nth-child(4) .step-num{animation-delay:-6s}
+      .steps:hover .step-stage,.steps:hover .step-text,.steps:hover .step-num,
+      .steps:focus-within .step-stage,.steps:focus-within .step-text,.steps:focus-within .step-num{animation-play-state:paused}
       @supports selector(:has(*)){
         .steps:has(.step-text:hover) .step-stage,.steps:has(.step-text:focus-within) .step-stage{animation:none;opacity:0;visibility:hidden}
         .steps:has(.step-text:hover) .step-text,.steps:has(.step-text:focus-within) .step-text{animation:none;border-color:var(--border)}
         .steps:has(.step-text:hover) .step-num,.steps:has(.step-text:focus-within) .step-num{animation:none;background:var(--tag-bg);color:var(--text)}
         .step-item:has(.step-text:hover) .step-stage,.step-item:has(.step-text:focus-within) .step-stage{opacity:1;visibility:visible}
-        .step-item:has(.step-text:hover) .step-arrow-path,.step-item:has(.step-text:focus-within) .step-arrow-path{animation:none;stroke-dashoffset:0}
-        .step-item:has(.step-text:hover) .step-arrow-head,.step-item:has(.step-text:focus-within) .step-arrow-head{animation:none;opacity:1}
-        .step-item:has(.step-text:hover) .step-hl,.step-item:has(.step-text:focus-within) .step-hl{animation:none}
         .step-item:has(.step-text:hover) .step-text,.step-item:has(.step-text:focus-within) .step-text{border-color:var(--hl)}
         .step-item:has(.step-text:hover) .step-num,.step-item:has(.step-text:focus-within) .step-num{background:var(--hl);color:#171717}
       }
     }
     @media(min-width:861px) and (prefers-reduced-motion:reduce){
-      .step-item{grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr);gap:24px;align-items:center}
-      .step-pad{padding-top:11%}.step-pad-bot{padding-top:0;padding-bottom:11%}
-      .step-tag{bottom:calc(100% + 16px);font-size:12.5px;padding:4px 11px}
-      .step-pad-bot .step-tag{bottom:auto;top:calc(100% + 16px)}
-      .step-arrow-path,.step-arrow-head{stroke-width:7}
+      .step-item{grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr);gap:24px;align-items:start}
     }
-    @keyframes step-stage{0%{opacity:0;visibility:hidden}3%,24%{opacity:1;visibility:visible}27%,100%{opacity:0;visibility:hidden}}
-    @keyframes step-arrow{0%,3%{stroke-dashoffset:100}9.5%,23%{stroke-dashoffset:0}25.5%,100%{stroke-dashoffset:100}}
-    @keyframes step-head{0%,8%{opacity:0}10%,23%{opacity:1}25.5%,100%{opacity:0}}
-    @keyframes step-hl{0%,25.5%,100%{box-shadow:0 0 0 1px rgba(255,190,0,.35),0 0 12px rgba(255,190,0,.35)}7%,16%{box-shadow:0 0 0 2px rgba(255,190,0,.65),0 0 24px rgba(255,190,0,.65)}11.5%,21%{box-shadow:0 0 0 1px rgba(255,190,0,.35),0 0 14px rgba(255,190,0,.4)}}
-    @keyframes step-card{0%,25.5%,100%{border-color:var(--border)}2%,23%{border-color:var(--hl)}}
-    @keyframes step-badge{0%,25.5%,100%{background:var(--tag-bg);color:var(--text)}2%,23%{background:var(--hl);color:#171717}}
+    @keyframes step-stage{0%{opacity:0;visibility:visible}2.5%,25%{opacity:1;visibility:visible}27.5%,100%{opacity:0;visibility:hidden}}
+    @keyframes step-card{0%,25%{border-color:var(--hl)}27.5%,100%{border-color:var(--border)}}
+    @keyframes step-badge{0%,25%{background:var(--hl);color:#171717}27.5%,100%{background:var(--tag-bg);color:var(--text)}}
 
     /* Secao 3: O que foi medido - numeros grandes + comparacao SQL animada */
     @property --in-k{syntax:"<integer>";inherits:false;initial-value:8}
@@ -192,22 +176,22 @@
     .stat-out{color:var(--hl-text)}
     .stat-unit{font-size:.62em;font-weight:700;color:var(--text-secondary);letter-spacing:-.5px}
     @media(prefers-reduced-motion:no-preference){
-      @supports (transition-behavior:allow-discrete){
+      @supports (animation-timeline:view()){
         .stat-static{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
         .stat-anim{display:inline}
-        .stat-in::before{counter-reset:ink var(--in-k) inr var(--in-r);content:counter(ink) var(--num-sep) counter(inr);animation:cnt-in 8s cubic-bezier(.16,1,.3,1) -2s infinite}
-        .stat-out::before{counter-reset:outn var(--out-n);content:counter(outn);animation:cnt-out 8s cubic-bezier(.16,1,.3,1) -2s infinite}
-        .stat-gpu::before{counter-reset:gpur var(--gpu-r);content:"1" var(--num-sep) counter(gpur);animation:cnt-gpu 8s cubic-bezier(.16,1,.3,1) -2s infinite}
+        .stat-in::before{counter-reset:ink var(--in-k) inr var(--in-r);content:counter(ink) var(--num-sep) counter(inr);animation:cnt-in linear both;animation-timeline:view();animation-range:entry 10% cover 40%}
+        .stat-out::before{counter-reset:outn var(--out-n);content:counter(outn);animation:cnt-out linear both;animation-timeline:view();animation-range:entry 10% cover 40%}
+        .stat-gpu::before{counter-reset:gpur var(--gpu-r);content:"1" var(--num-sep) counter(gpur);animation:cnt-gpu linear both;animation-timeline:view();animation-range:entry 10% cover 40%}
       }
     }
-    @keyframes cnt-in{0%{--in-k:1;--in-r:100;opacity:.35}6%{opacity:1}22%,96%{--in-k:8;--in-r:981;opacity:1}100%{--in-k:8;--in-r:981;opacity:.35}}
-    @keyframes cnt-out{0%{--out-n:40;opacity:.35}6%{opacity:1}22%,96%{--out-n:424;opacity:1}100%{--out-n:424;opacity:.35}}
-    @keyframes cnt-gpu{0%{--gpu-r:100;opacity:.35}6%{opacity:1}22%,96%{--gpu-r:447;opacity:1}100%{--gpu-r:447;opacity:.35}}
+    @keyframes cnt-in{0%{--in-k:1;--in-r:100;opacity:.35}25%{opacity:1}60%,100%{--in-k:8;--in-r:981;opacity:1}}
+    @keyframes cnt-out{0%{--out-n:40;opacity:.35}25%{opacity:1}60%,100%{--out-n:424;opacity:1}}
+    @keyframes cnt-gpu{0%{--gpu-r:100;opacity:.35}25%{opacity:1}60%,100%{--gpu-r:447;opacity:1}}
     .sql-box{border:1px solid var(--border);border-radius:14px;background:var(--bg-card);color:var(--text);padding:24px 24px 20px;margin:0 0 24px}
     .sql-box h3{font-size:17px;font-weight:700;margin:0 0 6px;color:var(--text)}
     .sql-box p{font-size:14px;color:var(--text-secondary);line-height:1.6;margin:0 0 18px;max-width:700px}
     .sql-box svg{display:block;width:100%;height:auto;font-family:inherit}
-    .sql-svg-m{display:none}
+    .sql-box .sql-svg-m{display:none}
     .sql-lbl{font-size:13.5px;font-weight:600;fill:var(--text)}
     .sql-val-big{font-size:13.5px;font-weight:700;fill:var(--text);font-variant-numeric:tabular-nums}
     .sql-val-sm{font-size:13.5px;font-weight:750;fill:var(--hl-text);font-variant-numeric:tabular-nums}
@@ -460,16 +444,14 @@
             <div class="step-canvas">
               <div class="step-bar" aria-hidden="true"><div class="step-dots"><span></span><span></span><span></span></div><span class="step-idx">1 / 4</span></div>
               <div class="step-body">
-                <div class="step-pad">
-                  <div class="step-shot">
-                    <img src="/ferramentas/planilha-custos-ia/img/passo1-celulas-amarelas.webp" width="1400" height="402" loading="lazy" decoding="async" alt="Aba Premissas da planilha com a coluna Valor em amarelo destacada" data-i18n-alt="u1_alt">
-                    <span class="step-hl" style="left:63.7%;top:27.9%;width:19.7%;height:70.7%" aria-hidden="true"></span>
-                    <span class="step-tag" style="left:56%" data-i18n="u1_tag">células amarelas</span>
-                    <svg class="step-arrow" viewBox="0 0 1400 402" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-                      <path class="step-arrow-path" pathLength="100" d="M 798 -76 C 920 -76, 1020 -30, 1030 98"/>
-                      <path class="step-arrow-head" d="M 1016 78 L 1030 102 L 1044 78"/>
-                    </svg>
-                  </div>
+                <div class="step-shot" style="--zoom:2.4;--origin-x:73.55%;--origin-y:63.25%">
+                  <img src="/ferramentas/planilha-custos-ia/img/passo1-celulas-amarelas.webp" width="1400" height="402" loading="lazy" decoding="async" alt="Aba Premissas da planilha com a coluna Valor em amarelo destacada" data-i18n-alt="u1_alt">
+                  <span class="step-hl" style="left:63.7%;top:27.9%;width:19.7%;height:70.7%" aria-hidden="true"></span>
+                  <span class="step-tag" style="right:calc(36.3% + 4px)" data-i18n="u1_tag">células amarelas</span>
+                  <svg class="step-arrow" viewBox="0 0 1400 402" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+                    <path class="step-arrow-path" d="M 890 205 C 905 215, 915 226, 925 240"/>
+                    <path class="step-arrow-head" d="M 909 230 L 925 240 L 921 220"/>
+                  </svg>
                 </div>
               </div>
             </div>
@@ -484,16 +466,14 @@
             <div class="step-canvas">
               <div class="step-bar" aria-hidden="true"><div class="step-dots"><span></span><span></span><span></span></div><span class="step-idx">2 / 4</span></div>
               <div class="step-body">
-                <div class="step-pad step-pad-bot">
-                  <div class="step-shot">
-                    <img src="/ferramentas/planilha-custos-ia/img/passo2-cenarios.webp" width="1400" height="256" loading="lazy" decoding="async" alt="Aba Cenarios da planilha com a linha Total mensal (US$) destacada" data-i18n-alt="u2_alt">
-                    <span class="step-hl" style="left:0.0%;top:65.8%;width:100.0%;height:8.6%" aria-hidden="true"></span>
-                    <span class="step-tag" style="left:45%" data-i18n="u2_tag">Total mensal</span>
-                    <svg class="step-arrow" viewBox="0 0 1400 256" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-                      <path class="step-arrow-path" pathLength="100" d="M 644 332 C 740 332, 780 280, 790 206"/>
-                      <path class="step-arrow-head" d="M 776 226 L 790 202 L 804 226"/>
-                    </svg>
-                  </div>
+                <div class="step-shot" style="--zoom:2.7;--origin-x:50%;--origin-y:70.1%">
+                  <img src="/ferramentas/planilha-custos-ia/img/passo2-cenarios.webp" width="1400" height="256" loading="lazy" decoding="async" alt="Aba Cenarios da planilha com a linha Total mensal (US$) destacada" data-i18n-alt="u2_alt">
+                  <span class="step-hl" style="left:0.0%;top:65.8%;width:100.0%;height:8.6%" aria-hidden="true"></span>
+                  <span class="step-tag" style="left:38%;--tag-y:10%;--tag-y-desktop:42%" data-i18n="u2_tag">Total mensal</span>
+                  <svg class="step-arrow" viewBox="0 0 1400 256" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+                    <path class="step-arrow-path" d="M 780 132 C 800 142, 810 154, 820 172"/>
+                    <path class="step-arrow-head" d="M 804 162 L 820 172 L 824 154"/>
+                  </svg>
                 </div>
               </div>
             </div>
@@ -508,16 +488,14 @@
             <div class="step-canvas">
               <div class="step-bar" aria-hidden="true"><div class="step-dots"><span></span><span></span><span></span></div><span class="step-idx">3 / 4</span></div>
               <div class="step-body">
-                <div class="step-pad">
-                  <div class="step-shot">
-                    <img src="/ferramentas/planilha-custos-ia/img/passo3-origem.webp" width="1400" height="313" loading="lazy" decoding="async" alt="Aba Premissas da planilha com a coluna Origem destacada" data-i18n-alt="u3_alt">
-                    <span class="step-hl" style="left:75.8%;top:27.9%;width:23.6%;height:70.7%" aria-hidden="true"></span>
-                    <span class="step-tag" style="left:66%" data-i18n="u3_tag">Origem</span>
-                    <svg class="step-arrow" viewBox="0 0 1400 313" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-                      <path class="step-arrow-path" pathLength="100" d="M 938 -76 C 1070 -76, 1185 -35, 1198 73"/>
-                      <path class="step-arrow-head" d="M 1184 53 L 1198 77 L 1212 53"/>
-                    </svg>
-                  </div>
+                <div class="step-shot" style="--zoom:3;--origin-x:87.6%;--origin-y:63.25%">
+                  <img src="/ferramentas/planilha-custos-ia/img/passo3-origem.webp" width="1400" height="313" loading="lazy" decoding="async" alt="Aba Premissas da planilha com a coluna Origem destacada" data-i18n-alt="u3_alt">
+                  <span class="step-hl" style="left:75.8%;top:27.9%;width:23.6%;height:70.7%" aria-hidden="true"></span>
+                  <span class="step-tag" style="right:calc(24.2% + 4px)" data-i18n="u3_tag">Origem</span>
+                  <svg class="step-arrow" viewBox="0 0 1400 313" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+                    <path class="step-arrow-path" d="M 1052 170 C 1062 176, 1072 184, 1080 194"/>
+                    <path class="step-arrow-head" d="M 1062 188 L 1080 194 L 1076 174"/>
+                  </svg>
                 </div>
               </div>
             </div>
@@ -532,16 +510,14 @@
             <div class="step-canvas">
               <div class="step-bar" aria-hidden="true"><div class="step-dots"><span></span><span></span><span></span></div><span class="step-idx">4 / 4</span></div>
               <div class="step-body">
-                <div class="step-pad">
-                  <div class="step-shot">
-                    <img src="/ferramentas/planilha-custos-ia/img/passo4-precos.webp" width="1400" height="357" loading="lazy" decoding="async" alt="Aba Precos_API da planilha com as colunas URL e Data de acesso destacadas" data-i18n-alt="u4_alt">
-                    <span class="step-hl" style="left:38.7%;top:25.8%;width:44.7%;height:72.5%" aria-hidden="true"></span>
-                    <span class="step-tag" style="left:44%" data-i18n="u4_tag">URL e data</span>
-                    <svg class="step-arrow" viewBox="0 0 1400 357" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-                      <path class="step-arrow-path" pathLength="100" d="M 630 -76 C 750 -76, 830 -35, 845 78"/>
-                      <path class="step-arrow-head" d="M 831 58 L 845 82 L 859 58"/>
-                    </svg>
-                  </div>
+                <div class="step-shot" style="--zoom:1.55;--origin-x:61.05%;--origin-y:62.05%">
+                  <img src="/ferramentas/planilha-custos-ia/img/passo4-precos.webp" width="1400" height="357" loading="lazy" decoding="async" alt="Aba Precos_API da planilha com as colunas URL e Data de acesso destacadas" data-i18n-alt="u4_alt">
+                  <span class="step-hl" style="left:38.7%;top:25.8%;width:44.7%;height:72.5%" aria-hidden="true"></span>
+                  <span class="step-tag" style="right:calc(61.3% + 4px)" data-i18n="u4_tag">URL e data</span>
+                  <svg class="step-arrow" viewBox="0 0 1400 357" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+                    <path class="step-arrow-path" d="M 540 190 C 550 198, 558 208, 565 222"/>
+                    <path class="step-arrow-head" d="M 549 212 L 565 222 L 561 202"/>
+                  </svg>
                 </div>
               </div>
             </div>
