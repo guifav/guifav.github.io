@@ -6,6 +6,9 @@
 //   com cta_location: "menu" ou "rodape" pela posição do link; nos demais, o atributo
 //   data-cta-location do link; sem ele (link dentro de um post), "conteudo".
 // - footer_click em todo link do rodapé, com link_label estável, igual em português e inglês.
+// - file_download em todo link com data-ga-download não vazio (ex.: "Baixar GIF" do diagrama da home,
+//   issue #148), com file_name (atributo download ou nome no caminho), file_extension, link_url (sem
+//   query/fragmento), site_language (pt ou en no momento do clique), origin_channel e origin_source.
 // - language_change e theme_change, mais as propriedades do usuário site_language e site_theme,
 //   gravadas ao abrir a página e a cada troca.
 // - sign_up (method expert-insights) na página com data-ga-event="sign_up", uma vez por sessão.
@@ -225,6 +228,28 @@
     input.value = value === null ? '' : value;
   }
 
+  function downloadParams(a, u) {
+    var id = (a.getAttribute('data-ga-download') || '').trim();
+    if (!id || (u.protocol !== 'https:' && u.protocol !== 'http:')) return null;
+    var rawName = (a.getAttribute('download') || '').trim();
+    if (!rawName) {
+      var seg = u.pathname.split('/').pop() || '';
+      try { rawName = decodeURIComponent(seg); } catch (e) { rawName = seg; }
+    }
+    if (!rawName) rawName = id;
+    var extMatch = rawName.match(/[^./]\.([a-z0-9]{1,10})$/i) || u.pathname.match(/[^./]\.([a-z0-9]{1,10})$/i);
+    var p = {
+      file_name: rawName,
+      link_url: u.origin + u.pathname,
+      site_language: language(),
+      origin_channel: origin.canal,
+      transport_type: 'beacon'
+    };
+    if (extMatch) p.file_extension = extMatch[1].toLowerCase();
+    if (origin.fonte) p.origin_source = origin.fonte;
+    return p;
+  }
+
   function onLink(a) {
     var u = parse(a);
     if (!u) return; // href que o navegador não interpreta: nenhum evento, nem de rodapé
@@ -234,6 +259,8 @@
       if (origin.fonte) p.origin_source = origin.fonte;
       send('event', ev, p);
     }
+    var dl = downloadParams(a, u);
+    if (dl) send('event', 'file_download', dl);
     if (a.closest('footer')) send('event', 'footer_click', { link_label: footerLabel(u), transport_type: 'beacon' });
   }
 

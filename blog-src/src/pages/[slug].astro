@@ -70,6 +70,12 @@ const ld = postLdGraph({
         <iframe src={embed} title={`Episódio: ${d.title}`} height="102" loading="lazy" allow="encrypted-media" referrerpolicy="strict-origin-when-cross-origin"></iframe>
       </div>
     )}
+    {d.summary && (
+      <section class="post-summary" aria-label="Em resumo">
+        <p class="post-summary-label">Em resumo</p>
+        <p>{d.summary.trim()}</p>
+      </section>
+    )}
     <div class="post-body">
       <Content />
     </div>

@@ -1476,10 +1476,19 @@ class TrackingSourcesTest(unittest.TestCase):
         self.assertIn('<article class="post page" data-ga-event="sign_up">',
                       self.read("blog-src/src/pages/inscricao-confirmada.astro"))
 
+    def test_home_gif_download_marker_in_source(self):
+        # #148: o link do GIF do ciclo na home leva data-ga-download para o track.js emitir file_download.
+        self.assertIn(
+            '<a class="dflow-dl" href="/assets/ciclo-dados-ia.gif" download="ciclo-de-dados-e-ia-guifav.gif" '
+            'data-ga-download="ciclo-dados-ia">',
+            self.read("index.html"),
+        )
+
     def test_privacy_mentions_events(self):
         t = self.read("privacidade/index.html")
         self.assertIn("alguns cliques: contato, agendamento, links do rodapé, troca de idioma e de tema, a "
-                      "confirmação da inscrição e o pedido e o download de materiais (sem o email)", t)
+                      "confirmação da inscrição, o pedido e o download de materiais e o download do GIF do "
+                      "diagrama da home (sem o email)", t)
 
     def test_privacy_discloses_google_ads(self):
         # #64: GA4 vinculado ao Google Ads com publicidade personalizada (Gui, 13/11/2026). A política diz o recurso,
@@ -2489,18 +2498,37 @@ class ContrastReviewR3Test(unittest.TestCase):
         self.assertEqual(C.css_cascade([css])["claro"][".x:hover"], ((0, 0, 0), (255, 255, 255)))
 
     def test_more_specific_rule_wins_regardless_of_order(self):
-        css = "#a .x{color:#000;background:#fff}.x{color:#fff}"
+        # Mesma chave (".x" no escuro) com especificidades diferentes: body[data-theme=dark] .x (0,2,1) vence [data-theme=dark] .x (0,2,0).
+        css = "body[data-theme=dark] .x{color:#fff;background:#000}[data-theme=dark] .x{color:#000}"
         self.assertEqual(C.contrast_problems([css]), [])
+        self.assertEqual(C.css_cascade([css])["escuro"][".x"], ((255, 255, 255), (0, 0, 0)))
+        css_bad = "body[data-theme=dark] .x{color:#fff;background:#fff}[data-theme=dark] .x{color:#000}"
+        self.assertEqual([(s, t) for s, t, *_ in C.contrast_problems([css_bad])], [(".x", "escuro")])
         # o :hover (0,2,0) vence o base (0,1,0) mesmo vindo antes no texto
         css = ".x:hover{color:#000}.x{color:#fff;background:#000}"
         self.assertEqual(C.css_cascade([css])["claro"][".x:hover"], ((0, 0, 0), (0, 0, 0)))
         self.assertTrue(C.contrast_problems([".x{color:#000;background:#fff}.x{color:#fff}"]))
 
     def test_important_beats_a_later_normal_declaration(self):
-        # Claude P3.
+        # Claude P3 e #138 (agy P2): !important vence empate e também seletor mais específico.
         self.assertEqual(C.contrast_problems([".x{color:#000!important;background:#fff}.x{color:#fff}"]), [])
         self.assertTrue(C.contrast_problems([".x{color:#000!important;background:#fff}.x{color:#fff!important}"]))
         self.assertEqual(C.contrast_problems([".x{color:#000 !IMPORTANT;background:#fff}.x{color:#fff}"]), [])
+        # !important em seletor menos específico vencendo seletor mais específico (herança de estado e mesma chave).
+        css = ".x{color:#000!important;background:#fff}.x:hover{color:#fff}"
+        self.assertEqual(C.contrast_problems([css]), [])
+        self.assertEqual(C.css_cascade([css])["claro"][".x:hover"], ((0, 0, 0), (255, 255, 255)))
+        self.assertIn((".x:hover", "claro"),
+                      {(s, t) for s, t, *_ in C.contrast_problems([".x{color:#fff!important;background:#fff}.x:hover{color:#000}"])})
+        self.assertEqual(C.contrast_problems([
+            "[data-theme=dark] .x{color:#fff!important;background:#000}body[data-theme=dark] .x{color:#000}"
+        ]), [])
+        self.assertEqual(
+            [(s, t) for s, t, *_ in C.contrast_problems([
+                "[data-theme=dark] .x{color:#000!important;background:#000}body[data-theme=dark] .x{color:#fff}"
+            ])],
+            [(".x", "escuro")],
+        )
 
     def test_braces_and_semicolons_inside_strings(self):
         # Claude P3, agy P4: content:"{" não engole a regra seguinte; ";" numa string não parte a declaração.
@@ -2535,6 +2563,109 @@ class ContrastReviewR3Test(unittest.TestCase):
                                                      "body[data-theme=dark] .x", "a::before", ":root", "#a .b c")],
                          [(0, 0, 0), (0, 0, 1), (0, 1, 0), (1, 0, 0), (0, 2, 0), (0, 2, 0), (0, 2, 1), (0, 0, 2),
                           (0, 1, 0), (1, 1, 1)])
+
+
+class ContrastFollowup138Test(unittest.TestCase):
+    """#138: 7 ajustes menores da rodada 4 do #131 (itens 2 a 7; item 1 está em ContrastReviewR3Test)."""
+
+    def test_body_tokens_beat_root_and_html_tokens(self):
+        # Item 2 (Claude P3): body é filho de html/:root, então os tokens de body vencem mesmo vindo antes.
+        css = "body{--t:#fff}:root{--t:#000}.x{color:var(--t);background:#000}"
+        self.assertEqual(C.contrast_problems([css]), [])
+        for theme in C.THEMES:
+            self.assertEqual(C.css_cascade([css])[theme][".x"], ((255, 255, 255), (0, 0, 0)))
+        css_bad = "body{--t:#000}html{--t:#fff}.x{color:var(--t);background:#000}"
+        self.assertEqual([(s, t) for s, t, *_ in C.contrast_problems([css_bad])], [(".x", "claro"), (".x", "escuro")])
+        # Dentro da mesma camada, especificidade e tema continuam valendo.
+        css_theme = "body[data-theme=dark]{--t:#fff}body{--t:#000}.x{color:var(--t);background:#000}"
+        self.assertEqual([(s, t) for s, t, *_ in C.contrast_problems([css_theme])], [(".x", "claro")])
+        css_root_vs_html = ":root{--t:#fff}html{--t:#000}.x{color:var(--t);background:#000}"
+        self.assertEqual(C.contrast_problems([css_root_vs_html]), [])
+        # html/:root não herda tokens definidos em body.
+        css_no_leak = ":root{--t:#000;color:var(--t);background:#fff}body{--t:#fff;color:var(--t);background:#000}"
+        self.assertEqual(C.contrast_problems([css_no_leak]), [])
+
+    def test_root_and_html_theme_share_the_same_key(self):
+        # Item 3 (agy P3): :root puro e html[data-theme]/:root[data-theme] caem na mesma chave "html".
+        css_ok = ":root{--text:#000;color:var(--text);background:#fff}:root[data-theme=dark]{--text:#fff;background:#000}"
+        self.assertEqual(C.contrast_problems([css_ok]), [])
+        self.assertEqual(C.css_cascade([css_ok])["escuro"]["html"], ((255, 255, 255), (0, 0, 0)))
+        css_bad = ":root{color:#000;background:#fff}html[data-theme=dark]{background:#000}"
+        self.assertEqual([(s, t) for s, t, *_ in C.contrast_problems([css_bad])], [("html", "escuro")])
+        # :root (0,1,0) vence html (0,0,1) na mesma chave "html".
+        self.assertEqual(C.contrast_problems([":root{color:#fff;background:#000}html{color:#000}"]), [])
+
+    def test_escaped_quotes_and_braces_inside_quoted_selectors(self):
+        # Item 4 (agy P3): escapes com barra invertida em strings e "{" dentro de aspas no seletor ou @import.
+        for css, want in (
+            ('.a::before{content:"\\"}"}.x{color:#fff;background:#fff}', ".x"),
+            (".a::before{content:'\\'}'}.x{color:#fff;background:#fff}", ".x"),
+            ('.a::before{content:"\\\\\\"{" }.x{color:#fff;background:#fff}', ".x"),
+            ('.a::before{content:"\\\\"}.x{color:#fff;background:#fff}', ".x"),
+            ('.a{content:"a\\";color:#000";color:#fff;background:#fff}', ".a"),
+            ('.a{content:"a\\\\";color:#fff;background:#fff}', ".a"),
+            ('a[data-x="{"]{color:#fff;background:#fff}', 'a[data-x="{"]'),
+            ('a[data-x="\\"{"].z{color:#fff;background:#fff}', 'a[data-x="\\"{"].z'),
+            ('@import url("https://example.com/a{b;c\\";d");.x{color:#fff;background:#fff}', ".x"),
+        ):
+            with self.subTest(css=css):
+                self.assertEqual({s for s, *_ in C.contrast_problems([css])}, {want}, css)
+        # Vírgula escapada dentro de aspas no seletor não parte o seletor.
+        probs = C.contrast_problems(['[data-x="a\\",b"],.y{color:#fff;background:#fff}'])
+        self.assertEqual({s for s, *_ in probs}, {'[data-x="a\\",b"]', ".y"})
+
+    def test_compound_states_inherit_intermediate_states(self):
+        # Item 5 (agy P3): estados compostos (:hover:active) herdam dos estados intermediários pela cascata.
+        css_ok = ".btn{color:#000;background:#fff}.btn:hover{color:#fff;background:#000}.btn:hover:active{background:#111}"
+        self.assertEqual(C.contrast_problems([css_ok]), [])
+        self.assertEqual(C.css_cascade([css_ok])["claro"][".btn:hover:active"], ((255, 255, 255), (17, 17, 17)))
+        css_bad = ".btn{color:#000;background:#fff}.btn:hover{color:#fff;background:#000}.btn:hover:active{background:#fff}"
+        self.assertEqual({s for s, *_ in C.contrast_problems([css_bad])}, {".btn:hover:active"})
+        # Desempate por ordem entre intermediários de mesma especificidade.
+        css_order_bad = ".btn{background:#fff}.btn:hover{color:#fff;background:#000}.btn:active{color:#000;background:#fff}.btn:hover:active{background:#000}"
+        self.assertEqual({s for s, *_ in C.contrast_problems([css_order_bad])}, {".btn:hover:active"})
+        css_order_ok = ".btn{background:#fff}.btn:active{color:#000;background:#fff}.btn:hover{color:#fff;background:#000}.btn:hover:active{background:#000}"
+        self.assertEqual(C.contrast_problems([css_order_ok]), [])
+        # !important no intermediário vence o estado composto.
+        css_imp = ".btn{background:#fff}.btn:hover{color:#fff!important}.btn:hover:active{color:#000;background:#fff}"
+        self.assertIn(".btn:hover:active", {s for s, *_ in C.contrast_problems([css_imp])})
+        # Estados intermediários em ordem diferente (.btn:active:hover) e em partes diferentes do seletor.
+        css_perm = ".btn{background:#fff}.btn:active:hover{color:#fff;background:#000}.btn:hover:active:focus{background:#111}"
+        self.assertEqual(C.contrast_problems([css_perm]), [])
+        css_split = ".card .btn{color:#000;background:#fff}.card:hover .btn{color:#fff;background:#000}.card:hover .btn:active{background:#111}"
+        self.assertEqual(C.contrast_problems([css_split]), [])
+
+    def test_var_followed_by_another_token(self):
+        # Item 6 (agy P4): var(...) só vale como cor única quando o ")" correspondente encerra a string.
+        toks = {"--a": "#fff", "--b": "#000"}
+        self.assertIsNone(C.css_color("var(--a, #fff) var(--b)", toks))
+        self.assertIsNone(C.css_color("var(--a, #000) rgb(0, 0, 0)", toks))
+        self.assertIsNone(C.css_color("var(--a, #000) calc(1px)", toks))
+        self.assertEqual(C.css_color("var(--a, var(--b, rgb(0, 0, 0)))", {}), (0, 0, 0))
+        self.assertIsNone(C._css_background("var(--a, #fff) var(--b)", toks))
+        self.assertEqual(C.contrast_problems([":root{--a:#fff;--b:#000}.x{color:#fff;background:var(--a, #fff) var(--b)}"]), [])
+        self.assertEqual(C.contrast_problems([":root{--a:#fff}.x{color:var(--a, #fff) calc(1px);background:#fff}"]), [])
+
+    def test_ancestor_before_data_theme(self):
+        # Item 7 (Claude P4): ancestral html/:root antes de [data-theme] sobrescreve o seletor e os tokens do tema.
+        for prefix in ("html body[data-theme=dark]", "html > body[data-theme=dark]",
+                       ":root body[data-theme=dark]", ":root > body[data-theme=dark]",
+                       "html [data-theme=dark]"):
+            with self.subTest(prefix=prefix):
+                css_ok = f".x{{color:#000;background:#fff}}{prefix} .x{{color:#fff;background:#000}}"
+                self.assertEqual(C.contrast_problems([css_ok]), [])
+                self.assertEqual(C.css_cascade([css_ok])["escuro"][".x"], ((255, 255, 255), (0, 0, 0)))
+                css_bad = f".x{{color:#000;background:#fff}}{prefix} .x{{background:#000}}"
+                self.assertEqual([(s, t) for s, t, *_ in C.contrast_problems([css_bad])], [(".x", "escuro")])
+        # Tokens e cores no próprio body com ancestral html.
+        css_tok = ":root{--f:#000;--b:#fff}html body[data-theme=dark]{--f:#fff;--b:#000}.x{color:var(--f);background:var(--b)}"
+        self.assertEqual(C.contrast_problems([css_tok]), [])
+        self.assertEqual(C.css_cascade([css_tok])["escuro"][".x"], ((255, 255, 255), (0, 0, 0)))
+        css_body = "body{color:#000;background:#fff}html body[data-theme=dark]{background:#000}"
+        self.assertEqual([(s, t) for s, t, *_ in C.contrast_problems([css_body])], [("body", "escuro")])
+        # Ancestral arbitrário não-raiz não se mistura com .x global.
+        css_scoped = ".x{color:#000;background:#fff}.card [data-theme=dark] .x{background:#000}"
+        self.assertEqual(C.contrast_problems([css_scoped]), [])
 
 
 class ContrastSiteTest(Base):
@@ -3268,10 +3399,134 @@ class LegalSourcesTest(unittest.TestCase):
                 self.assertNotIn("/termos/", form, rel)
 
 
+class SummaryTest(Base):
+    """#108: bloco 'Em resumo' acima de .post-body quando há summary e ausente quando não há, com contraste AA."""
+
+    SUMMARY_HTML = (
+        '<section class="post-summary" aria-label="Em resumo">'
+        '<p class="post-summary-label">Em resumo</p>'
+        '<p>Resposta direta em duas frases. Sem repetir a description.</p>'
+        '</section><div class="post-body"><figure><img src="/blog/img/um-post/a.webp" alt="x"></figure></div>'
+    )
+
+    def write_post(self, slug: str, summary: str | None, html_body: str) -> None:
+        lines = ["---", "title: Teste", "description: Descricao propria do post", f"slug: {slug}"]
+        if summary is not None:
+            lines.append(f'summary: "{summary}"')
+        lines += ["---", "corpo", ""]
+        (self.posts / f"{slug}.md").write_text("\n".join(lines), encoding="utf-8")
+        self.w(f"blog/{slug}/index.html", page(html_body))
+
+    def test_valid_with_and_without_summary(self):
+        self.write_post("com-resumo", "Resposta direta em duas frases.", self.SUMMARY_HTML)
+        self.write_post("sem-resumo", None, '<div class="post-body"><p>texto</p></div>')
+        self.assertEqual(C.check_summary(self.site, self.posts), [])
+
+    def test_yaml_multiline_and_indented_summary_are_recognized(self):
+        # Regressão da revisão do PR #158 (Roger P1 / Codex P2): YAML válido com valor indentado na linha seguinte
+        # ou em bloco >/| é aceito pelo Astro e precisa ser reconhecido como post com summary.
+        yaml_with = {
+            "indentado": "summary:\n  Resposta direta na linha seguinte.\n  Segunda frase.",
+            "indentado com comentario": "summary: # nota\n  # comentario interno\n  Resposta valida.",
+            "bloco dobrado": "summary: >\n  Resposta dobrada em duas linhas.",
+            "bloco literal": "summary: |-\n  Resposta literal.",
+            "bloco indentado": "summary: >2-\n  Resposta com indicador numerico.",
+            "aspas multilinha": 'summary:\n  "Resposta entre aspas\n  quebrada em duas linhas."',
+            "espaco antes de dois-pontos": 'summary : "Resposta com espaco antes do separador."',
+            "chave com aspas duplas": '"summary": "Resposta com chave entre aspas duplas."',
+            "chave com aspas simples": "'summary' : 'Resposta com chave entre aspas simples.'",
+            "aspas duplas escapadas": 'summary: "\\"Resposta\\" entre aspas escapadas."',
+            "misto nUll e string no YAML 1.2": "summary: nUll",
+            "indentado nUll e string no YAML 1.2": "summary:\n  nUll",
+            "null entre aspas e string": 'summary: "null"',
+        }
+        for name, fm_line in yaml_with.items():
+            with self.subTest(case=name):
+                self.setUp()
+                (self.posts / "ml.md").write_text(
+                    f"---\ntitle: Teste\ndescription: Desc\nslug: ml\n{fm_line}\n---\ncorpo\n", encoding="utf-8"
+                )
+                self.w("blog/ml/index.html", page(self.SUMMARY_HTML))
+                self.assertEqual(C.check_summary(self.site, self.posts), [], name)
+                self.w("blog/ml/index.html", page('<div class="post-body"><p>sem bloco</p></div>'))
+                self.assertTrue(C.check_summary(self.site, self.posts), name)
+
+        yaml_without = {
+            "chave vazia": "summary:",
+            "so comentario": "summary: # nada\n  # ainda nada",
+            "aspas vazias": 'summary: ""',
+            "null": "summary: null",
+            "Null": "summary: Null",
+            "NULL": "summary: NULL",
+            "til": "summary: ~",
+            "bloco vazio": "summary: >\n   ",
+            "indentado null": "summary:\n  null",
+            "indentado Null": "summary:\n  Null",
+            "indentado NULL": "summary:\n  NULL",
+            "indentado til com comentario": "summary:\n  ~ # vazio",
+        }
+        for name, fm_line in yaml_without.items():
+            with self.subTest(empty=name):
+                self.setUp()
+                (self.posts / "vazio.md").write_text(
+                    f"---\ntitle: Teste\ndescription: Desc\nslug: vazio\n{fm_line}\n---\ncorpo\n", encoding="utf-8"
+                )
+                self.w("blog/vazio/index.html", page('<div class="post-body"><p>texto</p></div>'))
+                self.assertEqual(C.check_summary(self.site, self.posts), [], name)
+
+    def test_missing_or_misplaced_or_inert_summary_fails(self):
+        cases = {
+            "ausente": '<div class="post-body"><p>texto</p></div>',
+            "depois do body": '<div class="post-body"><p>x</p></div>' + self.SUMMARY_HTML.split("<div")[0],
+            "dentro do body": '<div class="post-body">' + self.SUMMARY_HTML.split("<div")[0] + "</div>",
+            "sem rotulo": '<section class="post-summary"><p>So o texto.</p></section><div class="post-body"></div>',
+            "sem texto": '<section class="post-summary"><p class="post-summary-label">Em resumo</p></section><div class="post-body"></div>',
+            "texto so em template": '<section class="post-summary"><p class="post-summary-label">Em resumo</p><template><p>Oculto</p></template></section><div class="post-body"></div>',
+            "em template": '<template>' + self.SUMMARY_HTML.split("<div")[0] + '</template><div class="post-body"></div>',
+            "hidden": self.SUMMARY_HTML.replace('class="post-summary"', 'class="post-summary" hidden'),
+            "duplicado": self.SUMMARY_HTML.split("<div")[0] * 2 + '<div class="post-body"></div>',
+        }
+        for name, body in cases.items():
+            with self.subTest(case=name):
+                self.setUp()
+                self.write_post("com-resumo", "Resposta direta.", body)
+                self.assertTrue(C.check_summary(self.site, self.posts), name)
+        # .post-body dentro de <template> antes do summary é inerte e não conta como .post-body real.
+        self.setUp()
+        self.write_post("com-resumo", "Resposta direta.", '<template><div class="post-body"></div></template>' + self.SUMMARY_HTML)
+        self.assertEqual(C.check_summary(self.site, self.posts), [])
+
+    def test_main_runs_check_summary(self):
+        consts = Path(self.tmp.name) / "consts.ts"
+        consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
+        self.write_post("com-resumo", "Resposta direta.", '<div class="post-body"><p>sem bloco</p></div>')
+        err = io.StringIO()
+        with isolate_main_rule("check_summary"), \
+                contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            code = C.main(["--site", str(self.site), "--posts", str(self.posts), "--consts", str(consts)])
+        self.assertEqual(code, 1)
+        self.assertIn("post-summary", err.getvalue())
+
+    def test_post_without_summary_cannot_render_block(self):
+        self.write_post("sem-resumo", None, self.SUMMARY_HTML)
+        got = C.check_summary(self.site, self.posts)
+        self.assertTrue(any("sem summary" in p for p in got), got)
+
+    def test_blog_summary_contrast_in_light_and_dark(self):
+        repo = Path(__file__).resolve().parent.parent
+        site_css = (repo / "assets/site.css").read_text(encoding="utf-8")
+        blog_css = (repo / "blog-src/src/styles/blog.css").read_text(encoding="utf-8")
+        self.assertEqual(C.contrast_problems([site_css, blog_css]), [])
+        # Confere também .post-summary-label (cor herdando fundo --tag-bg de .post-summary) nos dois temas.
+        extra = ".post-summary-label{background:var(--tag-bg)}"
+        self.assertEqual(C.contrast_problems([site_css, blog_css, extra]), [])
+
+
 # Regras chamadas por C.main() e o retorno neutro usado ao isolar uma delas (#147).
 MAIN_RULES = {
     "check": lambda *a, **k: [],
     "check_related": lambda *a, **k: [],
+    "check_summary": lambda *a, **k: [],
     "check_contrast": lambda *a, **k: [],
     "check_consulting": lambda *a, **k: [],
     "check_home": lambda *a, **k: [],

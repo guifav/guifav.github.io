@@ -524,14 +524,16 @@ class FakeCF:
     """Conta Cloudflare em memória, com o registro das chamadas."""
 
     def __init__(self, phase=None, lists=None, op_status=("pending", "completed"), echo_items=True,
-                 echo_rule=True, page=20, items=None):
+                 echo_rule=True, page=20, items=None, decode_source=True, readback_map=None):
         self.phase = phase  # None = fase sem ruleset
         self.lists = lists if lists is not None else []
         self.items: dict[str, list[dict]] = dict(items or {})  # itens por id de lista
         self.op_status = list(op_status)
         self.echo_items, self.echo_rule, self.page = echo_items, echo_rule, page
+        self.decode_source, self.readback_map = decode_source, readback_map
         self.calls: list[tuple[str, str]] = []
         self.raw_cursors: list[str] = []
+        self.read_items: list[dict] = []
 
     def __call__(self, req, timeout=None):
         m, url = req.get_method(), req.full_url.removeprefix(S.API)
@@ -564,8 +566,16 @@ class FakeCF:
                 self.raw_cursors.append(raw)
                 start = int(urllib.parse.unquote(raw).rsplit("=", 1)[1])
             items = self.items.get(url.split("/lists/")[1].split("/")[0], [])
-            chunk = [{"id": str(i), "created_on": "x", "redirect": {**it["redirect"], "preserve_path_suffix": True}}
-                     for i, it in enumerate(items[start:start + self.page], start)]
+            chunk = []
+            for i, it in enumerate(items[start:start + self.page], start):
+                red = {**it["redirect"], "preserve_path_suffix": True}
+                if self.decode_source and isinstance(red.get("source_url"), str):
+                    red["source_url"] = red["source_url"].replace("%20", " ")
+                if self.readback_map is not None:
+                    red = self.readback_map(red)
+                row = {"id": str(i), "created_on": "x", "redirect": red}
+                chunk.append(row)
+                self.read_items.append(row)
             after = start + self.page
             cursors = {"after": f"c+/x={after}"} if after < len(items) else {}  # opaco, como os da Cloudflare
             return ok(chunk, result_info={"cursors": cursors})
@@ -691,6 +701,83 @@ class ApplyTest(unittest.TestCase):
     def test_rule_answer_differing_is_an_error(self):
         with self.assertRaises(SystemExit):
             self.apply(FakeCF(echo_rule=False))
+
+    def test_apply_accepts_cloudflare_decoded_space_in_pdf_source_url_and_rejects_other_diffs(self):
+        # Reproduz a leitura de volta da Cloudflare (#151): o PUT envia %20 no source_url e no target_url do PDF,
+        # mas o GET devolve source_url com espaço literal e target_url ainda com %20; os outros 53 itens conferem.
+        pdf_src_sent = f"guifav.dev{PDF_OLD_ENCODED}"
+        pdf_src_cf = f"guifav.dev{PDF_OLD_PATH}"
+        pdf_target = f"https://guifav.dev{PDF_NEW_ENCODED}"
+
+        cf = self.live(self.A)
+        self.assertEqual(self.apply(cf), 0)
+        self.assertEqual(cf.phase, [S.rule(self.B)])
+        self.assertEqual(cf.items["LA"], self.OLD)
+        self.assertEqual(len(cf.items["LB"]), TOTAL)
+        self.assertEqual(len(cf.read_items), TOTAL)
+        sent_pdf = [it["redirect"] for it in cf.items["LB"] if it["redirect"]["source_url"] == pdf_src_sent]
+        read_pdf = [it["redirect"] for it in cf.read_items if it["redirect"]["source_url"] == pdf_src_cf]
+        self.assertEqual(len(sent_pdf), 1)
+        self.assertEqual(sent_pdf[0]["target_url"], pdf_target)
+        self.assertEqual(len(read_pdf), 1)
+        self.assertEqual(read_pdf[0]["target_url"], pdf_target)
+        self.assertEqual([it for it in cf.read_items if it["redirect"]["source_url"] == pdf_src_sent], [])
+        sent_other = {it["redirect"]["source_url"] for it in cf.items["LB"] if it["redirect"]["source_url"] != pdf_src_sent}
+        read_other = {it["redirect"]["source_url"] for it in cf.read_items if it["redirect"]["source_url"] != pdf_src_cf}
+        self.assertEqual(len(sent_other), TOTAL - 1)
+        self.assertEqual(read_other, sent_other)
+
+        # Também aceita se a API ecoar %20 sem decodificar.
+        cf_echo = self.live(self.A)
+        cf_echo.decode_source = False
+        self.assertEqual(self.apply(cf_echo), 0)
+        self.assertEqual(cf_echo.phase, [S.rule(self.B)])
+
+        # Qualquer outra divergência na leitura de volta continua reprovando, mantendo a regra ativa intacta.
+        def _drop_source(r):
+            out = dict(r)
+            del out["source_url"]
+            return out
+
+        cases = (
+            ("target_url decodificado", pdf_src_cf, lambda r: {**r, "target_url": f"https://guifav.dev{PDF_NEW_PATH}"}),
+            ("target_url diferente", pdf_src_cf, lambda r: {**r, "target_url": "https://guifav.dev/tools/outro/"}),
+            ("status_code diferente", pdf_src_cf, lambda r: {**r, "status_code": 302}),
+            ("preserve_query_string diferente", pdf_src_cf, lambda r: {**r, "preserve_query_string": True}),
+            ("include_subdomains diferente", pdf_src_cf, lambda r: {**r, "include_subdomains": True}),
+            ("subpath_matching diferente", pdf_src_cf, lambda r: {**r, "subpath_matching": True}),
+            ("parenteses codificados no source_url", pdf_src_cf,
+             lambda r: {**r, "source_url": r["source_url"].replace("(", "%28").replace(")", "%29")}),
+            ("duplo escape %2520 no source_url", pdf_src_cf,
+             lambda r: {**r, "source_url": r["source_url"].replace(" ", "%2520")}),
+            ("sinal + no lugar do espaco", pdf_src_cf,
+             lambda r: {**r, "source_url": r["source_url"].replace(" ", "+")}),
+            ("barra codificada %2F em outro item", "guifav.dev/llm-ranking",
+             lambda r: {**r, "source_url": r["source_url"].replace("/", "%2F")}),
+            ("espaco extra em outro item", "guifav.dev/llm-ranking",
+             lambda r: {**r, "source_url": r["source_url"].replace("-", " ")}),
+            ("source_url ausente", pdf_src_cf, _drop_source),
+        )
+        for label, match_src, mutator in cases:
+            with self.subTest(case=label):
+                hits = 0
+
+                def apply_mut(r, _match=match_src, _fn=mutator):
+                    nonlocal hits
+                    if r.get("source_url") == _match:
+                        hits += 1
+                        return _fn(r)
+                    return r
+
+                cf_bad = self.live(self.A)
+                cf_bad.readback_map = apply_mut
+                with self.assertRaises(SystemExit) as e:
+                    self.apply(cf_bad)
+                self.assertEqual(hits, 1, label)
+                self.assertIn(self.A, str(e.exception))
+                self.assertEqual(cf_bad.phase, [{"id": "r", **S.rule(self.A)}])
+                self.assertEqual(cf_bad.items["LA"], self.OLD)
+                self.assertNotIn(("PUT", f"/accounts/acc/rulesets/phases/{S.PHASE}/entrypoint"), cf_bad.calls)
 
 
 class CfErrorsTest(unittest.TestCase):
