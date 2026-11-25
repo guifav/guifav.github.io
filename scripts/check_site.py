@@ -1196,6 +1196,8 @@ def check_related(site: Path, posts: Path) -> list[str]:
 SUMMARY_CLASS = "post-summary"
 SUMMARY_LABEL = "Em resumo"
 _YAML_BLOCK_INDICATOR = re.compile(r"^[>|](?:[+-]?\d?|\d[+-]?)(?:\s+#.*)?$")
+# YAML 1.2 Core Schema (o mesmo do Astro): só estes quatro tokens sem aspas são nulos; "nUll" é string.
+_YAML_NULLS = frozenset({"null", "Null", "NULL", "~"})
 
 
 def _has_frontmatter_summary(text: str) -> bool:
@@ -1225,7 +1227,7 @@ def _has_frontmatter_summary(text: str) -> bool:
             if raw[0] in ("'", '"'):
                 found = bool(val.strip())
             else:
-                found = bool(val.strip()) and val.strip().lower() not in ("null", "~")
+                found = bool(val.strip()) and val.strip() not in _YAML_NULLS
         else:
             cleaned = [ln.strip() for ln in cont if ln.strip() and not ln.strip().startswith("#")]
             if not cleaned:
@@ -1235,7 +1237,7 @@ def _has_frontmatter_summary(text: str) -> bool:
                 if first[0] in ("'", '"'):
                     found = bool(_yaml_scalar(first).strip()) or len(cleaned) > 1
                 else:
-                    found = first.lower() not in ("null", "~") or len(cleaned) > 1
+                    found = _yaml_scalar(first).strip() not in _YAML_NULLS or len(cleaned) > 1
     return bool(found)
 
 

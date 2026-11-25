@@ -3305,6 +3305,9 @@ class SummaryTest(Base):
             "chave com aspas duplas": '"summary": "Resposta com chave entre aspas duplas."',
             "chave com aspas simples": "'summary' : 'Resposta com chave entre aspas simples.'",
             "aspas duplas escapadas": 'summary: "\\"Resposta\\" entre aspas escapadas."',
+            "misto nUll e string no YAML 1.2": "summary: nUll",
+            "indentado nUll e string no YAML 1.2": "summary:\n  nUll",
+            "null entre aspas e string": 'summary: "null"',
         }
         for name, fm_line in yaml_with.items():
             with self.subTest(case=name):
@@ -3322,9 +3325,14 @@ class SummaryTest(Base):
             "so comentario": "summary: # nada\n  # ainda nada",
             "aspas vazias": 'summary: ""',
             "null": "summary: null",
+            "Null": "summary: Null",
+            "NULL": "summary: NULL",
             "til": "summary: ~",
             "bloco vazio": "summary: >\n   ",
             "indentado null": "summary:\n  null",
+            "indentado Null": "summary:\n  Null",
+            "indentado NULL": "summary:\n  NULL",
+            "indentado til com comentario": "summary:\n  ~ # vazio",
         }
         for name, fm_line in yaml_without.items():
             with self.subTest(empty=name):
