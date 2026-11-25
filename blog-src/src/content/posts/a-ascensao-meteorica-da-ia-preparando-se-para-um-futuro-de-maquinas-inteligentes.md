@@ -1,6 +1,7 @@
 ---
 title: "A ascensão meteórica da IA: preparando-se para um futuro de máquinas ultra inteligentes"
 description: "Nos últimos anos, testemunhamos avanços sem precedentes no campo da inteligência artificial (IA), com sistemas de IA demonstrando capacidades cada vez mais sofisticadas que antes eram exclusivas dos seres humanos."
+summary: "Jensen Huang, CEO da Nvidia, prevê que a IA atingirá paridade com a inteligência humana em cinco anos. Uma IA superinteligente poderia acelerar a descoberta de tratamentos e otimizar o uso de recursos, mas também escapar do controle humano e perseguir objetivos divergentes, o que exige técnicas de alinhamento e governança antes desse ponto. O Japão mira ampliar em 20 a 30 vezes sua capacidade computacional para IA generativa até março de 2028."
 date: 2023-11-30T03:00:00.000Z
 updated: 2024-01-04T18:33:07.778Z
 slug: a-ascensao-meteorica-da-ia-preparando-se-para-um-futuro-de-maquinas-inteligentes

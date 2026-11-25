@@ -2,6 +2,7 @@
 title: "API-First Architecture: Quando Construir um Ecossistema Digital Faz Sentido (e Quando Não)"
 subtitle: "Por que Shopify construiu um ecossistema de 8.000 apps enquanto Basecamp mantém um monolito lucrativo - e o que isso ensina sobre decisões arquiteturais"
 description: "API-first architecture resolve problemas específicos mas não é sempre a resposta. Análise pragmática de quando usar APIs, monolitos ou arquiteturas híbridas com cases de Shopify, Netflix e Basecamp."
+summary: "API-first, em que o contrato da API vem antes das aplicações que o consomem, gera valor com múltiplos canais digitais, ecossistema de parceiros ou componentes que precisam escalar separadamente, como nos casos de Shopify e Nubank. Em produtos buscando product-market fit, sistemas internos de baixo volume e times pequenos sem maturidade em APIs, vira over-engineering, e o Basecamp segue lucrativo com um monolito. Arquiteturas híbridas costumam ser a melhor solução."
 date: 2025-12-11T11:36:32.659Z
 updated: 2025-12-11T11:39:18.276Z
 slug: api-first-architecture-quando-faz-sentido

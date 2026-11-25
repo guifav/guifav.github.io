@@ -2,6 +2,7 @@
 title: "Lagostas, Farmacia Digital e Freelancers Artificiais: Bem-Vindo a Economia dos Agentes"
 subtitle: "Quando seu assistente de IA abre conta no banco, posta no LinkedIn e ainda compra “drogas digitais” para ficar mais criativo... talvez seja hora de prestar atenção."
 description: "Quando seu assistente de IA abre conta no banco, posta no LinkedIn e ainda compra “drogas digitais” para ficar mais criativo... talvez seja hora de prestar atenção."
+summary: "O OpenClaw, agente pessoal open source de Peter Steinberger que já se chamou ClawdBot e MoltBot, passou de 100 mil estrelas no GitHub em dois meses e ganhou ao redor um ecossistema feito para agentes, com a rede social Moltbook e marketplaces de tarefas, como o ClawTasks, que paga em USDC. A Cisco encontrou vulnerabilidades em 26% de 31 mil skills analisadas, e um paper do Google DeepMind aponta a economia de agentes espontânea e permeável como o cenário de maior risco."
 date: 2026-02-02T21:14:18.687Z
 updated: 2026-02-02T21:19:47.174Z
 slug: economia-agentes-ia-openclaw

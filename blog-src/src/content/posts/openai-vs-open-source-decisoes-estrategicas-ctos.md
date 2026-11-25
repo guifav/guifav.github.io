@@ -2,6 +2,7 @@
 title: "OpenAI vs Modelos Open-Source: Decisões Estratégicas para CTOs"
 subtitle: "OpenAI vs modelos open-source: guia completo para CTOs. Arquitetura híbrida, análise de custos e cases práticos. Framework baseado em experiência real."
 description: "OpenAI ou modelos open source: critérios técnicos, análise de custos e padrões de arquitetura híbrida para CTOs decidirem o que usar em produção."
+summary: "A escolha entre OpenAI e modelos open source como o Llama 4.0 depende do caso de uso, e a arquitetura mais robusta costuma combinar os dois. Um roteador que envia queries simples a modelos abertos e raciocínio complexo ao ChatGPT 5.0 reduziu custos em 40%, e um suporte com Llama fine-tuned em 80% das queries cortou 60% do custo operacional. Volume previsível e exigência de rodar on-premises favorecem o open source, desde que o time tenha experiência em MLOps."
 date: 2025-08-25T03:00:00.000Z
 updated: 2025-11-24T20:05:11.258Z
 slug: openai-vs-open-source-decisoes-estrategicas-ctos

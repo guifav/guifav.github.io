@@ -2,6 +2,7 @@
 title: "Como Criar um Modelo de Machine Learning a Partir de Planilhas: Guia Completo"
 subtitle: "Pipeline completo em 5 etapas: análise exploratória, engenharia de features, preparação, modelagem e aplicação, com código disponível."
 description: "Pipeline completo de machine learning: da planilha bruta ao modelo preditivo. 5 etapas práticas com métricas reais, código disponível e checklist de implementação."
+summary: "Um modelo preditivo a partir de planilhas segue cinco etapas: análise exploratória, engenharia de features, preparação dos dados, modelagem supervisionada e aplicação. Com cerca de 5 milhões de voos dos EUA, a classificação prevê se o voo vai atrasar com ROC-AUC de 0,75 e a regressão estima o atraso com erro médio de 17,8 minutos. O post mostra a correção de um caso de data leakage, e o código do pipeline está publicado no GitHub."
 date: 2026-01-03T03:20:02.017Z
 updated: 2026-01-07T18:11:31.710Z
 slug: como-criar-um-modelo-de-machine-learning

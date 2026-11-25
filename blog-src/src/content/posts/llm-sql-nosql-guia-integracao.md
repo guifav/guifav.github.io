@@ -1,6 +1,7 @@
 ---
 title: "Integração de LLMs com Bancos de Dados SQL e NoSQL: Uma Abordagem Estratégica, Tática e Operacional"
 description: "Explore a integração estratégica, tática e operacional de LLMs com bancos de dados SQL e NoSQL para transformar o gerenciamento e a análise de dados."
+summary: "Integrar LLMs a bancos SQL e NoSQL permite que usuários sem conhecimento técnico consultem dados em linguagem natural: o modelo traduz a pergunta em consulta e converte o resultado em texto ou visualização. O guia organiza a integração em níveis estratégico, tático e operacional, com etapas como governança de dados e validação contra injeção SQL, e indica começar por um piloto em pequena escala."
 date: 2024-10-09T03:00:00.000Z
 slug: llm-sql-nosql-guia-integracao
 cover: img/llm-sql-nosql-guia-integracao/capa.jpg

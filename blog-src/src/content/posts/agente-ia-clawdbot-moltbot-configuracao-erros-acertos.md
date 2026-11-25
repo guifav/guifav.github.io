@@ -2,6 +2,7 @@
 title: "Coloquei o agente de IA Clawdbot para rodar na minha máquina principal. Eis o que aprendi."
 subtitle: "De Claude Opus 4.5 a modelo local: como configurei um agente de IA que responde no WhatsApp, posta nas redes e gerencia minha rotina - sem custo recorrente. Setup, armadilhas e aprendizados."
 description: "Instalei o Clawdbot (Moltbot) para automatizar minha rotina digital. Custos, problemas com RAM, integração via WhatsApp e o que realmente funcionou após semanas de uso real."
+summary: "O Clawdbot, que está virando Moltbot, é um agente de IA auto-hospedado criado por Peter Steinberger, com memória persistente e integrações via MCP, que se configura conversando pelo WhatsApp. O setup descrito roda num MacBook Pro M2 de 16GB com permissões granulares: Google Workspace só leitura e respostas no WhatsApp apenas às mensagens enviadas para si mesmo. O modelo local de 20B parâmetros dá conta da maioria das tarefas, mas disputa RAM com o resto do sistema."
 date: 2026-01-28T10:09:52.766Z
 updated: 2026-01-28T10:11:17.061Z
 slug: agente-ia-clawdbot-moltbot-configuracao-erros-acertos
