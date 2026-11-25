@@ -1,4 +1,5 @@
 User-agent: *
+Disallow: /admin/
 Disallow: /portfolio/mockups/
 
 Sitemap: https://guifav.dev/sitemap.xml

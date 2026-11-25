@@ -62,6 +62,7 @@ jobs:
           python3 scripts/test_cutover_redirects.py
           python3 scripts/test_site_redirects.py
           python3 scripts/test_build_sitemaps.py
+          python3 scripts/test_build_llms_txt.py
           python3 scripts/test_indexnow.py
           python3 scripts/test_build_llm_ranking.py
           python3 scripts/test_llm_ranking_snapshot.py
@@ -99,7 +100,10 @@ jobs:
           SITEMAP_REAL_SITE: required
         run: python3 scripts/test_build_sitemaps.py RealSiteTest
 
-      - name: Verificar links, noindex, RSS e sitemaps
+      - name: Gerar o /llms.txt (#174)
+        run: python3 scripts/build_llms_txt.py
+
+      - name: Verificar links, noindex, RSS, sitemaps e llms.txt
         run: python3 scripts/check_site.py
 
       - name: Plano do IndexNow (URLs que mudaram em relação ao site publicado)

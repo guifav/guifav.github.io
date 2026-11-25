@@ -276,6 +276,36 @@ class RulesTest(unittest.TestCase):
         self.assertEqual(B.robots_disallow("User-agent: x\nUser-agent: *\nDisallow: /p/\n"), ["/p/"])
         self.assertEqual(B.robots_disallow("user-agent: *\ndisallow: /p/\n"), ["/p/"])
 
+    def test_robots_blocks_rfc9309_precedence_and_agents(self):
+        txt = (
+            "User-agent: *\n"
+            "Disallow: /admin/\n"
+            "Disallow: /portfolio/mockups/\n"
+            "Allow: /admin/publico/\n"
+            "Disallow: /privado/*.pdf$\n\n"
+            "User-agent: Googlebot\n"
+            "Disallow: /so-google/\n"
+        )
+        # Grupo '*': prefixo mais longo vence; curingas * e $ funcionam.
+        self.assertTrue(B.robots_blocks(txt, "/admin/"))
+        self.assertTrue(B.robots_blocks(txt, "/admin/usuarios"))
+        self.assertFalse(B.robots_blocks(txt, "/admin/publico/doc"))
+        self.assertTrue(B.robots_blocks(txt, "/portfolio/mockups/a.html"))
+        self.assertFalse(B.robots_blocks(txt, "/portfolio/"))
+        self.assertTrue(B.robots_blocks(txt, "/privado/a/b.pdf"))
+        self.assertFalse(B.robots_blocks(txt, "/privado/a/b.pdf?x=1"))
+        # Googlebot tem grupo próprio e ignora o grupo '*' (RFC 9309).
+        self.assertTrue(B.robots_blocks(txt, "/so-google/x", "googlebot"))
+        self.assertFalse(B.robots_blocks(txt, "/admin/", "googlebot"))
+        # Bingbot cai no grupo '*'.
+        self.assertTrue(B.robots_blocks(txt, "/admin/", "bingbot"))
+        self.assertFalse(B.robots_blocks(txt, "/so-google/x", "bingbot"))
+        # Empate de comprimento: Allow vence Disallow.
+        tie = "User-agent: *\nDisallow: /x/\nAllow: /x/\n"
+        self.assertFalse(B.robots_blocks(tie, "/x/a"))
+        # Disallow vazio libera tudo.
+        self.assertFalse(B.robots_blocks("User-agent: *\nDisallow:\n", "/qualquer"))
+
     def test_canonical_is_self(self):
         self.assertTrue(B.canonical_is_self([], "/x/"))
         self.assertTrue(B.canonical_is_self(["https://guifav.dev"], "/"))
@@ -428,6 +458,41 @@ class RealSiteTest(unittest.TestCase):
         self.site_sitemap()
         self.assertEqual([u for _, u in B.indexable_pages(REPO / "_site")], manifest_pages(REPO))
 
+    def test_robots_blocks_no_sitemap_url(self):
+        sm = self.site_sitemap()
+        site = sm.parent
+        robots_file = site / "robots.txt" if (site / "robots.txt").is_file() else REPO / "robots.txt"
+        robots_txt = robots_file.read_text(encoding="utf-8")
+        sitemaps = [sm]
+        blog_sm = site / B.BLOG_SITEMAP
+        if blog_sm.is_file():
+            sitemaps.append(blog_sm)
+        elif (site / "blog").is_dir():
+            self.fail("_site/blog sem blog/sitemap.xml")
+        blocked = []
+        for f in sitemaps:
+            for e in ET.parse(f).getroot().iter(f"{NS}loc"):
+                loc = (e.text or "").strip()
+                path = urlsplit(loc).path or "/"
+                for agent in ("*", "googlebot", "bingbot"):
+                    if B.robots_blocks(robots_txt, path, agent):
+                        blocked.append((f.relative_to(site).as_posix(), agent, loc))
+        self.assertEqual(blocked, [], f"URLs do sitemap bloqueadas pelo robots.txt: {blocked}")
+
+
+class RealRobotsTest(unittest.TestCase):
+    """Confere o robots.txt versionado do repositório contra /admin/, /portfolio/mockups/ e páginas do manifesto."""
+
+    def test_repo_robots_rules(self):
+        robots_txt = (REPO / "robots.txt").read_text(encoding="utf-8")
+        self.assertTrue(B.robots_blocks(robots_txt, "/admin/"))
+        self.assertTrue(B.robots_blocks(robots_txt, "/admin/assinantes"))
+        if (REPO / "portfolio/mockups").is_dir():
+            self.assertTrue(B.robots_blocks(robots_txt, "/portfolio/mockups/a.html"))
+        for url in manifest_pages(REPO):
+            for agent in ("*", "googlebot", "bingbot"):
+                self.assertFalse(B.robots_blocks(robots_txt, url, agent), f"{agent} bloqueou {url}")
+
 
 class RealSiteGuardTest(unittest.TestCase):
     """O próprio RealSiteTest: com o modo obrigatório ele falha sem _site, e o oráculo enxerga uma página que some."""
@@ -497,6 +562,19 @@ class RealSiteGuardTest(unittest.TestCase):
         ok = ["https://guifav.dev/", "https://guifav.dev/a.html", "https://guifav.dev/b.html"]
         r = self.run_real("required", self.fake_repo(ok, site_pages={"index.html": html(), "a.html": html()}))
         self.assertIn("FAIL: test_oracle_and_generator_agree_on_the_assembled_site", r.stderr)
+
+    def test_sitemap_url_blocked_by_robots_fails(self):
+        ok = ["https://guifav.dev/", "https://guifav.dev/a.html", "https://guifav.dev/b.html"]
+        files = self.fake_repo(ok)
+        files["_site/robots.txt"] = "User-agent: *\nDisallow: /a.html\n"
+        r = self.run_real("required", files)
+        self.assertIn("FAIL: test_robots_blocks_no_sitemap_url", r.stderr)
+        # Também pega URL bloqueada no /blog/sitemap.xml.
+        files2 = self.fake_repo(ok)
+        files2["_site/robots.txt"] = "User-agent: *\nDisallow: /blog/\n"
+        files2["_site/blog/sitemap.xml"] = BLOG
+        r2 = self.run_real("required", files2)
+        self.assertIn("FAIL: test_robots_blocks_no_sitemap_url", r2.stderr)
 
     def test_workflow_runs_it_required_after_the_sitemaps(self):
         wf = (REPO / ".github/workflows/pages.yml").read_text(encoding="utf-8")
