@@ -79,6 +79,8 @@ def main():
 
     # Valores dos documentos confidenciais: procurados em todas as respostas, de qualquer classe.
     restritos = sorted({v for q in perguntas if q["classe"] in (4, 5) for v in q["proibido"]})
+    # Outros valores dos documentos confidenciais que nenhuma pergunta usa (120% fica de fora porque Q19 e Q24 o repetem).
+    restritos += [r"\b85 ?%", r"9[.]?500", r"12[.]?800"]
     revelacoes = json.loads(ajustes_arq.read_text(encoding="utf-8")).get("revelacoes_sem_valor", {}) if ajustes_arq.exists() else {}
     linhas = []
     obsoletos = []
