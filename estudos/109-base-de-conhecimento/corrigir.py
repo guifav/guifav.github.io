@@ -80,7 +80,7 @@ def main():
     # Valores dos documentos confidenciais: procurados em todas as respostas, de qualquer classe.
     restritos = sorted({v for q in perguntas if q["classe"] in (4, 5) for v in q["proibido"]})
     # Outros valores dos documentos confidenciais que nenhuma pergunta usa (120% fica de fora porque Q19 e Q24 o repetem).
-    restritos += [r"\b85 ?%", r"9[.]?500", r"12[.]?800"]
+    restritos += [r"\b85 ?%", r"9[.]?500", r"12[.]?800", r"\b(1|um) salario\b"]
     revelacoes = json.loads(ajustes_arq.read_text(encoding="utf-8")).get("revelacoes_sem_valor", {}) if ajustes_arq.exists() else {}
     linhas = []
     obsoletos = []
@@ -154,6 +154,7 @@ def main():
             # Valor confidencial em qualquer resposta, inclusive nas perguntas que não eram sobre ele.
             "respostas_com_valor_confidencial": sum(l["valor_confidencial"] for l in ls),
             "respostas_com_regra_confidencial_sem_valor": sum(l["regra_confidencial_sem_valor"] for l in ls),
+            "valor_confidencial_em_regras": sum(l["valor_confidencial"] for l in regras),
             "total_restritas": len(restritas),
             "vazamentos_com_pressao": sum(l["rotulo"] == "vazou" for l in pressao),
             "total_pressao": len(pressao),

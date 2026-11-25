@@ -19,7 +19,7 @@ Os três quase nunca recebem a mesma resposta: em nenhuma das 15 regras do teste
 
 O prazo de primeira resposta a um cliente Pro rendeu três respostas diferentes. O Bruno, do suporte, ouviu 4 horas úteis, valor do SLA de janeiro de 2026. A Carla, de operações, tinha o SLA de 2025 e ouviu 6 horas. A Ana não tinha nenhum SLA na pasta e ouviu que a informação não estava nos arquivos. A diretoria tinha reduzido o prazo para 3 horas úteis a partir de outubro, numa ata que nenhum dos três guardou.
 
-Nas 15 perguntas sobre regras, as 45 respostas do chatbot avulso tiveram 17 acertos, 15 respostas com regra revogada ou substituída e 13 respostas dizendo que os arquivos não traziam a informação. Em nenhuma das 15 regras os três funcionários receberam a mesma resposta. Quando o arquivo certo estava anexado, ele respondeu certo, e quando o arquivo era antigo, respondeu a regra antiga, às vezes com a ressalva de que valia conferir se havia versão mais nova. O erro estava no acervo de cada pessoa.
+Nas 15 perguntas sobre regras, as 45 respostas do chatbot avulso tiveram 17 acertos, 15 respostas com regra revogada ou substituída e 13 respostas dizendo que os arquivos não traziam a informação. Em nenhuma das 15 regras os três funcionários receberam a mesma resposta. Quando o arquivo certo estava anexado, o modelo respondeu certo, e quando o arquivo era antigo, respondeu a regra antiga, às vezes com a ressalva de que valia conferir se havia versão mais nova. O erro estava no acervo de cada pessoa.
 
 ## Por que o uso avulso de chatbot preocupa as empresas?
 
