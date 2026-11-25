@@ -2,6 +2,7 @@
 title: "Depois do transformer: onde está o próximo salto de escala da IA"
 subtitle: "O transformer e o tensor em GPU viraram salto porque abriram um eixo de escala previsível e rodavam na máquina que existia. Apliquei os dois testes aos candidatos de 2026: o salto que já aconteceu, a continuação do tensor, a física por baixo e a aposta que mais lembra 2017."
 description: "Os candidatos de 2026 ao próximo salto de escala da IA, julgados pelos dois testes que fizeram do transformer e do tensor em GPU um salto: eixo de escala novo e casamento com o hardware."
+summary: "O salto de escala mais provável depois do transformer vem da composição de frentes que já rodam no hardware atual: pensar mais na hora de responder, eixo aberto pelo o1 em 2024, somado a modelos que ativam menos parâmetros por token e usam menos bits por número. A memória no momento do teste, em que o modelo atualiza os próprios pesos enquanto responde, é a aposta que mais lembra 2017, com evidência só até cerca de 3 bilhões de parâmetros."
 date: 2026-11-18T12:00:00Z
 slug: depois-do-transformer-proximo-salto-de-escala-da-ia
 cover: img/depois-do-transformer-proximo-salto-de-escala-da-ia/capa.png

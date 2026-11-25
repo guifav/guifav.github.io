@@ -2,6 +2,7 @@
 title: "IA Generativa em Produção: Custos, Performance e Escalabilidade"
 subtitle: "Aprenda como escalar IA generativa de 100 para 10.000 usuários reduzindo custos em 67% e melhorando performance em 40%. Guia prático com estratégias reais de produção."
 description: "Aprenda como escalar IA generativa de 100 para 10.000 usuários reduzindo custos em 67% e melhorando performance em 40%. Guia prático com estratégias reais de produção."
+summary: "Ao escalar uma aplicação de IA generativa de 100 usuários piloto para 10.000 em produção numa empresa parceira, o consumo médio de tokens por sessão ficou 300% acima do projetado. Em seis meses, caching e roteamento inteligentes reduziram os custos operacionais em 67%, e otimizações de infraestrutura melhoraram a performance média em 40%, com SLA de 99,5% de disponibilidade."
 date: 2025-09-04T11:36:18.903Z
 updated: 2025-11-24T20:05:42.736Z
 slug: ia-generativa-em-producao-custos

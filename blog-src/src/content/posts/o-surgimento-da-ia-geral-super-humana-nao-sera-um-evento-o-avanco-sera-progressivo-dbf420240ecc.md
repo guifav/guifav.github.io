@@ -1,6 +1,7 @@
 ---
 title: "O surgimento da IA geral super-humana não será um evento. O avanço será progressivo."
 description: "A transição para uma Inteligência Artificial Geral, presente em todos os equipamentos e dispositivos, em todos os lugares, será gradual."
+summary: "A IA geral super-humana deve surgir de forma gradual, provavelmente ao longo de décadas, conforme sistemas que aprendem como o mundo funciona passam a perseguir objetivos dentro de limites definidos por humanos e a planejar para alcançá-los. Os humanos seguem no controle durante todo o processo, e o alinhamento desses sistemas aos valores humanos precisa crescer junto com a capacidade deles."
 date: 2023-12-20T00:45:42.000Z
 updated: 2024-01-04T00:41:01.294Z
 slug: o-surgimento-da-ia-geral-super-humana-nao-sera-um-evento-o-avanco-sera-progressivo-dbf420240ecc

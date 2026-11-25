@@ -2,6 +2,7 @@
 title: "O Futuro das Organizações: Além da Tecnologia e Processos"
 subtitle: "O verdadeiro ativo estratégico será a composição única de dados proprietários combinados com modelos de IA treinados especificamente nestes conjuntos de dados."
 description: "O verdadeiro ativo estratégico será a composição única de dados proprietários combinados com modelos de IA treinados especificamente nestes conjuntos de dados."
+summary: "Com metodologias e ferramentas de automação virando requisito básico, o diferencial das organizações passa a ser o tripé de capital humano qualificado, automação inteligente e escala sustentável. O ativo estratégico central será a combinação de dados proprietários com modelos de IA treinados especificamente neles, num ciclo em que mais interações geram dados mais ricos e algoritmos mais precisos."
 date: 2025-04-24T15:54:09.389Z
 updated: 2025-11-24T20:04:26.513Z
 slug: o-futuro-das-organizacoes-alem-da

@@ -2,6 +2,7 @@
 title: "MCP aberto ou aplicação: quem garante a resposta da IA na sua empresa"
 subtitle: "Ligar os dados da empresa ao Claude e ao ChatGPT via MCP ficou barato. Um critério para decidir quando basta perguntar ao assistente com os dados abertos via MCP e quando o processo pede uma aplicação, e o que dá para garantir na entrada e na saída de cada caminho."
 description: "Ligar os dados da empresa ao Claude e ao ChatGPT via MCP ficou barato. Um critério para decidir quando basta perguntar ao assistente e quando o processo pede uma aplicação."
+summary: "O conector MCP, que liga os dados da empresa ao Claude ou ao ChatGPT, e a aplicação de processo podem usar o mesmo dado, com a mesma identidade e o mesmo registro de consultas, e se separam em quem garante a resposta: no MCP aberto, a pessoa que perguntou; na aplicação, a empresa. Um processo deve subir para aplicação quando a saída vai para quem não fez a pergunta ou quando o erro é caro ou difícil de desfazer."
 date: 2026-11-16T12:00:00Z
 slug: mcp-ou-aplicacao-dados-da-empresa-na-ia
 cover: img/mcp-ou-aplicacao-dados-da-empresa-na-ia/capa.png

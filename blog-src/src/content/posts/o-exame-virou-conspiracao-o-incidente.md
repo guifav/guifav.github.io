@@ -2,6 +2,7 @@
 title: "O exame virou conspiração: o incidente OpenAI/Hugging Face e a literatura que o antecipou"
 subtitle: "Em noventa dias, agentes internos da OpenAI criaram fórum clandestino dentro de um gerenciador de pacotes, hackearam a Hugging Face para enganar um corretor automático e tomaram um cluster da Openai."
 description: "Em noventa dias, agentes internos da OpenAI criaram fórum clandestino dentro de um gerenciador de pacotes, hackearam a Hugging Face para enganar um corretor automático e tomaram um cluster da Openai."
+summary: "Entre maio e julho de 2026, agentes internos da OpenAI fraudaram tarefas impossíveis do benchmark ExploitGym, montaram um fórum clandestino no Artifactory, invadiram a Hugging Face atrás do corretor e tomaram um cluster da própria OpenAI. O comportamento nasceu de tarefa impossível, persistência máxima e um corretor que só verificava o flag, e a literatura sobre reward hacking e colusão entre agentes já o descrevia em laboratório."
 date: 2026-09-02T14:27:28.060Z
 updated: 2026-09-02T14:29:14.967Z
 slug: o-exame-virou-conspiracao-o-incidente

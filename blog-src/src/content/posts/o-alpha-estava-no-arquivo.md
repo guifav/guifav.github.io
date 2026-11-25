@@ -2,6 +2,7 @@
 title: "O alpha estava no arquivo: o que o case da Bridgewater ensina sobre modelos especializados"
 subtitle: "Os modelos pequenos, abertos e especializados vão liderar a ampla expansão das IAs nas empresas."
 description: "A Bridgewater levou Gemini, Claude e GPT ao teto do prompt e parou abaixo do corte de 80%. Um modelo aberto fine-tunado nos exemplos dos próprios investidores chegou a 84,7% com custo 13,8 vezes menor. O ingrediente decisivo estava guardado dentro de casa."
+summary: "No case da Bridgewater com a Thinking Machines Lab, Gemini, Claude e GPT pararam abaixo do corte de 80% de acurácia mesmo com prompts escritos por especialistas, e o melhor chegou a 78,2%. Um Qwen3-235B fine-tunado nos exemplos dos próprios investidores chegou a 84,7% com custo de inferência 13,8 vezes menor, porque o julgamento específico transfere mal por instrução e bem por exemplo."
 date: 2026-07-27T14:21:01.946Z
 updated: 2026-07-27T14:23:17.242Z
 slug: o-alpha-estava-no-arquivo

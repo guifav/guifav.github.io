@@ -1,6 +1,7 @@
 ---
 title: "Casos práticos de aplicação da Inteligência Artificial no Mercado Imobiliário Global: Insights do GRI Club"
 description: "Recentemente, tive o prazer de participar do podcast \"Encontros com o Futuro\", uma produção conjunta do World Observatory, da ESPM e da Prime (braço das Nações Unidas para as Faculdades de Negócios no Mundo)."
+summary: "O GRI Club, rede de 17.000 membros C-Level de mais de 100 países nos setores imobiliário, de infraestrutura e agricultura, usa mais de 25 ferramentas de IA em vários departamentos. No podcast Encontros com o Futuro, as aplicações citadas foram o matchmaking entre membros, a personalização de conteúdo, a previsão de renovação e a aceleração de tarefas como tradução e análise de dados."
 date: 2024-08-15T03:00:00.000Z
 updated: 2024-09-18T10:58:40.120Z
 slug: casos-praticos-inteligencia-artificial

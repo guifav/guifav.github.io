@@ -1,6 +1,7 @@
 ---
 title: "Direito de Alertar sobre Inteligência Artificial Avançada (funcionários da OpenAi, GoogleDeepMind e Anthropic)"
 description: "O texto abaixo é uma declaração na íntegra de funcionários e ex-funcionários de empresas de ponta em IA (A Right to Warn about Advanced Artificial Intelligence, 04/06/2024), que reconhecem o potencial da tecnologia de IA para beneficiar a humanidade, mas também alertam sobre sérios riscos, como desigualdades, manipulação, desinformação e perda de controle de sistemas autônomos."
+summary: "A declaração A Right to Warn, de 4 de junho de 2024, assinada por funcionários e ex-funcionários da OpenAI, do Google DeepMind e da Anthropic, pede às empresas de IA avançada que se comprometam com quatro princípios. Entre eles estão não retaliar críticas relacionadas a riscos e oferecer um processo anônimo para levar essas preocupações ao conselho da empresa e a reguladores. O post traz a tradução integral do texto."
 date: 2024-06-05T03:00:00.000Z
 updated: 2024-09-05T21:07:18.547Z
 slug: direito-de-alertar-sobre-inteligencia-artificial-avancada

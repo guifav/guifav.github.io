@@ -1,6 +1,7 @@
 ---
 title: "Machine Learning em Produção: Como transformei modelos experimentais em motores de crescimento empresarial"
 description: "Aprenda como transformar modelos de machine learning experimentais em soluções empresariais que geram ROI real, com case prático e framework para produção."
+summary: "Colocar machine learning em produção é um problema de engenharia de sistemas: numa empresa parceira, 70% dos problemas de performance em produção vinham da camada de dados, e um modelo de churn com 89% de precisão em laboratório degradava na jornada real do cliente. Em seis meses, uma arquitetura em cinco pilares levou três modelos à produção, e a receita da linha de produtos principal subiu 34%."
 date: 2025-09-09T03:00:00.000Z
 slug: machine-learning-producao-modelos-empresariais-roi
 cover: img/machine-learning-producao-modelos-empresariais-roi/capa.jpg

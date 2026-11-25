@@ -1,6 +1,7 @@
 ---
 title: "Data Pipelines e ETL para Business Intelligence: Transformando Dados em Decisões Estratégicas"
 description: "Guia técnico sobre data pipelines e ETL para business intelligence: arquiteturas modernas, processamento em tempo real e otimização de performance."
+summary: "Pipelines de dados para business intelligence funcionam melhor quando combinam processamento orientado por eventos, que encaminha cada dado para streaming ou batch conforme a criticidade, com validação de qualidade embutida em cada etapa. Numa empresa parceira com dados em mais de 12 sistemas, essa arquitetura reduziu o time-to-insight de 3 semanas para 4 horas e liberou 60% do tempo dos analistas."
 date: 2025-09-14T03:00:00.000Z
 slug: data-pipelines-etl-business-intelligence-tempo-real
 cover: img/data-pipelines-etl-business-intelligence-tempo-real/capa.jpg

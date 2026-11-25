@@ -2,6 +2,7 @@
 title: "Fine-tuning vs Prompt Engineering: Quando Investir em Cada Abordagem"
 subtitle: "Decisões Práticas Baseadas em ROI e restrições técnicas"
 description: "Fine-tuning, RAG ou prompt engineering: framework prático com análise de custo, ROI e restrições técnicas para decidir qual abordagem usar em LLMs."
+summary: "Numa aplicação de análise de documentos financeiros, o fine-tuning trouxe 23% de melhoria na precisão, e o prompt engineering avançado alcançou 89% dessa melhoria com investimento 10 vezes menor. O texto recomenda começar pelo prompt engineering com exemplos few-shot e reservar o fine-tuning para tarefas específicas de domínio, com requisitos estáveis e dados de qualidade disponíveis."
 date: 2025-08-28T21:05:59.774Z
 updated: 2025-11-24T20:05:35.972Z
 slug: fine-tuning-vs-prompt-engineering
