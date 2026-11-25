@@ -2,7 +2,7 @@
 title: "Inteligência Artificial nos Negócios: Uma Nova Era de Transformação Empresarial"
 subtitle: "Descubra como a IA está transformando os negócios em 2025: da simples automação aos agentes autônomos."
 description: "Como empresas saem de testes isolados para agentes de IA nos processos de negócio, lidando com integração, custo-benefício e confiabilidade das entregas."
-summary: "Empresas que transformam o negócio com IA redesenham processos inteiros em torno dela, enquanto as que apenas aderem ficam em usos isolados, como um chatbot no site. Agentes autônomos são a nova fronteira, como na Nvidia, que os usa em cibersegurança e design de chips. Proibir o uso se mostra ineficaz, porque funcionários usam IA de qualquer forma, e o caminho indicado combina diretrizes, segurança de dados, treinamento e monitoramento."
+summary: "Empresas que transformam o negócio com IA redesenham processos inteiros em torno dela, enquanto as que apenas aderem ficam em usos isolados, como um chatbot no site. Na Nvidia, a cibersegurança já depende fortemente de agentes de IA, e assistentes de IA apoiam o design de chips. Proibir o uso se mostra ineficaz, porque funcionários usam IA de qualquer forma, e o caminho indicado combina diretrizes, segurança de dados, treinamento e monitoramento."
 date: 2025-01-07T03:00:00.000Z
 updated: 2025-11-24T20:04:25.425Z
 slug: inteligencia-artificial-negocios-transformacao-empresarial

@@ -1,7 +1,7 @@
 ---
 title: "[atualizado] Melhores práticas para uso do ChatGPT e outros LLMs"
 description: "Ao seguir essas orientações e melhores práticas, você pode criar prompts eficazes que aproveitem ao máximo as capacidades dos LLMs."
-summary: "Prompts eficazes em LLMs como ChatGPT, Claude, Gemini e Perplexity seguem sete práticas: instruções claras e específicas, exemplos ilustrativos (n-shot, geralmente 5 ou mais), chain-of-thought com etapas explícitas, recursos de referência, prompts pequenos e focados, contexto enxuto e iteração com testes. Para desenvolvedores, valem ainda monitorar os prompts em produção e estruturar inputs e outputs em XML, JSON ou Markdown."
+summary: "Prompts eficazes em LLMs como ChatGPT, Claude, Gemini e Perplexity seguem sete práticas: instruções claras e específicas, exemplos ilustrativos (n-shot, geralmente 5 ou mais), chain-of-thought com etapas explícitas, recursos de referência, prompts pequenos e focados, contexto enxuto e iteração com testes. Para desenvolvedores, valem ainda monitorar os prompts em produção, estruturar os inputs em XML, JSON ou Markdown e especificar o formato dos outputs."
 date: 2024-05-31T03:00:00.000Z
 updated: 2024-08-26T10:40:57.525Z
 slug: melhores-praticas-para-uso-do-chatgpt-e-outros-llms

@@ -1,7 +1,7 @@
 ---
 title: "\"Vida em 2030\" de acordo com Sam Altman"
 description: "Recentemente Sam Altman, presidente da OpenAI, escreveu um artigo revelando como é sua visão para os seres humanos em 2030."
-summary: "O post traduz o ensaio Lei de Moore para tudo, de Sam Altman, presidente da OpenAI, que prevê a IA derrubando o custo de bens e serviços e transferindo poder do trabalho para o capital. Altman propõe o American Equity Fund, que tributaria em 2,5% ao ano o valor das empresas acima de certa avaliação e das terras privadas para distribuir dinheiro e ações aos cidadãos adultos, cerca de US$ 13.500 por ano para cada um daqui a uma década."
+summary: "O post traduz o ensaio 'Lei de Moore para tudo', de Sam Altman, presidente da OpenAI, que prevê a IA derrubando o custo de bens e serviços e transferindo poder do trabalho para o capital. Altman propõe o American Equity Fund, que tributaria em 2,5% ao ano o valor das empresas acima de certa avaliação e das terras privadas para distribuir dinheiro e ações aos cidadãos adultos, cerca de US$ 13.500 por ano para cada um daqui a uma década."
 date: 2024-08-27T03:00:00.000Z
 updated: 2024-10-12T01:23:42.682Z
 slug: vida-em-2030-sam-altman-moore

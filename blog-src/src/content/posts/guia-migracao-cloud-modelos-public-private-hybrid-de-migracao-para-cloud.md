@@ -1,7 +1,7 @@
 ---
 title: "Estratégias de Migração para Cloud: Navegando Entre Public, Private e Hybrid"
 description: "Explore estratégias de migração para cloud comparando public, private, hybrid e multi-cloud. Aprenda com casos Capital One e Goldman Sachs sobre padrões de migração (6 Rs), otimização de custos, arquitetura híbrida e trade-offs fundamentais para decisões alinhadas ao contexto organizacional."
-summary: "A estratégia de migração para cloud depende de compliance, perfil de workload e maturidade da organização: a Capital One levou tudo para a AWS, enquanto o Walmart construiu cloud privada para não depender do maior concorrente. Arquiteturas maduras costumam combinar public, private, hybrid, multi-cloud e edge, escolhem entre os 6 Rs de migração (como rehost, replatform e refactor) e precisam de conectividade dedicada e FinOps para controlar custos."
+summary: "A estratégia de migração para cloud depende de compliance, perfil de workload e maturidade da organização: a Capital One levou tudo para a AWS, enquanto o Walmart construiu cloud privada para não depender do maior concorrente. Arquiteturas maduras costumam combinar vários dos modelos public, private, hybrid, multi-cloud e edge, escolhem entre os 6 Rs de migração (como rehost, replatform e refactor) e precisam de conectividade dedicada e FinOps para controlar custos."
 date: 2025-12-15T22:40:23.420Z
 updated: 2025-12-15T22:45:50.900Z
 slug: guia-migracao-cloud-modelos-public-private-hybrid-de-migracao-para-cloud
