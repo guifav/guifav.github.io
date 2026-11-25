@@ -20,7 +20,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 
-# URL publicada -> arquivo do repo que precisa ser servido byte a byte. O /tools/llm-ranking/ saiu da lista em #113: o HTML
+# URL publicada -> arquivo do repo que precisa ser servido byte a byte. O /ferramentas/llm-ranking/ saiu da lista em #113: o HTML
 # dele é gerado no build a partir do snapshot de dados, então difere do template do repo por construção.
 IDENTICAL = {
     "/": "index.html",

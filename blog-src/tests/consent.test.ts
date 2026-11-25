@@ -265,8 +265,8 @@ function runInline(rel: string, stored: unknown) {
   return JSON.parse(JSON.stringify(((ctx.dataLayer as unknown[]) ?? []).map((a) => Array.from(a as ArrayLike<unknown>)))) as unknown[][];
 }
 
-const MATERIAIS = ['planilha-custos-ia', 'mapa-decisao-ia'].flatMap((m) => [`tools/${m}/index.html`, `tools/${m}/enviado/index.html`]);
-for (const rel of ['index.html', 'portfolio/index.html', 'consultoria/index.html', 'tools/index.html', 'tools/llm-ranking/index.html', 'privacidade/index.html', 'termos/index.html', ...MATERIAIS, 'Base.astro']) {
+const MATERIAIS = ['planilha-custos-ia', 'mapa-decisao-ia'].flatMap((m) => [`ferramentas/${m}/index.html`, `ferramentas/${m}/enviado/index.html`]);
+for (const rel of ['index.html', 'portfolio/index.html', 'consultoria/index.html', 'ferramentas/index.html', 'ferramentas/llm-ranking/index.html', 'privacidade/index.html', 'termos/index.html', ...MATERIAIS, 'Base.astro']) {
   test(`${rel}: padrão negado antes do config; aceite válido vira update granted antes do config; vencido não`, () => {
     const names = (l: unknown[][]) => l.map((c) => `${c[0]}:${c[0] === 'consent' ? c[1] : ''}`);
     const none = runInline(rel, undefined);

@@ -15,7 +15,7 @@ Organizei a resposta em sete partes: as quatro linhas que compõem a conta real,
 
 ## Quais são as quatro linhas de custo de um projeto de IA?
 
-Quem compara opções olhando apenas a tabela de tokens por milhão erra o orçamento por uma ordem de grandeza. Na [planilha de custos de IA](/tools/planilha-custos-ia/) que montei para acompanhar projetos reais, toda arquitetura soma quatro linhas mensais: inferência, infraestrutura ao redor do modelo, desperdício e engenharia.
+Quem compara opções olhando apenas a tabela de tokens por milhão erra o orçamento por uma ordem de grandeza. Na [planilha de custos de IA](/ferramentas/planilha-custos-ia/) que montei para acompanhar projetos reais, toda arquitetura soma quatro linhas mensais: inferência, infraestrutura ao redor do modelo, desperdício e engenharia.
 
 A primeira linha é a inferência útil, ou seja, o que efetivamente responde às perguntas do time, seja em tokens de API, em assentos realmente usados ou nas horas em que uma GPU está processando requisições. A segunda linha cobre o que sustenta a aplicação fora do modelo: contêineres da aplicação e do ambiente de execução de consultas, banco de dados gerenciado, logs, monitoramento e, no caso da GPU própria, disco para os pesos do modelo e telemetria da placa. A terceira linha mede o desperdício inevitável: retentativas por falhas na API, licenças de chat pagas para quem quase nunca abre a ferramenta e horas em que uma placa alugada fica ligada sem nenhuma pergunta na fila.
 
@@ -101,7 +101,7 @@ Desligar a GPU fora do expediente derruba o aluguel da placa em 70% (uma A100 de
 
 ## Onde fica o ponto de virada entre assinatura, API e GPU própria?
 
-Para enxergar onde cada escolha vence, simulei as quatro opções somando todas as quatro linhas de custo com as premissas da [planilha de custos de IA](/tools/planilha-custos-ia/) convertidas pela PTAX de R$ 5,8573. A engenharia usa um engenheiro sênior CLT (R$ 17.600 de salário mais 80% de encargos em 168 horas úteis, igual a R$ 188,57 ou US$ 32,19 por hora), com as horas de construção amortizadas em 12 meses mais a manutenção mensal: 880 h de construção e 96 h/mês na API (R$ 31.931/mês), 1.000 h e 120 h/mês na GPU própria (R$ 38.343/mês) e 80 h e 10 h/mês na assinatura (R$ 3.143/mês). A infraestrutura auxiliar entra a US$ 250/mês (R$ 1.464) na API e US$ 500/mês (R$ 2.929) na GPU. A assinatura usa o mix de 60% Standard (US$ 20) e 40% Premium (US$ 100), com 35% de licenças subutilizadas. A GPU usa 1× A100 SXM 40 GB na Lambda (US$ 1,99/h) ligada 24/7 com fator de pico de 8 vezes sobre a média mensal.
+Para enxergar onde cada escolha vence, simulei as quatro opções somando todas as quatro linhas de custo com as premissas da [planilha de custos de IA](/ferramentas/planilha-custos-ia/) convertidas pela PTAX de R$ 5,8573. A engenharia usa um engenheiro sênior CLT (R$ 17.600 de salário mais 80% de encargos em 168 horas úteis, igual a R$ 188,57 ou US$ 32,19 por hora), com as horas de construção amortizadas em 12 meses mais a manutenção mensal: 880 h de construção e 96 h/mês na API (R$ 31.931/mês), 1.000 h e 120 h/mês na GPU própria (R$ 38.343/mês) e 80 h e 10 h/mês na assinatura (R$ 3.143/mês). A infraestrutura auxiliar entra a US$ 250/mês (R$ 1.464) na API e US$ 500/mês (R$ 2.929) na GPU. A assinatura usa o mix de 60% Standard (US$ 20) e 40% Premium (US$ 100), com 35% de licenças subutilizadas. A GPU usa 1× A100 SXM 40 GB na Lambda (US$ 1,99/h) ligada 24/7 com fator de pico de 8 vezes sobre a média mensal.
 
 No porte médio (50 pessoas e 10 mil consultas por mês), as quatro linhas ficam distribuídas assim:
 
@@ -129,7 +129,7 @@ O segundo ponto de virada ocorre entre API e GPU própria, e ele raramente favor
 
 Mesmo desligando a A100 fora do expediente (220 horas por mês, baixando o aluguel da placa para US$ 438 ou R$ 2.564), o empate olhando apenas a fatura do modelo cai para 42,1 mil consultas mensais contra a API otimizada, mas quando somamos a engenharia adicional de MLOps o empate total volta a subir para 171,4 mil consultas por mês, novamente acima da capacidade de pico de uma placa. Por isso considero que alugar GPU própria em nuvem se justifica por três razões concretas que independem de economia imediata: exigência contratual ou regulatória de que nenhum dado saia do ambiente controlado da empresa, carga contínua distribuída nas 24 horas sem pico agudo, ou uso intensivo de modelos abertos ajustados internamente em volumes acima de centenas de milhares de chamadas por mês.
 
-Quem quiser testar essas contas com o salário da própria equipe, outro mix de modelos ou o valor de uma plataforma pronta pode baixar a [planilha de custos de IA](/tools/planilha-custos-ia/) e trocar apenas as células amarelas.
+Quem quiser testar essas contas com o salário da própria equipe, outro mix de modelos ou o valor de uma plataforma pronta pode baixar a [planilha de custos de IA](/ferramentas/planilha-custos-ia/) e trocar apenas as células amarelas.
 
 ## Como o câmbio, os impostos e o faturamento no Brasil alteram a conta?
 
@@ -157,7 +157,7 @@ Antes de assinar qualquer orçamento de IA para os dados da empresa, eu sempre p
 
 ### Quanto custa manter uma IA conectada ao banco de dados de uma empresa média?
 
-Numa empresa de 50 pessoas rodando 10 mil consultas por mês com arquitetura própria em API otimizada, a fatura de tokens fica perto de R$ 609 por mês (US$ 104). Somando infraestrutura auxiliar (R$ 1.464) e a engenharia para construir e manter permissões, auditoria, testes de acerto e conectores (R$ 31.931/mês no primeiro ano, amortizando a construção em 12 meses), o custo total fica em torno de R$ 34 mil por mês. A [planilha de custos de IA](/tools/planilha-custos-ia/) permite recalcular esse total com o salário e o volume da sua empresa.
+Numa empresa de 50 pessoas rodando 10 mil consultas por mês com arquitetura própria em API otimizada, a fatura de tokens fica perto de R$ 609 por mês (US$ 104). Somando infraestrutura auxiliar (R$ 1.464) e a engenharia para construir e manter permissões, auditoria, testes de acerto e conectores (R$ 31.931/mês no primeiro ano, amortizando a construção em 12 meses), o custo total fica em torno de R$ 34 mil por mês. A [planilha de custos de IA](/ferramentas/planilha-custos-ia/) permite recalcular esse total com o salário e o volume da sua empresa.
 
 ### Vale a pena alugar GPU própria para economizar com API?
 

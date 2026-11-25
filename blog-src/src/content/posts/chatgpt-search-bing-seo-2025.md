@@ -64,7 +64,7 @@ Além da camada de rastreadores e indexação, a forma como o HTML é entregue d
 | Renderização | Conteúdo principal, tabelas e respostas diretas presentes no HTML inicial | Inspeção do HTML entregue pelo servidor (SSR ou estático) |
 | Estrutura citável | Resumo direto no topo, subtítulos em pergunta, dados verificáveis e autor claro | Marcação semântica e JSON-LD (`BlogPosting`, `Person`, `WebSite`) |
 
-Para aprofundar a camada editorial e a estrutura de conteúdo para citação em múltiplos modelos, disponibilizei o [Framework de SEO e AEO](/tools/seo-geo-aeo-framework/framework-seo-aeo.html) completo para consulta aberta. Se o seu time precisa revisar arquitetura de busca, automação de indexação e estratégia de IA com foco em demanda qualificada, veja os formatos de trabalho na página de [consultoria em IA para empresas](/consultoria/).
+Para aprofundar a camada editorial e a estrutura de conteúdo para citação em múltiplos modelos, disponibilizei o [Framework de SEO e AEO](/ferramentas/seo-geo-aeo-framework/framework-seo-aeo.html) completo para consulta aberta. Se o seu time precisa revisar arquitetura de busca, automação de indexação e estratégia de IA com foco em demanda qualificada, veja os formatos de trabalho na página de [consultoria em IA para empresas](/consultoria/).
 
 ## Perguntas frequentes sobre ChatGPT Search, Bing e SEO
 

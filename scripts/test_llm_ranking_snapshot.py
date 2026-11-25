@@ -1,4 +1,4 @@
-"""Testes do snapshot da Arena para o /tools/llm-ranking/ (scripts/llm_ranking_snapshot.py, issue #113).
+"""Testes do snapshot da Arena para o /ferramentas/llm-ranking/ (scripts/llm_ranking_snapshot.py, issue #113).
 
 Rodar: python3 scripts/test_llm_ranking_snapshot.py
 """
@@ -428,6 +428,7 @@ class VersaoNoArTest(unittest.TestCase):
         self.assertEqual(S.versao_no_ar(urlopen=urlopen), self.V)
         self.assertEqual(pedidos[0].get_header("Accept"), "text/html")
         self.assertEqual(pedidos[0].get_header("Cache-control"), "no-cache")
+        self.assertEqual(B.URL, "https://guifav.dev/ferramentas/llm-ranking/")
         self.assertTrue(pedidos[0].full_url.startswith(B.URL + "?snapshot="))
 
     def test_the_source_is_still_asked_for_json(self):

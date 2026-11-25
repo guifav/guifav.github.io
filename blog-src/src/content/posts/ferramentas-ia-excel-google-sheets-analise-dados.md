@@ -173,7 +173,7 @@ Para tirar resultado confiável na primeira tentativa, diga ao modelo o formato 
 2. **Contas feitas no texto em vez de código**: modelos de linguagem erram somas e médias quando tentam calcular "de cabeça" lendo centenas de linhas no texto. Exija que a ferramenta rode Python ou gere uma fórmula conferível dentro do Excel, e valide sempre os totais contra a planilha original.
 3. **Volume de linhas e custo de contexto**: colar uma planilha grande inteira no prompt consome centenas de milhares de tokens e piora a precisão. No meu [teste comparando RAG, contexto longo e Text-to-SQL](/blog/rag-contexto-longo-ou-text-to-sql-teste-80-contratos/), uma planilha de 5 mil linhas consumiu 447.568 tokens quando enviada inteira no contexto, contra 554 tokens com consulta SQL e resultado.
 
-Quando a planilha passa a sustentar decisões recorrentes de diretoria ou cruza dados de várias áreas, vale consultar o [mapa de decisão de IA](/tools/mapa-decisao-ia/) para avaliar o momento de sair da planilha e estruturar uma consulta direta sobre banco de dados.
+Quando a planilha passa a sustentar decisões recorrentes de diretoria ou cruza dados de várias áreas, vale consultar o [mapa de decisão de IA](/ferramentas/mapa-decisao-ia/) para avaliar o momento de sair da planilha e estruturar uma consulta direta sobre banco de dados.
 
 ## Perguntas frequentes sobre IA para planilhas e Excel
 
@@ -191,4 +191,4 @@ Depende de como a ferramenta processa o arquivo. Quando o modelo lê as células
 
 ### Quando sair das planilhas com IA e passar para banco SQL ou aplicação dedicada?
 
-O sinal de virada aparece quando a mesma planilha precisa ser consolidada toda semana a partir de múltiplos sistemas, quando várias pessoas editam versões paralelas ou quando há regras de permissão por área. Nesse estágio, conectar o modelo a um banco relacional com usuário somente leitura reduz erros e custo por consulta. Veja os critérios no [mapa de decisão de IA](/tools/mapa-decisao-ia/) e os detalhes técnicos no [guia de integração de LLMs com SQL e NoSQL](/blog/llm-sql-nosql-guia-integracao/).
+O sinal de virada aparece quando a mesma planilha precisa ser consolidada toda semana a partir de múltiplos sistemas, quando várias pessoas editam versões paralelas ou quando há regras de permissão por área. Nesse estágio, conectar o modelo a um banco relacional com usuário somente leitura reduz erros e custo por consulta. Veja os critérios no [mapa de decisão de IA](/ferramentas/mapa-decisao-ia/) e os detalhes técnicos no [guia de integração de LLMs com SQL e NoSQL](/blog/llm-sql-nosql-guia-integracao/).

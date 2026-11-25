@@ -123,7 +123,7 @@ export async function pontaAPonta(): Promise<PontaAPonta> {
   await w.run(new Request(confirmacao));
 
   // Material: chegou do ChatGPT (utm_source=chatgpt.com) na página do mapa e pediu com a caixa dos Expert Insights.
-  const material = visita('https://chatgpt.com/', ['https://guifav.dev/tools/mapa-decisao-ia/?utm_source=chatgpt.com&utm_term=termo'],
+  const material = visita('https://chatgpt.com/', ['https://guifav.dev/ferramentas/mapa-decisao-ia/?utm_source=chatgpt.com&utm_term=termo'],
     'https://insights.guifav.dev/material');
   await w.run(post('/material', { email: 'leitora@exemplo.com', material: 'mapa-decisao-ia', insights: 'sim',
     'cf-turnstile-response': 'tok', ...material }));

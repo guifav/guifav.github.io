@@ -719,7 +719,7 @@ class ForgetTest(unittest.TestCase):
 # ---------------------------------------------------------------- Origem da visita (issue #114)
 
 ORIGEM = {"origin_channel": "assistente", "origin_source": "chatgpt", "utm_source": "chatgpt.com", "utm_medium": None,
-          "utm_campaign": "lancamento", "landing_path": "/tools/mapa-decisao-ia/"}
+          "utm_campaign": "lancamento", "landing_path": "/ferramentas/mapa-decisao-ia/"}
 NEWSLETTER = os.path.join(HERE, "..", "..", "workers", "newsletter")
 ORIGEM_TWENTY = ("origemCanal", "origemFonte", "utmSource", "utmMedium", "utmCampaign", "paginaEntrada")
 
@@ -745,7 +745,7 @@ class OrigemTest(unittest.TestCase):
         ev = conv_by_event(f)
         self.assertEqual({k: ev[hexid(1)][k] for k in ORIGEM_TWENTY},
                          {"origemCanal": "ASSISTENTE", "origemFonte": "CHATGPT", "utmSource": "chatgpt.com", "utmMedium": None,
-                          "utmCampaign": "lancamento", "paginaEntrada": "/tools/mapa-decisao-ia/"})
+                          "utmCampaign": "lancamento", "paginaEntrada": "/ferramentas/mapa-decisao-ia/"})
         self.assertEqual({k: ev[hexid(2)][k] for k in ORIGEM_TWENTY},
                          {"origemCanal": "DIRETO", "origemFonte": None, "utmSource": None, "utmMedium": None, "utmCampaign": None,
                           "paginaEntrada": None})
@@ -842,7 +842,7 @@ class OrigemTest(unittest.TestCase):
         self.assertEqual(f.db.execute("SELECT count(*) FROM conversions WHERE email = 'a@x.com'").fetchone()[0], 0)
         state = json.dumps([list(f.convs.values()), list(f.people.values()),
                             [dict(r) for r in f.db.execute("SELECT * FROM conversions")]])
-        for v in ("chatgpt", "CHATGPT", "lancamento", "/tools/mapa-decisao-ia/", "ASSISTENTE"):
+        for v in ("chatgpt", "CHATGPT", "lancamento", "/ferramentas/mapa-decisao-ia/", "ASSISTENTE"):
             self.assertNotIn(v, state, f"a origem do email apagado sobrou: {v}")
         self.assertEqual([c["origemFonte"] for c in f.convs.values()], ["GOOGLE"])  # a de outro email fica
 
@@ -858,10 +858,10 @@ class OrigemTest(unittest.TestCase):
         got = sorted((c["acao"], *(c[k] for k in ORIGEM_TWENTY)) for c in f.convs.values())
         self.assertEqual(got, sorted([
             ("NEWSLETTER_CONFIRM", "PAGO", "GOOGLE", None, None, None, "/blog/rag-em-producao/"),
-            ("MATERIAL_REQUEST", "ASSISTENTE", "CHATGPT", "chatgpt.com", None, None, "/tools/mapa-decisao-ia/"),
-            ("MATERIAL_DOWNLOAD", "ASSISTENTE", "CHATGPT", "chatgpt.com", None, None, "/tools/mapa-decisao-ia/"),
-            ("MATERIAL_DOWNLOAD", "ASSISTENTE", "CHATGPT", "chatgpt.com", None, None, "/tools/mapa-decisao-ia/"),
-            ("NEWSLETTER_CONFIRM", "ASSISTENTE", "CHATGPT", "chatgpt.com", None, None, "/tools/mapa-decisao-ia/"),
+            ("MATERIAL_REQUEST", "ASSISTENTE", "CHATGPT", "chatgpt.com", None, None, "/ferramentas/mapa-decisao-ia/"),
+            ("MATERIAL_DOWNLOAD", "ASSISTENTE", "CHATGPT", "chatgpt.com", None, None, "/ferramentas/mapa-decisao-ia/"),
+            ("MATERIAL_DOWNLOAD", "ASSISTENTE", "CHATGPT", "chatgpt.com", None, None, "/ferramentas/mapa-decisao-ia/"),
+            ("NEWSLETTER_CONFIRM", "ASSISTENTE", "CHATGPT", "chatgpt.com", None, None, "/ferramentas/mapa-decisao-ia/"),
         ]))
         # Nada além dos campos combinados: as chaves de cada Conversão são as de antes mais as seis da origem.
         antes = {"name", "acao", "comprovado", "material", "arquivo", "interesses", "ocorreuEm", "eventoId", "pedidoId", "gaClientId",
