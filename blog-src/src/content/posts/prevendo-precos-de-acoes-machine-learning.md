@@ -2,6 +2,7 @@
 title: "Prevendo Preços de Ações com Machine Learning - Do Zero ao Deploy com ferramentas Gratuitas"
 subtitle: "Passo a passo desde a captura de dados históricos de ações até a disponibilização do modelo via dashboard, com retreino automático semanal"
 description: "Passo a passo desde a captura de dados históricos de ações até a disponibilização do modelo via dashboard, com retreino automático semanal"
+summary: "Uma rede LSTM em PyTorch recebe os últimos 60 dias de fechamento da PETR4 e prevê o preço do dia seguinte. O modelo é treinado no Google Colab, publicado no HuggingFace com dashboard e API e retreinado toda segunda-feira por um GitHub Action, tudo em ferramentas gratuitas. Ele acompanha a tendência com atraso e erro considerável, porque usa só o histórico de preços, e serve apenas para fins educacionais, sem uso em decisões financeiras."
 date: 2026-02-18T13:09:03.469Z
 updated: 2026-02-18T13:11:03.382Z
 slug: prevendo-precos-de-acoes-machine-learning

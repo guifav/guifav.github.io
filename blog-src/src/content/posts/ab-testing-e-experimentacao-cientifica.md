@@ -2,6 +2,7 @@
 title: "A/B Testing e Experimentação Científica: Decisões Baseadas em Evidências no Ambiente Empresarial"
 subtitle: "Metodologias de customer analytics: segmentação comportamental, personalização em tempo real, machine learning e frameworks de customer intelligence para experiências."
 description: "Metodologias de customer analytics: segmentação comportamental, personalização em tempo real, machine learning e frameworks de customer intelligence para experiências."
+summary: "A experimentação científica transforma o A/B testing em capacidade de toda a organização, apoiada em feature flags, análise estatística automatizada, hipóteses falsificáveis, análise de poder para dimensionar amostras e métricas guardrail contra efeitos colaterais. Sem governança e rigor estatístico, os programas viram teatro de experimentação, com falsos positivos e foco excessivo em conversão de curto prazo."
 date: 2025-10-06T17:54:00.824Z
 updated: 2025-11-24T20:06:55.847Z
 slug: ab-testing-e-experimentacao-cientifica

@@ -2,6 +2,7 @@
 title: "SEO + AEO: Como Ser Encontrado no Google e Citado por IAs"
 subtitle: "O framework completo para otimizar seu conteúdo para buscadores tradicionais e inteligências artificiais como ChatGPT, Perplexity, Gemini, Grok e Claude"
 description: "O framework completo para otimizar seu conteúdo para buscadores tradicionais e inteligências artificiais como ChatGPT, Perplexity, Gemini, Grok e Claude"
+summary: "SEO é ser encontrado no Google, e AEO/GEO é ser citado por IAs como ChatGPT, Perplexity, Gemini e Claude; os dois recompensam respostas claras e bem estruturadas, com dados e fontes. A técnica central é o Answer Capsule, uma resposta direta de 50 a 80 palavras logo após cada heading em forma de pergunta, somada a dados originais, sinais de E-E-A-T, schema markup e liberação dos bots de IA no robots.txt."
 date: 2025-12-18T15:02:59.246Z
 updated: 2025-12-21T21:46:03.746Z
 slug: seo-aeo-geo-ias-como-ser-encontrado

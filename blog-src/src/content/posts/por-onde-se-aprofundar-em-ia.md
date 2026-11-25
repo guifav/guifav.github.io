@@ -2,6 +2,7 @@
 title: "Por onde se aprofundar em IA: matemática, estatística e ML"
 subtitle: "O outro extremo do \"por onde começar com IA\": matemática, estatística e machine learning em 54 notebooks abertos, pra quem escreve código."
 description: "O outro extremo do \"por onde começar com IA\": matemática, estatística e machine learning em 54 notebooks abertos, pra quem escreve código."
+summary: "Para quem já constrói com IA e quer sair do tutorial hell, o caminho proposto é o math-statistics-for-ai, repositório aberto com licença MIT e 54 notebooks Jupyter em português. Os sete módulos cobrem matemática, estatística, data science, machine learning, deep learning, domínios aplicados e MLOps, e cada notebook intercala teoria e código executável, com exercícios cuja solução fica separada. É material de meses, na escala de centenas de horas."
 date: 2026-06-11T14:10:58.207Z
 updated: 2026-06-11T14:14:22.485Z
 slug: por-onde-se-aprofundar-em-ia

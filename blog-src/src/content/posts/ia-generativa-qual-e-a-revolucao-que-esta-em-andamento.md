@@ -1,6 +1,7 @@
 ---
 title: "IA generativa: qual é a revolução que está em andamento?"
 description: "Fundamentos da IA generativa explicados em linguagem direta: como redes neurais criam texto, imagem e código e o que isso muda para empresas e equipes."
+summary: "A IA generativa cria conteúdo novo a partir de prompts, como texto, imagem, áudio e código, com grandes modelos de linguagem: redes neurais de bilhões de parâmetros, treinadas em enormes volumes de texto e baseadas na arquitetura transformer, introduzida em 2017. Para prosperar com ela, o texto propõe uma mentalidade de abundância, que trata a IA como parceira, e investimento em programação, fundamentos de IA, engenharia de prompts e aprendizado contínuo."
 date: 2024-02-18T03:00:00.000Z
 updated: 2024-06-25T16:27:33.081Z
 slug: ia-generativa-qual-e-a-revolucao-que-esta-em-andamento

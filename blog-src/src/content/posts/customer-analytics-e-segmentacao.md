@@ -2,6 +2,7 @@
 title: "Customer Analytics e Segmentação: Case de Transformação de Dados em Experiências Personalizadas"
 subtitle: "Customer analytics empresarial: metodologias de segmentação comportamental, engines de personalização, analytics preditivos e frameworks de customer intelligence."
 description: "Customer analytics empresarial: metodologias de segmentação comportamental, engines de personalização, analytics preditivos e frameworks de customer intelligence."
+summary: "Customer analytics eficaz troca a segmentação demográfica e estática por clustering comportamental, estágios de ciclo de vida, segmentação por valor e modelos de propensão, alimentados por uma identidade unificada do cliente e por triggers de intervenção em tempo real. No caso de uma empresa parceira, o churn caiu 45%, a conversão de campanhas chegou a 8,7%, o customer lifetime value cresceu 67% e o ROI foi de 280% em 18 meses."
 date: 2025-09-29T14:42:07.166Z
 updated: 2025-11-24T20:06:46.382Z
 slug: customer-analytics-e-segmentacao

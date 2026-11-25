@@ -2,6 +2,7 @@
 title: "Por onde eu começo?"
 subtitle: "A pergunta que mais me fazem em jantar de família, e o que eu finalmente fiz com ela."
 description: "Uma trilha de 30 dias pra quem sempre se prometeu entender IA mas nunca terminou o curso. Dez minutos por dia, do zero ao prático. Gratuita, pra sempre."
+summary: "A academia-ia é uma trilha gratuita de 30 dias, com aulas diárias de 10 a 20 minutos, para quem sabe que IA importa e nunca passou do começo de um curso. Ela cobre o que é IA generativa, como escrever prompts que funcionam, onde encaixar IA no trabalho, quando confiar nas respostas e o que vem depois, como agentes e automação. Não há cadastro de cartão nem versão premium, e o curso não se destina a engenheiros de ML em busca da matemática de transformer."
 date: 2026-05-14T01:52:42.739Z
 updated: 2026-05-14T01:56:28.648Z
 slug: por-onde-comecar-com-ia

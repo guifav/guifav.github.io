@@ -2,6 +2,7 @@
 title: "A AGI Chegou? Uma Questão de Semântica, Não de Tecnologia"
 subtitle: "O debate sobre inteligência artificial geral esconde uma questão mais importante: como nos preparamos para uma IA que já transforma o trabalho humano?"
 description: "A presidente da Anthropic diz que a AGI já chegou. Mas será? Análise sobre como a definição de inteligência artificial geral molda completamente a resposta"
+summary: "Daniela Amodei, presidente da Anthropic, disse à CNBC em janeiro de 2026 que, por algumas definições, a IA de nível humano já foi superada. Pela definição de capacidade humana universal, adotada no texto, a AGI não chegou; pela de desempenho de especialista em domínios economicamente críticos, como engenharia de software, várias linhas já foram cruzadas. A pergunta útil passa a ser como se adaptar à IA que já trabalha nesse nível."
 date: 2026-01-19T14:48:20.749Z
 updated: 2026-01-19T14:50:44.361Z
 slug: agi-chegou-inteligencia-artificial-geral
