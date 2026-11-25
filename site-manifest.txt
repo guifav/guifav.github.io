@@ -20,5 +20,6 @@ assets/
 portfolio/
 consultoria/
 ferramentas/
+cursos/
 privacidade/
 termos/

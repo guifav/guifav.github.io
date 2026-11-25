@@ -76,6 +76,8 @@ SITE_SCRIPT_ATTR = "data-site-script"
 # Sob /blog/ (contrato, barreira 2): páginas, RSS e sitemap, e mídia.
 BLOG_EXACT_SUFFIXES = {".html", ".xml"}
 BLOG_MEDIA_SUFFIXES = {".webp", ".png", ".jpg", ".jpeg", ".gif", ".avif", ".mp4", ".webm"}
+# Rotas sob guifav.dev servidas por Workers na Cloudflare, fora do _site/ do GitHub Pages (#146, #166).
+WORKER_PATHS = frozenset({"/cursos/academia-ia"})
 
 
 class ResolverError(Exception):
@@ -490,6 +492,8 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
             if pre_cutover and not in_blog and (path == "/blog" or path.startswith(BLOG_PREFIX)):
                 problems.append(f"{rel}: aponta para o blog antes do cutover: {ref}")
                 continue
+            if path in WORKER_PATHS:
+                continue
             ok, dir_without_slash = _resolve(site, path)
             if dir_without_slash:
                 problems.append(f"{rel}: link para pasta sem barra final: {ref}")
@@ -573,7 +577,7 @@ SITE_NAME = "Guilherme Favaron"
 TITLE_SEP = " | "
 TITLE_EXEMPT_PREFIXES = ("portfolio/mockups/",)
 # Grupos de conteúdo do GA4 (content_group), um por tipo de página; espelha CONTENT_GROUPS do consts.ts do blog.
-CONTENT_GROUPS = ("home", "portfolio", "insights-lista", "insights-artigo", "expert-insights", "materiais", "consultoria", "ferramentas", "legal")
+CONTENT_GROUPS = ("home", "portfolio", "insights-lista", "insights-artigo", "expert-insights", "materiais", "consultoria", "ferramentas", "legal", "cursos")
 # Páginas dos materiais do canal (issue #99): o formulário e a página de enviado de cada material do catálogo do Worker.
 MATERIALS = ("planilha-custos-ia", "mapa-decisao-ia")
 MATERIAL_PAGES = {f"ferramentas/{m}/{p}index.html" for m in MATERIALS for p in ("", "enviado/")}
@@ -581,6 +585,11 @@ MATERIAL_PAGES = {f"ferramentas/{m}/{p}index.html" for m in MATERIALS for p in (
 TOOLS_INDEX_PAGE = "ferramentas/index.html"
 LLM_RANKING_PAGE = "ferramentas/llm-ranking/index.html"
 TOOLS_PAGES = {TOOLS_INDEX_PAGE, LLM_RANKING_PAGE}
+# Página de cursos (#166): publicada com noindex e fora do sitemap enquanto a Academia da IA está em atualização.
+COURSES_PAGE = "cursos/index.html"
+COURSES_URL = "/cursos/"
+COURSES_TITLE = "Cursos" + TITLE_SEP + SITE_NAME
+ACADEMY_URL = "/cursos/academia-ia"
 # Páginas legais na raiz (#146): Política de privacidade e Termos de uso, públicas, indexáveis e no sitemap.
 LEGAL_PAGES = ("privacidade/index.html", "termos/index.html")
 LEGAL_SPECS = (
@@ -611,6 +620,8 @@ def expected_content_group(rel: str) -> str | None:
         return "materiais"
     if rel in TOOLS_PAGES:
         return "ferramentas"
+    if rel == COURSES_PAGE:
+        return "cursos"
     if re.fullmatch(r"blog/[a-z0-9][a-z0-9-]*/index\.html", rel):
         return "insights-artigo"
     return None
@@ -1016,7 +1027,8 @@ TOOLS_INDEX_LINKS = ("/ferramentas/mapa-decisao-ia/", "/ferramentas/planilha-cus
 TOOLS_LINKS = ("/ferramentas/", "/ferramentas/mapa-decisao-ia/", "/ferramentas/planilha-custos-ia/",
                "/ferramentas/llm-ranking/",
                "/blog/livro-ia-inteligencia-artificial-portugues-gratuito/",
-               "/ferramentas/seo-geo-aeo-framework/framework-seo-aeo.html")
+               "/ferramentas/seo-geo-aeo-framework/framework-seo-aeo.html",
+               COURSES_URL)
 TOOLS_SECTION_ID = "ferramentas"
 
 
@@ -2640,6 +2652,111 @@ def check_llms_txt(site: Path, posts: Path) -> list[str]:
     return problems
 
 
+class _CoursesLinks(HTMLParser):
+    """Links <a> visíveis no <nav> principal (fora do <footer>), no <main> e no <footer>: (href, tokens de rel)."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.stack: list[tuple[str, str | None, bool]] = []  # (tag, bloco, inerte)
+        self.footers = 0
+        self.found: dict[str, list[tuple[str, list[str]]]] = {"nav": [], "main": [], "footer": []}
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+        if tag not in VOID_TAGS:
+            self.handle_endtag(tag)
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        a: dict[str, str] = {}
+        for k, v in attrs:
+            a.setdefault(k, v or "")
+        inert = any(i for _, _, i in self.stack) or tag in ("template", "noscript") or "hidden" in a
+        in_footer = any(b == "footer" for _, b, _ in self.stack)
+        if tag == "footer" and not inert:
+            self.footers += 1
+        if tag == "a" and not inert:
+            href = a.get("href", "").strip()
+            if href:
+                rels = a.get("rel", "").lower().split()
+                for where in dict.fromkeys(b for _, b, _ in self.stack if b):
+                    self.found[where].append((href, rels))
+        if tag not in VOID_TAGS:
+            block = ("footer" if tag == "footer" else
+                     "main" if tag == "main" else
+                     "nav" if tag == "nav" and not in_footer else None)
+            self.stack.append((tag, block if not inert else None,
+                               tag in ("template", "noscript") or "hidden" in a))
+
+    def handle_endtag(self, tag: str) -> None:
+        for i in range(len(self.stack) - 1, -1, -1):
+            if self.stack[i][0] == tag:
+                del self.stack[i:]
+                return
+
+
+def check_courses_footer(rel: str, html: str) -> list[str]:
+    """#166: /cursos/ entra em todos os rodapés (fora /cursos/ e mockups) e não entra no menu principal."""
+    if rel.startswith(TITLE_EXEMPT_PREFIXES):
+        return []
+    p = _CoursesLinks()
+    p.feed(html)
+    p.close()
+    problems: list[str] = []
+    if any(h in (COURSES_URL, SITE_ORIGIN + COURSES_URL) for h, _ in p.found["nav"]):
+        problems.append(f"{rel}: {COURSES_URL} não entra no menu principal")
+    if rel == COURSES_PAGE:
+        return problems
+    if p.footers == 0:
+        return problems + [f"{rel}: página sem <footer> com o link {COURSES_URL}"]
+    matches = [r for h, r in p.found["footer"] if h == COURSES_URL]
+    if len(matches) != 1:
+        problems.append(f"{rel}: rodapé precisa do link {COURSES_URL} uma vez, tem {len(matches)}")
+    elif "nofollow" in matches[0]:
+        problems.append(f"{rel}: rodapé com o link {COURSES_URL} em rel=nofollow")
+    return problems
+
+
+def check_courses(site: Path) -> list[str]:
+    """#166: /cursos/ existe com noindex, canonical próprio, título e link para /cursos/academia-ia, fora do sitemap;
+    /cursos/ está nos rodapés do site e fora do menu principal."""
+    problems: list[str] = []
+    entries = _sitemap(site, "sitemap-site.xml", "urlset", "url", problems)
+    sitemap_locs = {loc for loc, _ in entries} if entries is not None else None
+    if sitemap_locs is not None and SITE_ORIGIN + COURSES_URL in sitemap_locs:
+        problems.append(f"sitemap-site.xml: {SITE_ORIGIN}{COURSES_URL} tem noindex e não entra no sitemap")
+    page = site / COURSES_PAGE
+    if not page.is_file():
+        problems.append(f"{COURSES_PAGE}: página de cursos ausente no site montado (site-manifest.txt)")
+    else:
+        html = page.read_text(encoding="utf-8")
+        p = _Page()
+        p.feed(html)
+        p.close()
+        if not any(_robots_noindex(r) for r in p.robots):
+            problems.append(f"{COURSES_PAGE}: página de cursos precisa de noindex enquanto a academia está em atualização")
+        if not p.canonicals or not canonical_is_self(p.canonicals, COURSES_URL):
+            problems.append(f"{COURSES_PAGE}: página de cursos precisa de canonical próprio "
+                            f"({SITE_ORIGIN}{COURSES_URL}), tem {p.canonicals}")
+        visible = _visible_html(html)
+        m = re.search(r"<title[^>]*>(.*?)</title\s*>", visible, flags=re.S | re.I)
+        title = unescape(m.group(1)).strip() if m else None
+        if title != COURSES_TITLE:
+            problems.append(f"{COURSES_PAGE}: o título precisa ser {COURSES_TITLE!r}: {title!r}")
+        links = _CoursesLinks()
+        links.feed(html)
+        links.close()
+        academy = [r for h, r in links.found["main"] if h == ACADEMY_URL]
+        if len(academy) != 1:
+            problems.append(f"{COURSES_PAGE}: página de cursos precisa do link {ACADEMY_URL} uma vez em <main>, "
+                            f"tem {len(academy)}")
+        elif "nofollow" in academy[0]:
+            problems.append(f"{COURSES_PAGE}: link {ACADEMY_URL} em rel=nofollow")
+    for f in html_files(site):
+        rel = f.relative_to(site).as_posix()
+        problems += check_courses_footer(rel, f.read_text(encoding="utf-8"))
+    return problems
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Verifica o site montado em _site/ antes do deploy.")
     ap.add_argument("--site", default="_site")
@@ -2658,6 +2775,7 @@ def main(argv: list[str] | None = None) -> int:
         problems += check_llm_ranking(Path(args.site))
         problems += check_legal(Path(args.site))
         problems += check_llms_txt(Path(args.site), Path(args.posts))
+        problems += check_courses(Path(args.site))
     except ResolverError as e:
         print(f"ERRO: resolvedor de URL indisponível, verificação não feita: {e}", file=sys.stderr)
         return 1
