@@ -3682,6 +3682,168 @@ class CoursesSourcesTest(unittest.TestCase):
         self.assertEqual(C.check_courses_footer("blog/index.html", base), [])
 
 
+class YoutubeFooterTest(unittest.TestCase):
+    """#166: todo link de YouTube dentro de <footer> (fora mockups) aponta para https://www.youtube.com/@ia-para-leigos."""
+
+    OK_LINK = f'<a href="{C.YOUTUBE_FOOTER_URL}" target="_blank" rel="noopener">YouTube</a>'
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.site = Path(self.tmp.name) / "_site"
+        self.site.mkdir()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def w(self, rel: str, content: str) -> None:
+        p = self.site / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content, encoding="utf-8")
+
+    def doc(self, body: str) -> str:
+        return f"<!DOCTYPE html><html><head></head><body>{body}</body></html>"
+
+    def test_valid_footer_and_exemptions_pass(self):
+        self.assertEqual(C.check_youtube_footer("index.html", self.doc(f"<footer><p>{self.OK_LINK}</p></footer>")), [])
+        # Rodapé sem link de YouTube (como framework-seo-aeo.html) e página sem footer passam.
+        self.assertEqual(C.check_youtube_footer("ferramentas/seo-geo-aeo-framework/framework-seo-aeo.html",
+                                                self.doc('<footer><a href="/cursos/">Cursos</a></footer>')), [])
+        self.assertEqual(C.check_youtube_footer("404.html", self.doc("<main><p>x</p></main>")), [])
+        # Links de YouTube fora de <footer> não entram na regra (card da home, JSON-LD, corpo dos materiais).
+        outside = ('<main><a href="https://youtube.com/@ia-aplicada-guilhermefavaron">Assistir</a>'
+                   '<a href="https://www.youtube.com/@guifav">Canal @guifav</a></main>'
+                   f"<footer>{self.OK_LINK}</footer>")
+        self.assertEqual(C.check_youtube_footer("index.html", self.doc(outside)), [])
+        # Mockups ficam fora da regra.
+        self.assertEqual(C.check_youtube_footer("portfolio/mockups/crm.html",
+                                                self.doc('<footer><a href="https://www.youtube.com/@guifav">YT</a></footer>')), [])
+        # Links internos ou externos que só têm "youtube" no caminho ou domínio de outro site não contam.
+        non_yt = ('<footer><a href="/blog/curso-ia-negocios-gratuito-youtube/">Curso</a>'
+                  '<a href="https://youtube.com.evil.example/@guifav">Outro</a>'
+                  '<a href="http://[invalido">Quebrado</a></footer>')
+        self.assertEqual(C.check_youtube_footer("index.html", self.doc(non_yt)), [])
+        # Comentários, template, noscript e hidden são ignorados, como nas outras regras de rodapé.
+        inert = ('<footer><!-- <a href="https://www.youtube.com/@guifav">YT</a> -->'
+                 '<template><a href="https://www.youtube.com/@guifav">YT</a></template>'
+                 '<noscript><a href="https://www.youtube.com/@guifav">YT</a></noscript>'
+                 '<a href="https://www.youtube.com/@guifav" hidden>YT</a>'
+                 '<div hidden><a href="https://www.youtube.com/@guifav">YT</a></div>'
+                 f"{self.OK_LINK}</footer>")
+        self.assertEqual(C.check_youtube_footer("index.html", self.doc(inert)), [])
+
+    def test_wrong_youtube_links_in_footer_fail(self):
+        bad_urls = (
+            "https://youtube.com/@ia-aplicada-guilhermefavaron",
+            "https://www.youtube.com/@guifav",
+            "https://youtube.com/@ia-para-leigos",
+            "http://www.youtube.com/@ia-para-leigos",
+            "https://www.youtube.com/@ia-para-leigos/",
+            "https://www.youtube.com/@ia-para-leigos?sub_confirmation=1",
+            "https://m.youtube.com/@ia-para-leigos",
+            "https://youtu.be/abc",
+            "https://www.youtube-nocookie.com/embed/abc",
+            "//www.youtube.com/@guifav",
+            "HTTPS://WWW.YOUTUBE.COM/@ia-para-leigos",
+            "https://www.youtube.com./@ia-para-leigos",
+            "https://www.youtube.com:bad/@guifav",
+        )
+        for href in bad_urls:
+            with self.subTest(href=href):
+                got = C.check_youtube_footer("portfolio/index.html", self.doc(f'<footer><a href="{href}">YouTube</a></footer>'))
+                self.assertEqual(len(got), 1, got)
+                self.assertIn(C.YOUTUBE_FOOTER_URL, got[0])
+                self.assertIn(href, got[0])
+        # <footer> dentro de <main> e link dentro de <nav class="footer-tools"> no rodapé também são verificados.
+        for name, body in (
+            ("footer em main", '<main><footer><a href="https://www.youtube.com/@guifav">YT</a></footer></main>'),
+            ("nav no footer", '<footer><nav class="footer-tools"><a href="https://www.youtube.com/@guifav">YT</a></nav></footer>'),
+        ):
+            with self.subTest(case=name):
+                got = C.check_youtube_footer("index.html", self.doc(body))
+                self.assertEqual(len(got), 1, got)
+
+    def test_check_youtube_site_and_main_wiring(self):
+        self.w("index.html", self.doc(f"<footer>{self.OK_LINK}</footer>"))
+        self.w("ferramentas/index.html", self.doc('<footer><a href="https://www.youtube.com/@guifav">YouTube</a></footer>'))
+        self.w("portfolio/mockups/crm.html", self.doc('<footer><a href="https://www.youtube.com/@guifav">YouTube</a></footer>'))
+        got = C.check_youtube(self.site)
+        self.assertEqual(len(got), 1, got)
+        self.assertIn("ferramentas/index.html", got[0])
+
+        consts = Path(self.tmp.name) / "consts.ts"
+        consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
+        err = io.StringIO()
+        with isolate_main_rule("check_youtube"), \
+                contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            code = C.main(["--site", str(self.site), "--posts", str(self.tmp.name), "--consts", str(consts)])
+        self.assertEqual(code, 1)
+        self.assertIn("ferramentas/index.html: link de YouTube no rodapé", err.getvalue())
+
+        self.w("ferramentas/index.html", self.doc(f"<footer>{self.OK_LINK}</footer>"))
+        with isolate_main_rule("check_youtube"), \
+                contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(C.main(["--site", str(self.site), "--posts", str(self.tmp.name), "--consts", str(consts)]), 0)
+
+
+class YoutubeFooterSourcesTest(unittest.TestCase):
+    """#166: fontes reais do site com o link de YouTube no rodapé apontando para @ia-para-leigos, mantendo os links fora do rodapé."""
+
+    REPO = Path(__file__).resolve().parent.parent
+    EXPECTED_WITH_YT = (
+        "index.html",
+        "404.html",
+        "consultoria/index.html",
+        "portfolio/index.html",
+        "cursos/index.html",
+        "privacidade/index.html",
+        "termos/index.html",
+        "ferramentas/index.html",
+        "ferramentas/llm-ranking/index.html",
+        "ferramentas/mapa-decisao-ia/index.html",
+        "ferramentas/mapa-decisao-ia/enviado/index.html",
+        "ferramentas/planilha-custos-ia/index.html",
+        "ferramentas/planilha-custos-ia/enviado/index.html",
+        "blog-src/src/layouts/Base.astro",
+    )
+
+    def root_html_files(self) -> list[tuple[str, Path]]:
+        entries = [l.strip() for l in (self.REPO / "site-manifest.txt").read_text(encoding="utf-8").splitlines()
+                   if l.strip() and not l.startswith("#")]
+        files: list[Path] = []
+        for e in entries:
+            p = self.REPO / e
+            if e.endswith("/"):
+                files += sorted(f for f in p.rglob("*.html") if "mockups" not in f.parts)
+            elif e.endswith(".html"):
+                files.append(p)
+        return [(f.relative_to(self.REPO).as_posix(), f) for f in files]
+
+    def test_every_root_page_and_blog_layout_passes_youtube_footer_rule(self):
+        for rel, f in self.root_html_files():
+            with self.subTest(rel=rel):
+                self.assertEqual(C.check_youtube_footer(rel, f.read_text(encoding="utf-8")), [])
+        base = (self.REPO / "blog-src/src/layouts/Base.astro").read_text(encoding="utf-8")
+        self.assertEqual(C.check_youtube_footer("blog/index.html", base), [])
+
+    def test_expected_footers_point_to_ia_para_leigos(self):
+        for rel in self.EXPECTED_WITH_YT:
+            with self.subTest(rel=rel):
+                p = C._LegalFooter()
+                p.feed((self.REPO / rel).read_text(encoding="utf-8"))
+                p.close()
+                yt_links = [href for href, _, _ in p.links if C._is_youtube_url(href)]
+                self.assertEqual(yt_links, [C.YOUTUBE_FOOTER_URL], rel)
+
+    def test_youtube_links_outside_footer_were_not_changed(self):
+        home = (self.REPO / "index.html").read_text(encoding="utf-8")
+        self.assertIn('"https://www.youtube.com/@guifav","https://www.youtube.com/@ia-para-leigos"', home)
+        self.assertIn('<a href="https://youtube.com/@ia-aplicada-guilhermefavaron" target="_blank" rel="noopener" data-i18n="content_yt_a">Assistir &#8599;</a>', home)
+        for rel in ("ferramentas/mapa-decisao-ia/index.html", "ferramentas/planilha-custos-ia/index.html"):
+            with self.subTest(rel=rel):
+                html = (self.REPO / rel).read_text(encoding="utf-8")
+                self.assertIn('<a class="btn" href="https://www.youtube.com/@guifav" target="_blank" rel="noopener" data-i18n="yt">Canal @guifav no YouTube</a>', html)
+
+
 class SummaryTest(Base):
     """#108: bloco 'Em resumo' acima de .post-body quando há summary e ausente quando não há, com contraste AA."""
 
@@ -3937,6 +4099,7 @@ MAIN_RULES = {
     "check_legal": lambda *a, **k: [],
     "check_llms_txt": lambda *a, **k: [],
     "check_courses": lambda *a, **k: [],
+    "check_youtube": lambda *a, **k: [],
     "check_seo": lambda *a, **k: ([], [], []),
 }
 

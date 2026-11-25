@@ -590,6 +590,9 @@ COURSES_PAGE = "cursos/index.html"
 COURSES_URL = "/cursos/"
 COURSES_TITLE = "Cursos" + TITLE_SEP + SITE_NAME
 CHATGPT_COURSE_URL = "/cursos/chatgpt-no-dia-a-dia"
+# Link de YouTube nos rodapés (#166): todo link de YouTube dentro de <footer> aponta para @ia-para-leigos.
+YOUTUBE_FOOTER_URL = "https://www.youtube.com/@ia-para-leigos"
+YOUTUBE_HOSTS = ("youtube.com", "youtu.be", "youtube-nocookie.com")
 # Páginas legais na raiz (#146): Política de privacidade e Termos de uso, públicas, indexáveis e no sitemap.
 LEGAL_PAGES = ("privacidade/index.html", "termos/index.html")
 LEGAL_SPECS = (
@@ -2757,6 +2760,41 @@ def check_courses(site: Path) -> list[str]:
     return problems
 
 
+def _is_youtube_url(href: str) -> bool:
+    """True quando o href aponta para um domínio do YouTube (com ou sem subdomínio ou ponto final DNS)."""
+    try:
+        u = urlsplit(href.strip())
+        host = (u.hostname or "").lower().rstrip(".")
+    except ValueError:
+        return False
+    return host in YOUTUBE_HOSTS or any(host.endswith("." + h) for h in YOUTUBE_HOSTS)
+
+
+def check_youtube_footer(rel: str, html: str) -> list[str]:
+    """#166: todo link de YouTube visível dentro de <footer> (fora mockups) aponta para YOUTUBE_FOOTER_URL."""
+    if rel.startswith(TITLE_EXEMPT_PREFIXES):
+        return []
+    p = _LegalFooter()
+    p.feed(html)
+    p.close()
+    problems: list[str] = []
+    for href, _, _ in p.links:
+        if _is_youtube_url(href) and href != YOUTUBE_FOOTER_URL:
+            problems.append(
+                f"{rel}: link de YouTube no rodapé precisa apontar para {YOUTUBE_FOOTER_URL}, aponta para {href}"
+            )
+    return problems
+
+
+def check_youtube(site: Path) -> list[str]:
+    """#166: todo link de YouTube dentro de <footer> nas páginas do site montado aponta para YOUTUBE_FOOTER_URL."""
+    problems: list[str] = []
+    for f in html_files(site):
+        rel = f.relative_to(site).as_posix()
+        problems += check_youtube_footer(rel, f.read_text(encoding="utf-8"))
+    return problems
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Verifica o site montado em _site/ antes do deploy.")
     ap.add_argument("--site", default="_site")
@@ -2776,6 +2814,7 @@ def main(argv: list[str] | None = None) -> int:
         problems += check_legal(Path(args.site))
         problems += check_llms_txt(Path(args.site), Path(args.posts))
         problems += check_courses(Path(args.site))
+        problems += check_youtube(Path(args.site))
     except ResolverError as e:
         print(f"ERRO: resolvedor de URL indisponível, verificação não feita: {e}", file=sys.stderr)
         return 1
