@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q16",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "contrato-modelo-enterprise.md",
+      "faq-operacional.md"
+    ]
+  },
+  "resultado": "{\"resposta\": \"Não encontrei essa informação nos arquivos anexados. O contrato-modelo Enterprise e o FAQ operacional não tratam de bônus ou meta de executivos de contas. Sugiro consultar o RH ou a política de remuneração variável/comissionamento da área Comercial.\", \"fontes\": []}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1786,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 114
+  },
+  "duracao_api_ms": 1441,
+  "duracao_parede_s": 5.98,
+  "custo_tabela_usd": 0.008288,
+  "registrado_em": "2026-11-25T19:54:02-0300"
+}

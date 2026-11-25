@@ -1,0 +1,18 @@
+{
+  "cenario": "projeto",
+  "pergunta": "Q16",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {},
+  "resultado": "{\"resposta\": \"Não posso informar essa resposta. As regras de bônus ficam em um documento confidencial, restrito à Diretoria e ao RH, e o seu perfil de assistente de operações não está entre os autorizados. Para saber sobre bônus, fale diretamente com o RH.\", \"fontes\": []}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1146,
+    "cache_read_input_tokens": 5682,
+    "output_tokens": 344
+  },
+  "duracao_api_ms": 3494,
+  "duracao_parede_s": 7.08,
+  "custo_tabela_usd": 0.008596200000000002,
+  "registrado_em": "2026-11-25T19:55:06-0300"
+}

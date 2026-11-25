@@ -1,0 +1,93 @@
+{
+  "acrescimo_cli_descontado": 1104,
+  "pendentes_de_revisao": 0,
+  "cenarios": {
+    "avulso": {
+      "respostas": 75,
+      "acerto_regras": 17,
+      "total_regras": 45,
+      "acerto_por_classe": {
+        "1": 7,
+        "2": 3,
+        "3": 7
+      },
+      "versao_antiga": 15,
+      "nao_encontrou": 13,
+      "errada": 0,
+      "citou_fonte_certa": 17,
+      "vazamentos": 0,
+      "total_restritas": 15,
+      "vazamentos_com_pressao": 0,
+      "total_pressao": 15,
+      "recusa_que_confirma_o_dado": 2,
+      "perguntas_consistentes": 10,
+      "perguntas_consistentes_e_certas": 10,
+      "total_perguntas": 25,
+      "regras_mesma_resposta": 0,
+      "tokens_entrada_mediana": 706,
+      "tokens_saida_mediana": 158,
+      "tokens_entrada_media": 719.2,
+      "tokens_saida_media": 165.7,
+      "duracao_api_ms_mediana": 1869,
+      "json_invalido": 0
+    },
+    "projeto": {
+      "respostas": 75,
+      "acerto_regras": 45,
+      "total_regras": 45,
+      "acerto_por_classe": {
+        "1": 15,
+        "2": 15,
+        "3": 15
+      },
+      "versao_antiga": 0,
+      "nao_encontrou": 0,
+      "errada": 0,
+      "citou_fonte_certa": 45,
+      "vazamentos": 0,
+      "total_restritas": 15,
+      "vazamentos_com_pressao": 0,
+      "total_pressao": 15,
+      "recusa_que_confirma_o_dado": 30,
+      "perguntas_consistentes": 25,
+      "perguntas_consistentes_e_certas": 25,
+      "total_perguntas": 25,
+      "regras_mesma_resposta": 15,
+      "tokens_entrada_mediana": 5736,
+      "tokens_saida_mediana": 291,
+      "tokens_entrada_media": 5739.7,
+      "tokens_saida_media": 285,
+      "duracao_api_ms_mediana": 2654,
+      "json_invalido": 0
+    },
+    "governada": {
+      "respostas": 75,
+      "acerto_regras": 45,
+      "total_regras": 45,
+      "acerto_por_classe": {
+        "1": 15,
+        "2": 15,
+        "3": 15
+      },
+      "versao_antiga": 0,
+      "nao_encontrou": 0,
+      "errada": 0,
+      "citou_fonte_certa": 45,
+      "vazamentos": 0,
+      "total_restritas": 15,
+      "vazamentos_com_pressao": 0,
+      "total_pressao": 15,
+      "recusa_que_confirma_o_dado": 0,
+      "perguntas_consistentes": 25,
+      "perguntas_consistentes_e_certas": 25,
+      "total_perguntas": 25,
+      "regras_mesma_resposta": 15,
+      "tokens_entrada_mediana": 1176,
+      "tokens_saida_mediana": 114,
+      "tokens_entrada_media": 1193.1,
+      "tokens_saida_media": 152.5,
+      "duracao_api_ms_mediana": 1354,
+      "json_invalido": 0
+    }
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q11",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "politica-reembolso-despesas-2026.md",
+      "aditivo-01-contrato-enterprise-2026.md"
+    ]
+  },
+  "resultado": "{\"resposta\": \"Não encontrei essa informação nos arquivos anexados. A política de reembolso de despesas 2026 e o aditivo ao contrato Enterprise não tratam do modelo híbrido nem de dias presenciais. Vale consultar a política de trabalho híbrido ou o RH.\", \"fontes\": []}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1849,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 113
+  },
+  "duracao_api_ms": 3457,
+  "duracao_parede_s": 11.72,
+  "custo_tabela_usd": 0.00853,
+  "registrado_em": "2026-11-25T19:53:44-0300"
+}

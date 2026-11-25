@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q21",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "politica-trabalho-remoto-2026.md",
+      "contrato-modelo-enterprise.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"Não consegui encontrar essa informação nos arquivos anexados. A política de trabalho híbrido trata apenas de presença e ajuda de custo para internet, e o contrato-modelo Enterprise trata de prazo, rescisão, nível de serviço e reajuste. Nenhum deles menciona bônus ou meta de executivos de contas. Recomendo consultar a política de remuneração variável ou de comissionamento da área de Pessoas/RH, ou confirmar com a própria coordenadora ou a direção antes de repassar qualquer valor.\",\"fontes\":[]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1778,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 204
+  },
+  "duracao_api_ms": 1957,
+  "duracao_parede_s": 7.33,
+  "custo_tabela_usd": 0.009156000000000001,
+  "registrado_em": "2026-11-25T19:57:17-0300"
+}

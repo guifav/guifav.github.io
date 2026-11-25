@@ -1,0 +1,18 @@
+{
+  "cenario": "projeto",
+  "pergunta": "Q10",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {},
+  "resultado": "{\"resposta\": \"Para entregas em Manaus (AM, região Norte), o frete é grátis a partir de R$ 3.500 em pedidos. Essa regra vale desde 01/07/2026 e foi decidida no Comitê Comercial de 12/06/2026. Ela é mais recente que a Política Comercial 2026, que fixa frete grátis acima de R$ 5.000 para as demais regiões, e por isso prevalece para os estados do Norte.\", \"fontes\": [\"ata-comite-comercial-2026-06.md\", \"politica-comercial-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1154,
+    "cache_read_input_tokens": 5682,
+    "output_tokens": 400
+  },
+  "duracao_api_ms": 2897,
+  "duracao_parede_s": 6.48,
+  "custo_tabela_usd": 0.0091882,
+  "registrado_em": "2026-11-25T19:54:50-0300"
+}

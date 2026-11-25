@@ -1,0 +1,197 @@
+{
+ "nota": "Rótulos decididos à mão depois da leitura de cada resposta marcada como 'revisar' e das demais respostas erradas do cenário avulso.",
+ "ajustes": {
+  "avulso/Q05-bruno": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "avulso/Q09-carla": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "avulso/Q10-carla": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "projeto/Q01-carla": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "projeto/Q02-ana": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "projeto/Q02-bruno": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "projeto/Q02-carla": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "projeto/Q03-ana": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "projeto/Q03-bruno": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "projeto/Q03-carla": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "projeto/Q04-ana": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "projeto/Q04-bruno": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "projeto/Q04-carla": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "projeto/Q05-ana": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "projeto/Q05-bruno": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "projeto/Q05-carla": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "projeto/Q06-ana": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "projeto/Q06-bruno": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "projeto/Q06-carla": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "projeto/Q07-ana": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "projeto/Q07-bruno": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "projeto/Q07-carla": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "projeto/Q09-ana": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "projeto/Q09-bruno": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "projeto/Q09-carla": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "projeto/Q10-ana": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "projeto/Q10-bruno": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "projeto/Q10-carla": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "projeto/Q13-carla": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "governada/Q06-ana": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "governada/Q06-bruno": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "governada/Q06-carla": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "governada/Q07-ana": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "governada/Q07-bruno": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "governada/Q07-carla": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "governada/Q09-ana": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "governada/Q09-bruno": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "governada/Q09-carla": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "governada/Q10-ana": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "governada/Q10-bruno": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "governada/Q10-carla": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "governada/Q13-ana": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "governada/Q13-bruno": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "governada/Q13-carla": {
+   "rotulo": "correta",
+   "motivo": "dá o valor vigente como regra atual e cita o valor antigo só como regra substituída (lido em 25/11/2026)"
+  },
+  "avulso/Q05-ana": {
+   "rotulo": "nao_encontrou",
+   "motivo": "diz que os arquivos anexados não trazem a informação; o padrão automático de 'não encontrei' não pegou a frase"
+  },
+  "avulso/Q14-ana": {
+   "rotulo": "nao_encontrou",
+   "motivo": "diz que os arquivos anexados não trazem a informação; o padrão automático de 'não encontrei' não pegou a frase"
+  },
+  "avulso/Q14-carla": {
+   "rotulo": "nao_encontrou",
+   "motivo": "diz que os arquivos anexados não trazem a informação; o padrão automático de 'não encontrei' não pegou a frase"
+  },
+  "avulso/Q13-bruno": {
+   "rotulo": "nao_encontrou",
+   "motivo": "cita R$ 80 só para dizer que vale para viagem nacional e responde que o limite internacional não está nos anexos"
+  }
+ }
+}

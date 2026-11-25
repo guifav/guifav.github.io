@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q24",
+  "funcionario": "ana",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "politica-trabalho-remoto-2026.md",
+      "tabela-descontos-volume-2026.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"Não encontrei essa informação nos arquivos anexados. A política de trabalho híbrido 2026 trata de presença e ajuda de custo para internet, e a tabela de descontos por volume 2026 trata de descontos nos pedidos. Nenhum dos dois fala de bônus por meta para executivos de contas (nem do percentual acima de 120%). Para confirmar o valor, consulte a política de remuneração variável/bônus ou a área de Pessoas/RH.\",\"fontes\":[]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1802,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 177
+  },
+  "duracao_api_ms": 1878,
+  "duracao_parede_s": 5.4,
+  "custo_tabela_usd": 0.008982,
+  "registrado_em": "2026-11-25T19:57:22-0300"
+}

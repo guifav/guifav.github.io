@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q10",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "manual-onboarding-acessos.md",
+      "contrato-modelo-enterprise.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"Não encontrei essa informação nos arquivos anexados. O manual de onboarding trata de acessos e senhas, e o contrato-modelo Enterprise trata de prazo, rescisão, SLA e reajuste. Nenhum deles fala de valor mínimo de pedido para frete grátis ou de entregas em Manaus. Vale confirmar com a área comercial ou de logística.\",\"fontes\":[]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1770,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 148
+  },
+  "duracao_api_ms": 1702,
+  "duracao_parede_s": 11.48,
+  "custo_tabela_usd": 0.008564,
+  "registrado_em": "2026-11-25T19:53:39-0300"
+}

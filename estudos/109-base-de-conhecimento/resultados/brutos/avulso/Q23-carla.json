@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q23",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "politica-devolucoes-2026.md",
+      "ata-comite-comercial-2026-06.md"
+    ]
+  },
+  "resultado": "{\"resposta\": \"Não encontrei essa informação nos arquivos anexados. A política de devoluções e a ata do Comitê Comercial não definem uma margem mínima por pedido (a ata só trata de alçada de desconto em renovações, frete grátis na região Norte e adia a revisão do pedido mínimo). Vale confirmar com o Comercial ou na Política Comercial vigente, que não foi anexada.\", \"fontes\": []}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1893,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 151
+  },
+  "duracao_api_ms": 1882,
+  "duracao_parede_s": 6.74,
+  "custo_tabela_usd": 0.009086,
+  "registrado_em": "2026-11-25T19:57:23-0300"
+}

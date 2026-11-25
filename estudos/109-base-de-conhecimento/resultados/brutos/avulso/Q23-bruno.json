@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q23",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "politica-trabalho-remoto-2026.md",
+      "manual-onboarding-acessos.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"Não encontrei essa informação nos arquivos anexados. A política de trabalho híbrido e o manual de onboarding tratam de presença, ajuda de custo, acessos e senhas, e nenhum deles fala de margem mínima em pedidos. Esse dado provavelmente consta em uma política comercial ou de preços, que não foi anexada. Vale confirmar com a área Comercial ou com quem definiu a política de preços.\",\"fontes\":[]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1767,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 162
+  },
+  "duracao_api_ms": 1710,
+  "duracao_parede_s": 6.24,
+  "custo_tabela_usd": 0.008692,
+  "registrado_em": "2026-11-25T19:57:22-0300"
+}

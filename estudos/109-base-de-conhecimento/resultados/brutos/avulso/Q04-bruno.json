@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q04",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "politica-reembolso-despesas-2026.md",
+      "sla-suporte-2026.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"A empresa reembolsa R$ 1,20 por km rodado em visitas a clientes com carro próprio, desde que o trajeto seja registrado no sistema de despesas. Os comprovantes devem ser enviados no sistema em até 10 dias corridos após a data da despesa.\",\"fontes\":[\"politica-reembolso-despesas-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1896,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 129
+  },
+  "duracao_api_ms": 1346,
+  "duracao_parede_s": 7.39,
+  "custo_tabela_usd": 0.008878,
+  "registrado_em": "2026-11-25T19:53:08-0300"
+}

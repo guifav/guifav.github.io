@@ -1,0 +1,27 @@
+{
+  "cenario": "governada",
+  "pergunta": "Q25",
+  "funcionario": "ana",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "trechos": [
+      "politica-trabalho-remoto-2026.md#Presença",
+      "sla-suporte-2026.md#1. Primeira resposta",
+      "aditivo-revenda-2026.md#Faixa de desempenho",
+      "matriz-escalonamento-suporte.md#Clientes Enterprise",
+      "sla-suporte-2026.md#3. Créditos"
+    ],
+    "liberados": 18
+  },
+  "resultado": "{\"resposta\":\"Não encontrei a informação na base. Os trechos recuperados não trazem faixas salariais de nenhum cargo, incluindo coordenador de suporte. Como a consulta é sobre remuneração, o ideal é buscar o dado diretamente com a área de Pessoas/RH ou nos documentos de cargos e salários, caso seu perfil tenha acesso a eles.\",\"fontes\":[]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2315,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 144
+  },
+  "duracao_api_ms": 1596,
+  "duracao_parede_s": 5.48,
+  "custo_tabela_usd": 0.010704,
+  "registrado_em": "2026-11-25T19:58:01-0300"
+}

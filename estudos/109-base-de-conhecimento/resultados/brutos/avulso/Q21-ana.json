@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q21",
+  "funcionario": "ana",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "tabela-descontos-volume-2026.md",
+      "politica-comercial-2025.md"
+    ]
+  },
+  "resultado": "{\"resposta\": \"Não encontrei essa informação nos arquivos anexados. Eles tratam de alçadas de desconto, prazo de pagamento, frete, pedido mínimo e descontos por volume, mas não trazem nenhuma regra de bônus ou remuneração variável para executivos de contas. Como se trata de um dado de RH, recomendo confirmar com a coordenadora de RH ou consultar a política de remuneração/bonificação da área, em vez de estimar um valor.\", \"fontes\": []}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1923,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 175
+  },
+  "duracao_api_ms": 1958,
+  "duracao_parede_s": 7.33,
+  "custo_tabela_usd": 0.009446,
+  "registrado_em": "2026-11-25T19:57:17-0300"
+}

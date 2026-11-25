@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q25",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "sla-suporte-2025.md",
+      "aditivo-revenda-2026.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"Não encontrei essa informação nos arquivos anexados. Eles tratam apenas do SLA de suporte (prazos de primeira resposta por faixa de cliente) e do aditivo de comissão para revendas 2026, e nenhum traz faixas salariais de cargos como o de coordenador de suporte. Para conferir, vale consultar a tabela de cargos e salários do RH ou pedir a informação à liderança de RH, pois não quero apresentar um valor sem fonte.\",\"fontes\":[]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1679,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 180
+  },
+  "duracao_api_ms": 1747,
+  "duracao_parede_s": 6.34,
+  "custo_tabela_usd": 0.00852,
+  "registrado_em": "2026-11-25T19:57:29-0300"
+}

@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q14",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "matriz-escalonamento-suporte.md",
+      "sla-suporte-2026.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"Escale para o gerente de operações de suporte, acionando-o pelo telefone de plantão publicado na intranet (a matriz não traz o número). Se o chamado seguir sem solução após 4 horas, o gerente aciona o diretor de operações. Lembre que o SLA prevê solução ou contorno de severidade 1 Enterprise em até 8 horas.\",\"fontes\":[\"matriz-escalonamento-suporte.md\",\"sla-suporte-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1839,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 168
+  },
+  "duracao_api_ms": 1559,
+  "duracao_parede_s": 5.77,
+  "custo_tabela_usd": 0.00904,
+  "registrado_em": "2026-11-25T19:53:56-0300"
+}

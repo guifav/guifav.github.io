@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q06",
+  "funcionario": "ana",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "politica-comercial-2025.md",
+      "faq-operacional.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"Não encontrei essa informação nos arquivos anexados. O FAQ operacional só diz que o suporte funciona de segunda a sexta, das 8h às 18h, e que clientes Enterprise têm atendimento 24x7 para severidade 1. Nenhum dos documentos define prazo de primeira resposta (SLA) para chamados de clientes Pro. A Política Comercial 2025 também não trata disso. Sugiro consultar o documento de SLA de suporte ou a área de Operações.\",\"fontes\":[\"faq-operacional.md\",\"politica-comercial-2025.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1897,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 207
+  },
+  "duracao_api_ms": 2364,
+  "duracao_parede_s": 10.27,
+  "custo_tabela_usd": 0.009662,
+  "registrado_em": "2026-11-25T19:53:17-0300"
+}

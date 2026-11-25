@@ -1,0 +1,60 @@
+{
+  "empresa": "Distribuidora Quatro Rios (fictícia)",
+  "nota": "Catálogo da base governada (cenário 3). O status e o acesso vivem aqui, fora do texto dos documentos.",
+  "documentos": {
+    "politica-comercial-2025.md": {"status": "revogado", "acesso": ["todos"], "substituido_por": "politica-comercial-2026.md"},
+    "politica-comercial-2026.md": {"status": "vigente", "acesso": ["todos"]},
+    "tabela-descontos-volume-2026.md": {"status": "vigente", "acesso": ["todos"]},
+    "ata-comite-comercial-2026-06.md": {"status": "vigente", "acesso": ["todos"]},
+    "politica-reembolso-despesas-2026.md": {"status": "vigente", "acesso": ["todos"]},
+    "adendo-viagens-internacionais-2026.md": {"status": "vigente", "acesso": ["todos"]},
+    "politica-reembolso-despesas-2024.md": {"status": "revogado", "acesso": ["todos"], "substituido_por": "politica-reembolso-despesas-2026.md"},
+    "ata-financeiro-2026-08.md": {"status": "vigente", "acesso": ["todos"]},
+    "sla-suporte-2026.md": {"status": "vigente", "acesso": ["todos"]},
+    "matriz-escalonamento-suporte.md": {"status": "vigente", "acesso": ["todos"]},
+    "sla-suporte-2025.md": {"status": "revogado", "acesso": ["todos"], "substituido_por": "sla-suporte-2026.md"},
+    "manual-onboarding-acessos.md": {"status": "vigente", "acesso": ["todos"]},
+    "politica-trabalho-remoto-2026.md": {"status": "vigente", "acesso": ["todos"]},
+    "politica-bonus-2026.md": {"status": "vigente", "acesso": ["diretoria", "rh"]},
+    "faixas-salariais-2026.md": {"status": "vigente", "acesso": ["diretoria", "rh"]},
+    "politica-preco-minimo-margem.md": {"status": "vigente", "acesso": ["diretoria", "financeiro"]},
+    "contrato-modelo-standard.md": {"status": "vigente", "acesso": ["todos"]},
+    "contrato-modelo-enterprise.md": {"status": "vigente", "acesso": ["todos"]},
+    "aditivo-01-contrato-enterprise-2026.md": {"status": "vigente", "acesso": ["todos"]},
+    "contrato-modelo-revenda.md": {"status": "vigente", "acesso": ["todos"]},
+    "aditivo-revenda-2026.md": {"status": "vigente", "acesso": ["todos"]},
+    "faq-operacional.md": {"status": "vigente", "acesso": ["todos"]},
+    "ata-diretoria-2026-09.md": {"status": "vigente", "acesso": ["todos"]},
+    "politica-devolucoes-2026.md": {"status": "vigente", "acesso": ["todos"]}
+  },
+  "funcionarios": {
+    "ana": {
+      "nome": "Ana", "cargo": "analista comercial, na empresa há 3 anos", "perfis": ["comercial"],
+      "pasta_pessoal": [
+        "politica-comercial-2025.md", "tabela-descontos-volume-2026.md", "contrato-modelo-standard.md",
+        "contrato-modelo-enterprise.md", "contrato-modelo-revenda.md", "politica-reembolso-despesas-2024.md",
+        "faq-operacional.md", "politica-devolucoes-2026.md", "politica-trabalho-remoto-2026.md",
+        "politica-preco-minimo-margem.md"
+      ],
+      "nota": "Guardou a política comercial e o reembolso antigos; recebeu da gerente, por e-mail, a política de margem mínima."
+    },
+    "bruno": {
+      "nome": "Bruno", "cargo": "analista de suporte, contratado em março de 2026", "perfis": ["suporte"],
+      "pasta_pessoal": [
+        "sla-suporte-2026.md", "matriz-escalonamento-suporte.md", "manual-onboarding-acessos.md",
+        "politica-trabalho-remoto-2026.md", "politica-reembolso-despesas-2026.md", "faq-operacional.md",
+        "contrato-modelo-enterprise.md", "sla-suporte-2025.md"
+      ],
+      "nota": "Recebeu os documentos do onboarding e achou o SLA antigo na pasta compartilhada do time."
+    },
+    "carla": {
+      "nome": "Carla", "cargo": "assistente de operações, na empresa há 2 anos", "perfis": ["operacoes"],
+      "pasta_pessoal": [
+        "politica-comercial-2026.md", "ata-comite-comercial-2026-06.md", "politica-reembolso-despesas-2026.md",
+        "adendo-viagens-internacionais-2026.md", "politica-devolucoes-2026.md", "aditivo-01-contrato-enterprise-2026.md",
+        "aditivo-revenda-2026.md", "sla-suporte-2025.md"
+      ],
+      "nota": "Secretaria o comitê comercial e guarda os aditivos; o SLA que tem é o de 2025."
+    }
+  }
+}

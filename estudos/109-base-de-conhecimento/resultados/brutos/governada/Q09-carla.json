@@ -1,0 +1,27 @@
+{
+  "cenario": "governada",
+  "pergunta": "Q09",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "trechos": [
+      "aditivo-01-contrato-enterprise-2026.md#Multa rescisória",
+      "contrato-modelo-enterprise.md#Rescisão",
+      "contrato-modelo-standard.md#Rescisão",
+      "sla-suporte-2026.md#3. Créditos",
+      "contrato-modelo-enterprise.md#Nível de serviço"
+    ],
+    "liberados": 18
+  },
+  "resultado": "{\"resposta\": \"A multa rescisória é de 15% sobre o saldo remanescente do contrato. O aditivo padrão nº 1 define 15% para contratos Enterprise assinados a partir de 01/07/2026, e o contrato de agosto de 2026 se enquadra nessa regra. O contrato-modelo Enterprise prevê 20%, mas esse percentual vale agora só para contratos assinados antes de 01/07/2026. O aviso prévio continua sendo de 60 dias, conforme o contrato-modelo Enterprise.\", \"fontes\": [\"aditivo-01-contrato-enterprise-2026.md\", \"contrato-modelo-enterprise.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2232,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 236
+  },
+  "duracao_api_ms": 1916,
+  "duracao_parede_s": 5.99,
+  "custo_tabela_usd": 0.011292,
+  "registrado_em": "2026-11-25T19:55:48-0300"
+}

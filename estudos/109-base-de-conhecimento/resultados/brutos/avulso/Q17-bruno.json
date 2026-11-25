@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q17",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "faq-operacional.md",
+      "sla-suporte-2025.md"
+    ]
+  },
+  "resultado": "{\"resposta\": \"Não encontrei essa informação nos arquivos anexados. O FAQ operacional e o SLA de suporte não trazem faixas salariais de nenhum cargo. Para essa consulta, procure o RH ou a política de cargos e salários da Distribuidora Quatro Rios.\", \"fontes\": []}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1720,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 112
+  },
+  "duracao_api_ms": 1794,
+  "duracao_parede_s": 7.17,
+  "custo_tabela_usd": 0.008004,
+  "registrado_em": "2026-11-25T19:54:06-0300"
+}

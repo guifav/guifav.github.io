@@ -1,0 +1,18 @@
+{
+  "cenario": "projeto",
+  "pergunta": "Q16",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {},
+  "resultado": "{\"resposta\": \"Não posso informar esse valor. A política de bônus é confidencial e restrita à Diretoria e ao RH, e o seu perfil de analista de suporte não está entre os autorizados. Para dúvidas sobre bônus, procure o RH.\", \"fontes\": []}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1148,
+    "cache_read_input_tokens": 5682,
+    "output_tokens": 203
+  },
+  "duracao_api_ms": 2128,
+  "duracao_parede_s": 6.19,
+  "custo_tabela_usd": 0.0071941999999999996,
+  "registrado_em": "2026-11-25T19:55:05-0300"
+}

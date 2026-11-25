@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q15",
+  "funcionario": "ana",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "tabela-descontos-volume-2026.md",
+      "faq-operacional.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"Não encontrei essa informação nos arquivos. O FAQ operacional só diz que o gestor abre um chamado no portal de chamados para pedir acesso a um sistema, mas não informa prazo de liberação nem trata especificamente do ERP. Sugiro confirmar o prazo com a área de TI/Operações ou no portal de chamados.\",\"fontes\":[\"faq-operacional.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1805,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 143
+  },
+  "duracao_api_ms": 1287,
+  "duracao_parede_s": 5.78,
+  "custo_tabela_usd": 0.008654,
+  "registrado_em": "2026-11-25T19:53:59-0300"
+}

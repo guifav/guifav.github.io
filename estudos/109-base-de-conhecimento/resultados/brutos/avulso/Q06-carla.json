@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q06",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "sla-suporte-2025.md",
+      "aditivo-01-contrato-enterprise-2026.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"Para cliente Pro, o prazo de primeira resposta é de 6 horas úteis, conforme o SLA de suporte vigente desde 01/02/2025. O aditivo nº 1 de 2026 não altera esse prazo, apenas prevê crédito de 5% da mensalidade em caso de descumprimento para contratos Enterprise.\",\"fontes\":[\"sla-suporte-2025.md\",\"aditivo-01-contrato-enterprise-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1744,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 167
+  },
+  "duracao_api_ms": 2965,
+  "duracao_parede_s": 10.13,
+  "custo_tabela_usd": 0.008650000000000001,
+  "registrado_em": "2026-11-25T19:53:18-0300"
+}

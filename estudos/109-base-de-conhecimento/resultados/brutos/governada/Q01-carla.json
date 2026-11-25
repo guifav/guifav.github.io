@@ -1,0 +1,27 @@
+{
+  "cenario": "governada",
+  "pergunta": "Q01",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "trechos": [
+      "ata-comite-comercial-2026-06.md#Decisão 1: alçada em renovações",
+      "politica-comercial-2026.md#1. Alçadas de desconto",
+      "tabela-descontos-volume-2026.md#Regra de aplicação",
+      "faq-operacional.md#Posso dar desconto ao cliente?",
+      "ata-comite-comercial-2026-06.md#Pauta adiada"
+    ],
+    "liberados": 18
+  },
+  "resultado": "{\"resposta\":\"Para cliente novo, o executivo de contas pode aprovar sozinho descontos de até 10% sobre a tabela de preços. Entre 10,01% e 18% é preciso aprovação do gerente comercial, e acima de 18%, do diretor comercial. A alçada de 12% definida pelo Comitê Comercial vale apenas para renovações de contrato, não para clientes novos. O desconto por volume aplicado automaticamente pelo ERP não conta para essa alçada.\",\"fontes\":[\"politica-comercial-2026.md\",\"ata-comite-comercial-2026-06.md\",\"tabela-descontos-volume-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2369,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 225
+  },
+  "duracao_api_ms": 1819,
+  "duracao_parede_s": 6.39,
+  "custo_tabela_usd": 0.01173,
+  "registrado_em": "2026-11-25T19:55:23-0300"
+}

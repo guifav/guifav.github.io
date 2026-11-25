@@ -71,7 +71,7 @@ export const TOPICS: Topic[] = [
     description:
       'Artigos de Guilherme Favaron sobre como fazer a IA responder com os dados da empresa: RAG, Text-to-SQL, MCP e análise de planilhas com LLMs.',
     intro:
-      'Quase todo projeto de IA que acompanho precisa que o modelo responda com os dados da própria empresa, com cada número conferido na fonte. Os caminhos são vários (RAG sobre documentos, Text-to-SQL sobre o banco, MCP e análise de planilhas), e cada um acerta num tipo de pergunta e falha em outro. Os seis primeiros artigos tratam da escolha de arquitetura, da série de RAG e de Text-to-SQL. Depois vêm as planilhas, os modelos preditivos e o valor do dado da empresa, e a lista termina em aplicações: segmentação de clientes, análise de ligações de vendas e um radar de mercado que construí.',
+      'Quase todo projeto de IA que acompanho precisa que o modelo responda com os dados da própria empresa, com cada número conferido na fonte. Os caminhos são vários (RAG sobre documentos, Text-to-SQL sobre o banco, MCP e análise de planilhas), e cada um acerta num tipo de pergunta e falha em outro. O primeiro artigo testa base compartilhada contra chatbot avulso, e os seis seguintes tratam da arquitetura, de RAG e de Text-to-SQL. Depois vêm as planilhas, os modelos preditivos e o valor do dado da empresa, e a lista termina em aplicações: segmentação de clientes, análise de ligações de vendas e um radar de mercado que construí.',
     pageCta: [
       'Antes de escolher a arquitetura, use o ',
       { text: 'mapa de decisão', href: MAPA },
@@ -80,6 +80,7 @@ export const TOPICS: Topic[] = [
     pageCtaExtra: ['Para ver isso funcionando em produto, ', { text: 'conheça o TalkWithData', href: '/portfolio/#talkwithdata' }, '.'],
     blockCta: ['Vai escolher a arquitetura? Use o ', { text: 'mapa de decisão de IA', href: MAPA }, '.'],
     posts: [
+      { slug: 'base-de-conhecimento-com-ia-ou-chatbot-avulso', question: 'Vale mais dar chatbot por usuário ao time ou montar uma base de conhecimento compartilhada com IA?' },
       { slug: 'mcp-ou-aplicacao-dados-da-empresa-na-ia', question: 'Servidor MCP aberto ou aplicação própria: quem garante a resposta da IA sobre os dados da empresa?' },
       { slug: 'rag-llm-ai-o-que-e', question: 'Quais são os primeiros passos para implementar RAG?' },
       { slug: 'o-que-e-rag-llms-ia', question: 'O que é RAG e quando ele resolve a pergunta sobre os documentos da empresa?' },

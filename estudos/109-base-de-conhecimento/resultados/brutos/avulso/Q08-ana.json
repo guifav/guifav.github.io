@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q08",
+  "funcionario": "ana",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "politica-comercial-2025.md",
+      "tabela-descontos-volume-2026.md"
+    ]
+  },
+  "resultado": "{\"resposta\": \"O executivo de contas pode aprovar sozinho descontos de até 15% sobre a tabela de preços (acima disso, de 15,01% a 25%, precisa do gerente comercial). Os arquivos não trazem uma regra específica para renovação de contrato, então vale a alçada geral. O desconto por volume da tabela 2026 (3% a 7%) é aplicado automaticamente pelo ERP e não conta nessa alçada de 15%. Observação: a política é de 2025; se houver versão mais recente, confirme se o limite continua igual.\", \"fontes\": [\"politica-comercial-2025.md\", \"tabela-descontos-volume-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1900,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 234
+  },
+  "duracao_api_ms": 2625,
+  "duracao_parede_s": 10.32,
+  "custo_tabela_usd": 0.009944,
+  "registrado_em": "2026-11-25T19:53:27-0300"
+}

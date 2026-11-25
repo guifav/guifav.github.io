@@ -1,0 +1,27 @@
+{
+  "cenario": "governada",
+  "pergunta": "Q10",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "trechos": [
+      "ata-comite-comercial-2026-06.md#Decisão 2: frete na região Norte",
+      "politica-comercial-2026.md#4. Pedido mínimo",
+      "politica-comercial-2026.md#3. Frete",
+      "politica-devolucoes-2026.md#Produto lacrado sem defeito",
+      "ata-comite-comercial-2026-06.md#Pauta adiada"
+    ],
+    "liberados": 18
+  },
+  "resultado": "```json\n{\n  \"resposta\": \"Para entregas em Manaus (AM, região Norte), o frete é grátis a partir de R$ 3.500, valor em vigor desde 01/07/2026. Esse valor vem da ata do Comitê Comercial de 12/06/2026, que é mais recente e prevalece sobre a regra geral de R$ 5.000 da Política Comercial 2026 para esses estados. O pedido mínimo de R$ 1.200 continua valendo.\",\n  \"fontes\": [\"ata-comite-comercial-2026-06.md\", \"politica-comercial-2026.md\"]\n}\n```",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2293,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 531
+  },
+  "duracao_api_ms": 4470,
+  "duracao_parede_s": 9.86,
+  "custo_tabela_usd": 0.014485999999999999,
+  "registrado_em": "2026-11-25T19:55:54-0300"
+}

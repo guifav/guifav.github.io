@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q03",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "politica-reembolso-despesas-2026.md",
+      "politica-trabalho-remoto-2026.md"
+    ]
+  },
+  "resultado": "{\"resposta\": \"O limite de hospedagem em viagens nacionais a trabalho é de R$ 350 por noite, conforme a política de reembolso de despesas 2026 (vigente desde 01/02/2026, portanto já aplicável a você, contratado em março de 2026).\", \"fontes\": [\"politica-reembolso-despesas-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1820,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 123
+  },
+  "duracao_api_ms": 1619,
+  "duracao_parede_s": 6.24,
+  "custo_tabela_usd": 0.008514,
+  "registrado_em": "2026-11-25T19:53:05-0300"
+}

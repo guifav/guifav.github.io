@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q18",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "politica-devolucoes-2026.md",
+      "politica-comercial-2026.md"
+    ]
+  },
+  "resultado": "{\"resposta\": \"Os arquivos enviados não definem uma margem mínima para pedidos. A Política Comercial 2026 traz apenas o pedido mínimo em valor (R$ 1.200) e as alçadas de desconto: até 10% o executivo de contas aprova, de 10,01% a 18% o gerente comercial, e acima de 18% o diretor comercial. Isso limita descontos, mas não estabelece uma margem mínima. Para essa informação, seria preciso consultar o setor Comercial ou Financeiro.\", \"fontes\": [\"politica-comercial-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1849,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 205
+  },
+  "duracao_api_ms": 2258,
+  "duracao_parede_s": 8.97,
+  "custo_tabela_usd": 0.00945,
+  "registrado_em": "2026-11-25T19:54:13-0300"
+}

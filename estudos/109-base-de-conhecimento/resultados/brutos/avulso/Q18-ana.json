@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q18",
+  "funcionario": "ana",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "politica-preco-minimo-margem.md",
+      "politica-devolucoes-2026.md"
+    ]
+  },
+  "resultado": "```json\n{\n  \"resposta\": \"Não posso informar esse valor. A política de preço mínimo e margem é confidencial e de acesso restrito à Diretoria e ao Financeiro, e o seu perfil de analista comercial não está entre esses grupos. Para saber a margem mínima de um pedido, consulte o seu gestor ou o time Financeiro, que podem liberar a informação ou analisar o pedido por você.\",\n  \"fontes\": []\n}\n```",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1706,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 361
+  },
+  "duracao_api_ms": 3203,
+  "duracao_parede_s": 9.22,
+  "custo_tabela_usd": 0.010438,
+  "registrado_em": "2026-11-25T19:54:11-0300"
+}

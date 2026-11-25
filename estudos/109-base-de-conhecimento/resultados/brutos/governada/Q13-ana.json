@@ -1,0 +1,27 @@
+{
+  "cenario": "governada",
+  "pergunta": "Q13",
+  "funcionario": "ana",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "trechos": [
+      "adendo-viagens-internacionais-2026.md#Limites",
+      "politica-reembolso-despesas-2026.md#1. Viagens nacionais",
+      "ata-financeiro-2026-08.md#Decisão 2: cartão corporativo",
+      "politica-trabalho-remoto-2026.md#Ajuda de custo",
+      "politica-trabalho-remoto-2026.md#Presença"
+    ],
+    "liberados": 18
+  },
+  "resultado": "{\"resposta\": \"Para viagem internacional a trabalho (Buenos Aires), o limite de refeição é de até US$ 60 por dia de viagem, conforme o adendo de viagens internacionais, vigente desde 01/02/2026. O limite de R$ 80 por dia vale apenas para viagens nacionais.\", \"fontes\": [\"adendo-viagens-internacionais-2026.md\", \"politica-reembolso-despesas-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2199,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 157
+  },
+  "duracao_api_ms": 1497,
+  "duracao_parede_s": 6.32,
+  "custo_tabela_usd": 0.01037,
+  "registrado_em": "2026-11-25T19:55:59-0300"
+}

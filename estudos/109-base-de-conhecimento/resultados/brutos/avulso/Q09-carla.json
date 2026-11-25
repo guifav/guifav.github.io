@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q09",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "aditivo-01-contrato-enterprise-2026.md",
+      "sla-suporte-2025.md"
+    ]
+  },
+  "resultado": "{\"resposta\": \"A multa rescisória é de 15% sobre o saldo remanescente do contrato. Como o contrato Enterprise foi assinado em agosto de 2026, ou seja, depois de 01/07/2026, aplica-se o novo percentual do Aditivo nº 1 (os contratos assinados antes dessa data mantêm 20%).\", \"fontes\": [\"aditivo-01-contrato-enterprise-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1744,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 153
+  },
+  "duracao_api_ms": 2720,
+  "duracao_parede_s": 8.99,
+  "custo_tabela_usd": 0.00851,
+  "registrado_em": "2026-11-25T19:53:32-0300"
+}

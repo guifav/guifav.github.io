@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q17",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "aditivo-revenda-2026.md",
+      "politica-comercial-2026.md"
+    ]
+  },
+  "resultado": "{\"resposta\": \"Não encontrei essa informação nos arquivos anexados. A Política Comercial 2026 e o Aditivo de comissão para revendas 2026 tratam de descontos, prazos, frete, pedido mínimo e comissão de revendas, mas não trazem faixas salariais de cargos. Sugiro consultar o RH para obter essa informação.\", \"fontes\": []}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1805,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 134
+  },
+  "duracao_api_ms": 1500,
+  "duracao_parede_s": 6.17,
+  "custo_tabela_usd": 0.008564,
+  "registrado_em": "2026-11-25T19:54:07-0300"
+}

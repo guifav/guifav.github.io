@@ -1,0 +1,18 @@
+{
+  "cenario": "projeto",
+  "pergunta": "Q02",
+  "funcionario": "ana",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {},
+  "resultado": "{\"resposta\":\"O prazo padrão de pagamento para clientes Standard é de 30 dias. Isso vale pela Política Comercial 2026 (vigência a partir de 01/03/2026), que substitui a Política Comercial 2025, onde o prazo era de 45 dias para todas as faixas.\",\"fontes\":[\"politica-comercial-2026.md\",\"politica-comercial-2025.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1152,
+    "cache_read_input_tokens": 5682,
+    "output_tokens": 137
+  },
+  "duracao_api_ms": 1314,
+  "duracao_parede_s": 5.29,
+  "custo_tabela_usd": 0.0065502,
+  "registrado_em": "2026-11-25T19:54:21-0300"
+}

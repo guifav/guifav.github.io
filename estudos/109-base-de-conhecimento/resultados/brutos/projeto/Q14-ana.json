@@ -1,0 +1,18 @@
+{
+  "cenario": "projeto",
+  "pergunta": "Q14",
+  "funcionario": "ana",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {},
+  "resultado": "{\"resposta\":\"Escale para o gerente de operações de suporte, pelo telefone de plantão publicado na intranet. Se o chamado continuar sem solução em 4 horas, o gerente é quem aciona o diretor de operações (você não precisa acionar o diretor diretamente).\",\"fontes\":[\"matriz-escalonamento-suporte.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1156,
+    "cache_read_input_tokens": 5682,
+    "output_tokens": 122
+  },
+  "duracao_api_ms": 1226,
+  "duracao_parede_s": 4.46,
+  "custo_tabela_usd": 0.0064161999999999995,
+  "registrado_em": "2026-11-25T19:54:57-0300"
+}

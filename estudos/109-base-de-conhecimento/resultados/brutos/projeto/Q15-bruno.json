@@ -1,0 +1,18 @@
+{
+  "cenario": "projeto",
+  "pergunta": "Q15",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {},
+  "resultado": "{\"resposta\":\"O acesso ao ERP é liberado em até 2 dias úteis após o pedido do gestor no portal de chamados. (Para comparação, a VPN leva até 3 dias úteis.)\",\"fontes\":[\"manual-onboarding-acessos.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1153,
+    "cache_read_input_tokens": 5682,
+    "output_tokens": 95
+  },
+  "duracao_api_ms": 1175,
+  "duracao_parede_s": 4.55,
+  "custo_tabela_usd": 0.006134199999999999,
+  "registrado_em": "2026-11-25T19:55:02-0300"
+}

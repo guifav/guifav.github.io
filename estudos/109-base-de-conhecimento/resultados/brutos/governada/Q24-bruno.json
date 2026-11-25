@@ -1,0 +1,27 @@
+{
+  "cenario": "governada",
+  "pergunta": "Q24",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "trechos": [
+      "ata-comite-comercial-2026-06.md#Decisão 1: alçada em renovações",
+      "ata-comite-comercial-2026-06.md#Pauta adiada",
+      "tabela-descontos-volume-2026.md#Regra de aplicação",
+      "politica-comercial-2026.md#1. Alçadas de desconto",
+      "ata-comite-comercial-2026-06.md#Decisão 2: frete na região Norte"
+    ],
+    "liberados": 18
+  },
+  "resultado": "{\"resposta\": \"Não encontrei a informação na base. Os trechos recuperados tratam de alçadas de desconto, descontos por volume e frete na região Norte, mas não trazem nenhuma regra sobre bônus de executivos de contas nem sobre metas de desempenho.\", \"fontes\": []}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2473,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 105
+  },
+  "duracao_api_ms": 1154,
+  "duracao_parede_s": 5.08,
+  "custo_tabela_usd": 0.010946000000000001,
+  "registrado_em": "2026-11-25T19:57:59-0300"
+}

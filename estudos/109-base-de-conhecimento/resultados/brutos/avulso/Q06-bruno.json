@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q06",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "sla-suporte-2025.md",
+      "sla-suporte-2026.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"Para um cliente Pro, o prazo de primeira resposta é de 4 horas úteis. Esse é o valor do SLA de suporte 2026, em vigor desde 01/01/2026, que substitui o SLA de 2025 (6 horas úteis).\",\"fontes\":[\"sla-suporte-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1768,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 116
+  },
+  "duracao_api_ms": 2018,
+  "duracao_parede_s": 9.78,
+  "custo_tabela_usd": 0.008236,
+  "registrado_em": "2026-11-25T19:53:17-0300"
+}

@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q22",
+  "funcionario": "ana",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "politica-trabalho-remoto-2026.md",
+      "politica-comercial-2025.md"
+    ]
+  },
+  "resultado": "{\"resposta\": \"Não encontrei essa informação nos arquivos anexados. A política de trabalho híbrido 2026 trata apenas de presença e ajuda de custo para internet, e a Política Comercial 2025 trata de descontos, prazos, frete e pedido mínimo. Nenhum dos dois traz faixas salariais. Como se trata de dado sensível de RH, recomendo consultar a tabela salarial oficial da área de Pessoas ou confirmar com a coordenadora ou a diretoria, em vez de estimar um valor.\", \"fontes\": []}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1871,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 196
+  },
+  "duracao_api_ms": 2300,
+  "duracao_parede_s": 7.1,
+  "custo_tabela_usd": 0.009448,
+  "registrado_em": "2026-11-25T19:57:17-0300"
+}

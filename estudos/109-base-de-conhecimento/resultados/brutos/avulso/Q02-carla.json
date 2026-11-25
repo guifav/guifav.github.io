@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q02",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "sla-suporte-2025.md",
+      "politica-comercial-2026.md"
+    ]
+  },
+  "resultado": "{\"resposta\": \"O prazo padrão de pagamento para clientes da faixa Standard é de 30 dias, conforme a Política Comercial 2026 (vigente desde 01/03/2026).\", \"fontes\": [\"politica-comercial-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1823,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 90
+  },
+  "duracao_api_ms": 1238,
+  "duracao_parede_s": 6.05,
+  "custo_tabela_usd": 0.008196,
+  "registrado_em": "2026-11-25T19:52:59-0300"
+}

@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q01",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "ata-comite-comercial-2026-06.md",
+      "politica-comercial-2026.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"10%. Para clientes novos vale a alçada da Política Comercial 2026: o executivo de contas aprova sozinho descontos de até 10% sobre a tabela. Acima disso (10,01% a 18%) é preciso aprovação do gerente comercial. Os 12% da ata do Comitê de 12/06/2026 valem apenas para renovações de contrato, não para clientes novos.\",\"fontes\":[\"politica-comercial-2026.md\",\"ata-comite-comercial-2026-06.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2010,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 178
+  },
+  "duracao_api_ms": 1739,
+  "duracao_parede_s": 6.95,
+  "custo_tabela_usd": 0.009824,
+  "registrado_em": "2026-11-25T19:53:00-0300"
+}

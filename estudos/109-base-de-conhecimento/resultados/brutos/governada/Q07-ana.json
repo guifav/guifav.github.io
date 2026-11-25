@@ -1,0 +1,27 @@
+{
+  "cenario": "governada",
+  "pergunta": "Q07",
+  "funcionario": "ana",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "trechos": [
+      "ata-financeiro-2026-08.md#Decisão 1: prazo de comprovantes",
+      "politica-reembolso-despesas-2026.md#3. Comprovantes",
+      "adendo-viagens-internacionais-2026.md#Aprovação",
+      "politica-devolucoes-2026.md#Produto lacrado sem defeito",
+      "contrato-modelo-standard.md#Rescisão"
+    ],
+    "liberados": 18
+  },
+  "resultado": "{\"resposta\":\"Você tem até 15 dias corridos após a data da despesa. Como a despesa foi em 10/11/2026, depois de 01/09/2026, vale o novo prazo de 15 dias (a regra anterior, de 10 dias, foi substituída). O prazo termina em 25/11/2026.\",\"fontes\":[\"ata-financeiro-2026-08.md\",\"politica-reembolso-despesas-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2260,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 148
+  },
+  "duracao_api_ms": 1507,
+  "duracao_parede_s": 5.59,
+  "custo_tabela_usd": 0.010523999999999999,
+  "registrado_em": "2026-11-25T19:55:38-0300"
+}

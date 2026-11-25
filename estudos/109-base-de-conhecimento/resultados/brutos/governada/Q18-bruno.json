@@ -1,0 +1,27 @@
+{
+  "cenario": "governada",
+  "pergunta": "Q18",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "trechos": [
+      "politica-devolucoes-2026.md#Produto lacrado sem defeito",
+      "politica-comercial-2026.md#4. Pedido mínimo",
+      "ata-comite-comercial-2026-06.md#Pauta adiada",
+      "manual-onboarding-acessos.md#Sistemas",
+      "tabela-descontos-volume-2026.md#Regra de aplicação"
+    ],
+    "liberados": 18
+  },
+  "resultado": "{\"resposta\": \"Não encontrei a informação na base. Os trechos recuperados não mencionam margem mínima por pedido. O único critério de pedido que aparece é o pedido mínimo de R$ 1.200 (valor do pedido, não margem), e a revisão desse valor foi adiada para a reunião de setembro.\", \"fontes\": []}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2248,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 119
+  },
+  "duracao_api_ms": 1299,
+  "duracao_parede_s": 4.98,
+  "custo_tabela_usd": 0.010186,
+  "registrado_em": "2026-11-25T19:56:13-0300"
+}

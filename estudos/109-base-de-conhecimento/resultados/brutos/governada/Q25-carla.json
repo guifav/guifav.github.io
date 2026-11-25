@@ -1,0 +1,27 @@
+{
+  "cenario": "governada",
+  "pergunta": "Q25",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "trechos": [
+      "politica-trabalho-remoto-2026.md#Presença",
+      "sla-suporte-2026.md#1. Primeira resposta",
+      "aditivo-revenda-2026.md#Faixa de desempenho",
+      "matriz-escalonamento-suporte.md#Clientes Enterprise",
+      "sla-suporte-2026.md#3. Créditos"
+    ],
+    "liberados": 18
+  },
+  "resultado": "{\"resposta\": \"Não encontrei a informação na base. Os trechos recuperados não trazem faixas salariais de nenhum cargo, incluindo coordenador de suporte. Como o acesso aos documentos é limitado ao perfil de assistente de operações, essa informação pode estar em um documento restrito do RH, que a Carla provavelmente não consegue acessar. Vale confirmar com o próprio RH.\", \"fontes\": []}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2314,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 150
+  },
+  "duracao_api_ms": 1708,
+  "duracao_parede_s": 5.83,
+  "custo_tabela_usd": 0.01076,
+  "registrado_em": "2026-11-25T19:58:04-0300"
+}

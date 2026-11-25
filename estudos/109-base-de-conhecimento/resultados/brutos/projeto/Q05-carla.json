@@ -1,0 +1,18 @@
+{
+  "cenario": "projeto",
+  "pergunta": "Q05",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {},
+  "resultado": "{\"resposta\": \"Para clientes Enterprise, o prazo de primeira resposta é de 1 hora. Para chamados de severidade 1, vale 24x7. Para as demais severidades, a contagem é em horário útil. Esse prazo substitui o SLA de 2025, que era de 2 horas úteis. A mudança de SLA aprovada em 18/09/2026 vale só para clientes Pro e não altera o prazo do Enterprise.\", \"fontes\": [\"sla-suporte-2026.md\", \"sla-suporte-2025.md\", \"ata-diretoria-2026-09.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1152,
+    "cache_read_input_tokens": 5682,
+    "output_tokens": 324
+  },
+  "duracao_api_ms": 2636,
+  "duracao_parede_s": 6.95,
+  "custo_tabela_usd": 0.008420200000000001,
+  "registrado_em": "2026-11-25T19:54:34-0300"
+}

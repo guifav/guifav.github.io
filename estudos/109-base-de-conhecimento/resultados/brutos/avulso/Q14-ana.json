@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q14",
+  "funcionario": "ana",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "faq-operacional.md",
+      "politica-comercial-2025.md"
+    ]
+  },
+  "resultado": "{\"resposta\": \"Os arquivos não dizem para quem escalar. O FAQ operacional só informa que clientes Enterprise têm atendimento 24x7 para severidade 1, sem indicar contato, nível de escalonamento ou prazo (SLA). A Política Comercial 2025 trata de descontos, pagamento, frete e pedido mínimo, e não de escalonamento de chamados. Recomendo confirmar com a área de Operações/Suporte ou consultar o procedimento de escalonamento no portal de chamados.\", \"fontes\": [\"faq-operacional.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1898,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 201
+  },
+  "duracao_api_ms": 1856,
+  "duracao_parede_s": 5.39,
+  "custo_tabela_usd": 0.009606,
+  "registrado_em": "2026-11-25T19:53:56-0300"
+}

@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q13",
+  "funcionario": "ana",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "politica-reembolso-despesas-2024.md",
+      "politica-trabalho-remoto-2026.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"O limite de refeição é de R$ 60 por dia de viagem. Viagens ao exterior, como a de Buenos Aires, seguem os mesmos limites, em reais. Observação: a política de reembolso está vigente desde 01/03/2024.\",\"fontes\":[\"politica-reembolso-despesas-2024.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1778,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 118
+  },
+  "duracao_api_ms": 4078,
+  "duracao_parede_s": 8.07,
+  "custo_tabela_usd": 0.008296000000000001,
+  "registrado_em": "2026-11-25T19:53:50-0300"
+}

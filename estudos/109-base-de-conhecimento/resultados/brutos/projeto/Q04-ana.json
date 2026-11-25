@@ -1,0 +1,18 @@
+{
+  "cenario": "projeto",
+  "pergunta": "Q04",
+  "funcionario": "ana",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {},
+  "resultado": "{\"resposta\":\"A empresa reembolsa R$ 1,20 por km rodado em visitas a clientes com carro próprio, com o trajeto registrado no sistema de despesas. Esse valor vem da política de 2026 (vigência desde 01/02/2026), que substitui o valor anterior de R$ 0,90 por km da política de 2024.\",\"fontes\":[\"politica-reembolso-despesas-2026.md\",\"politica-reembolso-despesas-2024.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1155,
+    "cache_read_input_tokens": 5682,
+    "output_tokens": 162
+  },
+  "duracao_api_ms": 1460,
+  "duracao_parede_s": 5.32,
+  "custo_tabela_usd": 0.0068122,
+  "registrado_em": "2026-11-25T19:54:27-0300"
+}

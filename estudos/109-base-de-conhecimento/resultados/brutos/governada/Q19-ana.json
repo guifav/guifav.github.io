@@ -1,0 +1,27 @@
+{
+  "cenario": "governada",
+  "pergunta": "Q19",
+  "funcionario": "ana",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "trechos": [
+      "tabela-descontos-volume-2026.md#Regra de aplicação",
+      "ata-comite-comercial-2026-06.md#Decisão 1: alçada em renovações",
+      "politica-comercial-2026.md#1. Alçadas de desconto",
+      "manual-onboarding-acessos.md#Primeiro dia",
+      "contrato-modelo-revenda.md#Comissão"
+    ],
+    "liberados": 18
+  },
+  "resultado": "{\"resposta\": \"Não encontrei na base a informação sobre o bônus de um executivo de contas que ultrapassa 120% da meta. Os trechos recuperados tratam de alçadas de desconto, descontos por volume, comissão de revendas e onboarding, mas nenhum fala de bônus ou metas de executivos de contas.\", \"fontes\": []}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2339,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 123
+  },
+  "duracao_api_ms": 1408,
+  "duracao_parede_s": 5.81,
+  "custo_tabela_usd": 0.01059,
+  "registrado_em": "2026-11-25T19:56:15-0300"
+}

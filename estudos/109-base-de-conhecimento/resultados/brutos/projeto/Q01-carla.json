@@ -1,0 +1,18 @@
+{
+  "cenario": "projeto",
+  "pergunta": "Q01",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {},
+  "resultado": "{\"resposta\": \"Para um cliente novo, o executivo de contas pode aprovar sozinho descontos de até 10% sobre a tabela de preços. De 10,01% a 18% é preciso aprovação do gerente comercial, e acima de 18%, do diretor comercial. A Política Comercial 2026 (vigente desde 01/03/2026) substituiu a de 2025, que previa 15%. O limite de 12% definido no Comitê Comercial de 12/06/2026 vale apenas para renovações de contrato. Para clientes novos, a ata confirma que a alçada continua a da Política Comercial vigente. O desconto automático por volume do ERP não conta para essa alçada.\", \"fontes\": [\"politica-comercial-2026.md\", \"ata-comite-comercial-2026-06.md\", \"tabela-descontos-volume-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1164,
+    "cache_read_input_tokens": 5682,
+    "output_tokens": 537
+  },
+  "duracao_api_ms": 4198,
+  "duracao_parede_s": 8.19,
+  "custo_tabela_usd": 0.0105982,
+  "registrado_em": "2026-11-25T19:54:23-0300"
+}

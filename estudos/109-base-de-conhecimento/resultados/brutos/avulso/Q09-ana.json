@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q09",
+  "funcionario": "ana",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "contrato-modelo-enterprise.md",
+      "contrato-modelo-standard.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"A multa rescisória para clientes Enterprise é de 20% sobre o saldo remanescente do contrato, com aviso prévio de 60 dias. Como o contrato foi assinado em agosto de 2026, após a vigência do contrato-modelo (01/01/2026), aplica-se esse modelo. O valor exato depende do saldo remanescente na data da rescisão, que não consta nos arquivos. Atenção: se o contrato assinado tiver condições negociadas diferentes do modelo, vale o que está no contrato do cliente.\",\"fontes\":[\"contrato-modelo-enterprise.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1753,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 214
+  },
+  "duracao_api_ms": 3095,
+  "duracao_parede_s": 11.93,
+  "custo_tabela_usd": 0.009156000000000001,
+  "registrado_em": "2026-11-25T19:53:32-0300"
+}

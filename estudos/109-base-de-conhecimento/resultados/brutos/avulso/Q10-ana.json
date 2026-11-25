@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q10",
+  "funcionario": "ana",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "politica-comercial-2025.md",
+      "politica-devolucoes-2026.md"
+    ]
+  },
+  "resultado": "{\"resposta\": \"O frete é grátis para pedidos acima de R$ 3.000, com entrega em qualquer estado do Brasil, o que inclui Manaus. Não há condição diferente por região. Observação: a política comercial é de 2025 (vigência a partir de 02/01/2025); não há no material anexado uma versão de 2026, então vale confirmar se essa regra continua vigente.\", \"fontes\": [\"politica-comercial-2025.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1855,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 157
+  },
+  "duracao_api_ms": 2009,
+  "duracao_parede_s": 11.53,
+  "custo_tabela_usd": 0.008994,
+  "registrado_em": "2026-11-25T19:53:39-0300"
+}

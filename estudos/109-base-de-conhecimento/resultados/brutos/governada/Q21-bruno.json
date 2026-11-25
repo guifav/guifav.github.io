@@ -1,0 +1,27 @@
+{
+  "cenario": "governada",
+  "pergunta": "Q21",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "trechos": [
+      "ata-comite-comercial-2026-06.md#Decisão 1: alçada em renovações",
+      "ata-comite-comercial-2026-06.md#Pauta adiada",
+      "tabela-descontos-volume-2026.md#Regra de aplicação",
+      "politica-comercial-2026.md#1. Alçadas de desconto",
+      "ata-comite-comercial-2026-06.md#Decisão 2: frete na região Norte"
+    ],
+    "liberados": 18
+  },
+  "resultado": "{\"resposta\": \"Não encontrei a informação na base. Os trechos recuperados tratam de alçadas de desconto, descontos por volume e frete na região Norte, mas nenhum deles menciona bônus ou remuneração variável de executivos de contas.\", \"fontes\": []}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2471,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 96
+  },
+  "duracao_api_ms": 1047,
+  "duracao_parede_s": 5.23,
+  "custo_tabela_usd": 0.010848,
+  "registrado_em": "2026-11-25T19:57:51-0300"
+}
