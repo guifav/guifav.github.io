@@ -103,19 +103,6 @@
       .bar-pulse{animation:none!important;opacity:0!important}
     }
 
-    /* Secao 2: Como usar - lista vertical com recortes e destaques fixos */
-    .steps{list-style:none;display:grid;gap:32px;margin:0}
-    .step-heading{display:grid;grid-template-columns:28px minmax(0,1fr);gap:12px;align-items:center}
-    .step-num{width:28px;height:28px;border-radius:8px;background:var(--tag-bg);color:var(--text);font-size:13px;font-weight:750;display:inline-flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums;margin-top:1px}
-    .step-heading h3{font-size:15.5px;font-weight:650;margin:0;color:var(--text);line-height:1.35}
-    .step-item>p{font-size:13.5px;color:var(--text-secondary);margin:8px 0 0;line-height:1.55}
-    .step-shot{margin:12px 0 0;padding:8px;background:#141414;border:1px solid var(--border);border-radius:8px}
-    .step-crop{position:relative}
-    .step-shot img{width:100%;height:auto;display:block}
-    .step-hl{position:absolute;box-sizing:border-box;border:2px solid var(--hl);border-radius:4px;pointer-events:none}
-    .step-shot--estreito{width:80%;max-width:100%}
-    @media(max-width:640px){.step-shot--estreito{width:100%}}
-
     /* Secao 3: O que foi medido - numeros grandes + comparacao SQL animada */
     @property --in-k{syntax:"<integer>";inherits:false;initial-value:8}
     @property --in-r{syntax:"<integer>";inherits:false;initial-value:981}
@@ -388,48 +375,12 @@
 
     <section>
       <div class="section-label" data-i18n="s2">Como usar</div>
-      <ol class="steps">
-        <li class="step-item">
-          <div class="step-heading"><span class="step-num" aria-hidden="true">1</span><h3 data-i18n="u1_t">Troque só as células amarelas</h3></div>
-          <p data-i18n="u1_d">Estão na aba Premissas (volume, tokens por consulta, câmbio, salário, infraestrutura, pico de uso) e nas horas da aba Engenharia. As outras abas recalculam.</p>
-          <figure class="step-shot">
-            <div class="step-crop">
-              <img src="/ferramentas/planilha-custos-ia/img/passo1-valor.webp" width="1400" height="254" loading="lazy" decoding="async" alt="Aba Premissas da planilha com a coluna Valor em amarelo destacada" data-i18n-alt="u1_alt">
-              <span class="step-hl" style="left:calc(57.1% - 3px);top:calc(10.6% - 3px);width:calc(25.0% + 6px);height:calc(89.1% + 6px)" aria-hidden="true"></span>
-            </div>
-          </figure>
-        </li>
-        <li class="step-item">
-          <div class="step-heading"><span class="step-num" aria-hidden="true">2</span><h3 data-i18n="u2_t">Leia a aba Cenarios</h3></div>
-          <p data-i18n="u2_d">É a tela principal: as cinco opções lado a lado (API sem otimização, API otimizada, assinatura, GPU própria e plataforma pronta) nos três volumes, com as quatro linhas e o total. A aba Empate mostra o volume em que a GPU passa a valer a pena.</p>
-          <figure class="step-shot">
-            <div class="step-crop">
-              <img src="/ferramentas/planilha-custos-ia/img/passo2-total.webp" width="1400" height="209" loading="lazy" decoding="async" alt="Aba Cenarios da planilha com a linha Total mensal (US$) destacada" data-i18n-alt="u2_alt">
-              <span class="step-hl" style="left:calc(0.1% - 3px);top:calc(86.6% - 3px);width:calc(99.9% + 6px);height:calc(13.1% + 6px)" aria-hidden="true"></span>
-            </div>
-          </figure>
-        </li>
-        <li class="step-item">
-          <div class="step-heading"><span class="step-num" aria-hidden="true">3</span><h3 data-i18n="u3_t">Confira a origem de cada número</h3></div>
-          <p data-i18n="u3_d">Toda premissa diz se foi medida, tirada de uma fonte ou declarada. Quando falta uma premissa, a conta mostra "aguarda premissa" no lugar de um número.</p>
-          <figure class="step-shot step-shot--estreito">
-            <div class="step-crop">
-              <img src="/ferramentas/planilha-custos-ia/img/passo3-origem.webp" width="1323" height="299" loading="lazy" decoding="async" alt="Aba Premissas da planilha com a coluna Origem destacada" data-i18n-alt="u3_alt">
-              <span class="step-hl" style="left:calc(52.9% - 3px);top:calc(10.6% - 3px);width:calc(47.0% + 6px);height:calc(89.1% + 6px)" aria-hidden="true"></span>
-            </div>
-          </figure>
-        </li>
-        <li class="step-item">
-          <div class="step-heading"><span class="step-num" aria-hidden="true">4</span><h3 data-i18n="u4_t">Atualize os preços</h3></div>
-          <p data-i18n="u4_d">Cada preço de API, GPU e assento tem o link da página oficial e a data em que foi lido. Preço muda sem aviso: confira antes de decidir.</p>
-          <figure class="step-shot step-shot--estreito">
-            <div class="step-crop">
-              <img src="/ferramentas/planilha-custos-ia/img/passo4-url-data.webp" width="1310" height="306" loading="lazy" decoding="async" alt="Aba Precos_API da planilha com as colunas URL e Data de acesso destacadas" data-i18n-alt="u4_alt">
-              <span class="step-hl" style="left:calc(0.1% - 3px);top:calc(10.6% - 3px);width:calc(62.8% + 6px);height:calc(89.1% + 6px)" aria-hidden="true"></span>
-            </div>
-          </figure>
-        </li>
-      </ol>
+      <div class="grid-2 cols-2">
+        <div class="card"><h3 data-i18n="u1_t">Troque só as células amarelas</h3><p data-i18n="u1_d">Estão na aba Premissas (volume, tokens por consulta, câmbio, salário, infraestrutura, pico de uso) e nas horas da aba Engenharia. As outras abas recalculam.</p></div>
+        <div class="card"><h3 data-i18n="u2_t">Leia a aba Cenarios</h3><p data-i18n="u2_d">É a tela principal: as cinco opções lado a lado (API sem otimização, API otimizada, assinatura, GPU própria e plataforma pronta) nos três volumes, com as quatro linhas e o total. A aba Empate mostra o volume em que a GPU passa a valer a pena.</p></div>
+        <div class="card"><h3 data-i18n="u3_t">Confira a origem de cada número</h3><p data-i18n="u3_d">Toda premissa diz se foi medida, tirada de uma fonte ou declarada. Quando falta uma premissa, a conta mostra "aguarda premissa" no lugar de um número.</p></div>
+        <div class="card"><h3 data-i18n="u4_t">Atualize os preços</h3><p data-i18n="u4_d">Cada preço de API, GPU e assento tem o link da página oficial e a data em que foi lido. Preço muda sem aviso: confira antes de decidir.</p></div>
+      </div>
     </section>
 
     <section>
@@ -567,16 +518,12 @@
       "s2": "How to use it",
       "u1_t": "Change only the yellow cells",
       "u1_d": "They are on the Premissas tab (volume, tokens per query, exchange rate, salary, infrastructure, peak usage) and in the hours on the Engenharia tab. Every other tab recalculates.",
-      "u1_alt": "Premissas tab of the spreadsheet with the yellow Valor column highlighted",
       "u2_t": "Read the Cenarios tab",
       "u2_d": "It is the main view: the five options side by side (unoptimized API, optimized API, subscription, your own GPU and ready-made platform) at the three volumes, with the four lines and the total. The Empate tab shows the volume at which the GPU starts to pay off.",
-      "u2_alt": "Cenarios tab of the spreadsheet with the Total mensal (US$) row highlighted",
       "u3_t": "Check where each number comes from",
       "u3_d": "Every assumption says whether it was measured, taken from a source or declared. When an assumption is missing, the math shows \"aguarda premissa\" instead of a number.",
-      "u3_alt": "Premissas tab of the spreadsheet with the Origem column highlighted",
       "u4_t": "Update the prices",
       "u4_d": "Every API, GPU and seat price links to the official page and the date it was read. Prices change without notice: check them before you decide.",
-      "u4_alt": "Precos_API tab of the spreadsheet with the URL and Data de acesso columns highlighted",
       "s3": "What was measured",
       "s3_p": "The values that come filled in are the ones from the video. The measured ones are flagged as measurements in the spreadsheet:",
       "m1_stat": "8,981 &#8594; 424",
