@@ -103,64 +103,18 @@
       .bar-pulse{animation:none!important;opacity:0!important}
     }
 
-    /* Secao 2: Como usar - stepper com print e destaque animado */
-    .steps{list-style:none;display:grid;gap:24px;margin:0}
-    .step-item{display:grid;gap:12px}
-    .step-text{position:relative;display:grid;grid-template-columns:28px minmax(0,1fr);gap:12px;align-items:start;padding:14px 16px;border:1px solid var(--border);border-radius:10px;background:var(--bg-card);color:var(--text);transition:border-color .25s}
-    .step-text:focus-visible{outline:2px solid var(--hl);outline-offset:2px}
+    /* Secao 2: Como usar - lista vertical com recortes e destaques fixos */
+    .steps{list-style:none;display:grid;gap:32px;margin:0}
+    .step-heading{display:grid;grid-template-columns:28px minmax(0,1fr);gap:12px;align-items:center}
     .step-num{width:28px;height:28px;border-radius:8px;background:var(--tag-bg);color:var(--text);font-size:13px;font-weight:750;display:inline-flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums;margin-top:1px}
-    .step-text h3{font-size:15.5px;font-weight:650;margin:0 0 4px;color:var(--text);line-height:1.35}
-    .step-text p{font-size:13.5px;color:var(--text-secondary);margin:0;line-height:1.55}
-    .step-stage{margin:0}
-    .step-canvas{background:#141414;border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:var(--shadow)}
-    .step-bar{display:flex;align-items:center;justify-content:space-between;height:28px;padding:0 12px;background:#1c1c1c;border-bottom:1px solid rgba(255,255,255,.08)}
-    .step-dots{display:flex;gap:6px}.step-dots span{width:9px;height:9px;border-radius:50%;background:#3a3a3a}
-    .step-idx{font-size:11.5px;font-weight:650;color:#b5b5b5;font-variant-numeric:tabular-nums}
-    .step-body{position:relative;overflow:hidden}
-    .step-shot{position:relative;width:100%;line-height:0}
-    .step-shot img{width:100%;height:auto;display:block;opacity:1}
-    .step-hl{position:absolute;z-index:1;box-sizing:border-box;border:2.5px solid var(--hl);border-radius:6px;box-shadow:0 0 0 9999px rgba(0,0,0,.45);pointer-events:none}
-    .step-tag{position:absolute;z-index:2;top:var(--tag-y,44%);padding:3px 9px;border:1px solid rgba(255,190,0,.55);border-radius:999px;background:rgba(20,20,20,.82);color:#FFBE00;font-size:11.5px;font-weight:700;line-height:1.25;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.28)}
-    .step-arrow{position:absolute;z-index:2;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
-    .step-arrow-path{fill:none;stroke:var(--hl);stroke-width:9;stroke-linecap:round;stroke-linejoin:round}
-    .step-arrow-head{fill:none;stroke:var(--hl);stroke-width:9;stroke-linecap:round;stroke-linejoin:round}
-    @media(min-width:861px){
-      .step-tag{top:var(--tag-y-desktop,44%);font-size:11px;padding:3px 7px}
-      .step-arrow-path,.step-arrow-head{stroke-width:7}
-    }
-    @media(min-width:861px) and (prefers-reduced-motion:no-preference){
-      .steps{grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr);grid-template-rows:repeat(4,auto);column-gap:28px;row-gap:10px;align-items:start}
-      .step-item{display:contents}
-      .step-item:nth-child(1) .step-text{grid-column:1;grid-row:1}
-      .step-item:nth-child(2) .step-text{grid-column:1;grid-row:2}
-      .step-item:nth-child(3) .step-text{grid-column:1;grid-row:3}
-      .step-item:nth-child(4) .step-text{grid-column:1;grid-row:4}
-      .step-stage{grid-column:2;grid-row:1 / 5;align-self:start;position:sticky;top:96px;opacity:0;visibility:hidden;animation:step-stage 16s linear both infinite}
-      .step-body{aspect-ratio:1400 / 402}
-      .step-shot{position:absolute;left:0;top:50%;transform:translateY(calc(0% - var(--origin-y))) scale(var(--zoom));transform-origin:var(--origin-x) var(--origin-y)}
-      .step-text{animation:step-card 16s linear both infinite}
-      .step-num{animation:step-badge 16s linear both infinite}
-      .step-item:nth-child(1) .step-stage,.step-item:nth-child(1) .step-text,.step-item:nth-child(1) .step-num{animation-delay:-2s}
-      .step-item:nth-child(2) .step-stage,.step-item:nth-child(2) .step-text,.step-item:nth-child(2) .step-num{animation-delay:-14s}
-      .step-item:nth-child(3) .step-stage,.step-item:nth-child(3) .step-text,.step-item:nth-child(3) .step-num{animation-delay:-10s}
-      .step-item:nth-child(4) .step-stage,.step-item:nth-child(4) .step-text,.step-item:nth-child(4) .step-num{animation-delay:-6s}
-      .steps:hover .step-stage,.steps:hover .step-text,.steps:hover .step-num,
-      .steps:focus-within .step-stage,.steps:focus-within .step-text,.steps:focus-within .step-num{animation-play-state:paused}
-      @supports selector(:has(*)){
-        .steps:has(.step-text:hover) .step-stage,.steps:has(.step-text:focus-within) .step-stage{animation:none;opacity:0;visibility:hidden}
-        .steps:has(.step-text:hover) .step-text,.steps:has(.step-text:focus-within) .step-text{animation:none;border-color:var(--border)}
-        .steps:has(.step-text:hover) .step-num,.steps:has(.step-text:focus-within) .step-num{animation:none;background:var(--tag-bg);color:var(--text)}
-        .step-item:has(.step-text:hover) .step-stage,.step-item:has(.step-text:focus-within) .step-stage{opacity:1;visibility:visible}
-        .step-item:has(.step-text:hover) .step-text,.step-item:has(.step-text:focus-within) .step-text{border-color:var(--hl)}
-        .step-item:has(.step-text:hover) .step-num,.step-item:has(.step-text:focus-within) .step-num{background:var(--hl);color:#171717}
-      }
-    }
-    @media(min-width:861px) and (prefers-reduced-motion:reduce){
-      .step-item{grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr);gap:24px;align-items:start}
-    }
-    @keyframes step-stage{0%{opacity:0;visibility:visible}2.5%,25%{opacity:1;visibility:visible}27.5%,100%{opacity:0;visibility:hidden}}
-    @keyframes step-card{0%,25%{border-color:var(--hl)}27.5%,100%{border-color:var(--border)}}
-    @keyframes step-badge{0%,25%{background:var(--hl);color:#171717}27.5%,100%{background:var(--tag-bg);color:var(--text)}}
+    .step-heading h3{font-size:15.5px;font-weight:650;margin:0;color:var(--text);line-height:1.35}
+    .step-item>p{font-size:13.5px;color:var(--text-secondary);margin:8px 0 0;line-height:1.55}
+    .step-shot{margin:12px 0 0;padding:8px;background:#141414;border:1px solid var(--border);border-radius:8px}
+    .step-crop{position:relative}
+    .step-shot img{width:100%;height:auto;display:block}
+    .step-hl{position:absolute;box-sizing:border-box;border:2px solid var(--hl);border-radius:4px;pointer-events:none}
+    .step-shot--estreito{width:80%;max-width:100%}
+    @media(max-width:640px){.step-shot--estreito{width:100%}}
 
     /* Secao 3: O que foi medido - numeros grandes + comparacao SQL animada */
     @property --in-k{syntax:"<integer>";inherits:false;initial-value:8}
@@ -436,90 +390,42 @@
       <div class="section-label" data-i18n="s2">Como usar</div>
       <ol class="steps">
         <li class="step-item">
-          <div class="step-text" tabindex="0">
-            <span class="step-num" aria-hidden="true">1</span>
-            <div><h3 data-i18n="u1_t">Troque só as células amarelas</h3><p data-i18n="u1_d">Estão na aba Premissas (volume, tokens por consulta, câmbio, salário, infraestrutura, pico de uso) e nas horas da aba Engenharia. As outras abas recalculam.</p></div>
-          </div>
-          <figure class="step-stage">
-            <div class="step-canvas">
-              <div class="step-bar" aria-hidden="true"><div class="step-dots"><span></span><span></span><span></span></div><span class="step-idx">1 / 4</span></div>
-              <div class="step-body">
-                <div class="step-shot" style="--zoom:2.4;--origin-x:73.55%;--origin-y:63.25%">
-                  <img src="/ferramentas/planilha-custos-ia/img/passo1-celulas-amarelas.webp" width="1400" height="402" loading="lazy" decoding="async" alt="Aba Premissas da planilha com a coluna Valor em amarelo destacada" data-i18n-alt="u1_alt">
-                  <span class="step-hl" style="left:63.7%;top:27.9%;width:19.7%;height:70.7%" aria-hidden="true"></span>
-                  <span class="step-tag" style="right:calc(36.3% + 4px)" data-i18n="u1_tag">células amarelas</span>
-                  <svg class="step-arrow" viewBox="0 0 1400 402" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-                    <path class="step-arrow-path" d="M 890 205 C 905 215, 915 226, 925 240"/>
-                    <path class="step-arrow-head" d="M 909 230 L 925 240 L 921 220"/>
-                  </svg>
-                </div>
-              </div>
+          <div class="step-heading"><span class="step-num" aria-hidden="true">1</span><h3 data-i18n="u1_t">Troque só as células amarelas</h3></div>
+          <p data-i18n="u1_d">Estão na aba Premissas (volume, tokens por consulta, câmbio, salário, infraestrutura, pico de uso) e nas horas da aba Engenharia. As outras abas recalculam.</p>
+          <figure class="step-shot">
+            <div class="step-crop">
+              <img src="/ferramentas/planilha-custos-ia/img/passo1-valor.webp" width="1400" height="254" loading="lazy" decoding="async" alt="Aba Premissas da planilha com a coluna Valor em amarelo destacada" data-i18n-alt="u1_alt">
+              <span class="step-hl" style="left:calc(57.1% - 3px);top:calc(10.6% - 3px);width:calc(25.0% + 6px);height:calc(89.1% + 6px)" aria-hidden="true"></span>
             </div>
           </figure>
         </li>
         <li class="step-item">
-          <div class="step-text" tabindex="0">
-            <span class="step-num" aria-hidden="true">2</span>
-            <div><h3 data-i18n="u2_t">Leia a aba Cenarios</h3><p data-i18n="u2_d">É a tela principal: as cinco opções lado a lado (API sem otimização, API otimizada, assinatura, GPU própria e plataforma pronta) nos três volumes, com as quatro linhas e o total. A aba Empate mostra o volume em que a GPU passa a valer a pena.</p></div>
-          </div>
-          <figure class="step-stage">
-            <div class="step-canvas">
-              <div class="step-bar" aria-hidden="true"><div class="step-dots"><span></span><span></span><span></span></div><span class="step-idx">2 / 4</span></div>
-              <div class="step-body">
-                <div class="step-shot" style="--zoom:2.7;--origin-x:50%;--origin-y:70.1%">
-                  <img src="/ferramentas/planilha-custos-ia/img/passo2-cenarios.webp" width="1400" height="256" loading="lazy" decoding="async" alt="Aba Cenarios da planilha com a linha Total mensal (US$) destacada" data-i18n-alt="u2_alt">
-                  <span class="step-hl" style="left:0.0%;top:65.8%;width:100.0%;height:8.6%" aria-hidden="true"></span>
-                  <span class="step-tag" style="left:38%;--tag-y:10%;--tag-y-desktop:42%" data-i18n="u2_tag">Total mensal</span>
-                  <svg class="step-arrow" viewBox="0 0 1400 256" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-                    <path class="step-arrow-path" d="M 780 132 C 800 142, 810 154, 820 172"/>
-                    <path class="step-arrow-head" d="M 804 162 L 820 172 L 824 154"/>
-                  </svg>
-                </div>
-              </div>
+          <div class="step-heading"><span class="step-num" aria-hidden="true">2</span><h3 data-i18n="u2_t">Leia a aba Cenarios</h3></div>
+          <p data-i18n="u2_d">É a tela principal: as cinco opções lado a lado (API sem otimização, API otimizada, assinatura, GPU própria e plataforma pronta) nos três volumes, com as quatro linhas e o total. A aba Empate mostra o volume em que a GPU passa a valer a pena.</p>
+          <figure class="step-shot">
+            <div class="step-crop">
+              <img src="/ferramentas/planilha-custos-ia/img/passo2-total.webp" width="1400" height="209" loading="lazy" decoding="async" alt="Aba Cenarios da planilha com a linha Total mensal (US$) destacada" data-i18n-alt="u2_alt">
+              <span class="step-hl" style="left:calc(0.1% - 3px);top:calc(86.6% - 3px);width:calc(99.9% + 6px);height:calc(13.1% + 6px)" aria-hidden="true"></span>
             </div>
           </figure>
         </li>
         <li class="step-item">
-          <div class="step-text" tabindex="0">
-            <span class="step-num" aria-hidden="true">3</span>
-            <div><h3 data-i18n="u3_t">Confira a origem de cada número</h3><p data-i18n="u3_d">Toda premissa diz se foi medida, tirada de uma fonte ou declarada. Quando falta uma premissa, a conta mostra "aguarda premissa" no lugar de um número.</p></div>
-          </div>
-          <figure class="step-stage">
-            <div class="step-canvas">
-              <div class="step-bar" aria-hidden="true"><div class="step-dots"><span></span><span></span><span></span></div><span class="step-idx">3 / 4</span></div>
-              <div class="step-body">
-                <div class="step-shot" style="--zoom:3;--origin-x:87.6%;--origin-y:63.25%">
-                  <img src="/ferramentas/planilha-custos-ia/img/passo3-origem.webp" width="1400" height="313" loading="lazy" decoding="async" alt="Aba Premissas da planilha com a coluna Origem destacada" data-i18n-alt="u3_alt">
-                  <span class="step-hl" style="left:75.8%;top:27.9%;width:23.6%;height:70.7%" aria-hidden="true"></span>
-                  <span class="step-tag" style="right:calc(24.2% + 4px)" data-i18n="u3_tag">Origem</span>
-                  <svg class="step-arrow" viewBox="0 0 1400 313" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-                    <path class="step-arrow-path" d="M 1052 170 C 1062 176, 1072 184, 1080 194"/>
-                    <path class="step-arrow-head" d="M 1062 188 L 1080 194 L 1076 174"/>
-                  </svg>
-                </div>
-              </div>
+          <div class="step-heading"><span class="step-num" aria-hidden="true">3</span><h3 data-i18n="u3_t">Confira a origem de cada número</h3></div>
+          <p data-i18n="u3_d">Toda premissa diz se foi medida, tirada de uma fonte ou declarada. Quando falta uma premissa, a conta mostra "aguarda premissa" no lugar de um número.</p>
+          <figure class="step-shot step-shot--estreito">
+            <div class="step-crop">
+              <img src="/ferramentas/planilha-custos-ia/img/passo3-origem.webp" width="1323" height="299" loading="lazy" decoding="async" alt="Aba Premissas da planilha com a coluna Origem destacada" data-i18n-alt="u3_alt">
+              <span class="step-hl" style="left:calc(52.9% - 3px);top:calc(10.6% - 3px);width:calc(47.0% + 6px);height:calc(89.1% + 6px)" aria-hidden="true"></span>
             </div>
           </figure>
         </li>
         <li class="step-item">
-          <div class="step-text" tabindex="0">
-            <span class="step-num" aria-hidden="true">4</span>
-            <div><h3 data-i18n="u4_t">Atualize os preços</h3><p data-i18n="u4_d">Cada preço de API, GPU e assento tem o link da página oficial e a data em que foi lido. Preço muda sem aviso: confira antes de decidir.</p></div>
-          </div>
-          <figure class="step-stage">
-            <div class="step-canvas">
-              <div class="step-bar" aria-hidden="true"><div class="step-dots"><span></span><span></span><span></span></div><span class="step-idx">4 / 4</span></div>
-              <div class="step-body">
-                <div class="step-shot" style="--zoom:1.55;--origin-x:61.05%;--origin-y:62.05%">
-                  <img src="/ferramentas/planilha-custos-ia/img/passo4-precos.webp" width="1400" height="357" loading="lazy" decoding="async" alt="Aba Precos_API da planilha com as colunas URL e Data de acesso destacadas" data-i18n-alt="u4_alt">
-                  <span class="step-hl" style="left:38.7%;top:25.8%;width:44.7%;height:72.5%" aria-hidden="true"></span>
-                  <span class="step-tag" style="right:calc(61.3% + 4px)" data-i18n="u4_tag">URL e data</span>
-                  <svg class="step-arrow" viewBox="0 0 1400 357" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
-                    <path class="step-arrow-path" d="M 540 190 C 550 198, 558 208, 565 222"/>
-                    <path class="step-arrow-head" d="M 549 212 L 565 222 L 561 202"/>
-                  </svg>
-                </div>
-              </div>
+          <div class="step-heading"><span class="step-num" aria-hidden="true">4</span><h3 data-i18n="u4_t">Atualize os preços</h3></div>
+          <p data-i18n="u4_d">Cada preço de API, GPU e assento tem o link da página oficial e a data em que foi lido. Preço muda sem aviso: confira antes de decidir.</p>
+          <figure class="step-shot step-shot--estreito">
+            <div class="step-crop">
+              <img src="/ferramentas/planilha-custos-ia/img/passo4-url-data.webp" width="1310" height="306" loading="lazy" decoding="async" alt="Aba Precos_API da planilha com as colunas URL e Data de acesso destacadas" data-i18n-alt="u4_alt">
+              <span class="step-hl" style="left:calc(0.1% - 3px);top:calc(10.6% - 3px);width:calc(62.8% + 6px);height:calc(89.1% + 6px)" aria-hidden="true"></span>
             </div>
           </figure>
         </li>
@@ -661,19 +567,15 @@
       "s2": "How to use it",
       "u1_t": "Change only the yellow cells",
       "u1_d": "They are on the Premissas tab (volume, tokens per query, exchange rate, salary, infrastructure, peak usage) and in the hours on the Engenharia tab. Every other tab recalculates.",
-      "u1_tag": "yellow cells",
       "u1_alt": "Premissas tab of the spreadsheet with the yellow Valor column highlighted",
       "u2_t": "Read the Cenarios tab",
       "u2_d": "It is the main view: the five options side by side (unoptimized API, optimized API, subscription, your own GPU and ready-made platform) at the three volumes, with the four lines and the total. The Empate tab shows the volume at which the GPU starts to pay off.",
-      "u2_tag": "Monthly total",
       "u2_alt": "Cenarios tab of the spreadsheet with the Total mensal (US$) row highlighted",
       "u3_t": "Check where each number comes from",
       "u3_d": "Every assumption says whether it was measured, taken from a source or declared. When an assumption is missing, the math shows \"aguarda premissa\" instead of a number.",
-      "u3_tag": "Origin",
       "u3_alt": "Premissas tab of the spreadsheet with the Origem column highlighted",
       "u4_t": "Update the prices",
       "u4_d": "Every API, GPU and seat price links to the official page and the date it was read. Prices change without notice: check them before you decide.",
-      "u4_tag": "URL and date",
       "u4_alt": "Precos_API tab of the spreadsheet with the URL and Data de acesso columns highlighted",
       "s3": "What was measured",
       "s3_p": "The values that come filled in are the ones from the video. The measured ones are flagged as measurements in the spreadsheet:",
