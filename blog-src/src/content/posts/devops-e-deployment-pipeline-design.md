@@ -2,6 +2,7 @@
 title: "DevOps e Deployment Pipeline Design: Quando a Velocidade de Entrega Define a Capacidade de Competir"
 subtitle: "Cases de Netflix, Etsy e Capital One revelam como pipelines de CI/CD bem arquitetados transformam velocidade de entrega em vantagem competitiva"
 description: "Descubra como Netflix, Etsy e Capital One redesenharam seus pipelines de deployment para alcançar dezenas de deploys diários. Framework DORA, GitOps e Progressive Delivery.ompetitiva"
+summary: "As quatro métricas DORA medem a capacidade de entrega, e equipes que deployam com mais frequência também falham menos, porque cada mudança é menor. A Etsy, que fazia dois deploys por semana em 2012, passou a mais de 50 por dia três anos depois, com deploy em um clique e feature flags. A Netflix soma canary analysis automatizada e chaos engineering, e a Capital One aplica o modelo num banco regulado."
 date: 2025-12-15T06:00:49.483Z
 updated: 2025-12-15T06:04:24.037Z
 slug: devops-e-deployment-pipeline-design

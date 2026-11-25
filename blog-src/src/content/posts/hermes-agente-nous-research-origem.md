@@ -2,6 +2,7 @@
 title: "Hermes: conheça a história do agente que virou o maior contribuidor de si mesmo"
 subtitle: "A história do Hermes Agent e da Nous Research, de dois amigos num Discord em 2023 a um agente open source com 231 mil stars, e a tese técnica que sustenta tudo: gestão de contexto."
 description: "A história do Hermes Agent e da Nous Research, de dois amigos num Discord em 2023 a um agente open source com 231 mil stars, e a tese técnica que sustenta tudo: gestão de contexto."
+summary: "O Hermes Agent, da Nous Research, é um agente open source sob licença MIT lançado em fevereiro de 2026, que chegou a agosto com 231,5 mil stars no GitHub e tem como maior contribuidor do código o próprio agente. Para o cofundador Karan Malhotra, tudo no harness é gestão de contexto: o agente funciona com qualquer modelo e acumula memória e skills, que um curador automático poda e consolida."
 date: 2026-08-17T02:01:07.888Z
 updated: 2026-08-17T02:05:44.637Z
 slug: hermes-agente-nous-research-origem

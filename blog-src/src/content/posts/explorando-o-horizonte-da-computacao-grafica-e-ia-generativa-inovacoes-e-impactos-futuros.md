@@ -1,6 +1,7 @@
 ---
 title: "Explorando o Horizonte da Computação Gráfica e IA Generativa: Inovações e Impactos Futuros"
 description: "Nos últimos anos, testemunhamos avanços significativos na computação gráfica, abrindo novas fronteiras em entretenimento, jogos e aplicações interativas."
+summary: "Na SIGGRAPH 2023, o CEO da NVIDIA, Jensen Huang, afirmou que a IA generativa abre uma nova era para a computação gráfica. Ray tracing em tempo real nas GPUs RTX e o upscaling com redes neurais do DLSS já deixam os jogos mais realistas, e modelos generativos começam a criar texturas, materiais e modelos 3D a partir de texto. Fora do entretenimento, IA e simulação em tempo real permitem gêmeos digitais de fábricas inteiras."
 date: 2023-11-17T03:00:00.000Z
 updated: 2024-01-04T18:32:58.068Z
 slug: explorando-o-horizonte-da-computacao-grafica-e-ia-generativa-inovacoes-e-impactos-futuros

@@ -1,6 +1,7 @@
 ---
 title: "Desbloqueando a Inteligência Artificial: O Guia Definitivo para Empresários na Era da IA"
 description: "Para líderes e empreendedores que desejam se manter competitivos, compreender e implementar a IA não é mais opcional - é essencial."
+summary: "Desbloqueando a Inteligência Artificial, livro de Guilherme Favaron lançado em julho de 2024, é um guia para líderes e empresários sobre fundamentos de IA, aplicações em negócios, estudos de caso, implementação, gestão de projetos e equipes de IA e questões éticas. O livro é acessível a leitores sem formação técnica e dedica um capítulo inteiro às questões éticas, como privacidade e viés algorítmico."
 date: 2024-07-01T03:00:00.000Z
 updated: 2024-09-05T21:07:13.521Z
 slug: desbloqueando-a-inteligencia-artificial-o-guia-definitivo-para-empresarios-na-era-da-ia-livro-da-ia

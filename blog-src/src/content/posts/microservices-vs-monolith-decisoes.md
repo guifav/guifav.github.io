@@ -2,6 +2,7 @@
 title: "Microservices vs Monolith: Decisões Arquiteturais que Definem Competitividade"
 subtitle: "Como decidir entre microservices e monolith? Análise de casos reais, custos operacionais e framework de decisão que conecta arquitetura de software com estratégia empresarial e competitividade."
 description: "Como decidir entre microservices e monolith? Análise de casos reais, custos operacionais e framework de decisão que conecta arquitetura de software com estratégia empresarial e competitividade."
+summary: "A escolha entre microservices e monolito depende da escala e da maturidade organizacional. A Netflix migrou para mais de 700 microservices em sete anos, enquanto o Segment voltou ao monolito com 50% menos custo de infraestrutura e 90% menos tempo de debugging. Monolitos modulares tendem a servir equipes com menos de 50 engenheiros, e microservices, organizações com mais de 100 e componentes com escala muito diferente."
 date: 2025-11-21T17:47:32.680Z
 updated: 2025-12-07T20:57:18.102Z
 slug: microservices-vs-monolith-decisoes

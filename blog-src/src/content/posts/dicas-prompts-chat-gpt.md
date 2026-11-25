@@ -1,6 +1,7 @@
 ---
 title: "Obtendo o Melhor da Inteligência Artificial: Desvendando os Segredos do Chat GPT"
 description: "A inteligência artificial tem revolucionado diversas áreas, e os chatbots baseados em IA, como o Chat GPT, têm ganhado destaque como poderosas ferramentas de interação e assistência."
+summary: "Respostas melhores do ChatGPT vêm de instruções claras, com exemplos e personas, de texto de referência que impeça o modelo de inventar informação, da divisão de tarefas complexas em etapas menores e do pedido para que o chatbot explique o raciocínio. Também ajuda combiná-lo com ferramentas externas, como o Wolfram em matemática, e testar os prompts de forma sistemática, com amostras maiores, como recomenda a OpenAI."
 date: 2023-06-07T03:00:00.000Z
 updated: 2024-01-04T18:32:58.822Z
 slug: dicas-prompts-chat-gpt
