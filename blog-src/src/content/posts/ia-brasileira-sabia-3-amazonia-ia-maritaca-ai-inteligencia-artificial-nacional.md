@@ -1,6 +1,7 @@
 ---
 title: "IA Brasileira - Sabia 3, Amazonia IA, Maritaca AI - O Avanço da Inteligência Artificial Nacional"
 description: "Explore o fascinante mundo das IAs brasileiras como Amazônia IA e Sabiá, que estão revolucionando o cenário tecnológico nacional com modelos de linguagem inovadores, aplicações práticas e um olhar genuinamente brasileiro para a inteligência artificial."
+summary: "A Amazônia IA, anunciada em julho de 2024 pela Wide Labs, de Porto Alegre, é um LLM nativo em português brasileiro, executado em data centers da Oracle no Brasil e cobrado em reais. O Sabiá, da Maritaca AI, fundada em 2022 por Rodrigo Nogueira com pesquisadores da Unicamp, é acessado pela MariTalk e tem as versões recentes treinadas no Brasil. Falta de mão de obra qualificada e de capacidade computacional estão entre os obstáculos dessas IAs."
 date: 2024-07-31T03:00:00.000Z
 updated: 2024-09-05T21:07:10.281Z
 slug: ia-brasileira-sabia-3-amazonia-ia-maritaca-ai-inteligencia-artificial-nacional

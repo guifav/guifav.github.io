@@ -1,6 +1,7 @@
 ---
 title: "Gemini: A Nova Fronteira da Inteligência Artificial Google"
 description: "A inteligência artificial Google atingiu um novo patamar com o lançamento do Gemini, a mais recente e poderosa AI do Google."
+summary: "O Gemini é o modelo multimodal do Google, capaz de processar texto, código, áudio, imagem e vídeo, lançado nas versões Ultra, Pro e Nano. Ele superou o GPT-4 em 30 dos 32 benchmarks acadêmicos testados. O acesso é feito pelo site gemini.google.com ou pelos aplicativos de Android e iPhone, e o plano pago Gemini Advanced dá acesso ao Gemini Ultra 1.5."
 date: 2024-09-02T03:00:00.000Z
 updated: 2024-11-05T13:03:38.627Z
 slug: inteligencia-artificial-google

@@ -1,6 +1,7 @@
 ---
 title: "Sabiá-2: O Novo Modelo LLM de Inteligência Artificial da Maritaca.ai que Rivaliza com ChatGPT-4o"
 description: "A Maritaca AI, uma empresa brasileira dedicada à pesquisa e desenvolvimento de IA, publicou o Sabiá-2, um LLM especializado em português que está revolucionando o campo da IA no Brasil."
+summary: "O Sabiá-2 é um LLM especializado em português que a Maritaca AI publicou em 26/03/2024, nas versões Small e Medium, acessível pela API MariTalk ou executado nos servidores da própria empresa com a MariTalk Local. Na média de acurácia em exames brasileiros como Enem, OAB, Enade e Revalida, o Sabiá-2 Medium ficou em terceiro lugar, atrás do GPT-4 Turbo e do Claude 3 Opus, e o Small superou o GPT-3.5 Turbo e o Llama 70B."
 date: 2024-04-03T03:00:00.000Z
 updated: 2024-08-07T23:03:47.733Z
 slug: sabia-2-o-novo-modelo-de-linguagem-em-portugues-que-rivaliza-com-gpt-4-maritaca-ai

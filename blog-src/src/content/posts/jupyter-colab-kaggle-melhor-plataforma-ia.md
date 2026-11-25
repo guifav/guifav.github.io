@@ -1,6 +1,7 @@
 ---
 title: "Jupyter vs. Colab vs. Kaggle: Qual a Melhor Plataforma para IA?"
 description: "A Inteligência Artificial (IA) e o aprendizado de máquina estão revolucionando diversos setores da sociedade, desde a saúde até o transporte."
+summary: "O Jupyter roda localmente e dá controle total do ambiente, o que o torna indicado para projetos longos e dados sensíveis. O Google Colab roda na nuvem sem instalação, oferece GPUs e TPUs gratuitas e colaboração em tempo real, e é a melhor opção para iniciantes. O Kaggle também oferece GPUs gratuitas, com limites semanais, e se destaca pelos datasets públicos e pelas competições de ciência de dados."
 date: 2024-09-05T03:00:00.000Z
 updated: 2024-11-13T13:41:25.466Z
 slug: jupyter-colab-kaggle-melhor-plataforma-ia

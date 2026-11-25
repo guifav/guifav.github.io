@@ -1,6 +1,7 @@
 ---
 title: "Agentes de IA: Por onde começar?"
 description: "Descubra como iniciar sua jornada com agentes de IA: conceitos básicos, ferramentas essenciais e primeiros passos para criar e implementar agentes inteligentes."
+summary: "Agentes de IA são sistemas de software que tomam decisões e agem com autonomia para cumprir objetivos. Para criá-los, o LangChain encadeia chamadas a LLMs mantendo o contexto, o LlamaIndex indexa e consulta grandes volumes de dados, o CrewAI coordena equipes de agentes e o AutoGen cria agentes adaptativos. Nas empresas, o caminho é escolher um processo que se beneficie da automação e testar um piloto em pequena escala antes de ampliar."
 date: 2024-09-22T03:00:00.000Z
 slug: agentes-ia-por-onde-comecar
 cover: img/agentes-ia-por-onde-comecar/capa.jpg

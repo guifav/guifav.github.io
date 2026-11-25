@@ -1,6 +1,7 @@
 ---
 title: "ChatGPT-4: O guia definitivo para explorar a Inteligência Artificial conversacional mais avançada"
 description: "O Chat GPT-4 não é apenas uma ferramenta de comunicação avançada, mas um companion digital que pode ser personalizado para servir uma ampla gama de propósitos."
+summary: "O ChatGPT-4 é a versão paga do ChatGPT, no plano Plus de USD 20 por mês, e acrescenta à versão gratuita 3.5 a navegação na web pelo Bing, o Advanced Data Analysis para analisar tabelas e arquivos em Python, os plugins e a geração de imagens com o DALL-E 3. Os plugins são ativados nas funções beta das configurações, aceitam até três por conversa, vêm de terceiros fora do controle da OpenAI e podem receber o conteúdo da conversa."
 date: 2023-10-31T19:15:52.000Z
 updated: 2024-01-04T18:33:24.152Z
 slug: chatgpt-4-o-guia-definitivo-para-explorar-a-inteligencia-artificial-conversacional-mais-avancada

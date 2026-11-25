@@ -1,6 +1,7 @@
 ---
 title: "Decifrando o Código da IA: Estratégias para Mitigar Vieses em Negócios Inteligentes"
 description: "Como identificar e mitigar vieses cognitivos e alucinações em LLMs antes de usar inteligência artificial em decisões de negócio e investimento."
+summary: "Vieses cognitivos como confirmação, ancoragem, excesso de confiança, aversão à perda e disponibilidade distorcem decisões de negócio e podem entrar na IA pelos dados de treinamento e pelas perguntas feitas aos LLMs. As alucinações dos LLMs, informações plausíveis e falsas, pedem revisão humana das saídas críticas e checagem de fatos. Linguagem neutra nas perguntas, prompts de duas etapas que apontam o viés, equipes diversas e diretrizes éticas reduzem esse risco."
 date: 2024-07-20T03:00:00.000Z
 updated: 2024-09-05T21:07:10.793Z
 slug: decifrando-o-codigo-da-ia-estrategias-para-mitigar-vieses-em-negocios-inteligentes

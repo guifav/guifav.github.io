@@ -2,6 +2,7 @@
 title: "Análise de Componentes Principais (PCA): Um Guia Prático para Empresas e Negócios"
 subtitle: "Descubra como a Análise de Componentes Principais (PCA) revoluciona a análise de dados empresariais."
 description: "O que é Análise de Componentes Principais (PCA), como reduz a complexidade de grandes bases corporativas e onde aplicá-la em problemas de negócio."
+summary: "A Análise de Componentes Principais (PCA) reduz o número de variáveis de uma base mantendo as informações mais relevantes, o que ajuda a identificar padrões e os fatores que mais pesam no negócio. Ela apoia segmentação de clientes, análise de risco, detecção de fraudes e manutenção preditiva. Em Python, os dados são limpos e padronizados, e o número de componentes sai da variância explicada acumulada, com limiar de 95% no exemplo do artigo."
 date: 2024-12-02T03:00:00.000Z
 updated: 2025-11-24T20:07:20.747Z
 slug: analise-componentes-principais-pca-guia-empresarial

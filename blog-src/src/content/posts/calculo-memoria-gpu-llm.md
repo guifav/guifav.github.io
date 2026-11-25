@@ -1,6 +1,7 @@
 ---
 title: "Quanta memória GPU é necessária para rodar um grande modelo de linguagem LLM?"
 description: "Em quase todas as conversas de LLM que tenho, há uma pergunta que surge consistentemente: “Quanta memória GPU é necessária para rodar um Large Language Model (LLM)?”"
+summary: "A memória de GPU para servir um LLM é estimada pelo número de parâmetros vezes 4 bytes, ajustado pela precisão em que o modelo é carregado (16 ou 32 bits), com 20% de sobrecarga para ativações e resultados intermediários. Por essa conta, um LLaMA de 70 bilhões de parâmetros em 16 bits precisa de cerca de 168 GB, o que exige pelo menos duas GPUs NVIDIA A100 de 80 GB."
 date: 2024-08-28T03:00:00.000Z
 updated: 2024-11-04T11:15:19.534Z
 slug: calculo-memoria-gpu-llm

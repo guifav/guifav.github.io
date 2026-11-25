@@ -1,6 +1,7 @@
 ---
 title: "Inteligência Artificial: Um Guia Abrangente"
 description: "Neste artigo exploraremos seus fundamentos, desvendando os mecanismos por trás de sua operação. Examinaremos suas aplicações práticas, desde assistentes virtuais em nossos smartphones até sistemas complexos que estão revolucionando indústrias inteiras. Discutiremos seu impacto nos negócios, na sociedade e no futuro do trabalho."
+summary: "Inteligência artificial é o campo da computação que cria sistemas para tarefas que normalmente exigem inteligência humana, como aprendizado, percepção, resolução de problemas e tomada de decisões. Machine learning é o subconjunto que aprende a partir de dados, e deep learning usa redes neurais com múltiplas camadas. A IA que existe hoje é a chamada IA fraca, projetada para tarefas específicas."
 date: 2024-08-25T03:00:00.000Z
 updated: 2025-11-29T00:19:51.120Z
 slug: o-que-e-inteligencia-artificial

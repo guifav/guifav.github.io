@@ -2,6 +2,7 @@
 title: "Desenvolvimento Moderno com IA: Como Criar Aplicações do Zero ao Deploy"
 subtitle: "Aprenda a desenvolver aplicações modernas usando IA como par de programação."
 description: "Como estruturar, codificar e publicar aplicações usando IA como par de programação, do planejamento inicial ao deploy, com práticas de segurança."
+summary: "Usar IA como par de programação acelera a escrita de código e o debugging, desde que o desenvolvedor revise e teste tudo o que ela gera. Com o Resume Raccoon, um analisador de currículos, como exemplo, o artigo mostra o ambiente virtual com Conda, a estrutura do projeto, a integração com a API do Claude e o deploy no Hugging Face Spaces. As chaves de API ficam em variáveis de ambiente, e o uso de APIs pagas deve ser monitorado."
 date: 2024-11-21T03:00:00.000Z
 updated: 2025-08-28T21:32:14.682Z
 slug: desenvolvimento-moderno-ia-criar-aplicacoes-zero-deploy
