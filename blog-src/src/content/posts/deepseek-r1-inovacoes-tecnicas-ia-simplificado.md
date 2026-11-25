@@ -2,6 +2,7 @@
 title: "DeepSeek R1: A Sinfonia da Inovação em IA - Um Mergulho Técnico Simplificado"
 subtitle: "Descubra as inovações revolucionárias do DeepSeek R1: da arquitetura MoE à Previsão Multi-Token."
 description: "Explicação técnica simplificada do DeepSeek R1: como funcionam a arquitetura MoE, a previsão multi-token e por que o modelo reduziu o custo de inferência."
+summary: "O post explica em linguagem simples as técnicas que fizeram o DeepSeek R1 chamar atenção: Mixture-of-Experts, que ativa só os especialistas necessários; previsão de vários tokens por vez; precisão mista em FP8, com números em 8 bits em vez de 32; o DualPipe, que reduz a espera na comunicação interna; e destilação de conhecimento. Segundo o texto, a combinação levou o DeepSeek-V3 a performance comparável à de modelos muito mais caros."
 date: 2025-02-05T03:00:00.000Z
 updated: 2025-11-24T20:04:02.366Z
 slug: deepseek-r1-inovacoes-tecnicas-ia-simplificado

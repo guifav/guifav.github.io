@@ -2,6 +2,7 @@
 title: "Data Architecture para Analytics e AI: Quando a Escolha Arquitetural Define o Destino Competitivo"
 subtitle: "O Trator Inteligente que Processa 15 Mil Medições por Segundo"
 description: "Descubra como arquiteturas de dados como Lakehouse, Data Mesh e Medallion impulsionam analytics e AI. Cases de John Deere, Netflix e Starbucks mostram quando cada padrão faz sentido."
+summary: "Em arquitetura de dados para analytics e IA, a escolha do padrão costuma pesar mais que a sofisticação dos modelos, e John Deere, Netflix, Spotify e Starbucks tiveram sucesso com arquiteturas diferentes. Data warehouse atende dados estruturados com consultas previsíveis, lakehouse une BI e machine learning, data mesh serve a organizações grandes cujo time central virou gargalo, e Medallion organiza os dados em bronze, silver e gold."
 date: 2025-12-09T06:00:38.680Z
 updated: 2025-12-09T06:01:51.367Z
 slug: arquitetura-dados-analytics-ai

@@ -2,6 +2,7 @@
 title: "O que o Candy Crush ensina sobre IA aplicada ao produto"
 subtitle: "Três abordagens distintas de machine learning para um mesmo problema, e o que cada uma revela sobre como pensar projetos de IA em empresas"
 description: "Três abordagens distintas de machine learning para um mesmo problema, e o que cada uma revela sobre como pensar projetos de IA em empresas"
+summary: "A King calibra a dificuldade dos níveis do Candy Crush com uma rede neural convolucional treinada em cerca de 12 milhões de jogadas reais para reproduzir o comportamento humano típico, e o playtesting de cada nível, que levava sete dias com testers, passou a levar menos de um minuto. Comparada a Monte Carlo Tree Search e Deep Q-Network, que buscam boas jogadas ou pontuação máxima, a escolha mostra que o método de IA depende de saber antes se o objetivo é modelar o ótimo ou o real."
 date: 2026-04-19T23:55:57.237Z
 updated: 2026-04-19T23:57:34.432Z
 slug: candy-crush-ia

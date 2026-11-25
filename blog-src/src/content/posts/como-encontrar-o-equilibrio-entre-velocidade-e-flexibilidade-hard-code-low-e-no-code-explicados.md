@@ -1,6 +1,7 @@
 ---
 title: "Como encontrar o equilíbrio entre velocidade e flexibilidade: hard-code, low e no-code explicados"
 description: "A analogia da hamburgueria, criada pelo Renato Asse, ilustra bem os trade-offs entre desenvolver um aplicativo do zero (hard code) versus utilizar plataformas low code e no code."
+summary: "Pela analogia da hamburgueria de Renato Asse, desenvolver em código próprio (hard code) equivale a criar o gado e plantar o trigo: dá controle total, mas exige tempo e conhecimento especializado. Low code e no code equivalem a comprar o hambúrguer pronto e aceleram o lançamento, ao custo de menos flexibilidade no longo prazo e risco de dependência do fornecedor, por isso o texto recomenda combinar as abordagens, por exemplo codificando só os módulos mais customizados."
 date: 2023-10-24T03:00:00.000Z
 updated: 2024-01-04T18:32:58.277Z
 slug: como-encontrar-o-equilibrio-entre-velocidade-e-flexibilidade-hard-code-low-e-no-code-explicados

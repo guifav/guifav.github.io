@@ -2,6 +2,7 @@
 title: "IA no dia a dia corporativo: uma abordagem prática que funciona"
 subtitle: "Como integrar GPT, Claude, Grok e Gemini diretamente ao Google Sheets — com código aberto e passo a passo"
 description: "Aprenda a usar os principais modelos de IA como fórmulas no Google Sheets. Código aberto, gratuito, com suas próprias API keys. Guia prático com casos de uso reais para empresas."
+summary: "Um script aberto de Apps Script transforma GPT, Claude, Grok e Gemini em fórmulas do Google Sheets que rodam com as suas próprias chaves de API. A configuração leva menos de dez minutos e serve para processar listas em massa em operações, marketing, vendas e BI, com revisão humana do resultado e sem passar dados sensíveis por esse fluxo."
 date: 2025-12-15T08:30:30.984Z
 updated: 2025-12-15T08:30:51.564Z
 slug: ia-google-sheets-integracao-llm-codigo-aberto

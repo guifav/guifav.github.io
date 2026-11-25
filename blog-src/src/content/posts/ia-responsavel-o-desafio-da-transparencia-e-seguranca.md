@@ -1,6 +1,7 @@
 ---
 title: "IA responsável: o desafio da transparência e segurança"
 description: "A indústria de inteligência artificial viu grandes avanços recentemente, com o lançamento de modelos de linguagem avançados como o Gemini Ultra da Google."
+summary: "As propostas de regulação nos EUA e na Europa parecem tratar modelos de IA como produtos que podem ser inspecionados e aprovados, enquanto os LLMs misturam dados de muitas fontes o tempo todo e um mesmo produto combina vários modelos. A EQTY Lab propõe usar criptografia e blockchain para registrar a origem dos modelos, o que daria transparência sem expor segredos comerciais, e a Accenture testa a tecnologia para ver se ela escala para seus clientes."
 date: 2024-02-09T03:00:00.000Z
 updated: 2024-06-25T16:27:33.903Z
 slug: ia-responsavel-o-desafio-da-transparencia-e-seguranca

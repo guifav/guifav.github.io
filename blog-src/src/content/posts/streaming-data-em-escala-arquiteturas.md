@@ -2,6 +2,7 @@
 title: "Streaming Data em Escala: Arquiteturas Para Analytics Sem Latência Analítica"
 subtitle: "Real-time analytics em produção: reduza latência de dias para milissegundos. Arquiteturas streaming, patterns e ROI mensurável para decisões instantâneas."
 description: "Real-time analytics em produção: reduza latência de dias para milissegundos. Arquiteturas streaming, patterns e ROI mensurável para decisões instantâneas."
+summary: "Arquiteturas de streaming tratam cada transação ou interação como um evento processado na hora, o que reduz para segundos a latência entre o fato e a decisão e viabiliza casos como detecção de fraude durante a transação e personalização pela sessão atual. Como o tempo real custa mais por evento que o batch, o texto recomenda reservá-lo aos eventos de alto valor, com micro-batch e batch para o resto, e escolher entre Lambda e Kappa conforme a maturidade da infraestrutura."
 date: 2025-10-06T22:37:41.252Z
 updated: 2025-11-24T20:05:57.717Z
 slug: streaming-data-em-escala-arquiteturas
