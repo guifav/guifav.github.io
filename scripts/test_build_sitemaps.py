@@ -287,6 +287,7 @@ class RulesTest(unittest.TestCase):
             "Disallow: /so-google/\n"
         )
         # Grupo '*': prefixo mais longo vence; curingas * e $ funcionam.
+        self.assertFalse(B.robots_blocks(txt, "/admin"))
         self.assertTrue(B.robots_blocks(txt, "/admin/"))
         self.assertTrue(B.robots_blocks(txt, "/admin/usuarios"))
         self.assertFalse(B.robots_blocks(txt, "/admin/publico/doc"))
@@ -294,6 +295,11 @@ class RulesTest(unittest.TestCase):
         self.assertFalse(B.robots_blocks(txt, "/portfolio/"))
         self.assertTrue(B.robots_blocks(txt, "/privado/a/b.pdf"))
         self.assertFalse(B.robots_blocks(txt, "/privado/a/b.pdf?x=1"))
+        # Disallow: /admin (sem barra final) cobre /admin, /admin/ e subcaminhos.
+        admin_no_slash = "User-agent: *\nDisallow: /admin\n"
+        self.assertTrue(B.robots_blocks(admin_no_slash, "/admin"))
+        self.assertTrue(B.robots_blocks(admin_no_slash, "/admin/"))
+        self.assertTrue(B.robots_blocks(admin_no_slash, "/admin/assinantes"))
         # Googlebot tem grupo próprio e ignora o grupo '*' (RFC 9309).
         self.assertTrue(B.robots_blocks(txt, "/so-google/x", "googlebot"))
         self.assertFalse(B.robots_blocks(txt, "/admin/", "googlebot"))
@@ -481,7 +487,7 @@ class RealSiteTest(unittest.TestCase):
 
 
 class RealRobotsTest(unittest.TestCase):
-    """Confere o robots.txt versionado do repositório contra /admin/, /portfolio/mockups/, robôs de IA e páginas do manifesto."""
+    """Confere o robots.txt versionado do repositório contra /admin, /admin/, /portfolio/mockups/, robôs de IA e páginas do manifesto."""
 
     AI_AGENTS = (
         "OAI-SearchBot",
@@ -500,7 +506,8 @@ class RealRobotsTest(unittest.TestCase):
 
     def test_repo_robots_rules(self):
         robots_txt = (REPO / "robots.txt").read_text(encoding="utf-8")
-        self.assertTrue(B.robots_blocks(robots_txt, "/admin/"))
+        self.assertTrue(B.robots_blocks(robots_txt, "/admin"), "robots.txt não bloqueou /admin")
+        self.assertTrue(B.robots_blocks(robots_txt, "/admin/"), "robots.txt não bloqueou /admin/")
         self.assertTrue(B.robots_blocks(robots_txt, "/admin/assinantes"))
         if (REPO / "portfolio/mockups").is_dir():
             self.assertTrue(B.robots_blocks(robots_txt, "/portfolio/mockups/a.html"))
@@ -508,6 +515,7 @@ class RealRobotsTest(unittest.TestCase):
         for agent in self.AI_AGENTS:
             self.assertFalse(B.robots_blocks(robots_txt, "/", agent), f"{agent} bloqueou /")
             self.assertFalse(B.robots_blocks(robots_txt, "/blog/", agent), f"{agent} bloqueou /blog/")
+            self.assertTrue(B.robots_blocks(robots_txt, "/admin", agent), f"{agent} não bloqueou /admin")
             self.assertTrue(B.robots_blocks(robots_txt, "/admin/", agent), f"{agent} não bloqueou /admin/")
             if (REPO / "portfolio/mockups").is_dir():
                 self.assertTrue(
@@ -600,6 +608,11 @@ class RealSiteGuardTest(unittest.TestCase):
         files2["_site/blog/sitemap.xml"] = BLOG
         r2 = self.run_real("required", files2)
         self.assertIn("FAIL: test_robots_blocks_no_sitemap_url", r2.stderr)
+        # Com Disallow: /admin (sem barra), qualquer URL de sitemap começando por /admin também falha.
+        files3 = self.fake_repo(ok + ["https://guifav.dev/administracao/"])
+        files3["_site/robots.txt"] = "User-agent: *\nDisallow: /admin\n"
+        r3 = self.run_real("required", files3)
+        self.assertIn("FAIL: test_robots_blocks_no_sitemap_url", r3.stderr)
 
     def test_workflow_runs_it_required_after_the_sitemaps(self):
         wf = (REPO / ".github/workflows/pages.yml").read_text(encoding="utf-8")
