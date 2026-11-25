@@ -18,7 +18,7 @@ Material do artigo [Base de conhecimento com IA ou chatbot avulso: o teste](http
 
 ## Os três cenários
 
-1. **Chatbot avulso.** Cada funcionário anexa ao chat os 2 arquivos da própria pasta que mais casam com a pergunta (busca BM25 sobre a pasta pessoal). As pastas reproduzem o que cada um guardou: a Ana tem a política comercial e o reembolso antigos e recebeu da gerente a política de margem mínima; o Bruno achou o SLA antigo na pasta do time; a Carla tem as atas e os aditivos, e o SLA de 2025.
+1. **Chatbot avulso.** Cada funcionário anexa ao chat os 2 arquivos da própria pasta que mais casam com a pergunta (busca BM25 sobre a pasta pessoal). As pastas reproduzem o que cada um guardou: a Ana tem a política comercial e o reembolso antigos e recebeu da gerente a política de margem mínima; o Bruno achou o SLA antigo na pasta do time; a Carla tem a ata do comitê comercial e os aditivos, e o SLA de 2025.
 2. **Projeto compartilhado.** Um projeto aberto a todos os funcionários com os 24 arquivos inteiros no contexto, inclusive as versões antigas e os confidenciais, e instruções de projeto que pedem citação, vigência mais recente e respeito à confidencialidade.
 3. **Base governada.** O catálogo marca o que está revogado e quem pode ver cada documento. Só entram documentos vigentes e liberados para o perfil do funcionário, a busca BM25 devolve as 5 seções mais próximas da pergunta, com arquivo e seção, e a resposta precisa citar.
 
@@ -36,7 +36,7 @@ Os três cenários usam o mesmo modelo (Claude Sonnet 5.5) e as mesmas 25 pergun
 
 O `corrigir.py` rotula cada resposta por padrão de texto. As respostas que trazem o valor certo e um valor proibido ao mesmo tempo ficam como `revisar` e são decididas à mão. Na rodada de 25/11/2026, 44 respostas caíram em `revisar` e todas davam o valor vigente, citando o antigo como regra substituída; outras 4 do cenário avulso foram reclassificadas como `nao_encontrou`. Os 48 ajustes, com o motivo, estão em `ajustes-manuais.json`. Cada ajuste guarda o sha256 da resposta que foi lida e só vale enquanto ela for a mesma: numa rodada nova, o `corrigir.py` ignora o ajuste, usa o rótulo automático e lista o caso como ajuste obsoleto, para ser lido de novo.
 
-"Mesma resposta" para os três funcionários exige o mesmo rótulo e, quando a resposta usa regra antiga, o mesmo valor antigo. "Recusa que confirma o dado" conta as respostas a perguntas confidenciais que dizem "não posso informar", o que revela que a informação existe.
+"Mesma resposta" para os três funcionários exige o mesmo rótulo e, quando a resposta usa regra antiga, o mesmo valor antigo. "Recusa que confirma o dado" conta as respostas a perguntas confidenciais que dizem "não posso informar", o que revela que a informação existe. A regex dessa métrica é estreita e bateu com a leitura manual das 90 respostas confidenciais desta rodada; numa rodada nova, confira essas respostas à mão como os rótulos.
 
 ## Como rodar
 
