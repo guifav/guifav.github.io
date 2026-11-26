@@ -578,9 +578,18 @@ TITLE_SEP = " | "
 TITLE_EXEMPT_PREFIXES = ("portfolio/mockups/",)
 # Grupos de conteúdo do GA4 (content_group), um por tipo de página; espelha CONTENT_GROUPS do consts.ts do blog.
 CONTENT_GROUPS = ("home", "portfolio", "insights-lista", "insights-artigo", "expert-insights", "materiais", "consultoria", "ferramentas", "legal", "cursos")
-# Páginas dos materiais do canal (issue #99): o formulário e a página de enviado de cada material do catálogo do Worker.
-MATERIALS = ("planilha-custos-ia", "mapa-decisao-ia")
-MATERIAL_PAGES = {f"ferramentas/{m}/{p}index.html" for m in MATERIALS for p in ("", "enviado/")}
+# Páginas dos materiais (issues #99 e #183): o formulário e a página de enviado de cada material do catálogo do Worker.
+BOOK_ID = "livro-desbloqueando-a-inteligencia-artificial"
+BOOK_URL = f"/materiais/{BOOK_ID}/"
+BOOK_PAGE = f"materiais/{BOOK_ID}/index.html"
+BOOK_ASIN = "B0D8H13BYN"
+BOOK_AMAZON_URL = f"https://www.amazon.com.br/dp/{BOOK_ASIN}"
+MATERIALS = {
+    "planilha-custos-ia": "ferramentas/planilha-custos-ia",
+    "mapa-decisao-ia": "ferramentas/mapa-decisao-ia",
+    BOOK_ID: f"materiais/{BOOK_ID}",
+}
+MATERIAL_PAGES = {f"{path}/{p}index.html" for path in MATERIALS.values() for p in ("", "enviado/")}
 # Ferramentas sem material para baixar (issues #113, #151 e #166): grupo próprio, para não misturar com o funil dos materiais.
 TOOLS_INDEX_PAGE = "ferramentas/index.html"
 LLM_RANKING_PAGE = "ferramentas/llm-ranking/index.html"
@@ -1000,15 +1009,15 @@ def check_tracking(rel: str, html: str) -> list[str]:
                 problems.append(f"{rel}: {ev} com data-cta-location={loc!r} repetido na página")
             else:
                 seen.add((ev, loc))
-    # generate_lead na página de enviado de cada material, com o id do material igual ao da pasta (issue #99).
-    lead = next((m for m in MATERIALS if rel == f"ferramentas/{m}/enviado/index.html"), None)
+    # generate_lead na página de enviado de cada material, com o id do material do catálogo (issues #99 e #183).
+    lead = next((m for m, path in MATERIALS.items() if rel == f"{path}/enviado/index.html"), None)
     expected = ["sign_up"] if rel == SIGNUP_PAGE else ["generate_lead"] if lead else []
     if t.ga_events != expected:
         problems.append(f"{rel}: data-ga-event {t.ga_events}, esperado {expected}")
     elif lead and t.ga_materials != [lead]:
         problems.append(f"{rel}: generate_lead com data-material-id {t.ga_materials}, esperado [{lead!r}]")
-    # Formulário de material (issue #99): data-ga-client-id e o campo oculto ga_cid, que o track.js preenche no envio.
-    if any(rel == f"ferramentas/{m}/index.html" for m in MATERIALS):
+    # Formulário de material (issues #99 e #183): data-ga-client-id e o campo oculto ga_cid, que o track.js preenche no envio.
+    if any(rel == f"{path}/index.html" for path in MATERIALS.values()):
         # Só HTML visível: formulário ou campo dentro de comentário não conta.
         forms = [f for f in re.findall(r"<form\b[^>]*>.*?</form>", _visible_html(html), flags=re.S | re.I)
                  if 'action="https://insights.guifav.dev/material"' in f]
@@ -1029,7 +1038,7 @@ TOOLS_INDEX_LINKS = ("/ferramentas/mapa-decisao-ia/", "/ferramentas/planilha-cus
                      "/ferramentas/seo-geo-aeo-framework/framework-seo-aeo.html")
 TOOLS_LINKS = ("/ferramentas/", "/ferramentas/mapa-decisao-ia/", "/ferramentas/planilha-custos-ia/",
                "/ferramentas/llm-ranking/",
-               "/blog/livro-ia-inteligencia-artificial-portugues-gratuito/",
+               BOOK_URL,
                "/ferramentas/seo-geo-aeo-framework/framework-seo-aeo.html",
                COURSES_URL)
 TOOLS_SECTION_ID = "ferramentas"
@@ -2795,6 +2804,85 @@ def check_youtube(site: Path) -> list[str]:
     return problems
 
 
+def check_book(site: Path) -> list[str]:
+    """#183: a página do livro traz @graph com WebPage e Book gratuito ligado à Person, workExample PDF e Kindle (ASIN) e sem offers nem FAQPage."""
+    rel = BOOK_PAGE
+    page = site / rel
+    if not page.is_file():
+        return [f"{rel}: a página do livro sumiu do site montado (site-manifest.txt)"]
+    html = page.read_text(encoding="utf-8")
+    problems: list[str] = []
+    nodes = _ld_nodes(html)
+    if any(n.get("@type") == "FAQPage" for n in nodes):
+        problems.append(f"{rel}: FAQPage fora da decisão da #183 (perguntas só em texto visível)")
+    books = [(n, gnodes, graph) for gnodes, graph in _ld_blocks(html) for n in gnodes
+             if isinstance(n, dict) and n.get("@type") == "Book"]
+    if len(books) != 1:
+        problems.append(f"{rel}: esperado um nó Book no JSON-LD, achados {len(books)}")
+        return problems
+    book, gnodes, graph = books[0]
+
+    def ref(v: object) -> object:
+        return v.get("@id") if isinstance(v, dict) else None
+
+    book_url = SITE_ORIGIN + BOOK_URL
+    book_id = book_url + "#book"
+    website_id = SITE_ORIGIN + "/#website"
+    if not graph:
+        problems.append(f"{rel}: o nó Book precisa estar num @graph com o WebPage")
+    if book.get("@id") != book_id:
+        problems.append(f"{rel}: Book precisa de @id {book_id!r}, tem {book.get('@id')!r}")
+    if book.get("isAccessibleForFree") is not True:
+        problems.append(f"{rel}: Book precisa de isAccessibleForFree: true")
+    if ref(book.get("author")) != PERSON_ID:
+        problems.append(f"{rel}: Book.author precisa apontar para {PERSON_ID}")
+    if ref(book.get("publisher")) != PERSON_ID:
+        problems.append(f"{rel}: Book.publisher precisa apontar para {PERSON_ID}")
+    if "offers" in book or any(isinstance(n, dict) and ("offers" in n or n.get("@type") == "Offer") for n in gnodes):
+        problems.append(f"{rel}: Book não pode declarar offers")
+    examples = book.get("workExample")
+    if not isinstance(examples, list):
+        problems.append(f"{rel}: Book precisa de workExample em lista com o PDF e o Kindle")
+    else:
+        if any(isinstance(ex, dict) and "offers" in ex for ex in examples):
+            problems.append(f"{rel}: workExample do Book não pode declarar offers")
+        has_pdf = any(
+            isinstance(ex, dict)
+            and ex.get("@type") == "Book"
+            and ex.get("bookFormat") == "https://schema.org/EBook"
+            and ex.get("encodingFormat") == "application/pdf"
+            and ex.get("isAccessibleForFree") is True
+            and ex.get("url") == book_url + "#baixar"
+            for ex in examples
+        )
+        has_kindle = any(
+            isinstance(ex, dict)
+            and ex.get("@type") == "Book"
+            and ex.get("bookFormat") == "https://schema.org/EBook"
+            and ex.get("url") == BOOK_AMAZON_URL
+            and isinstance(ex.get("identifier"), dict)
+            and ex["identifier"].get("@type") == "PropertyValue"
+            and ex["identifier"].get("propertyID") == "ASIN"
+            and ex["identifier"].get("value") == BOOK_ASIN
+            for ex in examples
+        )
+        if not has_pdf:
+            problems.append(f"{rel}: workExample sem a edição PDF gratuita ({book_url}#baixar)")
+        if not has_kindle:
+            problems.append(f"{rel}: workExample sem a edição Kindle ({BOOK_AMAZON_URL}, ASIN {BOOK_ASIN})")
+    if not any(
+        isinstance(n, dict)
+        and n.get("@type") == "WebPage"
+        and n.get("url") == book_url
+        and ref(n.get("isPartOf")) == website_id
+        and ref(n.get("about")) == book_id
+        and ref(n.get("mainEntity")) == book_id
+        for n in gnodes
+    ):
+        problems.append(f"{rel}: @graph sem WebPage com url {book_url}, isPartOf {website_id}, about e mainEntity {book_id}")
+    return problems
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Verifica o site montado em _site/ antes do deploy.")
     ap.add_argument("--site", default="_site")
@@ -2808,6 +2896,7 @@ def main(argv: list[str] | None = None) -> int:
         problems += check_summary(Path(args.site), Path(args.posts))
         problems += check_contrast(Path(args.site))
         problems += check_consulting(Path(args.site))
+        problems += check_book(Path(args.site))
         problems += check_home(Path(args.site), Path(args.posts), read_home_latest(Path(args.consts)))
         problems += check_post_ld(Path(args.site), Path(args.posts))
         problems += check_llm_ranking(Path(args.site))
