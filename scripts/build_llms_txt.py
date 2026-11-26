@@ -305,16 +305,21 @@ def _build_tools_section(site: Path, robots_txt: str) -> list[str]:
         raise LlmsTxtError("ferramentas/: pasta ausente no _site")
     index_url, index_meta = _load_required_page(site, "ferramentas/index.html", robots_txt)
     discovered: dict[str, _PageMeta] = {index_url: index_meta}
-    for f in sorted(tools_dir.rglob("*")):
-        if f.is_symlink() or not f.is_file() or f.suffix.lower() not in HTML_SUFFIXES:
-            continue
-        rel = f.relative_to(site).as_posix()
-        url = page_url(rel)
-        if url in discovered:
-            continue
-        meta = _parse_html(f)
-        if _is_indexable(rel, url, meta, robots_txt):
-            discovered[url] = meta
+    dirs = [tools_dir]
+    materials_dir = site / "materiais"
+    if materials_dir.is_dir() and not materials_dir.is_symlink():
+        dirs.append(materials_dir)
+    for base_dir in dirs:
+        for f in sorted(base_dir.rglob("*")):
+            if f.is_symlink() or not f.is_file() or f.suffix.lower() not in HTML_SUFFIXES:
+                continue
+            rel = f.relative_to(site).as_posix()
+            url = page_url(rel)
+            if url in discovered:
+                continue
+            meta = _parse_html(f)
+            if _is_indexable(rel, url, meta, robots_txt):
+                discovered[url] = meta
 
     ordered: list[str] = [index_url]
     for href in index_meta.main_links:

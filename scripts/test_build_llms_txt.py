@@ -311,6 +311,29 @@ class BuildLlmsTxtTest(Fixture):
         for excluded in ("post-podado", "ep-podcast", "post-podcast-index-true", "post-html-noindex", "post-bloqueado"):
             self.assertNotIn(excluded, text)
 
+    def test_includes_indexable_materials_under_tools_and_excludes_enviado(self):
+        self.w(
+            "materiais/livro-desbloqueando-a-inteligencia-artificial/index.html",
+            page(
+                "Livro gratuito de IA para empresários (PDF em português) | Guilherme Favaron",
+                "Receba grátis o livro Desbloqueando a Inteligência Artificial.",
+                extra_head='<link rel="canonical" href="https://guifav.dev/materiais/livro-desbloqueando-a-inteligencia-artificial/">',
+            ),
+        )
+        self.w(
+            "materiais/livro-desbloqueando-a-inteligencia-artificial/enviado/index.html",
+            page("Link enviado | Guilherme Favaron", "Enviado", extra_head='<meta name="robots" content="noindex">'),
+        )
+        text, _ = L.build(self.site, self.posts)
+        tools_block = text.split("## Ferramentas\n\n", 1)[1].split("\n\n## Temas", 1)[0]
+        self.assertIn(
+            "- [Livro gratuito de IA para empresários (PDF em português)]"
+            "(https://guifav.dev/materiais/livro-desbloqueando-a-inteligencia-artificial/): "
+            "Receba grátis o livro Desbloqueando a Inteligência Artificial.",
+            tools_block.splitlines(),
+        )
+        self.assertNotIn("/enviado/", text)
+
     def test_excludes_tool_with_external_canonical_or_robots_disallow(self):
         self.w(
             "ferramentas/externa/index.html",

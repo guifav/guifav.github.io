@@ -892,6 +892,9 @@ class TitleAndGroupTest(unittest.TestCase):
                        ("blog/inscricao-invalida/index.html", "expert-insights"),
                        ("blog/o-exame-virou-conspiracao/index.html", "insights-artigo"),
                        ("ferramentas/planilha-custos-ia/index.html", "materiais"), ("ferramentas/mapa-decisao-ia/enviado/index.html", "materiais"),
+                       ("materiais/livro-desbloqueando-a-inteligencia-artificial/index.html", "materiais"),
+                       ("materiais/livro-desbloqueando-a-inteligencia-artificial/enviado/index.html", "materiais"),
+                       ("materiais/livro-desbloqueando-a-inteligencia-artificial/x/index.html", None),
                        ("consultoria/index.html", "consultoria"), ("consultoria/x/index.html", None),
                        ("ferramentas/planilha-custos-ia/x/index.html", None),
                        ("ferramentas/index.html", "ferramentas"),
@@ -1048,8 +1051,8 @@ class ClaritySourcesTest(unittest.TestCase):
 
     def test_forms_masked(self):
         self.assertIn('action="https://insights.guifav.dev/subscribe" data-clarity-mask="true"', self.read("index.html"))
-        for m in C.MATERIALS:
-            self.assertIn('data-ga-client-id data-clarity-mask="true"', self.read(f"ferramentas/{m}/index.html"))
+        for path in C.MATERIALS.values():
+            self.assertIn('data-ga-client-id data-clarity-mask="true"', self.read(f"{path}/index.html"))
         self.assertIn('data-clarity-mask="true"', self.read("blog-src/src/components/SubscribeForm.astro"))
 
     def test_privacy_mentions_clarity(self):
@@ -1237,35 +1240,41 @@ class TrackingTest(unittest.TestCase):
                 self.assertTrue(any("data-ga-event" in p for p in self.check(self.doc(body), rel=rel)), name)
 
     def test_material_form_carries_ga_client_id(self):
-        # Issue #99: o formulário de material leva data-ga-client-id e o campo oculto ga_cid, uma vez.
-        rel = "ferramentas/planilha-custos-ia/index.html"
-        form = ('<form id="receber" {attr}method="post" action="https://insights.guifav.dev/material">'
-                '<input type="hidden" name="material" value="planilha-custos-ia">{cid}</form>')
+        # Issues #99 e #183: o formulário de material leva data-ga-client-id e o campo oculto ga_cid, uma vez.
         cid = '<input type="hidden" name="ga_cid" value="">'
-        self.assertEqual(self.check(self.doc(form.format(attr="data-ga-client-id ", cid=cid)), rel=rel), [])
-        for name, body in {
-            "sem atributo": form.format(attr="", cid=cid),
-            "sem campo": form.format(attr="data-ga-client-id ", cid=""),
-            "campo duas vezes": form.format(attr="data-ga-client-id ", cid=cid * 2),
-            "sem formulário": "",
-            "formulário comentado": "<!-- " + form.format(attr="data-ga-client-id ", cid=cid) + " -->",
-            "campo comentado": form.format(attr="data-ga-client-id ", cid="<!-- " + cid + " -->"),
-        }.items():
-            with self.subTest(name=name):
-                self.assertTrue(any("formulário de material" in p for p in self.check(self.doc(body), rel=rel)), name)
+        for m, rel in (("planilha-custos-ia", "ferramentas/planilha-custos-ia/index.html"), (C.BOOK_ID, C.BOOK_PAGE)):
+            form = (f'<form id="receber" {{attr}}method="post" action="https://insights.guifav.dev/material">'
+                    f'<input type="hidden" name="material" value="{m}">{{cid}}</form>')
+            with self.subTest(rel=rel):
+                self.assertEqual(self.check(self.doc(form.format(attr="data-ga-client-id ", cid=cid)), rel=rel), [])
+            for name, body in {
+                "sem atributo": form.format(attr="", cid=cid),
+                "sem campo": form.format(attr="data-ga-client-id ", cid=""),
+                "campo duas vezes": form.format(attr="data-ga-client-id ", cid=cid * 2),
+                "dois formulários": form.format(attr="data-ga-client-id ", cid=cid) * 2,
+                "sem formulário": "",
+                "formulário comentado": "<!-- " + form.format(attr="data-ga-client-id ", cid=cid) + " -->",
+                "campo comentado": form.format(attr="data-ga-client-id ", cid="<!-- " + cid + " -->"),
+            }.items():
+                with self.subTest(rel=rel, name=name):
+                    self.assertTrue(any("formulário de material" in p for p in self.check(self.doc(body), rel=rel)), name)
 
     def test_generate_lead_only_on_material_sent_pages_with_the_folder_id(self):
-        # Issue #99: generate_lead na página de enviado de cada material, com data-material-id igual ao da pasta.
+        # Issues #99 e #183: generate_lead na página de enviado de cada material, com data-material-id igual ao id no catálogo.
         lead = lambda m: f'<header data-ga-event="generate_lead" data-material-id="{m}">x</header>'
-        for m in C.MATERIALS:
-            self.assertEqual(self.check(self.doc(lead(m)), rel=f"ferramentas/{m}/enviado/index.html"), [], m)
+        for m, path in C.MATERIALS.items():
+            self.assertEqual(self.check(self.doc(lead(m)), rel=f"{path}/enviado/index.html"), [], m)
         enviado = "ferramentas/planilha-custos-ia/enviado/index.html"
+        livro_enviado = f"materiais/{C.BOOK_ID}/enviado/index.html"
         for name, (rel, body) in {
             "falta": (enviado, ""),
+            "falta livro": (livro_enviado, ""),
             "duas vezes": (enviado, lead("planilha-custos-ia") * 2),
             "outro material": (enviado, lead("mapa-decisao-ia")),
+            "outro material no livro": (livro_enviado, lead("mapa-decisao-ia")),
             "sem id": (enviado, '<header data-ga-event="generate_lead">x</header>'),
             "fora do enviado": ("ferramentas/planilha-custos-ia/index.html", lead("planilha-custos-ia")),
+            "livro fora do enviado": (C.BOOK_PAGE, lead(C.BOOK_ID)),
             "home": ("index.html", lead("planilha-custos-ia")),
         }.items():
             with self.subTest(name=name):
@@ -1927,7 +1936,7 @@ class ToolsSourcesTest(unittest.TestCase):
         for rel in ("ferramentas/index.html", "ferramentas/mapa-decisao-ia/index.html", "ferramentas/planilha-custos-ia/index.html",
                     "ferramentas/llm-ranking/index.html", "ferramentas/seo-geo-aeo-framework/framework-seo-aeo.html",
                     "cursos/index.html",
-                    "blog-src/src/content/posts/livro-ia-inteligencia-artificial-portugues-gratuito.md"):
+                    C.BOOK_PAGE):
             with self.subTest(rel=rel):
                 self.assertTrue((self.REPO / rel).is_file())
         for rel in ("index.html", "404.html", "portfolio/index.html", "consultoria/index.html",
@@ -1936,6 +1945,7 @@ class ToolsSourcesTest(unittest.TestCase):
                     "ferramentas/mapa-decisao-ia/index.html", "ferramentas/mapa-decisao-ia/enviado/index.html",
                     "ferramentas/planilha-custos-ia/index.html", "ferramentas/planilha-custos-ia/enviado/index.html",
                     "ferramentas/seo-geo-aeo-framework/framework-seo-aeo.html",
+                    C.BOOK_PAGE, f"materiais/{C.BOOK_ID}/enviado/index.html",
                     "blog-src/src/layouts/Base.astro", "blog-src/src/lib/topics.ts"):
             with self.subTest(no_old_tools=rel):
                 self.assertNotIn("/tools/", self.read(rel))
@@ -3534,6 +3544,7 @@ class NavSourcesTest(unittest.TestCase):
         for must in ("index.html", "404.html", "portfolio/index.html", "consultoria/index.html",
                      "ferramentas/index.html", "ferramentas/llm-ranking/index.html",
                      "ferramentas/mapa-decisao-ia/index.html", "ferramentas/planilha-custos-ia/index.html",
+                     C.BOOK_PAGE, f"materiais/{C.BOOK_ID}/enviado/index.html",
                      "cursos/index.html", "privacidade/index.html", "termos/index.html",
                      "blog-src/src/layouts/Base.astro"):
             self.assertIn(must, rels)
@@ -4389,7 +4400,7 @@ class LegalSourcesTest(unittest.TestCase):
     def test_terms_not_in_forms_or_cookie_banner(self):
         self.assertNotIn("/termos/", (self.REPO / "assets/consent.js").read_text(encoding="utf-8"))
         self.assertNotIn("/termos/", (self.REPO / "blog-src/src/components/SubscribeForm.astro").read_text(encoding="utf-8"))
-        for rel in ("index.html", "ferramentas/planilha-custos-ia/index.html", "ferramentas/mapa-decisao-ia/index.html"):
+        for rel in ("index.html", "ferramentas/planilha-custos-ia/index.html", "ferramentas/mapa-decisao-ia/index.html", C.BOOK_PAGE):
             html = (self.REPO / rel).read_text(encoding="utf-8")
             for form in re.findall(r"<form\b[^>]*>.*?</form>", html, flags=re.S | re.I):
                 self.assertNotIn("/termos/", form, rel)
@@ -4737,6 +4748,8 @@ class YoutubeFooterSourcesTest(unittest.TestCase):
         "ferramentas/mapa-decisao-ia/enviado/index.html",
         "ferramentas/planilha-custos-ia/index.html",
         "ferramentas/planilha-custos-ia/enviado/index.html",
+        C.BOOK_PAGE,
+        f"materiais/{C.BOOK_ID}/enviado/index.html",
         "blog-src/src/layouts/Base.astro",
     )
 
@@ -5102,6 +5115,136 @@ class LlmsTxtTest(Base):
         self.assertIn("llms.txt", err.getvalue())
 
 
+class BookTest(Base):
+    """#183: página do livro em /materiais/ com @graph (WebPage + Book gratuito, workExample PDF e Kindle, sem offers/FAQPage)."""
+
+    REPO = Path(__file__).resolve().parent.parent
+
+    def valid_graph(self) -> dict:
+        book_url = C.SITE_ORIGIN + C.BOOK_URL
+        book_id = book_url + "#book"
+        return {
+            "@context": "https://schema.org",
+            "@graph": [
+                {
+                    "@type": "WebPage",
+                    "@id": book_url + "#webpage",
+                    "url": book_url,
+                    "isPartOf": {"@id": C.SITE_ORIGIN + "/#website"},
+                    "about": {"@id": book_id},
+                    "mainEntity": {"@id": book_id},
+                },
+                {
+                    "@type": "Book",
+                    "@id": book_id,
+                    "name": "Desbloqueando a Inteligência Artificial",
+                    "author": {"@id": C.PERSON_ID},
+                    "publisher": {"@id": C.PERSON_ID},
+                    "isAccessibleForFree": True,
+                    "workExample": [
+                        {
+                            "@type": "Book",
+                            "bookFormat": "https://schema.org/EBook",
+                            "encodingFormat": "application/pdf",
+                            "url": book_url + "#baixar",
+                            "isAccessibleForFree": True,
+                        },
+                        {
+                            "@type": "Book",
+                            "bookFormat": "https://schema.org/EBook",
+                            "url": C.BOOK_AMAZON_URL,
+                            "identifier": {"@type": "PropertyValue", "propertyID": "ASIN", "value": C.BOOK_ASIN},
+                        },
+                    ],
+                },
+            ],
+        }
+
+    def write_book(self, ld: dict | list | None, extra_head: str = "") -> None:
+        script = "" if ld is None else f'<script type="application/ld+json">{json.dumps(ld)}</script>'
+        self.w(C.BOOK_PAGE, f'<!DOCTYPE html><html><head>{script}{extra_head}</head><body>x</body></html>')
+
+    def test_valid_book_graph_passes(self):
+        self.write_book(self.valid_graph())
+        self.assertEqual(C.check_book(self.site), [])
+
+    def test_missing_page_or_book_or_graph_fails(self):
+        self.assertTrue(any("sumiu" in p for p in C.check_book(self.site)))
+        self.write_book(None)
+        self.assertTrue(any("Book" in p for p in C.check_book(self.site)))
+        # Book fora de @graph falha.
+        solo = self.valid_graph()["@graph"][1]
+        solo["@context"] = "https://schema.org"
+        self.write_book(solo)
+        self.assertTrue(any("@graph" in p for p in C.check_book(self.site)))
+        # JSON-LD comentado ou dentro de <template> não conta.
+        raw = json.dumps(self.valid_graph())
+        for inert in (f'<!-- <script type="application/ld+json">{raw}</script> -->',
+                      f'<template><script type="application/ld+json">{raw}</script></template>'):
+            with self.subTest(inert=inert[:20]):
+                self.w(C.BOOK_PAGE, f'<!DOCTYPE html><html><head>{inert}</head><body>x</body></html>')
+                self.assertTrue(C.check_book(self.site))
+
+    def test_invalid_book_fields_offers_or_faqpage_fail(self):
+        def mutate(fn):
+            g = self.valid_graph()
+            fn(g["@graph"][0], g["@graph"][1], g["@graph"])
+            return g
+
+        cases = {
+            "offers no Book": mutate(lambda wp, b, g: b.__setitem__("offers", {"@type": "Offer", "price": "0"})),
+            "offers no workExample": mutate(lambda wp, b, g: b["workExample"][0].__setitem__("offers", {"@type": "Offer"})),
+            "no Offer solto no graph": mutate(lambda wp, b, g: g.append({"@type": "Offer", "price": "0"})),
+            "isAccessibleForFree false": mutate(lambda wp, b, g: b.__setitem__("isAccessibleForFree", False)),
+            "isAccessibleForFree string": mutate(lambda wp, b, g: b.__setitem__("isAccessibleForFree", "true")),
+            "sem isAccessibleForFree": mutate(lambda wp, b, g: b.pop("isAccessibleForFree")),
+            "author errado": mutate(lambda wp, b, g: b.__setitem__("author", {"@type": "Person", "name": "Guilherme"})),
+            "publisher errado": mutate(lambda wp, b, g: b.__setitem__("publisher", {"@id": "https://example.com/#p"})),
+            "sem PDF": mutate(lambda wp, b, g: b.__setitem__("workExample", [b["workExample"][1]])),
+            "PDF url sem ancora": mutate(lambda wp, b, g: b["workExample"][0].__setitem__("url", C.SITE_ORIGIN + C.BOOK_URL)),
+            "PDF nao gratuito": mutate(lambda wp, b, g: b["workExample"][0].__setitem__("isAccessibleForFree", False)),
+            "sem Kindle": mutate(lambda wp, b, g: b.__setitem__("workExample", [b["workExample"][0]])),
+            "ASIN errado": mutate(lambda wp, b, g: b["workExample"][1]["identifier"].__setitem__("value", "B000000000")),
+            "URL Amazon errada": mutate(lambda wp, b, g: b["workExample"][1].__setitem__("url", "https://amazon.com/dp/x")),
+            "WebPage sem mainEntity": mutate(lambda wp, b, g: wp.pop("mainEntity")),
+            "WebPage sem about": mutate(lambda wp, b, g: wp.pop("about")),
+            "WebPage isPartOf errado": mutate(lambda wp, b, g: wp.__setitem__("isPartOf", {"@id": "https://guifav.dev/"})),
+            "id do Book errado": mutate(lambda wp, b, g: b.__setitem__("@id", "https://guifav.dev/#book")),
+            "FAQPage no graph": mutate(lambda wp, b, g: g.append({"@type": "FAQPage", "mainEntity": []})),
+        }
+        for name, doc in cases.items():
+            with self.subTest(case=name):
+                self.write_book(doc)
+                self.assertTrue(C.check_book(self.site), name)
+
+    def test_main_runs_check_book(self):
+        consts = Path(self.tmp.name) / "consts.ts"
+        consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
+        err = io.StringIO()
+        with isolate_main_rule("check_book"), \
+                contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            code = C.main(["--site", str(self.site), "--posts", str(self.posts), "--consts", str(consts)])
+        self.assertEqual(code, 1)
+        self.assertIn(C.BOOK_PAGE, err.getvalue())
+
+    def test_repo_book_pages_pass_all_static_rules(self):
+        book_html = (self.REPO / C.BOOK_PAGE).read_text(encoding="utf-8")
+        sent_rel = f"materiais/{C.BOOK_ID}/enviado/index.html"
+        sent_html = (self.REPO / sent_rel).read_text(encoding="utf-8")
+        self.assertEqual(C.check_book(self.REPO), [])
+        for rel, html in ((C.BOOK_PAGE, book_html), (sent_rel, sent_html)):
+            with self.subTest(rel=rel):
+                self.assertEqual(C.check_titles_and_groups(rel, html), [])
+                self.assertEqual(C.check_tracking(rel, html), [])
+                self.assertEqual(C.check_ga_host_guard(rel, html), [])
+                self.assertEqual(C.check_consent(rel, html), [])
+                self.assertEqual(C.check_legal_footer(rel, html), [])
+                self.assertEqual(C.check_courses_footer(rel, html), [])
+                self.assertEqual(C.check_youtube_footer(rel, html), [])
+                self.assertNotIn("\u2014", html)
+                self.assertNotIn("\u2013", html)
+
+
 # Regras chamadas por C.main() e o retorno neutro usado ao isolar uma delas (#147).
 MAIN_RULES = {
     "check": lambda *a, **k: [],
@@ -5109,6 +5252,7 @@ MAIN_RULES = {
     "check_summary": lambda *a, **k: [],
     "check_contrast": lambda *a, **k: [],
     "check_consulting": lambda *a, **k: [],
+    "check_book": lambda *a, **k: [],
     "check_paid_consulting": lambda *a, **k: [],
     "check_home": lambda *a, **k: [],
     "check_post_ld": lambda *a, **k: [],
