@@ -54,7 +54,7 @@ Por exemplo:
 
 ### 3. Estudos de Caso e Exemplos de Sucesso
 
-Quatro exemplos ilustrativos com empresas não identificadas (Empresas A, B, C e D), baseados em situações reais e adaptados, demonstram como a IA pode ser aplicada em atendimento ao cliente, recomendações personalizadas de vendas, automação operacional e análise de dados, seguidos das lições e fatores de sucesso para futuros projetos.
+Quatro exemplos ilustrativos com nomes genéricos (Empresas A, B, C e D), inspirados em empresas reais e adaptados, demonstram como a IA pode ser aplicada em atendimento ao cliente, recomendações personalizadas de vendas, automação operacional e análise de dados, seguidos das lições e fatores de sucesso para futuros projetos.
 
 ### 4. Implementando IA em Seu Negócio
 
