@@ -526,7 +526,7 @@ O futuro da IA é incrivelmente promissor, com o potencial de resolver alguns do
 
 Como indivíduos e como sociedade, temos um papel crucial a desempenhar na formação do futuro da IA:
 
-**1. Eduque-se**: Continue aprendendo sobre IA e suas implicações. O conhecimento é poder, especialmente em uma era de rápidas mudanças tecnológicas. [Conheça o livro mais completo sobre IA recentemente lançado no Brasil.](/blog/desbloqueando-a-inteligencia-artificial-o-guia-definitivo-para-empresarios-na-era-da-ia-livro-da-ia/)
+**1. Eduque-se**: Continue aprendendo sobre IA e suas implicações. O conhecimento é poder, especialmente em uma era de rápidas mudanças tecnológicas. [Conheça o livro mais completo sobre IA recentemente lançado no Brasil.](/materiais/livro-desbloqueando-a-inteligencia-artificial/)
 
 **2. Participe do Diálogo**: Envolva-se em discussões sobre ética em IA, políticas e regulamentações. Sua voz é importante na formação do futuro desta tecnologia.
 

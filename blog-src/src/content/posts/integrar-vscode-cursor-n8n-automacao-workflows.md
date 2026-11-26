@@ -645,7 +645,7 @@ Ao trabalhar com tokens de API e automações, é fundamental seguir boas práti
 3. **Backup regular:** Exporte workflows importantes periodicamente
 4. **Documentação:** Mantenha um README.md atualizado com descrição dos workflows
 
-> **Leitura complementar:** Para entender melhor como implementar IA de forma segura e estratégica em processos corporativos, recomendo o livro [Desbloqueando a Inteligência Artificial nas Empresas](/blog/livro-ia-inteligencia-artificial-portugues-gratuito/).
+> **Leitura complementar:** Para entender melhor como implementar IA de forma segura e estratégica em processos corporativos, recomendo o livro [Desbloqueando a Inteligência Artificial nas Empresas](/materiais/livro-desbloqueando-a-inteligencia-artificial/).
 
 ***
 
