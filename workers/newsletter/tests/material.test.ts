@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
-import { handle, entrypoint, type Env } from '../src/index.ts';
+import { handle, entrypoint, type Env, type R2BucketLike } from '../src/index.ts';
 import { signLink, signMaterialLink, MATERIAL_TTL_MS } from '../src/token.ts';
 import { MATERIAIS, INTERESSES } from '../src/materiais.ts';
 import { createHash } from 'node:crypto';
@@ -20,9 +20,19 @@ const tomlVar = (k: string) => {
 
 type Call = { url: string; method: string; body: any };
 
-function setup(opts: { turnstile?: unknown; rlEmail?: boolean; rlIp?: boolean; emailStatus?: number; now?: number; d1Falha?: RegExp; d1Pendura?: RegExp; d1Porta?: Promise<void>; semGa4?: boolean; ga4Status?: number | 'throw'; ga4Pendura?: boolean; ga4Porta?: Promise<void> } = {}) {
+function r2Stream(bytes: Uint8Array): ReadableStream<Uint8Array> {
+  return new ReadableStream({
+    start(controller) {
+      controller.enqueue(bytes);
+      controller.close();
+    },
+  });
+}
+
+function setup(opts: { turnstile?: unknown; rlEmail?: boolean; rlIp?: boolean; emailStatus?: number; now?: number; d1Falha?: RegExp; d1Pendura?: RegExp; d1Porta?: Promise<void>; semGa4?: boolean; ga4Status?: number | 'throw'; ga4Pendura?: boolean; ga4Porta?: Promise<void>; r2?: Record<string, Uint8Array | null>; semR2?: boolean; r2Erro?: boolean } = {}) {
   const calls: Call[] = [];
   const rl: string[] = [];
+  const r2Gets: string[] = [];
   const db = d1(opts.d1Falha, undefined, opts.d1Pendura, opts.d1Porta);
   const pending: Promise<unknown>[] = [];
   const waitUntil = (p: Promise<unknown>) => void pending.push(p);
@@ -46,6 +56,23 @@ function setup(opts: { turnstile?: unknown; rlEmail?: boolean; rlIp?: boolean; e
     }
     return new Response('inesperado', { status: 500 });
   };
+  const r2Default: Record<string, Uint8Array | null> = Object.fromEntries(
+    MATERIAIS.flatMap((m) => m.arquivos)
+      .filter((a) => a.r2Key)
+      .map((a) => [a.r2Key!, new TextEncoder().encode(`r2:${a.id}`)]),
+  );
+  const r2Store = { ...r2Default, ...(opts.r2 ?? {}) };
+  const r2Bucket: R2BucketLike | undefined = opts.semR2
+    ? undefined
+    : {
+        get: async (key: string) => {
+          r2Gets.push(key);
+          if (opts.r2Erro) throw new Error('R2 indisponivel');
+          const data = r2Store[key];
+          if (!data) return null;
+          return { body: r2Stream(data), size: data.byteLength };
+        },
+      };
   const env: Env = {
     RESEND_API_KEY: 're_teste', TURNSTILE_SECRET: 'ts_teste', CONFIRM_SECRET: SECRET,
     FROM: tomlVar('FROM'), MATERIAL_FROM: tomlVar('MATERIAL_FROM'), REPLY_TO: tomlVar('REPLY_TO'),
@@ -54,15 +81,18 @@ function setup(opts: { turnstile?: unknown; rlEmail?: boolean; rlIp?: boolean; e
     RL_EMAIL: { limit: async ({ key }) => (rl.push('email:' + key), { success: opts.rlEmail ?? true }) },
     RL_IP: { limit: async ({ key }) => (rl.push('ip:' + key), { success: opts.rlIp ?? true }) },
     DB: db,
+    MATERIAIS_R2: r2Bucket,
     GA4_MEASUREMENT_ID: tomlVar('GA4_MEASUREMENT_ID'),
     GA4_API_SECRET: opts.semGa4 ? undefined : 'mp_teste_segredo',
   };
   const bytes: Record<string, ArrayBuffer> = Object.fromEntries(
-    MATERIAIS.flatMap((m) => m.arquivos).map((a) => [a.id, new TextEncoder().encode(`conteudo:${a.id}`).buffer as ArrayBuffer]));
+    MATERIAIS.flatMap((m) => m.arquivos)
+      .filter((a) => !a.r2Key)
+      .map((a) => [a.id, new TextEncoder().encode(`conteudo:${a.id}`).buffer as ArrayBuffer]));
   let clock = opts.now ?? NOW;
   const run = (req: Request) => handle(req, env, { fetch: fetchFn as typeof fetch, now: () => clock, file: async (id) => bytes[id] ?? null, waitUntil });
   const avanca = (ms: number) => void (clock += ms);
-  return { run, calls, rl, env, db: db.raw, settle, pendentes: () => pending.length, avanca, rows: async (t: string) => (await settle(), rows(db.raw, t)), waitUntil };
+  return { run, calls, rl, r2Gets, env, db: db.raw, settle, pendentes: () => pending.length, avanca, rows: async (t: string) => (await settle(), rows(db.raw, t)), waitUntil };
 }
 
 const pedir = (fields: Record<string, string>, headers: Record<string, string> = {}) =>
@@ -174,15 +204,125 @@ test('M8: link expirado, adulterado ou de outro tipo não entrega nada', async (
   assert.equal(loc(await s.run(baixar(''))), 'https://guifav.dev/');
 });
 
-test('M9: o deploy leva os arquivos de todos os materiais do catálogo', () => {
+test('M9: o deploy leva os arquivos do bundle e configura o R2 para os arquivos grandes', () => {
   assert.match(TOML, /^main = "src\/worker\.ts"$/m);
   assert.match(TOML, /\[\[rules\]\]\ntype = "Data"\nglobs = \["\*\*\/\*\.xlsx", "\*\*\/\*\.pdf"\]/);
+  assert.match(TOML, /\[\[r2_buckets\]\]\nbinding = "MATERIAIS_R2"\nbucket_name = "blog-materiais"/);
   const worker = readFileSync(new URL('../src/worker.ts', import.meta.url), 'utf-8');
-  for (const a of MATERIAIS.flatMap((m) => m.arquivos)) {
-    assert.ok(worker.includes(`'${a.id}':`), `worker.ts não liga o arquivo ${a.id}`);
-    assert.ok(worker.includes(`../materiais/${a.nome}`), `worker.ts não importa ${a.nome}`);
-    assert.ok(existsSync(new URL(`../materiais/${a.nome}`, import.meta.url)), `materiais/${a.nome} ausente`);
+  for (const m of MATERIAIS) {
+    assert.ok(m.pagina.startsWith('/') && m.pagina.endsWith('/'), `${m.id}: página fora do formato ${m.pagina}`);
+    for (const a of m.arquivos) {
+      if (a.r2Key) {
+        assert.ok(!worker.includes(a.nome), `worker.ts não deve embutir o arquivo do R2 ${a.nome}`);
+        assert.ok(!existsSync(new URL(`../materiais/${a.nome}`, import.meta.url)), `arquivo do R2 não deve entrar em materiais/${a.nome}`);
+      } else {
+        assert.ok(worker.includes(`'${a.id}':`), `worker.ts não liga o arquivo ${a.id}`);
+        assert.ok(worker.includes(`../materiais/${a.nome}`), `worker.ts não importa ${a.nome}`);
+        assert.ok(existsSync(new URL(`../materiais/${a.nome}`, import.meta.url)), `materiais/${a.nome} ausente`);
+      }
+    }
   }
+});
+
+// ---------------------------------------------------------------- Livro via R2 (issue #183)
+
+const okLivro = {
+  email: 'Leitor@Exemplo.com ',
+  material: 'livro-desbloqueando-a-inteligencia-artificial',
+  'cf-turnstile-response': 'tok',
+};
+
+test('L1: pedido do livro redireciona para /materiais/.../enviado/, manda o link do PDF e grava interesse ESTRATEGIA_IA', async () => {
+  const s = setup();
+  const r = await s.run(pedir(okLivro));
+  assert.equal(r.status, 303);
+  assert.equal(loc(r), 'https://guifav.dev/materiais/livro-desbloqueando-a-inteligencia-artificial/enviado/');
+  const sent = emails(s.calls);
+  assert.equal(sent.length, 1);
+  const b = sent[0].body;
+  assert.equal(b.subject, 'Seu link: Desbloqueando a Inteligência Artificial');
+  assert.deepEqual(b.tags, [{ name: 'material', value: 'livro-desbloqueando-a-inteligencia-artificial' }, { name: 'insights', value: 'nao' }]);
+  const l = links(b.html);
+  assert.equal(l.length, 1);
+  assert.ok(l[0].startsWith('https://insights.guifav.dev/material/download?f=livro-desbloqueando-ia-pdf&'));
+  const c = await s.rows('conversions');
+  assert.equal(c.length, 1);
+  assert.equal(c[0].action, 'material_request');
+  assert.equal(c[0].material, 'livro-desbloqueando-a-inteligencia-artificial');
+  assert.equal(c[0].interests, JSON.stringify([INTERESSES.ESTRATEGIA_IA]));
+});
+
+test('L2: Turnstile reprovado no livro volta para /materiais/.../#erro-verificacao', async () => {
+  const s = setup({ turnstile: { success: false } });
+  const r = await s.run(pedir(okLivro));
+  assert.equal(r.status, 303);
+  assert.equal(loc(r), 'https://guifav.dev/materiais/livro-desbloqueando-a-inteligencia-artificial/#erro-verificacao');
+  assert.equal(emails(s.calls).length, 0);
+});
+
+test('L3: link expirado ou adulterado do livro volta para /materiais/.../#link-expirado', async () => {
+  const q = await signMaterialLink('livro-desbloqueando-ia-pdf', 'leitor@exemplo.com', NOW, SECRET);
+  const expirado = await setup({ now: NOW + MATERIAL_TTL_MS + 60e3 }).run(baixar(q));
+  assert.equal(loc(expirado), 'https://guifav.dev/materiais/livro-desbloqueando-a-inteligencia-artificial/#link-expirado');
+  const outro = await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', NOW, SECRET);
+  const adulterado = await setup().run(baixar(outro.replace('f=planilha-custos-ia', 'f=livro-desbloqueando-ia-pdf')));
+  assert.equal(loc(adulterado), 'https://guifav.dev/materiais/livro-desbloqueando-a-inteligencia-artificial/#link-expirado');
+});
+
+test('L4: download do livro lê em stream do R2, devolve o PDF com content-length e grava conversão e GA4', async () => {
+  const pdf = new TextEncoder().encode('%PDF-1.7 conteudo do livro');
+  const s = setup({ r2: { 'livro/desbloqueando-a-inteligencia-artificial.pdf': pdf } });
+  const q = await signMaterialLink('livro-desbloqueando-ia-pdf', 'leitor@exemplo.com', NOW, SECRET);
+  const r = await s.run(baixar(q));
+  assert.equal(r.status, 200);
+  assert.deepEqual(s.r2Gets, ['livro/desbloqueando-a-inteligencia-artificial.pdf']);
+  assert.equal(r.headers.get('content-type'), 'application/pdf');
+  assert.equal(r.headers.get('content-disposition'), 'attachment; filename="desbloqueando-a-inteligencia-artificial-guilherme-favaron.pdf"');
+  assert.equal(r.headers.get('content-length'), String(pdf.byteLength));
+  assert.equal(r.headers.get('cache-control'), 'private, no-store');
+  assert.equal(r.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(r.headers.get('referrer-policy'), 'no-referrer');
+  assert.equal(await r.text(), '%PDF-1.7 conteudo do livro');
+  const c = await s.rows('conversions');
+  assert.equal(c.length, 1);
+  assert.equal(c[0].action, 'material_download');
+  assert.equal(c[0].material, 'livro-desbloqueando-a-inteligencia-artificial');
+  assert.equal(c[0].file, 'livro-desbloqueando-ia-pdf');
+  const g = ga4(s.calls);
+  assert.equal(g.length, 1);
+  assert.equal(g[0].body.events[0].params.material_id, 'livro-desbloqueando-a-inteligencia-artificial');
+  assert.equal(g[0].body.events[0].params.file_id, 'livro-desbloqueando-ia-pdf');
+});
+
+test('L5: objeto ausente, binding ausente ou erro no R2 devolvem 500 arquivo indisponível sem gravar conversão', async () => {
+  const q = await signMaterialLink('livro-desbloqueando-ia-pdf', 'leitor@exemplo.com', NOW, SECRET);
+  for (const opts of [
+    { r2: { 'livro/desbloqueando-a-inteligencia-artificial.pdf': null } },
+    { semR2: true },
+    { r2Erro: true },
+  ]) {
+    const s = setup(opts);
+    let r: Response | undefined;
+    await capturaErros(async () => {
+      r = await s.run(baixar(q));
+      await s.settle();
+    });
+    assert.equal(r!.status, 500, JSON.stringify(opts));
+    assert.equal(await r!.text(), 'arquivo indisponível', JSON.stringify(opts));
+    assert.equal((await s.rows('conversions')).length, 0, JSON.stringify(opts));
+  }
+});
+
+test('L6: materiais anteriores continuam em /ferramentas/<id>/ sem tocar no R2', async () => {
+  const s = setup();
+  for (const [id, fileId] of [['planilha-custos-ia', 'planilha-custos-ia'], ['mapa-decisao-ia', 'mapa-decisao-pdf']] as const) {
+    const r = await s.run(pedir({ ...ok, material: id }));
+    assert.equal(loc(r), `https://guifav.dev/ferramentas/${id}/enviado/`);
+    const dl = await s.run(baixar(await signMaterialLink(fileId, 'leitor@exemplo.com', NOW, SECRET)));
+    assert.equal(dl.status, 200);
+    assert.equal(dl.headers.get('content-length'), null);
+  }
+  assert.deepEqual(s.r2Gets, []);
 });
 
 // ---------------------------------------------------------------- Conversões (issue #97)
