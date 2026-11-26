@@ -20,12 +20,143 @@
   <link rel="canonical" href="https://guifav.dev/ferramentas/planilha-custos-ia/">
   <link rel="stylesheet" href="/assets/site.css?v=202611232330">
   <style>
+    :root{--c-inf:#171717;--c-around:#5b6b7c;--c-waste:#b8432e;--c-eng:#FFBE00;--c-eng-edge:rgba(138,100,0,.35);--bar-track:#ececec;--sql-big:#404040;--num-sep:"."}
+    [data-theme="dark"]{--c-inf:#e5e5e5;--c-around:#8ea1b5;--c-waste:#dc755c;--c-eng:#FFBE00;--c-eng-edge:transparent;--bar-track:#262626;--sql-big:#8a8a8a}
+    html[lang="en"]{--num-sep:","}
+
+    /* Hero: pilha 3D ampliada, respeitando margem e coluna de texto */
+    .sheet-hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:32px;align-items:center}
+    .sheet-hero h1{font-size:clamp(31px,3.8vw,40px)}
+    .sheet-copy>:last-child{margin-bottom:0}
+    .sheet-stack{position:relative;width:100%;aspect-ratio:1.36;perspective:1150px}
+    @media(min-width:1040px){.sheet-stack{width:calc(100% + 24px);margin-right:-24px}}
+    .sheet-card{position:absolute;left:0;bottom:2%;width:91%;height:auto;border-radius:12px;border:1px solid rgba(0,0,0,.18);box-shadow:0 22px 48px -14px rgba(0,0,0,.36),0 8px 18px -6px rgba(0,0,0,.2);transition:transform .45s cubic-bezier(.2,.75,.2,1),filter .45s}
+    [data-theme="dark"] .sheet-card{border-color:rgba(255,255,255,.14);box-shadow:0 26px 56px -14px rgba(0,0,0,.85),0 8px 22px -6px rgba(0,0,0,.65)}
+    .sheet-front{z-index:3;transform:translate3d(0,0,0) rotateY(-13deg) rotateX(5deg);box-shadow:0 26px 56px -14px rgba(0,0,0,.42),0 10px 22px -6px rgba(0,0,0,.24)}
+    [data-theme="dark"] .sheet-front{border-color:rgba(255,255,255,.18);box-shadow:0 28px 60px -14px rgba(0,0,0,.9),0 10px 24px -6px rgba(0,0,0,.7)}
+    .sheet-mid{z-index:2;transform:translate3d(7%,-17%,-45px) rotateY(-13deg) rotateX(5deg) scale(.97);filter:brightness(.85)}
+    .sheet-back{z-index:1;transform:translate3d(14%,-34%,-90px) rotateY(-13deg) rotateX(5deg) scale(.94);filter:brightness(.7)}
+    @media(min-width:901px) and (hover:hover) and (pointer:fine) and (prefers-reduced-motion:no-preference){
+      .sheet-stack:hover .sheet-front{transform:translate3d(0,1.5%,8px) rotateY(-10deg) rotateX(3deg)}
+      .sheet-stack:hover .sheet-mid{transform:translate3d(7.8%,-19%,-45px) rotateY(-10deg) rotateX(3deg) scale(.97);filter:brightness(.9)}
+      .sheet-stack:hover .sheet-back{transform:translate3d(15.5%,-37%,-90px) rotateY(-10deg) rotateX(3deg) scale(.94);filter:brightness(.78)}
+    }
+    @media(max-width:900px){
+      .sheet-hero{grid-template-columns:1fr;gap:32px}
+      .sheet-stack{width:100%;max-width:580px;margin:0 auto;aspect-ratio:1.42;perspective:1000px}
+      .sheet-card{left:0;bottom:2%;width:91%}
+      .sheet-front{transform:translate3d(0,0,0) rotateY(-8deg) rotateX(3deg)}
+      .sheet-mid{transform:translate3d(6.5%,-16%,-35px) rotateY(-8deg) rotateX(3deg) scale(.97)}
+      .sheet-back{transform:translate3d(13%,-32%,-70px) rotateY(-8deg) rotateX(3deg) scale(.94)}
+    }
+    @media(prefers-reduced-motion:reduce){.sheet-card{transition:none}}
     .material-form{max-width:560px;margin:0 0 16px}.material-form label{display:block;font-size:14px;color:var(--text-secondary);margin-bottom:6px}
-    .material-row{display:flex;gap:8px;flex-wrap:wrap}.material-row input{flex:1 1 220px;min-width:0;font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text)}
+    .material-row{display:flex;gap:8px;flex-wrap:wrap}.material-row input{flex:1 1 180px;min-width:0;font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text)}
     .material-row button{font:inherit;font-size:15px;font-weight:600;padding:10px 18px;border:0;border-radius:8px;background:var(--hl);color:#171717;cursor:pointer}.material-row button:hover{background:var(--hl-hover)}
     .material-form .material-check{display:flex;gap:8px;align-items:flex-start;margin-top:12px;font-size:14px;color:var(--text-secondary)}.material-check input{margin-top:3px}
     .cf-turnstile{margin-top:12px}.material-note{font-size:13px;color:var(--text-secondary);margin:12px 0 0;line-height:1.6}.material-note a{color:inherit;text-decoration:underline}
     .form-error{display:none;max-width:560px;padding:12px 14px;margin:0 0 16px;border:1px solid var(--hl);border-radius:8px;font-size:14px}.form-error:target{display:block}
+
+    /* Secao 1: O que ela calcula - grafico de barras empilhadas + lista compacta */
+    .cost-chart{margin:0 0 28px;border:1px solid var(--border);border-radius:14px;background:var(--bg-card);color:var(--text);padding:22px 24px 18px}
+    .cost-legend{list-style:none;display:flex;flex-wrap:wrap;gap:8px 20px;margin:0 0 16px;font-size:13px;font-weight:600;color:var(--text)}
+    .cost-legend li{display:inline-flex;align-items:center;gap:7px}
+    .cost-dot{width:11px;height:11px;border-radius:3px;flex:0 0 auto;display:inline-block}
+    .cost-dot-1{background:var(--c-inf)}.cost-dot-2{background:var(--c-around)}.cost-dot-3{background:var(--c-waste)}.cost-dot-4{background:var(--c-eng);box-shadow:inset 0 0 0 1px var(--c-eng-edge)}
+    .cost-chart svg{display:block;width:100%;height:auto;font-family:inherit}
+    .cost-chart .cost-svg-m{display:none}
+    .cost-grid{stroke:var(--border);stroke-width:1}
+    .cost-axis{font-size:11.5px;fill:var(--text-secondary);font-variant-numeric:tabular-nums}
+    .cost-opt{font-size:13px;font-weight:600;fill:var(--text)}
+    .cost-tot{font-size:13px;font-weight:700;fill:var(--text);font-variant-numeric:tabular-nums;animation:cost-tot 7.5s ease -3.6s both infinite}
+    .cost-dash{fill:none;stroke:var(--text-secondary);stroke-width:1.6;stroke-dasharray:6 5;opacity:.65}
+    .cost-wait{font-size:12.5px;font-style:italic;fill:var(--text-secondary)}
+    .bar-seg{transform-box:fill-box;transform-origin:0 50%}
+    .bar-s1{fill:var(--c-inf);animation:bar-s1 7.5s cubic-bezier(.25,.8,.25,1) -3.6s both infinite}
+    .bar-s2{fill:var(--c-around);animation:bar-s2 7.5s cubic-bezier(.25,.8,.25,1) -3.6s both infinite}
+    .bar-s3{fill:var(--c-waste);animation:bar-s3 7.5s cubic-bezier(.25,.8,.25,1) -3.6s both infinite}
+    .bar-s4{fill:var(--c-eng);stroke:var(--c-eng-edge);stroke-width:.75;animation:bar-s4 7.5s cubic-bezier(.25,.8,.25,1) -3.6s both infinite}
+    .bar-pulse{fill:#fff;opacity:0;pointer-events:none;animation:bar-pulse 7.5s ease-in-out -3.6s both infinite}
+    .cost-cap{margin:12px 0 0;font-size:12.5px;color:var(--text-secondary);line-height:1.5}
+    @keyframes bar-s1{0%{transform:scaleX(0);opacity:1}10%,92%{transform:scaleX(1);opacity:1}97%,100%{transform:scaleX(1);opacity:0}}
+    @keyframes bar-s2{0%,10%{transform:scaleX(0);opacity:1}20%,92%{transform:scaleX(1);opacity:1}97%,100%{transform:scaleX(1);opacity:0}}
+    @keyframes bar-s3{0%,20%{transform:scaleX(0);opacity:1}30%,92%{transform:scaleX(1);opacity:1}97%,100%{transform:scaleX(1);opacity:0}}
+    @keyframes bar-s4{0%,30%{transform:scaleX(0);opacity:1}46%,92%{transform:scaleX(1);opacity:1}97%,100%{transform:scaleX(1);opacity:0}}
+    @keyframes cost-tot{0%,40%{opacity:0}50%,92%{opacity:1}97%,100%{opacity:0}}
+    @keyframes bar-pulse{0%,56%,74%,100%{opacity:0}65%{opacity:.32}}
+    .cost-lines{list-style:none;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px 32px}
+    .cost-lines li{padding:2px 0 2px 14px;border-left:3px solid var(--border)}
+    .cost-lines li.cl-1{border-left-color:var(--c-inf)}
+    .cost-lines li.cl-2{border-left-color:var(--c-around)}
+    .cost-lines li.cl-3{border-left-color:var(--c-waste)}
+    .cost-lines li.cl-4{border-left-color:var(--c-eng)}
+    .cost-lines h3{font-size:15.5px;font-weight:650;margin:0 0 4px;color:var(--text)}
+    .cost-lines p{font-size:14px;color:var(--text-secondary);line-height:1.6;margin:0}
+    @media(max-width:640px){
+      .cost-chart{padding:16px 14px 14px}
+      .cost-chart .cost-svg-d{display:none}
+      .cost-chart .cost-svg-m{display:block}
+      .cost-lines{grid-template-columns:1fr;gap:16px}
+    }
+    @media(prefers-reduced-motion:reduce){
+      .bar-s1,.bar-s2,.bar-s3,.bar-s4,.cost-tot{animation:none!important;transform:none!important;opacity:1!important}
+      .bar-pulse{animation:none!important;opacity:0!important}
+    }
+
+    /* Secao 3: O que foi medido - numeros grandes + comparacao SQL animada */
+    @property --in-k{syntax:"<integer>";inherits:false;initial-value:8}
+    @property --in-r{syntax:"<integer>";inherits:false;initial-value:981}
+    @property --out-n{syntax:"<integer>";inherits:false;initial-value:424}
+    @property --gpu-r{syntax:"<integer>";inherits:false;initial-value:447}
+    .measured-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px 40px;margin:0 0 32px;padding:24px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+    .stat-block h3{font-size:14px;font-weight:650;color:var(--text);margin:0 0 6px}
+    .stat-block p{font-size:14px;color:var(--text-secondary);line-height:1.6;margin:0}
+    .stat-val{font-size:clamp(30px,4.2vw,42px);font-weight:800;letter-spacing:-1.4px;line-height:1.1;color:var(--text);margin:0 0 10px;font-variant-numeric:tabular-nums}
+    .stat-anim{display:none}
+    .stat-arr{color:var(--hl-text);font-weight:700}
+    .stat-out{color:var(--hl-text)}
+    .stat-unit{font-size:.62em;font-weight:700;color:var(--text-secondary);letter-spacing:-.5px}
+    @media(prefers-reduced-motion:no-preference){
+      @supports (animation-timeline:view()){
+        .stat-static{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+        .stat-anim{display:inline}
+        .stat-in::before{counter-reset:ink var(--in-k) inr var(--in-r);content:counter(ink) var(--num-sep) counter(inr);animation:cnt-in linear both;animation-timeline:view();animation-range:entry 10% cover 40%}
+        .stat-out::before{counter-reset:outn var(--out-n);content:counter(outn);animation:cnt-out linear both;animation-timeline:view();animation-range:entry 10% cover 40%}
+        .stat-gpu::before{counter-reset:gpur var(--gpu-r);content:"1" var(--num-sep) counter(gpur);animation:cnt-gpu linear both;animation-timeline:view();animation-range:entry 10% cover 40%}
+      }
+    }
+    @keyframes cnt-in{0%{--in-k:1;--in-r:100;opacity:.35}25%{opacity:1}60%,100%{--in-k:8;--in-r:981;opacity:1}}
+    @keyframes cnt-out{0%{--out-n:40;opacity:.35}25%{opacity:1}60%,100%{--out-n:424;opacity:1}}
+    @keyframes cnt-gpu{0%{--gpu-r:100;opacity:.35}25%{opacity:1}60%,100%{--gpu-r:447;opacity:1}}
+    .sql-box{border:1px solid var(--border);border-radius:14px;background:var(--bg-card);color:var(--text);padding:24px 24px 20px;margin:0 0 24px}
+    .sql-box h3{font-size:17px;font-weight:700;margin:0 0 6px;color:var(--text)}
+    .sql-box p{font-size:14px;color:var(--text-secondary);line-height:1.6;margin:0 0 18px;max-width:700px}
+    .sql-box svg{display:block;width:100%;height:auto;font-family:inherit}
+    .sql-box .sql-svg-m{display:none}
+    .sql-lbl{font-size:13.5px;font-weight:600;fill:var(--text)}
+    .sql-val-big{font-size:13.5px;font-weight:700;fill:var(--text);font-variant-numeric:tabular-nums}
+    .sql-val-sm{font-size:13.5px;font-weight:750;fill:var(--hl-text);font-variant-numeric:tabular-nums}
+    .sql-track{fill:var(--bar-track)}
+    .sql-big{fill:var(--sql-big);transform-box:fill-box;transform-origin:0 50%;animation:sql-shrink 7s cubic-bezier(.4,0,.2,1) infinite}
+    .sql-small{fill:var(--hl);stroke:var(--hl);stroke-width:2px;vector-effect:non-scaling-stroke}
+    .sql-guide{stroke:var(--hl);stroke-width:1.6;stroke-dasharray:3 3;animation:sql-badge 7s ease-in-out infinite}
+    .sql-pill{fill:var(--bg);stroke:var(--hl);stroke-width:1.6;animation:sql-badge 7s ease-in-out infinite}
+    .sql-word{font-size:12.5px;font-weight:800;letter-spacing:1.4px;fill:var(--hl-text);animation:sql-badge 7s ease-in-out infinite}
+    .sql-chev{fill:none;stroke:var(--hl-text);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;animation:sql-badge 7s ease-in-out infinite}
+    @keyframes sql-shrink{0%,18%{transform:scaleX(1)}46%,72%{transform:scaleX(.004)}88%,100%{transform:scaleX(1)}}
+    @keyframes sql-badge{0%,16%,88%,100%{opacity:.55}34%,72%{opacity:1}}
+    .measured-note{font-size:14.5px;color:var(--text-secondary);line-height:1.7;margin:0}
+    .measured-note strong{color:var(--text);font-weight:650}
+    @media(max-width:640px){
+      .measured-stats{grid-template-columns:1fr;gap:22px;padding:20px 0}
+      .sql-box{padding:18px 14px 16px}
+      .sql-box .sql-svg-d{display:none}
+      .sql-box .sql-svg-m{display:block}
+    }
+    @media(prefers-reduced-motion:reduce){
+      .sql-big{animation:none!important;transform:none!important}
+      .sql-guide,.sql-pill,.sql-word,.sql-chev{animation:none!important;opacity:1!important}
+    }
   </style>
   <script async defer src="https://challenges.cloudflare.com/turnstile/v0/api.js"></script>
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-K7Y87QNCX8"></script>
@@ -51,39 +182,195 @@
       </div>
     </nav>
 
-    <header class="hero">
-      <div class="eyebrow" data-i18n="eyebrow">Material do vídeo · canal @guifav</div>
-      <h1 data-i18n="h1">Planilha de custos de IA em produção</h1>
-      <p class="subtitle" data-i18n="sub">Quanto custa responder perguntas sobre os dados da sua empresa com IA: API, assinatura por usuário, GPU própria ou plataforma pronta, em mil, 10 mil e 100 mil consultas por mês. Você troca as premissas e a planilha refaz a conta.</p>
-      <p id="erro-verificacao" class="form-error" data-i18n="f_err">A verificação antirrobô não passou. Tente de novo.</p>
-      <p id="link-expirado" class="form-error" data-i18n="f_exp">Esse link de download expirou ou não é válido. Peça um novo abaixo: ele chega em alguns segundos.</p>
-      <form id="receber" class="material-form" data-site-form data-ga-client-id data-clarity-mask="true" method="post" action="https://insights.guifav.dev/material">
-        <input type="hidden" name="material" value="planilha-custos-ia">
-        <input type="hidden" name="ga_cid" value="">
-        <label for="material-email" data-i18n="f_label">Seu email, para receber o link de download</label>
-        <div class="material-row">
-          <input id="material-email" type="email" name="email" required autocomplete="email" maxlength="254" placeholder="voce@exemplo.com">
-          <button type="submit" data-i18n="f_btn">Receber a planilha</button>
+    <header class="hero sheet-hero">
+      <div class="sheet-copy">
+        <div class="eyebrow" data-i18n="eyebrow">Material do vídeo · canal @guifav</div>
+        <h1 data-i18n="h1">Planilha de custos de IA em produção</h1>
+        <p class="subtitle" data-i18n="sub">Quanto custa responder perguntas sobre os dados da sua empresa com IA: API, assinatura por usuário, GPU própria ou plataforma pronta, em mil, 10 mil e 100 mil consultas por mês. Você troca as premissas e a planilha refaz a conta.</p>
+        <p id="erro-verificacao" class="form-error" data-i18n="f_err">A verificação antirrobô não passou. Tente de novo.</p>
+        <p id="link-expirado" class="form-error" data-i18n="f_exp">Esse link de download expirou ou não é válido. Peça um novo abaixo: ele chega em alguns segundos.</p>
+        <form id="receber" class="material-form" data-site-form data-ga-client-id data-clarity-mask="true" method="post" action="https://insights.guifav.dev/material">
+          <input type="hidden" name="material" value="planilha-custos-ia">
+          <input type="hidden" name="ga_cid" value="">
+          <label for="material-email" data-i18n="f_label">Seu email, para receber o link de download</label>
+          <div class="material-row">
+            <input id="material-email" type="email" name="email" required autocomplete="email" maxlength="254" placeholder="voce@exemplo.com">
+            <button type="submit" data-i18n="f_btn">Receber a planilha</button>
+          </div>
+          <label class="material-check"><input type="checkbox" name="insights" value="sim"><span data-i18n="f_insights">Receber também os Expert Insights, os meus artigos por email. A inscrição só vale depois que você confirma pelo link.</span></label>
+          <div class="cf-turnstile" data-sitekey="0x4AAAAAAF8raRhCn4ciudgW" data-language="pt-br"></div>
+          <p class="material-note"><a href="/privacidade/#materiais" data-i18n="f_priv">Como seus dados são usados</a></p>
+        </form>
+        <div class="hero-cta">
+          <a class="btn btn-primary" href="https://calendar.app.google/VyG67Nq5p6zsstAt8" target="_blank" rel="noopener" data-cta-location="hero" data-i18n="cta">Revisar a conta do seu projeto comigo &#8599;</a>
         </div>
-        <label class="material-check"><input type="checkbox" name="insights" value="sim"><span data-i18n="f_insights">Receber também os Expert Insights, os meus artigos por email. A inscrição só vale depois que você confirma pelo link.</span></label>
-        <div class="cf-turnstile" data-sitekey="0x4AAAAAAF8raRhCn4ciudgW" data-language="pt-br"></div>
-        <p class="material-note"><span data-i18n="f_note">O link chega no seu email e vale por 7 dias. Quando você pede a planilha, registro o seu email, a data e os temas dela, e também se você baixou o arquivo, para entender o que interessa a quem me acompanha e, quando fizer sentido, falar com você sobre o assunto. Para sair desse registro, escreva para contact@guifav.dev.</span> <a href="/privacidade/#materiais" data-i18n="f_priv">Como seus dados são usados</a>.</p>
-      </form>
-      <div class="hero-cta">
-        <a class="btn" href="mailto:contact@guifav.dev?subject=Revisar%20conta%20do%20projeto%20IA" data-cta-location="hero" data-i18n="cta">Revisar a conta do seu projeto comigo</a>
+        <p class="section-intro" data-i18n="open">Abre no Excel e no Google Sheets (Arquivo &gt; Importar). Versão 1.0, preços conferidos em 22/11/2026.</p>
       </div>
-      <p class="section-intro" data-i18n="open">Abre no Excel e no Google Sheets (Arquivo &gt; Importar). Versão 1.0, preços conferidos em 22/11/2026.</p>
+      <div class="sheet-stack">
+        <img class="sheet-card sheet-back" src="/ferramentas/planilha-custos-ia/img/planilha-precos_api.webp" width="1200" height="666" loading="lazy" decoding="async" aria-hidden="true" alt="">
+        <img class="sheet-card sheet-mid" src="/ferramentas/planilha-custos-ia/img/planilha-premissas.webp" width="1200" height="666" loading="lazy" decoding="async" aria-hidden="true" alt="">
+        <img class="sheet-card sheet-front" src="/ferramentas/planilha-custos-ia/img/planilha-cenarios.webp" width="1200" height="666" loading="eager" decoding="async" alt="Aba Cenários da planilha de custos de IA em produção, com a tabela das quatro linhas de custo nas cinco opções e o gráfico de custo mensal por opção e volume" data-i18n-alt="sheet_alt">
+      </div>
     </header>
 
     <section>
       <div class="section-label" data-i18n="s1">O que ela calcula</div>
       <p class="section-intro" data-i18n="s1_p">A fatura de tokens é só uma das quatro linhas de custo. A planilha soma as quatro para cada opção e cada volume, e mostra em que volume uma GPU própria empata com a API.</p>
-      <div class="grid-2 cols-2">
-        <div class="card"><h3 data-i18n="l1_t">1. Inferência</h3><p data-i18n="l1_d">Tokens de entrada e de saída de cada consulta, pelo preço de cada provedor, com roteamento entre modelo pequeno e grande, cache e lote ligados ou desligados.</p></div>
-        <div class="card"><h3 data-i18n="l2_t">2. Em volta do modelo</h3><p data-i18n="l2_d">Contêineres, banco, logs, monitoramento e, na GPU própria, disco para os pesos e telemetria da placa.</p></div>
-        <div class="card"><h3 data-i18n="l3_t">3. Desperdício</h3><p data-i18n="l3_d">Assento pago para quem quase não usa e GPU ligada sem consulta para responder.</p></div>
-        <div class="card"><h3 data-i18n="l4_t">4. Engenharia</h3><p data-i18n="l4_d">Horas para construir e manter permissões, registro de cada consulta, testes de acerto, integração com as fontes e, na GPU própria, o servidor de inferência.</p></div>
-      </div>
+      <figure class="cost-chart">
+        <ul class="cost-legend" aria-hidden="true">
+          <li><span class="cost-dot cost-dot-1"></span><span data-i18n="l1_t">1. Inferência</span></li>
+          <li><span class="cost-dot cost-dot-2"></span><span data-i18n="l2_t">2. Em volta do modelo</span></li>
+          <li><span class="cost-dot cost-dot-3"></span><span data-i18n="l3_t">3. Desperdício</span></li>
+          <li><span class="cost-dot cost-dot-4"></span><span data-i18n="l4_t">4. Engenharia</span></li>
+        </ul>
+        <svg class="cost-svg-d" viewBox="0 0 780 278" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="cost-t-d" aria-describedby="cost-d-d" focusable="false">
+          <title id="cost-t-d" data-i18n="c_svg_t">Custo mensal por opção em 10.000 consultas por mês</title>
+          <desc id="cost-d-d" data-i18n="c_svg_d">Gráfico de barras empilhadas com as quatro linhas de custo em dólares por mês: API sem otimização 6.116,35, API otimizada 5.776,29, Assinatura 3.133,69, GPU própria 8.463,74 e Plataforma pronta aguarda premissa.</desc>
+          <defs>
+            <clipPath id="cb-d1"><rect x="168" y="24" width="318.05" height="28" rx="4"/></clipPath>
+            <clipPath id="cb-d2"><rect x="168" y="68" width="300.37" height="28" rx="4"/></clipPath>
+            <clipPath id="cb-d3"><rect x="168" y="112" width="162.95" height="28" rx="4"/></clipPath>
+            <clipPath id="cb-d4"><rect x="168" y="156" width="440.11" height="28" rx="4"/></clipPath>
+          </defs>
+          <g aria-hidden="true">
+            <line class="cost-grid" x1="168" y1="14" x2="168" y2="244"/>
+            <line class="cost-grid" x1="272" y1="14" x2="272" y2="244"/>
+            <line class="cost-grid" x1="376" y1="14" x2="376" y2="244"/>
+            <line class="cost-grid" x1="480" y1="14" x2="480" y2="244"/>
+            <line class="cost-grid" x1="584" y1="14" x2="584" y2="244"/>
+            <text class="cost-axis" x="168" y="264" text-anchor="middle">0</text>
+            <text class="cost-axis" x="272" y="264" text-anchor="middle" data-i18n="c_x2">2.000</text>
+            <text class="cost-axis" x="376" y="264" text-anchor="middle" data-i18n="c_x4">4.000</text>
+            <text class="cost-axis" x="480" y="264" text-anchor="middle" data-i18n="c_x6">6.000</text>
+            <text class="cost-axis" x="584" y="264" text-anchor="middle" data-i18n="c_x8">8.000</text>
+          </g>
+          <g>
+            <text class="cost-opt" x="156" y="43" text-anchor="end" data-i18n="c_o1">API sem otimização</text>
+            <g clip-path="url(#cb-d1)">
+              <rect class="bar-seg bar-s1" x="168" y="24" width="22.72" height="28"/>
+              <rect class="bar-seg bar-s2" x="190.72" y="24" width="13.00" height="28"/>
+              <rect class="bar-seg bar-s3" x="203.72" y="24" width="1.50" height="28"/>
+              <rect class="bar-seg bar-s4" x="205.22" y="24" width="280.83" height="28"/>
+              <rect class="bar-pulse" x="205.22" y="24" width="280.83" height="28"/>
+            </g>
+            <text class="cost-tot" x="496" y="43" data-i18n="c_t1">US$ 6.116,35</text>
+          </g>
+          <g>
+            <text class="cost-opt" x="156" y="87" text-anchor="end" data-i18n="c_o2">API otimizada</text>
+            <g clip-path="url(#cb-d2)">
+              <rect class="bar-seg bar-s1" x="168" y="68" width="5.32" height="28"/>
+              <rect class="bar-seg bar-s2" x="173.32" y="68" width="13.00" height="28"/>
+              <rect class="bar-seg bar-s3" x="186.32" y="68" width="1.20" height="28"/>
+              <rect class="bar-seg bar-s4" x="187.52" y="68" width="280.85" height="28"/>
+              <rect class="bar-pulse" x="187.52" y="68" width="280.85" height="28"/>
+            </g>
+            <text class="cost-tot" x="478" y="87" data-i18n="c_t2">US$ 5.776,29</text>
+          </g>
+          <g>
+            <text class="cost-opt" x="156" y="131" text-anchor="end" data-i18n="c_o3">Assinatura</text>
+            <g clip-path="url(#cb-d3)">
+              <rect class="bar-seg bar-s1" x="168" y="112" width="87.88" height="28"/>
+              <rect class="bar-seg bar-s3" x="255.88" y="112" width="47.32" height="28"/>
+              <rect class="bar-seg bar-s4" x="303.20" y="112" width="27.75" height="28"/>
+              <rect class="bar-pulse" x="303.20" y="112" width="27.75" height="28"/>
+            </g>
+            <text class="cost-tot" x="341" y="131" data-i18n="c_t3">US$ 3.133,69</text>
+          </g>
+          <g>
+            <text class="cost-opt" x="156" y="175" text-anchor="end" data-i18n="c_o4">GPU própria</text>
+            <g clip-path="url(#cb-d4)">
+              <rect class="bar-seg bar-s1" x="168" y="156" width="1.80" height="28"/>
+              <rect class="bar-seg bar-s2" x="169.80" y="156" width="26.00" height="28"/>
+              <rect class="bar-seg bar-s3" x="195.80" y="156" width="74.84" height="28"/>
+              <rect class="bar-seg bar-s4" x="270.64" y="156" width="337.47" height="28"/>
+              <rect class="bar-pulse" x="270.64" y="156" width="337.47" height="28"/>
+            </g>
+            <text class="cost-tot" x="618" y="175" data-i18n="c_t4">US$ 8.463,74</text>
+          </g>
+          <g>
+            <text class="cost-opt" x="156" y="219" text-anchor="end" data-i18n="c_o5">Plataforma pronta</text>
+            <line class="cost-dash" x1="168" y1="214" x2="608" y2="214"/>
+            <text class="cost-wait" x="618" y="219" data-i18n="c_t5">aguarda premissa</text>
+          </g>
+        </svg>
+        <svg class="cost-svg-m" viewBox="0 0 328 332" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="cost-t-m" aria-describedby="cost-d-m" focusable="false">
+          <title id="cost-t-m" data-i18n="c_svg_t">Custo mensal por opção em 10.000 consultas por mês</title>
+          <desc id="cost-d-m" data-i18n="c_svg_d">Gráfico de barras empilhadas com as quatro linhas de custo em dólares por mês: API sem otimização 6.116,35, API otimizada 5.776,29, Assinatura 3.133,69, GPU própria 8.463,74 e Plataforma pronta aguarda premissa.</desc>
+          <defs>
+            <clipPath id="cb-m1"><rect x="2" y="26" width="220.19" height="20" rx="3"/></clipPath>
+            <clipPath id="cb-m2"><rect x="2" y="86" width="207.95" height="20" rx="3"/></clipPath>
+            <clipPath id="cb-m3"><rect x="2" y="146" width="112.81" height="20" rx="3"/></clipPath>
+            <clipPath id="cb-m4"><rect x="2" y="206" width="304.69" height="20" rx="3"/></clipPath>
+          </defs>
+          <g aria-hidden="true">
+            <line class="cost-grid" x1="2" y1="22" x2="2" y2="304"/>
+            <line class="cost-grid" x1="74" y1="22" x2="74" y2="304"/>
+            <line class="cost-grid" x1="146" y1="22" x2="146" y2="304"/>
+            <line class="cost-grid" x1="218" y1="22" x2="218" y2="304"/>
+            <line class="cost-grid" x1="290" y1="22" x2="290" y2="304"/>
+            <text class="cost-axis" x="2" y="322">0</text>
+            <text class="cost-axis" x="74" y="322" text-anchor="middle" data-i18n="c_x2">2.000</text>
+            <text class="cost-axis" x="146" y="322" text-anchor="middle" data-i18n="c_x4">4.000</text>
+            <text class="cost-axis" x="218" y="322" text-anchor="middle" data-i18n="c_x6">6.000</text>
+            <text class="cost-axis" x="290" y="322" text-anchor="middle" data-i18n="c_x8">8.000</text>
+          </g>
+          <g>
+            <text class="cost-opt" x="2" y="18" data-i18n="c_o1">API sem otimização</text>
+            <text class="cost-tot" x="326" y="18" text-anchor="end" data-i18n="c_t1">US$ 6.116,35</text>
+            <g clip-path="url(#cb-m1)">
+              <rect class="bar-seg bar-s1" x="2" y="26" width="15.73" height="20"/>
+              <rect class="bar-seg bar-s2" x="17.73" y="26" width="9.00" height="20"/>
+              <rect class="bar-seg bar-s3" x="26.73" y="26" width="1.20" height="20"/>
+              <rect class="bar-seg bar-s4" x="27.93" y="26" width="194.26" height="20"/>
+              <rect class="bar-pulse" x="27.93" y="26" width="194.26" height="20"/>
+            </g>
+          </g>
+          <g>
+            <text class="cost-opt" x="2" y="78" data-i18n="c_o2">API otimizada</text>
+            <text class="cost-tot" x="326" y="78" text-anchor="end" data-i18n="c_t2">US$ 5.776,29</text>
+            <g clip-path="url(#cb-m2)">
+              <rect class="bar-seg bar-s1" x="2" y="86" width="3.68" height="20"/>
+              <rect class="bar-seg bar-s2" x="5.68" y="86" width="9.00" height="20"/>
+              <rect class="bar-seg bar-s3" x="14.68" y="86" width="1.00" height="20"/>
+              <rect class="bar-seg bar-s4" x="15.68" y="86" width="194.27" height="20"/>
+              <rect class="bar-pulse" x="15.68" y="86" width="194.27" height="20"/>
+            </g>
+          </g>
+          <g>
+            <text class="cost-opt" x="2" y="138" data-i18n="c_o3">Assinatura</text>
+            <text class="cost-tot" x="326" y="138" text-anchor="end" data-i18n="c_t3">US$ 3.133,69</text>
+            <g clip-path="url(#cb-m3)">
+              <rect class="bar-seg bar-s1" x="2" y="146" width="60.84" height="20"/>
+              <rect class="bar-seg bar-s3" x="62.84" y="146" width="32.76" height="20"/>
+              <rect class="bar-seg bar-s4" x="95.60" y="146" width="19.21" height="20"/>
+              <rect class="bar-pulse" x="95.60" y="146" width="19.21" height="20"/>
+            </g>
+          </g>
+          <g>
+            <text class="cost-opt" x="2" y="198" data-i18n="c_o4">GPU própria</text>
+            <text class="cost-tot" x="326" y="198" text-anchor="end" data-i18n="c_t4">US$ 8.463,74</text>
+            <g clip-path="url(#cb-m4)">
+              <rect class="bar-seg bar-s1" x="2" y="206" width="1.40" height="20"/>
+              <rect class="bar-seg bar-s2" x="3.40" y="206" width="18.00" height="20"/>
+              <rect class="bar-seg bar-s3" x="21.40" y="206" width="51.81" height="20"/>
+              <rect class="bar-seg bar-s4" x="73.21" y="206" width="233.48" height="20"/>
+              <rect class="bar-pulse" x="73.21" y="206" width="233.48" height="20"/>
+            </g>
+          </g>
+          <g>
+            <text class="cost-opt" x="2" y="258" data-i18n="c_o5">Plataforma pronta</text>
+            <text class="cost-wait" x="326" y="258" text-anchor="end" data-i18n="c_t5">aguarda premissa</text>
+            <line class="cost-dash" x1="2" y1="276" x2="326" y2="276"/>
+          </g>
+        </svg>
+        <figcaption class="cost-cap" data-i18n="c_cap">10.000 consultas por mês, valores padrão da planilha, em US$</figcaption>
+      </figure>
+      <ol class="cost-lines">
+        <li class="cl-1"><h3 data-i18n="l1_t">1. Inferência</h3><p data-i18n="l1_d">Tokens de entrada e de saída de cada consulta, pelo preço de cada provedor, com roteamento entre modelo pequeno e grande, cache e lote ligados ou desligados.</p></li>
+        <li class="cl-2"><h3 data-i18n="l2_t">2. Em volta do modelo</h3><p data-i18n="l2_d">Contêineres, banco, logs, monitoramento e, na GPU própria, disco para os pesos e telemetria da placa.</p></li>
+        <li class="cl-3"><h3 data-i18n="l3_t">3. Desperdício</h3><p data-i18n="l3_d">Assento pago para quem quase não usa e GPU ligada sem consulta para responder.</p></li>
+        <li class="cl-4"><h3 data-i18n="l4_t">4. Engenharia</h3><p data-i18n="l4_d">Horas para construir e manter permissões, registro de cada consulta, testes de acerto, integração com as fontes e, na GPU própria, o servidor de inferência.</p></li>
+      </ol>
     </section>
 
     <section>
@@ -99,12 +386,75 @@
     <section>
       <div class="section-label" data-i18n="s3">O que foi medido</div>
       <p class="section-intro" data-i18n="s3_p">Os números que vêm preenchidos são os do vídeo. Os medidos estão marcados como medição na planilha:</p>
-      <div class="grid-2 cols-2">
-        <div class="card"><h3 data-i18n="m1_t">Tokens por consulta</h3><p data-i18n="m1_d">8.981 de entrada e 424 de saída, em média, numa bateria de 224 perguntas no TalkWithData, a plataforma que eu construo.</p></div>
-        <div class="card"><h3 data-i18n="m2_t">Respostas por hora numa GPU</h3><p data-i18n="m2_d">1.447 respostas por hora numa NVIDIA A100 de 40 GB, com um modelo aberto de 8 bilhões de parâmetros (Qwen3-8B no vLLM) e quatro perguntas simultâneas, com p90 de 10,1 segundos. Medido em 23/11/2026.</p></div>
-        <div class="card"><h3 data-i18n="m3_t">Planilha inteira contra pergunta filtrada</h3><p data-i18n="m3_d">Uma planilha de faturamento de 5 mil linhas despejada no contexto gasta 447.568 tokens de entrada; filtrada com SQL antes, a mesma pergunta gasta 554.</p></div>
-        <div class="card"><h3 data-i18n="m4_t">O resto é premissa</h3><p data-i18n="m4_d">Câmbio, salário, infraestrutura, fração de assentos Premium e pico de uso são premissas declaradas, com a origem escrita ao lado. Troque pelas da sua empresa.</p></div>
+      <div class="measured-stats">
+        <div class="stat-block">
+          <div class="stat-val" aria-label="8.981 de entrada para 424 de saída" data-i18n-aria="m1_stat_aria"><span class="stat-static" data-i18n="m1_stat">8.981 &#8594; 424</span><span class="stat-anim" aria-hidden="true"><span class="stat-in"></span><span class="stat-arr"> &#8594; </span><span class="stat-out"></span></span></div>
+          <h3 data-i18n="m1_t">Tokens por consulta</h3>
+          <p data-i18n="m1_d">8.981 de entrada e 424 de saída, em média, numa bateria de 224 perguntas no TalkWithData, a plataforma que eu construo.</p>
+        </div>
+        <div class="stat-block">
+          <div class="stat-val"><span class="stat-static" data-i18n="m2_stat">1.447/h</span><span class="stat-anim" aria-hidden="true"><span class="stat-gpu"></span><span class="stat-unit">/h</span></span></div>
+          <h3 data-i18n="m2_t">Respostas por hora numa GPU</h3>
+          <p data-i18n="m2_d">1.447 respostas por hora numa NVIDIA A100 de 40 GB, com um modelo aberto de 8 bilhões de parâmetros (Qwen3-8B no vLLM) e quatro perguntas simultâneas, com p90 de 10,1 segundos. Medido em 23/11/2026.</p>
+        </div>
       </div>
+      <div class="sql-box">
+        <h3 data-i18n="m3_t">Planilha inteira contra pergunta filtrada</h3>
+        <p data-i18n="m3_d">Uma planilha de faturamento de 5 mil linhas despejada no contexto gasta 447.568 tokens de entrada; filtrada com SQL antes, a mesma pergunta gasta 554.</p>
+        <svg class="sql-svg-d" viewBox="0 0 680 198" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="sql-t-d" aria-describedby="sql-d-d" focusable="false">
+          <title id="sql-t-d" data-i18n="m3_svg_t">Comparação em escala linear entre planilha inteira e pergunta filtrada com SQL</title>
+          <desc id="sql-d-d" data-i18n="m3_svg_d">A planilha inteira consome 447.568 tokens de entrada; filtrada com SQL antes, a mesma pergunta consome 554 tokens, cerca de 800 vezes menos.</desc>
+          <defs>
+            <clipPath id="sql-clip-d1"><rect x="16" y="34" width="648" height="28" rx="5"/></clipPath>
+            <clipPath id="sql-clip-d2"><rect x="16" y="136" width="648" height="28" rx="5"/></clipPath>
+          </defs>
+          <text class="sql-lbl" x="16" y="23" data-i18n="m3_lbl_full">planilha inteira</text>
+          <text class="sql-val-big" x="664" y="23" text-anchor="end" data-i18n="m3_val_full">447.568 tokens</text>
+          <rect class="sql-track" x="16" y="34" width="648" height="28" rx="5"/>
+          <g clip-path="url(#sql-clip-d1)">
+            <rect class="sql-big" x="16" y="34" width="648" height="28"/>
+          </g>
+          <line class="sql-guide" x1="17.2" y1="66" x2="17.2" y2="132" aria-hidden="true"/>
+          <g aria-hidden="true">
+            <rect class="sql-pill" x="306" y="80" width="68" height="28" rx="14"/>
+            <text class="sql-word" x="340" y="98.5" text-anchor="middle">SQL</text>
+            <path class="sql-chev" d="M 334 116 L 340 122 L 346 116"/>
+          </g>
+          <rect class="sql-track" x="16" y="136" width="648" height="28" rx="5"/>
+          <g clip-path="url(#sql-clip-d2)">
+            <rect class="sql-small" x="16" y="136" width="2.4" height="28"/>
+          </g>
+          <text class="sql-lbl" x="16" y="185" data-i18n="m3_lbl_sql">filtrada com SQL</text>
+          <text class="sql-val-sm" x="664" y="185" text-anchor="end" data-i18n="m3_val_sql">554 tokens</text>
+        </svg>
+        <svg class="sql-svg-m" viewBox="0 0 328 194" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="sql-t-m" aria-describedby="sql-d-m" focusable="false">
+          <title id="sql-t-m" data-i18n="m3_svg_t">Comparação em escala linear entre planilha inteira e pergunta filtrada com SQL</title>
+          <desc id="sql-d-m" data-i18n="m3_svg_d">A planilha inteira consome 447.568 tokens de entrada; filtrada com SQL antes, a mesma pergunta consome 554 tokens, cerca de 800 vezes menos.</desc>
+          <defs>
+            <clipPath id="sql-clip-m1"><rect x="4" y="32" width="320" height="26" rx="4"/></clipPath>
+            <clipPath id="sql-clip-m2"><rect x="4" y="134" width="320" height="26" rx="4"/></clipPath>
+          </defs>
+          <text class="sql-lbl" x="4" y="21" data-i18n="m3_lbl_full">planilha inteira</text>
+          <text class="sql-val-big" x="324" y="21" text-anchor="end" data-i18n="m3_val_full">447.568 tokens</text>
+          <rect class="sql-track" x="4" y="32" width="320" height="26" rx="4"/>
+          <g clip-path="url(#sql-clip-m1)">
+            <rect class="sql-big" x="4" y="32" width="320" height="26"/>
+          </g>
+          <line class="sql-guide" x1="5" y1="62" x2="5" y2="130" aria-hidden="true"/>
+          <g aria-hidden="true">
+            <rect class="sql-pill" x="130" y="78" width="68" height="28" rx="14"/>
+            <text class="sql-word" x="164" y="96.5" text-anchor="middle">SQL</text>
+            <path class="sql-chev" d="M 158 114 L 164 120 L 170 114"/>
+          </g>
+          <rect class="sql-track" x="4" y="134" width="320" height="26" rx="4"/>
+          <g clip-path="url(#sql-clip-m2)">
+            <rect class="sql-small" x="4" y="134" width="2" height="26"/>
+          </g>
+          <text class="sql-lbl" x="4" y="182" data-i18n="m3_lbl_sql">filtrada com SQL</text>
+          <text class="sql-val-sm" x="324" y="182" text-anchor="end" data-i18n="m3_val_sql">554 tokens</text>
+        </svg>
+      </div>
+      <p class="measured-note"><strong data-i18n="m4_t">O resto é premissa</strong>. <span data-i18n="m4_d">Câmbio, salário, infraestrutura, fração de assentos Premium e pico de uso são premissas declaradas, com a origem escrita ao lado. Troque pelas da sua empresa.</span></p>
     </section>
 
     <section>
@@ -134,12 +484,29 @@
       "f_exp": "This download link has expired or is not valid. Request a new one below: it arrives in a few seconds.",
       "f_label": "Your email, to receive the download link",
       "f_insights": "Also receive Expert Insights, my articles by email. The subscription only takes effect after you confirm through the link.",
-      "f_note": "The link arrives in your email and is valid for 7 days. When you request the spreadsheet, I record your email, the date and its topics, and whether you downloaded the file, to understand what interests the people who follow my work and, when it makes sense, to talk to you about the subject. To be removed from this record, write to contact@guifav.dev.",
       "f_priv": "How your data is used",
-      "cta": "Review your project's numbers with me",
+      "cta": "Review your project's numbers with me &#8599;",
+      "sheet_alt": "Cenarios tab of the AI cost-in-production spreadsheet, showing the table with the four cost lines across five options and the monthly cost chart by option and volume",
       "open": "Opens in Excel and Google Sheets (File > Import). Version 1.0, prices checked on Nov 22, 2026. The spreadsheet is in Portuguese.",
       "s1": "What it calculates",
       "s1_p": "The token bill is only one of four cost lines. The spreadsheet adds all four for each option and each volume, and shows the volume at which your own GPU breaks even with the API.",
+      "c_svg_t": "Monthly cost per option at 10,000 queries a month",
+      "c_svg_d": "Stacked bar chart with the four monthly cost lines in US dollars: unoptimized API 6,116.35, optimized API 5,776.29, subscription 3,133.69, own GPU 8,463.74 and ready-made platform awaiting assumption.",
+      "c_x2": "2,000",
+      "c_x4": "4,000",
+      "c_x6": "6,000",
+      "c_x8": "8,000",
+      "c_o1": "Unoptimized API",
+      "c_o2": "Optimized API",
+      "c_o3": "Subscription",
+      "c_o4": "Own GPU",
+      "c_o5": "Ready-made platform",
+      "c_t1": "US$ 6,116.35",
+      "c_t2": "US$ 5,776.29",
+      "c_t3": "US$ 3,133.69",
+      "c_t4": "US$ 8,463.74",
+      "c_t5": "awaiting assumption",
+      "c_cap": "10,000 queries a month, default spreadsheet values, in US$",
       "l1_t": "1. Inference",
       "l1_d": "Input and output tokens per query at each provider's price, with small/large model routing, caching and batching switched on or off.",
       "l2_t": "2. Around the model",
@@ -159,12 +526,21 @@
       "u4_d": "Every API, GPU and seat price links to the official page and the date it was read. Prices change without notice: check them before you decide.",
       "s3": "What was measured",
       "s3_p": "The values that come filled in are the ones from the video. The measured ones are flagged as measurements in the spreadsheet:",
+      "m1_stat": "8,981 &#8594; 424",
+      "m1_stat_aria": "8,981 input to 424 output",
       "m1_t": "Tokens per query",
       "m1_d": "8,981 input and 424 output on average, over a battery of 224 questions on TalkWithData, the platform I build.",
+      "m2_stat": "1,447/h",
       "m2_t": "Answers per hour on a GPU",
       "m2_d": "1,447 answers per hour on a 40 GB NVIDIA A100, with an 8-billion-parameter open model (Qwen3-8B on vLLM) and four concurrent questions, with a p90 of 10.1 seconds. Measured on Nov 23, 2026.",
       "m3_t": "Whole spreadsheet versus filtered question",
       "m3_d": "A 5,000-row billing spreadsheet dumped into the context costs 447,568 input tokens; filtered with SQL first, the same question costs 554.",
+      "m3_svg_t": "Linear-scale comparison between the whole spreadsheet and a question filtered with SQL",
+      "m3_svg_d": "The whole spreadsheet takes 447,568 input tokens; filtered with SQL first, the same question takes 554 tokens, about 800 times less.",
+      "m3_lbl_full": "whole spreadsheet",
+      "m3_val_full": "447,568 tokens",
+      "m3_lbl_sql": "filtered with SQL",
+      "m3_val_sql": "554 tokens",
       "m4_t": "Everything else is an assumption",
       "m4_d": "Exchange rate, salary, infrastructure, share of Premium seats and peak usage are declared assumptions, with their origin written next to them. Replace them with your company's.",
       "s4": "Conflict of interest",
