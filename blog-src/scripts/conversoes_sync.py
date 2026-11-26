@@ -39,12 +39,23 @@ Regras:
   lixeira não ganha Pessoa nova nem Conversão: a linha fica pendente e conta em `pessoa_na_lixeira` (o wrapper alerta),
   porque restaurar ou apagar de vez essa Pessoa é decisão humana.
 
-Remoção (direito do titular), --forget: lê UM email da entrada padrão (fora do histórico do shell e da lista de
-processos). As linhas do email no D1 são o diário da remoção: apaga no Twenty (de vez, inclusive as que estão na
-lixeira) as Conversões cujos eventoId são os ids dessas linhas, relê o Twenty com a lixeira para provar que nenhuma
-sobrou e só então apaga as linhas no D1. Uma queda no meio deixa o
-D1 intacto, e repetir o comando conclui, mesmo que o email da Pessoa tenha mudado no CRM. A Pessoa e os campos site*
-dela ficam como estão (decisão do Gui, 2026-11-23). Simulação sem --apply.
+Remoção (direito do titular), --forget (issue #134): lê UM email da entrada padrão (fora do histórico do shell e da
+lista de processos). Exige FORGET_HMAC_KEY (32 caracteres ou mais, igual à do Worker) antes de qualquer leitura ou
+escrita; o sync normal não precisa dela. Logo depois de validar a chave e o email, antes de qualquer leitura do D1 ou do
+Twenty, --forget --apply grava um marcador mínimo na tabela `forgotten` do D1 (upsert, fica a data mais recente):
+`email_hmac` (HMAC-SHA256 em hex minúsculo de `forget-v1\\n` + email normalizado, nunca o email em claro) e
+`forgotten_at` (pelo relógio do próprio D1, em ISO UTC com milissegundos). Com esse marcador, o Worker recusa links
+assinados emitidos antes (ou no instante) da remoção. As linhas do email no D1 continuam sendo o diário da remoção:
+apaga no Twenty (de vez, inclusive as que estão na lixeira) as Conversões cujos eventoId são os ids dessas linhas, relê
+o Twenty com a lixeira para provar que nenhuma sobrou e só então apaga as linhas no D1. Uma queda no meio (mesmo na
+leitura do Twenty) deixa o marcador gravado e o D1 intacto, e repetir o comando conclui, mesmo que o email da Pessoa
+tenha mudado no CRM. A Pessoa e os campos site* dela ficam como estão (decisão do Gui, 2026-11-23). Simulação sem
+--apply.
+
+Limpeza dos marcadores (issue #134): os marcadores em `forgotten` ficam por 8 dias (o link mais longo vale 7 dias, mais
+1 dia de folga de relógio). No sync e no --forget com --apply, os marcadores com `forgotten_at` mais velho que 8 dias
+(pelo relógio do próprio D1) são apagados logo depois da contagem, antes de ler o Twenty; sem --apply, só conta em
+`marcadores_vencidos`.
 
 Sync e --forget nunca rodam juntos: os dois pegam o mesmo lock (arquivo em CONVERSOES_SYNC_LOCK, padrão
 /tmp/guifav-conversoes-sync.lock). Sem ele, o sync poderia criar no Twenty uma Conversão de uma linha pendente entre a
@@ -53,12 +64,14 @@ limpeza do Twenty e a do D1, e essa Conversão ficaria sem linha no D1 que a lig
 Rodar na KVM (todas as credenciais vêm do ambiente):
     CLOUDFLARE_API_TOKEN=... CLOUDFLARE_ACCOUNT_ID=... D1_DATABASE_ID=... TWENTY_API_KEY=... \\
     TWENTY_LOCAL_URL=http://127.0.0.1:3100 python3 scripts/conversoes_sync.py [--apply]
-    printf '%s\\n' "$EMAIL" | ... python3 scripts/conversoes_sync.py --forget [--apply]
+    printf '%s\\n' "$EMAIL" | FORGET_HMAC_KEY=... ... python3 scripts/conversoes_sync.py --forget [--apply]
 """
 from __future__ import annotations
 
 import argparse
 import fcntl
+import hashlib
+import hmac
 import json
 import os
 import re
@@ -142,6 +155,15 @@ MAX_ENTRADA = 200
 MAX_LABEL = 120
 MARK_CHUNK = 50  # ids por UPDATE no D1 (limite de 100 parâmetros por consulta)
 FORGET_MARK = "conversões apagadas"
+# Marcador mínimo de remoção (issue #134): mesmo prefixo e piso de chave do Worker (workers/newsletter/src/forget.ts).
+FORGET_PREFIX = "forget-v1\n"
+MIN_FORGET_KEY = 32
+# Retenção dos marcadores em dias (issue #134): precisa cobrir o maior TTL dos links assinados (`TTL_MS` e
+# `MATERIAL_TTL_MS` em `workers/newsletter/src/token.ts`) mais 1 dia de folga. Ao alterar um TTL, atualize junto este
+# valor, `privacidade/index.html` e `workers/newsletter/README.md`.
+FORGET_TTL_DAYS = 8
+_D1_NOW_SQL = "strftime('%Y-%m-%dT%H:%M:%fZ','now')"
+_D1_CUTOFF_SQL = f"strftime('%Y-%m-%dT%H:%M:%fZ','now','-{FORGET_TTL_DAYS} days')"
 # Filtro da REST do Twenty que devolve ativos e lixeira juntos (conferido ao vivo na 2.32 com uma sonda descartável).
 WITH_TRASH = "or(deletedAt[is]:NULL,deletedAt[is]:NOT_NULL)"
 LOCK_DEFAULT = "/tmp/guifav-conversoes-sync.lock"
@@ -153,6 +175,40 @@ def _full(rx: re.Pattern, v) -> bool:
 
 def valid_email(v) -> bool:
     return _full(EMAIL, v) and len(v) <= MAX_EMAIL
+
+
+def forget_hmac(email: str, key: str) -> str:
+    """HMAC-SHA256 em hex minúsculo de `forget-v1\\n` + email normalizado (issue #134), igual ao Worker."""
+    if not isinstance(key, str) or len(key) < MIN_FORGET_KEY:
+        raise SyncError("FORGET_HMAC_KEY ausente ou curta demais")
+    norm = email.strip().lower() if isinstance(email, str) else ""
+    if not valid_email(norm):
+        raise SyncError("email inválido na entrada")
+    return hmac.new(key.encode("utf-8"), (FORGET_PREFIX + norm).encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def _upsert_forget_mark(c: TS.Clients, email_hmac: str) -> None:
+    # Relógio do próprio D1 (issue #134): evita diferença entre a KVM e o Cloudflare; o upsert mantém a data mais recente.
+    c.d1(
+        f"INSERT INTO forgotten (email_hmac, forgotten_at) VALUES (?, {_D1_NOW_SQL}) "
+        f"ON CONFLICT (email_hmac) DO UPDATE SET forgotten_at = max(forgotten.forgotten_at, {_D1_NOW_SQL})",
+        [email_hmac],
+    )
+
+
+def _count_expired_marks(c: TS.Clients, exclude_hmac: str | None = None) -> int:
+    if exclude_hmac is None:
+        return int(c.d1(f"SELECT count(*) AS n FROM forgotten WHERE forgotten_at < {_D1_CUTOFF_SQL}")[0]["n"])
+    return int(
+        c.d1(
+            f"SELECT count(*) AS n FROM forgotten WHERE forgotten_at < {_D1_CUTOFF_SQL} AND email_hmac != ?",
+            [exclude_hmac],
+        )[0]["n"]
+    )
+
+
+def _prune_expired_marks(c: TS.Clients) -> None:
+    c.d1(f"DELETE FROM forgotten WHERE forgotten_at < {_D1_CUTOFF_SQL}")
 
 
 def iso_ms(value: str) -> str:
@@ -410,7 +466,7 @@ def ensure_schema(c: TS.Clients, meta: dict, labels: dict[str, str]) -> None:
 def run(c: TS.Clients, *, apply: bool = False, out=None) -> Counter:
     out = out or sys.stdout
     counts: Counter = Counter()
-    # 1) Leituras e validações. Nenhuma escrita antes de a fonte e o CRM estarem lidos por inteiro.
+    # 1) Leituras e validações. Nenhuma escrita de conversões antes de a fonte e o CRM estarem lidos por inteiro.
     raw = c.d1("SELECT id, email, action, material, interests, occurred_at, verified, ga_client_id, request_id, file, "
                + ", ".join(ORIGEM_COLS) + " FROM conversions WHERE synced_at IS NULL ORDER BY occurred_at, id")
     rows = []
@@ -421,11 +477,20 @@ def run(c: TS.Clients, *, apply: bool = False, out=None) -> Counter:
         else:
             rows.append(p)
     counts["pendentes_lidas"] = len(raw)
+    expired_marks = _count_expired_marks(c)
+    counts["marcadores_vencidos"] = expired_marks
+    # Limpeza dos marcadores vencidos (#134): não depende do Twenty, então roda logo após a contagem com --apply.
+    if apply and expired_marks:
+        _prune_expired_marks(c)
     for k in ("linha_invalida", "pedido_sem_pessoa", "pessoa_na_lixeira", "email_em_mais_de_uma_pessoa", "pessoas_a_criar",
               "pessoas_a_atualizar", "conversoes_a_criar", "conversoes_ja_no_crm", "conversoes_na_lixeira", "linhas_a_marcar"):
         counts[k] += 0  # sempre visíveis na saída
     if not rows:
-        _report(counts, out, "nada pendente" if not raw else "só linhas inválidas; nada foi gravado")
+        if apply and expired_marks:
+            tail = "nada pendente; marcadores vencidos apagados" if not raw else "só linhas inválidas; marcadores vencidos apagados"
+        else:
+            tail = "nada pendente" if not raw else "só linhas inválidas; nada foi gravado"
+        _report(counts, out, tail)
         return counts
     meta = read_metadata(c)
     people = list_records(c, "people")
@@ -477,7 +542,7 @@ def run(c: TS.Clients, *, apply: bool = False, out=None) -> Counter:
     counts["opcoes_a_criar"] = sum(len([v for v in labels if v not in _option_values(meta[o].get(n))])
                                    for o, n in (("person", "siteInteresses"), ("conv", "interesses")))
 
-    # 3) Escritas, só com --apply: esquema, depois cada email (Pessoa, Conversões, marca no D1).
+    # 3) Escritas no Twenty e marcação em `conversions`, só com --apply: esquema, depois cada email (Pessoa, Conversões, marca no D1).
     if apply and plan:
         ensure_schema(c, meta, labels)
         now = stamp(_now())
@@ -502,25 +567,36 @@ def run(c: TS.Clients, *, apply: bool = False, out=None) -> Counter:
     return counts
 
 
-def forget(c: TS.Clients, email: str, *, apply: bool = False, out=None) -> Counter:
-    """Apaga as conversões de um email: as do Twenty pelos ids do D1, depois as linhas do D1. A Pessoa fica."""
+def forget(c: TS.Clients, email: str, *, apply: bool = False, out=None, forget_key: str | None = None) -> Counter:
+    """Grava o marcador `forgotten` (issue #134), apaga as conversões do Twenty e do D1, e limpa marcadores vencidos."""
     out = out or sys.stdout
+    key = c.env.get("FORGET_HMAC_KEY", "") if forget_key is None else forget_key
     email = email.strip().lower()
-    if not valid_email(email):
-        raise SyncError("email inválido na entrada")
+    email_hmac = forget_hmac(email, key)  # valida chave e email antes de qualquer leitura ou escrita
     counts: Counter = Counter()
+    if apply:
+        # 1) Marcador mínimo no D1 logo após validar chave e email, antes de qualquer leitura do D1 ou do Twenty (#134):
+        #    mesmo que a leitura do Twenty falhe em seguida, links antigos já ficam bloqueados.
+        _upsert_forget_mark(c, email_hmac)
     # As linhas do D1 são o diário: enquanto existirem, os ids delas acham as Conversões no Twenty, qualquer que seja o
     # email atual da Pessoa no CRM.
     ids = {r["id"] for r in c.d1("SELECT id FROM conversions WHERE email = ?", [email])}
+    expired_marks = _count_expired_marks(c, exclude_hmac=email_hmac)
+    if apply and expired_marks:
+        # Limpeza dos marcadores vencidos independe do Twenty (#134).
+        _prune_expired_marks(c)
     meta = read_metadata(c)
     persons = people_by_email(list_records(c, "people")).get(email) or []
     convs = [x for x in list_records(c, PLURAL) if x.get("eventoId") in ids] if meta["conv_id"] else []
     counts["d1_linhas"], counts["conversoes_no_crm"], counts["pessoas_mantidas"] = len(ids), len(convs), len(persons)
+    counts["marcadores_vencidos"] = expired_marks
     if apply:
+        # 2) Apaga no Twenty e relê para provar que nenhuma sobrou.
         for x in convs:
             c.twenty("DELETE", f"/rest/{PLURAL}/{urllib.parse.quote(x['id'])}", op="apagar conversão")
         if meta["conv_id"] and any(x.get("eventoId") in ids for x in list_records(c, PLURAL)):
             raise SyncError("ainda há Conversões do email no Twenty; o D1 ficou intacto, rode de novo")
+        # 3) Apaga as linhas do email em `conversions` e confirma.
         c.d1("DELETE FROM conversions WHERE email = ?", [email])
         if c.d1("SELECT count(*) AS n FROM conversions WHERE email = ?", [email])[0]["n"] != 0:
             raise SyncError("o D1 ainda tem linhas do email depois da remoção")
@@ -543,6 +619,12 @@ def main(argv=None, transport=TS._transport, sleep=time.sleep, stdin=None) -> in
     if not all(env.values()):
         print("ERRO: faltam variáveis de ambiente: " + ", ".join(k for k, v in env.items() if not v), file=sys.stderr)
         return 2
+    forget_key = os.environ.get("FORGET_HMAC_KEY", "") if a.forget else ""
+    if a.forget and len(forget_key) < MIN_FORGET_KEY:
+        msg = ("falta variável de ambiente: FORGET_HMAC_KEY" if not forget_key
+               else f"FORGET_HMAC_KEY curta demais (mínimo {MIN_FORGET_KEY} caracteres)")
+        print(f"ERRO: {msg}", file=sys.stderr)
+        return 2
     lock = None
     try:
         lock = open(os.environ.get("CONVERSOES_SYNC_LOCK") or LOCK_DEFAULT, "a")
@@ -555,7 +637,7 @@ def main(argv=None, transport=TS._transport, sleep=time.sleep, stdin=None) -> in
             lines = [x for x in (stdin or sys.stdin).read().splitlines() if x.strip()]
             if len(lines) != 1:
                 raise SyncError("--forget espera exatamente um email na entrada padrão")
-            forget(c, lines[0], apply=a.apply)
+            forget(c, lines[0], apply=a.apply, forget_key=forget_key)
         else:
             run(c, apply=a.apply)
     except SyncError as e:

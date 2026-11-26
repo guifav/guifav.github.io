@@ -6,6 +6,10 @@
 import { decodeOrigem, encodeOrigem, type Origem } from './origem.ts';
 
 const enc = new TextEncoder();
+// Issue #134: /confirm deduz a emissão do link por `x * 1000 - TTL_MS`. Diminuir este prazo com links ainda em
+// circulação faria links emitidos antes do --forget parecerem emitidos depois; alterar este prazo exige revisar junto
+// `FORGET_TTL_DAYS` em `blog-src/scripts/conversoes_sync.py` (sempre >= max(TTL_MS, MATERIAL_TTL_MS) + 1 dia),
+// `privacidade/index.html` e `workers/newsletter/README.md`.
 export const TTL_MS = 48 * 3600e3;
 export const MIN_SECRET = 32;
 
@@ -48,6 +52,10 @@ export async function signLink(email: string, nowMs: number, secret: string, ori
 
 // Link de download dos materiais do canal (planilha, mapa de decisão). Payload com outro prefixo (m1) e com o
 // arquivo: um link de confirmação nunca vale como download, e o link de um arquivo nunca abre outro.
+// Issue #134: /material/download deduz a emissão do link por `x * 1000 - MATERIAL_TTL_MS`. Diminuir este prazo com links
+// ainda em circulação faria links emitidos antes do --forget parecerem emitidos depois; alterar este prazo exige atualizar
+// junto `FORGET_TTL_DAYS` em `blog-src/scripts/conversoes_sync.py` (sempre >= max(TTL_MS, MATERIAL_TTL_MS) + 1 dia),
+// `privacidade/index.html` e `workers/newsletter/README.md`.
 export const MATERIAL_TTL_MS = 7 * 24 * 3600e3;
 const materialPayload = (file: string, email: string, exp: number) => enc.encode(`m1\n${file}\n${email}\n${exp}`);
 

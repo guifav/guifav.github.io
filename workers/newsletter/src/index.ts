@@ -5,12 +5,15 @@
 //   GET  /material/download  link assinado do email (7 dias): entrega o arquivo (bundle ou R2) e grava a conversão (issue #97)
 // Desde a issue #114, a inscrição e o pedido de material levam a origem da visita (src/origem.ts) até a conversão.
 // As garantias A1 a A9 estão no PR e em tests/worker.test.ts; as dos materiais, em tests/material.test.ts.
-import { signLink, verifyConfirmLink, signMaterialLink, verifyMaterialLink, materialExp, MIN_SECRET } from './token.ts';
-import { confirmationEmail, materialEmail } from './email.ts';
+import { signLink, verifyConfirmLink, signMaterialLink, verifyMaterialLink, materialExp, MIN_SECRET, TTL_MS, MATERIAL_TTL_MS } from './token.ts';
+import { confirmationEmail, materialEmail, normalizeEmail } from './email.ts';
 import { material, arquivo, INTERESSES } from './materiais.ts';
 import { recordConversion, conversionId, requestId, requestInfo, type D1Like } from './conversoes.ts';
 import { parseOrigem } from './origem.ts';
 import { parseGaClientId, sendDownloadEvent } from './ga4.ts';
+import { checkForgotten } from './forget.ts';
+
+export { normalizeEmail };
 
 export interface RateLimit {
   limit(o: { key: string }): Promise<{ success: boolean }>;
@@ -31,6 +34,8 @@ export interface Env {
   RESEND_API_KEY: string;
   TURNSTILE_SECRET: string;
   CONFIRM_SECRET: string;
+  /** Chave do HMAC-SHA256 da tabela `forgotten` (issue #134; 32 caracteres ou mais, igual no wrapper da KVM). */
+  FORGET_HMAC_KEY: string;
   FROM: string;
   MATERIAL_FROM: string;
   REPLY_TO: string;
@@ -62,6 +67,8 @@ export interface Deps {
    * fora do ar nunca atrasa nem impede o download, o email do pedido ou a confirmação (issue #97).
    */
   waitUntil: (p: Promise<unknown>) => void;
+  /** Prazo máximo da leitura do marcador `forgotten` no D1 (issue #134); em produção usa FORGET_TIMEOUT_MS. */
+  forgetTimeoutMs?: number;
 }
 
 const MAX_BODY = 8192;
@@ -72,20 +79,15 @@ const redirect = (location: string) => new Response(null, { status: 303, headers
 const plain = (status: number, body: string, extra: Record<string, string> = {}) =>
   new Response(body, { status, headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store', ...extra } });
 
-/** Email normalizado (minúsculas, sem espaços nas pontas) ou null. Sem espaço, controle ou caractere de cabeçalho. */
-export function normalizeEmail(raw: string): string | null {
-  const e = raw.trim().toLowerCase();
-  if (e.length > 254) return null;
-  const label = '[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?';
-  const re = new RegExp(`^[a-z0-9.!#$%&*+/=?^_\`{|}~-]{1,64}@${label}(?:\\.${label})+$`);
-  return re.test(e) ? e : null;
-}
-
 /** Caminho do contato na API do Resend: o email, com o @ literal como na documentação. */
 export const contactPath = (email: string) => `${RESEND}/contacts/${encodeURIComponent(email).replace('%40', '@')}`;
 
 function configured(env: Env): boolean {
-  return Boolean(env.CONFIRM_SECRET && env.CONFIRM_SECRET.length >= MIN_SECRET && env.RESEND_API_KEY && env.SEGMENT_ID && env.TOPIC_ID);
+  return Boolean(
+    env.CONFIRM_SECRET && env.CONFIRM_SECRET.length >= MIN_SECRET
+    && env.FORGET_HMAC_KEY && env.FORGET_HMAC_KEY.length >= MIN_SECRET
+    && env.RESEND_API_KEY && env.SEGMENT_ID && env.TOPIC_ID,
+  );
 }
 
 async function turnstileOk(token: string, ip: string, env: Env, deps: Deps): Promise<boolean> {
@@ -143,6 +145,12 @@ async function confirm(url: URL, env: Env, deps: Deps): Promise<Response> {
   const ok = await verifyConfirmLink(url.searchParams, env.CONFIRM_SECRET, deps.now());
   if (!ok) return redirect(`${env.BLOG_URL}/inscricao-invalida/`);
   const { email, origem } = ok;
+  // Issue #134: recusa link emitido antes (ou no instante) da remoção pelo --forget, sem tocar no Resend nem no D1.
+  // Se a leitura do marcador falhar ou estourar o prazo, responde a mesma 502 de falha temporária sem chamar o Resend.
+  const issuedAtMs = Number(url.searchParams.get('x')) * 1000 - TTL_MS;
+  const forgotten = await checkForgotten(env.DB, email, env.FORGET_HMAC_KEY, issuedAtMs, deps.forgetTimeoutMs);
+  if (forgotten === 'error') return plain(502, 'falha temporária; tente o link de novo em alguns minutos');
+  if (forgotten === 'forgotten') return redirect(`${env.BLOG_URL}/inscricao-invalida/`);
   // Falha de rede ou resposta que não é JSON também é falha temporária (A5): 502, nunca exceção.
   let res: Response;
   try {
@@ -276,6 +284,11 @@ async function download(url: URL, env: Env, deps: Deps): Promise<Response> {
   const found = ok ? arquivo(ok.file) : arquivo(url.searchParams.get('f') ?? '');
   const expired = redirect(found ? `${env.SITE_ORIGIN}${found.material.pagina}#link-expirado` : `${env.SITE_ORIGIN}/`);
   if (!ok || !found) return expired;
+  // Issue #134: recusa link emitido antes (ou no instante) da remoção pelo --forget, sem entregar o arquivo nem gravar nada.
+  // Se a leitura do marcador falhar ou estourar o prazo (D1 fora do ar ou lento), o arquivo ainda é entregue, sem gravar conversão nem mandar evento ao GA4.
+  const issuedAtMs = Number(url.searchParams.get('x')) * 1000 - MATERIAL_TTL_MS;
+  const forgotten = await checkForgotten(env.DB, ok.email, env.FORGET_HMAC_KEY, issuedAtMs, deps.forgetTimeoutMs);
+  if (forgotten === 'forgotten') return expired;
   let body: ReadableStream<Uint8Array> | ArrayBuffer | null = null;
   let size: number | undefined;
   if (found.arquivo.r2Key) {
@@ -300,19 +313,24 @@ async function download(url: URL, env: Env, deps: Deps): Promise<Response> {
   if (!body) return plain(500, 'arquivo indisponível');
   // O clique no link prova o email (issue #97). A conversão aponta para o pedido que gerou o link e herda dele a origem da
   // visita (issue #114), e o evento do GA4 sai com o client_id guardado nesse pedido, ligando pedido e download no GA4;
-  // sem ele, vai como contagem anônima (#99).
-  const nowMs = deps.now();
-  const material = found.material;
-  const file = found.arquivo.id;
-  deps.waitUntil((async () => {
-    const reqId = await requestId(material.id, ok.email, Number(url.searchParams.get('x')));
-    const { clientId, origem } = await requestInfo(env.DB, reqId);
-    await recordConversion(env.DB, { id: await conversionId('material_download', url.searchParams.get('s') ?? ''),
-      acao: 'material_download', email: ok.email, material: material.id, interesses: material.interesses, nowMs, verified: true,
-      requestId: reqId, file, origem });
-    await sendDownloadEvent({ measurementId: env.GA4_MEASUREMENT_ID, apiSecret: env.GA4_API_SECRET }, deps.fetch,
-      { clientId, material: material.id, file, nowMs });
-  })());
+  // sem ele, vai como contagem anônima (#99). Em falha ou prazo estourado na leitura do marcador (#134), entrega o arquivo
+  // sem gravar nem avisar o GA4. Corrida residual (#134): um clique que leu `forgotten` um instante antes de o `--forget --apply`
+  // gravar o marcador ainda pode gravar pela `waitUntil`; a janela é de milissegundos e repetir o `--forget --apply` apaga
+  // o que tiver sobrado.
+  if (forgotten === 'ok') {
+    const nowMs = deps.now();
+    const material = found.material;
+    const file = found.arquivo.id;
+    deps.waitUntil((async () => {
+      const reqId = await requestId(material.id, ok.email, Number(url.searchParams.get('x')));
+      const { clientId, origem } = await requestInfo(env.DB, reqId);
+      await recordConversion(env.DB, { id: await conversionId('material_download', url.searchParams.get('s') ?? ''),
+        acao: 'material_download', email: ok.email, material: material.id, interesses: material.interesses, nowMs, verified: true,
+        requestId: reqId, file, origem });
+      await sendDownloadEvent({ measurementId: env.GA4_MEASUREMENT_ID, apiSecret: env.GA4_API_SECRET }, deps.fetch,
+        { clientId, material: material.id, file, nowMs });
+    })());
+  }
   const headers: Record<string, string> = {
     'content-type': found.arquivo.tipo,
     'content-disposition': `attachment; filename="${found.arquivo.nome}"`,

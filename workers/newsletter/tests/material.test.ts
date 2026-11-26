@@ -11,6 +11,7 @@ import { d1, rows, capturaErros, variantes, SEM_ORIGEM } from './d1.ts';
 
 const NOW = Date.UTC(2026, 10, 23, 12, 0, 0);
 const SECRET = 'segredo-de-teste-com-tamanho-suficiente-0123456789';
+const FORGET_KEY = 'chave-hmac-de-teste-com-32-bytes-ou-mais-0123456789';
 const TOML = readFileSync(new URL('../wrangler.toml', import.meta.url), 'utf-8');
 const tomlVar = (k: string) => {
   const m = TOML.match(new RegExp(`^${k}\\s*=\\s*"([^"]*)"`, 'm'));
@@ -29,7 +30,7 @@ function r2Stream(bytes: Uint8Array): ReadableStream<Uint8Array> {
   });
 }
 
-function setup(opts: { turnstile?: unknown; rlEmail?: boolean; rlIp?: boolean; emailStatus?: number; now?: number; d1Falha?: RegExp; d1Pendura?: RegExp; d1Porta?: Promise<void>; semGa4?: boolean; ga4Status?: number | 'throw'; ga4Pendura?: boolean; ga4Porta?: Promise<void>; r2?: Record<string, Uint8Array | null>; semR2?: boolean; r2Erro?: boolean } = {}) {
+function setup(opts: { turnstile?: unknown; rlEmail?: boolean; rlIp?: boolean; emailStatus?: number; now?: number; d1Falha?: RegExp; d1Pendura?: RegExp; d1Porta?: Promise<void>; forgetTimeoutMs?: number; semGa4?: boolean; ga4Status?: number | 'throw'; ga4Pendura?: boolean; ga4Porta?: Promise<void>; r2?: Record<string, Uint8Array | null>; semR2?: boolean; r2Erro?: boolean } = {}) {
   const calls: Call[] = [];
   const rl: string[] = [];
   const r2Gets: string[] = [];
@@ -74,7 +75,7 @@ function setup(opts: { turnstile?: unknown; rlEmail?: boolean; rlIp?: boolean; e
         },
       };
   const env: Env = {
-    RESEND_API_KEY: 're_teste', TURNSTILE_SECRET: 'ts_teste', CONFIRM_SECRET: SECRET,
+    RESEND_API_KEY: 're_teste', TURNSTILE_SECRET: 'ts_teste', CONFIRM_SECRET: SECRET, FORGET_HMAC_KEY: FORGET_KEY,
     FROM: tomlVar('FROM'), MATERIAL_FROM: tomlVar('MATERIAL_FROM'), REPLY_TO: tomlVar('REPLY_TO'),
     SEGMENT_ID: 'seg-1', TOPIC_ID: 'topic-1', SITE_ORIGIN: tomlVar('SITE_ORIGIN'), BLOG_URL: tomlVar('BLOG_URL'),
     WORKER_URL: tomlVar('WORKER_URL'), TURNSTILE_HOSTNAME: tomlVar('TURNSTILE_HOSTNAME'),
@@ -90,7 +91,7 @@ function setup(opts: { turnstile?: unknown; rlEmail?: boolean; rlIp?: boolean; e
       .filter((a) => !a.r2Key)
       .map((a) => [a.id, new TextEncoder().encode(`conteudo:${a.id}`).buffer as ArrayBuffer]));
   let clock = opts.now ?? NOW;
-  const run = (req: Request) => handle(req, env, { fetch: fetchFn as typeof fetch, now: () => clock, file: async (id) => bytes[id] ?? null, waitUntil });
+  const run = (req: Request) => handle(req, env, { fetch: fetchFn as typeof fetch, now: () => clock, file: async (id) => bytes[id] ?? null, waitUntil, forgetTimeoutMs: opts.forgetTimeoutMs });
   const avanca = (ms: number) => void (clock += ms);
   return { run, calls, rl, r2Gets, env, db: db.raw, settle, pendentes: () => pending.length, avanca, rows: async (t: string) => (await settle(), rows(db.raw, t)), waitUntil };
 }
@@ -465,14 +466,25 @@ test('C6: a assinatura só vale na forma canônica; as variantes com os mesmos b
   assert.equal((await s.rows('conversions')).length, 1);
 });
 
-test('C3: D1 que não responde não segura a resposta do pedido nem do download (a gravação vai por waitUntil)', async () => {
-  const s = setup({ d1Pendura: /conversions|material_requests/ });
+test('C3: D1 que não responde não segura a resposta do pedido nem do download (waitUntil e prazo no marcador, #134)', async () => {
+  const s = setup({ d1Pendura: /conversions|material_requests|forgotten/, forgetTimeoutMs: 30 });
   const limite = <T>(p: Promise<T>) => Promise.race([p, new Promise<never>((_, no) => setTimeout(() => no(new Error('a resposta esperou o D1')), 1000))]);
   const r1 = await limite(s.run(pedir(ok)));
   assert.equal(loc(r1), 'https://guifav.dev/ferramentas/planilha-custos-ia/enviado/');
   assert.equal(emails(s.calls).length, 1);
-  const r2 = await limite(s.run(baixar(await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', NOW, SECRET))));
+  let r2!: Response;
+  const erros = await capturaErros(async () => {
+    r2 = await limite(s.run(baixar(await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', NOW, SECRET))));
+  });
+  assert.equal(r2.status, 200);
   assert.equal(await r2.text(), 'conteudo:planilha-custos-ia');
+  assert.equal(ga4(s.calls).length, 0);
+  assert.equal(erros.length, 1);
+  assert.ok(!erros[0].includes('exemplo.com'), erros[0]);
+
+  const sConv = setup({ d1Pendura: /conversions|material_requests/ });
+  const r3 = await limite(sConv.run(baixar(await signMaterialLink('planilha-custos-ia', 'leitor@exemplo.com', NOW, SECRET))));
+  assert.equal(await r3.text(), 'conteudo:planilha-custos-ia');
 });
 
 test('C1: o id é um SHA-256 em hexadecimal, diferente da assinatura', async () => {

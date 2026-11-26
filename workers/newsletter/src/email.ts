@@ -1,4 +1,14 @@
 // Email de confirmação (issue #21, garantia A9): HTML e texto, um único link, o de confirmação.
+
+/** Email normalizado (minúsculas, sem espaços nas pontas) ou null. Sem espaço, controle ou caractere de cabeçalho. */
+export function normalizeEmail(raw: string): string | null {
+  const e = raw.trim().toLowerCase();
+  if (e.length > 254) return null;
+  const label = '[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?';
+  const re = new RegExp(`^[a-z0-9.!#$%&*+/=?^_\`{|}~-]{1,64}@${label}(?:\\.${label})+$`);
+  return re.test(e) ? e : null;
+}
+
 const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
