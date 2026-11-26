@@ -46,7 +46,7 @@ const ld = postLdGraph({
   author: { id: AUTHOR_ID, name: AUTHOR_NAME, url: AUTHOR_URL },
   websiteId: WEBSITE_ID,
   crumbs: [
-    { name: AUTHOR_NAME, url: AUTHOR_URL },
+    { name: AUTHOR_NAME, url: absoluteUrl(site, '/') },
     { name: BLOG_NAME, url: absoluteUrl(site, base) },
   ],
 });

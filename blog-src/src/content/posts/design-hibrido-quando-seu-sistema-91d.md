@@ -17,4 +17,4 @@ Conteúdo e roteiro desenvolvidos por Guilherme Favaron, com vozes geradas por i
 
 Para mais informações sobre Inteligência Artificial e conteúdo exclusivo, acesse [www<!---->.guilhermefavaron.com.br](/blog/)
 
-Conteúdo inspirado neste artigo: https<!---->://www<!---->.guilhermefavaron.com.br/post/arquitetura-sistemas-agentes-ia
+Conteúdo inspirado neste artigo: [guifav.dev/blog/arquitetura-sistemas-agentes-ia](/blog/arquitetura-sistemas-agentes-ia/)

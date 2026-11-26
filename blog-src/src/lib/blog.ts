@@ -116,6 +116,59 @@ export function postLdGraph(p: PostLdInput): Record<string, unknown> {
   return { '@context': 'https://schema.org', '@graph': [posting, breadcrumb, person] };
 }
 
+export interface TopicLdInput {
+  name: string;
+  description: string;
+  url: string;
+  /** A Person da home (mesmo @id), com nome e URL para o Google resolver o autor na própria página. */
+  author: { id: string; name: string; url: string };
+  /** @id do WebSite da home (index.html). */
+  websiteId: string;
+  /** Níveis acima do tema na trilha (home e blog); o tema entra por último, com o nome. */
+  crumbs: { name: string; url: string }[];
+  /** Posts listados na página do tema, na mesma ordem da lista visível. */
+  items: { name: string; url: string }[];
+}
+
+/**
+ * JSON-LD da página de tema (#105): um @graph com CollectionPage (e ItemList em mainEntity),
+ * BreadcrumbList espelhando a migalha visível e o nó Person mínimo igual ao dos posts.
+ */
+export function topicLdGraph(t: TopicLdInput): Record<string, unknown> {
+  const breadcrumbId = `${t.url}#breadcrumb`;
+  const itemList = {
+    '@type': 'ItemList',
+    itemListOrder: 'https://schema.org/ItemListOrderAscending',
+    numberOfItems: t.items.length,
+    itemListElement: t.items.map((item, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      name: item.name,
+      url: item.url,
+    })),
+  };
+  const collection = {
+    '@type': 'CollectionPage',
+    '@id': t.url,
+    url: t.url,
+    name: t.name,
+    description: t.description,
+    inLanguage: 'pt-BR',
+    isPartOf: { '@id': t.websiteId },
+    author: { '@id': t.author.id },
+    breadcrumb: { '@id': breadcrumbId },
+    mainEntity: itemList,
+  };
+  const trail = [...t.crumbs, { name: t.name, url: t.url }];
+  const breadcrumb = {
+    '@type': 'BreadcrumbList',
+    '@id': breadcrumbId,
+    itemListElement: trail.map((c, i) => ({ '@type': 'ListItem', position: i + 1, name: c.name, item: c.url })),
+  };
+  const person = { '@type': 'Person', '@id': t.author.id, name: t.author.name, url: t.author.url };
+  return { '@context': 'https://schema.org', '@graph': [collection, breadcrumb, person] };
+}
+
 /** Serializa JSON-LD para dentro de <script>, sem permitir fechar a tag. */
 export function jsonLdScript(data: unknown): string {
   return JSON.stringify(data).replace(/</g, '\\u003c');

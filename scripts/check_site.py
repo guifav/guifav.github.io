@@ -26,7 +26,6 @@ from __future__ import annotations
 import argparse
 import colorsys
 import json
-import math
 import os
 import re
 import shutil
@@ -37,7 +36,7 @@ from datetime import datetime, timezone
 from html import unescape
 from html.parser import HTMLParser
 from pathlib import Path
-from urllib.parse import unquote, urlsplit
+from urllib.parse import unquote, urljoin, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_sitemaps import canonical_is_self, robots_blocks, robots_disallow  # noqa: E402
@@ -593,6 +592,8 @@ CHATGPT_COURSE_URL = "/cursos/chatgpt-no-dia-a-dia"
 # Link de YouTube nos rodapés (#166): todo link de YouTube dentro de <footer> aponta para @ia-para-leigos.
 YOUTUBE_FOOTER_URL = "https://www.youtube.com/@ia-para-leigos"
 YOUTUBE_HOSTS = ("youtube.com", "youtu.be", "youtube-nocookie.com")
+# Handle antigo do YouTube (#105): substituído por @guifav e @ia-para-leigos, proibido em qualquer HTML do site.
+OLD_YOUTUBE_HANDLE = "ia-aplicada-guilhermefavaron"
 # Páginas legais na raiz (#146): Política de privacidade e Termos de uso, públicas, indexáveis e no sitemap.
 LEGAL_PAGES = ("privacidade/index.html", "termos/index.html")
 LEGAL_SPECS = (
@@ -1471,6 +1472,32 @@ def _ld_nodes(html: str) -> list[dict]:
     return [n for nodes, _ in _ld_blocks(html) for n in nodes if isinstance(n, dict)]
 
 
+def _iter_ld_dicts(value: object):
+    """Percorre todos os objetos (dict) contidos em value, em qualquer profundidade (dicts e listas aninhados)."""
+    if isinstance(value, dict):
+        yield value
+        for v in value.values():
+            yield from _iter_ld_dicts(v)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _iter_ld_dicts(item)
+
+
+def _has_ld_type(node: dict, *types: str) -> bool:
+    """True se @type do nó contiver algum dos tipos pedidos (string ou lista de strings)."""
+    t = node.get("@type")
+    if isinstance(t, str):
+        return t in types
+    if isinstance(t, list):
+        return any(isinstance(x, str) and x in types for x in t)
+    return False
+
+
+def _is_zero_price(price: object) -> bool:
+    """Preço exatamente a string '0' (decisão do Gui, 26/11/2026, #105: primeira conversa gratuita)."""
+    return isinstance(price, str) and price == "0"
+
+
 def _home_websites(html: str) -> list[dict]:
     """Os WebSite da home com HOME_WEBSITE (nome e URL); o WebSite não usa o @id da Person."""
     return [n for nodes, _ in _ld_blocks(html) for n in nodes
@@ -1484,8 +1511,8 @@ def _home_has_website(html: str) -> bool:
 
 
 def _home_website_id(html: str) -> str | None:
-    """@id do WebSite da home, para o isPartOf dos posts (#105)."""
-    ids = [n["@id"] for n in _home_websites(html) if isinstance(n.get("@id"), str) and n["@id"]]
+    """@id do WebSite da home, para o isPartOf dos posts e temas (#105)."""
+    ids = [n["@id"] for n in _home_websites(html) if isinstance(n.get("@id"), str) and n["@id"].strip() != ""]
     return ids[0] if ids else None
 
 
@@ -1493,6 +1520,10 @@ def _home_website_id(html: str) -> str | None:
 # Google, que lê uma página por vez, resolver author.name e author.url sem seguir o @id até a home.
 POST_PERSON = {"@type": "Person", "@id": PERSON_ID, "name": SITE_NAME, "url": SITE_ORIGIN + "/"}
 POST_LD_RULE = "post indexável sem o JSON-LD do post (#105)"
+BLOG_NAME = "Insights"
+TOPIC_LD_RULE = "página de tema sem o JSON-LD do tema (#105)"
+ITEM_LIST_ORDER = "https://schema.org/ItemListOrderAscending"
+TOPIC_LIST_ITEM_KEYS = frozenset({"@type", "position", "name", "url"})
 
 
 def post_ld_problems(html: str, url: str, website_id: str | None) -> list[str]:
@@ -1573,6 +1604,338 @@ def check_post_ld(site: Path, posts: Path) -> list[str]:
     return problems
 
 
+class _TopicListLinks(HTMLParser):
+    """Links <a> visíveis dentro de <ol class="... topic-list ...">, em ordem."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.stack: list[tuple[str, bool, bool]] = []  # (tag, é ol.topic-list visível, torna inerte)
+        self.lists: list[list[str]] = []
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+        if tag not in VOID_TAGS:
+            self.handle_endtag(tag)
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        a: dict[str, str] = {}
+        for k, v in attrs:
+            a.setdefault(k, v or "")
+        inert = any(i for _, _, i in self.stack) or tag in ("template", "noscript") or "hidden" in a
+        in_list = any(is_l for _, is_l, _ in self.stack)
+        is_topic_list = not inert and not in_list and tag == "ol" and "topic-list" in a.get("class", "").split()
+        if is_topic_list:
+            self.lists.append([])
+        if tag == "a" and not inert and in_list:
+            href = a.get("href", "").strip()
+            if href:
+                self.lists[-1].append(href)
+        if tag not in VOID_TAGS:
+            self.stack.append((tag, is_topic_list, tag in ("template", "noscript") or "hidden" in a))
+
+    def handle_endtag(self, tag: str) -> None:
+        for i in range(len(self.stack) - 1, -1, -1):
+            if self.stack[i][0] == tag:
+                del self.stack[i:]
+                return
+
+
+def topic_ld_problems(html: str, url: str, website_id: str | None) -> list[str]:
+    """Motivos pelos quais a página de tema não traz o @graph do #105; vazio quando traz.
+
+    Contrato: um único CollectionPage na página, dentro de um @graph com BreadcrumbList (home, blog, tema) e a
+    Person mínima; @id e url iguais à própria página; author é a Person; isPartOf é o WebSite da home; breadcrumb
+    aponta para <url>#breadcrumb; mainEntity é um ItemList cujas URLs batem, na mesma ordem, com os links de
+    ol.topic-list.
+    """
+    collections = [(n, nodes, graph) for nodes, graph in _ld_blocks(html) for n in nodes
+                   if isinstance(n, dict) and n.get("@type") == "CollectionPage"]
+    if not collections:
+        return ["nenhum CollectionPage"]
+    if len(collections) > 1:
+        return [f"{len(collections)} CollectionPage na página"]
+    col, nodes, graph = collections[0]
+    if not graph:
+        return ["o CollectionPage não está num @graph"]
+
+    def ref(v: object) -> object:
+        return v.get("@id") if isinstance(v, dict) else None
+
+    why: list[str] = []
+    for k in ("@id", "url"):
+        if col.get(k) != url:
+            why.append(f"{k} diferente de {url}")
+    name = col.get("name")
+    if not isinstance(name, str) or not name.strip():
+        why.append("name vazio")
+    desc = col.get("description")
+    if not isinstance(desc, str) or not desc.strip():
+        why.append("description vazio")
+    if col.get("inLanguage") != "pt-BR":
+        why.append("inLanguage diferente de 'pt-BR'")
+    if ref(col.get("author")) != PERSON_ID:
+        why.append(f"author não aponta para {PERSON_ID}")
+    if website_id is not None and ref(col.get("isPartOf")) != website_id:
+        why.append(f"isPartOf não aponta para o WebSite da home ({website_id})")
+    crumb_id = f"{url}#breadcrumb"
+    if ref(col.get("breadcrumb")) != crumb_id:
+        why.append(f"breadcrumb não aponta para {crumb_id}")
+
+    persons = [n for n in nodes if isinstance(n, dict) and n.get("@id") == PERSON_ID]
+    if len(persons) != 1:
+        why.append(f"{len(persons)} nós Person com @id {PERSON_ID} no @graph, em vez de 1")
+    elif any(persons[0].get(k) != v for k, v in POST_PERSON.items()):
+        why.append(f"a Person do @graph não tem @type, name e url {POST_PERSON}")
+
+    lists = [n for n in nodes if isinstance(n, dict) and n.get("@type") == "BreadcrumbList"]
+    want_crumbs = [
+        (SITE_NAME, SITE_ORIGIN + "/"),
+        (BLOG_NAME, SITE_ORIGIN + BLOG_PREFIX),
+        (name, url),
+    ]
+    if len(lists) != 1:
+        why.append(f"{len(lists)} BreadcrumbList no @graph, em vez de 1")
+    else:
+        bl = lists[0]
+        if bl.get("@id") != crumb_id:
+            why.append(f"BreadcrumbList com @id diferente de {crumb_id}")
+        items = bl.get("itemListElement")
+        ok = isinstance(items, list) and len(items) == len(want_crumbs) and all(
+            isinstance(it, dict) and it.get("@type") == "ListItem" and type(it.get("position")) is int
+            and it["position"] == i + 1 and it.get("item") == want_url
+            and isinstance(it.get("name"), str) and it["name"].strip() != "" and it["name"] == want_name
+            for i, (it, (want_name, want_url)) in enumerate(zip(items, want_crumbs)))
+        if not ok:
+            trail_desc = " > ".join(f"{n} ({u})" for n, u in want_crumbs[:2]) + f" > name ({url})"
+            why.append(f"BreadcrumbList fora da trilha {trail_desc}")
+
+    tl = _TopicListLinks()
+    tl.feed(html)
+    tl.close()
+    visible_urls: list[str] | None = None
+    if len(tl.lists) != 1:
+        why.append(f"esperava uma lista ol.topic-list visível, achou {len(tl.lists)}")
+    elif not tl.lists[0]:
+        why.append("lista visível ol.topic-list vazia")
+    else:
+        visible_urls = [urljoin(url, h) for h in tl.lists[0]]
+
+    main = col.get("mainEntity")
+    if not isinstance(main, dict) or main.get("@type") != "ItemList":
+        why.append("mainEntity sem ItemList")
+    else:
+        if main.get("itemListOrder") != ITEM_LIST_ORDER:
+            why.append(f"ItemList com itemListOrder diferente de {ITEM_LIST_ORDER}")
+        elems = main.get("itemListElement")
+        if not isinstance(elems, list):
+            why.append("ItemList sem itemListElement em lista")
+        else:
+            if type(main.get("numberOfItems")) is not int or main["numberOfItems"] != len(elems):
+                why.append(f"ItemList com numberOfItems {main.get('numberOfItems')!r}, tamanho da lista é {len(elems)}")
+            bad_item = any(
+                not isinstance(it, dict) or set(it.keys()) != TOPIC_LIST_ITEM_KEYS
+                or it.get("@type") != "ListItem" or type(it.get("position")) is not int
+                or it["position"] != i + 1
+                or not isinstance(it.get("name"), str) or not it["name"].strip()
+                or not isinstance(it.get("url"), str) or not it["url"].strip()
+                for i, it in enumerate(elems)
+            )
+            if bad_item:
+                why.append("ItemList com ListItem inválido (esperado só @type, position, name e url)")
+            elif visible_urls is not None:
+                ld_urls = [it["url"] for it in elems]
+                if ld_urls != visible_urls:
+                    why.append(f"ItemList com URLs diferentes da lista visível ol.topic-list "
+                               f"({len(ld_urls)} no JSON-LD, {len(visible_urls)} na lista)")
+    return why
+
+
+def check_topic_ld(site: Path) -> list[str]:
+    """#105: toda página de tema sai com o @graph de CollectionPage, ItemList, BreadcrumbList e Person mínima."""
+    problems: list[str] = []
+    home = site / "index.html"
+    website_id = _home_website_id(home.read_text(encoding="utf-8")) if home.is_file() else None
+    if website_id is None:
+        problems.append("index.html: sem o WebSite com @id para o isPartOf dos temas (#105)")
+    for f in html_files(site):
+        rel = f.relative_to(site).as_posix()
+        if not TOPIC_PAGE.fullmatch(rel):
+            continue
+        url = SITE_ORIGIN + _page_url(site, f)
+        why = topic_ld_problems(f.read_text(encoding="utf-8"), url, website_id)
+        if why:
+            problems.append(f"{rel}: {TOPIC_LD_RULE}: {'; '.join(why)}")
+    return problems
+
+
+# Framework SEO + AEO/GEO (#105, decisão 26/11/2026): documento gratuito (DigitalDocument), sem Product nem Offer.
+FRAMEWORK_PAGE = "ferramentas/seo-geo-aeo-framework/framework-seo-aeo.html"
+FRAMEWORK_URL = SITE_ORIGIN + "/" + FRAMEWORK_PAGE
+FRAMEWORK_LD_RULE = "framework de SEO e AEO sem o JSON-LD DigitalDocument (#105)"
+FRAMEWORK_FORBIDDEN_FIELDS = ("offers", "price", "brand", "productID")
+
+
+def framework_ld_problems(html: str, url: str = FRAMEWORK_URL, website_id: str | None = None) -> list[str]:
+    """Motivos pelos quais a página do framework não traz o JSON-LD DigitalDocument do #105; vazio quando traz.
+
+    Contrato: exatamente um DigitalDocument (num @graph com a Person mínima), com isAccessibleForFree true, @id e url
+    iguais à própria página, author e publisher na Person, isPartOf no WebSite da home, e nenhum nó Product ou Offer
+    em qualquer profundidade.
+    """
+    blocks = _ld_blocks(html)
+    why: list[str] = []
+
+    forbidden: list[str] = []
+    for nodes, _ in blocks:
+        for node in nodes:
+            for d in _iter_ld_dicts(node):
+                for bad_type in ("Product", "Offer"):
+                    if _has_ld_type(d, bad_type) and bad_type not in forbidden:
+                        forbidden.append(bad_type)
+    if forbidden:
+        why.append(f"nó proibido no JSON-LD: {', '.join(forbidden)}")
+
+    all_docs = [d for nodes, _ in blocks for node in nodes for d in _iter_ld_dicts(node)
+                if _has_ld_type(d, "DigitalDocument")]
+    top_docs = [(n, nodes, graph) for nodes, graph in blocks for n in nodes
+                if isinstance(n, dict) and _has_ld_type(n, "DigitalDocument")]
+    if not all_docs:
+        why.append("nenhum DigitalDocument")
+        return why
+    if len(all_docs) > 1:
+        why.append(f"{len(all_docs)} DigitalDocument na página")
+        return why
+    if len(top_docs) != 1:
+        why.append("DigitalDocument aninhado fora do nível principal")
+        return why
+
+    doc, nodes, graph = top_docs[0]
+    if not graph:
+        why.append("o DigitalDocument não está num @graph")
+
+    def ref(v: object) -> object:
+        return v.get("@id") if isinstance(v, dict) else None
+
+    if doc.get("isAccessibleForFree") is not True:
+        why.append("isAccessibleForFree diferente de true")
+    for k in ("@id", "url"):
+        if doc.get(k) != url:
+            why.append(f"{k} diferente de {url}")
+    if ref(doc.get("author")) != PERSON_ID:
+        why.append(f"author não aponta para {PERSON_ID}")
+    if ref(doc.get("publisher")) != PERSON_ID:
+        why.append(f"publisher não aponta para {PERSON_ID}")
+    if website_id is not None and ref(doc.get("isPartOf")) != website_id:
+        why.append(f"isPartOf não aponta para o WebSite da home ({website_id})")
+    for bad_key in FRAMEWORK_FORBIDDEN_FIELDS:
+        if bad_key in doc:
+            why.append(f"campo proibido no DigitalDocument: {bad_key}")
+
+    persons = [n for n in nodes if isinstance(n, dict) and n.get("@id") == PERSON_ID]
+    if len(persons) != 1:
+        why.append(f"{len(persons)} nós Person com @id {PERSON_ID} no @graph, em vez de 1")
+    elif any(persons[0].get(k) != v for k, v in POST_PERSON.items()):
+        why.append(f"a Person do @graph não tem @type, name e url {POST_PERSON}")
+    return why
+
+
+def check_framework_ld(site: Path) -> list[str]:
+    """#105: a página do framework sai com @graph de DigitalDocument gratuito e Person mínima, sem Product nem Offer."""
+    rel = FRAMEWORK_PAGE
+    page = site / rel
+    if not page.is_file():
+        return [f"{rel}: página do framework ausente no site montado (site-manifest.txt)"]
+    home = site / "index.html"
+    website_id = _home_website_id(home.read_text(encoding="utf-8")) if home.is_file() else (SITE_ORIGIN + "/#website")
+    problems: list[str] = []
+    if home.is_file() and website_id is None:
+        problems.append("index.html: sem o WebSite com @id para o isPartOf do framework (#105)")
+    why = framework_ld_problems(page.read_text(encoding="utf-8"), FRAMEWORK_URL, website_id)
+    if why:
+        problems.append(f"{rel}: {FRAMEWORK_LD_RULE}: {'; '.join(why)}")
+    return problems
+
+
+def _og_property_contents(html: str, prop: str) -> list[str]:
+    """content de cada <meta property=prop> (sem diferença de caixa); '' quando falta o content."""
+    p = _MetaTags()
+    p.feed(html)
+    p.close()
+    return [t.get("content", "").strip() for t in p.tags if t.get("property", "").lower() == prop.lower()]
+
+
+def check_page_og_site_name(rel: str, html: str) -> list[str]:
+    """#105: a home e toda página HTML sob blog/ levam exatamente um og:site_name igual a SITE_NAME."""
+    if rel != "index.html" and not rel.startswith("blog/"):
+        return []
+    vals = _og_property_contents(_visible_html(html), "og:site_name")
+    if not vals:
+        return [f"{rel}: sem meta og:site_name (esperado {SITE_NAME!r})"]
+    if len(vals) > 1:
+        return [f"{rel}: esperado 1 meta og:site_name, achados {len(vals)}: {vals!r}"]
+    if vals[0] != SITE_NAME:
+        return [f"{rel}: og:site_name com valor {vals[0]!r}, esperado {SITE_NAME!r}"]
+    return []
+
+
+def check_og_site_name(site: Path) -> list[str]:
+    """#105: a home e toda página HTML sob blog/ saem com exatamente um og:site_name com SITE_NAME."""
+    problems: list[str] = []
+    for f in html_files(site):
+        rel = f.relative_to(site).as_posix()
+        problems += check_page_og_site_name(rel, f.read_text(encoding="utf-8"))
+    return problems
+
+
+# Resíduos legados nos posts indexáveis (critério de pronto da #105): busca na fonte sem <!----> e sem caixa.
+POST_RESIDUE_TERMS = (
+    "guilhermefavaron.com.br",
+    "mindapps.ai",
+    "VP de Tecnologia",
+    "ia-aplicada.substack.com",
+    "iaaplicada.substack.com",
+    "guifav.github.io",
+)
+GITHUB_REPO_HOST_PREFIX = "github.com/guifav/"
+
+
+def _has_forbidden_github_io(low: str) -> bool:
+    """True quando a linha (em minúsculas) traz guifav.github.io fora da exceção github.com/guifav/guifav.github.io."""
+    term = "guifav.github.io"
+    prefix = GITHUB_REPO_HOST_PREFIX
+    plen = len(prefix)
+    for m in re.finditer(re.escape(term), low):
+        start = m.start()
+        if low[:start].endswith(prefix):
+            before = start - plen - 1
+            if before < 0 or not (low[before].isalnum() or low[before] in ".-"):
+                continue
+        return True
+    return False
+
+
+def check_post_residues(posts: Path) -> list[str]:
+    """#105: posts indexáveis não podem conter resíduos legados na fonte (ignorando <!----> e diferença de caixa)."""
+    problems: list[str] = []
+    for md in sorted(posts.glob("**/*.md")):
+        text = md.read_text(encoding="utf-8")
+        fm = frontmatter(text)
+        if fm.get("index", "").lower() == "false":
+            continue
+        rel = md.relative_to(posts).as_posix()
+        clean = text.replace("<!---->", "")
+        for lineno, line in enumerate(clean.splitlines(), 1):
+            low = line.lower()
+            for term in POST_RESIDUE_TERMS:
+                term_low = term.lower()
+                if term_low not in low:
+                    continue
+                if term_low == "guifav.github.io" and not _has_forbidden_github_io(low):
+                    continue
+                problems.append(f"{rel}:{lineno}: resíduo legado em post indexável (#105): {term!r}")
+    return problems
+
+
 def check_seo(site: Path, posts: Path) -> tuple[list[str], list[str], list[str]]:
     """(problemas, avisos dos posts novos, avisos dos posts importados) da #103, sobre o HTML montado.
 
@@ -1624,16 +1987,82 @@ def check_seo(site: Path, posts: Path) -> tuple[list[str], list[str], list[str]]
     return problems, warn_new, warn_old
 
 
-# Página de consultoria (#136, consulta 18 do mapa da #112): a página existe, com o título e o H1 aprovados e o
-# JSON-LD Service do Gui (provider pelo @id da Person) com uma Offer. Alarme de integridade da página estática.
+# Página de consultoria (#136, consulta 18 do mapa da #112) e regras dos R$ 500 (decisão do Gui, 26/11/2026, #105):
+# a /consultoria/ existe com o título, o H1 aprovados e o JSON-LD Service do Gui (provider pelo @id da Person) com
+# Offer gratuita (price "0" em BRL). Em todo o site, o link antigo da agenda paga não pode aparecer e nenhum Service
+# pode trazer offers com price diferente da string "0".
 CONSULTING_PAGE = "consultoria/index.html"
 CONSULTING_TITLE = "Consultoria em IA para empresas" + TITLE_SEP + SITE_NAME
 CONSULTING_H1 = "Consultoria em inteligência artificial para empresas"
+OLD_PAID_SCHEDULE_ID = "DmYwGeyh67m2nBD39"
+
+
+def _service_offer_problems(service: dict, checked: set[int] | None = None) -> list[str]:
+    """Problemas de offers dentro de um nó Service (em qualquer profundidade): todo price precisa ser a string '0'."""
+    why: list[str] = []
+    seen = checked if checked is not None else set()
+
+    def check_entry(entry: object) -> None:
+        if isinstance(entry, list):
+            if not entry:
+                why.append("offers vazio em Service")
+                return
+            for item in entry:
+                check_entry(item)
+            return
+        if not isinstance(entry, dict):
+            why.append(f"offers em Service com valor inválido {entry!r}, esperado objeto com price '0'")
+            return
+        if id(entry) in seen:
+            return
+        seen.add(id(entry))
+        if "price" not in entry:
+            why.append("Offer em Service sem price '0'")
+        elif not _is_zero_price(entry["price"]):
+            why.append(f"Offer em Service com price {entry['price']!r}, esperado '0'")
+
+    for sub in _iter_ld_dicts(service):
+        if "offers" in sub:
+            check_entry(sub["offers"])
+        if _has_ld_type(sub, "Offer"):
+            check_entry(sub)
+    return why
+
+
+def _page_service_offer_problems(html: str) -> list[str]:
+    """Problemas de offers em todos os nós Service do JSON-LD da página (em qualquer profundidade)."""
+    why: list[str] = []
+    checked: set[int] = set()
+    for node in _ld_nodes(html):
+        for d in _iter_ld_dicts(node):
+            if _has_ld_type(d, "Service"):
+                why += _service_offer_problems(d, checked)
+    return why
+
+
+def check_page_paid_consulting(rel: str, html: str) -> list[str]:
+    """#105 (decisão 26/11/2026): sem o link antigo da agenda paga (texto, atributo ou JSON-LD) e sem Service com price != '0'."""
+    problems: list[str] = []
+    needle = OLD_PAID_SCHEDULE_ID.lower()
+    if needle in html.lower() or needle in unescape(html).lower():
+        problems.append(f"{rel}: contém o link antigo da consultoria paga ({OLD_PAID_SCHEDULE_ID})")
+    for reason in _page_service_offer_problems(html):
+        problems.append(f"{rel}: {reason}")
+    return problems
+
+
+def check_paid_consulting(site: Path) -> list[str]:
+    """#105 (decisão 26/11/2026): nenhuma página HTML do site montado traz o link antigo nem Service com price diferente de '0'."""
+    problems: list[str] = []
+    for f in html_files(site):
+        rel = f.relative_to(site).as_posix()
+        problems += check_page_paid_consulting(rel, f.read_text(encoding="utf-8"))
+    return problems
 
 
 def check_consulting(site: Path) -> list[str]:
-    """#136: título, H1 único e JSON-LD Service (provider: a Person, com tipo, nome e url) com Offer de preço em BRL na
-    /consultoria/, sem FAQPage (#108)."""
+    """#136 e #105: título, H1 único e JSON-LD Service (provider: a Person, com tipo, nome e url) com Offer gratuita
+    (price '0' em BRL) na /consultoria/, sem FAQPage (#108)."""
     rel = CONSULTING_PAGE
     page = site / rel
     if not page.is_file():
@@ -1655,13 +2084,8 @@ def check_consulting(site: Path) -> list[str]:
         return o if isinstance(o, list) else [o]
 
     def priced(o) -> bool:
-        # Preço numérico, finito e não negativo (0 vale: a primeira conversa é gratuita), em número ou texto; null,
-        # booleano, "abc", negativo, NaN e Infinity não.
-        price = o.get("price") if isinstance(o, dict) else None
-        numeric = (isinstance(price, (int, float)) and not isinstance(price, bool) and math.isfinite(price)
-                   and price >= 0) or (
-            isinstance(price, str) and re.fullmatch(r"\d+(?:\.\d+)?", price.strip()) is not None)
-        return isinstance(o, dict) and o.get("@type") == "Offer" and numeric and o.get("priceCurrency") == "BRL"
+        return (isinstance(o, dict) and _has_ld_type(o, "Offer")
+                and _is_zero_price(o.get("price")) and o.get("priceCurrency") == "BRL")
 
     def person(pr) -> bool:
         return (isinstance(pr, dict) and pr.get("@id") == PERSON_ID and pr.get("@type") == "Person"
@@ -1670,9 +2094,9 @@ def check_consulting(site: Path) -> list[str]:
 
     nodes = _ld_nodes(html)
     if not any(n.get("@type") == "Service" and n.get("@id") != PERSON_ID and person(n.get("provider"))
-               and any(priced(o) for o in offers(n)) for n in nodes):
-        problems.append(f"{rel}: sem o JSON-LD Service com provider Person ({PERSON_ID!r}, name e url) e uma Offer "
-                        "com price e priceCurrency BRL")
+               and any(priced(o) for o in offers(n)) and not _service_offer_problems(n) for n in nodes):
+        problems.append(f"{rel}: sem o JSON-LD Service com provider Person ({PERSON_ID!r}, name e url) e Offer "
+                        "gratuita com price '0' e priceCurrency BRL")
     if any(n.get("@type") == "FAQPage" for n in nodes):
         problems.append(f"{rel}: FAQPage fora da decisão da #108 (perguntas só em texto visível)")
     return problems
@@ -1720,15 +2144,38 @@ def expected_home_latest(posts: Path, n: int) -> list[str]:
     return [f"/blog/{slug}/" for _, slug in _listed_posts(posts)[0][:n]]
 
 
+def home_person_problems(html: str) -> list[str]:
+    """#105: a Person da home (@id PERSON_ID) traz alternateName com SITE_NAME, knowsAbout e disambiguatingDescription."""
+    persons = [n for n in _ld_nodes(html) if _has_ld_type(n, "Person") and n.get("@id") == PERSON_ID]
+    if len(persons) != 1:
+        return [f"{len(persons)} nós Person com @id {PERSON_ID}, em vez de 1"]
+    person = persons[0]
+    why: list[str] = []
+    alt = person.get("alternateName")
+    if isinstance(alt, list):
+        if not (all(isinstance(x, str) and x.strip() for x in alt) and SITE_NAME in alt):
+            why.append(f"alternateName precisa conter {SITE_NAME!r} (lista de strings não vazias)")
+    elif not (isinstance(alt, str) and alt == SITE_NAME):
+        why.append(f"alternateName precisa conter {SITE_NAME!r}")
+    knows = person.get("knowsAbout")
+    if not (isinstance(knows, list) and knows and all(isinstance(x, str) and x.strip() for x in knows)):
+        why.append("knowsAbout precisa ser lista não vazia de strings")
+    disamb = person.get("disambiguatingDescription")
+    if not (isinstance(disamb, str) and disamb.strip()):
+        why.append("disambiguatingDescription ausente ou vazio")
+    return why
+
+
 def check_home(site: Path, posts: Path, n: int | None) -> list[str]:
-    """#136: a lista de últimos artigos e os links das páginas de tema na home montada."""
+    """#136 e #105: últimos artigos, links das páginas de tema e campos obrigatórios da Person na home montada."""
     rel = "index.html"
     page = site / rel
     if not page.is_file():
         return [f"{rel}: home ausente no site montado"]
     if not n:
         return ["blog-src/src/consts.ts: sem export const HOME_LATEST = <n>; (quantos artigos a home lista)"]
-    html = re.sub(r"<!--(?! /?ultimos-artigos -->).*?-->", "", page.read_text(encoding="utf-8"), flags=re.S)
+    raw_html = page.read_text(encoding="utf-8")
+    html = re.sub(r"<!--(?! /?ultimos-artigos -->).*?-->", "", raw_html, flags=re.S)
     problems = [f"posts: {name} com date ilegível no frontmatter" for name in _listed_posts(posts)[1]]
     m = re.search(r"<!-- ultimos-artigos -->(.*?)<!-- /ultimos-artigos -->", html, flags=re.S)
     got = re.findall(r"""<a\b[^>]*\bhref\s*=\s*["']([^"']*)["']""", m.group(1), flags=re.I) if m else None
@@ -1746,6 +2193,9 @@ def check_home(site: Path, posts: Path, n: int | None) -> list[str]:
         if links.count(href) != 1:
             problems.append(f'{rel}: a seção id="{HOME_TOPICS_ID}" precisa linkar {href} uma vez, linka '
                             f"{links.count(href)}")
+    person_why = home_person_problems(raw_html)
+    if person_why:
+        problems.append(f"{rel}: Person da home ({PERSON_ID}) inválida (#105): {'; '.join(person_why)}")
     return problems
 
 
@@ -2795,6 +3245,25 @@ def check_youtube(site: Path) -> list[str]:
     return problems
 
 
+def check_page_old_youtube_handle(rel: str, html: str) -> list[str]:
+    """#105: o handle antigo do YouTube não pode aparecer em nenhum HTML do site montado (atributo, texto ou script)."""
+    needle = OLD_YOUTUBE_HANDLE.lower()
+    decoded = unescape(html)
+    if (needle in html.lower() or needle in decoded.lower()
+            or needle in unquote(html).lower() or needle in unquote(decoded).lower()):
+        return [f"{rel}: contém o handle antigo do YouTube ({OLD_YOUTUBE_HANDLE})"]
+    return []
+
+
+def check_old_youtube_handle(site: Path) -> list[str]:
+    """#105: nenhuma página HTML do site montado traz o handle antigo do YouTube."""
+    problems: list[str] = []
+    for f in html_files(site):
+        rel = f.relative_to(site).as_posix()
+        problems += check_page_old_youtube_handle(rel, f.read_text(encoding="utf-8"))
+    return problems
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Verifica o site montado em _site/ antes do deploy.")
     ap.add_argument("--site", default="_site")
@@ -2808,13 +3277,19 @@ def main(argv: list[str] | None = None) -> int:
         problems += check_summary(Path(args.site), Path(args.posts))
         problems += check_contrast(Path(args.site))
         problems += check_consulting(Path(args.site))
+        problems += check_paid_consulting(Path(args.site))
         problems += check_home(Path(args.site), Path(args.posts), read_home_latest(Path(args.consts)))
         problems += check_post_ld(Path(args.site), Path(args.posts))
+        problems += check_topic_ld(Path(args.site))
+        problems += check_framework_ld(Path(args.site))
+        problems += check_og_site_name(Path(args.site))
+        problems += check_post_residues(Path(args.posts))
         problems += check_llm_ranking(Path(args.site))
         problems += check_legal(Path(args.site))
         problems += check_llms_txt(Path(args.site), Path(args.posts))
         problems += check_courses(Path(args.site))
         problems += check_youtube(Path(args.site))
+        problems += check_old_youtube_handle(Path(args.site))
     except ResolverError as e:
         print(f"ERRO: resolvedor de URL indisponível, verificação não feita: {e}", file=sys.stderr)
         return 1
