@@ -219,7 +219,7 @@ Os setores regulamentados têm requisitos adicionais para sistemas de gestão do
 
 O gerenciamento do ciclo de vida do conteúdo garante que informações desatualizadas não apareçam em respostas. As trilhas de auditoria rastreiam não apenas quem acessou o quê, mas também como as informações foram usadas e quais decisões foram influenciadas. O controle de versão mantém o contexto histórico, destacando as fontes confiáveis ​​atuais.
 
-A tabela abaixo consolida as cinco frentes de operação em produção abordadas nas seções anteriores (latência, aprendizado contínuo, métricas, segurança e compliance).
+A tabela abaixo consolida as cinco frentes de operação em produção abordadas até aqui (latência, aprendizado contínuo, métricas, segurança e compliance).
 
 | Frente em produção | Mecanismos aplicados no caso | Efeito ou critério acompanhado |
 |---|---|---|

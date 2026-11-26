@@ -20,7 +20,7 @@ Recentemente, uma empresa liderada por um amigo do setor financeiro enfrentou ex
 <figcaption>Modernização de sistemas legados</figcaption>
 </figure>
 
-A decisão de modernizar não era apenas tecnológica — era estratégica. Após 24 meses de transformação arquitetural estruturada, a mesma organização reduziu o time-to-market de features de 18 para 3 meses, cortou custos operacionais em 40%, e mais importante: transformou seu sistema de um liability em um enabler de inovação que hoje suporta 15 novos produtos digitais lançados anualmente.
+A decisão de modernizar não era apenas tecnológica: era estratégica. Após 24 meses de transformação arquitetural estruturada, a mesma organização reduziu o time-to-market de features de 18 para 3 meses, cortou custos operacionais em 40%, e mais importante: transformou seu sistema de um liability em um enabler de inovação que habilitou 15 novos produtos digitais em 2 anos.
 
 Este artigo explora as decisões arquiteturais críticas, trade-offs estratégicos e frameworks práticos que separam modernizações bem-sucedidas daquelas que se transformam em projetos de anos sem ROI visível. Não se trata de escolher entre “reescrever tudo” ou “manter como está” — existe um espectro de abordagens que equilibram risco, custo e valor de negócio.
 

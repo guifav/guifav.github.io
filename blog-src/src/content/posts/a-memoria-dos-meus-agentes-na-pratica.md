@@ -1,7 +1,7 @@
 ---
-title: "A memória dos meus agentes, na prática: um sistema de registros para quem lida com muitas decisões simultâneas"
-subtitle: "Cinco camadas de registro com dono, formato e ciclo de vida próprios; os crons que transformam PRs e reuniões em decisões rastreáveis; e a ordem de leitura que devolve a fonte certa para cada pergunta"
-description: "Cinco camadas de registro com dono, formato e ciclo de vida próprios; os crons que transformam PRs e reuniões em decisões rastreáveis; e a ordem de leitura que devolve a fonte certa para cada pergunta"
+title: "A memória dos meus agentes na prática: sistema de registros"
+subtitle: "Quatro camadas de registro com dono, formato e ciclo de vida próprios; os crons que transformam PRs e reuniões em decisões rastreáveis; e a ordem de leitura que devolve a fonte certa para cada pergunta"
+description: "Quatro camadas de registro para agentes, crons que transformam PRs e reuniões em decisões rastreáveis e a ordem de leitura que devolve a fonte certa."
 summary: "Rodando com cinco agentes em máquinas distintas, o sistema divide a memória em quatro camadas: ledger de sessão, índice semântico privado no Mem0, acervo compartilhado em Git (com inbox e curadoria diária) e registros operacionais. Crons com estado capturam decisões de PRs e reuniões com proveniência obrigatória, mantendo gate humano em identidade e estratégia. Na leitura, os agentes partem do acervo curado e descem às camadas brutas sob demanda."
 date: 2026-07-22T03:38:46.624Z
 updated: 2026-07-22T03:40:03.866Z
@@ -12,7 +12,7 @@ topics: [agentes-de-ia]
 ---
 
 <figure>
-<img src="/blog/img/a-memoria-dos-meus-agentes-na-pratica/484a84fa07-1456.webp" srcset="/blog/img/a-memoria-dos-meus-agentes-na-pratica/484a84fa07-728.webp 728w, /blog/img/a-memoria-dos-meus-agentes-na-pratica/484a84fa07-1456.webp 1456w" sizes="(max-width: 760px) 100vw, 720px" width="1456" height="819" alt="" loading="lazy" decoding="async">
+<img src="/blog/img/a-memoria-dos-meus-agentes-na-pratica/484a84fa07-1456.webp" srcset="/blog/img/a-memoria-dos-meus-agentes-na-pratica/484a84fa07-728.webp 728w, /blog/img/a-memoria-dos-meus-agentes-na-pratica/484a84fa07-1456.webp 1456w" sizes="(max-width: 760px) 100vw, 720px" width="1456" height="819" alt="Arquitetura de memória de agentes de IA organizada como um sistema de registros em quatro camadas" loading="lazy" decoding="async">
 </figure>
 
 Em março escrevi aqui que [a memória dos seus agentes está quebrada](/blog/memoria-agentes-solucao-definitiva/). O argumento era que jogar o histórico inteiro no contexto funciona no protótipo e desmorona em produção, e que a saída passava por separar camadas de memória com papéis distintos. Era arquitetura no papel.
@@ -30,7 +30,7 @@ O erro mais comum que vejo em projetos de memória de agente é misturar quatro 
 O desenho que uso separa as camadas num fluxo de refino:
 
 <figure>
-<img src="/blog/img/a-memoria-dos-meus-agentes-na-pratica/d89dc4b427-1456.webp" srcset="/blog/img/a-memoria-dos-meus-agentes-na-pratica/d89dc4b427-728.webp 728w, /blog/img/a-memoria-dos-meus-agentes-na-pratica/d89dc4b427-1456.webp 1456w" sizes="(max-width: 760px) 100vw, 720px" width="1456" height="819" alt="" loading="lazy" decoding="async">
+<img src="/blog/img/a-memoria-dos-meus-agentes-na-pratica/d89dc4b427-1456.webp" srcset="/blog/img/a-memoria-dos-meus-agentes-na-pratica/d89dc4b427-728.webp 728w, /blog/img/a-memoria-dos-meus-agentes-na-pratica/d89dc4b427-1456.webp 1456w" sizes="(max-width: 760px) 100vw, 720px" width="1456" height="819" alt="Fluxo de refino das camadas de registro em estratos, separando conversa, evidência bruta e conhecimento curado" loading="lazy" decoding="async">
 <figcaption><em>As camadas de registro como estratos: a conversa evapora, a evidência sedimenta, e só o estrato curado sustenta peso.</em></figcaption>
 </figure>
 
@@ -96,7 +96,7 @@ gui-brain/
 O fluxo de promoção: o agente detecta decisão, aprendizado ou mudança material; faz pull defensivo; cria a nota na inbox com proveniência, confiança, links e data; e commita. Uma vez por dia, um curador (no meu caso, um agente consolidador com playbook versionado) lê tudo que apareceu nas inboxes, deduplica observações que múltiplos agentes registraram, funde o que é a mesma coisa preservando as duas origens, e move o que tem sinal para a pasta curada apropriada. O que foi processado vai para um arquivo morto por agente, e nada é deletado.
 
 <figure>
-<img src="/blog/img/a-memoria-dos-meus-agentes-na-pratica/0ad5bc8956-1456.webp" srcset="/blog/img/a-memoria-dos-meus-agentes-na-pratica/0ad5bc8956-728.webp 728w, /blog/img/a-memoria-dos-meus-agentes-na-pratica/0ad5bc8956-1456.webp 1456w" sizes="(max-width: 760px) 100vw, 720px" width="1456" height="819" alt="" loading="lazy" decoding="async">
+<img src="/blog/img/a-memoria-dos-meus-agentes-na-pratica/0ad5bc8956-1456.webp" srcset="/blog/img/a-memoria-dos-meus-agentes-na-pratica/0ad5bc8956-728.webp 728w, /blog/img/a-memoria-dos-meus-agentes-na-pratica/0ad5bc8956-1456.webp 1456w" sizes="(max-width: 760px) 100vw, 720px" width="1456" height="819" alt="Fluxo de promoção no gui-brain com escrita livre na inbox, decantação, comporta do curador e gate humano em identidade" loading="lazy" decoding="async">
 <figcaption><em>Escrita livre a montante, decantação no meio, e uma comporta que só o curador opera. Identidade tem uma segunda comporta: a minha.</em></figcaption>
 </figure>
 
@@ -146,7 +146,7 @@ GitHub/GitLab
 A rubrica é versionada e a regra de aprovação é dura: qualquer finding bloqueia. A parte que mais importa para quem for implementar é o papel do SHA. Uma review vale apenas para o head revisado; commit novo invalida o parecer anterior; e o estado do cron é chaveado por repo, número e head SHA. Sem isso, o sistema afirma coisas sobre um código que já mudou.
 
 <figure>
-<img src="/blog/img/a-memoria-dos-meus-agentes-na-pratica/93492c97e6-1456.webp" srcset="/blog/img/a-memoria-dos-meus-agentes-na-pratica/93492c97e6-728.webp 728w, /blog/img/a-memoria-dos-meus-agentes-na-pratica/93492c97e6-1456.webp 1456w" sizes="(max-width: 760px) 100vw, 720px" width="1456" height="819" alt="" loading="lazy" decoding="async">
+<img src="/blog/img/a-memoria-dos-meus-agentes-na-pratica/93492c97e6-1456.webp" srcset="/blog/img/a-memoria-dos-meus-agentes-na-pratica/93492c97e6-728.webp 728w, /blog/img/a-memoria-dos-meus-agentes-na-pratica/93492c97e6-1456.webp 1456w" sizes="(max-width: 760px) 100vw, 720px" width="1456" height="819" alt="Review de PR chaveado por head SHA em que cada parecer lacra um commit específico e o commit seguinte rompe o lacre" loading="lazy" decoding="async">
 <figcaption><em>Cada parecer é um lacre sobre um commit específico. O commit seguinte rompe o lacre por definição.</em></figcaption>
 </figure>
 
@@ -177,7 +177,7 @@ Cada objeto extraído sai neste formato:
 ```
 
 <figure>
-<img src="/blog/img/a-memoria-dos-meus-agentes-na-pratica/99af684b0c-1456.webp" srcset="/blog/img/a-memoria-dos-meus-agentes-na-pratica/99af684b0c-728.webp 728w, /blog/img/a-memoria-dos-meus-agentes-na-pratica/99af684b0c-1456.webp 1456w" sizes="(max-width: 760px) 100vw, 720px" width="1456" height="819" alt="" loading="lazy" decoding="async">
+<img src="/blog/img/a-memoria-dos-meus-agentes-na-pratica/99af684b0c-1456.webp" srcset="/blog/img/a-memoria-dos-meus-agentes-na-pratica/99af684b0c-728.webp 728w, /blog/img/a-memoria-dos-meus-agentes-na-pratica/99af684b0c-1456.webp 1456w" sizes="(max-width: 760px) 100vw, 720px" width="1456" height="819" alt="Meeting intelligence transformando a transcrição contínua em objetos acionáveis ligados ao trecho de origem" loading="lazy" decoding="async">
 <figcaption><em>A transcrição entra como fita contínua; saem peças discretas, cada uma amarrada por um fio ao trecho de origem.</em></figcaption>
 </figure>
 
@@ -194,7 +194,7 @@ O desenho que recomendo é um job semanal de consolidação estratégica que lê
 Todo o investimento em escrita se paga na leitura. No início de uma sessão, meus agentes seguem uma ordem de carregamento que começa leve e aprofunda sob demanda: primeiro identidade e o índice do conhecimento curado; depois o contexto do projeto em questão; depois busca semântica na memória privada; o ledger de sessão apenas se for preciso reconstituir detalhe; e as notas executivas quando a tarefa tem implicação de gestão.
 
 <figure>
-<img src="/blog/img/a-memoria-dos-meus-agentes-na-pratica/f0a01f268f-1456.webp" srcset="/blog/img/a-memoria-dos-meus-agentes-na-pratica/f0a01f268f-728.webp 728w, /blog/img/a-memoria-dos-meus-agentes-na-pratica/f0a01f268f-1456.webp 1456w" sizes="(max-width: 760px) 100vw, 720px" width="1456" height="819" alt="" loading="lazy" decoding="async">
+<img src="/blog/img/a-memoria-dos-meus-agentes-na-pratica/f0a01f268f-1456.webp" srcset="/blog/img/a-memoria-dos-meus-agentes-na-pratica/f0a01f268f-728.webp 728w, /blog/img/a-memoria-dos-meus-agentes-na-pratica/f0a01f268f-1456.webp 1456w" sizes="(max-width: 760px) 100vw, 720px" width="1456" height="819" alt="Recuperação de contexto por estágios em profundidade crescente, resolvendo a maioria das perguntas nos dois primeiros" loading="lazy" decoding="async">
 <figcaption><em>O prumo desce por estágios. A maioria das perguntas se resolve nos dois primeiros.</em></figcaption>
 </figure>
 
