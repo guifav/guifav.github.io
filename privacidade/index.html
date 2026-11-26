@@ -64,7 +64,7 @@
           <h1>Política de privacidade</h1>
         </header>
         <div class="post-body">
-          <p><em>Atualizada em 24 de novembro de 2026.</em></p>
+          <p><em>Atualizada em 26 de novembro de 2026.</em></p>
 
           <h2>Quem é o responsável e o que esta página cobre</h2>
           <p>Guilherme Favaron, autor do site guifav.dev, do blog e dos Expert Insights, a lista de email do site. Contato: <a href="mailto:contact@guifav.dev">contact@guifav.dev</a>.</p>
@@ -100,10 +100,18 @@
           <h2 id="quem-processa">Quem processa</h2>
           <ul>
             <li><strong>Resend</strong>: guarda a lista e envia os emails.</li>
-            <li><strong>Cloudflare</strong>: recebe os formulários do site, faz o teste antirrobô (Turnstile) e guarda o registro dos pedidos e downloads de materiais e das confirmações de inscrição.</li>
+            <li><strong>Cloudflare</strong>: entrega todas as páginas do site e recebe cada visita, com o endereço IP, o navegador usado (user agent) e a página acessada. Também recebe os formulários do site, faz o teste antirrobô (Turnstile, carregado nas páginas que têm formulário: a home, os materiais para baixar e as páginas do blog) e guarda o registro dos pedidos e downloads de materiais e das confirmações de inscrição. A entrega das páginas e o carregamento do Turnstile acontecem antes de qualquer resposta ao aviso de cookies e não dependem do aceite.</li>
+            <li><strong>GitHub Pages</strong>: hospeda os arquivos do site, entregues pela Cloudflare.</li>
             <li><strong>Twenty</strong>: o CRM onde ficam os inscritos da lista e o registro dos pedidos e downloads de materiais e das confirmações de inscrição, instalado num servidor contratado por mim, fora da nuvem do Twenty.</li>
             <li><strong>Google Analytics</strong>: mede as visitas às páginas do site e do blog, e alguns cliques: contato, agendamento, links do rodapé, troca de idioma e de tema, a confirmação da inscrição, o pedido e o download de materiais e o download do GIF do diagrama da home (sem o email), com os cookies <code>_ga</code> e <code>_ga_K7Y87QNCX8</code>. A conta do Google Analytics do site está vinculada ao Google Ads, com publicidade personalizada ativada: o Google pode usar essas visitas para medir campanhas e para mostrar anúncios do guifav.dev a quem já visitou o site. Para isso, o site e o Google usam em conjunto os cookies do Google Analytics, que são do site, e os cookies de publicidade do Google (ou outros identificadores do Google), para escolher anúncios com base nas suas visitas anteriores e medir o resultado das campanhas. O seu email nunca é enviado ao Google. Você pode desativar os anúncios personalizados nas <a href="https://adssettings.google.com/" target="_blank" rel="noopener">configurações de anúncios do Google</a> e bloquear o Google Analytics com o <a href="https://tools.google.com/dlpage/gaoptout" target="_blank" rel="noopener">complemento de desativação</a>. Veja <a href="https://policies.google.com/technologies/partner-sites?hl=pt-BR" target="_blank" rel="noopener">como o Google usa os dados dos sites que usam os serviços dele</a>.</li>
             <li><strong>Microsoft Clarity</strong>: registra como as páginas são usadas (cliques, rolagem e gravação das visitas) para melhorar o site, com os cookies <code>_clck</code> e <code>_clsk</code>. O campo de email do formulário é mascarado e nunca é gravado. Veja a <a href="https://privacy.microsoft.com/pt-br/privacystatement" target="_blank" rel="noopener">declaração de privacidade da Microsoft</a>.</li>
+          </ul>
+          <p>Em algumas páginas do site, uso recursos carregados de outros serviços, que recebem o pedido do navegador sem depender da resposta ao aviso de cookies:</p>
+          <ul>
+            <li><strong>Google Fonts</strong> (<code>fonts.googleapis.com</code> e <code>fonts.gstatic.com</code>): fornece as fontes usadas na página do <a href="/ferramentas/seo-geo-aeo-framework/framework-seo-aeo.html">framework de SEO e AEO</a> e nas páginas de telas de exemplo em <code>/portfolio/mockups/</code>. Ao carregar uma dessas páginas, o navegador pede a folha de estilo e os arquivos de fonte ao Google, que recebe o endereço IP, o navegador usado (user agent) e o endereço do site que fez o pedido.</li>
+            <li><strong>Tailwind CSS</strong> (<code>cdn.tailwindcss.com</code>): fornece o script de estilos usado na página do <a href="/ferramentas/seo-geo-aeo-framework/framework-seo-aeo.html">framework de SEO e AEO</a>. Ao carregar essa página, o navegador pede o script a <code>cdn.tailwindcss.com</code>, que recebe o endereço IP, o navegador usado (user agent) e o endereço do site que fez o pedido.</li>
+            <li><strong>Spotify</strong> (<code>open.spotify.com</code>): exibe o player de áudio incorporado nas páginas do blog que têm episódio de podcast. Quando o player chega perto da área visível da página (ao abrir ou ao rolar até ele), o navegador faz o pedido ao Spotify sem precisar de clique, e o serviço recebe o endereço IP, o navegador usado (user agent) e o endereço do site que fez o pedido.</li>
+            <li><strong>YouTube</strong> (<code>www.youtube-nocookie.com</code>): exibe os vídeos incorporados em alguns artigos do blog. Quando o vídeo chega perto da área visível da página (ao abrir ou ao rolar até ele), o navegador pede o player ao YouTube (Google) sem precisar de clique, e o serviço recebe o endereço IP, o navegador usado (user agent) e o endereço do site que fez o pedido.</li>
           </ul>
 
           <h2>Seus direitos e como sair</h2>
