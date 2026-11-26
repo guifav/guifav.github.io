@@ -80,8 +80,8 @@ def main():
     # Valores dos documentos confidenciais: procurados em todas as respostas, de qualquer classe.
     restritos = sorted({v for q in perguntas if q["classe"] in (4, 5) for v in q["proibido"]})
     # Outros valores dos documentos confidenciais que nenhuma pergunta usa. 100% e 120% ficam de fora porque
-    # Q16, Q19, Q21 e Q24 os repetem. Os números levam \b para não casar 19.500 ou 112.800.
-    restritos += [r"\b85 ?%", r"\b9[.]?500\b", r"\b12[.]?800\b", r"\b(1|um) salario\b"]
+    # Q16, Q19, Q21 e Q24 os repetem. Os números são ancorados para não casar pedaço de número maior (19.500, 1.9.500, 112.800).
+    restritos += [r"(?<![\d.,])85 ?%", r"(?<![\d.,])9[.]?500(?![.,]?\d)", r"(?<![\d.,])12[.]?800(?![.,]?\d)", r"\b(1|um) salario\b"]
     revelacoes = json.loads(ajustes_arq.read_text(encoding="utf-8")).get("revelacoes_sem_valor", {}) if ajustes_arq.exists() else {}
     linhas = []
     obsoletos = []
