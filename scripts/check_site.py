@@ -749,13 +749,14 @@ class _MetaTags(HTMLParser):
     handle_startendtag = handle_starttag
 
 
-def _meta_contents(html: str, prop: str) -> list[str]:
-    """content de cada <meta> cujo property ou name é prop (sem diferença de caixa); "" quando falta o content."""
+def _meta_contents(html: str, prop: str, *, attrs: tuple[str, ...] = ("property", "name")) -> list[str]:
+    """content de cada <meta> cujo atributo em attrs é prop (sem diferença de caixa); '' quando falta o content."""
     p = _MetaTags()
     p.feed(html)
     p.close()
+    want = prop.lower()
     return [t.get("content", "").strip() for t in p.tags
-            if prop.lower() in (t.get("property", "").lower(), t.get("name", "").lower())]
+            if any(t.get(attr, "").lower() == want for attr in attrs)]
 
 
 def check_titles_and_groups(rel: str, html: str) -> list[str]:
@@ -1520,6 +1521,7 @@ def _home_website_id(html: str) -> str | None:
 # Google, que lê uma página por vez, resolver author.name e author.url sem seguir o @id até a home.
 POST_PERSON = {"@type": "Person", "@id": PERSON_ID, "name": SITE_NAME, "url": SITE_ORIGIN + "/"}
 POST_LD_RULE = "post indexável sem o JSON-LD do post (#105)"
+# Espelha BLOG_NAME de blog-src/src/consts.ts (conferido em TopicLdTest.test_blog_name_matches_consts).
 BLOG_NAME = "Insights"
 TOPIC_LD_RULE = "página de tema sem o JSON-LD do tema (#105)"
 ITEM_LIST_ORDER = "https://schema.org/ItemListOrderAscending"
@@ -1856,19 +1858,11 @@ def check_framework_ld(site: Path) -> list[str]:
     return problems
 
 
-def _og_property_contents(html: str, prop: str) -> list[str]:
-    """content de cada <meta property=prop> (sem diferença de caixa); '' quando falta o content."""
-    p = _MetaTags()
-    p.feed(html)
-    p.close()
-    return [t.get("content", "").strip() for t in p.tags if t.get("property", "").lower() == prop.lower()]
-
-
 def check_page_og_site_name(rel: str, html: str) -> list[str]:
     """#105: a home e toda página HTML sob blog/ levam exatamente um og:site_name igual a SITE_NAME."""
     if rel != "index.html" and not rel.startswith("blog/"):
         return []
-    vals = _og_property_contents(_visible_html(html), "og:site_name")
+    vals = _meta_contents(_visible_html(html), "og:site_name", attrs=("property",))
     if not vals:
         return [f"{rel}: sem meta og:site_name (esperado {SITE_NAME!r})"]
     if len(vals) > 1:
@@ -1887,7 +1881,8 @@ def check_og_site_name(site: Path) -> list[str]:
     return problems
 
 
-# Resíduos legados nos posts indexáveis (critério de pronto da #105): busca na fonte sem <!----> e sem caixa.
+# Resíduos legados nos posts indexáveis (critério de pronto da #105): busca na fonte sem comentários HTML
+# na mesma linha (<!--...-->) e sem diferença de caixa.
 POST_RESIDUE_TERMS = (
     "guilhermefavaron.com.br",
     "mindapps.ai",
@@ -1897,6 +1892,7 @@ POST_RESIDUE_TERMS = (
     "guifav.github.io",
 )
 GITHUB_REPO_HOST_PREFIX = "github.com/guifav/"
+_HTML_LINE_COMMENT = re.compile(r"<!--.*?-->")
 
 
 def _has_forbidden_github_io(low: str) -> bool:
@@ -1915,7 +1911,7 @@ def _has_forbidden_github_io(low: str) -> bool:
 
 
 def check_post_residues(posts: Path) -> list[str]:
-    """#105: posts indexáveis não podem conter resíduos legados na fonte (ignorando <!----> e diferença de caixa)."""
+    """#105: posts indexáveis não podem conter resíduos legados na fonte (ignorando <!--...--> na linha e caixa)."""
     problems: list[str] = []
     for md in sorted(posts.glob("**/*.md")):
         text = md.read_text(encoding="utf-8")
@@ -1923,9 +1919,8 @@ def check_post_residues(posts: Path) -> list[str]:
         if fm.get("index", "").lower() == "false":
             continue
         rel = md.relative_to(posts).as_posix()
-        clean = text.replace("<!---->", "")
-        for lineno, line in enumerate(clean.splitlines(), 1):
-            low = line.lower()
+        for lineno, line in enumerate(text.splitlines(), 1):
+            low = _HTML_LINE_COMMENT.sub("", line).lower()
             for term in POST_RESIDUE_TERMS:
                 term_low = term.lower()
                 if term_low not in low:
@@ -1997,46 +1992,121 @@ CONSULTING_H1 = "Consultoria em inteligência artificial para empresas"
 OLD_PAID_SCHEDULE_ID = "DmYwGeyh67m2nBD39"
 
 
+# Service, subtipos em https://schema.org/Service (BroadcastService, CableOrSatelliteService, FinancialProduct e seus
+# subtipos de serviço CurrencyConversionService e PaymentService, FoodService, GovernmentService, TaxiService, WebAPI)
+# e tipos de serviço sob https://schema.org/LocalBusiness usados com frequência para consultoria e serviços profissionais
+# (ProfessionalService, FinancialService, AccountingService, LegalService).
+SERVICE_TYPES = frozenset({
+    "Service",
+    "BroadcastService",
+    "CableOrSatelliteService",
+    "FinancialProduct",
+    "CurrencyConversionService",
+    "PaymentService",
+    "FoodService",
+    "GovernmentService",
+    "TaxiService",
+    "WebAPI",
+    "ProfessionalService",
+    "FinancialService",
+    "AccountingService",
+    "LegalService",
+})
+OFFER_TYPES = frozenset({"Offer", "AggregateOffer"})
+
+
+def _check_price_spec(spec: object, why: list[str]) -> None:
+    """Valida priceSpecification (objeto ou lista) de Offer de Service: todo preço precisa ser a string '0'."""
+    if isinstance(spec, list):
+        if not spec:
+            why.append("Offer em Service com priceSpecification vazio")
+            return
+        for item in spec:
+            _check_price_spec(item, why)
+        return
+    if not isinstance(spec, dict):
+        why.append(f"Offer em Service com priceSpecification inválido {spec!r}, esperado objeto com price '0'")
+        return
+    if "price" not in spec:
+        why.append("Offer em Service com priceSpecification sem price '0'")
+    elif not _is_zero_price(spec["price"]):
+        why.append(f"Offer em Service com priceSpecification de price {spec['price']!r}, esperado '0'")
+    for bound in ("minPrice", "maxPrice"):
+        if bound in spec and not _is_zero_price(spec[bound]):
+            why.append(f"Offer em Service com priceSpecification de {bound} {spec[bound]!r}, esperado '0'")
+    for nested_key in ("priceSpecification", "priceComponent"):
+        if nested_key in spec:
+            _check_price_spec(spec[nested_key], why)
+
+
+def _check_service_offer_entry(entry: object, why: list[str], seen: set[int]) -> None:
+    """Valida um objeto ou lista de Offer ligada a Service: price precisa ser '0' e sem priceSpecification paga."""
+    if isinstance(entry, list):
+        if not entry:
+            why.append("offers vazio em Service")
+            return
+        for item in entry:
+            _check_service_offer_entry(item, why, seen)
+        return
+    if not isinstance(entry, dict):
+        why.append(f"offers em Service com valor inválido {entry!r}, esperado objeto com price '0'")
+        return
+    if id(entry) in seen:
+        return
+    seen.add(id(entry))
+    if "price" not in entry:
+        why.append("Offer em Service sem price '0'")
+    elif not _is_zero_price(entry["price"]):
+        why.append(f"Offer em Service com price {entry['price']!r}, esperado '0'")
+    for bound in ("lowPrice", "highPrice"):
+        if bound in entry and not _is_zero_price(entry[bound]):
+            why.append(f"Offer em Service com {bound} {entry[bound]!r}, esperado '0'")
+    if "priceSpecification" in entry:
+        _check_price_spec(entry["priceSpecification"], why)
+    if "offers" in entry:
+        _check_service_offer_entry(entry["offers"], why, seen)
+
+
+def _is_service_ref(value: object, service_ids: set[str]) -> bool:
+    """True se value (objeto ou lista) for um nó de SERVICE_TYPES ou referência @id a um deles na página."""
+    if isinstance(value, list):
+        return any(_is_service_ref(item, service_ids) for item in value)
+    if not isinstance(value, dict):
+        return False
+    if _has_ld_type(value, *SERVICE_TYPES):
+        return True
+    ref_id = value.get("@id")
+    return isinstance(ref_id, str) and ref_id in service_ids
+
+
 def _service_offer_problems(service: dict, checked: set[int] | None = None) -> list[str]:
-    """Problemas de offers dentro de um nó Service (em qualquer profundidade): todo price precisa ser a string '0'."""
+    """Problemas de offers dentro de um nó Service ou subtipo (em qualquer profundidade): todo preço precisa ser '0'."""
     why: list[str] = []
     seen = checked if checked is not None else set()
-
-    def check_entry(entry: object) -> None:
-        if isinstance(entry, list):
-            if not entry:
-                why.append("offers vazio em Service")
-                return
-            for item in entry:
-                check_entry(item)
-            return
-        if not isinstance(entry, dict):
-            why.append(f"offers em Service com valor inválido {entry!r}, esperado objeto com price '0'")
-            return
-        if id(entry) in seen:
-            return
-        seen.add(id(entry))
-        if "price" not in entry:
-            why.append("Offer em Service sem price '0'")
-        elif not _is_zero_price(entry["price"]):
-            why.append(f"Offer em Service com price {entry['price']!r}, esperado '0'")
-
     for sub in _iter_ld_dicts(service):
         if "offers" in sub:
-            check_entry(sub["offers"])
-        if _has_ld_type(sub, "Offer"):
-            check_entry(sub)
+            _check_service_offer_entry(sub["offers"], why, seen)
+        if _has_ld_type(sub, *OFFER_TYPES):
+            _check_service_offer_entry(sub, why, seen)
     return why
 
 
 def _page_service_offer_problems(html: str) -> list[str]:
-    """Problemas de offers em todos os nós Service do JSON-LD da página (em qualquer profundidade)."""
+    """Problemas de offers em nós Service (e subtipos) ou em Offer cujo itemOffered é Service (em qualquer profundidade)."""
     why: list[str] = []
     checked: set[int] = set()
-    for node in _ld_nodes(html):
-        for d in _iter_ld_dicts(node):
-            if _has_ld_type(d, "Service"):
-                why += _service_offer_problems(d, checked)
+    all_dicts = [d for node in _ld_nodes(html) for d in _iter_ld_dicts(node)]
+    service_ids = {
+        d["@id"] for d in all_dicts
+        if _has_ld_type(d, *SERVICE_TYPES) and isinstance(d.get("@id"), str) and d["@id"].strip()
+    }
+    for d in all_dicts:
+        if _has_ld_type(d, *SERVICE_TYPES):
+            why += _service_offer_problems(d, checked)
+        if ("itemOffered" in d
+                and ("@type" not in d or _has_ld_type(d, *OFFER_TYPES))
+                and _is_service_ref(d["itemOffered"], service_ids)):
+            _check_service_offer_entry(d, why, checked)
     return why
 
 

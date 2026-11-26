@@ -2529,6 +2529,12 @@ class TopicLdTest(unittest.TestCase):
         self.assertIn("const ld = topicLdGraph({", src)
         self.assertIn("jsonLd={ld}", src)
 
+    def test_blog_name_matches_consts(self):
+        consts = (Path(__file__).resolve().parent.parent / "blog-src/src/consts.ts").read_text(encoding="utf-8")
+        m = re.search(r"""^export const BLOG_NAME = (["'])(.+?)\1;""", consts, flags=re.M)
+        self.assertIsNotNone(m, "BLOG_NAME não encontrado em blog-src/src/consts.ts")
+        self.assertEqual(m.group(2), C.BLOG_NAME)
+
     def test_main_runs_the_rule(self):
         consts = Path(self.tmp.name) / "consts.ts"
         consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
@@ -2758,9 +2764,16 @@ class OgSiteNameTest(unittest.TestCase):
         home_html = (repo / "index.html").read_text(encoding="utf-8")
         self.assertEqual(C.check_page_og_site_name("index.html", home_html), [])
         # #105 (T8): og:url da home com barra final, igual ao canonical.
-        self.assertEqual(C._og_property_contents(C._visible_html(home_html), "og:url"), ["https://guifav.dev/"])
+        self.assertEqual(C._meta_contents(C._visible_html(home_html), "og:url", attrs=("property",)),
+                         ["https://guifav.dev/"])
         base = (repo / "blog-src/src/layouts/Base.astro").read_text(encoding="utf-8")
         self.assertIn('<meta property="og:site_name" content={AUTHOR_NAME} />', base)
+
+    def test_meta_contents_attrs_filter(self):
+        html = '<meta name="og:site_name" content="Errado"><meta property="og:site_name" content="Certo">'
+        self.assertEqual(C._meta_contents(html, "og:site_name"), ["Errado", "Certo"])
+        self.assertEqual(C._meta_contents(html, "og:site_name", attrs=("property",)), ["Certo"])
+        self.assertFalse(hasattr(C, "_og_property_contents"))
 
     def test_main_runs_the_rule(self):
         consts = Path(self.tmp.name) / "consts.ts"
@@ -2830,6 +2843,28 @@ class PostResiduesTest(unittest.TestCase):
                 got = C.check_post_residues(self.posts)
                 self.assertEqual(len(got), 1, got)
                 self.assertTrue(got[0].startswith("post.md:6: "), got)
+
+    def test_html_comments_with_content_do_not_hide_residue_and_keep_line_numbers(self):
+        cases = (
+            ("comentario com espaco", "ok\nguilhermefavaron<!-- -->.com.br\n", 6),
+            ("comentario com texto", "ok\nguilhermefavaron<!-- nota -->.com.br\n", 6),
+            ("varios comentarios na mesma linha",
+             "ok\n<!-- a -->guilhermefavaron<!-- b -->.com.br<!-- c -->\n", 6),
+            ("comentario na linha anterior mantem contagem",
+             "<!-- linha cinco -->\nguilhermefavaron<!-- -->.com.br\n", 6),
+            ("comentario multilinha nao atravessa linha",
+             "<!-- inicio\nguilhermefavaron<!-- -->.com.br\nfim -->\n", 6),
+        )
+        for name, body, expected_line in cases:
+            with self.subTest(case=name):
+                self.write_post("post.md", body, index=True)
+                got = C.check_post_residues(self.posts)
+                self.assertEqual(len(got), 1, got)
+                self.assertTrue(got[0].startswith(f"post.md:{expected_line}: "), got)
+                self.assertIn("guilhermefavaron.com.br", got[0])
+
+        self.write_post("post.md", "ok\nguilhermefavaron<!-- -->.com.br\n", index=False)
+        self.assertEqual(C.check_post_residues(self.posts), [])
 
     def test_github_repo_link_exception(self):
         self.write_post(
@@ -3750,6 +3785,172 @@ class PaidConsultingTest(unittest.TestCase):
                 got = C.check_page_paid_consulting("outra/index.html", html)
                 self.assertEqual(len(got), 1, got)
                 self.assertIn("Offer em Service", got[0])
+
+    def test_offer_with_item_offered_service_fails(self):
+        bad_cases = {
+            "Offer com itemOffered Service": {
+                "@context": "https://schema.org",
+                "@type": "Offer",
+                "price": "500",
+                "priceCurrency": "BRL",
+                "itemOffered": {"@type": "Service", "name": "Consultoria em IA"},
+            },
+            "Offer com itemOffered ProfessionalService": {
+                "@context": "https://schema.org",
+                "@type": "Offer",
+                "price": "500",
+                "priceCurrency": "BRL",
+                "itemOffered": {"@type": "ProfessionalService", "name": "Consultoria em IA"},
+            },
+            "Offer com itemOffered em lista": {
+                "@context": "https://schema.org",
+                "@type": "Offer",
+                "price": "500",
+                "itemOffered": [{"@type": "Service", "name": "Consultoria em IA"}],
+            },
+            "Offer em @graph referenciando Service por @id": {
+                "@context": "https://schema.org",
+                "@graph": [
+                    {"@type": "Service", "@id": "https://guifav.dev/consultoria/#servico", "name": "Consultoria"},
+                    {"@type": "Offer", "price": "500", "priceCurrency": "BRL",
+                     "itemOffered": {"@id": "https://guifav.dev/consultoria/#servico"}},
+                ],
+            },
+        }
+        for name, data in bad_cases.items():
+            with self.subTest(case=name):
+                html = f"<html><head>{ld_script(data)}</head><body></body></html>"
+                got = C.check_page_paid_consulting("outra/index.html", html)
+                self.assertEqual(len(got), 1, got)
+                self.assertIn("Offer em Service", got[0])
+
+        ok_cases = {
+            "Offer gratuita com itemOffered Service": {
+                "@context": "https://schema.org",
+                "@type": "Offer",
+                "price": "0",
+                "priceCurrency": "BRL",
+                "itemOffered": {"@type": "Service", "name": "Consultoria em IA"},
+            },
+            "Offer paga de item que nao e Service": {
+                "@context": "https://schema.org",
+                "@type": "Offer",
+                "price": "500",
+                "priceCurrency": "BRL",
+                "itemOffered": {"@type": "Book", "name": "Livro"},
+            },
+        }
+        for name, data in ok_cases.items():
+            with self.subTest(case=name):
+                html = f"<html><head>{ld_script(data)}</head><body></body></html>"
+                self.assertEqual(C.check_page_paid_consulting("outra/index.html", html), [])
+
+    def test_service_subtypes_with_paid_offer_fail(self):
+        bad_cases = {
+            "ProfessionalService": {
+                "@context": "https://schema.org",
+                "@type": "ProfessionalService",
+                "offers": {"@type": "Offer", "price": 500, "priceCurrency": "BRL"},
+            },
+            "FinancialService": {
+                "@context": "https://schema.org",
+                "@type": "FinancialService",
+                "offers": {"@type": "Offer", "price": "500", "priceCurrency": "BRL"},
+            },
+            "LegalService": {
+                "@context": "https://schema.org",
+                "@type": "LegalService",
+                "offers": {"@type": "Offer", "price": 500, "priceCurrency": "BRL"},
+            },
+            "WebAPI (subtipo direto de Service)": {
+                "@context": "https://schema.org",
+                "@type": "WebAPI",
+                "offers": {"@type": "Offer", "price": "500", "priceCurrency": "BRL"},
+            },
+            "ProfessionalService em @type lista": {
+                "@context": "https://schema.org",
+                "@type": ["LocalBusiness", "ProfessionalService"],
+                "offers": {"@type": "Offer", "price": "500", "priceCurrency": "BRL"},
+            },
+        }
+        for name, data in bad_cases.items():
+            with self.subTest(case=name):
+                html = f"<html><head>{ld_script(data)}</head><body></body></html>"
+                got = C.check_page_paid_consulting("outra/index.html", html)
+                self.assertEqual(len(got), 1, got)
+                self.assertIn("Offer em Service", got[0])
+
+        free_sub = {
+            "@context": "https://schema.org",
+            "@type": "ProfessionalService",
+            "offers": {"@type": "Offer", "price": "0", "priceCurrency": "BRL"},
+        }
+        html = f"<html><head>{ld_script(free_sub)}</head><body></body></html>"
+        self.assertEqual(C.check_page_paid_consulting("outra/index.html", html), [])
+
+    def test_offer_with_zero_price_and_paid_price_specification_fails(self):
+        bad_cases = {
+            "priceSpecification objeto com price 500": {
+                "@context": "https://schema.org",
+                "@type": "Service",
+                "offers": {
+                    "@type": "Offer",
+                    "price": "0",
+                    "priceCurrency": "BRL",
+                    "priceSpecification": {"@type": "PriceSpecification", "price": 500, "priceCurrency": "BRL"},
+                },
+            },
+            "priceSpecification objeto com price texto 500": {
+                "@context": "https://schema.org",
+                "@type": "Service",
+                "offers": {
+                    "@type": "Offer",
+                    "price": "0",
+                    "priceCurrency": "BRL",
+                    "priceSpecification": {"@type": "UnitPriceSpecification", "price": "500", "priceCurrency": "BRL"},
+                },
+            },
+            "priceSpecification lista com 0 e 500": {
+                "@context": "https://schema.org",
+                "@type": "Service",
+                "offers": {
+                    "@type": "Offer",
+                    "price": "0",
+                    "priceCurrency": "BRL",
+                    "priceSpecification": [
+                        {"@type": "PriceSpecification", "price": "0", "priceCurrency": "BRL"},
+                        {"@type": "PriceSpecification", "price": 500, "priceCurrency": "BRL"},
+                    ],
+                },
+            },
+            "Offer com itemOffered Service e priceSpecification paga": {
+                "@context": "https://schema.org",
+                "@type": "Offer",
+                "price": "0",
+                "priceCurrency": "BRL",
+                "itemOffered": {"@type": "Service", "name": "Consultoria em IA"},
+                "priceSpecification": {"@type": "PriceSpecification", "price": "500", "priceCurrency": "BRL"},
+            },
+        }
+        for name, data in bad_cases.items():
+            with self.subTest(case=name):
+                html = f"<html><head>{ld_script(data)}</head><body></body></html>"
+                got = C.check_page_paid_consulting("outra/index.html", html)
+                self.assertEqual(len(got), 1, got)
+                self.assertIn("priceSpecification", got[0])
+
+        ok_spec = {
+            "@context": "https://schema.org",
+            "@type": "Service",
+            "offers": {
+                "@type": "Offer",
+                "price": "0",
+                "priceCurrency": "BRL",
+                "priceSpecification": {"@type": "PriceSpecification", "price": "0", "priceCurrency": "BRL"},
+            },
+        }
+        html = f"<html><head>{ld_script(ok_spec)}</head><body></body></html>"
+        self.assertEqual(C.check_page_paid_consulting("outra/index.html", html), [])
 
     def test_real_consulting_page_passes(self):
         repo = Path(__file__).resolve().parent.parent
