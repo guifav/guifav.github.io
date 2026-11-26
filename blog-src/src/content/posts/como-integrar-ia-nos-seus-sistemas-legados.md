@@ -1,7 +1,7 @@
 ---
 title: "Como integrar IA nos seus sistemas legados: um workflow real"
 subtitle: "Criar do zero é fácil. O desafio está em integrar IA nos sistemas que já rodam em produção. Aqui está o workflow que uso no meu time."
-description: "Workflow real para integrar IA em sistemas legados em produção: três fases (triagem, planejamento e execução), revisão por segunda IA e três gates humanos."
+description: "Workflow real para integrar IA em sistemas legados: três fases (triagem, planejamento e execução), revisão por segunda IA e três regras inegociáveis."
 summary: "Para integrar IA em sistemas legados em produção, uso no meu time um workflow em três fases: triagem de feedbacks em issues no GitHub, planejamento fora do código e execução em branch com pull request. Uma segunda IA revisa o PR para reduzir o viés de autoria antes da análise final do líder técnico. Três regras travam o risco: nada executa sem plano aprovado, nada vai direto para a main e o merge é sempre decisão humana."
 date: 2026-03-29T16:01:41.928Z
 updated: 2026-03-29T16:03:57.089Z
@@ -55,8 +55,8 @@ Por tudo isso, o objetivo de integrar IA em sistemas legados é **aumentar a cap
 | Dimensão | Projeto do zero (greenfield) | Sistema legado em produção |
 |---|---|---|
 | Contexto de código | Contexto vazio, sem código anterior nem conflitos | Código vasto, distribuído e às vezes contraditório, com regras obscuras, dependências antigas e documentação desatualizada ou inexistente |
-| Arquitetura e processos | Sem restrições prévias nem rituais consolidados | Arquitetura legada, dívida técnica acumulada e processos enraizados no time |
-| Testes | Sem comportamento histórico para preservar | Testes que cobrem o caminho feliz e deixam de fora edge cases relevantes |
+| Arquitetura e processos | Sem arquitetura legada, dívida técnica nem restrições; o artigo não trata de processos no greenfield | Arquitetura legada, dívida técnica acumulada e processos enraizados no time |
+| Testes | O artigo não trata de testes no projeto do zero | Testes que cobrem o caminho feliz e deixam de fora edge cases relevantes |
 | Risco de erro | Um erro num app recém-criado é um inconveniente | Um erro em produção pode afetar clientes, gerar perda de receita e corromper dados |
 | Papel da IA | Gera o app inteiro sem restrições | Aumenta a capacidade do time: automatiza o repetitivo, acelera o lento e traz uma segunda perspectiva nas decisões |
 

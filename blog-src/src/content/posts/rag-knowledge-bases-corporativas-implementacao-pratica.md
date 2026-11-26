@@ -219,11 +219,13 @@ Os setores regulamentados têm requisitos adicionais para sistemas de gestão do
 
 O gerenciamento do ciclo de vida do conteúdo garante que informações desatualizadas não apareçam em respostas. As trilhas de auditoria rastreiam não apenas quem acessou o quê, mas também como as informações foram usadas e quais decisões foram influenciadas. O controle de versão mantém o contexto histórico, destacando as fontes confiáveis ​​atuais.
 
+A tabela abaixo consolida as cinco frentes de operação em produção abordadas nas seções anteriores (latência, aprendizado contínuo, métricas, segurança e compliance).
+
 | Frente em produção | Mecanismos aplicados no caso | Efeito ou critério acompanhado |
 |---|---|---|
 | Latência e performance | Cache semântico, embeddings pré-computados, recuperação paralela, carregamento progressivo e cache proativo | Manter respostas abaixo de 5 segundos, limite acima do qual a adoção cai |
 | Aprendizado contínuo | Análise de consultas, taxa de sucesso por fonte, feedback do usuário, monitoramento de atualizações e alertas para especialistas | Detectar lacunas de conhecimento e evitar que a base fique obsoleta |
-| Métricas de negócio | Tempo de busca, taxa de conclusão de tarefas, uso da base, consultas a especialistas e tempo de treinamento | Redução do tempo de busca (horas para minutos), aumento de 85% na precisão e menos perguntas de acompanhamento |
+| Métricas de negócio | Tempo de busca, taxa de conclusão de tarefas, uso da base, consultas a especialistas e tempo de treinamento | No caso, buscas que levavam horas passaram a durar minutos e a precisão subiu 85%; consultas de acompanhamento servem como sinal de melhoria |
 | Segurança e controle de acesso | Filtragem por identidade, herança de permissões dos sistemas de origem, detecção e redação de dados confidenciais | Garantir que cada usuário recupere apenas conteúdo autorizado sem criar silos |
 | Compliance e governança | Gerenciamento de ciclo de vida do conteúdo, controle de versão e trilhas de auditoria de acesso e uso | Evitar dados desatualizados nas respostas e rastrear decisões influenciadas pela base |
 
@@ -249,6 +251,10 @@ Para CTOs que consideram implementar o RAG: comece com uma compreensão clara de
 
 *Para decidir quando o RAG é a escolha certa diante de alternativas como janela longa ou consulta direta ao banco, escrevi o comparativo [RAG, contexto longo ou Text-to-SQL: o teste em 80 contratos](/blog/rag-contexto-longo-ou-text-to-sql-teste-80-contratos/).*
 
+***
+
+*No próximo artigo da série, exploraremos [fine-tuning versus prompt engineering](/blog/fine-tuning-vs-prompt-engineering/), analisando quando cada abordagem oferece diferente ROI e como tomar decisões estratégicas baseadas em restrições de negócio e capabilidades técnicas.*
+
 ## Perguntas frequentes sobre arquitetura RAG em empresas
 
 ### Como garantir que um usuário só acesse documentos autorizados no RAG corporativo?
@@ -266,7 +272,3 @@ A manutenção depende de integrações sincronizadas com os sistemas de origem 
 ### Como medir o sucesso e a performance de um sistema RAG em produção?
 
 Métricas tradicionais como BLEU são insuficientes para captar o valor de negócio. Em produção, a avaliação usa a taxa de conclusão de tarefas após a consulta, a redução do tempo para localizar informações, a queda nas consultas repetitivas a especialistas e a redução do tempo de treinamento de novos funcionários. Na latência, respostas acima de 5 segundos prejudicam a adoção, o que exige técnicas como cache semântico, embeddings pré-computados, recuperação paralela e carregamento progressivo.
-
-***
-
-*No próximo artigo da série, exploraremos [fine-tuning versus prompt engineering](/blog/fine-tuning-vs-prompt-engineering/), analisando quando cada abordagem oferece diferente ROI e como tomar decisões estratégicas baseadas em restrições de negócio e capabilidades técnicas.*
