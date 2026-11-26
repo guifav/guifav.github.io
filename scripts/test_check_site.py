@@ -2218,7 +2218,7 @@ class PostLdTest(unittest.TestCase):
             "mainEntityOfPage de outro post": (
                 lambda g: node(g, "BlogPosting").update(mainEntityOfPage="https://guifav.dev/blog/q/"),
                 "mainEntityOfPage diferente"),
-            # o último nível da trilha também em branco: só a regra do headline pode acusar
+            # o último nível da trilha também em branco para bater com o headline; o isolamento vem da asserção do motivo "headline vazio"
             "headline em branco": (lambda g: (node(g, "BlogPosting").update(headline=" "), crumbs(g)[2].update(name=" ")),
                                    "headline vazio"),
             "sem BreadcrumbList": (lambda g: drop(g, "BreadcrumbList"), "0 BreadcrumbList"),
@@ -2289,11 +2289,16 @@ class PostLdTest(unittest.TestCase):
         self.assertEqual(self.ld(), [])
 
     def test_home_website_without_id_fails_once(self):
-        self.home(self.HOME.replace('"@id":"https://guifav.dev/#website",', ""))
-        self.post(ld_script(post_graph()))
-        self.post(ld_script(post_graph("q")), slug="q")
-        got = self.ld()
-        self.assertEqual(got, ["index.html: sem o WebSite com @id para o isPartOf dos posts (#105)"])
+        for bad_home in (
+            self.HOME.replace('"@id":"https://guifav.dev/#website",', ""),
+            self.HOME.replace("https://guifav.dev/#website", "   "),
+        ):
+            with self.subTest(bad_home=bad_home):
+                self.home(bad_home)
+                self.post(ld_script(post_graph()))
+                self.post(ld_script(post_graph("q")), slug="q")
+                got = self.ld()
+                self.assertEqual(got, ["index.html: sem o WebSite com @id para o isPartOf dos posts (#105)"])
 
     def test_home_website_id_ignores_other_websites(self):
         # Só vale o WebSite que o check_seo reconhece (nome e URL da home), e o @id da Person nunca serve.
@@ -2302,6 +2307,7 @@ class PostLdTest(unittest.TestCase):
         self.assertEqual(C._home_website_id(other + self.HOME), "https://guifav.dev/#website")
         self.assertIsNone(C._home_website_id(other))
         self.assertIsNone(C._home_website_id(self.HOME.replace("https://guifav.dev/#website", "https://guifav.dev/#person")))
+        self.assertIsNone(C._home_website_id(self.HOME.replace("https://guifav.dev/#website", "   ")))
         self.assertIsNone(C._home_website_id(self.HOME.replace('"https://guifav.dev/#website"', "1")))
 
     def test_repo_home_and_blog_consts_agree_on_the_website_id(self):
@@ -2331,6 +2337,573 @@ class PostLdTest(unittest.TestCase):
                     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
                         self.assertEqual(C.main(args), code)
                     self.assertEqual("JSON-LD do post (#105)" in err.getvalue(), code == 1)
+
+
+def topic_graph(slug: str = "agentes-de-ia", name: str = "Agentes de IA em produção",
+                items: list[tuple[str, str]] | None = None) -> dict:
+    """O @graph que o tema/[tema].astro emite (#105), para os testes partirem de um tema válido."""
+    url = f"https://guifav.dev/blog/tema/{slug}/"
+    crumb_id = f"{url}#breadcrumb"
+    entries = [("Primeiro post", "https://guifav.dev/blog/p1/"), ("Segundo post", "https://guifav.dev/blog/p2/")] if items is None else items
+    return {"@context": "https://schema.org", "@graph": [
+        {"@type": "CollectionPage", "@id": url, "url": url, "name": name,
+         "description": "Artigos sobre agentes de IA.", "inLanguage": "pt-BR",
+         "isPartOf": {"@id": "https://guifav.dev/#website"},
+         "author": {"@id": "https://guifav.dev/#person"},
+         "breadcrumb": {"@id": crumb_id},
+         "mainEntity": {
+             "@type": "ItemList",
+             "itemListOrder": "https://schema.org/ItemListOrderAscending",
+             "numberOfItems": len(entries),
+             "itemListElement": [
+                 {"@type": "ListItem", "position": i, "name": t, "url": u}
+                 for i, (t, u) in enumerate(entries, 1)
+             ],
+         }},
+        {"@type": "BreadcrumbList", "@id": crumb_id, "itemListElement": [
+            {"@type": "ListItem", "position": 1, "name": "Guilherme Favaron", "item": "https://guifav.dev/"},
+            {"@type": "ListItem", "position": 2, "name": "Insights", "item": "https://guifav.dev/blog/"},
+            {"@type": "ListItem", "position": 3, "name": name, "item": url},
+        ]},
+        {"@type": "Person", "@id": "https://guifav.dev/#person", "name": "Guilherme Favaron", "url": "https://guifav.dev/"},
+    ]}
+
+
+class TopicLdTest(unittest.TestCase):
+    """#105: toda página de tema sai com @graph de CollectionPage, ItemList, BreadcrumbList e Person mínima."""
+
+    HOME = PostLdTest.HOME
+    DEFAULT_BODY = (
+        '<ol class="post-list topic-list">'
+        '<li class="post-item"><a href="/blog/p1/"><h2>Primeiro post</h2></a></li>'
+        '<li class="post-item"><a href="/blog/p2/"><h2>Segundo post</h2></a></li>'
+        "</ol>"
+    )
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.site = Path(self.tmp.name) / "_site"
+        self.home(self.HOME)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def home(self, head):
+        self.site.mkdir(exist_ok=True)
+        (self.site / "index.html").write_text(f"<html><head>{head}</head><body></body></html>", encoding="utf-8")
+
+    def topic(self, head, body=DEFAULT_BODY, slug="agentes-de-ia"):
+        d = self.site / "blog" / "tema" / slug
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "index.html").write_text(f"<html><head>{head}</head><body>{body}</body></html>", encoding="utf-8")
+
+    def ld(self):
+        return C.check_topic_ld(self.site)
+
+    def _mutate(self, fn):
+        g = topic_graph()
+        fn(g)
+        return g
+
+    def test_valid_topic_passes(self):
+        self.topic(ld_script(topic_graph()))
+        self.assertEqual(self.ld(), [])
+
+    def test_topic_without_collection_page_fails(self):
+        self.topic("")
+        self.assertEqual(
+            self.ld(),
+            ["blog/tema/agentes-de-ia/index.html: página de tema sem o JSON-LD do tema (#105): nenhum CollectionPage"],
+        )
+
+    def test_each_broken_piece_fails_with_its_reason(self):
+        def node(g, t):
+            return next(n for n in g["@graph"] if n.get("@type") == t)
+
+        def drop(g, t):
+            g["@graph"] = [n for n in g["@graph"] if n.get("@type") != t]
+
+        def crumbs(g):
+            return node(g, "BreadcrumbList")["itemListElement"]
+
+        def items(g):
+            return node(g, "CollectionPage")["mainEntity"]["itemListElement"]
+
+        def swap_items(g):
+            els = items(g)
+            els[0], els[1] = els[1], els[0]
+            els[0]["position"], els[1]["position"] = 1, 2
+
+        def drop_last_item(g):
+            ml = node(g, "CollectionPage")["mainEntity"]
+            ml["itemListElement"].pop()
+            ml["numberOfItems"] = len(ml["itemListElement"])
+
+        def add_extra_item(g):
+            ml = node(g, "CollectionPage")["mainEntity"]
+            ml["itemListElement"].append(
+                {"@type": "ListItem", "position": 3, "name": "Terceiro", "url": "https://guifav.dev/blog/p3/"}
+            )
+            ml["numberOfItems"] = len(ml["itemListElement"])
+
+        cases = {
+            "sem Person": (lambda g: drop(g, "Person"), "0 nós Person"),
+            "Person errada": (lambda g: node(g, "Person").update(name="Outro"), "a Person do @graph"),
+            "author ausente": (lambda g: node(g, "CollectionPage").pop("author"), "author não aponta"),
+            "isPartOf errado": (lambda g: node(g, "CollectionPage").update(isPartOf={"@id": "https://guifav.dev/#outro"}),
+                                "isPartOf não aponta"),
+            "@id errado": (lambda g: node(g, "CollectionPage").update({"@id": "https://guifav.dev/blog/tema/outro/"}),
+                           "@id diferente"),
+            "url errada": (lambda g: node(g, "CollectionPage").update(url="https://guifav.dev/blog/tema/outro/"),
+                           "url diferente"),
+            "name vazio": (lambda g: (node(g, "CollectionPage").update(name=" "), crumbs(g)[2].update(name=" ")),
+                           "name vazio"),
+            "description vazio": (lambda g: node(g, "CollectionPage").update(description=""), "description vazio"),
+            "inLanguage errado": (lambda g: node(g, "CollectionPage").update(inLanguage="en"), "inLanguage diferente"),
+            "breadcrumb @id ref errada": (
+                lambda g: node(g, "CollectionPage").update(breadcrumb={"@id": "https://guifav.dev/#bc"}),
+                "breadcrumb não aponta",
+            ),
+            "sem BreadcrumbList": (lambda g: drop(g, "BreadcrumbList"), "0 BreadcrumbList"),
+            "BreadcrumbList @id errado": (
+                lambda g: node(g, "BreadcrumbList").update({"@id": "https://guifav.dev/#bc"}),
+                "BreadcrumbList com @id diferente",
+            ),
+            "trilha com 2 níveis": (lambda g: crumbs(g).pop(1), "BreadcrumbList fora da trilha"),
+            "trilha nível 1 errado": (lambda g: crumbs(g)[0].update(name="Home"), "BreadcrumbList fora da trilha"),
+            "trilha nível 2 errado": (lambda g: crumbs(g)[1].update(name="Blog"), "BreadcrumbList fora da trilha"),
+            "trilha nível 3 nome diferente": (lambda g: crumbs(g)[2].update(name="Outro"), "BreadcrumbList fora da trilha"),
+            "trilha posição em texto": (lambda g: crumbs(g)[0].update(position="1"), "BreadcrumbList fora da trilha"),
+            "sem mainEntity": (lambda g: node(g, "CollectionPage").pop("mainEntity"), "mainEntity sem ItemList"),
+            "itemListOrder errado": (
+                lambda g: node(g, "CollectionPage")["mainEntity"].update(itemListOrder="https://schema.org/ItemListUnordered"),
+                "itemListOrder diferente",
+            ),
+            "numberOfItems errado": (
+                lambda g: node(g, "CollectionPage")["mainEntity"].update(numberOfItems=99),
+                "numberOfItems",
+            ),
+            "ListItem com campo extra": (lambda g: items(g)[0].update(description="extra"), "ListItem inválido"),
+            "ListItem sem name": (lambda g: items(g)[0].pop("name"), "ListItem inválido"),
+            "ItemList fora de ordem": (swap_items, "ItemList com URLs diferentes da lista visível"),
+            "ItemList com post a menos": (drop_last_item, "ItemList com URLs diferentes da lista visível"),
+            "ItemList com post a mais": (add_extra_item, "ItemList com URLs diferentes da lista visível"),
+        }
+        for name, (fn, reason) in cases.items():
+            with self.subTest(name=name):
+                self.topic(ld_script(self._mutate(fn)))
+                got = self.ld()
+                self.assertEqual(len(got), 1, got)
+                self.assertTrue(got[0].startswith("blog/tema/agentes-de-ia/index.html: "), got)
+                self.assertIn(reason, got[0])
+
+    def test_graph_shape_and_visible_list_guards(self):
+        g = topic_graph()
+        flat = [dict(n, **{"@context": "https://schema.org"}) for n in g["@graph"]]
+        self.topic("".join(ld_script(n) for n in flat))
+        self.assertTrue(any("não está num @graph" in p for p in self.ld()))
+
+        self.topic(ld_script(g) + ld_script(dict(g["@graph"][0], **{"@context": "https://schema.org"})))
+        self.assertTrue(any("2 CollectionPage" in p for p in self.ld()))
+
+        for bad_body, needle in (
+            ("<p>sem lista</p>", "esperava uma lista ol.topic-list"),
+            ('<ol class="topic-list"></ol>', "lista visível ol.topic-list vazia"),
+            (f"<template>{self.DEFAULT_BODY}</template>", "esperava uma lista ol.topic-list"),
+            (self.DEFAULT_BODY.replace('class="post-list topic-list"', 'class="post-list topic-list" hidden'),
+             "esperava uma lista ol.topic-list"),
+        ):
+            with self.subTest(bad_body=bad_body):
+                self.topic(ld_script(g), body=bad_body)
+                got = self.ld()
+                self.assertTrue(any(needle in p for p in got), got)
+
+    def test_ispartof_follows_home_website_id_and_blank_fails_once(self):
+        self.home(self.HOME.replace("https://guifav.dev/#website", "   "))
+        self.topic(ld_script(topic_graph("a")), slug="a")
+        self.topic(ld_script(topic_graph("b")), slug="b")
+        self.assertEqual(self.ld(), ["index.html: sem o WebSite com @id para o isPartOf dos temas (#105)"])
+
+    def test_tema_template_builds_the_graph(self):
+        src = (Path(__file__).resolve().parent.parent / "blog-src/src/pages/tema/[tema].astro").read_text(encoding="utf-8")
+        self.assertIn("const ld = topicLdGraph({", src)
+        self.assertIn("jsonLd={ld}", src)
+
+    def test_blog_name_matches_consts(self):
+        consts = (Path(__file__).resolve().parent.parent / "blog-src/src/consts.ts").read_text(encoding="utf-8")
+        m = re.search(r"""^export const BLOG_NAME = (["'])(.+?)\1;""", consts, flags=re.M)
+        self.assertIsNotNone(m, "BLOG_NAME não encontrado em blog-src/src/consts.ts")
+        self.assertEqual(m.group(2), C.BLOG_NAME)
+
+    def test_main_runs_the_rule(self):
+        consts = Path(self.tmp.name) / "consts.ts"
+        consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
+        posts = Path(self.tmp.name) / "posts"
+        posts.mkdir()
+        args = ["--site", str(self.site), "--posts", str(posts), "--consts", str(consts)]
+        with isolate_main_rule("check_topic_ld"):
+            for head, code in (("", 1), (ld_script(topic_graph()), 0)):
+                with self.subTest(code=code):
+                    self.topic(head)
+                    out, err = io.StringIO(), io.StringIO()
+                    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                        self.assertEqual(C.main(args), code)
+                    self.assertEqual("JSON-LD do tema (#105)" in err.getvalue(), code == 1)
+
+
+def framework_graph() -> dict:
+    """O @graph DigitalDocument + Person da página do framework (#105, decisão 26/11/2026)."""
+    url = C.FRAMEWORK_URL
+    return {"@context": "https://schema.org", "@graph": [
+        {
+            "@type": "DigitalDocument",
+            "@id": url,
+            "url": url,
+            "name": "Framework SEO + AEO/GEO",
+            "headline": "Framework SEO + AEO/GEO: Como Ser Encontrado no Google e Citado por IAs",
+            "description": "Guia completo para otimizar conteúdo para Google e IAs.",
+            "inLanguage": "pt-BR",
+            "isAccessibleForFree": True,
+            "author": {"@id": "https://guifav.dev/#person"},
+            "publisher": {"@id": "https://guifav.dev/#person"},
+            "datePublished": "2025-12-01",
+            "dateModified": "2025-12-15",
+            "keywords": "Otimização SEO, AEO, GEO",
+            "isPartOf": {"@id": "https://guifav.dev/#website"},
+        },
+        {"@type": "Person", "@id": "https://guifav.dev/#person", "name": "Guilherme Favaron", "url": "https://guifav.dev/"},
+    ]}
+
+
+class FrameworkLdTest(unittest.TestCase):
+    """#105 (decisão 26/11/2026): o framework de SEO e AEO traz DigitalDocument gratuito e nenhum Product ou Offer."""
+
+    HOME = PostLdTest.HOME
+    FAQ = ld_script({
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        "mainEntity": [{"@type": "Question", "name": "O que é SEO?",
+                        "acceptedAnswer": {"@type": "Answer", "text": "Otimização para busca."}}],
+    })
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.site = Path(self.tmp.name) / "_site"
+        self.site.mkdir()
+        (self.site / "index.html").write_text(f"<html><head>{self.HOME}</head><body></body></html>", encoding="utf-8")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def write_framework(self, head: str) -> None:
+        p = self.site / C.FRAMEWORK_PAGE
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(f"<!DOCTYPE html><html><head>{head}</head><body></body></html>", encoding="utf-8")
+
+    def _mutate(self, fn):
+        g = framework_graph()
+        fn(g)
+        return g
+
+    def test_valid_framework_with_faqpage_passes(self):
+        self.write_framework(ld_script(framework_graph()) + self.FAQ)
+        self.assertEqual(C.check_framework_ld(self.site), [])
+
+    def test_missing_page_fails(self):
+        got = C.check_framework_ld(self.site)
+        self.assertEqual(len(got), 1, got)
+        self.assertIn("página do framework ausente", got[0])
+
+    def test_without_digital_document_fails(self):
+        self.write_framework(self.FAQ)
+        got = C.check_framework_ld(self.site)
+        self.assertEqual(len(got), 1, got)
+        self.assertIn("nenhum DigitalDocument", got[0])
+
+    def test_product_or_nested_offer_fails(self):
+        product_block = ld_script({
+            "@context": "https://schema.org",
+            "@type": "Product",
+            "name": "Framework SEO + AEO/GEO",
+            "offers": {"@type": "Offer", "price": "500", "priceCurrency": "BRL"},
+        })
+        cases = {
+            "so Product": product_block,
+            "DigitalDocument com Product extra": ld_script(framework_graph()) + product_block,
+            "Offer aninhado em offers objeto": ld_script(self._mutate(
+                lambda g: g["@graph"][0].update(offers={"@type": "Offer", "price": "0", "priceCurrency": "BRL"})
+            )),
+            "Offer aninhado em lista profunda": ld_script(self._mutate(
+                lambda g: g["@graph"][0].update(mainEntity={"nested": [{"@type": "Offer", "price": "500"}]})
+            )),
+            "Product aninhado em mentions": ld_script(self._mutate(
+                lambda g: g["@graph"][0].update(mentions={"@type": "Product", "name": "Outro"})
+            )),
+            "Offer em @type lista": ld_script(self._mutate(
+                lambda g: g["@graph"][0].update(about={"@type": ["Thing", "Offer"]})
+            )),
+        }
+        for name, head in cases.items():
+            with self.subTest(case=name):
+                self.write_framework(head)
+                got = C.check_framework_ld(self.site)
+                self.assertEqual(len(got), 1, got)
+                self.assertIn("nó proibido no JSON-LD", got[0])
+
+    def test_each_broken_digital_document_piece_fails(self):
+        def doc(g):
+            return g["@graph"][0]
+
+        cases = {
+            "isAccessibleForFree false": (lambda g: doc(g).update(isAccessibleForFree=False), "isAccessibleForFree"),
+            "isAccessibleForFree string": (lambda g: doc(g).update(isAccessibleForFree="true"), "isAccessibleForFree"),
+            "isAccessibleForFree int": (lambda g: doc(g).update(isAccessibleForFree=1), "isAccessibleForFree"),
+            "isAccessibleForFree ausente": (lambda g: doc(g).pop("isAccessibleForFree"), "isAccessibleForFree"),
+            "url errada": (lambda g: doc(g).update(url="https://guifav.dev/ferramentas/"), "url diferente"),
+            "@id errado": (lambda g: doc(g).update({"@id": "https://guifav.dev/ferramentas/"}), "@id diferente"),
+            "author ausente": (lambda g: doc(g).pop("author"), "author não aponta"),
+            "author outro id": (lambda g: doc(g).update(author={"@id": "https://outro.dev/#p"}), "author não aponta"),
+            "publisher errado": (lambda g: doc(g).update(publisher={"@type": "Person", "name": "G"}), "publisher não aponta"),
+            "isPartOf errado": (lambda g: doc(g).update(isPartOf={"@id": "https://guifav.dev/#outro"}), "isPartOf não aponta"),
+            "sem Person no graph": (lambda g: g["@graph"].pop(1), "0 nós Person"),
+            "Person com nome errado": (lambda g: g["@graph"][1].update(name="Outro"), "a Person do @graph"),
+            "campo brand proibido": (lambda g: doc(g).update(brand={"@type": "Brand", "name": "G"}), "campo proibido"),
+            "campo productID proibido": (lambda g: doc(g).update(productID="v1"), "campo proibido"),
+            "campo price proibido": (lambda g: doc(g).update(price="500"), "campo proibido"),
+            "dois DigitalDocument": (lambda g: g["@graph"].append(dict(doc(g))), "2 DigitalDocument"),
+        }
+        for name, (fn, needle) in cases.items():
+            with self.subTest(case=name):
+                self.write_framework(ld_script(self._mutate(fn)))
+                got = C.check_framework_ld(self.site)
+                self.assertEqual(len(got), 1, got)
+                self.assertIn(needle, got[0])
+
+        flat = ld_script(dict(framework_graph()["@graph"][0], **{"@context": "https://schema.org"}))
+        self.write_framework(flat)
+        got = C.check_framework_ld(self.site)
+        self.assertTrue(any("não está num @graph" in p for p in got), got)
+
+    def test_repo_framework_page_passes(self):
+        repo = Path(__file__).resolve().parent.parent
+        html = (repo / C.FRAMEWORK_PAGE).read_text(encoding="utf-8")
+        (self.site / "index.html").write_bytes((repo / "index.html").read_bytes())
+        p = self.site / C.FRAMEWORK_PAGE
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(html, encoding="utf-8")
+        self.assertEqual(C.check_framework_ld(self.site), [])
+        self.assertEqual(C.check_paid_consulting(self.site), [])
+        self.assertNotIn(C.OLD_PAID_SCHEDULE_ID, html)
+        self.assertNotIn('"price"', html)
+        nodes = C._ld_nodes(html)
+        self.assertTrue(any(n.get("@type") == "FAQPage" for n in nodes))
+        self.assertNotIn("/consultoria/", json.dumps(nodes, ensure_ascii=False))
+
+    def test_main_runs_the_rule(self):
+        consts = Path(self.tmp.name) / "consts.ts"
+        consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
+        posts = Path(self.tmp.name) / "posts"
+        posts.mkdir()
+        args = ["--site", str(self.site), "--posts", str(posts), "--consts", str(consts)]
+        with isolate_main_rule("check_framework_ld"):
+            for head, code in ((self.FAQ, 1), (ld_script(framework_graph()) + self.FAQ, 0)):
+                with self.subTest(code=code):
+                    self.write_framework(head)
+                    out, err = io.StringIO(), io.StringIO()
+                    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                        self.assertEqual(C.main(args), code)
+                    self.assertEqual("DigitalDocument (#105)" in err.getvalue(), code == 1)
+
+
+class OgSiteNameTest(unittest.TestCase):
+    """#105: a home e toda página HTML sob blog/ precisam de exatamente um og:site_name igual a SITE_NAME."""
+
+    OK_META = f'<meta property="og:site_name" content="{C.SITE_NAME}">'
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.site = Path(self.tmp.name) / "_site"
+        self.site.mkdir()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def w(self, rel: str, head: str) -> None:
+        p = self.site / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(f"<!DOCTYPE html><html><head>{head}</head><body></body></html>", encoding="utf-8")
+
+    def test_valid_home_and_blog_pages_pass(self):
+        self.w("index.html", self.OK_META)
+        self.w("blog/index.html", self.OK_META)
+        self.w("blog/um-post/index.html", self.OK_META)
+        self.w("blog/tema/agentes-de-ia/index.html", self.OK_META)
+        # Página fora da home e de blog/ não entra nessa regra.
+        self.w("portfolio/index.html", "")
+        self.assertEqual(C.check_og_site_name(self.site), [])
+
+    def test_missing_wrong_duplicate_or_inert_og_site_name_fails(self):
+        for rel in ("index.html", "blog/um-post/index.html"):
+            cases = {
+                "ausente": ("", "sem meta og:site_name"),
+                "valor errado": ('<meta property="og:site_name" content="guifav.dev">', "og:site_name com valor"),
+                "valor vazio": ('<meta property="og:site_name" content="">', "og:site_name com valor"),
+                "duplicado": (self.OK_META + self.OK_META, "esperado 1 meta og:site_name, achados 2"),
+                "name em vez de property": (f'<meta name="og:site_name" content="{C.SITE_NAME}">', "sem meta og:site_name"),
+                "comentado": (f"<!-- {self.OK_META} -->", "sem meta og:site_name"),
+                "em template": (f"<template>{self.OK_META}</template>", "sem meta og:site_name"),
+            }
+            for name, (head, needle) in cases.items():
+                with self.subTest(rel=rel, case=name):
+                    got = C.check_page_og_site_name(rel, f"<html><head>{head}</head><body></body></html>")
+                    self.assertEqual(len(got), 1, got)
+                    self.assertIn(needle, got[0])
+
+    def test_repo_sources_carry_og_site_name(self):
+        repo = Path(__file__).resolve().parent.parent
+        home_html = (repo / "index.html").read_text(encoding="utf-8")
+        self.assertEqual(C.check_page_og_site_name("index.html", home_html), [])
+        # #105 (T8): og:url da home com barra final, igual ao canonical.
+        self.assertEqual(C._meta_contents(C._visible_html(home_html), "og:url", attrs=("property",)),
+                         ["https://guifav.dev/"])
+        base = (repo / "blog-src/src/layouts/Base.astro").read_text(encoding="utf-8")
+        self.assertIn('<meta property="og:site_name" content={AUTHOR_NAME} />', base)
+
+    def test_meta_contents_attrs_filter(self):
+        html = '<meta name="og:site_name" content="Errado"><meta property="og:site_name" content="Certo">'
+        self.assertEqual(C._meta_contents(html, "og:site_name"), ["Errado", "Certo"])
+        self.assertEqual(C._meta_contents(html, "og:site_name", attrs=("property",)), ["Certo"])
+        self.assertFalse(hasattr(C, "_og_property_contents"))
+
+    def test_main_runs_the_rule(self):
+        consts = Path(self.tmp.name) / "consts.ts"
+        consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
+        posts = Path(self.tmp.name) / "posts"
+        posts.mkdir()
+        args = ["--site", str(self.site), "--posts", str(posts), "--consts", str(consts)]
+        with isolate_main_rule("check_og_site_name"):
+            for head, code in (("", 1), (self.OK_META, 0)):
+                with self.subTest(code=code):
+                    self.w("index.html", head)
+                    out, err = io.StringIO(), io.StringIO()
+                    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                        self.assertEqual(C.main(args), code)
+                    self.assertEqual("og:site_name" in err.getvalue(), code == 1)
+
+
+class PostResiduesTest(unittest.TestCase):
+    """#105: posts indexáveis não podem conter resíduos legados na fonte (sem <!----> e sem diferenciar caixa)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.posts = Path(self.tmp.name) / "posts"
+        self.posts.mkdir()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def write_post(self, name: str, body: str, index: bool = True) -> None:
+        fm = "---\ntitle: Teste\nslug: teste\n" + ("" if index else "index: false\n") + "---\n"
+        (self.posts / name).write_text(fm + body, encoding="utf-8")
+
+    def test_each_residue_term_fails_with_file_and_line_and_skips_noindex(self):
+        terms = (
+            "guilhermefavaron.com.br",
+            "GuilhermeFavaron.COM.BR",
+            "mindapps.ai",
+            "VP de Tecnologia",
+            "vp de tecnologia",
+            "ia-aplicada.substack.com",
+            "iaaplicada.substack.com",
+            "guifav.github.io",
+            "GUIFAV.GITHUB.IO",
+        )
+        for term in terms:
+            with self.subTest(term=term):
+                self.write_post("post.md", f"linha normal\nveja {term} aqui\n", index=True)
+                got = C.check_post_residues(self.posts)
+                self.assertEqual(len(got), 1, got)
+                self.assertTrue(got[0].startswith("post.md:6: "), got)
+
+                self.write_post("post.md", f"linha normal\nveja {term} aqui\n", index=False)
+                self.assertEqual(C.check_post_residues(self.posts), [])
+
+    def test_html_empty_comment_does_not_hide_residue(self):
+        cases = (
+            "https<!---->://www<!---->.guilhermefavaron.com.br/p/x",
+            "mind<!---->apps.ai",
+            "VP <!---->de Tecnologia",
+            "ia-aplicada<!---->.substack.com",
+            "iaaplicada<!---->.substack.com",
+            "guifav<!---->.github.io",
+        )
+        for text in cases:
+            with self.subTest(text=text):
+                self.write_post("post.md", f"ok\n{text}\n", index=True)
+                got = C.check_post_residues(self.posts)
+                self.assertEqual(len(got), 1, got)
+                self.assertTrue(got[0].startswith("post.md:6: "), got)
+
+    def test_html_comments_with_content_do_not_hide_residue_and_keep_line_numbers(self):
+        cases = (
+            ("comentario com espaco", "ok\nguilhermefavaron<!-- -->.com.br\n", 6),
+            ("comentario com texto", "ok\nguilhermefavaron<!-- nota -->.com.br\n", 6),
+            ("varios comentarios na mesma linha",
+             "ok\n<!-- a -->guilhermefavaron<!-- b -->.com.br<!-- c -->\n", 6),
+            ("comentario na linha anterior mantem contagem",
+             "<!-- linha cinco -->\nguilhermefavaron<!-- -->.com.br\n", 6),
+            ("comentario multilinha nao atravessa linha",
+             "<!-- inicio\nguilhermefavaron<!-- -->.com.br\nfim -->\n", 6),
+        )
+        for name, body, expected_line in cases:
+            with self.subTest(case=name):
+                self.write_post("post.md", body, index=True)
+                got = C.check_post_residues(self.posts)
+                self.assertEqual(len(got), 1, got)
+                self.assertTrue(got[0].startswith(f"post.md:{expected_line}: "), got)
+                self.assertIn("guilhermefavaron.com.br", got[0])
+
+        self.write_post("post.md", "ok\nguilhermefavaron<!-- -->.com.br\n", index=False)
+        self.assertEqual(C.check_post_residues(self.posts), [])
+
+    def test_github_repo_link_exception(self):
+        self.write_post(
+            "post.md",
+            "Código em [repositório](https://github.com/guifav/guifav.github.io/tree/main/estudos).\n"
+            "Também github.com/guifav/guifav.github.io e https://GITHUB.COM/GUIFAV/GUIFAV.GITHUB.IO.\n",
+            index=True,
+        )
+        self.assertEqual(C.check_post_residues(self.posts), [])
+
+        for bad_line in (
+            "https://github.com/guifav/guifav.github.io e https://guifav.github.io/\n",
+            "https://evilgithub.com/guifav/guifav.github.io\n",
+            "https://sub.github.com/guifav/guifav.github.io\n",
+        ):
+            with self.subTest(line=bad_line):
+                self.write_post("post.md", bad_line, index=True)
+                got = C.check_post_residues(self.posts)
+                self.assertEqual(len(got), 1, got)
+                self.assertIn("guifav.github.io", got[0])
+
+    def test_repo_indexable_posts_have_no_residues(self):
+        posts_dir = Path(__file__).resolve().parent.parent / "blog-src/src/content/posts"
+        self.assertEqual(C.check_post_residues(posts_dir), [])
+
+    def test_main_runs_the_rule(self):
+        site = Path(self.tmp.name) / "_site"
+        site.mkdir()
+        consts = Path(self.tmp.name) / "consts.ts"
+        consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
+        args = ["--site", str(site), "--posts", str(self.posts), "--consts", str(consts)]
+        with isolate_main_rule("check_post_residues"):
+            for body, code in (("site antigo mindapps.ai\n", 1), ("texto limpo\n", 0)):
+                with self.subTest(code=code):
+                    self.write_post("post.md", body, index=True)
+                    out, err = io.StringIO(), io.StringIO()
+                    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                        self.assertEqual(C.main(args), code)
+                    self.assertEqual("resíduo legado" in err.getvalue(), code == 1)
 
 
 TOKENS_CSS = (":root{--bg:#fafafa;--text:#171717;--hl:#FFBE00;--hl-text:#8a6400}"
@@ -3043,9 +3616,9 @@ class ConsultingTest(unittest.TestCase):
 
     def test_complete_page_passes(self):
         self.assertEqual(self.got(), [])
-        # @graph, offers em lista e H1 com marcação dentro também valem
+        # @graph, offers em lista (com price string "0") e H1 com marcação dentro também valem
         graph = ('<script type="application/ld+json">[{"@context":"https://schema.org","@graph":[{"@type":"Service",'
-                 '"provider":' + self.PROVIDER + ',"offers":[{"@type":"Offer","price":0,"priceCurrency":"BRL"}]}]}]'
+                 '"provider":' + self.PROVIDER + ',"offers":[{"@type":"Offer","price":"0","priceCurrency":"BRL"}]}]}]'
                  '</script>')
         self.assertEqual(self.got(head=self.TITLE + graph,
                                   body="<h1>Consultoria em <span>inteligência artificial</span>\n para empresas</h1>"), [])
@@ -3087,6 +3660,15 @@ class ConsultingTest(unittest.TestCase):
              "sem o JSON-LD Service"),
             ("Offer com preço texto negativo", self.TITLE + self.LD.replace('"price":"0"', '"price":"-1"'), None,
              "sem o JSON-LD Service"),
+            ("Offer com preço 0 numérico", self.TITLE + self.LD.replace('"price":"0"', '"price":0'), None,
+             "sem o JSON-LD Service"),
+            ("Offer com preço 500", self.TITLE + self.LD.replace('"price":"0"', '"price":"500"'), None,
+             "sem o JSON-LD Service"),
+            ("lista com Offer 0 e Offer 500", self.TITLE + self.LD.replace(
+                '"offers":{"@type":"Offer","price":"0","priceCurrency":"BRL"}',
+                '"offers":[{"@type":"Offer","price":"0","priceCurrency":"BRL"},'
+                '{"@type":"Offer","price":"500","priceCurrency":"BRL"}]'), None,
+             "sem o JSON-LD Service"),
             ("provider com nome null", self.TITLE + self.LD.replace('"name":"G"', '"name":null'), None,
              "sem o JSON-LD Service"),
             ("Offer em outra moeda", self.TITLE + self.LD.replace('"BRL"', '"USD"'), None, "sem o JSON-LD Service"),
@@ -3126,8 +3708,283 @@ class ConsultingTest(unittest.TestCase):
         self.assertIn("consultoria/index.html: a página de consultoria sumiu", err.getvalue())
 
 
+class PaidConsultingTest(unittest.TestCase):
+    """#105 (decisão 26/11/2026): sem o link antigo dos R$ 500 e sem Service com price diferente da string '0'."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.site = Path(self.tmp.name) / "_site"
+        self.site.mkdir()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def w(self, rel: str, html: str) -> None:
+        p = self.site / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(html, encoding="utf-8")
+
+    def test_old_schedule_id_fails_in_attribute_text_and_jsonld(self):
+        url = f"https://calendar.app.google/{C.OLD_PAID_SCHEDULE_ID}"
+        cases = {
+            "atributo": ("index.html", f'<html><body><a href="{url}">Agendar</a></body></html>'),
+            "texto": ("blog/post/index.html", f"<html><body><p>Agenda antiga: {C.OLD_PAID_SCHEDULE_ID}</p></body></html>"),
+            "json-ld": ("ferramentas/index.html",
+                        "<html><head>" + ld_script({"@context": "https://schema.org", "@type": "WebPage", "url": url})
+                        + "</head><body></body></html>"),
+        }
+        for name, (rel, html) in cases.items():
+            with self.subTest(case=name):
+                got = C.check_page_paid_consulting(rel, html)
+                self.assertEqual(len(got), 1, got)
+                self.assertIn(C.OLD_PAID_SCHEDULE_ID, got[0])
+
+    def test_service_offers_must_have_string_zero_price_anywhere_in_site(self):
+        cases = {
+            "price 500": {"@context": "https://schema.org", "@type": "Service",
+                          "offers": {"@type": "Offer", "price": "500", "priceCurrency": "BRL"}},
+            "price 0 numérico": {"@context": "https://schema.org", "@type": "Service",
+                                 "offers": {"@type": "Offer", "price": 0, "priceCurrency": "BRL"}},
+            "price 0.0 float": {"@context": "https://schema.org", "@type": "Service",
+                                "offers": {"@type": "Offer", "price": 0.0, "priceCurrency": "BRL"}},
+            "price 0.00 texto": {"@context": "https://schema.org", "@type": "Service",
+                                 "offers": {"@type": "Offer", "price": "0.00", "priceCurrency": "BRL"}},
+            "price ausente com priceCurrency": {"@context": "https://schema.org", "@type": "Service",
+                                                "offers": {"@type": "Offer", "priceCurrency": "BRL"}},
+            "lista com uma Offer 0 e outra 500": {
+                "@context": "https://schema.org",
+                "@type": "Service",
+                "offers": [
+                    {"@type": "Offer", "price": "0", "priceCurrency": "BRL"},
+                    {"@type": "Offer", "price": "500", "priceCurrency": "BRL"},
+                ],
+            },
+            "offers aninhado em hasOfferCatalog": {
+                "@context": "https://schema.org",
+                "@type": "Service",
+                "hasOfferCatalog": {
+                    "@type": "OfferCatalog",
+                    "itemListElement": [
+                        {"@type": "OfferCatalog", "offers": {"@type": "Offer", "price": "500", "priceCurrency": "BRL"}}
+                    ],
+                },
+            },
+            "Service aninhado em WebPage": {
+                "@context": "https://schema.org",
+                "@type": "WebPage",
+                "mainEntity": {"@type": "Service", "offers": {"@type": "Offer", "price": "500", "priceCurrency": "BRL"}},
+            },
+            "Service em @graph": {
+                "@context": "https://schema.org",
+                "@graph": [{"@type": "Service", "offers": {"@type": "Offer", "price": "500", "priceCurrency": "BRL"}}],
+            },
+        }
+        for name, data in cases.items():
+            with self.subTest(case=name):
+                html = f"<html><head>{ld_script(data)}</head><body></body></html>"
+                got = C.check_page_paid_consulting("outra/index.html", html)
+                self.assertEqual(len(got), 1, got)
+                self.assertIn("Offer em Service", got[0])
+
+    def test_offer_with_item_offered_service_fails(self):
+        bad_cases = {
+            "Offer com itemOffered Service": {
+                "@context": "https://schema.org",
+                "@type": "Offer",
+                "price": "500",
+                "priceCurrency": "BRL",
+                "itemOffered": {"@type": "Service", "name": "Consultoria em IA"},
+            },
+            "Offer com itemOffered ProfessionalService": {
+                "@context": "https://schema.org",
+                "@type": "Offer",
+                "price": "500",
+                "priceCurrency": "BRL",
+                "itemOffered": {"@type": "ProfessionalService", "name": "Consultoria em IA"},
+            },
+            "Offer com itemOffered em lista": {
+                "@context": "https://schema.org",
+                "@type": "Offer",
+                "price": "500",
+                "itemOffered": [{"@type": "Service", "name": "Consultoria em IA"}],
+            },
+            "Offer em @graph referenciando Service por @id": {
+                "@context": "https://schema.org",
+                "@graph": [
+                    {"@type": "Service", "@id": "https://guifav.dev/consultoria/#servico", "name": "Consultoria"},
+                    {"@type": "Offer", "price": "500", "priceCurrency": "BRL",
+                     "itemOffered": {"@id": "https://guifav.dev/consultoria/#servico"}},
+                ],
+            },
+        }
+        for name, data in bad_cases.items():
+            with self.subTest(case=name):
+                html = f"<html><head>{ld_script(data)}</head><body></body></html>"
+                got = C.check_page_paid_consulting("outra/index.html", html)
+                self.assertEqual(len(got), 1, got)
+                self.assertIn("Offer em Service", got[0])
+
+        ok_cases = {
+            "Offer gratuita com itemOffered Service": {
+                "@context": "https://schema.org",
+                "@type": "Offer",
+                "price": "0",
+                "priceCurrency": "BRL",
+                "itemOffered": {"@type": "Service", "name": "Consultoria em IA"},
+            },
+            "Offer paga de item que nao e Service": {
+                "@context": "https://schema.org",
+                "@type": "Offer",
+                "price": "500",
+                "priceCurrency": "BRL",
+                "itemOffered": {"@type": "Book", "name": "Livro"},
+            },
+        }
+        for name, data in ok_cases.items():
+            with self.subTest(case=name):
+                html = f"<html><head>{ld_script(data)}</head><body></body></html>"
+                self.assertEqual(C.check_page_paid_consulting("outra/index.html", html), [])
+
+    def test_service_subtypes_with_paid_offer_fail(self):
+        bad_cases = {
+            "ProfessionalService": {
+                "@context": "https://schema.org",
+                "@type": "ProfessionalService",
+                "offers": {"@type": "Offer", "price": 500, "priceCurrency": "BRL"},
+            },
+            "FinancialService": {
+                "@context": "https://schema.org",
+                "@type": "FinancialService",
+                "offers": {"@type": "Offer", "price": "500", "priceCurrency": "BRL"},
+            },
+            "LegalService": {
+                "@context": "https://schema.org",
+                "@type": "LegalService",
+                "offers": {"@type": "Offer", "price": 500, "priceCurrency": "BRL"},
+            },
+            "WebAPI (subtipo direto de Service)": {
+                "@context": "https://schema.org",
+                "@type": "WebAPI",
+                "offers": {"@type": "Offer", "price": "500", "priceCurrency": "BRL"},
+            },
+            "ProfessionalService em @type lista": {
+                "@context": "https://schema.org",
+                "@type": ["LocalBusiness", "ProfessionalService"],
+                "offers": {"@type": "Offer", "price": "500", "priceCurrency": "BRL"},
+            },
+        }
+        for name, data in bad_cases.items():
+            with self.subTest(case=name):
+                html = f"<html><head>{ld_script(data)}</head><body></body></html>"
+                got = C.check_page_paid_consulting("outra/index.html", html)
+                self.assertEqual(len(got), 1, got)
+                self.assertIn("Offer em Service", got[0])
+
+        free_sub = {
+            "@context": "https://schema.org",
+            "@type": "ProfessionalService",
+            "offers": {"@type": "Offer", "price": "0", "priceCurrency": "BRL"},
+        }
+        html = f"<html><head>{ld_script(free_sub)}</head><body></body></html>"
+        self.assertEqual(C.check_page_paid_consulting("outra/index.html", html), [])
+
+    def test_offer_with_zero_price_and_paid_price_specification_fails(self):
+        bad_cases = {
+            "priceSpecification objeto com price 500": {
+                "@context": "https://schema.org",
+                "@type": "Service",
+                "offers": {
+                    "@type": "Offer",
+                    "price": "0",
+                    "priceCurrency": "BRL",
+                    "priceSpecification": {"@type": "PriceSpecification", "price": 500, "priceCurrency": "BRL"},
+                },
+            },
+            "priceSpecification objeto com price texto 500": {
+                "@context": "https://schema.org",
+                "@type": "Service",
+                "offers": {
+                    "@type": "Offer",
+                    "price": "0",
+                    "priceCurrency": "BRL",
+                    "priceSpecification": {"@type": "UnitPriceSpecification", "price": "500", "priceCurrency": "BRL"},
+                },
+            },
+            "priceSpecification lista com 0 e 500": {
+                "@context": "https://schema.org",
+                "@type": "Service",
+                "offers": {
+                    "@type": "Offer",
+                    "price": "0",
+                    "priceCurrency": "BRL",
+                    "priceSpecification": [
+                        {"@type": "PriceSpecification", "price": "0", "priceCurrency": "BRL"},
+                        {"@type": "PriceSpecification", "price": 500, "priceCurrency": "BRL"},
+                    ],
+                },
+            },
+            "Offer com itemOffered Service e priceSpecification paga": {
+                "@context": "https://schema.org",
+                "@type": "Offer",
+                "price": "0",
+                "priceCurrency": "BRL",
+                "itemOffered": {"@type": "Service", "name": "Consultoria em IA"},
+                "priceSpecification": {"@type": "PriceSpecification", "price": "500", "priceCurrency": "BRL"},
+            },
+        }
+        for name, data in bad_cases.items():
+            with self.subTest(case=name):
+                html = f"<html><head>{ld_script(data)}</head><body></body></html>"
+                got = C.check_page_paid_consulting("outra/index.html", html)
+                self.assertEqual(len(got), 1, got)
+                self.assertIn("priceSpecification", got[0])
+
+        ok_spec = {
+            "@context": "https://schema.org",
+            "@type": "Service",
+            "offers": {
+                "@type": "Offer",
+                "price": "0",
+                "priceCurrency": "BRL",
+                "priceSpecification": {"@type": "PriceSpecification", "price": "0", "priceCurrency": "BRL"},
+            },
+        }
+        html = f"<html><head>{ld_script(ok_spec)}</head><body></body></html>"
+        self.assertEqual(C.check_page_paid_consulting("outra/index.html", html), [])
+
+    def test_real_consulting_page_passes(self):
+        repo = Path(__file__).resolve().parent.parent
+        self.w(C.CONSULTING_PAGE, (repo / C.CONSULTING_PAGE).read_text(encoding="utf-8"))
+        self.assertEqual(C.check_paid_consulting(self.site), [])
+        self.assertEqual(C.check_consulting(self.site), [])
+
+    def test_main_runs_the_rule(self):
+        consts = Path(self.tmp.name) / "consts.ts"
+        consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
+        posts = Path(self.tmp.name) / "posts"
+        posts.mkdir()
+        args = ["--site", str(self.site), "--posts", str(posts), "--consts", str(consts)]
+        bad_ld = ld_script({"@context": "https://schema.org", "@type": "Service",
+                            "offers": {"@type": "Offer", "price": "500", "priceCurrency": "BRL"}})
+        ok_ld = ld_script({"@context": "https://schema.org", "@type": "Service",
+                           "offers": {"@type": "Offer", "price": "0", "priceCurrency": "BRL"}})
+        with isolate_main_rule("check_paid_consulting"):
+            for html, code, needle in (
+                (f"<html><body><a href='https://calendar.app.google/{C.OLD_PAID_SCHEDULE_ID}'>x</a></body></html>", 1, C.OLD_PAID_SCHEDULE_ID),
+                (f"<html><head>{bad_ld}</head><body></body></html>", 1, "Offer em Service"),
+                (f"<html><head>{ok_ld}</head><body></body></html>", 0, ""),
+            ):
+                with self.subTest(code=code, needle=needle):
+                    self.w("index.html", html)
+                    out, err = io.StringIO(), io.StringIO()
+                    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                        self.assertEqual(C.main(args), code)
+                    if needle:
+                        self.assertIn(needle, err.getvalue())
+
+
 class HomeHubTest(unittest.TestCase):
-    """#136: a home montada lista os últimos artigos listados do blog e linka cada página de tema publicada."""
+    """#136 e #105: a home montada lista os últimos artigos, linka cada página de tema e traz a Person completa."""
 
     # 8 listados (mais que os 6 da home), um podcast indexável, um fora do índice e um "False" do YAML.
     POSTS = (("a", "2026-11-20", ""), ("b", "2026-11-22T10:00:00Z", ""),
@@ -3136,6 +3993,27 @@ class HomeHubTest(unittest.TestCase):
              ("fora2", "2026-11-25", "index: False\n"), ("d", "2026-11-19", ""), ("e", "2026-11-18", ""),
              ("f", "2026-11-17", ""), ("g", "2026-11-16", ""), ("velho", "2025-01-01", ""))
     WANT6 = ("/blog/b/", "/blog/c/", "/blog/a/", "/blog/d/", "/blog/e/", "/blog/f/")
+
+    @staticmethod
+    def valid_person(**overrides) -> dict:
+        data = {
+            "@context": "https://schema.org",
+            "@type": "Person",
+            "@id": "https://guifav.dev/#person",
+            "name": "Guilherme de Mauro Favaron",
+            "alternateName": ["Guilherme Favaron", "guifav"],
+            "url": "https://guifav.dev/",
+            "description": "Builder e CTO. Transformo problemas de negócio em aplicações reais de dados e IA.",
+            "disambiguatingDescription": "Executivo de tecnologia e CTO do GRI Institute, builder e arquiteto de dados e inteligência artificial.",
+            "knowsAbout": ["Inteligência Artificial Aplicada", "Arquitetura de Dados"],
+        }
+        data.update(overrides)
+        return data
+
+    @classmethod
+    def person_script(cls, data: dict | None = None) -> str:
+        payload = cls.valid_person() if data is None else data
+        return f'<script type="application/ld+json">{json.dumps(payload, ensure_ascii=False)}</script>'
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -3153,11 +4031,12 @@ class HomeHubTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def home(self, latest=WANT6, topics=("/blog/tema/t1/", "/blog/tema/t2/"), extra="", n=6) -> list[str]:
+    def home(self, latest=WANT6, topics=("/blog/tema/t1/", "/blog/tema/t2/"), extra="", n=6, head: str | None = None) -> list[str]:
         lis = "".join(f'<li><a href="{h}">x</a></li>' for h in latest)
         tl = "".join(f'<a href="{h}">t</a>' for h in topics)
+        ld = self.person_script() if head is None else head
         (self.site / "index.html").write_text(
-            f'<html><body><!-- ultimos-artigos --><ul class="latest-list">{lis}</ul><!-- /ultimos-artigos -->'
+            f'<html><head>{ld}</head><body><!-- ultimos-artigos --><ul class="latest-list">{lis}</ul><!-- /ultimos-artigos -->'
             f'<section id="temas">{tl}</section>{extra}</body></html>', encoding="utf-8")
         return C.check_home(self.site, self.posts, n)
 
@@ -3198,8 +4077,9 @@ class HomeHubTest(unittest.TestCase):
         self.assertEqual(self.home(), ["posts: ruim.md com date ilegível no frontmatter"])
 
     def test_list_without_markers_or_commented_fails(self):
-        (self.site / "index.html").write_text('<section id="temas"><a href="/blog/tema/t1/">t</a>'
-                                              '<a href="/blog/tema/t2/">t</a></section>', encoding="utf-8")
+        (self.site / "index.html").write_text(
+            f'<head>{self.person_script()}</head><section id="temas"><a href="/blog/tema/t1/">t</a>'
+            '<a href="/blog/tema/t2/">t</a></section>', encoding="utf-8")
         self.assertIn("são None", C.check_home(self.site, self.posts, 6)[0])
         self.assertEqual(self.home(), [])
         html = (self.site / "index.html").read_text(encoding="utf-8")
@@ -3222,6 +4102,60 @@ class HomeHubTest(unittest.TestCase):
         import shutil
         shutil.rmtree(self.site / "blog" / "tema")
         self.assertEqual(self.home(topics=()), ["blog/tema/: nenhuma página de tema publicada para a home linkar"])
+
+    def test_home_person_requires_disambiguation_fields(self):
+        def without(field: str) -> str:
+            d = self.valid_person()
+            d.pop(field)
+            return self.person_script(d)
+
+        cases = {
+            "sem Person": ("", "0 nós Person"),
+            "duas Person": (self.person_script() * 2, "2 nós Person"),
+            "Person comentada": (f"<!-- {self.person_script()} -->", "0 nós Person"),
+            "Person em template": (f"<template>{self.person_script()}</template>", "0 nós Person"),
+            "Person em noscript": (f"<noscript>{self.person_script()}</noscript>", "0 nós Person"),
+            "sem alternateName": (without("alternateName"), "alternateName"),
+            "alternateName vazio": (self.person_script(self.valid_person(alternateName=[])), "alternateName"),
+            "alternateName sem Guilherme Favaron": (self.person_script(self.valid_person(alternateName=["guifav"])), "alternateName"),
+            "alternateName substring": (self.person_script(self.valid_person(alternateName="Guilherme Favaron Jr")), "alternateName"),
+            "alternateName com item vazio": (self.person_script(self.valid_person(alternateName=["Guilherme Favaron", "  "])), "alternateName"),
+            "alternateName com item nao string": (self.person_script(self.valid_person(alternateName=["Guilherme Favaron", 1])), "alternateName"),
+            "sem knowsAbout": (without("knowsAbout"), "knowsAbout"),
+            "knowsAbout vazio": (self.person_script(self.valid_person(knowsAbout=[])), "knowsAbout"),
+            "knowsAbout string solta": (self.person_script(self.valid_person(knowsAbout="Inteligência Artificial")), "knowsAbout"),
+            "knowsAbout com string vazia": (self.person_script(self.valid_person(knowsAbout=["IA", "  "])), "knowsAbout"),
+            "knowsAbout com item nao string": (self.person_script(self.valid_person(knowsAbout=["IA", 42])), "knowsAbout"),
+            "sem disambiguatingDescription": (without("disambiguatingDescription"), "disambiguatingDescription"),
+            "disambiguatingDescription vazio": (self.person_script(self.valid_person(disambiguatingDescription="")), "disambiguatingDescription"),
+            "disambiguatingDescription espacos": (self.person_script(self.valid_person(disambiguatingDescription="   ")), "disambiguatingDescription"),
+            "disambiguatingDescription lista": (self.person_script(self.valid_person(disambiguatingDescription=["texto"])), "disambiguatingDescription"),
+        }
+        for name, (head, needle) in cases.items():
+            with self.subTest(case=name):
+                got = self.home(head=head)
+                self.assertEqual(len(got), 1, got)
+                self.assertIn("Person da home", got[0])
+                self.assertIn(needle, got[0])
+        # String exata em alternateName e Person dentro de @graph passam.
+        self.assertEqual(self.home(head=self.person_script(self.valid_person(alternateName="Guilherme Favaron"))), [])
+        graph_person = {k: v for k, v in self.valid_person().items() if k != "@context"}
+        graph_head = self.person_script({"@context": "https://schema.org", "@graph": [graph_person]})
+        self.assertEqual(self.home(head=graph_head), [])
+
+    def test_repo_home_person_passes_and_matches_contract(self):
+        home = (Path(__file__).resolve().parent.parent / "index.html").read_text(encoding="utf-8")
+        self.assertEqual(C.home_person_problems(home), [])
+        persons = [n for n in C._ld_nodes(home) if C._has_ld_type(n, "Person") and n.get("@id") == C.PERSON_ID]
+        self.assertEqual(len(persons), 1)
+        p = persons[0]
+        self.assertEqual(p["name"], "Guilherme de Mauro Favaron")
+        self.assertEqual(p["alternateName"], ["Guilherme Favaron", "guifav"])
+        self.assertTrue(6 <= len(p["knowsAbout"]) <= 8, p["knowsAbout"])
+        disamb = p["disambiguatingDescription"]
+        self.assertNotIn("\u2013", disamb)
+        self.assertNotIn("\u2014", disamb)
+        self.assertIsNone(re.search(r"\d", disamb))
 
     def test_missing_home_fails_and_main_runs_the_rule(self):
         self.assertEqual(C.check_home(self.site, self.posts, 6), ["index.html: home ausente no site montado"])
@@ -3837,11 +4771,93 @@ class YoutubeFooterSourcesTest(unittest.TestCase):
     def test_youtube_links_outside_footer_were_not_changed(self):
         home = (self.REPO / "index.html").read_text(encoding="utf-8")
         self.assertIn('"https://www.youtube.com/@guifav","https://www.youtube.com/@ia-para-leigos"', home)
-        self.assertIn('<a href="https://youtube.com/@ia-aplicada-guilhermefavaron" target="_blank" rel="noopener" data-i18n="content_yt_a">Assistir &#8599;</a>', home)
+        self.assertIn(
+            '<div class="card"><h3>YouTube: @guifav</h3><p data-i18n="content_yt_d">'
+            'Vídeos para quem decide sobre IA nas empresas, com comparações e testes medidos em uso real.</p>'
+            '<div class="card-links">'
+            '<a href="https://www.youtube.com/@guifav" target="_blank" rel="noopener" data-i18n="content_yt_a">Assistir &#8599;</a>'
+            '<a href="https://www.youtube.com/@ia-para-leigos" target="_blank" rel="noopener" data-i18n="content_yt_a2">Cursos e séries: IA para Leigos &#8599;</a>'
+            '</div></div>',
+            home,
+        )
+        en = json.loads(re.search(r'<script type="application/json" id="i18n-en">(.*?)</script>', home, re.S).group(1))
+        self.assertEqual(en["content_yt_d"], "Videos for people who make AI decisions in companies, with comparisons and tests measured in real use.")
+        self.assertEqual(en["content_yt_a"], "Watch &#8599;")
+        self.assertEqual(en["content_yt_a2"], "Courses and series: IA para Leigos &#8599;")
+        self.assertNotIn(C.OLD_YOUTUBE_HANDLE, home.lower())
         for rel in ("ferramentas/mapa-decisao-ia/index.html", "ferramentas/planilha-custos-ia/index.html"):
             with self.subTest(rel=rel):
                 html = (self.REPO / rel).read_text(encoding="utf-8")
                 self.assertIn('<a class="btn" href="https://www.youtube.com/@guifav" target="_blank" rel="noopener" data-i18n="yt">Canal @guifav no YouTube</a>', html)
+
+
+class OldYoutubeHandleTest(unittest.TestCase):
+    """#105: o handle antigo do YouTube (ia-aplicada-guilhermefavaron) não pode aparecer em nenhum HTML montado."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.site = Path(self.tmp.name) / "_site"
+        self.site.mkdir()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def w(self, rel: str, content: str) -> None:
+        p = self.site / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content, encoding="utf-8")
+
+    def doc(self, body: str) -> str:
+        return f"<!DOCTYPE html><html><head></head><body>{body}</body></html>"
+
+    def test_clean_site_passes(self):
+        self.w("index.html", self.doc(
+            '<a href="https://www.youtube.com/@guifav">Assistir</a>'
+            '<a href="https://www.youtube.com/@ia-para-leigos">Cursos</a>'
+            '<p>Canais @guifav e @ia-para-leigos</p>'
+        ))
+        self.w("blog/um-post/index.html", self.doc("<p>Texto sobre IA aplicada sem o handle antigo.</p>"))
+        self.assertEqual(C.check_old_youtube_handle(self.site), [])
+
+    def test_old_handle_fails_in_attribute_and_text(self):
+        cases = {
+            "em href": '<a href="https://youtube.com/@ia-aplicada-guilhermefavaron">Assistir</a>',
+            "em atributo data": '<div data-channel="@ia-aplicada-guilhermefavaron">x</div>',
+            "em texto": '<p>Veja @ia-aplicada-guilhermefavaron no YouTube.</p>',
+            "caixa mista": '<p>IA-Aplicada-GuilhermeFavaron</p>',
+            "entidade HTML": '<a href="https://youtube.com/@&#105;a-aplicada-guilhermefavaron">Assistir</a>',
+            "percent-encoding": '<a href="https://youtube.com/@%69a-aplicada-guilhermefavaron">Assistir</a>',
+        }
+        for name, body in cases.items():
+            with self.subTest(case=name):
+                got = C.check_page_old_youtube_handle("index.html", self.doc(body))
+                self.assertEqual(len(got), 1, got)
+                self.assertIn(C.OLD_YOUTUBE_HANDLE, got[0])
+
+    def test_site_scan_and_main_wiring(self):
+        self.w("index.html", self.doc('<a href="https://www.youtube.com/@guifav">Assistir</a>'))
+        self.w("blog/p/index.html", self.doc("<p>Antigo @ia-aplicada-guilhermefavaron</p>"))
+        got = C.check_old_youtube_handle(self.site)
+        self.assertEqual(len(got), 1, got)
+        self.assertIn("blog/p/index.html", got[0])
+
+        consts = Path(self.tmp.name) / "consts.ts"
+        consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
+        err = io.StringIO()
+        with isolate_main_rule("check_old_youtube_handle"), \
+                contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            code = C.main(["--site", str(self.site), "--posts", str(self.tmp.name), "--consts", str(consts)])
+        self.assertEqual(code, 1)
+        self.assertIn(C.OLD_YOUTUBE_HANDLE, err.getvalue())
+
+        self.w("blog/p/index.html", self.doc("<p>Atualizado para @guifav</p>"))
+        with isolate_main_rule("check_old_youtube_handle"), \
+                contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(C.main(["--site", str(self.site), "--posts", str(self.tmp.name), "--consts", str(consts)]), 0)
+
+    def test_repo_home_has_no_old_youtube_handle(self):
+        home = (Path(__file__).resolve().parent.parent / "index.html").read_text(encoding="utf-8")
+        self.assertEqual(C.check_page_old_youtube_handle("index.html", home), [])
 
 
 class SummaryTest(Base):
@@ -4093,13 +5109,19 @@ MAIN_RULES = {
     "check_summary": lambda *a, **k: [],
     "check_contrast": lambda *a, **k: [],
     "check_consulting": lambda *a, **k: [],
+    "check_paid_consulting": lambda *a, **k: [],
     "check_home": lambda *a, **k: [],
     "check_post_ld": lambda *a, **k: [],
+    "check_topic_ld": lambda *a, **k: [],
+    "check_framework_ld": lambda *a, **k: [],
+    "check_og_site_name": lambda *a, **k: [],
+    "check_post_residues": lambda *a, **k: [],
     "check_llm_ranking": lambda *a, **k: [],
     "check_legal": lambda *a, **k: [],
     "check_llms_txt": lambda *a, **k: [],
     "check_courses": lambda *a, **k: [],
     "check_youtube": lambda *a, **k: [],
+    "check_old_youtube_handle": lambda *a, **k: [],
     "check_seo": lambda *a, **k: ([], [], []),
 }
 
