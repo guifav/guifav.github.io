@@ -84,7 +84,7 @@ export const TOPICS: Topic[] = [
       { slug: 'mcp-ou-aplicacao-dados-da-empresa-na-ia', question: 'Servidor MCP aberto ou aplicação própria: quem garante a resposta da IA sobre os dados da empresa?' },
       { slug: 'rag-llm-ai-o-que-e', question: 'Quais são os primeiros passos para implementar RAG?' },
       { slug: 'o-que-e-rag-llms-ia', question: 'O que é RAG e quando ele resolve a pergunta sobre os documentos da empresa?' },
-      { slug: 'guia-praticos-implementacao-rag-llms-ai', question: 'Como implementar RAG na prática, a segunda parte da série?' },
+      { slug: 'guia-praticos-implementacao-rag-llms-ai', question: 'Como implementar RAG na prática, a terceira parte da série?' },
       { slug: 'rag-knowledge-bases-corporativas-implementacao-pratica', question: 'Como montar RAG sobre a base de conhecimento corporativa?' },
       { slug: 'llm-sql-nosql-guia-integracao', question: 'Como ligar um LLM aos bancos SQL e NoSQL da empresa?' },
       { slug: 'ferramentas-ia-excel-google-sheets-analise-dados', question: 'Quais ferramentas de IA analisam planilhas do Excel e do Google Sheets?' },
@@ -171,8 +171,8 @@ export const TOPICS: Topic[] = [
     posts: [
       { slug: 'framework-atlas-para-implementacao-de-ia-nos-processos-corporativos', question: 'Como planejar a implementação de IA nos processos com o framework ATLAS?' },
       { slug: 'modernizacao-de-sistemas-legados', question: 'Que estratégias de modernização de legados funcionaram em casos reais?' },
-      { slug: 'como-integrar-ia-nos-seus-sistemas-legados', question: 'Como integrar IA aos sistemas legados, num workflow real?' },
       { slug: 'arquitetura-consolidacao-dados-ia-sem-reescrever-sistemas-legados', question: 'Como preparar dados espalhados para IA sem reescrever os sistemas legados?' },
+      { slug: 'como-integrar-ia-nos-seus-sistemas-legados', question: 'Como integrar IA aos sistemas legados, num workflow real?' },
       { slug: 'a-arquitetura-definitiva-de-ia-para', question: 'Por que a maioria dos projetos de IA falha, e que arquitetura evita isso?' },
       { slug: 'curso-ia-negocios-gratuito-youtube', question: 'Como uma pequena ou média empresa começa a implementar IA?' },
       { slug: 'construindo-times-de-ia-lideranca', question: 'Como montar e liderar o time que implementa IA?' },

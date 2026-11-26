@@ -51,6 +51,8 @@ Integrar IA em sistemas legados é um problema fundamentalmente diferente de cri
 
 Por tudo isso, o objetivo de integrar IA em sistemas legados é **aumentar a capacidade do time**: automatizar o que é repetitivo, acelerar o que é lento, e trazer uma segunda perspectiva para decisões que antes dependiam de uma pessoa só.
 
+*Este artigo continua a série sobre sistemas legados. Se os dados da empresa ainda estão espalhados entre bancos e planilhas, veja antes a [arquitetura de consolidação de dados para IA sem reescrever sistemas legados](/blog/arquitetura-consolidacao-dados-ia-sem-reescrever-sistemas-legados/).*
+
 ***
 
 ## **Um framework prático: como integrei IA no meu time**
@@ -124,6 +126,8 @@ Algumas lições que aprendi:
 - **Trate a IA como membro do time.** Um membro do time tem responsabilidades definidas, participa de processos, e é cobrado por resultados. Quando você define que o agente de IA é responsável por criar issues, elaborar planos e abrir PRs, ele passa a ter um papel claro dentro do time.
 - **Mantenha o humano no controle das decisões que importam.** A IA acelera execução, mas as decisões de o que fazer e quando fazer continuam sendo humanas. Velocidade de máquina com julgamento humano.
 - **Busque disciplina.** O workflow que descrevi tem falhas. Mas funciona porque tem regras claras, gates explícitos, e artefatos rastreáveis. É isso que permite escalar o uso de IA sem perder o controle.
+
+*Este texto fecha a série sobre sistemas legados. Os demais artigos sobre implantação e arquitetura de dados estão reunidos em [Implantação de IA](/blog/tema/implantacao-de-ia/).*
 
 ***
 

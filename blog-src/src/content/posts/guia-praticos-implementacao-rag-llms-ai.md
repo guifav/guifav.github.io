@@ -9,63 +9,9 @@ type: newsletter
 topics: [ia-sobre-dados-da-empresa]
 ---
 
-[Acesse a parte 1 deste artigo com o detalhamento teórico sobre o tema](/blog/o-que-e-rag-llms-ia/)
-
 #### Sumário
 
-1. [Introdução](/blog/o-que-e-rag-llms-ia/)
-
-   - [O que é RAG (Retrieval-Augmented Generation)](/blog/o-que-e-rag-llms-ia/)
-   - [Importância do RAG no contexto atual da IA](/blog/o-que-e-rag-llms-ia/)
-
-2. [Fundamentos do RAG](/blog/o-que-e-rag-llms-ia/)
-
-   - [Definição detalhada](/blog/o-que-e-rag-llms-ia/)
-   - [Origem e evolução do RAG](/blog/o-que-e-rag-llms-ia/)
-   - [Componentes principais do RAG](/blog/o-que-e-rag-llms-ia/)
-
-3. [Como funciona o RAG](/blog/o-que-e-rag-llms-ia/)
-
-   - [Processo passo a passo](/blog/o-que-e-rag-llms-ia/)
-   - [Diferenças entre RAG e LLMs tradicionais](/blog/o-que-e-rag-llms-ia/)
-   - [Tipos de dados utilizados no RAG](/blog/o-que-e-rag-llms-ia/)
-
-4. [Vantagens do RAG](/blog/o-que-e-rag-llms-ia/)
-
-   - [Melhoria na precisão das respostas](/blog/o-que-e-rag-llms-ia/)
-   - [Capacidade de lidar com informações atualizadas](/blog/o-que-e-rag-llms-ia/)
-   - [Redução de alucinações e informações incorretas](/blog/o-que-e-rag-llms-ia/)
-   - [Personalização para domínios específicos](/blog/o-que-e-rag-llms-ia/)
-
-5. [Desafios na implementação do RAG](/blog/o-que-e-rag-llms-ia/)
-
-   - [Complexidade na integração de fontes de dados](/blog/o-que-e-rag-llms-ia/)
-   - [Balanceamento entre recuperação e geração](/blog/o-que-e-rag-llms-ia/)
-   - [Custo computacional](/blog/o-que-e-rag-llms-ia/)
-
-6. [Arquiteturas de RAG](/blog/o-que-e-rag-llms-ia/)
-
-   - [Modelos básicos de RAG](/blog/o-que-e-rag-llms-ia/)
-   - [Arquiteturas avançadas (ex: multi-step RAG, recursive RAG)](/blog/o-que-e-rag-llms-ia/)
-   - [Comparação entre diferentes arquiteturas](/blog/o-que-e-rag-llms-ia/)
-
-7. [Técnicas de recuperação de informações no RAG](/blog/o-que-e-rag-llms-ia/)
-
-   - [Métodos de indexação](/blog/o-que-e-rag-llms-ia/)
-   - [Algoritmos de busca semântica](/blog/o-que-e-rag-llms-ia/)
-   - [Técnicas de compressão de informação](/blog/o-que-e-rag-llms-ia/)
-
-8. [Otimização do RAG](/blog/o-que-e-rag-llms-ia/)
-
-   - [Fine-tuning para tarefas específicas](/blog/o-que-e-rag-llms-ia/)
-   - [Técnicas de prompt engineering para RAG](/blog/o-que-e-rag-llms-ia/)
-   - [Estratégias de caching e otimização de performance](/blog/o-que-e-rag-llms-ia/)
-
-9. [Avaliação de sistemas RAG](/blog/o-que-e-rag-llms-ia/)
-
-   - [Métricas de avaliação](/blog/o-que-e-rag-llms-ia/)
-   - [Benchmarks e datasets para testes](/blog/o-que-e-rag-llms-ia/)
-   - [Desafios na avaliação de sistemas RAG](/blog/o-que-e-rag-llms-ia/)
+Os temas anteriores (1. Introdução, 2. Fundamentos, 3. Como funciona, 4. Vantagens, 5. Desafios, 6. Arquiteturas, 7. Técnicas de recuperação, 8. Otimização e 9. Avaliação) estão no artigo sobre [fundamentos e arquiteturas de RAG](/blog/o-que-e-rag-llms-ia/).
 
 10. Aplicações práticas do RAG
 
@@ -101,7 +47,7 @@ topics: [ia-sobre-dados-da-empresa]
 
     - Artigos científicos relevantes
 
-[Este artigo é continuidade do artigo O que é RAG em LLMs e IA? Introdução ao tema (Parte 1/2)](/blog/o-que-e-rag-llms-ia/)
+*Este artigo continua a série sobre RAG. Para consultar antes os conceitos e as arquiteturas de base, leia o [artigo anterior sobre fundamentos e avaliação de sistemas RAG](/blog/o-que-e-rag-llms-ia/).*
 
 ## 10. Aplicações práticas do RAG
 
@@ -965,6 +911,8 @@ O RAG representa um passo significativo em direção a sistemas de IA mais capaz
 Em conclusão, o Retrieval-Augmented Generation representa uma fronteira empolgante na evolução da Inteligência Artificial. Seu potencial para transformar nossa interação com o conhecimento e a informação é vasto, mas também vem com responsabilidades significativas. À medida que avançamos, é crucial que o desenvolvimento e a implementação do RAG sejam guiados não apenas por ambições tecnológicas, mas também por considerações éticas cuidadosas e um compromisso com o benefício da sociedade como um todo.
 
 O futuro do RAG é brilhante e cheio de possibilidades. Cabe a nós, como comunidade de pesquisadores, desenvolvedores, usuários e cidadãos conscientes, moldar esse futuro de uma maneira que amplifique o melhor da inteligência humana e artificial, promova o acesso equitativo ao conhecimento e contribua positivamente para o progresso da humanidade. O convite está lançado para todos nós participarmos ativamente nesta jornada emocionante e transformadora.
+
+*A série sobre RAG continua no artigo seguinte, onde detalho um caso real de [RAG para bases de conhecimento corporativas em produção](/blog/rag-knowledge-bases-corporativas-implementacao-pratica/).*
 
 ## 15. Recursos adicionais
 

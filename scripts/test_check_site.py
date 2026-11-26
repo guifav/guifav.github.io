@@ -5115,6 +5115,103 @@ class LlmsTxtTest(Base):
         self.assertIn("llms.txt", err.getvalue())
 
 
+class SeriesTest(unittest.TestCase):
+    """#106: pares consecutivos (A, B) de cada série precisam de links mútuos dentro de div.post-body."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.site = Path(self.tmp.name) / "_site"
+        self.site.mkdir()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def write_post(self, slug: str, body_html: str, related_html: str = "") -> None:
+        p = self.site / "blog" / slug / "index.html"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        html = (
+            "<!DOCTYPE html><html><head><title>Post</title></head><body><main><article>"
+            f'<div class="post-body">{body_html}</div>'
+            f"{related_html}"
+            "</article></main></body></html>"
+        )
+        p.write_text(html, encoding="utf-8")
+
+    def test_series_with_all_links_passes(self):
+        series = (("a", "b", "c"),)
+        self.write_post("a", '<p><a href="/blog/b/">proxima</a></p>')
+        self.write_post("b", '<div><a href="https://guifav.dev/blog/a/">anterior</a></div>'
+                             '<p><a href="/blog/c/#secao">proxima</a></p>')
+        self.write_post("c", '<p><a href="../b/">anterior</a></p>')
+        self.assertEqual(C.check_series(self.site, series=series), [])
+
+    def test_missing_next_link_fails(self):
+        series = (("a", "b"),)
+        self.write_post("a", "<p>sem link para a seguinte</p>")
+        self.write_post("b", '<p><a href="/blog/a/">anterior</a></p>')
+        got = C.check_series(self.site, series=series)
+        self.assertEqual(len(got), 1, got)
+        self.assertIn("blog/a/index.html", got[0])
+        self.assertIn("/blog/b/", got[0])
+
+    def test_next_link_only_in_related_aside_or_outside_post_body_fails(self):
+        series = (("a", "b"),)
+        related = '<aside class="related"><ul><li><a href="/blog/b/">B</a></li></ul></aside>'
+        self.write_post("a", "<p>corpo sem link</p>", related_html=related)
+        self.write_post("b", '<p><a href="/blog/a/">anterior</a></p>')
+        got = C.check_series(self.site, series=series)
+        self.assertEqual(len(got), 1, got)
+        self.assertIn("blog/a/index.html", got[0])
+        self.assertIn("/blog/b/", got[0])
+
+        # Link depois que div.post-body fecha também não conta.
+        self.write_post("a", "<p>corpo sem link</p>", related_html='<div><a href="/blog/b/">fora</a></div>')
+        got_outside = C.check_series(self.site, series=series)
+        self.assertEqual(len(got_outside), 1, got_outside)
+        self.assertIn("blog/a/index.html", got_outside[0])
+
+    def test_missing_prev_link_fails(self):
+        series = (("a", "b"),)
+        self.write_post("a", '<p><a href="/blog/b/">proxima</a></p>')
+        related = '<aside class="related"><ul><li><a href="/blog/a/">A</a></li></ul></aside>'
+        self.write_post("b", "<p>sem link para a anterior</p>", related_html=related)
+        got = C.check_series(self.site, series=series)
+        self.assertEqual(len(got), 1, got)
+        self.assertIn("blog/b/index.html", got[0])
+        self.assertIn("/blog/a/", got[0])
+
+    def test_missing_series_page_fails(self):
+        series = (("a", "b"),)
+        self.write_post("a", '<p><a href="/blog/b/">proxima</a></p>')
+        got = C.check_series(self.site, series=series)
+        self.assertEqual(len(got), 1, got)
+        self.assertIn("blog/b/index.html", got[0])
+        self.assertIn("ausente", got[0])
+
+    def test_series_constant_and_main_wiring(self):
+        self.assertEqual(len(C.SERIES), 3)
+        consts = Path(self.tmp.name) / "consts.ts"
+        consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
+        err = io.StringIO()
+        with isolate_main_rule("check_series"), \
+                contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            code = C.main(["--site", str(self.site), "--posts", str(self.tmp.name), "--consts", str(consts)])
+        self.assertEqual(code, 1)
+        self.assertIn("blog/rag-llm-ai-o-que-e/index.html", err.getvalue())
+
+        for slugs in C.SERIES:
+            for i, slug in enumerate(slugs):
+                links = []
+                if i > 0:
+                    links.append(f'<a href="/blog/{slugs[i - 1]}/">ant</a>')
+                if i + 1 < len(slugs):
+                    links.append(f'<a href="/blog/{slugs[i + 1]}/">prox</a>')
+                self.write_post(slug, "<p>" + " ".join(links) + "</p>")
+        with isolate_main_rule("check_series"), \
+                contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(C.main(["--site", str(self.site), "--posts", str(self.tmp.name), "--consts", str(consts)]), 0)
+
+
 class BookTest(Base):
     """#183: página do livro em /materiais/ com @graph (WebPage + Book gratuito, workExample PDF e Kindle, sem offers/FAQPage)."""
 
@@ -5266,6 +5363,7 @@ MAIN_RULES = {
     "check_courses": lambda *a, **k: [],
     "check_youtube": lambda *a, **k: [],
     "check_old_youtube_handle": lambda *a, **k: [],
+    "check_series": lambda *a, **k: [],
     "check_seo": lambda *a, **k: ([], [], []),
 }
 

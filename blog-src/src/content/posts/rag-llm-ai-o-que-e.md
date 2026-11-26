@@ -97,6 +97,8 @@ O RAG está pavimentando o caminho para uma nova era de IA mais inteligente e ad
 
 O futuro dos LLMs de IA contextualizada é brilhante, e o RAG está no centro desta revolução, prometendo transformar radicalmente a forma como interagimos com a informação e o conhecimento no mundo digital.
 
+*Este artigo abre a série sobre RAG. Na sequência, aprofundo [os fundamentos teóricos e as arquiteturas de sistemas RAG](/blog/o-que-e-rag-llms-ia/).*
+
 ## FAQs
 
 - O RAG pode substituir completamente os LLMs tradicionais?

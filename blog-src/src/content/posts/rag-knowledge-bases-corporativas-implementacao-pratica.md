@@ -18,6 +18,8 @@ A implementação de RAG (Retrieval Augmented Generation) que desenvolvemos tran
 
 Este artigo explora a arquitetura conceitual desta implementação, revelando como transformar bases de conhecimento corporativas em sistemas inteligentes que realmente agregam valor ao negócio.
 
+*Este artigo faz parte da série sobre RAG e aplica a um cenário corporativo o que tratei antes no texto sobre [fundamentos e arquiteturas de RAG](/blog/o-que-e-rag-llms-ia/) e no [guia prático de implementação de RAG](/blog/guia-praticos-implementacao-rag-llms-ai/).*
+
 ## O problema real: Conhecimento fragmentado e inacessível
 
 O desafio que enfrentamos era típico de empresas maduras: décadas de conhecimento acumulado em formatos diversos, sistemas diferentes e níveis variados de estruturação. Manuais técnicos em PDFs, procedimentos em wikis internos (como o Notion), especificações em documentos do SharePoint e tribal knowledge que existia apenas nas cabeças dos colaboradores mais experientes.
@@ -227,6 +229,8 @@ A arquitetura desenvolvida demonstra que o RAG pode lidar com sucesso com conte�
 
 Para CTOs que consideram implementar o RAG: comece com uma compreensão clara de como o conhecimento flui pela sua organização, invista fortemente em arquitetura de conteúdo e qualidade de processamento e design para melhoria contínua. A base tecnológica é sólida – o sucesso depende da aplicação criteriosa ao seu contexto de negócios específico.
 
+*Para decidir quando o RAG é a escolha certa diante de alternativas como janela longa ou consulta direta ao banco, escrevi o comparativo [RAG, contexto longo ou Text-to-SQL: o teste em 80 contratos](/blog/rag-contexto-longo-ou-text-to-sql-teste-80-contratos/).*
+
 ***
 
-*No próximo artigo da série, exploraremos fine-tuning versus prompt engineering, analisando quando cada abordagem oferece diferente ROI e como tomar decisões estratégicas baseadas em restrições de negócio e capabilidades técnicas.*
+*No próximo artigo da série, exploraremos [fine-tuning versus prompt engineering](/blog/fine-tuning-vs-prompt-engineering/), analisando quando cada abordagem oferece diferente ROI e como tomar decisões estratégicas baseadas em restrições de negócio e capabilidades técnicas.*
