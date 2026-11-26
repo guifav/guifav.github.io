@@ -244,7 +244,7 @@ Em produção, usuários reais fazem consultas mais longas, iteram várias vezes
 
 ### Quais estratégias mais reduzem os custos operacionais de IA generativa em escala?
 
-No caso acompanhado ao longo de seis meses, estratégias de caching e roteamento inteligentes reduziram os custos operacionais em 67%. O conjunto incluiu caching semântico para consultas similares (responsável por 35% da redução de custos, com 40% de cache hits em produção), compressão de prompts preservando a qualidade do contexto, batching inteligente para múltiplos requests, seleção dinâmica de modelo conforme a complexidade da consulta e rate limiting baseado em uso para prevenir abuso. Para conter picos inesperados, o sistema também usou monitoramento de custos em tempo real, circuit breakers e filas.
+No caso acompanhado ao longo de seis meses, estratégias de caching e roteamento inteligentes reduziram os custos operacionais em 67%. O conjunto incluiu caching semântico para consultas similares (35% de redução de custos, com 40% de cache hits em produção), compressão de prompts preservando a qualidade do contexto, batching inteligente para múltiplos requests, seleção dinâmica de modelo conforme a complexidade da consulta e rate limiting baseado em uso para prevenir abuso. Para conter picos inesperados, o sistema também usou monitoramento de custos em tempo real, circuit breakers e filas.
 
 ### Como funciona o caching semântico em aplicações de IA generativa?
 
