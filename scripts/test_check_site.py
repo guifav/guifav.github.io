@@ -1550,18 +1550,23 @@ class TrackingSourcesTest(unittest.TestCase):
                      "https://adssettings.google.com/", "https://tools.google.com/dlpage/gaoptout",
                      "https://policies.google.com/technologies/partner-sites"):
             self.assertIn(must, t)
-        self.assertIn("Atualizada em 26 de novembro de 2026.", t)  # #68: seção Cookies; 23/11: Materiais para baixar; 24/11: CRM (#97) e /privacidade/ (#146); 26/11: terceiros e hospedagem (#154)
+        self.assertIn("Atualizada em 26 de novembro de 2026.", t)  # #68: seção Cookies; 23/11: Materiais para baixar; 24/11: CRM (#97) e /privacidade/ (#146); 26/11: terceiros e hospedagem (#154) e marca da remoção (#134)
 
     def test_privacy_says_material_record_goes_to_the_crm(self):
-        # #97 fase 2: o registro dos materiais vai ao Twenty. O download cria o contato; o pedido sem download só entra
-        # se o email já for contato; a remoção apaga pedidos e downloads nos dois lugares e o contato só a pedido.
+        # #97 fase 2 e #134: o registro dos materiais vai ao Twenty. O download cria o contato; o pedido sem download só
+        # entra se o email já for contato; a remoção apaga pedidos e downloads nos dois lugares, guarda a marca da remoção
+        # por 8 dias para links antigos não refazerem o registro, e o contato só sai a pedido.
         t = self.read("privacidade/index.html")
         for must in ("O registro vai também para o meu CRM",
                      "o download cria lá um contato só com o seu email, se ele ainda não existir",
                      "o pedido sem download só entra no CRM se o seu email já for um contato",
-                     "apago os pedidos e downloads, no Cloudflare e no CRM. O contato continua no CRM com o resumo que veio "
-                     "deles (os temas de interesse, a data da última ação, se o email foi comprovado e o identificador do "
-                     "Google Analytics), e só é apagado, com esse resumo, se você pedir.",
+                     "apago os pedidos e downloads, no Cloudflare e no CRM.",
+                     "Para que um link antigo não refaça o registro, guardo no Cloudflare, por 8 dias, só uma marca da "
+                     "remoção (um código calculado a partir do seu email, que sem a minha chave não permite chegar ao "
+                     "endereço, e a data), e nesse prazo os links enviados antes da remoção deixam de valer.",
+                     "O contato continua no CRM com o resumo que veio deles (os temas de interesse, a data da última "
+                     "ação, se o email foi comprovado e o identificador do Google Analytics), e só é apagado, com esse "
+                     "resumo, se você pedir.",
                      # r1 (Astra P2): a data da página mudou; o início do registro é o deploy do Worker, não a versão.
                      "Pedidos e downloads feitos antes das 17h31 de 23 de novembro de 2026 (horário de Brasília) não foram "
                      "registrados.",

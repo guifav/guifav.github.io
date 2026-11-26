@@ -19,7 +19,7 @@ export type Acao = 'material_request' | 'material_download' | 'newsletter_confir
 const enc = new TextEncoder();
 
 /** Motivo da falha para o log, sem nada que pareça um email. */
-const motivo = (e: unknown) => String((e as Error)?.message ?? e).replace(/[^\s@]+@[^\s@]+/g, '<email>').slice(0, 200);
+export const motivo = (e: unknown) => String((e as Error)?.message ?? e).replace(/[^\s@]+@[^\s@]+/g, '<email>').slice(0, 200);
 
 /**
  * Id da conversão: SHA-256 da ação com a assinatura do link, já verificada e canônica (token.ts recusa as variantes).

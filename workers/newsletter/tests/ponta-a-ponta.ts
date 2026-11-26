@@ -10,13 +10,14 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { handle, type Env } from '../src/index.ts';
-import { d1, rows } from './d1.ts';
+import { d1, d1Arquivo, rows } from './d1.ts';
 
 const TRACK = readFileSync(new URL('../../../assets/track.js', import.meta.url), 'utf8');
 const TOML = readFileSync(new URL('../wrangler.toml', import.meta.url), 'utf-8');
 const tomlVar = (k: string) => TOML.match(new RegExp(`^${k}\\s*=\\s*"([^"]*)"`, 'm'))![1];
 export const NOW = Date.UTC(2026, 10, 24, 12, 0, 0);
 const SECRET = 'segredo-de-teste-com-tamanho-suficiente-0123456789';
+export const FORGET_KEY = 'chave-hmac-de-teste-com-32-bytes-ou-mais-0123456789';
 
 /** O que a visita simulada deixa para trás e que nunca pode aparecer no D1 nem no Twenty. */
 export const PROIBIDOS = ['termo', 'secreto', 'GCLIDSECRETO', 'search', 'http', '?', '#', '=', '203.0.113', 'Mozilla'];
@@ -64,18 +65,20 @@ export function visita(referrer: string, paginas: string[], action: string): Rec
   return Object.fromEntries(campos.map((c) => [c.attrs.name, c.value]));
 }
 
-function worker() {
-  const db = d1();
+function worker(dbPath?: string, nowMs = NOW) {
+  const db = dbPath ? d1Arquivo(dbPath) : d1();
   const pending: Promise<unknown>[] = [];
   const emails: { html: string; text: string }[] = [];
-  const env: Env = {
-    RESEND_API_KEY: 're_teste', TURNSTILE_SECRET: 'ts_teste', CONFIRM_SECRET: SECRET,
+  const resendContacts: string[] = [];
+  const ga4: string[] = [];
+  const env = {
+    RESEND_API_KEY: 're_teste', TURNSTILE_SECRET: 'ts_teste', CONFIRM_SECRET: SECRET, FORGET_HMAC_KEY: FORGET_KEY,
     FROM: tomlVar('FROM'), MATERIAL_FROM: tomlVar('MATERIAL_FROM'), REPLY_TO: tomlVar('REPLY_TO'),
     SEGMENT_ID: 'seg-1', TOPIC_ID: 'topic-1', SITE_ORIGIN: tomlVar('SITE_ORIGIN'), BLOG_URL: tomlVar('BLOG_URL'),
     WORKER_URL: tomlVar('WORKER_URL'), TURNSTILE_HOSTNAME: tomlVar('TURNSTILE_HOSTNAME'),
     RL_EMAIL: { limit: async () => ({ success: true }) }, RL_IP: { limit: async () => ({ success: true }) },
     DB: db, GA4_MEASUREMENT_ID: tomlVar('GA4_MEASUREMENT_ID'), GA4_API_SECRET: 'mp_teste_segredo',
-  };
+  } as Env;
   const fetchFn = async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url.includes('turnstile')) return Response.json({ success: true, hostname: env.TURNSTILE_HOSTNAME });
@@ -83,17 +86,23 @@ function worker() {
       emails.push(JSON.parse(String(init?.body)));
       return Response.json({ id: 'e1' });
     }
-    if (url === 'https://api.resend.com/contacts') return Response.json({ id: 'c1' }, { status: 201 });
-    if (url.startsWith('https://www.google-analytics.com/mp/collect?')) return new Response(null, { status: 204 });
+    if (url.startsWith('https://api.resend.com/contacts')) {
+      resendContacts.push(`${init?.method ?? 'GET'} ${url}`);
+      return Response.json({ id: 'c1' }, { status: 201 });
+    }
+    if (url.startsWith('https://www.google-analytics.com/mp/collect?')) {
+      ga4.push(url);
+      return new Response(null, { status: 204 });
+    }
     return new Response('inesperado', { status: 500 });
   };
   const run = async (req: Request) => {
-    const r = await handle(req, env, { fetch: fetchFn as typeof fetch, now: () => NOW, waitUntil: (p) => void pending.push(p),
+    const r = await handle(req, env, { fetch: fetchFn as typeof fetch, now: () => nowMs, waitUntil: (p) => void pending.push(p),
       file: async (id) => new TextEncoder().encode(`conteudo:${id}`).buffer as ArrayBuffer });
-    await Promise.all(pending);
+    await Promise.all(pending.splice(0));
     return r;
   };
-  return { run, emails, db: db.raw };
+  return { run, emails, resendContacts, ga4, db: db.raw };
 }
 
 const post = (path: string, fields: Record<string, string>) => new Request(`https://insights.guifav.dev${path}`, {
@@ -133,5 +142,29 @@ export async function pontaAPonta(): Promise<PontaAPonta> {
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  process.stdout.write(JSON.stringify(await pontaAPonta()));
+  const [cmd, dbPath, nowArg] = process.argv.slice(2);
+  if (!cmd) {
+    process.stdout.write(JSON.stringify(await pontaAPonta()));
+  } else if (cmd === 'pedido') {
+    const w = worker(dbPath, Number(nowArg || NOW));
+    const origem = visita('https://chatgpt.com/', ['https://guifav.dev/ferramentas/mapa-decisao-ia/?utm_source=chatgpt.com'],
+      'https://insights.guifav.dev/material');
+    await w.run(post('/material', { email: 'leitor@exemplo.com', material: 'mapa-decisao-ia', insights: 'sim',
+      'cf-turnstile-response': 'tok', ...origem }));
+    const links = linksDe(w.emails[0].html);
+    w.db.close();
+    process.stdout.write(JSON.stringify({ links, resendContacts: w.resendContacts, ga4: w.ga4 }));
+  } else if (cmd === 'clicar') {
+    const entrada = JSON.parse(readFileSync(0, 'utf-8')) as { links: string[] };
+    const w = worker(dbPath, Number(nowArg || NOW));
+    const respostas: { url: string; status: number; location: string | null }[] = [];
+    for (const l of entrada.links) {
+      const r = await w.run(new Request(l));
+      respostas.push({ url: l, status: r.status, location: r.headers.get('location') });
+    }
+    w.db.close();
+    process.stdout.write(JSON.stringify({ respostas, resendContacts: w.resendContacts, ga4: w.ga4 }));
+  } else {
+    throw new Error(`comando desconhecido: ${cmd}`);
+  }
 }

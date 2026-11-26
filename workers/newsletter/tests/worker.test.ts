@@ -11,6 +11,7 @@ import { d1, rows, capturaErros, variantes, SEM_ORIGEM } from './d1.ts';
 
 const NOW = Date.UTC(2026, 10, 11, 12, 0, 0);
 const SECRET = 'segredo-de-teste-com-tamanho-suficiente-0123456789';
+const FORGET_KEY = 'chave-hmac-de-teste-com-32-bytes-ou-mais-0123456789';
 
 type Call = { url: string; method: string; body: unknown };
 
@@ -124,6 +125,7 @@ function setup(opts: Opts = {}) {
     RESEND_API_KEY: 're_teste',
     TURNSTILE_SECRET: 'ts_teste',
     CONFIRM_SECRET: SECRET,
+    FORGET_HMAC_KEY: FORGET_KEY,
     FROM: tomlVar('FROM'),
     MATERIAL_FROM: tomlVar('MATERIAL_FROM'),
     REPLY_TO: tomlVar('REPLY_TO'),
@@ -361,8 +363,8 @@ test('A7: corpo grande demais é recusado', async () => {
 
 test('A8: wrangler.toml sem segredos e com os nomes dos segredos documentados', () => {
   const toml = readFileSync(new URL('../wrangler.toml', import.meta.url), 'utf-8');
-  assert.doesNotMatch(toml, /re_[A-Za-z0-9]{8,}|0x[0-9A-Fa-f]{20,}|RESEND_API_KEY\s*=|TURNSTILE_SECRET\s*=|CONFIRM_SECRET\s*=/);
-  for (const k of ['RESEND_API_KEY', 'TURNSTILE_SECRET', 'CONFIRM_SECRET', 'GA4_API_SECRET']) assert.match(toml, new RegExp(`#.*${k}`));
+  assert.doesNotMatch(toml, /re_[A-Za-z0-9]{8,}|0x[0-9A-Fa-f]{20,}|RESEND_API_KEY\s*=|TURNSTILE_SECRET\s*=|CONFIRM_SECRET\s*=|FORGET_HMAC_KEY\s*=/);
+  for (const k of ['RESEND_API_KEY', 'TURNSTILE_SECRET', 'CONFIRM_SECRET', 'FORGET_HMAC_KEY', 'GA4_API_SECRET']) assert.match(toml, new RegExp(`#.*${k}`));
 });
 
 test('A8: segredo de confirmação curto demais derruba o Worker em vez de assinar fraco', async () => {
@@ -504,7 +506,7 @@ test('A8: nenhum arquivo do Worker atribui segredo, com chave TOML entre aspas o
   };
   walk(root);
   assert.ok(files.some((f) => f.endsWith('wrangler.toml')));
-  const secret = /^\s*["']?(RESEND_API_KEY|TURNSTILE_SECRET|CONFIRM_SECRET|GA4_API_SECRET)["']?\s*[=:]\s*["'][^"']+/m;
+  const secret = /^\s*["']?(RESEND_API_KEY|TURNSTILE_SECRET|CONFIRM_SECRET|FORGET_HMAC_KEY|GA4_API_SECRET)["']?\s*[=:]\s*["'][^"']+/m;
   for (const f of files) {
     const t = readFileSync(f, 'utf-8');
     assert.doesNotMatch(t, secret, f);
