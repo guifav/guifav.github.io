@@ -1561,9 +1561,11 @@ class TrackingSourcesTest(unittest.TestCase):
                      "o download cria lá um contato só com o seu email, se ele ainda não existir",
                      "o pedido sem download só entra no CRM se o seu email já for um contato",
                      "apago os pedidos e downloads, no Cloudflare e no CRM.",
-                     "Para que um link antigo não refaça o registro, guardo no Cloudflare, por 8 dias, só uma marca da "
-                     "remoção (um código calculado a partir do seu email, que sem a minha chave não permite chegar ao "
-                     "endereço, e a data), e nesse prazo os links enviados antes da remoção deixam de valer.",
+                     "Para que um link antigo não refaça o registro, guardo no Cloudflare só uma marca da remoção: um "
+                     "código calculado a partir do seu email, que sem a minha chave não permite descobrir o endereço, e "
+                     "a data. Os links enviados antes da remoção, inclusive o de confirmação dos Expert Insights, deixam "
+                     "de valer de vez, e a marca é apagada automaticamente depois de 8 dias, quando nenhum deles valeria "
+                     "mais.",
                      "O contato continua no CRM com o resumo que veio deles (os temas de interesse, a data da última "
                      "ação, se o email foi comprovado e o identificador do Google Analytics), e só é apagado, com esse "
                      "resumo, se você pedir.",

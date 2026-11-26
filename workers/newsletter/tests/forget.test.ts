@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { handle, type Env, type R2BucketLike } from '../src/index.ts';
 import { signLink, signMaterialLink } from '../src/token.ts';
-import { forgetHmac } from '../src/forget.ts';
+import { checkForgotten, FORGET_TIMEOUT_MS, forgetHmac } from '../src/forget.ts';
 import { MATERIAIS } from '../src/materiais.ts';
 import { d1, rows, capturaErros } from './d1.ts';
 
@@ -21,10 +21,10 @@ const tomlVar = (k: string) => TOML.match(new RegExp(`^${k}\\s*=\\s*"([^"]*)"`, 
 
 type Call = { url: string; method: string; body: any };
 
-function setup(opts: { d1Falha?: RegExp; now?: number; forgetKey?: string } = {}) {
+function setup(opts: { d1Falha?: RegExp; d1Pendura?: RegExp; forgetTimeoutMs?: number; now?: number; forgetKey?: string } = {}) {
   const calls: Call[] = [];
   const r2Gets: string[] = [];
-  const db = d1(opts.d1Falha);
+  const db = d1(opts.d1Falha, undefined, opts.d1Pendura);
   const pending: Promise<unknown>[] = [];
   const waitUntil = (p: Promise<unknown>) => void pending.push(p);
   const settle = () => Promise.all(pending);
@@ -78,7 +78,7 @@ function setup(opts: { d1Falha?: RegExp; now?: number; forgetKey?: string } = {}
   );
   let clock = opts.now ?? NOW;
   const run = (req: Request) =>
-    handle(req, env, { fetch: fetchFn as typeof fetch, now: () => clock, file: async (id) => bytes[id] ?? null, waitUntil });
+    handle(req, env, { fetch: fetchFn as typeof fetch, now: () => clock, file: async (id) => bytes[id] ?? null, waitUntil, forgetTimeoutMs: opts.forgetTimeoutMs });
   const avanca = (ms: number) => void (clock += ms);
   return { env, run, calls, r2Gets, db: db.raw, settle, avanca, rows: async (t: string) => (await settle(), rows(db.raw, t)) };
 }
@@ -297,4 +297,69 @@ test('F8: falha na leitura do marcador: confirmação responde 502 sem Resend; d
   assert.equal((await sBad.rows('conversions')).length, 0);
   assert.equal(ga4(sBad.calls).length, 0);
   assert.equal(errosBad.length, 2);
+});
+
+test('F9: D1 pendurado só em forgotten estoura o prazo (FORGET_TIMEOUT_MS = 1500 ms) e as duas rotas respondem dentro do prazo', async (t) => {
+  assert.equal(FORGET_TIMEOUT_MS, 1500);
+  const s = setup({ d1Pendura: /forgotten/, forgetTimeoutMs: 30 });
+  const qConf = await signLink(VETOR_EMAIL, NOW, SECRET);
+  const qDl = await signMaterialLink('planilha-custos-ia', VETOR_EMAIL, NOW, SECRET);
+  const limite = <T>(p: Promise<T>) =>
+    Promise.race([p, new Promise<never>((_, no) => setTimeout(() => no(new Error('a rota esperou o D1 em forgotten')), 500))]);
+  let rConf!: Response;
+  let rDl!: Response;
+  const erros = await capturaErros(async () => {
+    rConf = await limite(s.run(new Request(`https://insights.guifav.dev/confirm?${qConf}`)));
+    rDl = await limite(s.run(new Request(`https://insights.guifav.dev/material/download?${qDl}`)));
+    await s.settle();
+  });
+  assert.equal(rConf.status, 502);
+  assert.equal(await rConf.text(), 'falha temporária; tente o link de novo em alguns minutos');
+  assert.equal(resendContacts(s.calls).length, 0);
+
+  assert.equal(rDl.status, 200);
+  assert.equal(await rDl.text(), 'conteudo:planilha-custos-ia');
+  assert.equal((await s.rows('conversions')).length, 0);
+  assert.equal(ga4(s.calls).length, 0);
+
+  assert.equal(erros.length, 2);
+  assert.ok(!erros.join('\n').includes('exemplo.com'), erros.join('\n'));
+  assert.ok(!erros.join('\n').includes(FORGET_KEY), erros.join('\n'));
+
+  // Prova sem esperar 1,5 s reais que o prazo padrão de checkForgotten usa FORGET_TIMEOUT_MS.
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    let consultou!: () => void;
+    const leu = new Promise<void>((ok) => (consultou = ok));
+    const dbPendurado = {
+      prepare: () => ({
+        bind: () => ({
+          run: async () => new Promise(() => {}),
+          first: () => {
+            consultou();
+            return new Promise<null>(() => {});
+          },
+        }),
+        run: async () => new Promise(() => {}),
+        first: async () => new Promise<null>(() => {}),
+      }),
+    };
+    let status: string | undefined;
+    const errosPadrao = await capturaErros(async () => {
+      const p = checkForgotten(dbPendurado, VETOR_EMAIL, FORGET_KEY, NOW).then((st) => (status = st));
+      await leu;
+      await Promise.resolve();
+      t.mock.timers.tick(FORGET_TIMEOUT_MS - 1);
+      await Promise.resolve();
+      assert.equal(status, undefined, 'não deve estourar antes de FORGET_TIMEOUT_MS');
+      t.mock.timers.tick(1);
+      await p;
+    });
+    assert.equal(status, 'error');
+    assert.equal(errosPadrao.length, 1);
+    assert.match(errosPadrao[0], /1500 ms/);
+    assert.ok(!errosPadrao[0].includes('exemplo.com'), errosPadrao[0]);
+  } finally {
+    t.mock.timers.reset();
+  }
 });

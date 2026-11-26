@@ -67,6 +67,8 @@ export interface Deps {
    * fora do ar nunca atrasa nem impede o download, o email do pedido ou a confirmação (issue #97).
    */
   waitUntil: (p: Promise<unknown>) => void;
+  /** Prazo máximo da leitura do marcador `forgotten` no D1 (issue #134); em produção usa FORGET_TIMEOUT_MS. */
+  forgetTimeoutMs?: number;
 }
 
 const MAX_BODY = 8192;
@@ -144,9 +146,9 @@ async function confirm(url: URL, env: Env, deps: Deps): Promise<Response> {
   if (!ok) return redirect(`${env.BLOG_URL}/inscricao-invalida/`);
   const { email, origem } = ok;
   // Issue #134: recusa link emitido antes (ou no instante) da remoção pelo --forget, sem tocar no Resend nem no D1.
-  // Se a leitura do marcador falhar, responde a mesma 502 de falha temporária sem chamar o Resend.
+  // Se a leitura do marcador falhar ou estourar o prazo, responde a mesma 502 de falha temporária sem chamar o Resend.
   const issuedAtMs = Number(url.searchParams.get('x')) * 1000 - TTL_MS;
-  const forgotten = await checkForgotten(env.DB, email, env.FORGET_HMAC_KEY, issuedAtMs);
+  const forgotten = await checkForgotten(env.DB, email, env.FORGET_HMAC_KEY, issuedAtMs, deps.forgetTimeoutMs);
   if (forgotten === 'error') return plain(502, 'falha temporária; tente o link de novo em alguns minutos');
   if (forgotten === 'forgotten') return redirect(`${env.BLOG_URL}/inscricao-invalida/`);
   // Falha de rede ou resposta que não é JSON também é falha temporária (A5): 502, nunca exceção.
@@ -283,9 +285,9 @@ async function download(url: URL, env: Env, deps: Deps): Promise<Response> {
   const expired = redirect(found ? `${env.SITE_ORIGIN}${found.material.pagina}#link-expirado` : `${env.SITE_ORIGIN}/`);
   if (!ok || !found) return expired;
   // Issue #134: recusa link emitido antes (ou no instante) da remoção pelo --forget, sem entregar o arquivo nem gravar nada.
-  // Se a leitura do marcador falhar (D1 fora do ar), o arquivo ainda é entregue, sem gravar conversão nem mandar evento ao GA4.
+  // Se a leitura do marcador falhar ou estourar o prazo (D1 fora do ar ou lento), o arquivo ainda é entregue, sem gravar conversão nem mandar evento ao GA4.
   const issuedAtMs = Number(url.searchParams.get('x')) * 1000 - MATERIAL_TTL_MS;
-  const forgotten = await checkForgotten(env.DB, ok.email, env.FORGET_HMAC_KEY, issuedAtMs);
+  const forgotten = await checkForgotten(env.DB, ok.email, env.FORGET_HMAC_KEY, issuedAtMs, deps.forgetTimeoutMs);
   if (forgotten === 'forgotten') return expired;
   let body: ReadableStream<Uint8Array> | ArrayBuffer | null = null;
   let size: number | undefined;
@@ -311,7 +313,10 @@ async function download(url: URL, env: Env, deps: Deps): Promise<Response> {
   if (!body) return plain(500, 'arquivo indisponível');
   // O clique no link prova o email (issue #97). A conversão aponta para o pedido que gerou o link e herda dele a origem da
   // visita (issue #114), e o evento do GA4 sai com o client_id guardado nesse pedido, ligando pedido e download no GA4;
-  // sem ele, vai como contagem anônima (#99). Em falha na leitura do marcador (#134), entrega o arquivo sem gravar nem avisar o GA4.
+  // sem ele, vai como contagem anônima (#99). Em falha ou prazo estourado na leitura do marcador (#134), entrega o arquivo
+  // sem gravar nem avisar o GA4. Corrida residual (#134): um clique que leu `forgotten` um instante antes de o `--forget --apply`
+  // gravar o marcador ainda pode gravar pela `waitUntil`; a janela é de milissegundos e repetir o `--forget --apply` apaga
+  // o que tiver sobrado.
   if (forgotten === 'ok') {
     const nowMs = deps.now();
     const material = found.material;

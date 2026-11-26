@@ -3,6 +3,7 @@
 O D1 falso é um SQLite em memória com as migrações reais do painel (0004 em diante), e o Twenty falso guarda estado como o
 servidor: devolve cópias, recusa eventoId repetido (campo único, 400 como no Twenty 2.32) e cria o campo inverso da relação.
 """
+import ast
 import contextlib
 import copy
 import fcntl
@@ -10,10 +11,12 @@ import tempfile
 import io
 import json
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
 import sys
+import time
 import unittest
 import urllib.parse
 
@@ -1059,63 +1062,122 @@ class ForgetMarcadorTest(unittest.TestCase):
         with self.assertRaises(S.SyncError):
             S.forget_hmac("sem-arroba", FORGET_KEY)
 
-    def test_forget_apply_writes_marker_before_first_delete_without_plain_email_and_upserts_latest(self):
+    def test_forget_retention_covers_longest_link_ttl_plus_one_day(self):
+        # Issue #134: FORGET_TTL_DAYS precisa cobrir o maior TTL de workers/newsletter/src/token.ts mais 1 dia de folga.
+        with open(os.path.join(NEWSLETTER, "src", "token.ts"), encoding="utf-8") as fh:
+            ts = fh.read()
+
+        def eval_ms(name: str) -> float:
+            m = re.search(rf"\bexport\s+const\s+{name}\s*=\s*([^;]+);", ts)
+            self.assertIsNotNone(m, f"{name} não encontrada em token.ts")
+            node = ast.parse(m.group(1).strip(), mode="eval").body
+
+            def walk(n):
+                if isinstance(n, ast.Constant) and isinstance(n.value, (int, float)) and not isinstance(n.value, bool):
+                    return float(n.value)
+                if isinstance(n, ast.BinOp) and isinstance(n.op, (ast.Mult, ast.Add, ast.Sub, ast.Div, ast.FloorDiv)):
+                    a, b = walk(n.left), walk(n.right)
+                    return {ast.Mult: a * b, ast.Add: a + b, ast.Sub: a - b, ast.Div: a / b, ast.FloorDiv: a // b}[type(n.op)]
+                raise AssertionError(f"expressão inesperada em {name}: {m.group(1)!r}")
+
+            val = walk(node)
+            self.assertGreater(val, 0, name)
+            return val
+
+        ttl_ms = eval_ms("TTL_MS")
+        material_ttl_ms = eval_ms("MATERIAL_TTL_MS")
+        day_ms = 24 * 3600 * 1000
+        retention_ms = S.FORGET_TTL_DAYS * day_ms
+        self.assertGreaterEqual(
+            retention_ms,
+            max(ttl_ms, material_ttl_ms) + day_ms,
+            f"FORGET_TTL_DAYS ({S.FORGET_TTL_DAYS}d) precisa cobrir max(TTL_MS, MATERIAL_TTL_MS) + 1 dia",
+        )
+
+    def test_forget_apply_writes_marker_before_any_read_with_d1_clock_and_upserts_latest(self):
         from datetime import datetime, timezone
+        iso_re = r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$"
         f = Fake(people=[person("p1", VETOR_EMAIL)])
         f.add(1, VETOR_EMAIL)
         f.add(2, VETOR_EMAIL, action="material_request", when="2026-11-23T10:00:00.000Z")
         run(f, apply=True)
         start_calls = len(f.calls)
+        # Relógio da KVM propositalmente deslocado: forgotten_at precisa vir do relógio do D1 (#134).
         real_now = S._now
-        S._now = lambda: datetime(2026, 11, 26, 12, 0, 0, 123456, tzinfo=timezone.utc)
+        S._now = lambda: datetime(2000, 1, 1, 0, 0, 0, 0, tzinfo=timezone.utc)
         try:
             rc, out = self._run_cli(f, "--forget", "--apply", stdin=f"{VETOR_EMAIL}\n", forget_key=FORGET_KEY)
         finally:
             S._now = real_now
         self.assertEqual(rc, 0, out)
         self.assertNotIn(VETOR_EMAIL, out.lower())
-        # Prova da ordem: o INSERT INTO forgotten acontece antes do primeiro DELETE (no Twenty e no D1).
+        new_calls = f.calls[start_calls:]
+        # Prova da ordem (#134): o INSERT INTO forgotten é a primeira chamada, antes de qualquer leitura do D1 ou do Twenty.
+        first_m, first_p, first_d, _ = new_calls[0]
+        self.assertTrue(first_p.endswith("/query"), new_calls[0])
+        self.assertTrue(first_d["sql"].lstrip().upper().startswith("INSERT INTO FORGOTTEN"), first_d["sql"])
+        self.assertNotIn(VETOR_EMAIL, json.dumps(first_d).lower())
+        self.assertEqual(first_d["params"], [VETOR_HMAC])
+        self.assertIn("strftime('%Y-%m-%dT%H:%M:%fZ','now')", first_d["sql"])
         ops = []
-        for m, p, d, _ in f.calls[start_calls:]:
+        for m, p, d, _ in new_calls:
             if p.endswith("/query"):
                 sql = d["sql"].lstrip().upper()
                 if sql.startswith("INSERT INTO FORGOTTEN"):
                     ops.append("mark")
-                    self.assertNotIn(VETOR_EMAIL, json.dumps(d).lower())
-                    self.assertEqual(d["params"], [VETOR_HMAC, "2026-11-26T12:00:00.123Z"])
                 elif sql.startswith("DELETE FROM CONVERSIONS"):
                     ops.append("del_d1")
             elif m == "DELETE":
                 ops.append("del_tw")
         self.assertEqual(ops, ["mark", "del_tw", "del_tw", "del_d1"])
         marks = [dict(r) for r in f.db.execute("SELECT * FROM forgotten")]
-        self.assertEqual(marks, [{"email_hmac": VETOR_HMAC, "forgotten_at": "2026-11-26T12:00:00.123Z"}])
-        # Upsert mantém a data mais recente: relógio atrasado não volta a data; relógio adiantado atualiza.
-        S._now = lambda: datetime(2026, 11, 25, 11, 0, 0, 0, tzinfo=timezone.utc)
-        try:
-            self.assertEqual(self._run_cli(f, "--forget", "--apply", stdin=f"{VETOR_EMAIL}\n", forget_key=FORGET_KEY)[0], 0)
-        finally:
-            S._now = real_now
+        self.assertEqual(len(marks), 1)
+        self.assertEqual(marks[0]["email_hmac"], VETOR_HMAC)
+        self.assertRegex(marks[0]["forgotten_at"], iso_re)
+        self.assertFalse(marks[0]["forgotten_at"].startswith("2000-"), marks[0]["forgotten_at"])
+        # Upsert mantém a data mais recente: marcador futuro não retrocede; marcador antigo sobe para o relógio do D1.
+        f.db.execute("UPDATE forgotten SET forgotten_at = ? WHERE email_hmac = ?", ("2099-01-01T00:00:00.000Z", VETOR_HMAC))
+        f.db.commit()
+        self.assertEqual(self._run_cli(f, "--forget", "--apply", stdin=f"{VETOR_EMAIL}\n", forget_key=FORGET_KEY)[0], 0)
         self.assertEqual(f.db.execute("SELECT forgotten_at FROM forgotten WHERE email_hmac = ?", (VETOR_HMAC,)).fetchone()[0],
-                         "2026-11-26T12:00:00.123Z")
-        S._now = lambda: datetime(2026, 11, 26, 13, 0, 0, 456000, tzinfo=timezone.utc)
-        try:
-            self.assertEqual(self._run_cli(f, "--forget", "--apply", stdin=f"{VETOR_EMAIL}\n", forget_key=FORGET_KEY)[0], 0)
-        finally:
-            S._now = real_now
-        self.assertEqual(f.db.execute("SELECT forgotten_at FROM forgotten WHERE email_hmac = ?", (VETOR_HMAC,)).fetchone()[0],
-                         "2026-11-26T13:00:00.456Z")
+                         "2099-01-01T00:00:00.000Z")
+        f.db.execute("UPDATE forgotten SET forgotten_at = ? WHERE email_hmac = ?", ("2020-01-01T00:00:00.000Z", VETOR_HMAC))
+        f.db.commit()
+        self.assertEqual(self._run_cli(f, "--forget", "--apply", stdin=f"{VETOR_EMAIL}\n", forget_key=FORGET_KEY)[0], 0)
+        atualizado = f.db.execute("SELECT forgotten_at FROM forgotten WHERE email_hmac = ?", (VETOR_HMAC,)).fetchone()[0]
+        self.assertRegex(atualizado, iso_re)
+        self.assertGreater(atualizado, "2020-01-01T00:00:00.000Z")
+
+    def test_forget_apply_keeps_marker_when_twenty_read_fails(self):
+        # Issue #134: se a leitura do Twenty falhar, o marcador já está gravado e `conversions` fica intacta.
+        f = Fake(people=[person("p1", VETOR_EMAIL)])
+        f.add(1, VETOR_EMAIL)
+        run(f, apply=True)
+        start_calls = len(f.calls)
+        f.fail = lambda m, p, d: (500, {"errors": [{"message": "twenty indisponível"}]}) if p == "/metadata" else None
+        with self.assertRaises(S.SyncError):
+            forget(f, VETOR_EMAIL, apply=True)
+        new_calls = f.calls[start_calls:]
+        self.assertTrue(new_calls[0][1].endswith("/query"))
+        self.assertTrue(new_calls[0][2]["sql"].lstrip().upper().startswith("INSERT INTO FORGOTTEN"))
+        marks = [dict(r) for r in f.db.execute("SELECT * FROM forgotten")]
+        self.assertEqual(len(marks), 1)
+        self.assertEqual(marks[0]["email_hmac"], VETOR_HMAC)
+        self.assertRegex(marks[0]["forgotten_at"], r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$")
+        self.assertEqual(f.db.execute("SELECT count(*) FROM conversions WHERE email = ?", (VETOR_EMAIL,)).fetchone()[0], 1)
+        self.assertEqual(len(f.convs), 1)
 
     def test_expired_markers_over_8_days_are_deleted_on_apply_and_only_counted_without_apply(self):
         from datetime import datetime, timezone
+        # Relógio da KVM deslocado para provar que o corte de 8 dias vem do relógio do D1 (#134).
         real_now = S._now
-        S._now = lambda: datetime(2026, 11, 26, 12, 0, 0, 0, tzinfo=timezone.utc)
+        S._now = lambda: datetime(2000, 1, 1, 0, 0, 0, 0, tzinfo=timezone.utc)
         try:
             # 1) Sync normal (sem conversões pendentes): sem --apply só conta; com --apply apaga só os > 8 dias.
             f = Fake()
-            for n, ts in ((1, "2026-11-18T11:59:59.999Z"), (2, "2026-11-17T12:00:00.000Z"),
-                          (3, "2026-11-18T12:00:00.000Z"), (4, "2026-11-25T12:00:00.000Z")):
-                f.db.execute("INSERT INTO forgotten (email_hmac, forgotten_at) VALUES (?, ?)", (hexid(n), ts))
+            for n, mod in ((1, "'-8 days','-1 minute'"), (2, "'-9 days'"),
+                           (3, "'-8 days','+1 minute'"), (4, "'-1 day'")):
+                f.db.execute(f"INSERT INTO forgotten (email_hmac, forgotten_at) VALUES (?, strftime('%Y-%m-%dT%H:%M:%fZ','now',{mod}))", (hexid(n),))
             f.db.commit()
             counts, out = run(f, apply=False)
             self.assertEqual(counts["marcadores_vencidos"], 2)
@@ -1128,8 +1190,8 @@ class ForgetMarcadorTest(unittest.TestCase):
 
             # 2) --forget: sem --apply só conta e não grava nem apaga; com --apply grava o novo e apaga os vencidos.
             g = Fake()
-            for n, ts in ((1, "2026-11-18T11:59:59.999Z"), (2, "2026-11-18T12:00:00.000Z")):
-                g.db.execute("INSERT INTO forgotten (email_hmac, forgotten_at) VALUES (?, ?)", (hexid(n), ts))
+            for n, mod in ((1, "'-8 days','-1 minute'"), (2, "'-8 days','+1 minute'")):
+                g.db.execute(f"INSERT INTO forgotten (email_hmac, forgotten_at) VALUES (?, strftime('%Y-%m-%dT%H:%M:%fZ','now',{mod}))", (hexid(n),))
             g.db.commit()
             rc, out = self._run_cli(g, "--forget", stdin=f"{VETOR_EMAIL}\n", forget_key=FORGET_KEY)
             self.assertEqual(rc, 0, out)
@@ -1141,6 +1203,22 @@ class ForgetMarcadorTest(unittest.TestCase):
             self.assertEqual(sorted(r[0] for r in g.db.execute("SELECT email_hmac FROM forgotten")), sorted([hexid(2), VETOR_HMAC]))
         finally:
             S._now = real_now
+
+    def test_sync_prunes_expired_markers_even_when_twenty_is_down(self):
+        # Issue #134: em run() com --apply, a limpeza dos vencidos acontece antes de ler o Twenty.
+        f = Fake(fail=lambda m, p, d: (500, {"errors": [{"message": "twenty fora do ar"}]}) if p == "/metadata" else None)
+        f.add(1, "a@x.com")  # pendente, força run() a ir até o Twenty
+        f.db.execute("INSERT INTO forgotten (email_hmac, forgotten_at) VALUES (?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-8 days','-1 minute'))", (hexid(1),))
+        f.db.execute("INSERT INTO forgotten (email_hmac, forgotten_at) VALUES (?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-1 day'))", (hexid(2),))
+        f.db.commit()
+        with self.assertRaises(S.SyncError):
+            run(f, apply=False)
+        self.assertEqual(sorted(r[0] for r in f.db.execute("SELECT email_hmac FROM forgotten")), [hexid(1), hexid(2)])
+        with self.assertRaises(S.SyncError):
+            run(f, apply=True)
+        self.assertEqual(sorted(r[0] for r in f.db.execute("SELECT email_hmac FROM forgotten")), [hexid(2)])
+        self.assertEqual(f.pending(), [hexid(1)])
+        self.assertEqual(f.twenty_writes(), [])
 
     def test_forget_without_or_short_key_fails_without_writing_while_sync_works_without_key(self):
         f = Fake(people=[person("p1", VETOR_EMAIL)])
@@ -1160,14 +1238,14 @@ class ForgetMarcadorTest(unittest.TestCase):
         self.assertEqual(len(f.convs), 1)
 
     def test_end_to_end_24_11_scenario_forget_blocks_old_download_and_confirm_links(self):
-        # Cenário real de 24/11 (issue #134): pedido com a caixa dos Expert Insights, --forget --apply, e depois clique
-        # nos links antigos de download e de confirmação no Worker real, sobre o mesmo SQLite com as migrações reais.
-        from datetime import datetime, timezone
+        # Cenário real de 24/11 (issue #134): pedido com a caixa dos Expert Insights, --forget --apply (gravando
+        # forgotten_at pelo relógio do próprio D1), e depois clique nos links antigos de download e de confirmação no
+        # Worker real, sobre o mesmo SQLite com as migrações reais.
         fd, db_path = tempfile.mkstemp(prefix="conversoes-e2e-134-", suffix=".sqlite")
         os.close(fd)
         self.addCleanup(lambda: os.path.exists(db_path) and os.unlink(db_path))
         f = Fake(people=[person("p1", VETOR_EMAIL)], db_path=db_path)
-        now_ms = int(datetime(2026, 11, 24, 12, 0, 0, tzinfo=timezone.utc).timestamp() * 1000)
+        now_ms = int(time.time() * 1000) - 60_000  # pedido 1 minuto antes do relógio atual do D1
 
         # 1) Pedido real no Worker com a caixa dos Expert Insights.
         pedido = ponta_a_ponta_cmd("pedido", db_path, now_ms)
@@ -1180,15 +1258,12 @@ class ForgetMarcadorTest(unittest.TestCase):
         counts, _ = run(f, apply=True)
         self.assertEqual((counts["conversoes_a_criar"], len(f.convs)), (1, 1))
 
-        # 3) --forget --apply 1 minuto depois do pedido: limpa Twenty e D1 e grava marcador no mesmo SQLite.
-        real_now = S._now
-        S._now = lambda: datetime(2026, 11, 24, 12, 1, 0, 0, tzinfo=timezone.utc)
-        try:
-            rc, out = self._run_cli(f, "--forget", "--apply", stdin=f"{VETOR_EMAIL}\n", forget_key=FORGET_KEY)
-        finally:
-            S._now = real_now
+        # 3) --forget --apply 1 minuto depois do pedido: limpa Twenty e D1 e grava marcador pelo relógio do D1.
+        rc, out = self._run_cli(f, "--forget", "--apply", stdin=f"{VETOR_EMAIL}\n", forget_key=FORGET_KEY)
         self.assertEqual(rc, 0, out)
         self.assertEqual((len(f.convs), f.db.execute("SELECT count(*) FROM conversions").fetchone()[0]), (0, 0))
+        forgotten_at = f.db.execute("SELECT forgotten_at FROM forgotten WHERE email_hmac = ?", (VETOR_HMAC,)).fetchone()[0]
+        self.assertRegex(forgotten_at, r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$")
 
         # 4) Cliques nos links antigos (downloads e confirmação) 2 minutos depois do pedido, no Worker real.
         cliques = ponta_a_ponta_cmd("clicar", db_path, now_ms + 120_000, {"links": pedido["links"]})

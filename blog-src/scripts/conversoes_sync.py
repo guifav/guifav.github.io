@@ -41,19 +41,21 @@ Regras:
 
 Remoção (direito do titular), --forget (issue #134): lê UM email da entrada padrão (fora do histórico do shell e da
 lista de processos). Exige FORGET_HMAC_KEY (32 caracteres ou mais, igual à do Worker) antes de qualquer leitura ou
-escrita; o sync normal não precisa dela. Antes de apagar qualquer coisa no Twenty ou no D1, --forget --apply grava um
-marcador mínimo na tabela `forgotten` do D1 (upsert, fica a data mais recente): `email_hmac` (HMAC-SHA256 em hex
-minúsculo de `forget-v1\\n` + email normalizado, nunca o email em claro) e `forgotten_at` (ISO UTC com milissegundos).
-Com esse marcador, o Worker recusa links assinados emitidos antes (ou no instante) da remoção. As linhas do email no D1
-continuam sendo o diário da remoção: apaga no Twenty (de vez, inclusive as que estão na lixeira) as Conversões cujos
-eventoId são os ids dessas linhas, relê o Twenty com a lixeira para provar que nenhuma sobrou e só então apaga as
-linhas no D1. Uma queda no meio deixa o marcador gravado e o D1 intacto, e repetir o comando conclui, mesmo que o email
-da Pessoa tenha mudado no CRM. A Pessoa e os campos site* dela ficam como estão (decisão do Gui, 2026-11-23). Simulação
-sem --apply.
+escrita; o sync normal não precisa dela. Logo depois de validar a chave e o email, antes de qualquer leitura do D1 ou do
+Twenty, --forget --apply grava um marcador mínimo na tabela `forgotten` do D1 (upsert, fica a data mais recente):
+`email_hmac` (HMAC-SHA256 em hex minúsculo de `forget-v1\\n` + email normalizado, nunca o email em claro) e
+`forgotten_at` (pelo relógio do próprio D1, em ISO UTC com milissegundos). Com esse marcador, o Worker recusa links
+assinados emitidos antes (ou no instante) da remoção. As linhas do email no D1 continuam sendo o diário da remoção:
+apaga no Twenty (de vez, inclusive as que estão na lixeira) as Conversões cujos eventoId são os ids dessas linhas, relê
+o Twenty com a lixeira para provar que nenhuma sobrou e só então apaga as linhas no D1. Uma queda no meio (mesmo na
+leitura do Twenty) deixa o marcador gravado e o D1 intacto, e repetir o comando conclui, mesmo que o email da Pessoa
+tenha mudado no CRM. A Pessoa e os campos site* dela ficam como estão (decisão do Gui, 2026-11-23). Simulação sem
+--apply.
 
 Limpeza dos marcadores (issue #134): os marcadores em `forgotten` ficam por 8 dias (o link mais longo vale 7 dias, mais
-1 dia de folga de relógio). Toda execução com --apply (sync e --forget) apaga os marcadores com `forgotten_at` mais
-velho que 8 dias; sem --apply, só conta em `marcadores_vencidos`.
+1 dia de folga de relógio). No sync e no --forget com --apply, os marcadores com `forgotten_at` mais velho que 8 dias
+(pelo relógio do próprio D1) são apagados logo depois da contagem, antes de ler o Twenty; sem --apply, só conta em
+`marcadores_vencidos`.
 
 Sync e --forget nunca rodam juntos: os dois pegam o mesmo lock (arquivo em CONVERSOES_SYNC_LOCK, padrão
 /tmp/guifav-conversoes-sync.lock). Sem ele, o sync poderia criar no Twenty uma Conversão de uma linha pendente entre a
@@ -77,7 +79,7 @@ import sys
 import time
 import urllib.parse
 from collections import Counter, OrderedDict
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import twenty_sync as TS  # noqa: E402
@@ -156,7 +158,12 @@ FORGET_MARK = "conversões apagadas"
 # Marcador mínimo de remoção (issue #134): mesmo prefixo e piso de chave do Worker (workers/newsletter/src/forget.ts).
 FORGET_PREFIX = "forget-v1\n"
 MIN_FORGET_KEY = 32
+# Retenção dos marcadores em dias (issue #134): precisa cobrir o maior TTL dos links assinados (`TTL_MS` e
+# `MATERIAL_TTL_MS` em `workers/newsletter/src/token.ts`) mais 1 dia de folga. Ao alterar um TTL, atualize junto este
+# valor, `privacidade/index.html` e `workers/newsletter/README.md`.
 FORGET_TTL_DAYS = 8
+_D1_NOW_SQL = "strftime('%Y-%m-%dT%H:%M:%fZ','now')"
+_D1_CUTOFF_SQL = f"strftime('%Y-%m-%dT%H:%M:%fZ','now','-{FORGET_TTL_DAYS} days')"
 # Filtro da REST do Twenty que devolve ativos e lixeira juntos (conferido ao vivo na 2.32 com uma sonda descartável).
 WITH_TRASH = "or(deletedAt[is]:NULL,deletedAt[is]:NOT_NULL)"
 LOCK_DEFAULT = "/tmp/guifav-conversoes-sync.lock"
@@ -180,18 +187,28 @@ def forget_hmac(email: str, key: str) -> str:
     return hmac.new(key.encode("utf-8"), (FORGET_PREFIX + norm).encode("utf-8"), hashlib.sha256).hexdigest()
 
 
-def _expired_cutoff(now_dt: datetime) -> str:
-    return stamp(now_dt - timedelta(days=FORGET_TTL_DAYS))
+def _upsert_forget_mark(c: TS.Clients, email_hmac: str) -> None:
+    # Relógio do próprio D1 (issue #134): evita diferença entre a KVM e o Cloudflare; o upsert mantém a data mais recente.
+    c.d1(
+        f"INSERT INTO forgotten (email_hmac, forgotten_at) VALUES (?, {_D1_NOW_SQL}) "
+        f"ON CONFLICT (email_hmac) DO UPDATE SET forgotten_at = max(forgotten.forgotten_at, {_D1_NOW_SQL})",
+        [email_hmac],
+    )
 
 
-def _count_expired_marks(c: TS.Clients, cutoff: str, exclude_hmac: str | None = None) -> int:
+def _count_expired_marks(c: TS.Clients, exclude_hmac: str | None = None) -> int:
     if exclude_hmac is None:
-        return int(c.d1("SELECT count(*) AS n FROM forgotten WHERE forgotten_at < ?", [cutoff])[0]["n"])
-    return int(c.d1("SELECT count(*) AS n FROM forgotten WHERE forgotten_at < ? AND email_hmac != ?", [cutoff, exclude_hmac])[0]["n"])
+        return int(c.d1(f"SELECT count(*) AS n FROM forgotten WHERE forgotten_at < {_D1_CUTOFF_SQL}")[0]["n"])
+    return int(
+        c.d1(
+            f"SELECT count(*) AS n FROM forgotten WHERE forgotten_at < {_D1_CUTOFF_SQL} AND email_hmac != ?",
+            [exclude_hmac],
+        )[0]["n"]
+    )
 
 
-def _prune_expired_marks(c: TS.Clients, cutoff: str) -> None:
-    c.d1("DELETE FROM forgotten WHERE forgotten_at < ?", [cutoff])
+def _prune_expired_marks(c: TS.Clients) -> None:
+    c.d1(f"DELETE FROM forgotten WHERE forgotten_at < {_D1_CUTOFF_SQL}")
 
 
 def iso_ms(value: str) -> str:
@@ -449,7 +466,7 @@ def ensure_schema(c: TS.Clients, meta: dict, labels: dict[str, str]) -> None:
 def run(c: TS.Clients, *, apply: bool = False, out=None) -> Counter:
     out = out or sys.stdout
     counts: Counter = Counter()
-    # 1) Leituras e validações. Nenhuma escrita antes de a fonte e o CRM estarem lidos por inteiro.
+    # 1) Leituras e validações. Nenhuma escrita de conversões antes de a fonte e o CRM estarem lidos por inteiro.
     raw = c.d1("SELECT id, email, action, material, interests, occurred_at, verified, ga_client_id, request_id, file, "
                + ", ".join(ORIGEM_COLS) + " FROM conversions WHERE synced_at IS NULL ORDER BY occurred_at, id")
     rows = []
@@ -460,16 +477,16 @@ def run(c: TS.Clients, *, apply: bool = False, out=None) -> Counter:
         else:
             rows.append(p)
     counts["pendentes_lidas"] = len(raw)
-    now_dt = _now()
-    cutoff = _expired_cutoff(now_dt)
-    expired_marks = _count_expired_marks(c, cutoff)
+    expired_marks = _count_expired_marks(c)
     counts["marcadores_vencidos"] = expired_marks
+    # Limpeza dos marcadores vencidos (#134): não depende do Twenty, então roda logo após a contagem com --apply.
+    if apply and expired_marks:
+        _prune_expired_marks(c)
     for k in ("linha_invalida", "pedido_sem_pessoa", "pessoa_na_lixeira", "email_em_mais_de_uma_pessoa", "pessoas_a_criar",
               "pessoas_a_atualizar", "conversoes_a_criar", "conversoes_ja_no_crm", "conversoes_na_lixeira", "linhas_a_marcar"):
         counts[k] += 0  # sempre visíveis na saída
     if not rows:
         if apply and expired_marks:
-            _prune_expired_marks(c, cutoff)
             tail = "nada pendente; marcadores vencidos apagados" if not raw else "só linhas inválidas; marcadores vencidos apagados"
         else:
             tail = "nada pendente" if not raw else "só linhas inválidas; nada foi gravado"
@@ -525,10 +542,10 @@ def run(c: TS.Clients, *, apply: bool = False, out=None) -> Counter:
     counts["opcoes_a_criar"] = sum(len([v for v in labels if v not in _option_values(meta[o].get(n))])
                                    for o, n in (("person", "siteInteresses"), ("conv", "interesses")))
 
-    # 3) Escritas, só com --apply: esquema, depois cada email (Pessoa, Conversões, marca no D1) e limpeza de `forgotten`.
+    # 3) Escritas no Twenty e marcação em `conversions`, só com --apply: esquema, depois cada email (Pessoa, Conversões, marca no D1).
     if apply and plan:
         ensure_schema(c, meta, labels)
-        now = stamp(now_dt)
+        now = stamp(_now())
         for email, target, patch, new, rs in plan:
             if target is None:
                 data = c.twenty("POST", "/rest/people", {"emails": {"primaryEmail": email, "additionalEmails": []}, **patch},
@@ -546,8 +563,6 @@ def run(c: TS.Clients, *, apply: bool = False, out=None) -> Counter:
                 c.d1(f"UPDATE conversions SET synced_at = ? WHERE synced_at IS NULL AND id IN ({','.join('?' * len(part))})",
                      [now, *part])
             counts["linhas_marcadas"] += len(rs)
-    if apply and expired_marks:
-        _prune_expired_marks(c, cutoff)
     _report(counts, out, "gravado" if apply else "simulação: nada foi gravado (use --apply)")
     return counts
 
@@ -559,26 +574,23 @@ def forget(c: TS.Clients, email: str, *, apply: bool = False, out=None, forget_k
     email = email.strip().lower()
     email_hmac = forget_hmac(email, key)  # valida chave e email antes de qualquer leitura ou escrita
     counts: Counter = Counter()
+    if apply:
+        # 1) Marcador mínimo no D1 logo após validar chave e email, antes de qualquer leitura do D1 ou do Twenty (#134):
+        #    mesmo que a leitura do Twenty falhe em seguida, links antigos já ficam bloqueados.
+        _upsert_forget_mark(c, email_hmac)
     # As linhas do D1 são o diário: enquanto existirem, os ids delas acham as Conversões no Twenty, qualquer que seja o
     # email atual da Pessoa no CRM.
     ids = {r["id"] for r in c.d1("SELECT id FROM conversions WHERE email = ?", [email])}
+    expired_marks = _count_expired_marks(c, exclude_hmac=email_hmac)
+    if apply and expired_marks:
+        # Limpeza dos marcadores vencidos independe do Twenty (#134).
+        _prune_expired_marks(c)
     meta = read_metadata(c)
     persons = people_by_email(list_records(c, "people")).get(email) or []
     convs = [x for x in list_records(c, PLURAL) if x.get("eventoId") in ids] if meta["conv_id"] else []
-    now_dt = _now()
-    now = stamp(now_dt)
-    cutoff = _expired_cutoff(now_dt)
-    expired_marks = _count_expired_marks(c, cutoff, exclude_hmac=email_hmac)
     counts["d1_linhas"], counts["conversoes_no_crm"], counts["pessoas_mantidas"] = len(ids), len(convs), len(persons)
     counts["marcadores_vencidos"] = expired_marks
     if apply:
-        # 1) Marcador mínimo no D1 antes de apagar qualquer coisa no Twenty ou em `conversions` (#134).
-        c.d1(
-            "INSERT INTO forgotten (email_hmac, forgotten_at) VALUES (?, ?) "
-            "ON CONFLICT (email_hmac) DO UPDATE SET forgotten_at = "
-            "CASE WHEN excluded.forgotten_at > forgotten.forgotten_at THEN excluded.forgotten_at ELSE forgotten.forgotten_at END",
-            [email_hmac, now],
-        )
         # 2) Apaga no Twenty e relê para provar que nenhuma sobrou.
         for x in convs:
             c.twenty("DELETE", f"/rest/{PLURAL}/{urllib.parse.quote(x['id'])}", op="apagar conversão")
@@ -588,9 +600,6 @@ def forget(c: TS.Clients, email: str, *, apply: bool = False, out=None, forget_k
         c.d1("DELETE FROM conversions WHERE email = ?", [email])
         if c.d1("SELECT count(*) AS n FROM conversions WHERE email = ?", [email])[0]["n"] != 0:
             raise SyncError("o D1 ainda tem linhas do email depois da remoção")
-        # 4) Limpa marcadores com mais de 8 dias.
-        if expired_marks:
-            _prune_expired_marks(c, cutoff)
     _report(counts, out, FORGET_MARK if apply else "simulação: nada foi apagado (use --apply)")
     return counts
 

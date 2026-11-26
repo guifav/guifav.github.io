@@ -38,7 +38,7 @@ type Opts = {
   topic?: 'opt_in' | 'opt_out'; // estado do contato existente no tópico
   throwOn?: string;
   badJsonOn?: string;
-  d1Falha?: RegExp; d1Pendura?: RegExp; d1Porta?: Promise<void>; semGa4?: boolean; ga4Status?: number | 'throw';
+  d1Falha?: RegExp; d1Pendura?: RegExp; d1Porta?: Promise<void>; forgetTimeoutMs?: number; semGa4?: boolean; ga4Status?: number | 'throw';
 };
 
 function setup(opts: Opts = {}) {
@@ -142,7 +142,7 @@ function setup(opts: Opts = {}) {
     GA4_API_SECRET: opts.semGa4 ? undefined : 'mp_teste_segredo',
   };
   let clock = NOW;
-  const run = (req: Request) => handle(req, env, { fetch: fetchFn as typeof fetch, now: () => clock, waitUntil });
+  const run = (req: Request) => handle(req, env, { fetch: fetchFn as typeof fetch, now: () => clock, waitUntil, forgetTimeoutMs: opts.forgetTimeoutMs });
   const avanca = (ms: number) => void (clock += ms);
   return { env, run, calls, rl, state, db: db.raw, settle, pendentes: () => pending.length, avanca, rows: async (t: string) => (await settle(), rows(db.raw, t)) };
 }
@@ -662,11 +662,22 @@ test('C8: o wrangler.toml liga o mesmo D1 do painel, com o binding DB', () => {
   assert.deepEqual(bloco(TOML), bloco(admin));
 });
 
-test('C7: D1 que não responde não segura a confirmação (a gravação vai por waitUntil)', async () => {
-  const s = setup({ contact: 'none', d1Pendura: /conversions/ });
-  const r = await Promise.race([s.run(await confirmar(await signLink('leitor@exemplo.com', NOW, SECRET))),
+test('C7: D1 que não responde não segura a confirmação (gravação por waitUntil e leitura do marcador com prazo, #134)', async () => {
+  const limite = <T>(p: Promise<T>) => Promise.race([p,
     new Promise<never>((_, no) => setTimeout(() => no(new Error('a confirmação esperou o D1')), 1000))]);
-  assert.equal(loc(r), 'https://guifav.dev/blog/inscricao-confirmada/');
+  const sConv = setup({ contact: 'none', d1Pendura: /conversions/ });
+  const rConv = await limite(sConv.run(await confirmar(await signLink('leitor@exemplo.com', NOW, SECRET))));
+  assert.equal(loc(rConv), 'https://guifav.dev/blog/inscricao-confirmada/');
+
+  const s = setup({ contact: 'none', d1Pendura: /conversions|forgotten/, forgetTimeoutMs: 30 });
+  let r!: Response;
+  const erros = await capturaErros(async () => {
+    r = await limite(s.run(await confirmar(await signLink('leitor@exemplo.com', NOW, SECRET))));
+  });
+  assert.equal(r.status, 502);
+  assert.equal(s.calls.length, 0);
+  assert.equal(erros.length, 1);
+  assert.ok(!erros[0].includes('exemplo.com'), erros[0]);
 });
 
 test('C9: a conversão da confirmação passa por waitUntil e só grava quando ele a completa', async () => {
