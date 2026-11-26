@@ -20,7 +20,7 @@
   <link rel="canonical" href="https://guifav.dev/ferramentas/planilha-custos-ia/">
   <link rel="stylesheet" href="/assets/site.css?v=202611232330">
   <style>
-    :root{--c-inf:#171717;--c-around:#5b6b7c;--c-waste:#b8432e;--c-eng:#FFBE00;--c-eng-edge:rgba(138,100,0,.35);--bar-track:#ececec;--sql-big:#404040;--num-sep:"."}
+    :root{--c-inf:#171717;--c-around:#5b6b7c;--c-waste:#b8432e;--c-eng:#FFBE00;--c-eng-edge:#8a6400;--bar-track:#ececec;--sql-big:#404040;--num-sep:"."}
     [data-theme="dark"]{--c-inf:#e5e5e5;--c-around:#8ea1b5;--c-waste:#dc755c;--c-eng:#FFBE00;--c-eng-edge:transparent;--bar-track:#262626;--sql-big:#8a8a8a}
     html[lang="en"]{--num-sep:","}
 
@@ -68,21 +68,29 @@
     .cost-grid{stroke:var(--border);stroke-width:1}
     .cost-axis{font-size:11.5px;fill:var(--text-secondary);font-variant-numeric:tabular-nums}
     .cost-opt{font-size:13px;font-weight:600;fill:var(--text)}
-    .cost-tot{font-size:13px;font-weight:700;fill:var(--text);font-variant-numeric:tabular-nums;animation:cost-tot 7.5s ease -3.6s both infinite}
+    .cost-tot{font-size:13px;font-weight:700;fill:var(--text);font-variant-numeric:tabular-nums;opacity:1}
     .cost-dash{fill:none;stroke:var(--text-secondary);stroke-width:1.6;stroke-dasharray:6 5;opacity:.65}
     .cost-wait{font-size:12.5px;font-style:italic;fill:var(--text-secondary)}
     .bar-seg{transform-box:fill-box;transform-origin:0 50%}
-    .bar-s1{fill:var(--c-inf);animation:bar-s1 7.5s cubic-bezier(.25,.8,.25,1) -3.6s both infinite}
-    .bar-s2{fill:var(--c-around);animation:bar-s2 7.5s cubic-bezier(.25,.8,.25,1) -3.6s both infinite}
-    .bar-s3{fill:var(--c-waste);animation:bar-s3 7.5s cubic-bezier(.25,.8,.25,1) -3.6s both infinite}
-    .bar-s4{fill:var(--c-eng);stroke:var(--c-eng-edge);stroke-width:.75;animation:bar-s4 7.5s cubic-bezier(.25,.8,.25,1) -3.6s both infinite}
-    .bar-pulse{fill:#fff;opacity:0;pointer-events:none;animation:bar-pulse 7.5s ease-in-out -3.6s both infinite}
+    .bar-s1{fill:var(--c-inf)}
+    .bar-s2{fill:var(--c-around)}
+    .bar-s3{fill:var(--c-waste)}
+    .bar-s4{fill:var(--c-eng);stroke:var(--c-eng-edge);stroke-width:1.25}
+    .bar-pulse{fill:#fff;opacity:0;pointer-events:none}
     .cost-cap{margin:12px 0 0;font-size:12.5px;color:var(--text-secondary);line-height:1.5}
-    @keyframes bar-s1{0%{transform:scaleX(0);opacity:1}10%,92%{transform:scaleX(1);opacity:1}97%,100%{transform:scaleX(1);opacity:0}}
-    @keyframes bar-s2{0%,10%{transform:scaleX(0);opacity:1}20%,92%{transform:scaleX(1);opacity:1}97%,100%{transform:scaleX(1);opacity:0}}
-    @keyframes bar-s3{0%,20%{transform:scaleX(0);opacity:1}30%,92%{transform:scaleX(1);opacity:1}97%,100%{transform:scaleX(1);opacity:0}}
-    @keyframes bar-s4{0%,30%{transform:scaleX(0);opacity:1}46%,92%{transform:scaleX(1);opacity:1}97%,100%{transform:scaleX(1);opacity:0}}
-    @keyframes cost-tot{0%,40%{opacity:0}50%,92%{opacity:1}97%,100%{opacity:0}}
+    @media(prefers-reduced-motion:no-preference){
+      @supports (animation-timeline:view()){
+        .bar-s1{animation:bar-s1 cubic-bezier(.25,.8,.25,1) both;animation-timeline:view();animation-range:entry 10% cover 45%}
+        .bar-s2{animation:bar-s2 cubic-bezier(.25,.8,.25,1) both;animation-timeline:view();animation-range:entry 10% cover 45%}
+        .bar-s3{animation:bar-s3 cubic-bezier(.25,.8,.25,1) both;animation-timeline:view();animation-range:entry 10% cover 45%}
+        .bar-s4{animation:bar-s4 cubic-bezier(.25,.8,.25,1) both;animation-timeline:view();animation-range:entry 10% cover 45%}
+        .bar-pulse{animation:bar-pulse ease-in-out both;animation-timeline:view();animation-range:entry 10% cover 45%}
+      }
+    }
+    @keyframes bar-s1{0%{transform:scaleX(0)}10%,100%{transform:scaleX(1)}}
+    @keyframes bar-s2{0%,10%{transform:scaleX(0)}20%,100%{transform:scaleX(1)}}
+    @keyframes bar-s3{0%,20%{transform:scaleX(0)}30%,100%{transform:scaleX(1)}}
+    @keyframes bar-s4{0%,30%{transform:scaleX(0)}46%,100%{transform:scaleX(1)}}
     @keyframes bar-pulse{0%,56%,74%,100%{opacity:0}65%{opacity:.32}}
     .cost-lines{list-style:none;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px 32px}
     .cost-lines li{padding:2px 0 2px 14px;border-left:3px solid var(--border)}
@@ -388,7 +396,7 @@
       <p class="section-intro" data-i18n="s3_p">Os números que vêm preenchidos são os do vídeo. Os medidos estão marcados como medição na planilha:</p>
       <div class="measured-stats">
         <div class="stat-block">
-          <div class="stat-val" aria-label="8.981 de entrada para 424 de saída" data-i18n-aria="m1_stat_aria"><span class="stat-static" data-i18n="m1_stat">8.981 &#8594; 424</span><span class="stat-anim" aria-hidden="true"><span class="stat-in"></span><span class="stat-arr"> &#8594; </span><span class="stat-out"></span></span></div>
+          <div class="stat-val"><span class="stat-static" data-i18n="m1_stat">8.981 &#8594; 424</span><span class="stat-anim" aria-hidden="true"><span class="stat-in"></span><span class="stat-arr"> &#8594; </span><span class="stat-out"></span></span></div>
           <h3 data-i18n="m1_t">Tokens por consulta</h3>
           <p data-i18n="m1_d">8.981 de entrada e 424 de saída, em média, numa bateria de 224 perguntas no TalkWithData, a plataforma que eu construo.</p>
         </div>
@@ -527,7 +535,6 @@
       "s3": "What was measured",
       "s3_p": "The values that come filled in are the ones from the video. The measured ones are flagged as measurements in the spreadsheet:",
       "m1_stat": "8,981 &#8594; 424",
-      "m1_stat_aria": "8,981 input to 424 output",
       "m1_t": "Tokens per query",
       "m1_d": "8,981 input and 424 output on average, over a battery of 224 questions on TalkWithData, the platform I build.",
       "m2_stat": "1,447/h",
