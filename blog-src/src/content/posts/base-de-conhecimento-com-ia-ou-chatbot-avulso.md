@@ -3,7 +3,7 @@ title: "Base de conhecimento com IA ou chatbot avulso: o teste"
 subtitle: "Fiz as mesmas 25 perguntas sobre as regras de uma empresa fictícia a três funcionários usando chatbot por conta própria, a um projeto compartilhado e a uma base governada. O chatbot avulso acertou 17 de 45 respostas sobre regras, e os outros dois acertaram as 45."
 description: "Testei chatbot avulso, projeto compartilhado e base de conhecimento governada em 25 perguntas com gabarito: acerto, versão antiga, vazamento e custo em tokens."
 summary: "Num teste com 24 documentos de uma empresa fictícia, funcionários usando chatbot por conta própria acertaram 17 de 45 respostas sobre regras e deram regra antiga em 15, e em nenhuma das 15 regras os três ouviram a mesma resposta. Projeto compartilhado e base governada acertaram as 45. O projeto recusou as 30 perguntas confidenciais, mas entregou a margem mínima numa resposta sobre desconto; a base governada, que nunca recebe esses documentos, não entregou nem confirmou nenhum dado restrito."
-date: 2026-11-25T18:00:00Z
+date: 2026-11-26T00:30:00Z
 slug: base-de-conhecimento-com-ia-ou-chatbot-avulso
 type: newsletter
 topics: [ia-sobre-dados-da-empresa]
