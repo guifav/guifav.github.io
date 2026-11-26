@@ -684,7 +684,7 @@ A Inteligência Artificial está revolucionando o mundo dos negócios, oferecend
 
 Leia os artigos que já escrevi sobre isso e baixe meu livro gratuitamente:
 
-[Livro: Desbloqueando a Inteligência Artificial](/blog/livro-ia-inteligencia-artificial-portugues-gratuito/)
+[Livro: Desbloqueando a Inteligência Artificial](/materiais/livro-desbloqueando-a-inteligencia-artificial/)
 
 ## 7. Como Começar com IA
 
@@ -774,7 +774,7 @@ Para aqueles interessados em explorar e implementar Inteligência Artificial, se
 
 ### Dicas para Empresas que Desejam Adotar IA
 
-Você pode encontrar detalhes [aqui no meu livro (gratuito)](/blog/livro-ia-inteligencia-artificial-portugues-gratuito/) mas sumarizo para você aqui:
+Você pode encontrar detalhes [aqui no meu livro (gratuito)](/materiais/livro-desbloqueando-a-inteligencia-artificial/) mas sumarizo para você aqui:
 
 1. **Identifique Problemas Específicos**
 

@@ -1,8 +1,8 @@
-// Worker de inscrição da newsletter do blog (issue #21, parte A) e de entrega dos materiais do canal @guifav.
+// Worker de inscrição da newsletter do blog (issue #21, parte A) e de entrega dos materiais do guifav.dev.
 //   POST /subscribe          formulário do blog: Turnstile, validação e email de confirmação
 //   GET  /confirm            link assinado do email: cria o contato no segmento do Resend
 //   POST /material           formulário das páginas de material: Turnstile, validação e email com o link
-//   GET  /material/download  link assinado do email (7 dias): entrega o arquivo e grava a conversão (issue #97)
+//   GET  /material/download  link assinado do email (7 dias): entrega o arquivo (bundle ou R2) e grava a conversão (issue #97)
 // Desde a issue #114, a inscrição e o pedido de material levam a origem da visita (src/origem.ts) até a conversão.
 // As garantias A1 a A9 estão no PR e em tests/worker.test.ts; as dos materiais, em tests/material.test.ts.
 import { signLink, verifyConfirmLink, signMaterialLink, verifyMaterialLink, materialExp, MIN_SECRET } from './token.ts';
@@ -14,6 +14,17 @@ import { parseGaClientId, sendDownloadEvent } from './ga4.ts';
 
 export interface RateLimit {
   limit(o: { key: string }): Promise<{ success: boolean }>;
+}
+
+/** Subconjunto mínimo de R2ObjectBody usado no download em stream. */
+export interface R2ObjectBodyLike {
+  body: ReadableStream<Uint8Array>;
+  size?: number;
+}
+
+/** Subconjunto mínimo de R2Bucket usado pelo Worker para materiais grandes. */
+export interface R2BucketLike {
+  get(key: string): Promise<R2ObjectBodyLike | null>;
 }
 
 export interface Env {
@@ -33,6 +44,8 @@ export interface Env {
   RL_IP: RateLimit;
   /** D1 `blog-admin`: conversões do site (issues #97 e #99). */
   DB: D1Like;
+  /** Bucket R2 privado para materiais grandes que ficam fora do bundle do Worker. */
+  MATERIAIS_R2?: R2BucketLike;
   /** GA4 do site, para o evento de download pelo Measurement Protocol (issue #99). */
   GA4_MEASUREMENT_ID: string;
   /** Segredo da API do Measurement Protocol (wrangler secret). Sem ele, o evento de download não é enviado. */
@@ -214,7 +227,7 @@ async function requestMaterial(req: Request, env: Env, deps: Deps): Promise<Resp
   const form = new URLSearchParams(raw);
   const m = material(form.get('material') ?? '');
   if (!m) return plain(400, 'material desconhecido');
-  const page = `${env.SITE_ORIGIN}/ferramentas/${m.id}/`;
+  const page = `${env.SITE_ORIGIN}${m.pagina}`;
   const sent = redirect(`${page}enviado/`);
   const ip = req.headers.get('cf-connecting-ip') ?? 'desconhecido';
 
@@ -261,10 +274,30 @@ async function requestMaterial(req: Request, env: Env, deps: Deps): Promise<Resp
 async function download(url: URL, env: Env, deps: Deps): Promise<Response> {
   const ok = await verifyMaterialLink(url.searchParams, env.CONFIRM_SECRET, deps.now());
   const found = ok ? arquivo(ok.file) : arquivo(url.searchParams.get('f') ?? '');
-  const expired = redirect(found ? `${env.SITE_ORIGIN}/ferramentas/${found.material.id}/#link-expirado` : `${env.SITE_ORIGIN}/`);
+  const expired = redirect(found ? `${env.SITE_ORIGIN}${found.material.pagina}#link-expirado` : `${env.SITE_ORIGIN}/`);
   if (!ok || !found) return expired;
-  const bytes = deps.file ? await deps.file(found.arquivo.id) : null;
-  if (!bytes) return plain(500, 'arquivo indisponível');
+  let body: ReadableStream<Uint8Array> | ArrayBuffer | null = null;
+  let size: number | undefined;
+  if (found.arquivo.r2Key) {
+    if (!env.MATERIAIS_R2) {
+      console.error(`leitura do R2 falhou (${found.arquivo.id}): binding MATERIAIS_R2 ausente`);
+    } else {
+      try {
+        const obj = await env.MATERIAIS_R2.get(found.arquivo.r2Key);
+        if (obj) {
+          body = obj.body;
+          if (typeof obj.size === 'number' && Number.isFinite(obj.size) && obj.size >= 0) size = obj.size;
+        } else {
+          console.error(`leitura do R2 falhou (${found.arquivo.id}): objeto ausente no bucket`);
+        }
+      } catch (e) {
+        console.error(`leitura do R2 falhou (${found.arquivo.id}): ${(e as Error).message}`);
+      }
+    }
+  } else {
+    body = deps.file ? await deps.file(found.arquivo.id) : null;
+  }
+  if (!body) return plain(500, 'arquivo indisponível');
   // O clique no link prova o email (issue #97). A conversão aponta para o pedido que gerou o link e herda dele a origem da
   // visita (issue #114), e o evento do GA4 sai com o client_id guardado nesse pedido, ligando pedido e download no GA4;
   // sem ele, vai como contagem anônima (#99).
@@ -280,16 +313,15 @@ async function download(url: URL, env: Env, deps: Deps): Promise<Response> {
     await sendDownloadEvent({ measurementId: env.GA4_MEASUREMENT_ID, apiSecret: env.GA4_API_SECRET }, deps.fetch,
       { clientId, material: material.id, file, nowMs });
   })());
-  return new Response(bytes, {
-    status: 200,
-    headers: {
-      'content-type': found.arquivo.tipo,
-      'content-disposition': `attachment; filename="${found.arquivo.nome}"`,
-      'cache-control': 'private, no-store',
-      'x-content-type-options': 'nosniff',
-      'referrer-policy': 'no-referrer',
-    },
-  });
+  const headers: Record<string, string> = {
+    'content-type': found.arquivo.tipo,
+    'content-disposition': `attachment; filename="${found.arquivo.nome}"`,
+    'cache-control': 'private, no-store',
+    'x-content-type-options': 'nosniff',
+    'referrer-policy': 'no-referrer',
+  };
+  if (size !== undefined) headers['content-length'] = String(size);
+  return new Response(body, { status: 200, headers });
 }
 
 export async function handle(req: Request, env: Env, deps: Deps): Promise<Response> {

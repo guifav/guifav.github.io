@@ -19,6 +19,11 @@ type = "Data"
 globs = ["**/*.xlsx", "**/*.pdf"]
 fallthrough = false
 
+# Bucket R2 privado para materiais grandes que ficam fora do git e do bundle do Worker (ex.: PDF do livro).
+[[r2_buckets]]
+binding = "MATERIAIS_R2"
+bucket_name = "blog-materiais"
+
 # D1 do painel (`workers/admin`, dono do esquema e das migrações): aqui só se gravam as conversões do site, com o pedido
 # e o download de material por pessoa (issues #97 e #99). As migrações 0004 e 0005 precisam estar aplicadas antes do
 # deploy deste Worker.
