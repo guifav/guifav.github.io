@@ -84,7 +84,7 @@ export const TOPICS: Topic[] = [
       { slug: 'mcp-ou-aplicacao-dados-da-empresa-na-ia', question: 'Servidor MCP aberto ou aplicação própria: quem garante a resposta da IA sobre os dados da empresa?' },
       { slug: 'rag-llm-ai-o-que-e', question: 'Quais são os primeiros passos para implementar RAG?' },
       { slug: 'o-que-e-rag-llms-ia', question: 'O que é RAG e quando ele resolve a pergunta sobre os documentos da empresa?' },
-      { slug: 'guia-praticos-implementacao-rag-llms-ai', question: 'Como implementar RAG na prática, a segunda parte da série?' },
+      { slug: 'guia-praticos-implementacao-rag-llms-ai', question: 'Como implementar RAG na prática, a terceira parte da série?' },
       { slug: 'rag-knowledge-bases-corporativas-implementacao-pratica', question: 'Como montar RAG sobre a base de conhecimento corporativa?' },
       { slug: 'llm-sql-nosql-guia-integracao', question: 'Como ligar um LLM aos bancos SQL e NoSQL da empresa?' },
       { slug: 'ferramentas-ia-excel-google-sheets-analise-dados', question: 'Quais ferramentas de IA analisam planilhas do Excel e do Google Sheets?' },
