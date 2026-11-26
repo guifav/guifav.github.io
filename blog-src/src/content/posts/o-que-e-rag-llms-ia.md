@@ -1,6 +1,7 @@
 ---
 title: "O que é RAG em LLMs e IA? Introdução ao tema (Parte 1/2)"
 description: "Guia de fundamentos de RAG em LLMs: entenda como funciona a recuperação de contexto, quais são as arquiteturas principais e os desafios em produção."
+summary: "Introduzido por pesquisadores da Facebook AI em 2020, o RAG (Retrieval-Augmented Generation) acopla um mecanismo de recuperação de informações a um LLM para ancorar respostas em fontes externas verificáveis sem retreinar o modelo. Este guia detalha os componentes e o fluxo em etapas do RAG, compara arquiteturas básicas e avançadas (como multi-step e hierárquico) e cobre indexação, otimização e avaliação por métricas e benchmarks."
 date: 2024-09-16T03:00:00.000Z
 updated: 2025-01-09T01:32:06.535Z
 slug: o-que-e-rag-llms-ia

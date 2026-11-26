@@ -2,6 +2,7 @@
 title: "A Memória dos Seus Agentes Está Quebrada"
 subtitle: "E provavelmente você ainda não percebeu"
 description: "Memória de agentes de IA falha em produção por razões arquiteturais. Veja como fatos atômicos, scoring composto e evidence gaps resolvem isso."
+summary: "Gravar blocos de texto num vector store e buscar só por similaridade causa quatro falhas em produção: context bleed, fact contamination, ranking incorreto e alucinação operacional. A solução proposta usa fatos atômicos versionáveis, scoring composto e tratamento explícito de evidence gaps com fallback ladder. Na stack, Postgres sustenta estrutura e auditoria, pgvector ou Pinecone fazem a busca semântica e Redis opera sessão e cache."
 date: 2026-03-08T16:59:39.143Z
 updated: 2026-03-08T17:04:11.287Z
 slug: memoria-agentes-solucao-definitiva
