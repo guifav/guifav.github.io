@@ -1550,7 +1550,7 @@ class TrackingSourcesTest(unittest.TestCase):
                      "https://adssettings.google.com/", "https://tools.google.com/dlpage/gaoptout",
                      "https://policies.google.com/technologies/partner-sites"):
             self.assertIn(must, t)
-        self.assertIn("Atualizada em 24 de novembro de 2026.", t)  # #68: seção Cookies; 23/11: Materiais para baixar; 24/11: CRM (#97) e /privacidade/ (#146)
+        self.assertIn("Atualizada em 26 de novembro de 2026.", t)  # #68: seção Cookies; 23/11: Materiais para baixar; 24/11: CRM (#97) e /privacidade/ (#146); 26/11: terceiros e hospedagem (#154)
 
     def test_privacy_says_material_record_goes_to_the_crm(self):
         # #97 fase 2: o registro dos materiais vai ao Twenty. O download cria o contato; o pedido sem download só entra
