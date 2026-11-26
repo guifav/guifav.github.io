@@ -279,14 +279,20 @@ async function download(url: URL, env: Env, deps: Deps): Promise<Response> {
   let body: ReadableStream<Uint8Array> | ArrayBuffer | null = null;
   let size: number | undefined;
   if (found.arquivo.r2Key) {
-    try {
-      const obj = env.MATERIAIS_R2 ? await env.MATERIAIS_R2.get(found.arquivo.r2Key) : null;
-      if (obj) {
-        body = obj.body;
-        if (typeof obj.size === 'number' && Number.isFinite(obj.size) && obj.size >= 0) size = obj.size;
+    if (!env.MATERIAIS_R2) {
+      console.error(`leitura do R2 falhou (${found.arquivo.id}): binding MATERIAIS_R2 ausente`);
+    } else {
+      try {
+        const obj = await env.MATERIAIS_R2.get(found.arquivo.r2Key);
+        if (obj) {
+          body = obj.body;
+          if (typeof obj.size === 'number' && Number.isFinite(obj.size) && obj.size >= 0) size = obj.size;
+        } else {
+          console.error(`leitura do R2 falhou (${found.arquivo.id}): objeto ausente no bucket`);
+        }
+      } catch (e) {
+        console.error(`leitura do R2 falhou (${found.arquivo.id}): ${(e as Error).message}`);
       }
-    } catch (e) {
-      console.error(`leitura do R2 falhou (${found.arquivo.id}): ${(e as Error).message}`);
     }
   } else {
     body = deps.file ? await deps.file(found.arquivo.id) : null;

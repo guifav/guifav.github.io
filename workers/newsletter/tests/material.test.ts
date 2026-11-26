@@ -294,22 +294,30 @@ test('L4: download do livro lê em stream do R2, devolve o PDF com content-lengt
   assert.equal(g[0].body.events[0].params.file_id, 'livro-desbloqueando-ia-pdf');
 });
 
-test('L5: objeto ausente, binding ausente ou erro no R2 devolvem 500 arquivo indisponível sem gravar conversão', async () => {
+test('L5: objeto ausente, binding ausente ou erro no R2 registram erro sem dados do link e devolvem 500 sem gravar conversão', async () => {
   const q = await signMaterialLink('livro-desbloqueando-ia-pdf', 'leitor@exemplo.com', NOW, SECRET);
-  for (const opts of [
-    { r2: { 'livro/desbloqueando-a-inteligencia-artificial.pdf': null } },
-    { semR2: true },
-    { r2Erro: true },
-  ]) {
+  const params = new URLSearchParams(q);
+  const casos: Array<[Parameters<typeof setup>[0], RegExp]> = [
+    [{ r2: { 'livro/desbloqueando-a-inteligencia-artificial.pdf': null } }, /livro-desbloqueando-ia-pdf.*objeto ausente/],
+    [{ semR2: true }, /livro-desbloqueando-ia-pdf.*MATERIAIS_R2/],
+    [{ r2Erro: true }, /livro-desbloqueando-ia-pdf.*R2 indisponivel/],
+  ];
+  for (const [opts, motivo] of casos) {
     const s = setup(opts);
     let r: Response | undefined;
-    await capturaErros(async () => {
+    const erros = await capturaErros(async () => {
       r = await s.run(baixar(q));
       await s.settle();
     });
     assert.equal(r!.status, 500, JSON.stringify(opts));
     assert.equal(await r!.text(), 'arquivo indisponível', JSON.stringify(opts));
     assert.equal((await s.rows('conversions')).length, 0, JSON.stringify(opts));
+    assert.equal(erros.length, 1, JSON.stringify(opts));
+    assert.match(erros[0], motivo, JSON.stringify(opts));
+    assert.ok(
+      !/exemplo\.com|leitor/.test(erros[0]) && !erros[0].includes(params.get('s')!) && !erros[0].includes(params.get('x')!),
+      erros[0],
+    );
   }
 });
 
