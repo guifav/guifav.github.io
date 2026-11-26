@@ -35,6 +35,8 @@ O cliente operava com dezenas de sistemas acumulados ao longo de anos: bancos My
 
 O desafio era ao mesmo tempo técnico e estratégico: tornar o patrimônio de dados da empresa utilizável por IA, sem interromper as operações que dependiam dos sistemas existentes.
 
+*Este artigo continua a série sobre sistemas legados. Antes de entrar na camada de dados, vale ver as [estratégias e trade-offs para modernização de sistemas legados](/blog/modernizacao-de-sistemas-legados/).*
+
 ***
 
 ## O princípio: zero impacto nas origens
@@ -116,6 +118,8 @@ Se sua empresa tem dados em múltiplos sistemas e está tentando viabilizar proj
 Na grande maioria dos casos, ainda não estão. E a solução passa por construir uma camada de inteligência sobre os sistemas que já existem.
 
 Este é o tipo de projeto que tenho prazer em conceber e executar: diagnóstico de maturidade de dados, desenho de arquitetura de consolidação, e implementação de plataformas que transformam dados fragmentados em ativos estratégicos prontos para IA.
+
+*A série sobre sistemas legados segue no próximo artigo, com o [workflow prático que uso para integrar IA nos sistemas legados](/blog/como-integrar-ia-nos-seus-sistemas-legados/).*
 
 Se quiser conversar sobre como isso se aplica à sua realidade, me encontre no LinkedIn ou entre em contato diretamente.
 

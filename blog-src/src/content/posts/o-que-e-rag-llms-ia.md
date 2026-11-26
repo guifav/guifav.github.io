@@ -9,8 +9,6 @@ type: newsletter
 topics: [ia-sobre-dados-da-empresa]
 ---
 
-[Acesse a parte 2 deste artigo com o detalhamento teórico sobre o tema](/blog/guia-praticos-implementacao-rag-llms-ai/)
-
 #### Sumário
 
 1. Introdução
@@ -67,41 +65,7 @@ topics: [ia-sobre-dados-da-empresa]
    - Benchmarks e datasets para testes
    - Desafios na avaliação de sistemas RAG
 
-10. [Aplicações práticas do RAG](/blog/guia-praticos-implementacao-rag-llms-ai/)
-
-    - [Chatbots e assistentes virtuais](/blog/guia-praticos-implementacao-rag-llms-ai/)
-    - [Sistemas de recomendação](/blog/guia-praticos-implementacao-rag-llms-ai/)
-    - [Análise de documentos e pesquisa](/blog/guia-praticos-implementacao-rag-llms-ai/)
-    - [Aplicações em diversos setores (saúde, jurídico, financeiro, etc.)](/blog/guia-praticos-implementacao-rag-llms-ai/)
-
-11. [Ética e considerações de privacidade no RAG](/blog/guia-praticos-implementacao-rag-llms-ai/)
-
-    - [Gestão de dados sensíveis](/blog/guia-praticos-implementacao-rag-llms-ai/)
-    - [Vieses e fairness em sistemas RAG](/blog/guia-praticos-implementacao-rag-llms-ai/)
-    - [Transparência e explicabilidade](/blog/guia-praticos-implementacao-rag-llms-ai/)
-
-12. [Futuro do RAG](/blog/guia-praticos-implementacao-rag-llms-ai/)
-
-    - [Tendências emergentes](/blog/guia-praticos-implementacao-rag-llms-ai/)
-    - [Possíveis avanços e direções de pesquisa](/blog/guia-praticos-implementacao-rag-llms-ai/)
-    - [Integração com outras tecnologias de IA](/blog/guia-praticos-implementacao-rag-llms-ai/)
-
-13. [Implementação prática](/blog/guia-praticos-implementacao-rag-llms-ai/)
-
-    - [Guia passo a passo para construir um sistema RAG simples](/blog/guia-praticos-implementacao-rag-llms-ai/)
-    - [Ferramentas e frameworks populares para RAG](/blog/guia-praticos-implementacao-rag-llms-ai/)
-    - [Dicas e melhores práticas](/blog/guia-praticos-implementacao-rag-llms-ai/)
-
-14. [Conclusão](/blog/guia-praticos-implementacao-rag-llms-ai/)
-
-    - [Importância do RAG no futuro da IA](/blog/guia-praticos-implementacao-rag-llms-ai/)
-    - [Vamos juntos? (ex: experimentar RAG, continuar aprendendo)](/blog/guia-praticos-implementacao-rag-llms-ai/)
-
-15. [Recursos adicionais](/blog/guia-praticos-implementacao-rag-llms-ai/)
-
-    - [Artigos científicos relevantes](/blog/guia-praticos-implementacao-rag-llms-ai/)
-
-Este artigo é a primeira parte de um conjunto de 2 artigos. [Acesse sua continuidade Guia práticos de implementação de RAG em LLMs e IA (Parte 2/2) (Parte 2/2)](/blog/guia-praticos-implementacao-rag-llms-ai/)
+Os temas seguintes (10. Aplicações práticas, 11. Ética e privacidade, 12. Futuro do RAG, 13. Implementação prática, 14. Conclusão e 15. Recursos adicionais) estão no [guia prático de implementação de RAG](/blog/guia-praticos-implementacao-rag-llms-ai/).
 
 <figure>
 <img src="/blog/img/o-que-e-rag-llms-ia/8a7a18d2df-1000.webp" srcset="/blog/img/o-que-e-rag-llms-ia/8a7a18d2df-728.webp 728w, /blog/img/o-que-e-rag-llms-ia/8a7a18d2df-1000.webp 1000w" sizes="(max-width: 760px) 100vw, 720px" width="1000" height="560" alt="O que é RAG em LLMs e IA" loading="lazy" decoding="async">
@@ -110,6 +74,8 @@ Este artigo é a primeira parte de um conjunto de 2 artigos. [Acesse sua continu
 ## 1. Introdução
 
 No cenário em rápida evolução da Inteligência Artificial (IA), uma tecnologia emergente está redefinindo os limites do que é possível: o RAG, ou Retrieval-Augmented Generation. Esta inovação promete revolucionar a maneira como os sistemas de IA interagem com o conhecimento e geram respostas, marcando um ponto de virada significativo no campo da inteligência artificial.
+
+*Este artigo faz parte da série sobre RAG e aprofunda a [visão introdutória sobre o que é RAG e os primeiros passos para implementação](/blog/rag-llm-ai-o-que-e/).*
 
 ### O que é RAG (Retrieval-Augmented Generation)?
 
@@ -1140,3 +1106,5 @@ A avaliação eficaz de sistemas RAG é um campo em rápida evolução e crucial
    - Métodos: Incorporar feedback do usuário e métricas de satisfação do cliente na avaliação geral do sistema.
 
 À medida que os sistemas RAG se tornam mais sofisticados e amplamente adotados, a importância de métodos de avaliação robustos e abrangentes só tende a crescer. O desenvolvimento contínuo de benchmarks, métricas e metodologias de avaliação desempenha um papel crucial não apenas na melhoria dos sistemas individuais, mas também no avanço do campo como um todo, garantindo que os sistemas RAG possam ser implementados de maneira confiável, ética e benéfica em uma ampla gama de aplicações do mundo real.
+
+*A série sobre RAG continua no artigo seguinte, focado em [aplicações práticas e implementação de sistemas RAG](/blog/guia-praticos-implementacao-rag-llms-ai/).*

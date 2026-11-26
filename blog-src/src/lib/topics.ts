@@ -171,8 +171,8 @@ export const TOPICS: Topic[] = [
     posts: [
       { slug: 'framework-atlas-para-implementacao-de-ia-nos-processos-corporativos', question: 'Como planejar a implementação de IA nos processos com o framework ATLAS?' },
       { slug: 'modernizacao-de-sistemas-legados', question: 'Que estratégias de modernização de legados funcionaram em casos reais?' },
-      { slug: 'como-integrar-ia-nos-seus-sistemas-legados', question: 'Como integrar IA aos sistemas legados, num workflow real?' },
       { slug: 'arquitetura-consolidacao-dados-ia-sem-reescrever-sistemas-legados', question: 'Como preparar dados espalhados para IA sem reescrever os sistemas legados?' },
+      { slug: 'como-integrar-ia-nos-seus-sistemas-legados', question: 'Como integrar IA aos sistemas legados, num workflow real?' },
       { slug: 'a-arquitetura-definitiva-de-ia-para', question: 'Por que a maioria dos projetos de IA falha, e que arquitetura evita isso?' },
       { slug: 'curso-ia-negocios-gratuito-youtube', question: 'Como uma pequena ou média empresa começa a implementar IA?' },
       { slug: 'construindo-times-de-ia-lideranca', question: 'Como montar e liderar o time que implementa IA?' },

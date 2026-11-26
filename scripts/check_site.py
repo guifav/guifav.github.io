@@ -229,6 +229,7 @@ class _Page(HTMLParser):
         self.canonicals: list[str] = []
         self.main_depth = 0
         self.divs: list[bool] = []  # pilha de <div>: True para o div.post-body (conteúdo do post)
+        self.post_body_links: list[str] = []  # hrefs de <a> dentro de div.post-body
 
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self.handle_starttag(tag, attrs)
@@ -265,6 +266,10 @@ class _Page(HTMLParser):
         # Conteúdo ativo
         if tag == "div":
             self.divs.append("post-body" in a.get("class", "").split())
+        if tag == "a" and any(self.divs):
+            href = a.get("href", "").strip()
+            if href:
+                self.post_body_links.append(href)
         if tag in FORBIDDEN_TAGS:
             self.active.append(f"<{tag}>")
         if tag == "form" and not (
@@ -3334,6 +3339,74 @@ def check_old_youtube_handle(site: Path) -> list[str]:
     return problems
 
 
+# Séries de artigos com links cruzados obrigatórios no corpo do post (#106), na ordem de leitura.
+SERIES: tuple[tuple[str, ...], ...] = (
+    (
+        "rag-llm-ai-o-que-e",
+        "o-que-e-rag-llms-ia",
+        "guia-praticos-implementacao-rag-llms-ai",
+        "rag-knowledge-bases-corporativas-implementacao-pratica",
+    ),
+    (
+        "modernizacao-de-sistemas-legados",
+        "arquitetura-consolidacao-dados-ia-sem-reescrever-sistemas-legados",
+        "como-integrar-ia-nos-seus-sistemas-legados",
+    ),
+    (
+        "memoria-agentes-solucao-definitiva",
+        "a-memoria-dos-meus-agentes-na-pratica",
+    ),
+)
+
+
+def _series_targets(slug: str, hrefs: list[str]) -> set[str]:
+    """Caminhos internos (sem query/fragmento) dos links de /blog/<slug>/."""
+    base = f"{SITE_ORIGIN}{BLOG_PREFIX}{slug}/"
+    targets: set[str] = set()
+    for href in hrefs:
+        try:
+            u = urlsplit(urljoin(base, href))
+        except ValueError:
+            continue
+        if u.scheme in ("http", "https") and (u.hostname or "").lower().rstrip(".") == SITE_HOST:
+            targets.add(unquote(u.path) or "/")
+    return targets
+
+
+def check_series(site: Path, series: tuple[tuple[str, ...], ...] = SERIES) -> list[str]:
+    """#106: todo par consecutivo (A, B) de cada série precisa de links mútuos dentro de div.post-body."""
+    problems: list[str] = []
+    targets_by_slug: dict[str, set[str] | None] = {}
+    for slugs in series:
+        for slug in slugs:
+            if slug in targets_by_slug:
+                continue
+            rel = f"blog/{slug}/index.html"
+            f = site / rel
+            if not f.is_file():
+                problems.append(f"{rel}: página de post da série ausente no site montado")
+                targets_by_slug[slug] = None
+                continue
+            p = _Page()
+            p.feed(f.read_text(encoding="utf-8"))
+            p.close()
+            targets_by_slug[slug] = _series_targets(slug, p.post_body_links)
+        for prev_slug, next_slug in zip(slugs, slugs[1:]):
+            prev_targets = targets_by_slug[prev_slug]
+            next_targets = targets_by_slug[next_slug]
+            want_next = f"{BLOG_PREFIX}{next_slug}/"
+            want_prev = f"{BLOG_PREFIX}{prev_slug}/"
+            if prev_targets is not None and want_next not in prev_targets:
+                problems.append(
+                    f"blog/{prev_slug}/index.html: sem link em div.post-body para a próxima parte da série ({want_next})"
+                )
+            if next_targets is not None and want_prev not in next_targets:
+                problems.append(
+                    f"blog/{next_slug}/index.html: sem link em div.post-body para a parte anterior da série ({want_prev})"
+                )
+    return problems
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Verifica o site montado em _site/ antes do deploy.")
     ap.add_argument("--site", default="_site")
@@ -3360,6 +3433,7 @@ def main(argv: list[str] | None = None) -> int:
         problems += check_courses(Path(args.site))
         problems += check_youtube(Path(args.site))
         problems += check_old_youtube_handle(Path(args.site))
+        problems += check_series(Path(args.site))
     except ResolverError as e:
         print(f"ERRO: resolvedor de URL indisponível, verificação não feita: {e}", file=sys.stderr)
         return 1

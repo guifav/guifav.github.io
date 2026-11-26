@@ -265,6 +265,8 @@ Postgres sustenta a estrutura e a auditoria. pgvector ou Pinecone sustentam a re
 
 Sem isso, o sistema apenas armazena texto e chama isso de memória.
 
+*Este artigo abre a série sobre memória de agentes. Na continuação, mostro essa arquitetura rodando na minha operação em [A memória dos meus agentes, na prática](/blog/a-memoria-dos-meus-agentes-na-pratica/).*
+
 ***
 
 *O código completo dos fluxos de encoding, recall e evidence gaps, incluindo schema SQL e integração com Pinecone e Redis, está disponível no [GitHub](https://github.com/guifav).*

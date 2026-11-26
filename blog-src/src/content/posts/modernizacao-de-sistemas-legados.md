@@ -203,6 +203,8 @@ O momento para começar é agora. Não espere que o legado se torne insustentáv
 
 Nos próximos artigos desta série, explorarei decisões arquiteturais igualmente críticas: quando e como adotar microservices, estratégias de API-first architecture, e patterns de cloud migration. Cada um destes tópicos conecta escolhas técnicas com outcomes de negócio — porque arquitetura sem business context é engineering pelo engineering, não transformação estratégica.
 
+*Sobre sistemas legados em particular, a leitura seguinte mostra a [arquitetura em camadas que usei para consolidar dados para IA sem reescrever os sistemas originais](/blog/arquitetura-consolidacao-dados-ia-sem-reescrever-sistemas-legados/).*
+
 ***
 
 *Guilherme Favaron é CTO do GRI Institute, especializado em IA aplicada e transformações digitais empresariais. Com mais de 18 anos liderando implementações em organizações globais, combina profundidade técnica com visão estratégica de negócios. Compartilha conhecimento através de seu blog ([guifav.dev](/blog/)) e dos [Expert Insights](/blog/assinar/).*
