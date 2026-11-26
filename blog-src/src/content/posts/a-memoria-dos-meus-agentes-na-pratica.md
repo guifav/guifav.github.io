@@ -2,6 +2,7 @@
 title: "A memória dos meus agentes, na prática: um sistema de registros para quem lida com muitas decisões simultâneas"
 subtitle: "Cinco camadas de registro com dono, formato e ciclo de vida próprios; os crons que transformam PRs e reuniões em decisões rastreáveis; e a ordem de leitura que devolve a fonte certa para cada pergunta"
 description: "Cinco camadas de registro com dono, formato e ciclo de vida próprios; os crons que transformam PRs e reuniões em decisões rastreáveis; e a ordem de leitura que devolve a fonte certa para cada pergunta"
+summary: "Rodando com cinco agentes em máquinas distintas, o sistema divide a memória em quatro camadas: ledger de sessão, índice semântico privado no Mem0, acervo compartilhado em Git (com inbox e curadoria diária) e registros operacionais. Crons com estado capturam decisões de PRs e reuniões com proveniência obrigatória, mantendo gate humano em identidade e estratégia. Na leitura, os agentes partem do acervo curado e descem às camadas brutas sob demanda."
 date: 2026-07-22T03:38:46.624Z
 updated: 2026-07-22T03:40:03.866Z
 slug: a-memoria-dos-meus-agentes-na-pratica

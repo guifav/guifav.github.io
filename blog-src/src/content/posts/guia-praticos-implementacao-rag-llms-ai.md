@@ -1,6 +1,7 @@
 ---
 title: "Guia prático de implementação de RAG em LLMs e IA (Parte 2/2)"
 description: "Parte 2 do guia de RAG em LLMs: aplicações corporativas, privacidade de dados, arquitetura de implementação prática e cuidados ao levar para produção."
+summary: "Para colocar um sistema RAG em operação, este guia percorre dez etapas: escopo, preparação e indexação, recuperação com ranking, integração do LLM, controle de incerteza, testes, logging e implantação com caching. Reúne ferramentas como Haystack, LangChain, Hugging Face Transformers, Faiss, Pinecone, Weaviate e Qdrant, além de casos em atendimento, saúde, finanças e pesquisa jurídica. Também detalha privacidade sob LGPD e GDPR, mitigação de vieses e rastreabilidade das fontes."
 date: 2024-09-17T03:00:00.000Z
 updated: 2025-02-06T12:37:55.418Z
 slug: guia-praticos-implementacao-rag-llms-ai

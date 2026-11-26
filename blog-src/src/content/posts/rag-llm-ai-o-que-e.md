@@ -1,6 +1,7 @@
 ---
 title: "O que é RAG em LLMs de IA e Primeiros passos para implementação"
 description: "Entenda o que é RAG (Retrieval-Augmented Generation), como conecta LLMs aos dados da empresa para reduzir alucinações e por onde começar na prática."
+summary: "RAG (Retrieval-Augmented Generation) combina recuperação de informações externas com a geração de texto de um LLM para entregar respostas atualizadas e contextualizadas sem retreinar o modelo. O fluxo busca trechos relevantes na base de conhecimento, envia esse contexto ao modelo e gera a resposta final. A abordagem reduz o risco de alucinações em assistentes virtuais e análise de dados, exigindo cuidados com privacidade, qualidade das fontes e transparência."
 date: 2024-09-14T03:00:00.000Z
 updated: 2024-12-02T11:31:19.782Z
 slug: rag-llm-ai-o-que-e

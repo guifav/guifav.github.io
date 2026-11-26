@@ -2,6 +2,7 @@
 title: "Como transformei dados fragmentados em uma plataforma pronta para IA, preservando todos os sistemas legados"
 subtitle: "Uma arquitetura em camadas para consolidar dezenas de fontes heterogêneas, habilitar inteligência artificial e retroalimentar toda a operação, sem risco e sem reescrever sistemas originais e legados"
 description: "Uma arquitetura em camadas para consolidar dezenas de fontes heterogêneas, habilitar inteligência artificial e retroalimentar toda a operação, sem risco e sem reescrever sistemas originais e legados"
+summary: "Para alimentar IA com dados fragmentados sem reescrever sistemas legados, esta arquitetura mantém as origens intactas e espelha alterações numa plataforma em quatro camadas. O fluxo combina captura via CDC e conectores, data lake nas zonas Raw, Staging e Curated e enriquecimento com scoring e materialized views. Dashboards, APIs, automações e agentes de IA consomem esses dados e retroalimentam as origens; na construção em paralelo, a equipe operou normalmente e o risco operacional foi zero."
 date: 2026-03-29T21:13:06.054Z
 updated: 2026-03-29T21:13:50.374Z
 slug: arquitetura-consolidacao-dados-ia-sem-reescrever-sistemas-legados
