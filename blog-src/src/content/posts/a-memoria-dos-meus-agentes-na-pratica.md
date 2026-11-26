@@ -12,7 +12,7 @@ topics: [agentes-de-ia]
 ---
 
 <figure>
-<img src="/blog/img/a-memoria-dos-meus-agentes-na-pratica/484a84fa07-1456.webp" srcset="/blog/img/a-memoria-dos-meus-agentes-na-pratica/484a84fa07-728.webp 728w, /blog/img/a-memoria-dos-meus-agentes-na-pratica/484a84fa07-1456.webp 1456w" sizes="(max-width: 760px) 100vw, 720px" width="1456" height="819" alt="Arquitetura de memória de agentes de IA organizada como um sistema de registros em quatro camadas" loading="lazy" decoding="async">
+<img src="/blog/img/a-memoria-dos-meus-agentes-na-pratica/484a84fa07-1456.webp" srcset="/blog/img/a-memoria-dos-meus-agentes-na-pratica/484a84fa07-728.webp 728w, /blog/img/a-memoria-dos-meus-agentes-na-pratica/484a84fa07-1456.webp 1456w" sizes="(max-width: 760px) 100vw, 720px" width="1456" height="819" alt="Diagrama do sistema de memória: conversas, PRs, reuniões e sistemas passam por um refino diário e saem em CTO notes, estratégia e automações" loading="lazy" decoding="async">
 </figure>
 
 Em março escrevi aqui que [a memória dos seus agentes está quebrada](/blog/memoria-agentes-solucao-definitiva/). O argumento era que jogar o histórico inteiro no contexto funciona no protótipo e desmorona em produção, e que a saída passava por separar camadas de memória com papéis distintos. Era arquitetura no papel.
