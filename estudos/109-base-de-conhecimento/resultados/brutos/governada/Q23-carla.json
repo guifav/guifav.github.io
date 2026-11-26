@@ -1,0 +1,27 @@
+{
+  "cenario": "governada",
+  "pergunta": "Q23",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "trechos": [
+      "ata-comite-comercial-2026-06.md#Pauta adiada",
+      "politica-devolucoes-2026.md#Produto lacrado sem defeito",
+      "politica-trabalho-remoto-2026.md#Presença",
+      "politica-comercial-2026.md#4. Pedido mínimo",
+      "manual-onboarding-acessos.md#Sistemas"
+    ],
+    "liberados": 18
+  },
+  "resultado": "{\"resposta\": \"Não encontrei a informação sobre margem mínima por pedido na base. Os trechos só trazem o pedido mínimo, que é de R$ 1.200 (Política Comercial 2026), mas isso é um valor mínimo de pedido, não uma margem. Se for isso que você precisa conferir, é esse o valor vigente; caso contrário, vale confirmar com a área Comercial.\", \"fontes\": [\"politica-comercial-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2274,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 162
+  },
+  "duracao_api_ms": 1779,
+  "duracao_parede_s": 6.23,
+  "custo_tabela_usd": 0.01072,
+  "registrado_em": "2026-11-25T19:57:59-0300"
+}

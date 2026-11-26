@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q15",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "manual-onboarding-acessos.md",
+      "faq-operacional.md"
+    ]
+  },
+  "resultado": "{\"resposta\": \"O acesso ao ERP é liberado em até 2 dias úteis após o gestor fazer o pedido no portal de chamados. Ou seja, o gestor do funcionário novo precisa abrir o chamado para a contagem começar.\", \"fontes\": [\"manual-onboarding-acessos.md\", \"faq-operacional.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1783,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 121
+  },
+  "duracao_api_ms": 1216,
+  "duracao_parede_s": 5.42,
+  "custo_tabela_usd": 0.008346000000000001,
+  "registrado_em": "2026-11-25T19:53:59-0300"
+}

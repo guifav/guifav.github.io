@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q19",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "ata-comite-comercial-2026-06.md",
+      "politica-comercial-2026.md"
+    ]
+  },
+  "resultado": "{\"resposta\": \"Não encontrei essa informação nos arquivos enviados. Nem a Política Comercial 2026 nem a ata do Comitê Comercial de 12/06/2026 falam de bônus ou de meta de 120% para executivos de contas. Eles tratam apenas de alçadas de desconto, prazo de pagamento, frete e pedido mínimo. Sugiro consultar o RH ou o diretor comercial, ou enviar o documento da política de remuneração variável/bônus.\", \"fontes\": []}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1994,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 179
+  },
+  "duracao_api_ms": 1716,
+  "duracao_parede_s": 7.59,
+  "custo_tabela_usd": 0.009770000000000001,
+  "registrado_em": "2026-11-25T19:54:15-0300"
+}

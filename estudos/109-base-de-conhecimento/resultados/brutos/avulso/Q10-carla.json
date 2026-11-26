@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q10",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "politica-comercial-2026.md",
+      "ata-comite-comercial-2026-06.md"
+    ]
+  },
+  "resultado": "{\"resposta\": \"Para entregas em Manaus (AM, região Norte), o frete é grátis em pedidos a partir de R$ 3.500, regra do Comitê Comercial de 12/06/2026 em vigor desde 01/07/2026. Antes disso, valia a regra geral da Política Comercial 2026: frete grátis acima de R$ 5.000. Como a data de hoje é posterior a 01/07/2026, vale o valor de R$ 3.500.\", \"fontes\": [\"ata-comite-comercial-2026-06.md\", \"politica-comercial-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2001,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 201
+  },
+  "duracao_api_ms": 2925,
+  "duracao_parede_s": 9.54,
+  "custo_tabela_usd": 0.010018,
+  "registrado_em": "2026-11-25T19:53:39-0300"
+}

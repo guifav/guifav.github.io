@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q07",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "politica-reembolso-despesas-2026.md",
+      "adendo-viagens-internacionais-2026.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"Você tem até 10 dias corridos após a data da despesa para enviar o comprovante no sistema de despesas. Como a despesa foi em 10/11/2026, o prazo vai até 20/11/2026. Como hoje é 25/11/2026, esse prazo já terminou; vale falar com o Financeiro para saber se ainda é possível enviar o comprovante. Observação: se a viagem foi internacional, o adendo não traz prazo diferente, então a regra de 10 dias da política geral continua sendo a referência disponível.\",\"fontes\":[\"politica-reembolso-despesas-2026.md\",\"adendo-viagens-internacionais-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1858,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 231
+  },
+  "duracao_api_ms": 2384,
+  "duracao_parede_s": 7.39,
+  "custo_tabela_usd": 0.009746000000000001,
+  "registrado_em": "2026-11-25T19:53:23-0300"
+}

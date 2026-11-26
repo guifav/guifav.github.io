@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q08",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "ata-comite-comercial-2026-06.md",
+      "politica-comercial-2026.md"
+    ]
+  },
+  "resultado": "{\"resposta\": \"Até 12% sobre a tabela. Pela ata do Comitê Comercial de 12/06/2026, desde 01/07/2026 o executivo de contas aprova sozinho descontos de até 12% em renovações de contrato, e acima disso precisa do gerente. A Política Comercial 2026 fala em 10%, mas esse limite continua valendo só para clientes novos.\", \"fontes\": [\"ata-comite-comercial-2026-06.md\", \"politica-comercial-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2000,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 176
+  },
+  "duracao_api_ms": 2037,
+  "duracao_parede_s": 11.58,
+  "custo_tabela_usd": 0.009764,
+  "registrado_em": "2026-11-25T19:53:29-0300"
+}

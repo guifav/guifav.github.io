@@ -1,0 +1,18 @@
+{
+  "cenario": "projeto",
+  "pergunta": "Q11",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {},
+  "resultado": "{\"resposta\": \"No modelo híbrido são 2 dias presenciais por semana, às terças e quintas. Atenção: como você trabalha no suporte N1 (se for o seu caso), a política diz que o suporte N1 segue escala própria, então a sua presença pode seguir essa escala em vez de terças e quintas.\", \"fontes\": [\"politica-trabalho-remoto-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1145,
+    "cache_read_input_tokens": 5682,
+    "output_tokens": 138
+  },
+  "duracao_api_ms": 1658,
+  "duracao_parede_s": 6.51,
+  "custo_tabela_usd": 0.0065322,
+  "registrado_em": "2026-11-25T19:54:52-0300"
+}

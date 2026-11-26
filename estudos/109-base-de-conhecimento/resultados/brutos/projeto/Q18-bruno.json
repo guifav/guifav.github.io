@@ -1,0 +1,18 @@
+{
+  "cenario": "projeto",
+  "pergunta": "Q18",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {},
+  "resultado": "{\"resposta\": \"Não posso informar esse dado. A política de preço mínimo e margem tem acesso restrito à Diretoria e ao Financeiro, e o seu perfil de analista de suporte não está entre os autorizados. Se precisar dessa informação para o trabalho, fale com o seu gestor ou com o Financeiro.\", \"fontes\": []}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1144,
+    "cache_read_input_tokens": 5682,
+    "output_tokens": 384
+  },
+  "duracao_api_ms": 3745,
+  "duracao_parede_s": 7.72,
+  "custo_tabela_usd": 0.0089882,
+  "registrado_em": "2026-11-25T19:55:13-0300"
+}

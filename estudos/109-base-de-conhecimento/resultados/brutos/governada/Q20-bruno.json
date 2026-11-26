@@ -1,0 +1,27 @@
+{
+  "cenario": "governada",
+  "pergunta": "Q20",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "trechos": [
+      "sla-suporte-2026.md#1. Primeira resposta",
+      "aditivo-revenda-2026.md#Faixa de desempenho",
+      "matriz-escalonamento-suporte.md#Clientes Enterprise",
+      "sla-suporte-2026.md#3. Créditos",
+      "sla-suporte-2026.md#2. Resolução de severidade 1"
+    ],
+    "liberados": 18
+  },
+  "resultado": "{\"resposta\": \"Não encontrei a informação na base. Os trechos recuperados tratam de SLA de suporte, escalonamento e comissão de revendas, mas não trazem faixa salarial de coordenador de suporte.\", \"fontes\": []}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2267,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 86
+  },
+  "duracao_api_ms": 1024,
+  "duracao_parede_s": 4.77,
+  "custo_tabela_usd": 0.009932,
+  "registrado_em": "2026-11-25T19:56:18-0300"
+}

@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q05",
+  "funcionario": "ana",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "faq-operacional.md",
+      "politica-comercial-2025.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"Os arquivos não informam o prazo de primeira resposta para chamados de clientes Enterprise. O FAQ operacional só diz que o suporte funciona de segunda a sexta, das 8h às 18h, e que clientes Enterprise têm atendimento 24x7 para severidade 1, sem citar um prazo de resposta. A Política Comercial 2025 não trata do assunto. Vale consultar a área de Suporte/Operações ou o SLA vigente.\",\"fontes\":[\"faq-operacional.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1882,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 184
+  },
+  "duracao_api_ms": 1869,
+  "duracao_parede_s": 7.33,
+  "custo_tabela_usd": 0.009372,
+  "registrado_em": "2026-11-25T19:53:12-0300"
+}

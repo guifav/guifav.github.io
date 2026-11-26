@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q17",
+  "funcionario": "ana",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "politica-comercial-2025.md",
+      "contrato-modelo-revenda.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"Não encontrei essa informação nos arquivos anexados. A Política Comercial 2025 trata de alçadas de desconto, prazo de pagamento, frete e pedido mínimo, e o contrato-modelo de revenda trata de comissão e exclusividade. Nenhum deles traz faixas salariais ou plano de cargos. Para essa informação, consulte o RH ou o documento de cargos e salários da empresa.\",\"fontes\":[]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1812,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 160
+  },
+  "duracao_api_ms": 1653,
+  "duracao_parede_s": 7.45,
+  "custo_tabela_usd": 0.008852,
+  "registrado_em": "2026-11-25T19:54:06-0300"
+}

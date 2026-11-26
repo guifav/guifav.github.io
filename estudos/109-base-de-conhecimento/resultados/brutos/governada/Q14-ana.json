@@ -1,0 +1,27 @@
+{
+  "cenario": "governada",
+  "pergunta": "Q14",
+  "funcionario": "ana",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "trechos": [
+      "matriz-escalonamento-suporte.md#Clientes Enterprise",
+      "sla-suporte-2026.md#2. Resolução de severidade 1",
+      "sla-suporte-2026.md#1. Primeira resposta",
+      "faq-operacional.md#Qual o horário do suporte?",
+      "matriz-escalonamento-suporte.md#Clientes Standard e Pro"
+    ],
+    "liberados": 18
+  },
+  "resultado": "{\"resposta\": \"Escale para o gerente de operações de suporte, acionando-o pelo telefone de plantão publicado na intranet. Se o chamado continuar sem solução após 4 horas, o gerente é quem aciona o diretor de operações.\", \"fontes\": [\"matriz-escalonamento-suporte.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2287,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 112
+  },
+  "duracao_api_ms": 1325,
+  "duracao_parede_s": 5.16,
+  "custo_tabela_usd": 0.010272,
+  "registrado_em": "2026-11-25T19:56:01-0300"
+}

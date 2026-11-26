@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q24",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "ata-comite-comercial-2026-06.md",
+      "politica-comercial-2026.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"Não encontrei essa informação nos arquivos anexados. A Política Comercial 2026 e a ata do Comitê Comercial de 12/06/2026 tratam de alçadas de desconto, prazo de pagamento, frete e pedido mínimo, mas não falam de bônus ou meta de executivos de contas. Vale confirmar com o RH ou com a política de remuneração variável.\",\"fontes\":[]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2031,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 148
+  },
+  "duracao_api_ms": 1581,
+  "duracao_parede_s": 5.99,
+  "custo_tabela_usd": 0.009607999999999998,
+  "registrado_em": "2026-11-25T19:57:25-0300"
+}

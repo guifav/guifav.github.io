@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q25",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "politica-trabalho-remoto-2026.md",
+      "sla-suporte-2025.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"Não consegui responder: nenhum dos arquivos anexados traz faixas salariais. A política de trabalho híbrido 2026 trata de presença e ajuda de custo para internet, e o SLA de suporte trata de prazos de primeira resposta. Para essa informação, consulte a tabela de cargos e salários do RH ou a própria coordenadora.\",\"fontes\":[]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1715,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 137
+  },
+  "duracao_api_ms": 1460,
+  "duracao_parede_s": 6.42,
+  "custo_tabela_usd": 0.008234,
+  "registrado_em": "2026-11-25T19:57:29-0300"
+}

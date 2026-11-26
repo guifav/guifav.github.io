@@ -1,0 +1,27 @@
+{
+  "cenario": "governada",
+  "pergunta": "Q03",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "trechos": [
+      "adendo-viagens-internacionais-2026.md#Limites",
+      "politica-reembolso-despesas-2026.md#1. Viagens nacionais",
+      "ata-financeiro-2026-08.md#Decisão 2: cartão corporativo",
+      "politica-trabalho-remoto-2026.md#Ajuda de custo",
+      "politica-trabalho-remoto-2026.md#Presença"
+    ],
+    "liberados": 18
+  },
+  "resultado": "{\"resposta\":\"Em viagens nacionais a trabalho, o limite de hospedagem é de até R$ 350 por noite.\",\"fontes\":[\"politica-reembolso-despesas-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2199,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 71
+  },
+  "duracao_api_ms": 1032,
+  "duracao_parede_s": 4.49,
+  "custo_tabela_usd": 0.00951,
+  "registrado_em": "2026-11-25T19:55:28-0300"
+}

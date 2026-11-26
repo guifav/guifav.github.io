@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q05",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "sla-suporte-2025.md",
+      "sla-suporte-2026.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"Para um cliente Enterprise, a primeira resposta deve ocorrer em até 1 hora. Para chamados de severidade 1, vale 24x7 (a contagem corre fora do horário comercial também); para as demais severidades, a hora conta apenas em horário útil. Isso segue o SLA 2026, vigente desde 01/01/2026, que substituiu o SLA de 2025 (2 horas úteis).\",\"fontes\":[\"sla-suporte-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1762,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 170
+  },
+  "duracao_api_ms": 1795,
+  "duracao_parede_s": 7.46,
+  "custo_tabela_usd": 0.008752,
+  "registrado_em": "2026-11-25T19:53:13-0300"
+}

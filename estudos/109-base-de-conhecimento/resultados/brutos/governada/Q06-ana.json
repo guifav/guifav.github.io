@@ -1,0 +1,27 @@
+{
+  "cenario": "governada",
+  "pergunta": "Q06",
+  "funcionario": "ana",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "trechos": [
+      "sla-suporte-2026.md#1. Primeira resposta",
+      "ata-diretoria-2026-09.md#Decisão 1: SLA de clientes Pro",
+      "aditivo-01-contrato-enterprise-2026.md#Crédito por SLA",
+      "matriz-escalonamento-suporte.md#Clientes Standard e Pro",
+      "politica-comercial-2026.md#2. Prazo de pagamento"
+    ],
+    "liberados": 18
+  },
+  "resultado": "{\"resposta\": \"O prazo de primeira resposta para chamados de clientes Pro é de 3 horas úteis. O SLA de suporte 2026 previa 4 horas úteis, mas a decisão da diretoria de 18/09/2026, mais recente, alterou o prazo para 3 horas úteis a partir de 01/10/2026, e já está em vigor em novembro de 2026.\", \"fontes\": [\"ata-diretoria-2026-09.md\", \"sla-suporte-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2302,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 172
+  },
+  "duracao_api_ms": 1527,
+  "duracao_parede_s": 6.57,
+  "custo_tabela_usd": 0.010931999999999999,
+  "registrado_em": "2026-11-25T19:55:36-0300"
+}

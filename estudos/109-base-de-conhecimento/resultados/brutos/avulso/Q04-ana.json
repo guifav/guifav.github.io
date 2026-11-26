@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q04",
+  "funcionario": "ana",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "politica-reembolso-despesas-2024.md",
+      "faq-operacional.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"A empresa reembolsa R$ 0,90 por km rodado em visitas a clientes com carro próprio. Lembre-se de enviar os comprovantes em até 30 dias corridos após a data da despesa. Observação: a política tem vigência a partir de 01/03/2024, então vale confirmar se não há versão mais recente.\",\"fontes\":[\"politica-reembolso-despesas-2024.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1823,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 145
+  },
+  "duracao_api_ms": 1317,
+  "duracao_parede_s": 6.89,
+  "custo_tabela_usd": 0.008746,
+  "registrado_em": "2026-11-25T19:53:07-0300"
+}

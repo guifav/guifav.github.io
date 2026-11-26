@@ -1,0 +1,18 @@
+{
+  "cenario": "projeto",
+  "pergunta": "Q06",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {},
+  "resultado": "{\"resposta\":\"O prazo de primeira resposta para clientes Pro é de 3 horas úteis. Esse prazo vale desde 01/10/2026, conforme decisão da diretoria em 18/09/2026, e substitui as 4 horas úteis do SLA de suporte 2026 (que, por sua vez, havia substituído as 6 horas do SLA de 2025).\",\"fontes\":[\"ata-diretoria-2026-09.md\",\"sla-suporte-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1162,
+    "cache_read_input_tokens": 5682,
+    "output_tokens": 165
+  },
+  "duracao_api_ms": 1561,
+  "duracao_parede_s": 5.71,
+  "custo_tabela_usd": 0.0068702,
+  "registrado_em": "2026-11-25T19:54:35-0300"
+}

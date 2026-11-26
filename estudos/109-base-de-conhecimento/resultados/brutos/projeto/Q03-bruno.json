@@ -1,0 +1,18 @@
+{
+  "cenario": "projeto",
+  "pergunta": "Q03",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {},
+  "resultado": "{\"resposta\":\"O limite de hospedagem em viagens nacionais é de até R$ 350 por noite (e refeição de até R$ 80 por dia). Vale a política de 2026, vigente desde 01/02/2026, que substitui os limites anteriores (R$ 280 por noite).\",\"fontes\":[\"politica-reembolso-despesas-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1155,
+    "cache_read_input_tokens": 5682,
+    "output_tokens": 125
+  },
+  "duracao_api_ms": 1428,
+  "duracao_parede_s": 5.36,
+  "custo_tabela_usd": 0.0064422,
+  "registrado_em": "2026-11-25T19:54:27-0300"
+}

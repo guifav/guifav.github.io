@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q07",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "politica-reembolso-despesas-2026.md",
+      "manual-onboarding-acessos.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"Você tem até 10 dias corridos após a data da despesa para enviar o comprovante no sistema de despesas. Como a despesa foi em 10/11/2026, o prazo vai até 20/11/2026. Hoje é 25/11/2026, então esse prazo já venceu; vale falar com o Financeiro para saber se ainda é possível enviar o comprovante.\",\"fontes\":[\"politica-reembolso-despesas-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1858,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 158
+  },
+  "duracao_api_ms": 1726,
+  "duracao_parede_s": 7.87,
+  "custo_tabela_usd": 0.009016,
+  "registrado_em": "2026-11-25T19:53:21-0300"
+}

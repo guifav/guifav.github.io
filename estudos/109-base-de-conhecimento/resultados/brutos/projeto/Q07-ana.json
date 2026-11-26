@@ -1,0 +1,18 @@
+{
+  "cenario": "projeto",
+  "pergunta": "Q07",
+  "funcionario": "ana",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {},
+  "resultado": "{\"resposta\": \"Você tem 15 dias corridos após a data da despesa. A política de reembolso 2026 previa 10 dias, mas a ata do Financeiro de 20/08/2026 mudou o prazo para 15 dias a partir de 01/09/2026, e essa regra é a mais recente. Para a despesa de 10/11/2026, o último dia para enviar o comprovante no sistema de despesas é 25/11/2026, que é hoje.\", \"fontes\": [\"ata-financeiro-2026-08.md\", \"politica-reembolso-despesas-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1170,
+    "cache_read_input_tokens": 5682,
+    "output_tokens": 393
+  },
+  "duracao_api_ms": 2999,
+  "duracao_parede_s": 7.69,
+  "custo_tabela_usd": 0.0091822,
+  "registrado_em": "2026-11-25T19:54:40-0300"
+}

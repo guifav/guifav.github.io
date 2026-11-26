@@ -1,0 +1,18 @@
+{
+  "cenario": "projeto",
+  "pergunta": "Q18",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {},
+  "resultado": "{\"resposta\": \"Não posso informar essa margem. O documento que trata do assunto é confidencial e restrito à Diretoria e ao Financeiro, e o seu perfil de assistente de operações não está entre os autorizados. Para saber se um pedido específico precisa de aprovação por margem, fale com o seu gestor ou com o Financeiro.\", \"fontes\": []}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1146,
+    "cache_read_input_tokens": 5682,
+    "output_tokens": 392
+  },
+  "duracao_api_ms": 4129,
+  "duracao_parede_s": 8.44,
+  "custo_tabela_usd": 0.0090762,
+  "registrado_em": "2026-11-25T19:55:15-0300"
+}

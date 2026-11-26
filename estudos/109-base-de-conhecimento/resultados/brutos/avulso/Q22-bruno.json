@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q22",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "politica-trabalho-remoto-2026.md",
+      "faq-operacional.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"Não encontrei essa informação nos arquivos anexados. A política de trabalho híbrido e o FAQ operacional não trazem faixas salariais, nem de analista comercial pleno. Como é uma informação sensível de RH, confirme diretamente com a coordenadora de RH, com o time de Pessoas ou na tabela salarial oficial, em vez de usar um valor estimado.\",\"fontes\":[]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1791,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 147
+  },
+  "duracao_api_ms": 2005,
+  "duracao_parede_s": 6.67,
+  "custo_tabela_usd": 0.008638,
+  "registrado_em": "2026-11-25T19:57:16-0300"
+}

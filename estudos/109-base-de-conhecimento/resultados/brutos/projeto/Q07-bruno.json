@@ -1,0 +1,18 @@
+{
+  "cenario": "projeto",
+  "pergunta": "Q07",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {},
+  "resultado": "{\"resposta\":\"Você tem até 15 dias corridos após a data da despesa. Como a despesa foi em 10/11/2026, o prazo vai até 25/11/2026. A Política de Reembolso 2026 previa 10 dias, mas a ata do Financeiro de 20/08/2026 mudou o prazo para 15 dias corridos a partir de 01/09/2026, e essa decisão é a mais recente. Se hoje é 25/11/2026, hoje é o último dia para enviar.\",\"fontes\":[\"ata-financeiro-2026-08.md\",\"politica-reembolso-despesas-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1163,
+    "cache_read_input_tokens": 5682,
+    "output_tokens": 211
+  },
+  "duracao_api_ms": 1757,
+  "duracao_parede_s": 5.34,
+  "custo_tabela_usd": 0.0073342,
+  "registrado_em": "2026-11-25T19:54:38-0300"
+}

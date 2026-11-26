@@ -1,0 +1,18 @@
+{
+  "cenario": "projeto",
+  "pergunta": "Q08",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {},
+  "resultado": "{\n  \"resposta\": \"Em renovações de contrato, o executivo de contas pode aprovar sozinho descontos de até 12% sobre a tabela. Isso vale desde 01/07/2026, conforme decisão do Comitê Comercial, que é mais recente que a Política Comercial 2026 (limite de 10%). Para clientes novos, continua valendo o limite de 10% da Política Comercial 2026; acima disso é preciso aprovação do gerente comercial. O desconto por volume aplicado automaticamente pelo ERP não conta para essa alçada.\",\n  \"fontes\": [\n    \"ata-comite-comercial-2026-06.md\",\n    \"politica-comercial-2026.md\",\n    \"tabela-descontos-volume-2026.md\"\n  ]\n}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1160,
+    "cache_read_input_tokens": 5682,
+    "output_tokens": 452
+  },
+  "duracao_api_ms": 3247,
+  "duracao_parede_s": 7.18,
+  "custo_tabela_usd": 0.0097322,
+  "registrado_em": "2026-11-25T19:54:43-0300"
+}

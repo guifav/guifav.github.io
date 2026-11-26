@@ -1,0 +1,27 @@
+{
+  "cenario": "governada",
+  "pergunta": "Q12",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "trechos": [
+      "politica-devolucoes-2026.md#Produto lacrado sem defeito",
+      "politica-devolucoes-2026.md#Produto com defeito",
+      "politica-trabalho-remoto-2026.md#Ajuda de custo",
+      "contrato-modelo-enterprise.md#Rescisão",
+      "ata-financeiro-2026-08.md#Decisão 1: prazo de comprovantes"
+    ],
+    "liberados": 18
+  },
+  "resultado": "{\"resposta\": \"Sim, pode. Produto lacrado e sem defeito pode ser devolvido em até 30 dias corridos após a entrega, e o cliente está com 20 dias, dentro do prazo. O custo é uma taxa de reestocagem de 10% sobre o valor do produto.\", \"fontes\": [\"politica-devolucoes-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2247,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 127
+  },
+  "duracao_api_ms": 1465,
+  "duracao_parede_s": 6.36,
+  "custo_tabela_usd": 0.010262,
+  "registrado_em": "2026-11-25T19:55:58-0300"
+}

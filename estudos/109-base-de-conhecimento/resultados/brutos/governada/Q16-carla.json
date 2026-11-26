@@ -1,0 +1,27 @@
+{
+  "cenario": "governada",
+  "pergunta": "Q16",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "trechos": [
+      "tabela-descontos-volume-2026.md#Regra de aplicação",
+      "ata-comite-comercial-2026-06.md#Decisão 1: alçada em renovações",
+      "politica-comercial-2026.md#1. Alçadas de desconto",
+      "contrato-modelo-enterprise.md#Reajuste",
+      "contrato-modelo-standard.md#Reajuste"
+    ],
+    "liberados": 18
+  },
+  "resultado": "{\"resposta\": \"Não encontrei a informação na base. Os trechos recuperados tratam de alçadas de desconto, descontos por volume e reajuste de contratos, mas não trazem regras de bônus ou meta anual de executivos de contas.\", \"fontes\": []}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2309,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 93
+  },
+  "duracao_api_ms": 1129,
+  "duracao_parede_s": 4.84,
+  "custo_tabela_usd": 0.010169999999999998,
+  "registrado_em": "2026-11-25T19:56:09-0300"
+}

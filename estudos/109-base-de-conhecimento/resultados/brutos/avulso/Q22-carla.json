@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q22",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "ata-comite-comercial-2026-06.md",
+      "aditivo-revenda-2026.md"
+    ]
+  },
+  "resultado": "{\"resposta\": \"Não consigo responder: os arquivos anexados (ata do Comitê Comercial de 12/06/2026 e aditivo de comissão para revendas 2026) não trazem nenhuma informação sobre faixas salariais, e não há nenhum documento de cargos e salários entre eles. Como a informação é de RH, procure a política de cargos e salários na área responsável ou peça a liberação do documento à coordenadora de RH ou a quem responde por ela.\", \"fontes\": []}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1853,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 170
+  },
+  "duracao_api_ms": 1832,
+  "duracao_parede_s": 9.46,
+  "custo_tabela_usd": 0.009116,
+  "registrado_em": "2026-11-25T19:57:19-0300"
+}

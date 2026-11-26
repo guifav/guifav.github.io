@@ -1,0 +1,27 @@
+{
+  "cenario": "governada",
+  "pergunta": "Q12",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "trechos": [
+      "politica-devolucoes-2026.md#Produto lacrado sem defeito",
+      "politica-devolucoes-2026.md#Produto com defeito",
+      "politica-trabalho-remoto-2026.md#Ajuda de custo",
+      "contrato-modelo-enterprise.md#Rescisão",
+      "ata-financeiro-2026-08.md#Decisão 1: prazo de comprovantes"
+    ],
+    "liberados": 18
+  },
+  "resultado": "{\"resposta\": \"Sim, pode. Produto lacrado e sem defeito é aceito para devolução em até 30 dias corridos após a entrega, e o cliente está no 20º dia. Há taxa de reestocagem de 10% sobre o valor do produto.\", \"fontes\": [\"politica-devolucoes-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2244,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 115
+  },
+  "duracao_api_ms": 1591,
+  "duracao_parede_s": 6.65,
+  "custo_tabela_usd": 0.01013,
+  "registrado_em": "2026-11-25T19:55:59-0300"
+}

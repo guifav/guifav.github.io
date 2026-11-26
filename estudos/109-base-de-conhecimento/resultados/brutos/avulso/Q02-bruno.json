@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q02",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "sla-suporte-2025.md",
+      "sla-suporte-2026.md"
+    ]
+  },
+  "resultado": "{\"resposta\": \"Não encontrei essa informação. Os arquivos anexados tratam apenas do SLA de suporte (prazos de primeira resposta, resolução de severidade 1 e créditos) e não mencionam prazo de pagamento para clientes da faixa Standard. Para essa informação, seria preciso consultar um documento de política comercial ou financeira.\", \"fontes\": []}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1759,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 133
+  },
+  "duracao_api_ms": 1568,
+  "duracao_parede_s": 7.29,
+  "custo_tabela_usd": 0.008369999999999999,
+  "registrado_em": "2026-11-25T19:53:00-0300"
+}

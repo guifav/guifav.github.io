@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q03",
+  "funcionario": "ana",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "politica-reembolso-despesas-2024.md",
+      "politica-trabalho-remoto-2026.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"O limite de hospedagem é de R$ 280 por noite. Esse valor vale para viagens a trabalho; a política também informa que viagens ao exterior seguem os mesmos limites, em reais. Observação: a política tem vigência a partir de 01/03/2024, então vale confirmar com o Financeiro se não houve atualização.\",\"fontes\":[\"politica-reembolso-despesas-2024.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1779,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 146
+  },
+  "duracao_api_ms": 1597,
+  "duracao_parede_s": 6.79,
+  "custo_tabela_usd": 0.00858,
+  "registrado_em": "2026-11-25T19:53:06-0300"
+}

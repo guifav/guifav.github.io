@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q14",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "politica-comercial-2026.md",
+      "aditivo-01-contrato-enterprise-2026.md"
+    ]
+  },
+  "resultado": "{\"resposta\": \"Não consegui responder com os arquivos que você anexou. Nenhum deles define o fluxo de escalonamento de chamados nem a severidade 1: a Política Comercial trata de descontos, prazos, frete e pedido mínimo, e o Aditivo Enterprise trata de multa rescisória e crédito por SLA. O aditivo só diz que cada descumprimento do prazo de primeira resposta gera crédito de 5% da mensalidade, o que pode ser relevante para o caso, mas não indica a quem escalar. Procure a política de suporte/atendimento ou o SLA do contrato Enterprise do cliente, ou pergunte ao gestor da área de suporte.\", \"fontes\": [\"aditivo-01-contrato-enterprise-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1903,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 271
+  },
+  "duracao_api_ms": 2277,
+  "duracao_parede_s": 6.77,
+  "custo_tabela_usd": 0.010326,
+  "registrado_em": "2026-11-25T19:53:58-0300"
+}

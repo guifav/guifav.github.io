@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q12",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "politica-devolucoes-2026.md",
+      "sla-suporte-2025.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"Sim, pode. Como o produto está lacrado e sem defeito, e a devolução é pedida 20 dias após a entrega (dentro do limite de 30 dias corridos), ela é aceita. Há taxa de reestocagem de 10% sobre o valor do produto.\",\"fontes\":[\"politica-devolucoes-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1711,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 123
+  },
+  "duracao_api_ms": 4321,
+  "duracao_parede_s": 11.26,
+  "custo_tabela_usd": 0.008078,
+  "registrado_em": "2026-11-25T19:53:50-0300"
+}

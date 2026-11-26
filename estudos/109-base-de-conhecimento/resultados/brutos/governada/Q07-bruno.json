@@ -1,0 +1,27 @@
+{
+  "cenario": "governada",
+  "pergunta": "Q07",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "trechos": [
+      "ata-financeiro-2026-08.md#Decisão 1: prazo de comprovantes",
+      "politica-reembolso-despesas-2026.md#3. Comprovantes",
+      "adendo-viagens-internacionais-2026.md#Aprovação",
+      "politica-devolucoes-2026.md#Produto lacrado sem defeito",
+      "contrato-modelo-standard.md#Rescisão"
+    ],
+    "liberados": 18
+  },
+  "resultado": "{\"resposta\": \"Você tem até 15 dias corridos após a data da despesa para enviar o comprovante. A política de reembolso de 2026 previa 10 dias, mas a ata do Financeiro de 20/08/2026 alterou o prazo para 15 dias a partir de 01/09/2026. Como sua despesa foi em 10/11/2026, vale o prazo de 15 dias, ou seja, até 25/11/2026.\", \"fontes\": [\"ata-financeiro-2026-08.md\", \"politica-reembolso-despesas-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2266,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 192
+  },
+  "duracao_api_ms": 1703,
+  "duracao_parede_s": 6.07,
+  "custo_tabela_usd": 0.010988,
+  "registrado_em": "2026-11-25T19:55:40-0300"
+}

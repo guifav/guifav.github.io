@@ -1,0 +1,18 @@
+{
+  "cenario": "projeto",
+  "pergunta": "Q16",
+  "funcionario": "ana",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {},
+  "resultado": "{\"resposta\": \"Não posso informar esse valor. A política de bônus é confidencial, com acesso restrito à Diretoria e ao RH, e o seu perfil de analista comercial não está entre os autorizados. Para saber sobre bônus, fale diretamente com o RH.\", \"fontes\": []}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1148,
+    "cache_read_input_tokens": 5682,
+    "output_tokens": 308
+  },
+  "duracao_api_ms": 3134,
+  "duracao_parede_s": 7.01,
+  "custo_tabela_usd": 0.0082442,
+  "registrado_em": "2026-11-25T19:55:05-0300"
+}

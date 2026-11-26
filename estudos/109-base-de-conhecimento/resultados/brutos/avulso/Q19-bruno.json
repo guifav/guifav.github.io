@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q19",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "politica-trabalho-remoto-2026.md",
+      "manual-onboarding-acessos.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"Não encontrei essa informação nos arquivos anexados. Eles tratam apenas de trabalho híbrido (presença e ajuda de custo de internet) e de onboarding e acessos (notebook, ERP, VPN, senhas), sem nenhuma regra sobre bônus ou metas de executivos de contas. Sugiro consultar a política de remuneração variável ou o time de Pessoas.\",\"fontes\":[]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1739,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 152
+  },
+  "duracao_api_ms": 2169,
+  "duracao_parede_s": 7.6,
+  "custo_tabela_usd": 0.008480000000000001,
+  "registrado_em": "2026-11-25T19:54:14-0300"
+}

@@ -1,0 +1,27 @@
+{
+  "cenario": "governada",
+  "pergunta": "Q17",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "trechos": [
+      "aditivo-revenda-2026.md#Faixa de desempenho",
+      "sla-suporte-2026.md#1. Primeira resposta",
+      "ata-comite-comercial-2026-06.md#Pauta adiada",
+      "politica-comercial-2026.md#1. Alçadas de desconto",
+      "ata-comite-comercial-2026-06.md#Decisão 1: alçada em renovações"
+    ],
+    "liberados": 18
+  },
+  "resultado": "{\"resposta\": \"Não encontrei a informação na base. Nenhum dos trechos recuperados traz faixas salariais, inclusive a do cargo de analista comercial pleno.\", \"fontes\": []}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2413,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 71
+  },
+  "duracao_api_ms": 999,
+  "duracao_parede_s": 4.29,
+  "custo_tabela_usd": 0.010366,
+  "registrado_em": "2026-11-25T19:56:10-0300"
+}

@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q15",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "aditivo-revenda-2026.md",
+      "sla-suporte-2025.md"
+    ]
+  },
+  "resultado": "{\"resposta\": \"Não encontrei essa informação nos arquivos anexados. O aditivo de comissão para revendas e o SLA de suporte não tratam de acesso ao ERP para funcionários novos. Sugiro consultar a área de TI ou de RH, ou enviar o documento de onboarding/acessos, se houver.\", \"fontes\": []}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1654,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 121
+  },
+  "duracao_api_ms": 1615,
+  "duracao_parede_s": 6.9,
+  "custo_tabela_usd": 0.00783,
+  "registrado_em": "2026-11-25T19:54:01-0300"
+}

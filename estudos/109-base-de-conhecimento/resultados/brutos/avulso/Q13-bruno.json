@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q13",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "politica-reembolso-despesas-2026.md",
+      "politica-trabalho-remoto-2026.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"Não há um limite definido para Buenos Aires nos arquivos disponíveis. O limite de R$ 80 por dia vale apenas para viagens nacionais. A política de reembolso diz que viagens internacionais seguem um adendo próprio, que não foi anexado. Consulte esse adendo ou o Financeiro para saber o valor.\",\"fontes\":[\"politica-reembolso-despesas-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1818,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 149
+  },
+  "duracao_api_ms": 1440,
+  "duracao_parede_s": 9.96,
+  "custo_tabela_usd": 0.008766,
+  "registrado_em": "2026-11-25T19:53:53-0300"
+}

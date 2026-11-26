@@ -1,0 +1,27 @@
+{
+  "cenario": "governada",
+  "pergunta": "Q15",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "trechos": [
+      "manual-onboarding-acessos.md#Sistemas",
+      "manual-onboarding-acessos.md#Primeiro dia",
+      "tabela-descontos-volume-2026.md#Regra de aplicação",
+      "faq-operacional.md#Como peço acesso a um sistema?",
+      "faq-operacional.md#Como funciona a devolução?"
+    ],
+    "liberados": 18
+  },
+  "resultado": "{\"resposta\": \"O acesso ao ERP é liberado em até 2 dias úteis após o gestor fazer o pedido no portal de chamados.\", \"fontes\": [\"manual-onboarding-acessos.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2146,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 76
+  },
+  "duracao_api_ms": 1091,
+  "duracao_parede_s": 5.94,
+  "custo_tabela_usd": 0.009348,
+  "registrado_em": "2026-11-25T19:56:06-0300"
+}

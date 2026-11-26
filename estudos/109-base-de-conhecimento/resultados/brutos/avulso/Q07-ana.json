@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q07",
+  "funcionario": "ana",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "politica-reembolso-despesas-2024.md",
+      "politica-devolucoes-2026.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"Você tem até 30 dias corridos após a data da despesa. Como a despesa foi em 10/11/2026, o prazo final para enviar o comprovante é 10/12/2026.\",\"fontes\":[\"politica-reembolso-despesas-2024.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1796,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 95
+  },
+  "duracao_api_ms": 1216,
+  "duracao_parede_s": 7.72,
+  "custo_tabela_usd": 0.008138000000000001,
+  "registrado_em": "2026-11-25T19:53:20-0300"
+}

@@ -1,0 +1,27 @@
+{
+  "cenario": "governada",
+  "pergunta": "Q05",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "trechos": [
+      "sla-suporte-2026.md#1. Primeira resposta",
+      "aditivo-01-contrato-enterprise-2026.md#Crédito por SLA",
+      "ata-diretoria-2026-09.md#Decisão 1: SLA de clientes Pro",
+      "politica-comercial-2026.md#2. Prazo de pagamento",
+      "contrato-modelo-enterprise.md#Prazo"
+    ],
+    "liberados": 18
+  },
+  "resultado": "{\"resposta\": \"Para clientes Enterprise, o prazo de primeira resposta é de 1 hora. Para chamados de severidade 1, vale 24x7 (a qualquer hora); para as demais severidades, a contagem é em horário útil.\", \"fontes\": [\"sla-suporte-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2264,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 108
+  },
+  "duracao_api_ms": 1238,
+  "duracao_parede_s": 5.46,
+  "custo_tabela_usd": 0.01014,
+  "registrado_em": "2026-11-25T19:55:34-0300"
+}

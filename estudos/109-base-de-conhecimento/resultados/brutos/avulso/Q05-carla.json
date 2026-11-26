@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q05",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "sla-suporte-2025.md",
+      "aditivo-01-contrato-enterprise-2026.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"O prazo de primeira resposta para chamados de clientes Enterprise é de 2 horas úteis, conforme o SLA de suporte vigente desde 01/02/2025. Se o prazo for descumprido, o aditivo nº 1 ao contrato Enterprise prevê crédito de 5% da mensalidade do mês por cada descumprimento.\",\"fontes\":[\"sla-suporte-2025.md\",\"aditivo-01-contrato-enterprise-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1726,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 169
+  },
+  "duracao_api_ms": 2496,
+  "duracao_parede_s": 9.9,
+  "custo_tabela_usd": 0.008598,
+  "registrado_em": "2026-11-25T19:53:16-0300"
+}

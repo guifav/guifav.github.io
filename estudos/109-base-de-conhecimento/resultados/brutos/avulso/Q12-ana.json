@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q12",
+  "funcionario": "ana",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "politica-devolucoes-2026.md",
+      "politica-comercial-2025.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"Sim, pode. Como o produto está lacrado e sem defeito, a devolução é aceita em até 30 dias corridos após a entrega, e 20 dias está dentro do prazo. O custo é uma taxa de reestocagem de 10% sobre o valor do produto. Por exemplo, em um produto de R$ 1.000, a taxa seria de R$ 100.\",\"fontes\":[\"politica-devolucoes-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1864,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 156
+  },
+  "duracao_api_ms": 4382,
+  "duracao_parede_s": 12.02,
+  "custo_tabela_usd": 0.00902,
+  "registrado_em": "2026-11-25T19:53:51-0300"
+}

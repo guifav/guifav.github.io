@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q11",
+  "funcionario": "ana",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "politica-trabalho-remoto-2026.md",
+      "politica-reembolso-despesas-2024.md"
+    ]
+  },
+  "resultado": "{\"resposta\": \"No modelo híbrido são 2 dias presenciais por semana, às terças e quintas. O suporte N1 segue escala própria.\", \"fontes\": [\"politica-trabalho-remoto-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1770,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 80
+  },
+  "duracao_api_ms": 3422,
+  "duracao_parede_s": 10.24,
+  "custo_tabela_usd": 0.007884,
+  "registrado_em": "2026-11-25T19:53:42-0300"
+}

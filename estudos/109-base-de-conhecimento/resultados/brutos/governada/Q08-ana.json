@@ -1,0 +1,27 @@
+{
+  "cenario": "governada",
+  "pergunta": "Q08",
+  "funcionario": "ana",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "trechos": [
+      "ata-comite-comercial-2026-06.md#Decisão 1: alçada em renovações",
+      "tabela-descontos-volume-2026.md#Regra de aplicação",
+      "politica-comercial-2026.md#1. Alçadas de desconto",
+      "contrato-modelo-standard.md#Prazo",
+      "ata-comite-comercial-2026-06.md#Pauta adiada"
+    ],
+    "liberados": 18
+  },
+  "resultado": "{\"resposta\": \"Em renovações de contrato, o executivo de contas pode aprovar sozinho descontos de até 12% sobre a tabela, regra em vigor desde 01/07/2026. Essa alçada vale para renovações e é mais recente que o limite de 10% da Política Comercial 2026.\", \"fontes\": [\"ata-comite-comercial-2026-06.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2350,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 372
+  },
+  "duracao_api_ms": 3162,
+  "duracao_parede_s": 7.14,
+  "custo_tabela_usd": 0.013124,
+  "registrado_em": "2026-11-25T19:55:43-0300"
+}

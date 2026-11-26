@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q02",
+  "funcionario": "ana",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "politica-comercial-2025.md",
+      "contrato-modelo-standard.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"O prazo padrão de pagamento para clientes da faixa Standard é de 45 dias. A política comercial define esse mesmo prazo para todas as faixas (Standard, Pro e Enterprise). Observação: a política é de 2025 e não encontrei nos arquivos uma versão mais recente, então vale confirmar se continua vigente.\",\"fontes\":[\"politica-comercial-2025.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1837,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 144
+  },
+  "duracao_api_ms": 1791,
+  "duracao_parede_s": 6.02,
+  "custo_tabela_usd": 0.008792000000000001,
+  "registrado_em": "2026-11-25T19:52:59-0300"
+}

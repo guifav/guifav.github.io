@@ -1,0 +1,23 @@
+{
+  "cenario": "avulso",
+  "pergunta": "Q20",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "anexos": [
+      "sla-suporte-2025.md",
+      "sla-suporte-2026.md"
+    ]
+  },
+  "resultado": "{\"resposta\":\"Não encontrei essa informação. Os arquivos anexados tratam apenas do SLA de suporte (prazos de primeira resposta, resolução de severidade 1 e créditos) e não trazem nenhuma informação sobre faixas salariais ou cargos como coordenador de suporte. Sugiro consultar o RH.\",\"fontes\":[]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1755,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 126
+  },
+  "duracao_api_ms": 1605,
+  "duracao_parede_s": 6.23,
+  "custo_tabela_usd": 0.008284,
+  "registrado_em": "2026-11-25T19:54:18-0300"
+}

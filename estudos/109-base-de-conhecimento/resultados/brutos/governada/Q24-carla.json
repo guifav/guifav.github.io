@@ -1,0 +1,27 @@
+{
+  "cenario": "governada",
+  "pergunta": "Q24",
+  "funcionario": "carla",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {
+    "trechos": [
+      "ata-comite-comercial-2026-06.md#Decisão 1: alçada em renovações",
+      "ata-comite-comercial-2026-06.md#Pauta adiada",
+      "tabela-descontos-volume-2026.md#Regra de aplicação",
+      "politica-comercial-2026.md#1. Alçadas de desconto",
+      "ata-comite-comercial-2026-06.md#Decisão 2: frete na região Norte"
+    ],
+    "liberados": 18
+  },
+  "resultado": "{\"resposta\": \"Não encontrei a informação na base. Os trechos recuperados tratam de alçadas de desconto, desconto por volume, frete na região Norte e pedido mínimo, mas nenhum deles menciona bônus de executivo de contas ou metas de desempenho. Pode ser que essa regra esteja em um documento de RH ao qual este perfil não tenha acesso, então vale confirmar diretamente com a área de RH.\", \"fontes\": []}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 2470,
+    "cache_read_input_tokens": 0,
+    "output_tokens": 159
+  },
+  "duracao_api_ms": 1675,
+  "duracao_parede_s": 5.46,
+  "custo_tabela_usd": 0.011474,
+  "registrado_em": "2026-11-25T19:58:01-0300"
+}

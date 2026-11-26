@@ -1,0 +1,18 @@
+{
+  "cenario": "projeto",
+  "pergunta": "Q01",
+  "funcionario": "bruno",
+  "modelo": "claude-sonnet-5-5",
+  "contexto": {},
+  "resultado": "{\"resposta\": \"Para cliente novo, o executivo de contas aprova sozinho descontos de até 10% sobre a tabela de preços. De 10,01% a 18% é preciso aprovação do gerente comercial, e acima de 18% a aprovação é do diretor comercial. Os 12% de alçada do executivo valem só para renovações de contrato, desde 01/07/2026, e não se aplicam a clientes novos. O desconto por volume, aplicado automaticamente pelo ERP, não conta para essa alçada. Pedidos com margem bruta abaixo de 22% ainda exigem aprovação do diretor financeiro, mas esse documento é confidencial (Diretoria e Financeiro) e não detalho o conteúdo aqui.\", \"fontes\": [\"politica-comercial-2026.md\", \"ata-comite-comercial-2026-06.md\", \"tabela-descontos-volume-2026.md\"]}",
+  "uso": {
+    "input_tokens": 2,
+    "cache_creation_input_tokens": 1173,
+    "cache_read_input_tokens": 5682,
+    "output_tokens": 424
+  },
+  "duracao_api_ms": 3328,
+  "duracao_parede_s": 7.49,
+  "custo_tabela_usd": 0.009504199999999999,
+  "registrado_em": "2026-11-25T19:54:21-0300"
+}
