@@ -11,6 +11,7 @@ import {
   formatDate,
   spotifyEmbedUrl,
   postLdGraph,
+  topicLdGraph,
   jsonLdScript,
 } from '../src/lib/blog.ts';
 import { AUTHOR_ID, AUTHOR_NAME, AUTHOR_URL, WEBSITE_ID } from '../src/consts.ts';
@@ -176,6 +177,73 @@ test('constantes do JSON-LD (#105): os @id da home e a URL da Person', () => {
   assert.equal(WEBSITE_ID, 'https://guifav.dev/#website');
   assert.equal(AUTHOR_URL, 'https://guifav.dev/');
   assert.equal(AUTHOR_NAME, 'Guilherme Favaron');
+});
+
+const TOPIC_LD_INPUT = {
+  name: 'Agentes de IA em produção',
+  description: 'Artigos sobre agentes de IA em produção na empresa.',
+  url: 'https://guifav.dev/blog/tema/agentes-de-ia/',
+  author: { id: 'https://guifav.dev/#person', name: 'Guilherme Favaron', url: 'https://guifav.dev/' },
+  websiteId: 'https://guifav.dev/#website',
+  crumbs: [
+    { name: 'Guilherme Favaron', url: 'https://guifav.dev/' },
+    { name: 'Insights', url: 'https://guifav.dev/blog/' },
+  ],
+  items: [
+    { name: 'Primeiro post', url: 'https://guifav.dev/blog/primeiro/' },
+    { name: 'Segundo post', url: 'https://guifav.dev/blog/segundo/' },
+  ],
+};
+
+test('topicLdGraph (#105): @graph com CollectionPage, BreadcrumbList e Person, nessa ordem e sem outros nós', () => {
+  const ld = topicLdGraph(TOPIC_LD_INPUT);
+  assert.deepEqual(Object.keys(ld), ['@context', '@graph']);
+  assert.deepEqual(nodes(ld).map((n) => n['@type']), ['CollectionPage', 'BreadcrumbList', 'Person']);
+  for (const n of nodes(ld)) assert.equal('@context' in n, false);
+});
+
+test('topicLdGraph: CollectionPage com @id, url, isPartOf, author, breadcrumb e ItemList em mainEntity', () => {
+  const col = byType(topicLdGraph(TOPIC_LD_INPUT), 'CollectionPage');
+  assert.equal(col['@id'], 'https://guifav.dev/blog/tema/agentes-de-ia/');
+  assert.equal(col.url, 'https://guifav.dev/blog/tema/agentes-de-ia/');
+  assert.equal(col.name, 'Agentes de IA em produção');
+  assert.equal(col.description, 'Artigos sobre agentes de IA em produção na empresa.');
+  assert.equal(col.inLanguage, 'pt-BR');
+  assert.deepEqual(col.isPartOf, { '@id': 'https://guifav.dev/#website' });
+  assert.deepEqual(col.author, { '@id': 'https://guifav.dev/#person' });
+  assert.deepEqual(col.breadcrumb, { '@id': 'https://guifav.dev/blog/tema/agentes-de-ia/#breadcrumb' });
+  assert.deepEqual(col.mainEntity, {
+    '@type': 'ItemList',
+    itemListOrder: 'https://schema.org/ItemListOrderAscending',
+    numberOfItems: 2,
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Primeiro post', url: 'https://guifav.dev/blog/primeiro/' },
+      { '@type': 'ListItem', position: 2, name: 'Segundo post', url: 'https://guifav.dev/blog/segundo/' },
+    ],
+  });
+  // Cada ListItem traz só @type, position, name e url (sem entidade aninhada nem campos extras).
+  for (const item of col.mainEntity.itemListElement) {
+    assert.deepEqual(Object.keys(item).sort(), ['@type', 'name', 'position', 'url']);
+  }
+});
+
+test('topicLdGraph: BreadcrumbList com @id e trilha Home > Insights > tema', () => {
+  const breadcrumb = byType(topicLdGraph(TOPIC_LD_INPUT), 'BreadcrumbList');
+  assert.equal(breadcrumb['@id'], 'https://guifav.dev/blog/tema/agentes-de-ia/#breadcrumb');
+  assert.deepEqual(breadcrumb.itemListElement, [
+    { '@type': 'ListItem', position: 1, name: 'Guilherme Favaron', item: 'https://guifav.dev/' },
+    { '@type': 'ListItem', position: 2, name: 'Insights', item: 'https://guifav.dev/blog/' },
+    { '@type': 'ListItem', position: 3, name: 'Agentes de IA em produção', item: 'https://guifav.dev/blog/tema/agentes-de-ia/' },
+  ]);
+});
+
+test('topicLdGraph: nó Person mínimo igual ao dos posts', () => {
+  assert.deepEqual(byType(topicLdGraph(TOPIC_LD_INPUT), 'Person'), {
+    '@type': 'Person',
+    '@id': 'https://guifav.dev/#person',
+    name: 'Guilherme Favaron',
+    url: 'https://guifav.dev/',
+  });
 });
 
 test('jsonLdScript não deixa o conteúdo fechar a tag script', () => {

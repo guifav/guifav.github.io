@@ -1,11 +1,11 @@
 ---
 // Página de tema (#104): /blog/tema/<id>/. Migalha, abertura, chamada da conversão, posts em ordem de leitura com a
 // pergunta que cada um responde e o quadro da chamada no fim. Desenho do Fable 5.2 com os ajustes do agy contra a
-// canibalização (registro no PR da #104). Os dados estruturados (BreadcrumbList, CollectionPage) ficam na #105.
+// canibalização (registro no PR da #104). Os dados estruturados (CollectionPage, ItemList, BreadcrumbList, Person) são da #105.
 import Base from '../../layouts/Base.astro';
 import CtaLine from '../../components/CtaLine.astro';
-import { AUTHOR_NAME, BLOG_NAME } from '../../consts';
-import { formatDate, postPath } from '../../lib/blog';
+import { AUTHOR_ID, AUTHOR_NAME, AUTHOR_URL, BLOG_NAME, WEBSITE_ID } from '../../consts';
+import { absoluteUrl, formatDate, postPath, topicLdGraph } from '../../lib/blog';
 import { sortedPosts, type Post } from '../../lib/posts';
 import { CTA_LOCATION_END, CTA_LOCATION_TOP, TOPICS, topicPosts, topicProblems, type Topic } from '../../lib/topics';
 
@@ -23,8 +23,25 @@ interface Props {
 
 const { topic, posts } = Astro.props;
 const base = import.meta.env.BASE_URL;
+const site = Astro.site!.href;
+const url = absoluteUrl(site, Astro.url.pathname);
+const ld = topicLdGraph({
+  name: topic.name,
+  description: topic.description,
+  url,
+  author: { id: AUTHOR_ID, name: AUTHOR_NAME, url: AUTHOR_URL },
+  websiteId: WEBSITE_ID,
+  crumbs: [
+    { name: AUTHOR_NAME, url: absoluteUrl(site, '/') },
+    { name: BLOG_NAME, url: absoluteUrl(site, base) },
+  ],
+  items: posts.map(({ post: p }) => ({
+    name: p.data.title,
+    url: absoluteUrl(site, postPath(base, p.id)),
+  })),
+});
 ---
-<Base title={`Artigos sobre ${topic.about} | ${AUTHOR_NAME}`} contentGroup="insights-lista" description={topic.description}>
+<Base title={`Artigos sobre ${topic.about} | ${AUTHOR_NAME}`} contentGroup="insights-lista" description={topic.description} jsonLd={ld}>
   <header class="blog-head topic-head">
     <p class="post-crumb">
       <a href="/">{AUTHOR_NAME}</a> <span aria-hidden="true">/</span> <a href={base}>{BLOG_NAME}</a>{' '}
