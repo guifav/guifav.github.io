@@ -23,7 +23,7 @@ Este artigo compartilha as lições aprendidas para transformar protótipos de I
 | Custos operacionais (6 meses) | Redução de 67% | Caching e roteamento inteligentes |
 | Caching semântico | 35% de redução de custos e 40% de cache hits | Correspondência por similaridade vetorial com invalidação ligada à lógica de negócio |
 | Performance média | Melhoria de 40% | Otimizações de infraestrutura |
-| Latência | Respostas consistentes de 3 segundos | Decisões arquiteturais voltadas a performance previsível, evitando respostas variáveis acima de 10 segundos |
+| Latência (preferência observada) | Usuários preferiram respostas consistentes de 3 segundos a respostas variáveis que às vezes passavam de 10 segundos | Latência imprevisível leva ao abandono; essa percepção orientou a arquitetura a priorizar performance previsível sobre velocidade de pico |
 | Disponibilidade (SLA) | 99,5% mesmo com picos de demanda 20x acima da média | Compromissos de serviço em camadas por criticidade, sistemas redundantes em funções críticas e arquitetura de fallback multi-camada |
 
 ## Por que os custos de IA generativa sobem em escala e como controlá-los?
