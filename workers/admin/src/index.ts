@@ -1,13 +1,22 @@
-// Painel de assinantes da newsletter em guifav.dev/admin (issue #40). Só o Gui: Cloudflare Access na frente e o
-// JWT do Access conferido aqui de novo. Lê a cópia do segmento no D1 (cron de hora em hora, src/sync.ts).
-//   GET  /admin              lista, busca, filtros e contadores
-//   GET  /admin/export.csv   os mesmos filtros, em CSV
+// Painel do site em guifav.dev/admin (issues #40, #62, #82, #193). Só o Gui: Cloudflare Access na frente e o
+// JWT do Access conferido aqui de novo. Lê só o D1 e o R2 do próprio Worker ao abrir.
+//   GET  /admin              resumo do painel (redireciona 303 para /admin/assinantes com filtros/msg de assinantes)
+//   GET  /admin/assinantes   lista de assinantes, busca, filtros e contadores (cópia do Resend, src/sync.ts)
+//   GET  /admin/export.csv   os mesmos filtros dos assinantes, em CSV
 //   POST /admin/unsubscribe  descadastra no Resend, com auditoria no contato, e atualiza a cópia
+//   GET  /admin/contatos     conversões do D1, filtros, paginação e links para o Twenty (src/painel.ts)
+//   GET  /admin/conteudos    materiais e arquivos, páginas de entrada e posts do catálogo (src/painel.ts)
 //   /admin/rascunhos...      rascunhos privados do blog, aprovação e disparo da publicação (src/drafts.ts, issues #62 e #82)
+// Cron (17 * * * *): copia o segmento do Resend (src/sync.ts) e o catálogo de posts (src/catalogo.ts), independentes.
 // Qualquer outro caminho que a rota pegue (ex.: /administrar) segue para o site no GitHub Pages.
 import { accessEmail } from './access.ts';
+import { coletarCatalogo, type CatalogDeps } from './catalogo.ts';
 import { handleDrafts, type DraftDeps, type R2Like } from './drafts.ts';
+import { esc, htmlPage, redirect, respond, text } from './layout.ts';
+import { contatosPage, conteudosPage, resumoPage } from './painel.ts';
 import { AUDIT_PROPERTY, prop, resend, syncSegment, SyncError, topicSubscription, type D1Like, type SyncDeps } from './sync.ts';
+
+export { esc };
 
 export interface Env {
   DB: D1Like;
@@ -18,33 +27,20 @@ export interface Env {
   ACCESS_AUD: string;
   ALLOWED_EMAILS: string; // segredo: emails separados por vírgula
   SITE_ORIGIN: string;
+  TWENTY_ORIGIN: string; // base do Twenty na KVM (ex.: https://crm.guifav.dev)
   DRAFTS: R2Like; // bucket R2 privado blog-rascunhos
   DRAFT_NOTIFY_FROM: string; // segredo: remetente do aviso de rascunho aprovado
   DRAFT_NOTIFY_TO: string; // segredo: quem recebe o aviso (o Roger)
   GITHUB_DISPATCH_TOKEN: string; // segredo: token fino só deste repositório, só com Actions (disparo da publicação, #82)
 }
 
-export type Deps = SyncDeps & Pick<DraftDeps, 'siteTimeoutMs' | 'githubTimeoutMs' | 'mailTimeoutMs' | 'remocaoMaxPaginas'> & { origin: (req: Request) => Promise<Response> };
+export type Deps = SyncDeps &
+  Pick<DraftDeps, 'siteTimeoutMs' | 'githubTimeoutMs' | 'mailTimeoutMs' | 'remocaoMaxPaginas'> &
+  Pick<CatalogDeps, 'catalogTimeoutMs'> & { origin: (req: Request) => Promise<Response> };
 
 export const PAGE_SIZE = 100;
 
-const SECURITY_HEADERS: Record<string, string> = {
-  'cache-control': 'no-store',
-  'x-robots-tag': 'noindex, nofollow',
-  'x-frame-options': 'DENY',
-  'x-content-type-options': 'nosniff',
-  'referrer-policy': 'same-origin', // no-referrer faz o POST do formulário sair com Origin: null (403)
-  'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
-};
-
-const respond = (status: number, body: string, type: string, extra: Record<string, string> = {}) =>
-  new Response(body, { status, headers: { 'content-type': type, ...SECURITY_HEADERS, ...extra } });
-const text = (status: number, body: string) => respond(status, body, 'text/plain; charset=utf-8');
-const redirect = (location: string) => new Response(null, { status: 303, headers: { location, ...SECURITY_HEADERS } });
-
-export function esc(s: unknown): string {
-  return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
-}
+const SUBSCRIBER_QUERY_KEYS = ['q', 'status', 'origem', 'pago', 'p', 'msg'] as const;
 
 /** Célula de CSV: aspas sempre e neutraliza fórmula (=, +, -, @, tab, CR) para quem abrir no Excel ou Sheets. */
 export function csvCell(v: unknown): string {
@@ -121,26 +117,20 @@ function page(f: Filters, data: Awaited<ReturnType<typeof query>>, k: Awaited<Re
   </tr>`).join('');
   const pages = Math.max(1, Math.ceil(data.filtered / PAGE_SIZE));
   const err = k.m.last_sync_error ? `<p class="erro">Última sincronização com erro: ${esc(k.m.last_sync_error)}</p>` : '';
-  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="robots" content="noindex, nofollow"><title>Assinantes | Expert Insights</title>
-<style>body{font:15px/1.45 system-ui,sans-serif;margin:1.5rem;color:#111}table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid #ddd;padding:.35rem .5rem;text-align:left;vertical-align:top}
-.k{display:flex;flex-wrap:wrap;gap:1rem;margin:.5rem 0 1rem}.k div{background:#f4f4f4;padding:.4rem .7rem;border-radius:6px}.erro{color:#a00}.ok{color:#060}form.f{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem}
-td form{margin:0}</style></head><body>
-<p>Assinantes · <a href="/admin/rascunhos">Rascunhos</a></p>
-<h1>Assinantes dos Expert Insights</h1>
+  const body = `<h1>Assinantes dos Expert Insights</h1>
 ${msg ? `<p class="ok">${esc(msg)}</p>` : ''}${err}
 <div class="k"><div>Total ${n(k.c.total)}</div><div>Inscritos ${n(k.c.inscritos)}</div><div>Descadastrados ${n(k.c.descadastrados)}</div>
 <div>Substack ${n(k.c.substack)}</div><div>Site ${n(k.c.site)}</div><div>Outra origem ${n(k.c.outra)}</div><div>Pagos ativos ${n(k.c.pagos)}</div></div>
 <p>Atualizado do Resend em ${esc(k.m.last_sync_at || 'nunca')}. Atualização automática a cada hora.</p>
-<form class="f" method="get" action="/admin"><input name="q" value="${esc(f.q)}" placeholder="buscar email" aria-label="buscar email">
+<form class="f" method="get" action="/admin/assinantes"><input name="q" value="${esc(f.q)}" placeholder="buscar email" aria-label="buscar email">
 ${opt('status', f.status, [['', 'todos os status'], ['inscrito', 'inscritos'], ['descadastrado', 'descadastrados']])}
 ${opt('origem', f.origin, [['', 'todas as origens'], ['substack', 'Substack'], ['site', 'site'], ['outra', 'outra']])}
 ${opt('pago', f.paid, [['', 'pagos e gratuitos'], ['sim', 'pagos'], ['nao', 'gratuitos']])}
-<button>Filtrar</button> <a href="/admin">limpar</a> <a href="/admin/export.csv${qs({ page: 1 })}">exportar CSV</a></form>
+<button>Filtrar</button> <a href="/admin/assinantes">limpar</a> <a href="/admin/export.csv${qs({ page: 1 })}">exportar CSV</a></form>
 <p>${data.filtered} encontrados${pages > 1 ? `, página ${f.page} de ${pages}` : ''}.</p>
 <table><thead><tr><th>Email</th><th>Status</th><th>Origem</th><th>Entrada</th><th>Pago até</th><th></th></tr></thead><tbody>${rows}</tbody></table>
-<p>${f.page > 1 ? `<a href="/admin${qs({ page: f.page - 1 })}">anterior</a> ` : ''}${f.page < pages ? `<a href="/admin${qs({ page: f.page + 1 })}">próxima</a>` : ''}</p>
-</body></html>`;
+<p>${f.page > 1 ? `<a href="/admin/assinantes${qs({ page: f.page - 1 })}">anterior</a> ` : ''}${f.page < pages ? `<a href="/admin/assinantes${qs({ page: f.page + 1 })}">próxima</a>` : ''}</p>`;
+  return htmlPage({ title: 'Assinantes | Expert Insights', atual: 'assinantes', body });
 }
 
 async function unsubscribe(req: Request, env: Env, deps: Deps): Promise<Response> {
@@ -153,7 +143,7 @@ async function unsubscribe(req: Request, env: Env, deps: Deps): Promise<Response
   const id = form.get('id') ?? '';
   if (form.get('confirmar') !== 'sim') return text(400, 'marque "confirmo" para descadastrar');
   if (!env.TOPIC_ID) return text(500, 'painel sem configuração do tópico; nada foi alterado');
-  const fail = (msg: string) => respond(502, `<!doctype html><meta charset="utf-8"><p>${esc(msg)} <a href="/admin">voltar</a></p>`,
+  const fail = (msg: string) => respond(502, `<!doctype html><meta charset="utf-8"><p>${esc(msg)} <a href="/admin/assinantes">voltar</a></p>`,
     'text/html; charset=utf-8');
   let row: { id: string } | null;
   try {
@@ -183,7 +173,7 @@ async function unsubscribe(req: Request, env: Env, deps: Deps): Promise<Response
   } catch {
     return fail('Descadastrado no Resend, mas a cópia do painel não foi atualizada; a próxima sincronização (a cada hora) corrige.');
   }
-  return redirect('/admin?msg=descadastrado');
+  return redirect('/admin/assinantes?msg=descadastrado');
 }
 
 export function isAdminPath(pathname: string): boolean {
@@ -204,10 +194,26 @@ export async function handle(req: Request, env: Env, deps: Deps): Promise<Respon
   if (draft) return draft;
 
   const p = url.pathname.replace(/\/+$/, '') || '/admin';
-  if (p === '/admin' && req.method === 'GET') {
+  if (p === '/admin') {
+    if (req.method !== 'GET') return text(405, 'método não permitido');
+    if (SUBSCRIBER_QUERY_KEYS.some((k) => url.searchParams.has(k))) {
+      return redirect(`/admin/assinantes${url.search}`);
+    }
+    return resumoPage(env, deps.now(), () => counters(env.DB));
+  }
+  if (p === '/admin/assinantes') {
+    if (req.method !== 'GET') return text(405, 'método não permitido');
     const f = filtersFrom(url);
     const msg = url.searchParams.get('msg') === 'descadastrado' ? 'Descadastrado no Resend.' : '';
     return respond(200, page(f, await query(env.DB, f, false), await counters(env.DB), msg), 'text/html; charset=utf-8');
+  }
+  if (p === '/admin/contatos') {
+    if (req.method !== 'GET') return text(405, 'método não permitido');
+    return contatosPage(url, env);
+  }
+  if (p === '/admin/conteudos') {
+    if (req.method !== 'GET') return text(405, 'método não permitido');
+    return conteudosPage(url, env, deps.now());
   }
   if (p === '/admin/export.csv' && req.method === 'GET') {
     const { rows } = await query(env.DB, filtersFrom(url), true);
@@ -233,6 +239,8 @@ const deps = (): Deps => ({
 export default {
   fetch: (req: Request, env: Env) => handle(req, env, deps()),
   scheduled: async (_c: unknown, env: Env, ctx: { waitUntil(p: Promise<unknown>): void }) => {
-    ctx.waitUntil(syncSegment(env, deps()));
+    const d = deps();
+    ctx.waitUntil(syncSegment(env, d));
+    ctx.waitUntil(coletarCatalogo(env, d));
   },
 };

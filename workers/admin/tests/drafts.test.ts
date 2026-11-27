@@ -15,6 +15,7 @@ const tomlVar = (k: string) => TOML.match(new RegExp(`^${k}\\s*=\\s*"([^"]*)"`, 
 const TEAM = tomlVar('ACCESS_TEAM_DOMAIN');
 const AUD = tomlVar('ACCESS_AUD');
 const ORIGIN = tomlVar('SITE_ORIGIN');
+const TWENTY = tomlVar('TWENTY_ORIGIN');
 const GUI = 'gui@exemplo.com';
 const SHA = (c: string) => c.repeat(64);
 
@@ -268,7 +269,7 @@ function setup(opts: { mailStatus?: number; mailThrows?: boolean; mailPendente?:
   const db = d1(falha);
   const bucket = r2();
   const env: Env = { DB: db, RESEND_API_KEY: 're_test', SEGMENT_ID: 's', TOPIC_ID: 't', ACCESS_TEAM_DOMAIN: TEAM, ACCESS_AUD: AUD,
-    ALLOWED_EMAILS: GUI, SITE_ORIGIN: ORIGIN, DRAFTS: bucket,
+    ALLOWED_EMAILS: GUI, SITE_ORIGIN: ORIGIN, TWENTY_ORIGIN: TWENTY, DRAFTS: bucket,
     DRAFT_NOTIFY_FROM: opts.notify === false ? '' : 'Painel <painel@guifav.dev>', DRAFT_NOTIFY_TO: opts.notify === false ? '' : 'roger@exemplo.com',
     GITHUB_DISPATCH_TOKEN: opts.token ?? 'gh-teste' };
   const deps: Deps = { fetch: fetchFn as typeof fetch, now: () => relogio.t, sleep: async () => {}, origin: async () => new Response('pages'),
@@ -325,10 +326,14 @@ test('R2: lista vazia, e com rascunhos: título escapado, slug, data e estado; m
   assert.equal((await s.req('/admin/rascunhos', { method: 'POST' })).status, 405);
 });
 
-test('R2: o painel de assinantes tem o link para os rascunhos', async () => {
+test('R2: navegação comum no painel de assinantes e na lista de rascunhos', async () => {
   const s = setup();
-  const body = await (await s.req('/admin')).text();
-  assert.match(body, /<a href="\/admin\/rascunhos">Rascunhos<\/a>/);
+  const assinantes = await (await s.req('/admin/assinantes')).text();
+  assert.match(assinantes, /<a href="\/admin\/rascunhos">Rascunhos<\/a>/);
+  const rascunhos = await (await s.req('/admin/rascunhos')).text();
+  assert.ok(rascunhos.includes(
+    '<p><a href="/admin">Resumo</a> · <a href="/admin/assinantes">Assinantes</a> · Rascunhos · <a href="/admin/contatos">Contatos</a> · <a href="/admin/conteudos">Conteúdos</a></p>',
+  ));
 });
 
 // ------------------------------------------------------------------ R3: prévia
