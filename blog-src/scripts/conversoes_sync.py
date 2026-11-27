@@ -230,6 +230,9 @@ GA4_PURGE_PENDENTE_MSG = (
     "remoção no GA4 pendente na fila para o job diário: confira o papel de Editor da conta de serviço na propriedade GA4"
 )
 BQ_PURGE_PENDENTE_MSG = "remoção no BigQuery pendente na fila para o job diário"
+BQ_FILA_COM_ERRO_MSG = (
+    "há remoções no BigQuery com erro na fila (o job diário repete e alerta em bq_remocao_falhou ou bq_sessoes_excedidas)"
+)
 GA4_FILA_SEM_CRED_MSG = "remoção no GA4 e no BigQuery enfileirada para o job diário (sem credencial GCP neste ambiente)"
 SITE_UID_RE = re.compile(r"[0-9A-Za-z]{1,128}")  # CHECK da migração 0013 (site_identities) e 0014 (ga4_purge_queue)
 BQ_TABLE_SUFFIX_RE = re.compile(r"(?:intraday_)?\d{8}")
@@ -1212,6 +1215,7 @@ def processar_fila_ga4(
 
         bq_done = bool(int(r.get("bq_concluido") or 0))
         bq_failed = False
+        bq_erro = None
         new_tent = bq_tent
         # Sessões conhecidas: as salvas e as que a descoberta desta tentativa gravar antes do primeiro DELETE.
         known = {"sessoes": list(saved_sessoes)}
@@ -1253,10 +1257,12 @@ def processar_fila_ga4(
                         res["bq_remocao_travada"] += 1
             except SessoesExcedidas:
                 bq_failed = True
+                bq_erro = "sessoes_excedidas"
                 res["bq_sessoes_excedidas"] += 1
                 next_due = stamp(now + timedelta(days=1))
             except (GoogleIndisponivel, OSError):
                 bq_failed = True
+                bq_erro = "falhou"
                 res["bq_remocao_falhou"] += 1
                 next_due = now_iso
 
@@ -1266,9 +1272,9 @@ def processar_fila_ga4(
         elif bq_failed:
             # As sessões já gravadas por `persistir` ficam como estão (nada de sobrescrever com uma lista velha).
             c.d1(
-                "UPDATE ga4_purge_queue SET ga4_pendente = ?, bq_tentativas = ?, proxima_em = ? "
+                "UPDATE ga4_purge_queue SET ga4_pendente = ?, bq_tentativas = ?, bq_erro = ?, proxima_em = ? "
                 "WHERE uid = ? AND geracao = ?",
-                [ga4_pend, bq_tent, next_due, uid, gen],
+                [ga4_pend, bq_tent, bq_erro, next_due, uid, gen],
             )
             res["ga4_fila_restantes"] += 1
             if stop_on_bq_error:
@@ -1276,7 +1282,7 @@ def processar_fila_ga4(
         else:
             c.d1(
                 "UPDATE ga4_purge_queue SET ga4_pendente = ?, sessoes = ?, bq_tentativas = ?, bq_concluido = ?, "
-                "proxima_em = ? WHERE uid = ? AND geracao = ?",
+                "bq_erro = NULL, proxima_em = ? WHERE uid = ? AND geracao = ?",
                 [ga4_pend, _dump_sessoes_json(known["sessoes"]), new_tent, 1 if bq_done else 0, next_due, uid, gen],
             )
             res["ga4_fila_processados"] += 1
@@ -1407,9 +1413,14 @@ def forget(
         counts["ga4_fila_pendente_total"] = int(
             c.d1("SELECT count(*) AS n FROM ga4_purge_queue WHERE ga4_pendente = 1")[0]["n"]
         )
+        counts["bq_fila_com_erro_total"] = int(
+            c.d1("SELECT count(*) AS n FROM ga4_purge_queue WHERE bq_erro IS NOT NULL")[0]["n"]
+        )
     _report(counts, out, FORGET_MARK if apply else "simulação: nada foi apagado (use --apply)")
     if apply and counts.get("ga4_fila_pendente_total", 0) > 0 and not ga4_pendente and not sem_cred_enfileirado:
         print(GA4_FILA_PENDENTE_MSG, file=out)
+    if apply and counts.get("bq_fila_com_erro_total", 0) > 0 and not bq_falhou:
+        print(BQ_FILA_COM_ERRO_MSG, file=out)
     if apply and sem_cred_enfileirado:
         print(GA4_FILA_SEM_CRED_MSG, file=out)
     else:
@@ -1476,7 +1487,8 @@ def main(
             )
             if a.apply and (counts.get("ga4_remocao_pendente", 0) > 0 or counts.get("bq_remocao_falhou", 0) > 0
                             or counts.get("bq_sessoes_excedidas", 0) > 0
-                            or counts.get("ga4_fila_pendente_total", 0) > 0):
+                            or counts.get("ga4_fila_pendente_total", 0) > 0
+                            or counts.get("bq_fila_com_erro_total", 0) > 0):
                 rc = 2
         else:
             run(c, apply=a.apply)

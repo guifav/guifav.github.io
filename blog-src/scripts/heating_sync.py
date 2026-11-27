@@ -2195,9 +2195,14 @@ def optout(
         counts["ga4_fila_pendente_total"] = int(
             c.d1("SELECT count(*) AS n FROM ga4_purge_queue WHERE ga4_pendente = 1")[0]["n"]
         )
+        counts["bq_fila_com_erro_total"] = int(
+            c.d1("SELECT count(*) AS n FROM ga4_purge_queue WHERE bq_erro IS NOT NULL")[0]["n"]
+        )
     CS._report(counts, out, "oposição registrada" if apply else "simulação: nada foi apagado (use --apply)")
     if apply and counts.get("ga4_fila_pendente_total", 0) > 0 and not ga4_pendente and not sem_cred_enfileirado:
         print(CS.GA4_FILA_PENDENTE_MSG, file=out)
+    if apply and counts.get("bq_fila_com_erro_total", 0) > 0 and not bq_falhou:
+        print(CS.BQ_FILA_COM_ERRO_MSG, file=out)
     if apply and sem_cred_enfileirado:
         print(GA4_FILA_SEM_CRED_MSG, file=out)
     else:
@@ -2336,7 +2341,8 @@ def main(
                 )
                 if a.apply and (counts.get("ga4_remocao_pendente", 0) > 0 or counts.get("bq_remocao_falhou", 0) > 0
                                 or counts.get("bq_sessoes_excedidas", 0) > 0
-                                or counts.get("ga4_fila_pendente_total", 0) > 0):
+                                or counts.get("ga4_fila_pendente_total", 0) > 0
+                                or counts.get("bq_fila_com_erro_total", 0) > 0):
                     rc = 2
             else:
                 forget_curso(c, a.forget_curso, lines[0], apply=a.apply, forget_key=forget_key)

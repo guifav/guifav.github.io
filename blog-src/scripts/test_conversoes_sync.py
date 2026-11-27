@@ -1910,6 +1910,38 @@ class ForgetGooglePurgeTest(unittest.TestCase):
         self.assertIn("bq_sessoes_excedidas: 1", out)
         self.assertIn(S.BQ_PURGE_PENDENTE_MSG, out)
         self.assertNotIn("UidMuitasF1", out)
+        # Repetir o --forget com o vínculo já apagado continua avisando e saindo com 2 (Kimi P2, rodada 4).
+        rc2, out2 = self._run_cli(f, "--forget", "--apply", stdin="muitas@x.com\n",
+                                  ga4_delete=lambda _u: True, bq_delete=bq_muitas)
+        self.assertEqual(rc2, 2, out2)
+        self.assertIn("bq_fila_com_erro_total: 1", out2)
+        self.assertIn(S.BQ_FILA_COM_ERRO_MSG, out2)
+
+        # Falha operacional do BigQuery com GA4 feito: o mesmo aviso na repetição.
+        g = Fake(people=[person("p2", "falha@x.com")])
+        g.add(2, "falha@x.com")
+        run(g, apply=True)
+        g.add_identity("UidFalhaF2", "falha@x.com")
+
+        def bq_fora(uid, saved):
+            raise S.GoogleIndisponivel("BigQuery fora")
+
+        rc_g1, _ = self._run_cli(g, "--forget", "--apply", stdin="falha@x.com\n", ga4_delete=lambda _u: True, bq_delete=bq_fora)
+        rc_g2, out_g2 = self._run_cli(g, "--forget", "--apply", stdin="falha@x.com\n", ga4_delete=lambda _u: True, bq_delete=bq_fora)
+        self.assertEqual((rc_g1, rc_g2), (2, 2), out_g2)
+        self.assertIn("bq_fila_com_erro_total: 1", out_g2)
+        self.assertEqual(g.db.execute("SELECT bq_erro FROM ga4_purge_queue").fetchone()[0], "falhou")
+
+        # Repetição normal (D+1 pendente, sem erro) não é erro: GA4 feito, BigQuery rodou, código 0.
+        h = Fake(people=[person("p3", "normal@x.com")])
+        h.add(3, "normal@x.com")
+        run(h, apply=True)
+        h.add_identity("UidNormalF3", "normal@x.com")
+        ok_bq = lambda _u, _s: {"tabelas_limpas": 1, "adiadas": 0, "sessoes": []}
+        rc_h1, out_h1 = self._run_cli(h, "--forget", "--apply", stdin="normal@x.com\n", ga4_delete=lambda _u: True, bq_delete=ok_bq)
+        rc_h2, out_h2 = self._run_cli(h, "--forget", "--apply", stdin="normal@x.com\n", ga4_delete=lambda _u: True, bq_delete=ok_bq)
+        self.assertEqual((rc_h1, rc_h2), (0, 0), out_h1 + out_h2)
+        self.assertIn("bq_fila_com_erro_total: 0", out_h2)
 
     def test_forget_ga4_403_bq_falha_e_sem_sa_file(self):
         from datetime import datetime, timedelta, timezone

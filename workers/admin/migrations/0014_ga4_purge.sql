@@ -22,6 +22,10 @@ CREATE TABLE IF NOT EXISTS ga4_purge_queue (
     CHECK (bq_concluido IN (0, 1)),
   geracao INTEGER NOT NULL DEFAULT 0
     CHECK (geracao >= 0),
+  -- Erro da última tentativa no BigQuery ('falhou' ou 'sessoes_excedidas'); NULL quando a última tentativa rodou. As
+  -- repetições normais (D+1, D+3, tabela adiada) não são erro. O --forget e o --optout avisam enquanto houver erro.
+  bq_erro TEXT
+    CHECK (bq_erro IS NULL OR bq_erro IN ('falhou', 'sessoes_excedidas')),
   proxima_em TEXT NOT NULL
     CHECK (proxima_em GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z'),
   criado_em TEXT NOT NULL

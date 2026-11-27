@@ -182,13 +182,14 @@ class Fake:
         bq_tentativas: int = 0,
         bq_concluido: int = 0,
         geracao: int = 0,
+        bq_erro: str | None = None,
         criado_em: str | None = None,
     ):
         self.db.execute(
             "INSERT INTO ga4_purge_queue "
-            "(uid, ga4_pendente, sessoes, bq_tentativas, bq_concluido, geracao, proxima_em, criado_em) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (uid, ga4_pendente, sessoes, bq_tentativas, bq_concluido, geracao, proxima_em, criado_em or NOW_ISO),
+            "(uid, ga4_pendente, sessoes, bq_tentativas, bq_concluido, geracao, bq_erro, proxima_em, criado_em) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (uid, ga4_pendente, sessoes, bq_tentativas, bq_concluido, geracao, bq_erro, proxima_em, criado_em or NOW_ISO),
         )
         self.db.commit()
 
@@ -2680,6 +2681,23 @@ class Ga4EBigQueryTest(unittest.TestCase):
         self.assertNotIn("UidMuitas9", txt)
         row = [r for r in f.purge_queue_rows() if r["uid"] == "UidMuitas9"][0]
         self.assertEqual((row["ga4_pendente"], row["bq_concluido"]), (0, 0))
+        self.assertEqual(f.db.execute("SELECT bq_erro FROM ga4_purge_queue WHERE uid = 'UidMuitas9'").fetchone()[0],
+                         "sessoes_excedidas")
+        # Repetir o comando (vínculo já apagado, nada a processar para o email) continua avisando e sai com 2.
+        rc2, txt2 = self._cli(f, "--optout", "--apply", stdin="muitas@corp.com\n",
+                              ga4_delete=lambda _u: True, bq_delete=bq_muitas)
+        self.assertEqual(rc2, 2, txt2)
+        self.assertIn("bq_fila_com_erro_total: 1", txt2)
+        self.assertIn(CS.BQ_FILA_COM_ERRO_MSG, txt2)
+        # O job diário que conclui a tentativa limpa o erro, e a repetição volta a sair com 0.
+        f.db.execute("UPDATE ga4_purge_queue SET proxima_em = ? WHERE uid = 'UidMuitas9'", (NOW_ISO,))
+        f.db.commit()
+        run_job(f, apply=True, bq_delete=lambda _u, _s: {"tabelas_limpas": 1, "adiadas": 0, "sessoes": []})
+        self.assertIsNone(f.db.execute("SELECT bq_erro FROM ga4_purge_queue WHERE uid = 'UidMuitas9'").fetchone()[0])
+        rc3, txt3 = self._cli(f, "--optout", "--apply", stdin="muitas@corp.com\n")
+        self.assertEqual(rc3, 0, txt3)
+        self.assertIn("bq_fila_com_erro_total: 0", txt3)
+        self.assertNotIn(CS.BQ_FILA_COM_ERRO_MSG, txt3)
 
     def test_ga4_sem_vinculo_oposicao_e_ligacao_so_na_sessao(self):
         f = Fake(schema=True)
@@ -2964,6 +2982,7 @@ class Ga4EBigQueryTest(unittest.TestCase):
             {"uid": "UidOk1", "bq_tentativas": -1},
             {"uid": "UidOk1", "bq_tentativas": 6},
             {"uid": "UidOk1", "geracao": -1},
+            {"uid": "UidOk1", "bq_erro": "outro"},
             {"uid": "UidOk1", "proxima_em": "2026-11-27"},
             {"uid": "UidOk1", "criado_em": "2026-11-27"},
         ):
