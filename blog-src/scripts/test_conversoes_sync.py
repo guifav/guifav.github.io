@@ -65,17 +65,18 @@ class Fake:
 
     # ---- D1 ----
     def add(self, n, email, action="material_download", material="planilha-custos-ia", interests=(CUSTO,), when="2026-11-24T10:00:00.000Z",
-            verified=None, ga=None, request_id=None, file=None, synced=None, raw_interests=None, origem=None):
+            verified=None, ga=None, request_id=None, file=None, synced=None, raw_interests=None, origem=None, twenty_person_id=None):
         if verified is None:
             verified = 0 if action == "material_request" else 1
         if action == "material_download" and file is None:
             file = material
         o = origem or {}  # colunas da migração 0006 (issue #114), pelo nome da coluna
         self.db.execute("INSERT INTO conversions (id, email, action, material, interests, occurred_at, synced_at, verified, "
-                        "ga_client_id, request_id, file, " + ", ".join(S.ORIGEM_COLS) + ") VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        "ga_client_id, request_id, file, " + ", ".join(S.ORIGEM_COLS) + ", twenty_person_id) "
+                        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                         (hexid(n) if isinstance(n, int) else n, email, action, material,
                          raw_interests if raw_interests is not None else json.dumps(list(interests)), when, synced, verified,
-                         ga, request_id, file, *(o.get(k) for k in S.ORIGEM_COLS)))
+                         ga, request_id, file, *(o.get(k) for k in S.ORIGEM_COLS), twenty_person_id))
 
     def __del__(self):
         self.db_close()
@@ -1280,6 +1281,277 @@ class ForgetMarcadorTest(unittest.TestCase):
         # 5) Sync seguinte não encontra nem leva nada ao Twenty.
         counts, _ = run(f, apply=True)
         self.assertEqual((counts["pendentes_lidas"], len(f.convs)), (0, 0))
+
+
+# ---------------------------------------------------------------- Id da Pessoa no D1 (issue #193)
+
+
+class TwentyPersonIdTest(unittest.TestCase):
+    def test_sync_records_twenty_person_id_for_new_existing_multi_email_and_duplicate_person(self):
+        f = Fake(people=[person("p1", "existente@x.com", extra=["extra@x.com"])])
+        f.add(1, "existente@x.com")
+        f.add(2, "extra@x.com", when="2026-11-25T10:00:00.000Z")
+        f.add(3, "nova@x.com")
+        counts, _ = run(f, apply=True)
+        nova = next(p for p in f.people.values() if p["emails"]["primaryEmail"] == "nova@x.com")
+        self.assertEqual(f.row(1)["twenty_person_id"], "p1")
+        self.assertEqual(f.row(2)["twenty_person_id"], "p1")
+        self.assertEqual(f.row(3)["twenty_person_id"], nova["id"])
+        self.assertEqual(counts["pessoa_id_invalido"], 0)
+        # Email em duas Pessoas: grava o id da mais antiga, a mesma que recebeu as Conversões.
+        g = Fake(people=[person("p2", "z@x.com", extra=["a@x.com"], created="2025-01-01T00:00:00.000Z"),
+                         person("p1", "a@x.com", created="2026-01-01T00:00:00.000Z")])
+        g.add(1, "a@x.com")
+        run(g, apply=True)
+        self.assertEqual(g.row(1)["twenty_person_id"], "p2")
+        self.assertEqual(list(g.convs.values())[0]["pessoaId"], "p2")
+
+    def test_pending_request_without_person_and_trashed_person_keep_null_id(self):
+        f = Fake(people=[person("p-lixo", "lixo@x.com", deletedAt="2026-11-24T00:00:00.000Z")])
+        f.add(1, "pedido@x.com", action="material_request")
+        f.add(2, "lixo@x.com")
+        counts, _ = run(f, apply=True)
+        self.assertEqual((counts["pedido_sem_pessoa"], counts["pessoa_na_lixeira"]), (1, 1))
+        self.assertIsNone(f.row(1)["synced_at"])
+        self.assertIsNone(f.row(1)["twenty_person_id"])
+        self.assertIsNone(f.row(2)["synced_at"])
+        self.assertIsNone(f.row(2)["twenty_person_id"])
+
+    def test_dry_run_writes_no_twenty_person_id_and_prints_new_counters(self):
+        f = Fake(people=[person("p1", "a@x.com")], schema=True)
+        f.add(1, "a@x.com")  # pendente
+        f.add(2, "b@x.com", synced="2026-11-20T10:00:00.000Z")  # antiga com Conversão
+        f.add(3, "c@x.com", synced="2026-11-20T11:00:00.000Z")  # antiga sem Conversão
+        f.convs["c2"] = {"id": "c2", "eventoId": hexid(2), "pessoaId": "p1"}
+        counts, out = run(f, apply=False)
+        self.assertEqual((f.twenty_writes(), f.d1_writes()), ([], []))
+        self.assertIsNone(f.row(1)["twenty_person_id"])
+        self.assertIsNone(f.row(2)["twenty_person_id"])
+        self.assertIsNone(f.row(3)["twenty_person_id"])
+        self.assertEqual((counts["ids_a_preencher"], counts["sem_conversao_no_crm"], counts["pessoa_id_invalido"]), (1, 1, 0))
+        for line in ("ids_a_preencher: 1", "sem_conversao_no_crm: 1", "pessoa_id_invalido: 0"):
+            self.assertIn(line, out)
+        # No retorno cedo (nada pendente nem a preencher), os três contadores também aparecem.
+        g = Fake()
+        counts, out = run(g, apply=False)
+        for line in ("ids_a_preencher: 0", "sem_conversao_no_crm: 0", "pessoa_id_invalido: 0", "nada pendente"):
+            self.assertIn(line, out)
+
+    def test_backfill_fills_old_rows_without_pending_or_twenty_writes(self):
+        f = Fake(people=[person("p1", "a@x.com")], schema=True)
+        synced = "2026-11-20T10:00:00.000Z"
+        f.add(1, "a@x.com", synced=synced)  # ativa no CRM
+        f.add(2, "a@x.com", synced=synced)  # na lixeira no CRM
+        f.add(3, "b@x.com", synced=synced)  # sem Conversão no CRM
+        f.add(4, "c@x.com", synced=synced)  # Conversão sem pessoaId
+        f.add(5, "d@x.com", synced=synced)  # Conversão com pessoaId com espaço
+        f.add(6, "e@x.com", synced=synced)  # Conversão com pessoaId de 65 caracteres
+        f.add(7, "f@x.com", synced=synced, twenty_person_id="p-ja-tem")  # já preenchida: não é tocada
+        f.convs["c1"] = {"id": "c1", "eventoId": hexid(1), "pessoaId": "550e8400-e29b-41d4-a716-446655440000"}
+        f.convs["c2"] = {"id": "c2", "eventoId": hexid(2), "pessoaId": "p-lixeira", "deletedAt": "2026-11-21T00:00:00.000Z"}
+        f.convs["c4"] = {"id": "c4", "eventoId": hexid(4), "pessoaId": None}
+        f.convs["c5"] = {"id": "c5", "eventoId": hexid(5), "pessoaId": "x y"}
+        f.convs["c6"] = {"id": "c6", "eventoId": hexid(6), "pessoaId": "a" * 65}
+        f.convs["c7"] = {"id": "c7", "eventoId": hexid(7), "pessoaId": "outro-id"}
+        counts, out = run(f, apply=True)
+        self.assertEqual(f.twenty_writes(), [])
+        self.assertEqual((counts["pendentes_lidas"], counts["ids_a_preencher"], counts["sem_conversao_no_crm"]), (0, 2, 4))
+        self.assertEqual(f.row(1)["twenty_person_id"], "550e8400-e29b-41d4-a716-446655440000")
+        self.assertEqual(f.row(2)["twenty_person_id"], "p-lixeira")
+        for n in (3, 4, 5, 6):
+            self.assertIsNone(f.row(n)["twenty_person_id"], n)
+        self.assertEqual(f.row(7)["twenty_person_id"], "p-ja-tem")
+        self.assertEqual(f.row(1)["synced_at"], synced)
+        self.assertIn("gravado", out)
+
+    def test_backfill_only_skips_people_listing(self):
+        f = Fake(people=[person("p1", "a@x.com")], schema=True)
+        f.add(1, "a@x.com", synced="2026-11-20T10:00:00.000Z")
+        f.convs["c1"] = {"id": "c1", "eventoId": hexid(1), "pessoaId": "p1"}
+        counts, _ = run(f, apply=True)
+        self.assertEqual([c for c in f.calls if c[1] == "/rest/people"], [])
+        self.assertEqual((counts["pendentes_lidas"], counts["ids_a_preencher"]), (0, 1))
+        self.assertEqual(f.row(1)["twenty_person_id"], "p1")
+        self.assertEqual(f.twenty_writes(), [])
+
+    def test_backfill_when_site_conversion_object_does_not_exist_yet(self):
+        f = Fake(schema=False)
+        f.add(1, "a@x.com", synced="2026-11-20T10:00:00.000Z")
+        f.add(2, "b@x.com", synced="2026-11-20T11:00:00.000Z")
+        counts, _ = run(f, apply=True)
+        self.assertEqual((f.twenty_writes(), f.d1_writes()), ([], []))
+        self.assertEqual((counts["ids_a_preencher"], counts["sem_conversao_no_crm"]), (0, 2))
+        self.assertIsNone(f.row(1)["twenty_person_id"])
+        self.assertIsNone(f.row(2)["twenty_person_id"])
+
+    def test_backfill_chunks_and_runs_after_normal_sync_writes(self):
+        f = Fake(people=[person("p1", "a@x.com")], schema=True)
+        synced = "2026-11-20T10:00:00.000Z"
+        for i in range(1, 56):
+            f.add(i, "a@x.com", synced=synced)
+            f.convs[f"c{i:03d}"] = {"id": f"c{i:03d}", "eventoId": hexid(i), "pessoaId": "p1"}
+        f.add(100, "a@x.com", when="2026-11-25T10:00:00.000Z")  # pendente na mesma rodada
+        counts, _ = run(f, apply=True)
+        self.assertEqual((counts["linhas_marcadas"], counts["ids_a_preencher"]), (1, 55))
+        self.assertEqual(f.row(100)["twenty_person_id"], "p1")
+        self.assertEqual(f.row(1)["twenty_person_id"], "p1")
+        self.assertEqual(f.row(55)["twenty_person_id"], "p1")
+        writes = f.d1_writes()
+        self.assertEqual(len(writes), 3)  # 1 do sync normal + 2 lotes (50 + 5) do preenchimento
+        self.assertIn("synced_at = ?", writes[0])
+        self.assertNotIn("synced_at = ?", writes[1])
+        self.assertNotIn("synced_at = ?", writes[2])
+
+    def test_invalid_person_id_from_twenty_marks_null_and_counts(self):
+        # Pessoa nova cuja criação no Twenty devolve id fora do padrão do CHECK.
+        def bad_create(method, path, data):
+            if method == "POST" and path == "/rest/people":
+                return 201, {"data": {"createPerson": {"id": "id inválido"}}}
+            return None
+        f = Fake(fail=bad_create)
+        f.add(1, "nova@x.com")
+        counts, out = run(f, apply=True)
+        self.assertEqual(len(f.convs), 1)
+        self.assertEqual(list(f.convs.values())[0]["pessoaId"], "id inválido")
+        self.assertEqual(f.pending(), [])
+        self.assertIsNone(f.row(1)["twenty_person_id"])
+        self.assertEqual(counts["pessoa_id_invalido"], 1)
+        self.assertIn("pessoa_id_invalido: 1", out)
+        # Pessoa existente cujo id está fora do padrão: conta na simulação e no --apply.
+        g = Fake(people=[person("id invalido", "a@x.com")])
+        g.add(1, "a@x.com")
+        counts_dry, out_dry = run(g, apply=False)
+        self.assertEqual(counts_dry["pessoa_id_invalido"], 1)
+        self.assertIn("pessoa_id_invalido: 1", out_dry)
+        counts_apply, _ = run(g, apply=True)
+        self.assertEqual(counts_apply["pessoa_id_invalido"], 1)
+        self.assertEqual(g.pending(), [])
+        self.assertIsNone(g.row(1)["twenty_person_id"])
+
+    def test_d1_check_refuses_invalid_twenty_person_id_and_accepts_uuid(self):
+        f = Fake()
+        for i, bad in enumerate(("a b", "a/b", "", "a" * 65, "id_com_underscore", "ação"), start=1):
+            with self.assertRaises(sqlite3.IntegrityError, msg=repr(bad)):
+                f.add(i, "a@x.com", twenty_person_id=bad)
+        f.add(10, "a@x.com", twenty_person_id="550e8400-e29b-41d4-a716-446655440000")
+        f.add(11, "a@x.com", twenty_person_id="A" * 64)
+        f.add(12, "a@x.com", twenty_person_id=None)
+        self.assertEqual(f.row(10)["twenty_person_id"], "550e8400-e29b-41d4-a716-446655440000")
+        self.assertEqual(f.row(11)["twenty_person_id"], "A" * 64)
+        self.assertIsNone(f.row(12)["twenty_person_id"])
+
+    def test_forget_deletes_twenty_person_id_only_for_that_email(self):
+        f = Fake(people=[person("p1", "a@x.com", extra=["b@x.com"])])
+        f.add(1, "a@x.com")
+        f.add(2, "a@x.com", action="material_request", when="2026-11-23T10:00:00.000Z")
+        f.add(3, "b@x.com", when="2026-11-25T10:00:00.000Z")
+        run(f, apply=True)
+        self.assertEqual((f.row(1)["twenty_person_id"], f.row(2)["twenty_person_id"], f.row(3)["twenty_person_id"]),
+                         ("p1", "p1", "p1"))
+        forget(f, "a@x.com", apply=True)
+        self.assertEqual(f.db.execute("SELECT count(*) FROM conversions WHERE email = ?", ("a@x.com",)).fetchone()[0], 0)
+        self.assertEqual(
+            f.db.execute("SELECT count(*) FROM conversions WHERE twenty_person_id = ? AND email = ?", ("p1", "a@x.com")).fetchone()[0],
+            0,
+        )
+        self.assertEqual(f.row(3)["twenty_person_id"], "p1")
+
+    def test_missing_migration_0008_fails_before_any_write(self):
+        def no_0008(method, path, data):
+            if path.endswith("/query") and "twenty_person_id" in data["sql"]:
+                return 400, {"success": False, "errors": [{"message": "no such column: twenty_person_id"}]}
+            return None
+        f = Fake(people=[person("p1", "a@x.com")], fail=no_0008)
+        f.add(1, "a@x.com")
+        f.db.execute("INSERT INTO forgotten (email_hmac, forgotten_at) VALUES (?, strftime('%Y-%m-%dT%H:%M:%fZ','now','-9 days'))", (hexid(1),))
+        f.db.commit()
+        with self.assertRaises(S.SyncError):
+            run(f, apply=True)
+        self.assertEqual((f.twenty_writes(), f.d1_writes()), ([], []))
+        self.assertEqual(f.db.execute("SELECT count(*) FROM forgotten").fetchone()[0], 1)
+
+    def test_pending_with_existing_conversion_uses_its_pessoa_id_not_current_email_person(self):
+        # Conversão já existe ligada a 'p-old', mas hoje o email resolve para 'p-new': grava 'p-old' sem recriar.
+        f = Fake(people=[person("p-new", "a@x.com")], schema=True)
+        f.convs["c1"] = {"id": "c1", "eventoId": hexid(1), "pessoaId": "p-old"}
+        f.add(1, "a@x.com")
+        counts_dry, _ = run(f, apply=False)
+        self.assertEqual(counts_dry["pessoa_id_invalido"], 0)
+        counts, _ = run(f, apply=True)
+        self.assertEqual((counts["conversoes_a_criar"], counts["conversoes_ja_no_crm"], counts["pessoa_id_invalido"]), (0, 1, 0))
+        self.assertEqual(len(f.convs), 1)
+        self.assertEqual(f.pending(), [])
+        self.assertIsNotNone(f.row(1)["synced_at"])
+        self.assertEqual(f.row(1)["twenty_person_id"], "p-old")
+
+    def test_pending_with_existing_conversion_without_pessoa_id_marks_null_and_counts_invalid(self):
+        # Mesma situação com pessoaId ausente na Conversão existente: marca nulo e conta 1 na simulação e no --apply.
+        f = Fake(people=[person("p-new", "a@x.com")], schema=True)
+        f.convs["c1"] = {"id": "c1", "eventoId": hexid(1)}
+        f.add(1, "a@x.com")
+        counts_dry, _ = run(f, apply=False)
+        self.assertEqual(counts_dry["pessoa_id_invalido"], 1)
+        counts, out = run(f, apply=True)
+        self.assertEqual((counts["conversoes_a_criar"], counts["conversoes_ja_no_crm"], counts["pessoa_id_invalido"]), (0, 1, 1))
+        self.assertIn("pessoa_id_invalido: 1", out)
+        self.assertEqual(f.pending(), [])
+        self.assertIsNotNone(f.row(1)["synced_at"])
+        self.assertIsNone(f.row(1)["twenty_person_id"])
+
+    def test_mixed_group_uses_existing_conversion_id_and_current_person_id_for_new(self):
+        # Grupo misto: existente ligada a 'p-old' fica com 'p-old'; nova recebe o pid da Pessoa atual ('p-new').
+        f = Fake(people=[person("p-new", "a@x.com")], schema=True)
+        f.convs["c1"] = {"id": "c1", "eventoId": hexid(1), "pessoaId": "p-old"}
+        f.add(1, "a@x.com", when="2026-11-24T10:00:00.000Z")
+        f.add(2, "a@x.com", when="2026-11-25T10:00:00.000Z")
+        counts, _ = run(f, apply=True)
+        self.assertEqual((counts["conversoes_a_criar"], counts["conversoes_ja_no_crm"], counts["pessoa_id_invalido"]), (1, 1, 0))
+        self.assertEqual(f.pending(), [])
+        self.assertEqual(f.row(1)["twenty_person_id"], "p-old")
+        self.assertEqual(f.row(2)["twenty_person_id"], "p-new")
+        self.assertEqual(conv_by_event(f)[hexid(2)]["pessoaId"], "p-new")
+        # Pessoa existente com id fora do padrão + grupo misto: conta só a linha nova, igual na simulação e no --apply.
+        g = Fake(people=[person("id invalido", "a@x.com")], schema=True)
+        g.convs["c1"] = {"id": "c1", "eventoId": hexid(1), "pessoaId": "p-old"}
+        g.add(1, "a@x.com", when="2026-11-24T10:00:00.000Z")
+        g.add(2, "a@x.com", when="2026-11-25T10:00:00.000Z")
+        counts_dry, _ = run(g, apply=False)
+        self.assertEqual(counts_dry["pessoa_id_invalido"], 1)
+        counts_apply, _ = run(g, apply=True)
+        self.assertEqual(counts_apply["pessoa_id_invalido"], 1)
+        self.assertEqual(g.pending(), [])
+        self.assertEqual(g.row(1)["twenty_person_id"], "p-old")
+        self.assertIsNone(g.row(2)["twenty_person_id"])
+
+    def test_pending_with_trashed_existing_conversion_uses_its_pessoa_id(self):
+        # Conversão já existe na lixeira ligada a 'p-old', com email hoje na Pessoa ativa 'p-new': grava 'p-old' sem recriar.
+        f = Fake(people=[person("p-new", "a@x.com")], schema=True)
+        f.convs["c1"] = {"id": "c1", "eventoId": hexid(1), "pessoaId": "p-old", "deletedAt": "2026-11-21T00:00:00.000Z"}
+        f.add(1, "a@x.com")
+        counts, _ = run(f, apply=True)
+        self.assertEqual(
+            (counts["conversoes_a_criar"], counts["conversoes_ja_no_crm"], counts["conversoes_na_lixeira"], counts["pessoa_id_invalido"]),
+            (0, 1, 1, 0),
+        )
+        self.assertEqual(len(f.convs), 1)
+        self.assertEqual(f.pending(), [])
+        self.assertEqual(f.row(1)["twenty_person_id"], "p-old")
+
+    def test_pending_with_existing_conversion_and_new_person_keeps_existing_pessoa_id(self):
+        # Conversão já existe ligada a 'p-old', email sem Pessoa (target None): cria Pessoa nova, mas mantém 'p-old' na linha.
+        f = Fake(schema=True)
+        f.convs["c1"] = {"id": "c1", "eventoId": hexid(1), "pessoaId": "p-old"}
+        f.add(1, "a@x.com")
+        counts, _ = run(f, apply=True)
+        (nova,) = f.people.values()
+        self.assertEqual(
+            (counts["pessoas_a_criar"], counts["conversoes_a_criar"], counts["conversoes_ja_no_crm"], counts["pessoa_id_invalido"]),
+            (1, 0, 1, 0),
+        )
+        self.assertEqual(len(f.convs), 1)
+        self.assertEqual(f.pending(), [])
+        self.assertEqual(f.row(1)["twenty_person_id"], "p-old")
+        self.assertNotEqual(f.row(1)["twenty_person_id"], nova["id"])
 
 
 if __name__ == "__main__":
