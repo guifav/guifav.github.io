@@ -839,7 +839,7 @@ test('as três condições do user_id, heating-uid-v1 sincronizado, sinais de an
   ]);
   assert.equal(s2.fetchCalls.length, 0);
 
-  // Outro uid na mesma sessão não herda heating-link-v1 nem heating-uid-v1 do primeiro uid: apaga heating-uid-v1, manda user_id null e devolve anúncios para granted (consent-v1 continua granted).
+  // Outro uid na mesma sessão não herda heating-link-v1 nem heating-uid-v1 do primeiro uid: apaga heating-uid-v1 e manda user_id null; os anúncios continuam negados porque o vínculo segue ligado neste navegador.
   const otherUid = await setupAuth({
     local,
     session,
@@ -847,13 +847,10 @@ test('as três condições do user_id, heating-uid-v1 sincronizado, sinais de an
   });
   assert.ok(otherUid.findClass('guifav-auth-notice'));
   assert.equal(local.getItem('heating-uid-v1'), null);
-  assert.deepEqual(otherUid.gtagCalls, [
-    ['set', { user_id: null }],
-    ['consent', 'update', AD_CONSENT_GRANTED],
-  ]);
+  assert.deepEqual(otherUid.gtagCalls, [['set', { user_id: null }]]);
   assert.equal(otherUid.fetchCalls.length, 0);
 
-  // Troca de usuário para outro uid na mesma página sem reload: limpa user_id e devolve os 3 de anúncio para granted.
+  // Troca de usuário para outro uid na mesma página sem reload: limpa user_id; anúncios seguem negados (vínculo ligado no navegador).
   const switchUser = await setupAuth({
     consent: { v: 'granted', t: NOW - 1000 },
     heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
@@ -862,10 +859,7 @@ test('as três condições do user_id, heating-uid-v1 sincronizado, sinais de an
   const callsBeforeSwitch = switchUser.gtagCalls.length;
   await switchUser.emitAuth(makeUser({ uid: 'UidDiferente999', displayName: 'Ana Paula' }));
   assert.equal(switchUser.local.getItem('heating-uid-v1'), null);
-  assert.deepEqual(switchUser.gtagCalls.slice(callsBeforeSwitch), [
-    ['set', { user_id: null }],
-    ['consent', 'update', AD_CONSENT_GRANTED],
-  ]);
+  assert.deepEqual(switchUser.gtagCalls.slice(callsBeforeSwitch), [['set', { user_id: null }]]);
 
   // Sem consent-v1 granted (cookies negados), mesmo com heating-link-v1 granted e heating-uid-v1 sobrando: apaga heating-uid-v1 e nada vai ao GA4 nem ao Worker.
   const noCookies = await setupAuth({
@@ -878,7 +872,7 @@ test('as três condições do user_id, heating-uid-v1 sincronizado, sinais de an
   assert.deepEqual(noCookies.gtagCalls, []);
   assert.equal(noCookies.fetchCalls.length, 0);
 
-  // Se heating-uid-v1 existia (snippet do <head> enviou user_id e negou anúncios), mas sessão Firebase não existe mais: limpa a chave, envia user_id null e devolve anúncios para granted.
+  // Se heating-uid-v1 existia (snippet do <head> enviou user_id e negou anúncios), mas sessão Firebase não existe mais: limpa a chave e envia user_id null; anúncios seguem negados (vínculo ligado).
   const staleSession = await setupAuth({
     consent: { v: 'granted', t: NOW - 1000 },
     heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
@@ -886,10 +880,7 @@ test('as três condições do user_id, heating-uid-v1 sincronizado, sinais de an
     initialUser: null,
   });
   assert.equal(staleSession.local.getItem('heating-uid-v1'), null);
-  assert.deepEqual(staleSession.gtagCalls, [
-    ['set', { user_id: null }],
-    ['consent', 'update', AD_CONSENT_GRANTED],
-  ]);
+  assert.deepEqual(staleSession.gtagCalls, [['set', { user_id: null }]]);
 
   // heating-link-v1 vencido (> 365 dias) não vale, limpa heating-uid-v1, devolve anúncios para granted e reabre o aviso.
   const expired = await setupAuth({
@@ -942,7 +933,7 @@ test('limpeza de heating-uid-v1, user_id null literal e retorno do consentimento
     ['consent', 'update', AD_CONSENT_GRANTED],
   ]);
 
-  // 3. Logout ("Sair"): limpa heating-uid-v1 e user_id, devolve os 3 de anúncio para granted, marca supressão na sessão, chama disableAutoSelect() e NÃO dispara One Tap.
+  // 3. Logout ("Sair"): limpa heating-uid-v1 e user_id, marca supressão na sessão, chama disableAutoSelect() e NÃO dispara One Tap; anúncios seguem negados (o vínculo deste navegador continua ligado).
   const s3 = await setupAuth({
     consent: { v: 'granted', t: NOW - 1000 },
     heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
@@ -960,17 +951,14 @@ test('limpeza de heating-uid-v1, user_id null literal e retorno do consentimento
   assert.equal(s3.oneTapDisableAutoSelects.length, 1);
   assert.equal(s3.oneTapPrompts.length, 0, 'Sair não pode disparar One Tap na mesma página');
   const sairCalls = s3.gtagCalls.slice(callsBeforeSair);
-  assert.deepEqual(sairCalls.slice(0, 2), [
-    ['set', { user_id: null }],
-    ['consent', 'update', AD_CONSENT_GRANTED],
-  ]);
+  assert.deepEqual(sairCalls.slice(0, 1), [['set', { user_id: null }]]);
   assert.equal(
     sairCalls.filter((c) => c[0] === 'consent' && c[1] === 'update').length,
-    1,
-    'devolve consentimento de anúncio uma única vez no logout',
+    0,
+    'com o vínculo ligado no navegador, o logout não devolve anúncios',
   );
 
-  // 3b. Mesmo com signOut lento/pendente, o clique em "Sair" já limpa heating-uid-v1, manda user_id null e devolve anúncios para granted sincronamente.
+  // 3b. Mesmo com signOut lento/pendente, o clique em "Sair" já limpa heating-uid-v1 e manda user_id null sincronamente.
   const s3b = await setupAuth({
     consent: { v: 'granted', t: NOW - 1000 },
     heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
@@ -981,10 +969,7 @@ test('limpeza de heating-uid-v1, user_id null literal e retorno do consentimento
   const callsBeforeOut = s3b.gtagCalls.length;
   await s3b.click(s3b.body.findAll((e) => e.textContent === 'Sair')[0]);
   assert.equal(s3b.local.getItem('heating-uid-v1'), null);
-  assert.deepEqual(s3b.gtagCalls.slice(callsBeforeOut), [
-    ['set', { user_id: null }],
-    ['consent', 'update', AD_CONSENT_GRANTED],
-  ]);
+  assert.deepEqual(s3b.gtagCalls.slice(callsBeforeOut), [['set', { user_id: null }]]);
 
   // 4. Visitante muda banner de cookies para "Não" (guifav-consent denied): limpa user_id e NÃO devolve anúncios para granted.
   const s4 = await setupAuth({
@@ -1040,7 +1025,7 @@ test('outra aba (evento storage): ressincroniza toggle, aviso, heating-uid-v1, u
   assert.equal(s2.local.getItem('heating-uid-v1'), null);
   assert.deepEqual(s2.gtagCalls.slice(calls2), [['set', { user_id: null }]]);
 
-  // 3. Outra aba remove heating-uid-v1 (ex.: logout lá) -> manda user_id null sem reescrever heating-uid-v1 e devolve anúncios para granted.
+  // 3. Outra aba remove heating-uid-v1 (ex.: logout lá) -> manda user_id null sem reescrever heating-uid-v1; anúncios seguem negados (vínculo ligado).
   const s3 = await setupAuth({
     consent: { v: 'granted', t: NOW - 1000 },
     heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
@@ -1049,12 +1034,9 @@ test('outra aba (evento storage): ressincroniza toggle, aviso, heating-uid-v1, u
   const calls3 = s3.gtagCalls.length;
   await s3.emitStorage('heating-uid-v1', null);
   assert.equal(s3.local.getItem('heating-uid-v1'), null);
-  assert.deepEqual(s3.gtagCalls.slice(calls3), [
-    ['set', { user_id: null }],
-    ['consent', 'update', AD_CONSENT_GRANTED],
-  ]);
+  assert.deepEqual(s3.gtagCalls.slice(calls3), [['set', { user_id: null }]]);
 
-  // 4. Outra aba troca heating-uid-v1 para outro uid -> manda user_id null nesta aba sem apagar o uid da outra aba e devolve anúncios para granted.
+  // 4. Outra aba troca heating-uid-v1 para outro uid -> manda user_id null nesta aba sem apagar o uid da outra aba; anúncios seguem negados.
   const s4 = await setupAuth({
     consent: { v: 'granted', t: NOW - 1000 },
     heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
@@ -1064,10 +1046,7 @@ test('outra aba (evento storage): ressincroniza toggle, aviso, heating-uid-v1, u
   const otherUidVal = JSON.stringify({ uid: 'UidOutraConta9', t: NOW });
   await s4.emitStorage('heating-uid-v1', otherUidVal);
   assert.equal(s4.local.getItem('heating-uid-v1'), otherUidVal);
-  assert.deepEqual(s4.gtagCalls.slice(calls4), [
-    ['set', { user_id: null }],
-    ['consent', 'update', AD_CONSENT_GRANTED],
-  ]);
+  assert.deepEqual(s4.gtagCalls.slice(calls4), [['set', { user_id: null }]]);
 
   // 5. Outra aba chama localStorage.clear() (key === null) -> manda user_id null e NÃO devolve anúncios para granted.
   const s5 = await setupAuth({
@@ -1407,4 +1386,34 @@ test('antes do banner: clique em Entrar com popup fechado e sessão IDB que reso
   assert.equal(staleIdbGisPresent.firebaseImports.length, 2);
   assert.equal(staleIdbGisPresent.oneTapInits.length, 0);
   assert.equal(staleIdbGisPresent.oneTapPrompts.length, 0);
+});
+
+test('antes de o Firebase responder: Sim no banner não apaga o uid do <head> nem devolve anúncios; Não revoga na hora', async () => {
+  // Visitante identificado pelo <head> reabre "Cookies" e clica em Sim antes de o onAuthStateChanged chegar.
+  const s = await setupAuth({
+    consent: { v: 'granted', t: NOW - 1000 },
+    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
+    heatingUid: { uid: 'UidCurso123ABC', t: NOW - 1000 },
+  });
+  const before = s.gtagCalls.length;
+  await s.emitConsent('granted');
+  assert.ok(s.local.getItem('heating-uid-v1'), 'o uid do <head> continua até o Firebase decidir');
+  assert.deepEqual(s.gtagCalls.slice(before), [], 'nada de user_id null nem anúncio concedido antes de o Firebase responder');
+
+  // O Firebase confirma a sessão: identificação normal, com anúncios negados antes do user_id.
+  await s.emitAuth(makeUser());
+  const ids = s.gtagCalls.filter((c) => c[0] === 'set' && typeof c[1] === 'object' && (c[1] as { user_id?: unknown }).user_id === 'UidCurso123ABC');
+  assert.equal(ids.length, 1);
+
+  // Revogação explícita (banner Não) antes de o Firebase responder: limpa na hora, sem devolver anúncios.
+  const r = await setupAuth({
+    consent: { v: 'granted', t: NOW - 1000 },
+    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
+    heatingUid: { uid: 'UidCurso123ABC', t: NOW - 1000 },
+  });
+  const beforeR = r.gtagCalls.length;
+  r.local.setItem('consent-v1', JSON.stringify({ v: 'denied', t: NOW }));
+  await r.emitConsent('denied');
+  assert.equal(r.local.getItem('heating-uid-v1'), null);
+  assert.deepEqual(r.gtagCalls.slice(beforeR), [['set', { user_id: null }]]);
 });

@@ -99,6 +99,7 @@ type SetupOpts = {
 function setup(opts: SetupOpts = {}) {
   resetJwksCache();
   let jwksFetches = 0;
+  let jwksKeysAtual = opts.jwksKeys;
   const rl: string[] = [];
   const db = d1(opts.d1Falha, opts.d1Mensagem ?? 'D1_ERROR: falha para leitor@exemplo.com');
   const pending: Promise<unknown>[] = [];
@@ -121,7 +122,7 @@ function setup(opts: SetupOpts = {}) {
       const headers: Record<string, string> = { 'content-type': 'application/json' };
       const cc = opts.jwksCacheControl === undefined ? 'public, max-age=3600' : opts.jwksCacheControl;
       if (cc !== null) headers['cache-control'] = cc;
-      return new Response(JSON.stringify({ keys: opts.jwksKeys ?? [KEY1.jwk] }), { status, headers });
+      return new Response(JSON.stringify({ keys: jwksKeysAtual ?? [KEY1.jwk] }), { status, headers });
     }
     return new Response('inesperado', { status: 500 });
   };
@@ -160,6 +161,7 @@ function setup(opts: SetupOpts = {}) {
     rl,
     run,
     jwksFetches: () => jwksFetches,
+    trocaJwks: (k: JsonWebKey[]) => void (jwksKeysAtual = k as never),
     avanca: (ms: number) => void (clock += ms),
     rows: (t: string) => rows(db.raw, t),
   };
@@ -431,6 +433,36 @@ test('cache do JWKS: respeita max-age do Cache-Control e renova ao vencer; timeo
     assert.equal(r.status, 401);
   });
   assert.equal(logsBroken.length, 1);
+});
+
+test('rotacao de chaves: kid fora do cache forca uma busca nova do JWKS, limitada a uma por minuto', async () => {
+  // O Google anuncia max-age de horas; sem a busca forcada, a chave nova seria recusada ate o cache vencer.
+  const s = setup({ jwksCacheControl: 'public, max-age=19962' });
+  assert.equal((await s.run(idReq({ token: await signJwt(validPayload()) }))).status, 204);
+  assert.equal(s.jwksFetches(), 1);
+
+  // O Google gira: o JWKS passa a ter a chave nova (KEY2) e o token novo vem assinado por ela.
+  s.trocaJwks([KEY1.jwk, KEY2.jwk]);
+  s.avanca(10 * 60_000);
+  const tokNovo = await signJwt(validPayload(), { header: { alg: 'RS256', typ: 'JWT', kid: KEY2.kid }, privateKey: KEY2.privateKey });
+  assert.equal((await s.run(idReq({ token: tokNovo }))).status, 204, 'token da chave nova aceito com o cache ainda valido');
+  assert.equal(s.jwksFetches(), 2, 'uma busca forcada pelo kid novo');
+
+  // kid inventado logo depois: recusado sem nova busca (limite de uma por minuto).
+  const tokFalso = await signJwt(validPayload(), { header: { alg: 'RS256', typ: 'JWT', kid: 'kid-inventado' } });
+  const logs = await capturaErros(async () => {
+    assert.equal((await s.run(idReq({ token: tokFalso }))).status, 401);
+    assert.equal((await s.run(idReq({ token: tokFalso }))).status, 401);
+  });
+  assert.equal(s.jwksFetches(), 2, 'kid desconhecido dentro do minuto nao busca de novo');
+  assert.ok(logs.every((l) => l === 'identidade recusada: kid_desconhecido'));
+
+  // Passado o minuto, um kid desconhecido pode forcar uma busca de novo.
+  s.avanca(61_000);
+  await capturaErros(async () => {
+    assert.equal((await s.run(idReq({ token: tokFalso }))).status, 401);
+  });
+  assert.equal(s.jwksFetches(), 3);
 });
 
 test('falha do D1 responde 500 e remove qualquer email do log', async () => {

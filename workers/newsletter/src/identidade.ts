@@ -29,9 +29,18 @@ interface JwksCache {
 
 let jwksCache: JwksCache | null = null;
 
+/**
+ * Intervalo mínimo entre buscas forçadas do JWKS por `kid` desconhecido. O Google gira as chaves do securetoken e
+ * anuncia `max-age` de horas: sem a busca forçada, um token assinado pela chave nova seria recusado até o cache
+ * vencer. O intervalo impede que tokens com `kid` inventado façam o Worker buscar o JWKS a cada pedido.
+ */
+export const JWKS_REFETCH_MIN_MS = 60_000;
+let jwksLastForcedAt = Number.NEGATIVE_INFINITY;
+
 /** Limpa o cache em memória do JWKS (uso em testes). */
 export function resetJwksCache(): void {
   jwksCache = null;
+  jwksLastForcedAt = Number.NEGATIVE_INFINITY;
 }
 
 export interface IdentidadeEnv {
@@ -105,9 +114,9 @@ function parseMaxAgeMs(cacheControl: string | null): number {
   return Number.isSafeInteger(sec) && sec > 0 ? sec * 1000 : 0;
 }
 
-async function getJwksKeys(deps: IdentidadeDeps): Promise<Map<string, CryptoKey> | null> {
+async function getJwksKeys(deps: IdentidadeDeps, force = false): Promise<Map<string, CryptoKey> | null> {
   const nowMs = deps.now();
-  if (jwksCache && nowMs < jwksCache.expiresAt) {
+  if (!force && jwksCache && nowMs < jwksCache.expiresAt) {
     return jwksCache.keys;
   }
 
@@ -192,8 +201,17 @@ async function verifyIdToken(token: string, deps: IdentidadeDeps): Promise<Verif
   const keys = await getJwksKeys(deps);
   if (!keys) return { ok: false, reason: 'jwks_indisponivel' };
 
-  const key = keys.get(header.kid);
-  if (!key) return { ok: false, reason: 'kid_desconhecido' };
+  let key = keys.get(header.kid);
+  if (!key) {
+    // Rotação de chaves: um kid fora do cache força uma busca nova, no máximo uma por JWKS_REFETCH_MIN_MS.
+    const nowMs = deps.now();
+    if (nowMs - jwksLastForcedAt >= JWKS_REFETCH_MIN_MS) {
+      jwksLastForcedAt = nowMs;
+      const fresh = await getJwksKeys(deps, true);
+      if (fresh) key = fresh.get(header.kid);
+    }
+    if (!key) return { ok: false, reason: 'kid_desconhecido' };
+  }
 
   let validSig = false;
   try {

@@ -18,8 +18,7 @@
   var d = document;
   var KEY = 'consent-v1';
   var MAX_AGE = 365 * 24 * 3600 * 1000;
-  var UID_KEY = 'heating-uid-v1';
-  var UID_MAX_AGE = 18e5; // 30 minutos (mesma regra do snippet do <head>)
+  var LINK_KEY = 'heating-link-v1';
   var UID_RE = /^[0-9A-Za-z]{1,128}$/;
   var POLICY = '/privacidade/#cookies';
   var TEXT = {
@@ -43,19 +42,21 @@
     try { localStorage.setItem(KEY, JSON.stringify({ v: v, t: Date.now() })); } catch (e) { /* sem storage */ }
   }
 
-  function hasValidHeatingUid() {
+  // #197 corte 2: navegador com o vínculo do login ligado (heating-link-v1 granted, 365 dias) nunca alimenta anúncio,
+  // a mesma regra do snippet do <head>; o user_id em si é decidido pelo snippet e pelo auth.js.
+  function hasHeatingLinkGranted() {
     try {
-      var u = JSON.parse(localStorage.getItem(UID_KEY) || 'null');
-      if (u && typeof u.uid === 'string' && UID_RE.test(u.uid) && typeof u.t === 'number') {
-        var age = Date.now() - u.t;
-        return age >= 0 && age < UID_MAX_AGE;
+      var k = JSON.parse(localStorage.getItem(LINK_KEY) || 'null');
+      if (k && k.v === 'granted' && typeof k.uid === 'string' && UID_RE.test(k.uid) && typeof k.t === 'number') {
+        var age = Date.now() - k.t;
+        return age >= 0 && age < MAX_AGE;
       }
     } catch (e) { /* sem storage ou valor quebrado */ }
     return false;
   }
 
   function isIdentified() {
-    if (hasValidHeatingUid()) return true;
+    if (hasHeatingLinkGranted()) return true;
     try {
       if (typeof window.guifavAuthIdentified === 'function' && window.guifavAuthIdentified()) return true;
     } catch (e) { /* ignora */ }

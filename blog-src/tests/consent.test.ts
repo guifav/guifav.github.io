@@ -73,7 +73,7 @@ const Blocked = {
   },
 };
 
-function setup(opts: { lang?: string; stored?: unknown; heatingUid?: unknown; authIdentified?: () => boolean;
+function setup(opts: { lang?: string; stored?: unknown; heatingUid?: unknown; heatingLink?: unknown; authIdentified?: () => boolean;
   storage?: Storage | typeof Blocked; gtag?: boolean; cookies?: string; clarityLoaded?: boolean } = {}) {
   const calls: unknown[][] = [];
   const cookieWrites: string[] = [];
@@ -93,6 +93,7 @@ function setup(opts: { lang?: string; stored?: unknown; heatingUid?: unknown; au
   const storage = opts.storage ?? new Storage();
   if (opts.stored !== undefined && storage instanceof Storage) storage.setItem('consent-v1', typeof opts.stored === 'string' ? opts.stored : JSON.stringify(opts.stored));
   if (opts.heatingUid !== undefined && storage instanceof Storage) storage.setItem('heating-uid-v1', typeof opts.heatingUid === 'string' ? opts.heatingUid : JSON.stringify(opts.heatingUid));
+  if (opts.heatingLink !== undefined && storage instanceof Storage) storage.setItem('heating-link-v1', typeof opts.heatingLink === 'string' ? opts.heatingLink : JSON.stringify(opts.heatingLink));
   const listeners: ((e: unknown) => void)[] = [];
   const document = {
     documentElement: html,
@@ -258,10 +259,10 @@ test('Sim e Não disparam CustomEvent guifav-consent com detail granted ou denie
   assert.deepEqual(s.consentEvents, ['granted', 'denied']);
 });
 
-test('Sim com sessão identificada (heating-uid-v1 válido até 30 min ou sinal do auth.js) concede só analytics_storage e mantém anúncios negados', () => {
-  // Reabrir "Cookies" no rodapé e confirmar "Sim" com heating-uid-v1 dentro da janela de 30 min: nunca concede ad_*.
-  for (const age of [0, 10 * MIN, 30 * MIN - 1]) {
-    const s = setup({ stored: { v: 'granted', t: NOW - DAY }, heatingUid: { uid: 'UidAtivo123', t: NOW - age } });
+test('Sim com o vínculo do login ligado (heating-link-v1 granted) ou sinal do auth.js concede só analytics_storage e mantém anúncios negados', () => {
+  // Reabrir "Cookies" e confirmar "Sim" num navegador com o vínculo ligado (até 365 dias, qualquer uid): nunca concede ad_*.
+  for (const age of [0, 10 * MIN, 200 * DAY, 365 * DAY - 1]) {
+    const s = setup({ stored: { v: 'granted', t: NOW - DAY }, heatingLink: { v: 'granted', t: NOW - age, uid: 'UidAtivo123' } });
     s.click(s.cookieLink);
     s.click(s.btn('consent-yes'));
     assert.deepEqual(updates(s.calls), [IDENTIFIED_GRANTED], `age=${age}`);
@@ -269,31 +270,35 @@ test('Sim com sessão identificada (heating-uid-v1 válido até 30 min ou sinal 
     assert.deepEqual(s.consentEvents, ['granted']);
   }
 
-  // Sinal do auth.js (ex.: troca de "Não" para "Sim" estando logado com heating-link-v1 aceito, sem heating-uid-v1 gravado).
+  // Sinal do auth.js (sessão confirmada pelo Firebase, mesmo sem heating-link-v1 legível).
   const switched = setup({ stored: { v: 'denied', t: NOW - MIN }, authIdentified: () => true });
   switched.click(switched.cookieLink);
   switched.click(switched.btn('consent-yes'));
   assert.deepEqual(updates(switched.calls), [IDENTIFIED_GRANTED]);
 
-  // heating-uid-v1 vencido (>= 30 min), futuro, inválido ou quebrado: volta a conceder os quatro sinais normalmente.
-  for (const badUid of [
-    { uid: 'UidVelho123', t: NOW - 30 * MIN },
-    { uid: 'UidVelho123', t: NOW - 31 * MIN },
-    { uid: 'UidVelho123', t: NOW - DAY },
-    { uid: 'UidFuturo1', t: NOW + 1 },
-    '{"uid":"UidInf","t":1e400}',
-    { uid: '', t: NOW },
-    { uid: 'uid-invalido', t: NOW },
-    { uid: 'a'.repeat(129), t: NOW },
+  // Vínculo desligado, vencido, futuro, com uid inválido ou quebrado: volta a conceder os quatro sinais.
+  for (const badLink of [
+    { v: 'denied', t: NOW, uid: 'UidAtivo123' },
+    { v: 'granted', t: NOW - 365 * DAY, uid: 'UidAtivo123' },
+    { v: 'granted', t: NOW + 1, uid: 'UidAtivo123' },
+    '{"v":"granted","t":1e400,"uid":"UidAtivo123"}',
+    { v: 'granted', t: NOW, uid: '' },
+    { v: 'granted', t: NOW, uid: 'uid-invalido' },
+    { v: 'granted', t: NOW },
     '{quebrado',
   ]) {
-    const s = setup({ heatingUid: badUid });
+    const s = setup({ heatingLink: badLink });
     s.click(s.btn('consent-yes'));
-    assert.deepEqual(updates(s.calls), [GRANTED], JSON.stringify(badUid));
+    assert.deepEqual(updates(s.calls), [GRANTED], JSON.stringify(badLink));
   }
 
-  // Clicar em "Não" com heating-uid-v1 válido continua negando os quatro sinais.
-  const denied = setup({ stored: { v: 'granted', t: NOW - DAY }, heatingUid: { uid: 'UidAtivo123', t: NOW - 5 * MIN } });
+  // Só o heating-uid-v1, sem o vínculo, não nega anúncios (o uid sozinho não é a regra).
+  const soUid = setup({ heatingUid: { uid: 'UidAtivo123', t: NOW - MIN } });
+  soUid.click(soUid.btn('consent-yes'));
+  assert.deepEqual(updates(soUid.calls), [GRANTED]);
+
+  // "Não" com o vínculo ligado continua negando os quatro sinais.
+  const denied = setup({ stored: { v: 'granted', t: NOW - DAY }, heatingLink: { v: 'granted', t: NOW - DAY, uid: 'UidAtivo123' } });
   denied.click(denied.cookieLink);
   denied.click(denied.btn('consent-no'));
   assert.deepEqual(updates(denied.calls), [DENIED]);
@@ -323,10 +328,11 @@ function inlineBase(): string {
   return "const GA4_ID = 'G-K7Y87QNCX8'; const CONTENT_GROUP = 'insights-artigo';" + m![1];
 }
 
-function runInline(rel: string, stored: unknown, heatingUid?: unknown) {
+function runInline(rel: string, stored: unknown, heatingUid?: unknown, heatingLink?: unknown) {
   const storage = new Storage();
   if (stored !== undefined) storage.setItem('consent-v1', typeof stored === 'string' ? stored : JSON.stringify(stored));
   if (heatingUid !== undefined) storage.setItem('heating-uid-v1', typeof heatingUid === 'string' ? heatingUid : JSON.stringify(heatingUid));
+  if (heatingLink !== undefined) storage.setItem('heating-link-v1', typeof heatingLink === 'string' ? heatingLink : JSON.stringify(heatingLink));
   const ctx: Record<string, unknown> = { localStorage: storage, location: { hostname: 'guifav.dev' }, JSON, Date: Object.assign(function () {}, { now: () => NOW }) };
   ctx.window = ctx;
   vm.runInContext(rel === 'Base.astro' ? inlineBase() : inlineGa(rel), vm.createContext(ctx));
@@ -340,7 +346,7 @@ const MATERIAIS = [
   'materiais/livro-desbloqueando-a-inteligencia-artificial',
 ].flatMap((m) => [`${m}/index.html`, `${m}/enviado/index.html`]);
 for (const rel of ['index.html', 'portfolio/index.html', 'consultoria/index.html', 'ferramentas/index.html', 'ferramentas/llm-ranking/index.html', 'cursos/index.html', 'prioridade/index.html', 'privacidade/index.html', 'termos/index.html', ...MATERIAIS, 'Base.astro']) {
-  test(`${rel}: padrão negado antes do config; aceite válido vira update granted e lê heating-uid-v1 antes do config`, () => {
+  test(`${rel}: padrão negado antes do config; aceite válido vira update granted e lê o vínculo e o uid antes do config`, () => {
     const names = (l: unknown[][]) => l.map((c) => `${c[0]}:${c[0] === 'consent' ? c[1] : ''}`);
     const none = runInline(rel, undefined);
     assert.deepEqual(none.find((c) => c[0] === 'consent'), ['consent', 'default', DENIED]);
@@ -356,9 +362,12 @@ for (const rel of ['index.html', 'portfolio/index.html', 'consultoria/index.html
       assert.deepEqual(names(runInline(rel, stored)).filter((n) => n === 'consent:update'), [], JSON.stringify(stored));
     }
 
-    // Com consent-v1 granted e heating-uid-v1 válido (até 30 min): nega os 3 sinais de anúncio (analytics_storage continua granted),
-    // desliga sinais no GA4 e seta user_id ANTES do config.
-    const withUid = runInline(rel, { v: 'granted', t: NOW - DAY }, { uid: 'UidHead123', t: NOW - 29 * MIN });
+    const LINK = { v: 'granted', t: NOW - 100 * DAY, uid: 'UidHead123' };
+    const uidSet = (l: unknown[][]) => l.find((c) => c[0] === 'set' && typeof c[1] === 'object' && 'user_id' in (c[1] as object));
+
+    // Vínculo ligado + heating-uid-v1 do mesmo uid (até 30 min): nega os 3 sinais de anúncio (analytics_storage continua
+    // granted), desliga os sinais no GA4 e seta user_id, tudo ANTES do config.
+    const withUid = runInline(rel, { v: 'granted', t: NOW - DAY }, { uid: 'UidHead123', t: NOW - 29 * MIN }, LINK);
     assert.deepEqual(
       names(withUid).filter((n) => n.startsWith('consent') || n.startsWith('config')),
       ['consent:default', 'consent:update', 'consent:update', 'config:'],
@@ -371,29 +380,30 @@ for (const rel of ['index.html', 'portfolio/index.html', 'consultoria/index.html
     const uidIdx = withUid.findIndex((c) => c[0] === 'set' && typeof c[1] === 'object' && (c[1] as { user_id?: string }).user_id === 'UidHead123');
     assert.ok(adDeniedIdx > 0 && sigIdx > adDeniedIdx && persIdx > sigIdx && uidIdx > persIdx && configIdx > uidIdx, JSON.stringify(withUid));
 
-    // Sem consent-v1 granted, heating-uid-v1 nunca seta sinais, consentimento nem user_id.
-    for (const consent of [undefined, { v: 'denied', t: NOW }, { v: 'granted', t: NOW - 366 * DAY }]) {
-      const res = runInline(rel, consent, { uid: 'UidHead123', t: NOW - 5 * MIN });
-      assert.deepEqual(sets(res), [['ads_data_redaction', true]], JSON.stringify(consent));
-      assert.deepEqual(updates(res), [], JSON.stringify(consent));
+    // Vínculo ligado sem uid recente (visita nova depois de 30 min, ou uid de outra pessoa): anúncios negados e
+    // sinais desligados do mesmo jeito, mas sem user_id (o auth.js decide depois de confirmar a sessão).
+    for (const uid of [undefined, { uid: 'UidHead123', t: NOW - 30 * MIN }, { uid: 'UidHead123', t: NOW - DAY },
+      { uid: 'OutroUid999', t: NOW - MIN }, { uid: 'UidHead123', t: NOW + DAY }, '{quebrado']) {
+      const res = runInline(rel, { v: 'granted', t: NOW - DAY }, uid, LINK);
+      assert.deepEqual(updates(res), [GRANTED, AD_DENIED], JSON.stringify(uid));
+      assert.ok(res.some((c) => c[0] === 'set' && c[1] === 'allow_google_signals' && c[2] === false), JSON.stringify(uid));
+      assert.equal(uidSet(res), undefined, JSON.stringify(uid));
     }
 
-    // heating-uid-v1 vencido (>= 30 min), futuro, inválido ou quebrado é ignorado (não nega anúncios nem seta user_id).
-    for (const badUid of [
-      { uid: 'UidHead123', t: NOW - 30 * MIN },
-      { uid: 'UidHead123', t: NOW - 31 * MIN },
-      { uid: 'UidHead123', t: NOW - DAY },
-      { uid: 'UidHead123', t: NOW - 366 * DAY },
-      { uid: 'UidHead123', t: NOW + DAY },
-      '{"uid":"UidHead123","t":1e400}',
-      { uid: '', t: NOW },
-      { uid: 'uid-com-traco', t: NOW },
-      { uid: 'a'.repeat(129), t: NOW },
-      '{quebrado',
-    ]) {
-      const res = runInline(rel, { v: 'granted', t: NOW - DAY }, badUid);
-      assert.deepEqual(sets(res), [['ads_data_redaction', true]], JSON.stringify(badUid));
-      assert.deepEqual(updates(res), [GRANTED], JSON.stringify(badUid));
+    // Sem o vínculo ligado (ausente, desligado, vencido, futuro, uid inválido, quebrado), nem com heating-uid-v1 válido:
+    // nada de anúncio negado, sinal nem user_id.
+    for (const link of [undefined, { v: 'denied', t: NOW, uid: 'UidHead123' }, { v: 'granted', t: NOW - 365 * DAY, uid: 'UidHead123' },
+      { v: 'granted', t: NOW + DAY, uid: 'UidHead123' }, { v: 'granted', t: NOW, uid: 'uid-com-traco' }, { v: 'granted', t: NOW }, '{quebrado']) {
+      const res = runInline(rel, { v: 'granted', t: NOW - DAY }, { uid: 'UidHead123', t: NOW - MIN }, link);
+      assert.deepEqual(sets(res), [['ads_data_redaction', true]], JSON.stringify(link));
+      assert.deepEqual(updates(res), [GRANTED], JSON.stringify(link));
+    }
+
+    // Sem consent-v1 granted, o vínculo e o uid nunca setam sinais, consentimento nem user_id.
+    for (const consent of [undefined, { v: 'denied', t: NOW }, { v: 'granted', t: NOW - 366 * DAY }]) {
+      const res = runInline(rel, consent, { uid: 'UidHead123', t: NOW - 5 * MIN }, LINK);
+      assert.deepEqual(sets(res), [['ads_data_redaction', true]], JSON.stringify(consent));
+      assert.deepEqual(updates(res), [], JSON.stringify(consent));
     }
   });
 }

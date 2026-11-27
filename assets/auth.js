@@ -19,8 +19,10 @@
 //   desliga sinais de anúncio no GA4, grava user_id, envia auth_identified uma vez por sessão e envia
 //   POST https://insights.guifav.dev/identidade com o ID token uma vez por sessão e por uid.
 // - Quando qualquer condição deixa de valer (ou em outra aba via evento storage): apaga heating-uid-v1,
-//   envia gtag('set', { user_id: null }), devolve ad_storage/ad_user_data/ad_personalization para granted
-//   se consent-v1 continuar granted, e nada mais é enviado.
+//   envia gtag('set', { user_id: null }) e nada mais é enviado. Os anúncios só voltam a granted se consent-v1
+//   continuar granted e o vínculo (heating-link-v1) não estiver ligado neste navegador: com o vínculo ligado,
+//   nenhuma visita deste navegador alimenta anúncio (snippet do <head>, consent.js e este arquivo).
+// - Antes de o Firebase responder, só uma revogação explícita (banner Não, vínculo desligado) apaga ou concede algo.
 // - Nunca acessa nem envia email; nunca chama clarity('identify'); mascara botão, menu e aviso no Clarity.
 //   Falha em silêncio se o Firebase ou o GIS não carregarem.
 (function () {
@@ -122,6 +124,15 @@
     return entry ? entry.v : null;
   }
 
+  // Vínculo do login ligado neste navegador (qualquer uid, 365 dias): enquanto valer, nenhuma página alimenta
+  // anúncio (mesma regra do snippet do <head> e do consent.js), mesmo antes de o Firebase confirmar a sessão.
+  function linkGrantedInBrowser() {
+    try {
+      var c = JSON.parse(w.localStorage.getItem(LINK_KEY) || 'null');
+      return Boolean(c && c.v === 'granted' && typeof c.uid === 'string' && UID_RE.test(c.uid) && validAge(c.t, TTL_MS));
+    } catch (e) { return false; }
+  }
+
   function writeHeatingLink(uid, v) {
     if (!uid || (v !== 'granted' && v !== 'denied')) return;
     try {
@@ -200,7 +211,7 @@
     headSentUid = false;
     if (removeStored !== false) removeHeatingUid();
     sendGtag('set', { user_id: null });
-    if (wasIdentified && readConsent() === 'granted') {
+    if (wasIdentified && readConsent() === 'granted' && !linkGrantedInBrowser()) {
       sendGtag('consent', 'update', { ad_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'granted' });
     }
   }
@@ -256,6 +267,9 @@
       sendIdentity(currentUser);
       return;
     }
+    // Antes de o Firebase responder, sem revogação explícita (banner Não ou vínculo desligado), nada é apagado nem
+    // concedido: o uid do <head> e os anúncios negados continuam até o onAuthStateChanged decidir.
+    if (!authResolved && !forceClear) return;
     removeHeatingUid();
     if (activeUid !== null || headSentUid || forceClear) {
       clearUserId(false);
