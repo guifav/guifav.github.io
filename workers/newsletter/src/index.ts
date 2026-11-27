@@ -61,6 +61,8 @@ export interface Env {
   GA4_API_SECRET?: string;
   /** Segredo do webhook do Resend para o heating (épico #197, formato svix `whsec_` + base64). */
   RESEND_HEATING_WEBHOOK_SECRET?: string;
+  /** Remetentes (endereços separados por vírgula) cujo engajamento no heating entra no contexto `site`. */
+  HEATING_REMETENTES_SITE?: string;
   /** Slugs dos cursos (separados por vírgula) com engajamento próprio no heating (`<slug>@guifav.dev` -> `curso:<slug>`). */
   HEATING_CURSOS?: string;
 }

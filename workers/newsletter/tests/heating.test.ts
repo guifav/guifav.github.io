@@ -21,16 +21,31 @@ const WEBHOOK_SECRET = `whsec_${WEBHOOK_RAW.toString('base64')}`;
 const TOML = readFileSync(new URL('../wrangler.toml', import.meta.url), 'utf-8');
 const tomlVar = (k: string) => TOML.match(new RegExp(`^${k}\\s*=\\s*"([^"]*)"`, 'm'))![1];
 
+const FROM_SITE = 'Guilherme Favaron <insights@guifav.dev>';
+const FROM_EXPERT = 'Guilherme Favaron | Expert Insights <insights@expert.guifav.dev>';
+
 function assinarSvix(id: string, tsSec: number, body: string, rawKey: Buffer = WEBHOOK_RAW): string {
   const mac = createHmac('sha256', rawKey).update(`${id}.${tsSec}.${body}`).digest('base64');
   return `v1,${mac}`;
 }
 
+/** Altera um bit de padding inutilizado em base64 canônico com `=`/`==`: decodifica para os mesmos bytes, mas não é canônico. */
+function base64NaoCanonico(b64: string): string {
+  const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  const pos = b64.endsWith('==') ? b64.length - 3 : b64.endsWith('=') ? b64.length - 2 : -1;
+  assert.ok(pos >= 0, `esperado base64 com padding: ${b64}`);
+  const i = A.indexOf(b64[pos]);
+  assert.equal(i & 1, 0, 'bit menos significativo deve ser 0 em base64 canônico com padding');
+  return b64.slice(0, pos) + A[i | 1] + b64.slice(pos + 1);
+}
+
 type SetupOpts = {
   now?: number;
   webhookSecret?: string | undefined;
+  heatingSiteSenders?: string | undefined;
   heatingCursos?: string | undefined;
-  forgetKey?: string;
+  forgetKey?: string | undefined;
+  turnstileSecret?: string | undefined;
   turnstile?: unknown;
   rlIp?: boolean;
   d1Falha?: RegExp;
@@ -58,10 +73,11 @@ function setup(opts: SetupOpts = {}) {
   };
   const env: Env = {
     RESEND_API_KEY: 're_teste',
-    TURNSTILE_SECRET: 'ts_teste',
+    TURNSTILE_SECRET: 'turnstileSecret' in opts ? (opts.turnstileSecret as string) : 'ts_teste',
     CONFIRM_SECRET: SECRET,
-    FORGET_HMAC_KEY: opts.forgetKey ?? FORGET_KEY,
+    FORGET_HMAC_KEY: 'forgetKey' in opts ? (opts.forgetKey as string) : FORGET_KEY,
     RESEND_HEATING_WEBHOOK_SECRET: 'webhookSecret' in opts ? opts.webhookSecret : WEBHOOK_SECRET,
+    HEATING_REMETENTES_SITE: 'heatingSiteSenders' in opts ? opts.heatingSiteSenders : tomlVar('HEATING_REMETENTES_SITE'),
     HEATING_CURSOS: 'heatingCursos' in opts ? opts.heatingCursos : tomlVar('HEATING_CURSOS'),
     FROM: tomlVar('FROM'),
     MATERIAL_FROM: tomlVar('MATERIAL_FROM'),
@@ -129,7 +145,7 @@ const loc = (r: Response) => r.headers.get('location');
 
 // ---------------------------------------------------------------- Migração 0010 e 0011
 
-test('M1: migração 0010 preserva linhas e ordem exata das 18 colunas de conversions e passa a recusar verified fora de 0 e 1', () => {
+test('M1: migração 0010 preserva table_xinfo, índices, linhas e todos os CHECKs de conversions e passa a recusar verified fora de 0 e 1', () => {
   const db = new DatabaseSync(':memory:');
   const dir = new URL('../../admin/migrations/', import.meta.url);
   const sqlFiles = readdirSync(dir).filter((f) => f.endsWith('.sql')).sort();
@@ -137,7 +153,36 @@ test('M1: migração 0010 preserva linhas e ordem exata das 18 colunas de conver
     db.exec(readFileSync(new URL(f, dir), 'utf-8'));
   }
 
-  const colsAntes = (db.prepare('PRAGMA table_info(conversions)').all() as Array<{ name: string }>).map((c) => c.name);
+  const lerXinfo = () =>
+    JSON.parse(JSON.stringify(db.prepare('PRAGMA table_xinfo(conversions)').all())) as Array<{
+      cid: number;
+      name: string;
+      type: string;
+      notnull: number;
+      dflt_value: string | null;
+      pk: number;
+      hidden: number;
+    }>;
+  const lerIndices = () => {
+    const lista = JSON.parse(JSON.stringify(db.prepare('PRAGMA index_list(conversions)').all())) as Array<{
+      name: string;
+      unique: number;
+      origin: string;
+      partial: number;
+    }>;
+    return lista
+      .map((idx) => ({
+        name: idx.name,
+        unique: idx.unique,
+        origin: idx.origin,
+        partial: idx.partial,
+        cols: JSON.parse(JSON.stringify(db.prepare(`PRAGMA index_info("${idx.name}")`).all())),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  };
+
+  const xinfoAntes = lerXinfo();
+  const indicesAntes = lerIndices();
   db.prepare(`INSERT INTO conversions
     (id, email, action, material, interests, occurred_at, synced_at, verified, ga_client_id, request_id, file,
      origin_channel, origin_source, utm_source, utm_medium, utm_campaign, landing_path, twenty_person_id)
@@ -155,21 +200,41 @@ test('M1: migração 0010 preserva linhas e ordem exata das 18 colunas de conver
 
   db.exec(readFileSync(new URL('0010_conversions_verified_check.sql', dir), 'utf-8'));
 
-  const colsDepois = (db.prepare('PRAGMA table_info(conversions)').all() as Array<{ name: string }>).map((c) => c.name);
-  assert.deepEqual(colsDepois, colsAntes);
+  const xinfoDepois = lerXinfo();
+  const indicesDepois = lerIndices();
+  assert.deepEqual(xinfoDepois, xinfoAntes);
+  assert.equal(xinfoDepois.find((c) => c.name === 'verified')?.dflt_value, '1');
+  assert.deepEqual(indicesDepois, indicesAntes);
+  assert.deepEqual(
+    indicesDepois.filter((i) => i.origin === 'c').map((i) => [i.name, i.cols.map((c: { name: string }) => c.name)]),
+    [['conversions_email', ['email']], ['conversions_pending', ['synced_at']]],
+  );
   assert.deepEqual(rows(db, 'conversions'), linhasAntes);
 
-  const indices = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'conversions' AND name NOT LIKE 'sqlite_%' ORDER BY name")
-    .all() as Array<{ name: string }>).map((i) => i.name);
-  assert.deepEqual(indices, ['conversions_email', 'conversions_pending']);
+  // Default de verified continua sendo 1 quando omitido no INSERT.
+  db.prepare(`INSERT INTO conversions (id, email, action, interests, occurred_at)
+    VALUES ('id-def', 'def@exemplo.com', 'newsletter_confirm', '[]', '2026-11-27T12:00:00.000Z')`).run();
+  assert.equal(rows(db, 'conversions').find((r) => r.id === 'id-def')?.verified, 1);
 
-  // Depois da 0010, verified = 2 ou -1 é recusado pelo CHECK.
-  for (const ruim of [2, -1]) {
+  // Prova cada CHECK depois da 0010 com uma linha inválida por coluna com CHECK.
+  const checksInvalidos: Array<[string, unknown]> = [
+    ['origin_channel', 'canal_invalido'],
+    ['origin_source', 'fonte_invalida'],
+    ['utm_source', 'MAIUSCULA'],
+    ['utm_medium', 'com espaco'],
+    ['utm_campaign', 'camp?query=1'],
+    ['landing_path', 'sem-barra-inicial'],
+    ['twenty_person_id', 'id/invalido'],
+    ['verified', 2],
+    ['verified', -1],
+  ];
+  for (let i = 0; i < checksInvalidos.length; i++) {
+    const [col, ruim] = checksInvalidos[i];
     assert.throws(
-      () => db.prepare(`INSERT INTO conversions (id, email, action, interests, occurred_at, verified)
-        VALUES (?, 'tres@exemplo.com', 'material_request', '[]', '2026-11-27T12:00:00.000Z', ?)`).run(`bad-${ruim}`, ruim),
+      () => db.prepare(`INSERT INTO conversions (id, email, action, interests, occurred_at, ${col})
+        VALUES (?, 'tres@exemplo.com', 'material_request', '[]', '2026-11-27T12:00:00.000Z', ?)`).run(`bad-${col}-${i}`, ruim as never),
       /CHECK constraint failed/,
-      `verified=${ruim}`,
+      `${col}=${String(ruim)}`,
     );
   }
 });
@@ -302,10 +367,10 @@ test('H1: heatingOptoutHmac usa prefixo próprio e nunca coincide com forgetHmac
 test('W1: assinatura válida grava os quatro tipos mapeados de forma síncrona (sem waitUntil)', async () => {
   const s = setup();
   const casos: Array<[string, string, Record<string, unknown>]> = [
-    ['email.delivered', 'email_entregue', { email_id: 'em_del_1', to: ['Leitor@Exemplo.com'] }],
-    ['email.opened', 'email_aberto', { email_id: 'em_open_1', to: 'leitor@exemplo.com' }],
-    ['email.clicked', 'email_clicado', { email_id: 'em_click_1', to: ['leitor@exemplo.com'], click: { link: 'https://guifav.dev/blog/artigo/?utm_source=email' } }],
-    ['email.complained', 'email_spam', { email_id: 'em_spam_1', to: ['leitor@exemplo.com'] }],
+    ['email.delivered', 'email_entregue', { email_id: 'em_del_1', from: FROM_SITE, to: ['Leitor@Exemplo.com'] }],
+    ['email.opened', 'email_aberto', { email_id: 'em_open_1', from: FROM_EXPERT, to: 'leitor@exemplo.com' }],
+    ['email.clicked', 'email_clicado', { email_id: 'em_click_1', from: FROM_SITE, to: ['leitor@exemplo.com'], click: { link: 'https://guifav.dev/blog/artigo/?utm_source=email' } }],
+    ['email.complained', 'email_spam', { email_id: 'em_spam_1', from: FROM_EXPERT, to: ['leitor@exemplo.com'] }],
   ];
   for (let i = 0; i < casos.length; i++) {
     const [type, expectedSignal, data] = casos[i];
@@ -332,24 +397,44 @@ test('W1: assinatura válida grava os quatro tipos mapeados de forma síncrona (
   }
 });
 
-test('W2: múltiplas assinaturas em svix-signature (rotação): aceita quando qualquer v1 bate', async () => {
+test('W2: múltiplas assinaturas em svix-signature (rotação): aceita até 16 quando qualquer v1 bate e recusa acima de 16', async () => {
   const s = setup();
-  const body = JSON.stringify({ type: 'email.opened', created_at: '2026-11-27T12:00:00.000Z', data: { email_id: 'em_rot', to: ['a@b.com'] } });
+  const body = JSON.stringify({ type: 'email.opened', created_at: '2026-11-27T12:00:00.000Z', data: { email_id: 'em_rot', from: FROM_SITE, to: ['a@b.com'] } });
   const ts = Math.floor(NOW / 1000);
   const valida = assinarSvix('msg_rot_1', ts, body);
   const outra = assinarSvix('msg_rot_1', ts, body, Buffer.from('ffffffffffffffffffffffff', 'utf-8'));
   const r = await s.run(webhookReq(null, { id: 'msg_rot_1', tsSec: ts, rawBody: body, sig: `v2,AAAA ${outra} ${valida}` }));
   assert.equal(r.status, 200);
   assert.equal(s.rows('engagement_events').length, 1);
+
+  // Exatamente 16 assinaturas (a última válida): aceita.
+  const valida16 = assinarSvix('msg_rot_16', ts, body);
+  const sig16 = [...Array(15).fill(outra), valida16].join(' ');
+  const r16 = await s.run(webhookReq(null, { id: 'msg_rot_16', tsSec: ts, rawBody: body, sig: sig16 }));
+  assert.equal(r16.status, 200);
+  assert.equal(s.rows('engagement_events').length, 2);
+
+  // Mais de 16 assinaturas (17, mesmo contendo a assinatura válida): recusa com 401.
+  const valida17 = assinarSvix('msg_rot_17', ts, body);
+  const sig17 = [valida17, ...Array(16).fill(outra)].join(' ');
+  const r17 = await s.run(webhookReq(null, { id: 'msg_rot_17', tsSec: ts, rawBody: body, sig: sig17 }));
+  assert.equal(r17.status, 401);
+  assert.equal(s.rows('engagement_events').length, 2);
 });
 
-test('W3: assinatura errada, timestamp fora da janela e svix-id inválido devolvem 401 sem gravar', async () => {
+test('W3: assinatura errada, base64 não canônico na assinatura, timestamp fora da janela e svix-id inválido devolvem 401 sem gravar', async () => {
   const s = setup();
-  const payload = { type: 'email.opened', created_at: '2026-11-27T12:00:00.000Z', data: { email_id: 'em_1', to: ['a@b.com'] } };
+  const payload = { type: 'email.opened', created_at: '2026-11-27T12:00:00.000Z', data: { email_id: 'em_1', from: FROM_SITE, to: ['a@b.com'] } };
   const tsNow = Math.floor(NOW / 1000);
+  const raw = JSON.stringify(payload);
 
   // Assinatura errada
-  assert.equal((await s.run(webhookReq(payload, { sig: assinarSvix('msg_1', tsNow, JSON.stringify(payload), Buffer.from('chave-errada-0123456789a', 'utf-8')) }))).status, 401);
+  assert.equal((await s.run(webhookReq(payload, { sig: assinarSvix('msg_1', tsNow, raw, Buffer.from('chave-errada-0123456789a', 'utf-8')) }))).status, 401);
+  // Base64 não canônico na assinatura (decodifica para os mesmos 32 bytes do HMAC válido, mas falha a checagem canônica)
+  const macCanonico = createHmac('sha256', WEBHOOK_RAW).update(`msg_b64.${tsNow}.${raw}`).digest('base64');
+  const macNaoCanonico = base64NaoCanonico(macCanonico);
+  assert.ok(Buffer.from(macNaoCanonico, 'base64').equals(Buffer.from(macCanonico, 'base64')));
+  assert.equal((await s.run(webhookReq(null, { id: 'msg_b64', tsSec: tsNow, rawBody: raw, sig: `v1,${macNaoCanonico}` }))).status, 401);
   // Sem header svix-signature
   assert.equal((await s.run(webhookReq(payload, { sig: '' }))).status, 401);
   // Timestamp 5 min + 1 s no passado e no futuro
@@ -367,8 +452,14 @@ test('W3: assinatura errada, timestamp fora da janela e svix-id inválido devolv
   assert.equal(s.rows('engagement_events').length, 2);
 });
 
-test('W4: segredo ausente ou fora do formato devolve 503 sem ler o corpo', async () => {
-  for (const badSecret of [undefined, '', 'sem-prefixo-01234567890123456789', 'whsec_', 'whsec_!!!', 'whsec_AAAA']) {
+test('W4: segredo ausente, fora do formato ou base64 não canônico devolve 503 sem ler o corpo', async () => {
+  // Chave de 20 bytes (20 % 3 !== 0 -> padding `=`) para testar base64 canônico vs não canônico.
+  const chave20 = Buffer.from('0123456789abcdefghij', 'utf-8');
+  const chave20B64 = chave20.toString('base64');
+  const chave20NaoCanonica = base64NaoCanonico(chave20B64);
+  assert.ok(Buffer.from(chave20NaoCanonica, 'base64').equals(chave20));
+
+  for (const badSecret of [undefined, '', 'sem-prefixo-01234567890123456789', 'whsec_', 'whsec_!!!', 'whsec_AAAA', `whsec_${chave20NaoCanonica}`]) {
     const s = setup({ webhookSecret: badSecret });
     let leuCorpo = false;
     const stream = new ReadableStream({
@@ -391,6 +482,14 @@ test('W4: segredo ausente ou fora do formato devolve 503 sem ler o corpo', async
     assert.equal(req.bodyUsed, false, `bodyUsed deve continuar false com segredo=${String(badSecret)}`);
     assert.equal(s.rows('engagement_events').length, 0);
   }
+
+  // A mesma chave de 20 bytes em base64 canônico funciona normalmente.
+  const sOk = setup({ webhookSecret: `whsec_${chave20B64}` });
+  const bodyOk = JSON.stringify({ type: 'email.delivered', created_at: '2026-11-27T12:00:00.000Z', data: { email_id: 'em_20', from: FROM_SITE, to: ['a@b.com'] } });
+  const ts = Math.floor(NOW / 1000);
+  const rOk = await sOk.run(webhookReq(null, { id: 'msg_20_ok', tsSec: ts, rawBody: bodyOk, sig: assinarSvix('msg_20_ok', ts, bodyOk, chave20) }));
+  assert.equal(rOk.status, 200);
+  assert.equal(sOk.rows('engagement_events').length, 1);
 });
 
 test('W5: método diferente de POST devolve 405 com allow: POST', async () => {
@@ -404,7 +503,7 @@ test('W5: método diferente de POST devolve 405 com allow: POST', async () => {
 
 test('W6: reentrega com o mesmo svix-id não duplica', async () => {
   const s = setup();
-  const payload = { type: 'email.delivered', created_at: '2026-11-27T12:00:00.000Z', data: { email_id: 'em_dup', to: ['leitor@exemplo.com'] } };
+  const payload = { type: 'email.delivered', created_at: '2026-11-27T12:00:00.000Z', data: { email_id: 'em_dup', from: FROM_SITE, to: ['leitor@exemplo.com'] } };
   const r1 = await s.run(webhookReq(payload, { id: 'msg_mesmo' }));
   assert.equal(r1.status, 200);
   assert.deepEqual(await r1.json(), { ok: true, gravados: 1 });
@@ -417,12 +516,12 @@ test('W6: reentrega com o mesmo svix-id não duplica', async () => {
   assert.equal(todas[0].recorded_at, new Date(NOW).toISOString());
 });
 
-test('W7: vários destinatários gravam uma linha por email válido e pulam inválidos sem logar o email', async () => {
+test('W7: vários destinatários: entrega e spam gravam por destinatário (pulando inválidos sem logar email), abertura e clique são ignorados', async () => {
   const s = setup();
   const payload = {
     type: 'email.delivered',
     created_at: '2026-11-27T12:00:00.000Z',
-    data: { email_id: 'em_multi', to: ['Um@Exemplo.com', 'dois@exemplo.com', 'um@exemplo.com', 'invalido-sem-arroba', 'ruim@segredo.local\nbcc'] },
+    data: { email_id: 'em_multi', from: FROM_SITE, to: ['Um@Exemplo.com', 'dois@exemplo.com', 'um@exemplo.com', 'invalido-sem-arroba', 'ruim@segredo.local\nbcc'] },
   };
   let r!: Response;
   const erros = await capturaErros(async () => {
@@ -430,42 +529,85 @@ test('W7: vários destinatários gravam uma linha por email válido e pulam inv�
   });
   assert.equal(r.status, 200);
   assert.deepEqual(await r.json(), { ok: true, gravados: 2 });
-  const todas = s.rows('engagement_events');
-  assert.deepEqual(todas.map((x) => x.email), ['um@exemplo.com', 'dois@exemplo.com']);
+  assert.deepEqual(s.rows('engagement_events').map((x) => x.email), ['um@exemplo.com', 'dois@exemplo.com']);
   assert.equal(erros.length, 1);
   assert.match(erros[0], /2 destinatário/);
   assert.ok(!erros[0].includes('segredo.local'), erros[0]);
   assert.ok(!erros[0].includes('invalido-sem-arroba'), erros[0]);
+
+  // Spam (email.complained) também continua gravando por destinatário.
+  const rSpam = await s.run(webhookReq({
+    type: 'email.complained',
+    created_at: '2026-11-27T12:00:00.000Z',
+    data: { email_id: 'em_multi_spam', from: FROM_SITE, to: ['um@exemplo.com', 'dois@exemplo.com'] },
+  }, { id: 'msg_multi_spam' }));
+  assert.equal(rSpam.status, 200);
+  assert.deepEqual(await rSpam.json(), { ok: true, gravados: 2 });
+  assert.equal(s.rows('engagement_events').length, 4);
+
+  // Abertura e clique com mais de um destinatário válido não gravam nada (200 ignorado: varios_destinatarios).
+  const rOpenMulti = await s.run(webhookReq({
+    type: 'email.opened',
+    created_at: '2026-11-27T12:00:00.000Z',
+    data: { email_id: 'em_open_multi', from: FROM_SITE, to: ['um@exemplo.com', 'dois@exemplo.com'] },
+  }, { id: 'msg_open_multi' }));
+  assert.equal(rOpenMulti.status, 200);
+  assert.deepEqual(await rOpenMulti.json(), { ok: true, ignorado: 'varios_destinatarios' });
+
+  const rClickMulti = await s.run(webhookReq({
+    type: 'email.clicked',
+    created_at: '2026-11-27T12:00:00.000Z',
+    data: { email_id: 'em_click_multi', from: FROM_SITE, to: ['um@exemplo.com', 'dois@exemplo.com'], click: { link: 'https://guifav.dev/blog/post/' } },
+  }, { id: 'msg_click_multi' }));
+  assert.equal(rClickMulti.status, 200);
+  assert.deepEqual(await rClickMulti.json(), { ok: true, ignorado: 'varios_destinatarios' });
+  assert.equal(s.rows('engagement_events').length, 4);
+
+  // Mesmo endereço repetido em to (1 destinatário único válido) continua pontuando em abertura e clique.
+  const rOpenDup = await s.run(webhookReq({
+    type: 'email.opened',
+    created_at: '2026-11-27T12:00:00.000Z',
+    data: { email_id: 'em_open_dup', from: FROM_SITE, to: ['Um@Exemplo.com', 'um@exemplo.com'] },
+  }, { id: 'msg_open_dup' }));
+  assert.equal(rOpenDup.status, 200);
+  assert.deepEqual(await rOpenDup.json(), { ok: true, gravados: 1 });
+  assert.equal(s.rows('engagement_events').length, 5);
 });
 
-test('W8: cliques de descadastro, /prioridade e URL inválida são ignorados com 200 sem gravar', async () => {
+test('W8: cliques de descadastro, /prioridade (inclusive percent-encoded e host com ponto final) e URL inválida são ignorados com 200 sem gravar', async () => {
   const s = setup();
-  const linksIgnorados = [
-    'https://resend.com/unsubscribe/abc',
-    'https://links.resend.com/u/123',
-    'https://track.resend.dev/x',
-    'https://guifav.dev/blog/UNSUBSCRIBE/1',
-    'https://guifav.dev/descadastrar/',
-    'https://guifav.dev/prioridade',
-    'https://guifav.dev/prioridade/',
-    'https://guifav.dev/PRIORIDADE/?utm=1',
-    'https://insights.guifav.dev/prioridade',
-    'mailto:contact@guifav.dev',
-    'javascript:alert(1)',
-    'nao-e-url',
-    '',
+  const linksIgnorados: Array<[string, string]> = [
+    ['https://resend.com/unsubscribe/abc', 'descadastro'],
+    ['https://resend.com./u/123', 'descadastro'],
+    ['https://links.resend.com/u/123', 'descadastro'],
+    ['https://links.resend.com./u/123', 'descadastro'],
+    ['https://track.resend.dev/x', 'descadastro'],
+    ['https://resend.dev./x', 'descadastro'],
+    ['https://guifav.dev/blog/UNSUBSCRIBE/1', 'descadastro'],
+    ['https://guifav.dev/blog/%75nsubscribe/1', 'descadastro'],
+    ['https://guifav.dev/descadastrar/', 'descadastro'],
+    ['https://guifav.dev/prioridade', 'oposicao'],
+    ['https://guifav.dev/prioridade/', 'oposicao'],
+    ['https://guifav.dev/PRIORIDADE/?utm=1', 'oposicao'],
+    ['https://guifav.dev/%70rioridade', 'oposicao'],
+    ['https://guifav.dev/%70rioridade/', 'oposicao'],
+    ['https://guifav.dev./prioridade', 'oposicao'],
+    ['https://insights.guifav.dev/prioridade', 'oposicao'],
+    ['https://insights.guifav.dev/%70rioridade', 'oposicao'],
+    ['mailto:contact@guifav.dev', 'link_invalido'],
+    ['javascript:alert(1)', 'link_invalido'],
+    ['nao-e-url', 'link_invalido'],
+    ['', 'link_invalido'],
   ];
   for (let i = 0; i < linksIgnorados.length; i++) {
-    const link = linksIgnorados[i];
+    const [link, motivoEsperado] = linksIgnorados[i];
     const r = await s.run(webhookReq({
       type: 'email.clicked',
       created_at: '2026-11-27T12:00:00.000Z',
-      data: { email_id: 'em_click', to: ['leitor@exemplo.com'], click: { link } },
+      data: { email_id: 'em_click', from: FROM_SITE, to: ['leitor@exemplo.com'], click: { link } },
     }, { id: `msg_ign_${i}` }));
     assert.equal(r.status, 200, link);
-    const body = (await r.json()) as { ok: boolean; ignorado?: string };
-    assert.equal(body.ok, true, link);
-    assert.ok(typeof body.ignorado === 'string' && body.ignorado.length > 0, link);
+    assert.deepEqual(await r.json(), { ok: true, ignorado: motivoEsperado }, link);
   }
   assert.equal(s.rows('engagement_events').length, 0);
 
@@ -474,18 +616,24 @@ test('W8: cliques de descadastro, /prioridade e URL inválida são ignorados com
     const r = await s.run(webhookReq({
       type: 'email.clicked',
       created_at: '2026-11-27T12:00:00.000Z',
-      data: { email_id: 'em_click_ok', to: ['leitor@exemplo.com'], click: { link } },
+      data: { email_id: 'em_click_ok', from: FROM_SITE, to: ['leitor@exemplo.com'], click: { link } },
     }, { id: `msg_ok_${i}` }));
     assert.equal(r.status, 200, link);
   }
   assert.equal(s.rows('engagement_events').length, 2);
 });
 
-test('W9: tipo que não interessa responde 200 com ignorado sem gravar', async () => {
+test('W9: tipo que não interessa (inclusive propriedades do Object.prototype) responde 200 com ignorado sem gravar', async () => {
   const s = setup();
-  const r = await s.run(webhookReq({ type: 'email.sent', created_at: '2026-11-27T12:00:00.000Z', data: { email_id: 'em_1' } }));
-  assert.equal(r.status, 200);
-  assert.deepEqual(await r.json(), { ok: true, ignorado: 'email.sent' });
+  for (const [i, type] of ['email.sent', 'toString', 'constructor', '__proto__'].entries()) {
+    const r = await s.run(webhookReq({
+      type,
+      created_at: '2026-11-27T12:00:00.000Z',
+      data: { email_id: `em_ign_${i}`, from: FROM_SITE, to: ['leitor@exemplo.com'] },
+    }, { id: `msg_ign_type_${i}` }));
+    assert.equal(r.status, 200, type);
+    assert.deepEqual(await r.json(), { ok: true, ignorado: type }, type);
+  }
   assert.equal(s.rows('engagement_events').length, 0);
 });
 
@@ -512,18 +660,28 @@ test('W10: corpo maior que 64 KiB devolve 413 (com e sem content-length)', async
   assert.equal(s.rows('engagement_events').length, 0);
 });
 
-test('W11: JSON inválido e campos fora do formato devolvem 400 sem gravar', async () => {
+test('W11: corpo com UTF-8 inválido, JSON inválido e campos fora do formato (inclusive to vazio ou só espaços) devolvem 400 sem gravar', async () => {
   const s = setup();
+  // UTF-8 inválido no corpo -> 400
+  const reqUtf8Ruim = new Request('https://insights.guifav.dev/resend/webhook', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: new Uint8Array([0xff, 0xfe, 0x80]),
+  });
+  assert.equal((await s.run(reqUtf8Ruim)).status, 400, 'utf8 inválido');
+
   const invalidos: Array<[string, string]> = [
     ['json quebrado', '{nao-json'],
     ['array na raiz', '[]'],
     ['sem type', JSON.stringify({ created_at: '2026-11-27T12:00:00.000Z', data: {} })],
-    ['data inválida', JSON.stringify({ type: 'email.opened', created_at: 'ontem', data: { email_id: 'e1', to: ['a@b.com'] } })],
-    ['data inexistente', JSON.stringify({ type: 'email.opened', created_at: '2026-02-30T12:00:00Z', data: { email_id: 'e1', to: ['a@b.com'] } })],
-    ['email_id inválido', JSON.stringify({ type: 'email.opened', created_at: '2026-11-27T12:00:00Z', data: { email_id: 'id com espaco', to: ['a@b.com'] } })],
-    ['to vazio', JSON.stringify({ type: 'email.opened', created_at: '2026-11-27T12:00:00Z', data: { email_id: 'e1', to: [] } })],
-    ['to não string', JSON.stringify({ type: 'email.opened', created_at: '2026-11-27T12:00:00Z', data: { email_id: 'e1', to: [123] } })],
-    ['clique sem click.link', JSON.stringify({ type: 'email.clicked', created_at: '2026-11-27T12:00:00Z', data: { email_id: 'e1', to: ['a@b.com'] } })],
+    ['data inválida', JSON.stringify({ type: 'email.opened', created_at: 'ontem', data: { email_id: 'e1', from: FROM_SITE, to: ['a@b.com'] } })],
+    ['data inexistente', JSON.stringify({ type: 'email.opened', created_at: '2026-02-30T12:00:00Z', data: { email_id: 'e1', from: FROM_SITE, to: ['a@b.com'] } })],
+    ['email_id inválido', JSON.stringify({ type: 'email.opened', created_at: '2026-11-27T12:00:00Z', data: { email_id: 'id com espaco', from: FROM_SITE, to: ['a@b.com'] } })],
+    ['to array vazio', JSON.stringify({ type: 'email.opened', created_at: '2026-11-27T12:00:00Z', data: { email_id: 'e1', from: FROM_SITE, to: [] } })],
+    ['to string vazia', JSON.stringify({ type: 'email.opened', created_at: '2026-11-27T12:00:00Z', data: { email_id: 'e1', from: FROM_SITE, to: '' } })],
+    ['to só espaços', JSON.stringify({ type: 'email.opened', created_at: '2026-11-27T12:00:00Z', data: { email_id: 'e1', from: FROM_SITE, to: '   \t ' } })],
+    ['to não string', JSON.stringify({ type: 'email.opened', created_at: '2026-11-27T12:00:00Z', data: { email_id: 'e1', from: FROM_SITE, to: [123] } })],
+    ['clique sem click.link', JSON.stringify({ type: 'email.clicked', created_at: '2026-11-27T12:00:00Z', data: { email_id: 'e1', from: FROM_SITE, to: ['a@b.com'] } })],
   ];
   for (const [nome, rawBody] of invalidos) {
     const r = await s.run(webhookReq(null, { rawBody }));
@@ -538,12 +696,22 @@ test('W12: email com oposição em heating_optout não grava (200), enquanto out
   s.db.prepare('INSERT INTO heating_optout (email_hmac, opted_out_at) VALUES (?, ?)').run(hmac, new Date(NOW).toISOString());
 
   const r = await s.run(webhookReq({
-    type: 'email.opened',
+    type: 'email.delivered',
     created_at: '2026-11-27T12:00:00.000Z',
-    data: { email_id: 'em_opt', to: ['oposto@exemplo.com', 'ativo@exemplo.com'] },
+    data: { email_id: 'em_opt', from: FROM_SITE, to: ['oposto@exemplo.com', 'ativo@exemplo.com'] },
   }, { id: 'msg_opt_1' }));
   assert.equal(r.status, 200);
   assert.deepEqual(await r.json(), { ok: true, gravados: 1 });
+  assert.deepEqual(s.rows('engagement_events').map((x) => x.email), ['ativo@exemplo.com']);
+
+  // Abertura de destinatário único com oposição também não grava.
+  const rOpen = await s.run(webhookReq({
+    type: 'email.opened',
+    created_at: '2026-11-27T12:00:00.000Z',
+    data: { email_id: 'em_opt_open', from: FROM_SITE, to: ['oposto@exemplo.com'] },
+  }, { id: 'msg_opt_2' }));
+  assert.equal(rOpen.status, 200);
+  assert.deepEqual(await rOpen.json(), { ok: true, gravados: 0 });
   assert.deepEqual(s.rows('engagement_events').map((x) => x.email), ['ativo@exemplo.com']);
 });
 
@@ -555,7 +723,7 @@ test('W13: falha do D1 no webhook devolve 500 e o log não contém o email', asy
       r = await s.run(webhookReq({
         type: 'email.opened',
         created_at: '2026-11-27T12:00:00.000Z',
-        data: { email_id: 'em_err', to: ['sigiloso@exemplo.com'] },
+        data: { email_id: 'em_err', from: FROM_SITE, to: ['sigiloso@exemplo.com'] },
       }));
     });
     assert.equal(r.status, 500, String(regex));
@@ -566,13 +734,17 @@ test('W13: falha do D1 no webhook devolve 500 e o log não contém o email', asy
   }
 });
 
-test('W14: contexto do curso sai de data.from quando o domínio é guifav.dev e o slug está em HEATING_CURSOS', async () => {
+test('W14: contexto de curso e de site saem apenas das listas HEATING_CURSOS e HEATING_REMETENTES_SITE (em minúsculas)', async () => {
   const s = setup({ heatingCursos: 'chatgpt-no-dia-a-dia, ia-para-lideres' });
   const casos: Array<[string, string]> = [
     ['Guilherme Favaron | ChatGPT no dia a dia <chatgpt-no-dia-a-dia@guifav.dev>', 'curso:chatgpt-no-dia-a-dia'],
     ['chatgpt-no-dia-a-dia@guifav.dev', 'curso:chatgpt-no-dia-a-dia'],
     ['Curso <ChatGPT-No-Dia-A-Dia@GUIFAV.DEV>', 'curso:chatgpt-no-dia-a-dia'],
     ['Guilherme <ia-para-lideres@guifav.dev>', 'curso:ia-para-lideres'],
+    ['insights@guifav.dev', 'site'],
+    ['Guilherme Favaron <INSIGHTS@GUIFAV.DEV>', 'site'],
+    ['insights@expert.guifav.dev', 'site'],
+    ['Guilherme Favaron | Expert Insights <Insights@Expert.GuiFav.Dev>', 'site'],
   ];
   for (let i = 0; i < casos.length; i++) {
     const [from, esperado] = casos[i];
@@ -586,47 +758,87 @@ test('W14: contexto do curso sai de data.from quando o domínio é guifav.dev e 
   }
 });
 
-test('W15: remetente fora da lista, outro domínio, from ausente ou inválido viram contexto site', async () => {
+test('W15: remetente desconhecido, ausente ou malformado (extractFromAddress estrito) é ignorado com 200 e loga só a contagem', async () => {
   const s = setup();
   const casos: Array<[string, unknown]> = [
-    ['fora da lista no mesmo domínio', 'Guilherme Favaron <insights@guifav.dev>'],
-    ['subdomínio expert.guifav.dev', 'Guilherme Favaron | Expert Insights <newsletter@expert.guifav.dev>'],
+    ['outro endereço em guifav.dev fora das listas', 'Guilherme Favaron <outro-sigiloso@guifav.dev>'],
+    ['outro endereço em expert.guifav.dev fora da lista', 'Guilherme Favaron | Expert Insights <newsletter@expert.guifav.dev>'],
     ['mesmo slug em subdomínio', 'chatgpt-no-dia-a-dia@expert.guifav.dev'],
     ['mesmo slug em outro domínio', 'Curso <chatgpt-no-dia-a-dia@outro.com>'],
     ['from ausente', undefined],
     ['from vazio', '   '],
     ['from não string', 42],
     ['from sem arroba', 'chatgpt-no-dia-a-dia'],
+    ['from sem nome antes de <>', '<insights@guifav.dev>'],
+    ['from com lixo depois de >', 'Guilherme <insights@guifav.dev> extra'],
+    ['from com segundo endereço depois de >', 'Guilherme <insights@guifav.dev>, outro@exemplo.com'],
+    ['from com @ antes de <', 'outro@exemplo.com <insights@guifav.dev>'],
+    ['from com vírgula antes de <', 'A, B <insights@guifav.dev>'],
+    ['from com ponto e vírgula antes de <', 'A; B <insights@guifav.dev>'],
+    ['from com quebra de linha antes de <', 'A\nB <insights@guifav.dev>'],
     ['from com < sem >', 'Curso <chatgpt-no-dia-a-dia@guifav.dev'],
-    ['from com dois pares <>', '<outro@exemplo.com> <chatgpt-no-dia-a-dia@guifav.dev>'],
+    ['from com > sem <', 'Curso chatgpt-no-dia-a-dia@guifav.dev>'],
+    ['from com dois pares <>', '<outro@exemplo.com> <insights@guifav.dev>'],
+    ['from com espaços dentro de <>', 'Guilherme < insights@guifav.dev >'],
+    ['from com endereço inválido dentro de <>', 'Guilherme <nao-e-email>'],
   ];
   for (let i = 0; i < casos.length; i++) {
     const [nome, from] = casos[i];
-    const data: Record<string, unknown> = { email_id: `em_s_${i}`, to: ['leitor@exemplo.com'] };
+    const data: Record<string, unknown> = { email_id: `em_desc_${i}`, to: ['leitor@exemplo.com'] };
     if (from !== undefined) data.from = from;
-    const r = await s.run(webhookReq({
+    let r!: Response;
+    const erros = await capturaErros(async () => {
+      r = await s.run(webhookReq({
+        type: 'email.delivered',
+        created_at: '2026-11-27T12:00:00.000Z',
+        data,
+      }, { id: `msg_desc_${i}` }));
+    });
+    assert.equal(r.status, 200, nome);
+    assert.deepEqual(await r.json(), { ok: true, ignorado: 'remetente_desconhecido' }, nome);
+    assert.equal(erros.length, 1, nome);
+    assert.match(erros[0], /\b1\b.*remetente desconhecido/i, nome);
+    assert.ok(!erros[0].includes('outro-sigiloso'), erros[0]);
+    assert.ok(!erros[0].includes('insights@'), erros[0]);
+  }
+  assert.equal(s.rows('engagement_events').length, 0);
+
+  // Sem HEATING_CURSOS configurada, remetente do curso vira remetente desconhecido (não cai em site).
+  const sSemCurso = setup({ heatingCursos: undefined });
+  let rSemCurso!: Response;
+  await capturaErros(async () => {
+    rSemCurso = await sSemCurso.run(webhookReq({
       type: 'email.delivered',
       created_at: '2026-11-27T12:00:00.000Z',
-      data,
-    }, { id: `msg_site_${i}` }));
-    assert.equal(r.status, 200, nome);
-    assert.equal(s.rows('engagement_events')[i].context, 'site', nome);
-  }
+      data: { email_id: 'em_sem_curso', from: 'chatgpt-no-dia-a-dia@guifav.dev', to: ['leitor@exemplo.com'] },
+    }, { id: 'msg_sem_curso' }));
+  });
+  assert.equal(rSemCurso.status, 200);
+  assert.deepEqual(await rSemCurso.json(), { ok: true, ignorado: 'remetente_desconhecido' });
+  assert.equal(sSemCurso.rows('engagement_events').length, 0);
 
-  // Sem HEATING_CURSOS configurada, até o remetente do curso cai em `site`.
-  const sSem = setup({ heatingCursos: undefined });
-  const rSem = await sSem.run(webhookReq({
-    type: 'email.delivered',
-    created_at: '2026-11-27T12:00:00.000Z',
-    data: { email_id: 'em_sem', from: 'chatgpt-no-dia-a-dia@guifav.dev', to: ['leitor@exemplo.com'] },
-  }, { id: 'msg_sem_var' }));
-  assert.equal(rSem.status, 200);
-  assert.equal(sSem.rows('engagement_events')[0].context, 'site');
+  // Sem HEATING_REMETENTES_SITE configurada, remetente do site também vira remetente desconhecido.
+  const sSemSite = setup({ heatingSiteSenders: undefined });
+  let rSemSite!: Response;
+  await capturaErros(async () => {
+    rSemSite = await sSemSite.run(webhookReq({
+      type: 'email.delivered',
+      created_at: '2026-11-27T12:00:00.000Z',
+      data: { email_id: 'em_sem_site', from: FROM_SITE, to: ['leitor@exemplo.com'] },
+    }, { id: 'msg_sem_site' }));
+  });
+  assert.equal(rSemSite.status, 200);
+  assert.deepEqual(await rSemSite.json(), { ok: true, ignorado: 'remetente_desconhecido' });
+  assert.equal(sSemSite.rows('engagement_events').length, 0);
 });
 
-test('W16: slug inválido em HEATING_CURSOS é ignorado com log curto enquanto slugs válidos continuam valendo', async () => {
-  const s = setup({ heatingCursos: `chatgpt-no-dia-a-dia, -invalido, Maiuscula, com_underline, ${'a'.repeat(65)}` });
+test('W16: entradas inválidas em HEATING_CURSOS e HEATING_REMETENTES_SITE são ignoradas com log curto enquanto as válidas continuam valendo', async () => {
+  const s = setup({
+    heatingCursos: `chatgpt-no-dia-a-dia, -invalido, Maiuscula, com_underline, ${'a'.repeat(65)}`,
+    heatingSiteSenders: 'INSIGHTS@GUIFAV.DEV, nao-e-email, Nome <insights@expert.guifav.dev>, sigiloso@semtld',
+  });
   let rCurso!: Response;
+  let rSite!: Response;
   let rIgnorado!: Response;
   const erros = await capturaErros(async () => {
     rCurso = await s.run(webhookReq({
@@ -634,6 +846,11 @@ test('W16: slug inválido em HEATING_CURSOS é ignorado com log curto enquanto s
       created_at: '2026-11-27T12:00:00.000Z',
       data: { email_id: 'em_v', from: 'chatgpt-no-dia-a-dia@guifav.dev', to: ['leitor@exemplo.com'] },
     }, { id: 'msg_slug_ok' }));
+    rSite = await s.run(webhookReq({
+      type: 'email.opened',
+      created_at: '2026-11-27T12:00:00.000Z',
+      data: { email_id: 'em_s', from: 'insights@guifav.dev', to: ['leitor@exemplo.com'] },
+    }, { id: 'msg_site_ok' }));
     rIgnorado = await s.run(webhookReq({
       type: 'email.opened',
       created_at: '2026-11-27T12:00:00.000Z',
@@ -641,11 +858,17 @@ test('W16: slug inválido em HEATING_CURSOS é ignorado com log curto enquanto s
     }, { id: 'msg_slug_bad' }));
   });
   assert.equal(rCurso.status, 200);
+  assert.equal(rSite.status, 200);
   assert.equal(rIgnorado.status, 200);
+  assert.deepEqual(await rIgnorado.json(), { ok: true, ignorado: 'remetente_desconhecido' });
   const todas = s.rows('engagement_events');
   assert.deepEqual(todas.map((x) => x.context), ['curso:chatgpt-no-dia-a-dia', 'site']);
-  assert.equal(erros.length, 2);
-  assert.match(erros[0], /4 slug\(s\) inválido\(s\) em HEATING_CURSOS ignorado\(s\)/);
+  assert.ok(erros.some((e) => /4 slug\(s\) inválido\(s\) em HEATING_CURSOS ignorado\(s\)/.test(e)), erros.join('\n'));
+  assert.ok(erros.some((e) => /3 remetente\(s\) inválido\(s\) em HEATING_REMETENTES_SITE ignorado\(s\)/.test(e)), erros.join('\n'));
+  for (const e of erros) {
+    assert.ok(!e.includes('sigiloso@semtld'), e);
+    assert.ok(!e.includes('nao-e-email'), e);
+  }
 });
 
 test('W17: corrida com POST /prioridade — se a oposição grava a marca imediatamente antes do INSERT do webhook, nenhum evento do email fica gravado', async () => {
@@ -685,7 +908,7 @@ test('W17: corrida com POST /prioridade — se a oposição grava a marca imedia
   const r = await s.run(webhookReq({
     type: 'email.opened',
     created_at: new Date(NOW).toISOString(),
-    data: { email_id: 'em_corrida', to: [email] },
+    data: { email_id: 'em_corrida', from: FROM_SITE, to: [email] },
   }, { id: 'msg_corrida_1' }));
 
   assert.equal(r.status, 200);
@@ -693,6 +916,20 @@ test('W17: corrida com POST /prioridade — se a oposição grava a marca imedia
   assert.equal(s.rows('heating_optout').length, 1);
   assert.equal(s.rows('engagement_events').length, 0);
   assert.deepEqual(await r.json(), { ok: true, gravados: 0 });
+});
+
+test('W18: FORGET_HMAC_KEY ausente ou curta no webhook devolve 500 Worker sem configuração', async () => {
+  for (const forgetKey of [undefined, '', 'x'.repeat(31)]) {
+    const s = setup({ forgetKey });
+    const r = await s.run(webhookReq({
+      type: 'email.opened',
+      created_at: '2026-11-27T12:00:00.000Z',
+      data: { email_id: 'em_cfg', from: FROM_SITE, to: ['leitor@exemplo.com'] },
+    }));
+    assert.equal(r.status, 500, String(forgetKey));
+    assert.equal(await r.text(), 'Worker sem configuração');
+    assert.equal(s.rows('engagement_events').length, 0);
+  }
 });
 
 // ---------------------------------------------------------------- POST /prioridade
@@ -836,9 +1073,28 @@ test('P4: falha do D1 em /prioridade redireciona para #erro, sem email no log, e
   assert.equal(s.rows('engagement_events').length, 0);
 });
 
-test('C1: wrangler.toml documenta RESEND_HEATING_WEBHOOK_SECRET sem segredo e declara HEATING_CURSOS', () => {
+test('P5: FORGET_HMAC_KEY ausente/curta e TURNSTILE_SECRET ausente em /prioridade devolvem 500 Worker sem configuração', async () => {
+  for (const [nome, opts] of [
+    ['FORGET_HMAC_KEY undefined', { forgetKey: undefined }],
+    ['FORGET_HMAC_KEY vazia', { forgetKey: '' }],
+    ['FORGET_HMAC_KEY curta (31)', { forgetKey: 'x'.repeat(31) }],
+    ['TURNSTILE_SECRET undefined', { turnstileSecret: undefined }],
+    ['TURNSTILE_SECRET vazia', { turnstileSecret: '' }],
+  ] as Array<[string, SetupOpts]>) {
+    const s = setup(opts);
+    const r = await s.run(prioridadeReq({ email: 'a@b.com', 'cf-turnstile-response': 'tok' }));
+    assert.equal(r.status, 500, nome);
+    assert.equal(await r.text(), 'Worker sem configuração', nome);
+    assert.equal(s.calls.length, 0, nome);
+    assert.equal(s.rows('heating_optout').length, 0, nome);
+  }
+});
+
+test('C1: wrangler.toml documenta RESEND_HEATING_WEBHOOK_SECRET sem segredo e declara HEATING_REMETENTES_SITE e HEATING_CURSOS', () => {
   assert.match(TOML, /#.*RESEND_HEATING_WEBHOOK_SECRET/);
   assert.doesNotMatch(TOML, /RESEND_HEATING_WEBHOOK_SECRET\s*=|whsec_[A-Za-z0-9+/=]{16,}/);
+  assert.equal(tomlVar('HEATING_REMETENTES_SITE'), 'insights@guifav.dev,insights@expert.guifav.dev');
+  assert.match(TOML, /#.*HEATING_REMETENTES_SITE|#.*remetente novo do site/i);
   assert.equal(tomlVar('HEATING_CURSOS'), 'chatgpt-no-dia-a-dia');
   assert.match(TOML, /#.*<slug>@guifav\.dev/);
 });

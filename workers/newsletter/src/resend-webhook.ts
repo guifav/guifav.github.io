@@ -1,8 +1,9 @@
 // Webhook do Resend para o heating de contatos (épico #197, corte 1): POST /resend/webhook.
 // Recebe email.delivered, email.opened, email.clicked e email.complained de todos os envios da conta, verifica a
 // assinatura svix via WebCrypto (sem dependências), filtra cliques que não pontuam (links inválidos, descadastro e
-// página /prioridade), classifica o contexto a partir de `data.from` e `HEATING_CURSOS` (`curso:<slug>` para remetentes
-// `<slug>@guifav.dev` na lista, `site` em qualquer outro caso — decisão do Gui, 2026-11-27), respeita a oposição global
+// página /prioridade), classifica o contexto a partir de `data.from` com `HEATING_CURSOS` (`curso:<slug>` para
+// `<slug>@guifav.dev` na lista) e `HEATING_REMETENTES_SITE` (`site` só para endereços nessa lista; qualquer outro
+// remetente é ignorado sem gravar), exige destinatário único para abertura e clique, respeita a oposição global
 // em `heating_optout` e grava de forma síncrona em `engagement_events` antes de responder 200. Em falha do D1, devolve
 // 500 para o Resend reenviar, com log curto sem email.
 import { normalizeEmail } from './email.ts';
@@ -23,12 +24,12 @@ const CURSO_DOMAIN = 'guifav.dev';
 const ISO_RE = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|[+-]\d{2}(?::?\d{2})?)$/;
 const ISO_UTC_MS_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
-const EVENT_SIGNALS: Record<string, string> = {
-  'email.delivered': 'email_entregue',
-  'email.opened': 'email_aberto',
-  'email.clicked': 'email_clicado',
-  'email.complained': 'email_spam',
-};
+const EVENT_SIGNALS = new Map<string, string>([
+  ['email.delivered', 'email_entregue'],
+  ['email.opened', 'email_aberto'],
+  ['email.clicked', 'email_clicado'],
+  ['email.complained', 'email_spam'],
+]);
 
 const plain = (status: number, body: string, extra: Record<string, string> = {}) =>
   new Response(body, { status, headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store', ...extra } });
@@ -218,32 +219,63 @@ function parseHeatingCursos(raw: string | undefined): Set<string> {
   return slugs;
 }
 
+function parseHeatingSiteSenders(raw: string | undefined): Set<string> {
+  const senders = new Set<string>();
+  if (typeof raw !== 'string' || !raw.trim()) return senders;
+  let invalidCount = 0;
+  for (const part of raw.split(',')) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    const norm = normalizeEmail(trimmed);
+    if (!norm) {
+      invalidCount++;
+      continue;
+    }
+    senders.add(norm);
+  }
+  if (invalidCount > 0) {
+    console.error(`webhook resend: ${invalidCount} remetente(s) inválido(s) em HEATING_REMETENTES_SITE ignorado(s)`);
+  }
+  return senders;
+}
+
 function extractFromAddress(raw: unknown): string | null {
   if (typeof raw !== 'string') return null;
   const trimmed = raw.trim();
   if (!trimmed) return null;
   const lt = trimmed.indexOf('<');
   const gt = trimmed.indexOf('>');
-  if (lt !== -1 || gt !== -1) {
-    if (lt === -1 || gt === -1 || gt < lt || trimmed.indexOf('<', lt + 1) !== -1 || trimmed.indexOf('>', gt + 1) !== -1) {
-      return null;
-    }
-    return trimmed.slice(lt + 1, gt).trim().toLowerCase();
+  if (lt === -1 && gt === -1) {
+    return normalizeEmail(trimmed);
   }
-  return trimmed.toLowerCase();
+  if (
+    lt <= 0
+    || gt !== trimmed.length - 1
+    || trimmed.indexOf('<', lt + 1) !== -1
+    || trimmed.indexOf('>', gt + 1) !== -1
+  ) {
+    return null;
+  }
+  const displayName = trimmed.slice(0, lt);
+  if (!displayName.trim() || /[@,;\r\n]/.test(displayName)) return null;
+  const inside = trimmed.slice(lt + 1, gt);
+  if (!inside || inside !== inside.trim()) return null;
+  return normalizeEmail(inside);
 }
 
-function resolveContext(from: unknown, cursos: Set<string>): string {
+function resolveContext(from: unknown, cursos: Set<string>, siteSenders: Set<string>): string | null {
   const addr = extractFromAddress(from);
-  if (!addr) return 'site';
+  if (!addr) return null;
   const at = addr.indexOf('@');
-  if (at <= 0 || addr.indexOf('@', at + 1) !== -1) return 'site';
   const local = addr.slice(0, at);
   const domain = addr.slice(at + 1);
   if (domain === CURSO_DOMAIN && cursos.has(local)) {
     return `curso:${local}`;
   }
-  return 'site';
+  if (siteSenders.has(addr)) {
+    return 'site';
+  }
+  return null;
 }
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
@@ -252,6 +284,7 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
 
 export interface ResendWebhookEnv {
   RESEND_HEATING_WEBHOOK_SECRET?: string;
+  HEATING_REMETENTES_SITE?: string;
   HEATING_CURSOS?: string;
   FORGET_HMAC_KEY: string;
   DB: D1Like;
@@ -294,7 +327,7 @@ export async function handleResendWebhook(
     return plain(400, 'tipo ausente ou inválido');
   }
 
-  const signal = EVENT_SIGNALS[eventType];
+  const signal = EVENT_SIGNALS.get(eventType);
   if (!signal) return json(200, { ok: true, ignorado: eventType });
 
   const occurredAt = normalizeIsoUtc(payload.created_at);
@@ -309,6 +342,7 @@ export async function handleResendWebhook(
   const rawTo = data.to;
   let toList: string[];
   if (typeof rawTo === 'string') {
+    if (!rawTo.trim()) return plain(400, 'destinatários ausentes ou inválidos');
     toList = [rawTo];
   } else if (Array.isArray(rawTo) && rawTo.length > 0 && rawTo.every((x): x is string => typeof x === 'string')) {
     toList = rawTo;
@@ -325,7 +359,12 @@ export async function handleResendWebhook(
   }
 
   const cursos = parseHeatingCursos(env.HEATING_CURSOS);
-  const context = resolveContext(data.from, cursos);
+  const siteSenders = parseHeatingSiteSenders(env.HEATING_REMETENTES_SITE);
+  const context = resolveContext(data.from, cursos, siteSenders);
+  if (!context) {
+    console.error('webhook resend: 1 evento ignorado por remetente desconhecido');
+    return json(200, { ok: true, ignorado: 'remetente_desconhecido' });
+  }
 
   const emails = new Set<string>();
   let invalidCount = 0;
@@ -336,6 +375,10 @@ export async function handleResendWebhook(
   }
   if (invalidCount > 0) {
     console.error(`webhook resend: ${invalidCount} destinatário(s) inválido(s) ignorado(s)`);
+  }
+
+  if ((eventType === 'email.opened' || eventType === 'email.clicked') && emails.size > 1) {
+    return json(200, { ok: true, ignorado: 'varios_destinatarios' });
   }
 
   const recordedAt = new Date(now()).toISOString();

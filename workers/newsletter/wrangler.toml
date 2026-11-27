@@ -52,10 +52,18 @@ WORKER_URL = "https://insights.guifav.dev"
 TURNSTILE_HOSTNAME = "guifav.dev"
 # GA4 do site: o Worker manda o evento material_download pelo Measurement Protocol (issue #99).
 GA4_MEASUREMENT_ID = "G-K7Y87QNCX8"
+# Remetentes (endereços separados por vírgula, comparação em minúsculas) cujo engajamento no heating entra no
+# contexto `site` (épico #197): o remetente dos materiais e da confirmação neste Worker (`insights@guifav.dev`) e o
+# dos broadcasts dos Expert Insights em `blog-src/scripts/newsletter_draft.py` (`insights@expert.guifav.dev`).
+# Endereços fora do formato de email são ignorados com log curto. Um remetente novo do site precisa entrar nesta
+# lista (com novo deploy do Worker); qualquer remetente fora desta lista e fora de `HEATING_CURSOS` é ignorado sem
+# gravar (`200 {"ok":true,"ignorado":"remetente_desconhecido"}`).
+HEATING_REMETENTES_SITE = "insights@guifav.dev,insights@expert.guifav.dev"
 # Slugs dos cursos (separados por vírgula) cujo engajamento no heating é separado do site (épico #197, decisão de
 # 2026-11-27). Quando `data.from` no webhook do Resend é `<slug>@guifav.dev` e `<slug>` está nesta lista (padrão
-# `[a-z0-9][a-z0-9-]{0,63}`; slugs fora do padrão são ignorados), o contexto gravado é `curso:<slug>`; qualquer outro
-# remetente entra em `site`. Cada curso novo precisa de um remetente `<slug>@guifav.dev` e do slug nesta lista.
+# `[a-z0-9][a-z0-9-]{0,63}`; slugs fora do padrão são ignorados), o contexto gravado é `curso:<slug>`. Qualquer
+# outro remetente fora de `HEATING_REMETENTES_SITE` e de `HEATING_CURSOS` (inclusive ausente ou malformado) é
+# ignorado sem gravar. Cada curso novo precisa de um remetente `<slug>@guifav.dev` e do slug nesta lista.
 HEATING_CURSOS = "chatgpt-no-dia-a-dia"
 
 # Garantia A6: cerca de 5 pedidos por IP e 1 email de confirmação por endereço, a cada 60 s. O rate limit
