@@ -1,4 +1,4 @@
-# Painel de assinantes da newsletter em guifav.dev/admin (issue #40). O deploy é manual, depois do merge: ver README.md.
+# Painel do site em guifav.dev/admin (issues #40, #62, #82, #193). O deploy é manual, depois do merge: ver README.md.
 #
 # Segredos: só via `wrangler secret`, nunca neste arquivo.
 #   RESEND_API_KEY   chave dedicada do Resend com full_access (lê contatos e descadastra), revogável sem afetar as outras
@@ -26,6 +26,8 @@ ACCESS_TEAM_DOMAIN = "guifav.cloudflareaccess.com"
 # Tag de audiência da aplicação do Access "Painel de assinantes (guifav.dev/admin)", criada em 2026-11-11.
 ACCESS_AUD = "06d4b5bb6516b079eb6773cdc190fa6a7ec0946e2fa2bf08310a93b8e04923c3"
 SITE_ORIGIN = "https://guifav.dev"
+# Base do Twenty na KVM, usada nos links de Pessoa em /admin/contatos (issue #193).
+TWENTY_ORIGIN = "https://crm.guifav.dev"
 
 [[d1_databases]]
 binding = "DB"

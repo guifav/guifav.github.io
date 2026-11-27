@@ -3,7 +3,7 @@
 // (propriedades em {value, type}); JWT do Access assinado com RSA de verdade.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { handle, csvCell, PAGE_SIZE, type Env, type Deps } from '../src/index.ts';
 import { syncSegment, GAP_MS, AUDIT_PROPERTY, type D1Like, type D1Stmt, resend, MAX_CALLS, DEADLINE_MS, MAX_PAGES } from '../src/sync.ts';
@@ -21,13 +21,17 @@ const TEAM = tomlVar('ACCESS_TEAM_DOMAIN');
 const AUD = tomlVar('ACCESS_AUD');
 const SEG = tomlVar('SEGMENT_ID');
 const TOPIC = tomlVar('TOPIC_ID');
+const TWENTY = tomlVar('TWENTY_ORIGIN');
 const GUI = 'gui@exemplo.com';
 
 // ------------------------------------------------------------------ D1 falso (SQLite real)
 function d1(failBatch?: number, failSql?: RegExp, beforeBatch?: (n: number) => Promise<void>): D1Like & { raw: DatabaseSync } {
   let batches = 0;
   const db = new DatabaseSync(':memory:');
-  db.exec(readFileSync(new URL('../migrations/0001_init.sql', import.meta.url), 'utf-8'));
+  const dir = new URL('../migrations/', import.meta.url);
+  for (const f of readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()) {
+    db.exec(readFileSync(new URL(f, dir), 'utf-8'));
+  }
   const stmt = (sql: string, args: unknown[] = []): D1Stmt => ({
     bind: (...v: unknown[]) => stmt(sql, v),
     run: async () => { if (failSql?.test(sql)) throw new Error('D1 indisponível'); return db.prepare(sql).run(...(args as never[])); },
@@ -171,9 +175,9 @@ function setup(opts: { contacts?: FakeContact[]; props?: string[]; patchStatus?:
   };
   const db = d1();
   const env: Env = { DB: db, RESEND_API_KEY: 're_test', SEGMENT_ID: SEG, TOPIC_ID: TOPIC, ACCESS_TEAM_DOMAIN: TEAM, ACCESS_AUD: AUD,
-    ALLOWED_EMAILS: ` ${GUI.toUpperCase()} `, SITE_ORIGIN: tomlVar('SITE_ORIGIN'),
-    DRAFTS: { get: async () => null, list: async () => ({ objects: [], delimitedPrefixes: [], truncated: false }) },
-    DRAFT_NOTIFY_FROM: '', DRAFT_NOTIFY_TO: '' };
+    ALLOWED_EMAILS: ` ${GUI.toUpperCase()} `, SITE_ORIGIN: tomlVar('SITE_ORIGIN'), TWENTY_ORIGIN: TWENTY,
+    DRAFTS: { get: async () => null, list: async () => ({ objects: [], delimitedPrefixes: [], truncated: false }), delete: async () => {} },
+    DRAFT_NOTIFY_FROM: '', DRAFT_NOTIFY_TO: '', GITHUB_DISPATCH_TOKEN: '' };
   const passed: string[] = [];
   const deps: Deps = { fetch: fetchFn as typeof fetch, now: () => clock.t, sleep: async (ms) => { sleeps.push(ms); clock.t += ms; },
     origin: async (req) => { passed.push(new URL(req.url).pathname); return new Response('pages', { status: 200 }); } };
@@ -215,7 +219,7 @@ test('G1: sem JWT válido do Access, nenhuma rota do painel responde (403), e na
     ['sem exp', await jwt({ exp: undefined })],
     ['exp em texto', await jwt({ exp: String(NOW / 1000 + 3600) })],
   ];
-  for (const path of ['/admin', '/admin/', '/admin/export.csv', '/admin/unsubscribe', '/admin/qualquer']) {
+  for (const path of ['/admin', '/admin/', '/admin/assinantes', '/admin/contatos', '/admin/conteudos', '/admin/export.csv', '/admin/unsubscribe', '/admin/qualquer']) {
     for (const [why, token] of bad) {
       for (const method of ['GET', 'POST']) {
         resetCertsCache();
@@ -259,6 +263,7 @@ test('G1: caminhos fora de /admin seguem para o site sem exigir login', async ()
 test('G1: o wrangler.toml prende o Worker só ao caminho /admin e com cron de hora em hora', () => {
   assert.match(TOML, /routes = \[\{ pattern = "guifav\.dev\/admin\*", zone_name = "guifav\.dev" \}\]/);
   assert.match(TOML, /crons = \["17 \* \* \* \*"\]/);
+  assert.equal(TWENTY, 'https://crm.guifav.dev');
   assert.doesNotMatch(TOML, /RESEND_API_KEY\s*=|ALLOWED_EMAILS\s*=|@/);
 });
 
@@ -275,10 +280,10 @@ test('G2: lista, contadores e filtros vêm do D1', async () => {
     { id: 'c', email: 'caio@y.com', origin: 'substack', unsubscribed: 1, admin_unsubscribed_at: '2026-11-12T10:00:00Z', paid_until: '2026-12-01T00:00:00.000Z' },
   ]);
   s.db.raw.prepare("INSERT INTO meta (k, v) VALUES ('last_sync_at', '2026-11-12T11:17:00Z')").run();
-  const html = await (await get(s, '/admin')).text();
+  const html = await (await get(s, '/admin/assinantes')).text();
   for (const t of ['Total 3', 'Inscritos 2', 'Descadastrados 1', 'Substack 2', 'Site 1', 'Pagos ativos 1', '2026-11-12T11:17:00Z',
     'ana@x.com', 'bia@x.com', 'caio@y.com', 'painel, 2026-11-12', '3 encontrados']) assert.ok(html.includes(t), t);
-  const only = async (q: string) => [...(await (await get(s, `/admin?${q}`)).text()).matchAll(/<td>([a-z]+@[a-z.]+)<\/td>/g)].map((m) => m[1]).sort();
+  const only = async (q: string) => [...(await (await get(s, `/admin/assinantes?${q}`)).text()).matchAll(/<td>([a-z]+@[a-z.]+)<\/td>/g)].map((m) => m[1]).sort();
   assert.deepEqual(await only('q=y.com'), ['caio@y.com']);
   assert.deepEqual(await only('status=inscrito'), ['ana@x.com', 'bia@x.com']);
   assert.deepEqual(await only('status=descadastrado'), ['caio@y.com']);
@@ -293,11 +298,11 @@ test('G2: lista, contadores e filtros vêm do D1', async () => {
 test('G2: a busca não é LIKE (sem curinga) e é escapada no HTML; cabeçalhos de segurança em toda resposta', async () => {
   const s = setup();
   seed(s.db, [{ id: 'a', email: 'ana@x.com' }]);
-  const r = await get(s, '/admin?q=%25');
+  const r = await get(s, '/admin/assinantes?q=%25');
   assert.ok((await r.text()).includes('0 encontrados'));
-  const html = await (await get(s, '/admin?q=%3Cscript%3E')).text();
+  const html = await (await get(s, '/admin/assinantes?q=%3Cscript%3E')).text();
   assert.ok(!html.includes('<script>') && html.includes('&lt;script&gt;'));
-  for (const path of ['/admin', '/admin/export.csv', '/admin/nada']) {
+  for (const path of ['/admin', '/admin/assinantes', '/admin/export.csv', '/admin/nada']) {
     const h = (await get(s, path)).headers;
     assert.equal(h.get('cache-control'), 'no-store', path);
     assert.equal(h.get('x-robots-tag'), 'noindex, nofollow', path);
@@ -312,7 +317,7 @@ test('G2: a busca não é LIKE (sem curinga) e é escapada no HTML; cabeçalhos 
 test('G2: paginação de 100 em 100', async () => {
   const s = setup();
   seed(s.db, rows(250));
-  const count = async (p: string) => ((await (await get(s, `/admin${p}`)).text()).match(/<td>p\d+@x\.com<\/td>/g) ?? []).length;
+  const count = async (p: string) => ((await (await get(s, `/admin/assinantes${p}`)).text()).match(/<td>p\d+@x\.com<\/td>/g) ?? []).length;
   assert.equal(PAGE_SIZE, 100);
   assert.deepEqual([await count(''), await count('?p=2'), await count('?p=3'), await count('?p=9')], [100, 100, 50, 0]);
 });
@@ -348,7 +353,7 @@ test('G4: descadastro grava no Resend com auditoria, confere na releitura, atual
   seed(s.db, [{ id: 'a', email: 'ana@x.com' }]);
   const r = await post(s, { id: 'a', confirmar: 'sim' });
   assert.equal(r.status, 303);
-  assert.equal(r.headers.get('location'), '/admin?msg=descadastrado');
+  assert.equal(r.headers.get('location'), '/admin/assinantes?msg=descadastrado');
   const patches = s.calls.filter((c) => c.method === 'PATCH');
   // Auditoria primeiro, depois a saída só do tópico da newsletter; o status global da conta não é tocado.
   assert.deepEqual(patches.map((c) => c.url), ['https://api.resend.com/contacts/a', 'https://api.resend.com/contacts/a/topics']);
@@ -418,7 +423,7 @@ test('G2: conteúdo hostil gravado na cópia sai escapado na página e com aspas
   const s = setup();
   seed(s.db, [{ id: 'x"><script>alert(1)</script>', email: '<img src=x onerror=alert(1)>@x.com', origin: '<b>o</b>', joined_at: '<i>2025</i>' }]);
   s.db.raw.prepare("INSERT INTO meta (k, v) VALUES ('last_sync_error', '<script>e</script>')").run();
-  const html = await (await get(s, '/admin')).text();
+  const html = await (await get(s, '/admin/assinantes')).text();
   assert.ok(!html.includes('<script>') && !html.includes('<img') && !html.includes('<b>o</b>') && !html.includes('<i>'), 'HTML sem escape');
   assert.ok(html.includes('&lt;img src=x onerror=alert(1)&gt;@x.com'));
 });

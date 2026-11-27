@@ -166,8 +166,11 @@ Resumo do que a CI verifica e do que fica na revisão editorial:
    scripts/check_site.py na raiz do repo, depois). Só mídia: webp, png, jpg, jpeg, gif,
    avif, mp4, webm. HTML, SVG, JS, CSS, qualquer outra extensão e link simbólico (o Vite
    segue o link ao copiar) falham o build. Sob
-   /blog/, o site publicado só tem .html, .xml e essa mídia. Um arquivo fora disso em
-   _site/blog/ é bloqueio de gate.
+   /blog/, o site publicado só tem .html, .xml e essa mídia, com uma única exceção:
+   `/blog/catalogo.json`, dado gerado pelo template `src/pages/catalogo.json.ts` (origem 2,
+   código revisado), com caminho, título e data dos posts publicados, lido pelo cron do
+   painel (#193). O `check_site.py` recusa qualquer outro `.json` (ou qualquer arquivo fora
+   disso) em `_site/blog/` como bloqueio de gate.
 3. Templates. São código revisado. O atributo data-site-script marca os scripts do
    layout para o verificador reconhecer; ele não é prova de origem contra quem edita o
    template, e não pretende ser. Do mesmo jeito, data-site-form marca o único formulário do

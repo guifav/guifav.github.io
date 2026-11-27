@@ -12,7 +12,9 @@
 // entra no repo antes da aprovação. A aprovação dispara o workflow publicar.yml (#82), que baixa a fonte da versão,
 // confere o hash contra a aprovação no D1 e abre o PR de publicação; a lista lê o estado direto do GitHub. Depois do
 // merge, com o post no ar, a lista mostra o botão "Remover rascunho", que tira o rascunho do artigo do R2 (fatia 5).
+import { esc, nav } from './layout.ts';
 import type { D1Like } from './sync.ts';
+export { esc };
 
 export interface R2Body {
   arrayBuffer(): Promise<ArrayBuffer>;
@@ -125,10 +127,6 @@ function headers(type: string, csp: string): Record<string, string> {
 
 const text = (status: number, body: string) => new Response(body, { status, headers: headers('text/plain; charset=utf-8', ADMIN_CSP) });
 
-export function esc(s: unknown): string {
-  return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
-}
-
 export async function sha256Hex(data: ArrayBuffer | Uint8Array | string): Promise<string> {
   const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : data;
   const digest = await crypto.subtle.digest('SHA-256', bytes as BufferSource);
@@ -191,7 +189,7 @@ export async function readManifest(bucket: R2Like, slug: string): Promise<Manife
 const objectKey = (m: Manifest, file: string) => `${m.slug}/v/${m.version}/${file}`;
 
 /** HTML da versão do manifesto, conferido contra o html_sha256 dele; null se faltar ou não bater. */
-async function versionHtml(env: DraftEnv, m: Manifest): Promise<ArrayBuffer | null> {
+async function versionHtml(env: Pick<DraftEnv, 'DRAFTS'>, m: Manifest): Promise<ArrayBuffer | null> {
   const obj = await env.DRAFTS.get(objectKey(m, 'index.html'));
   if (!obj) return null;
   const raw = await obj.arrayBuffer();
@@ -565,7 +563,7 @@ export const REMOCAO_MAX_PAGINAS = 20;
 class HistoricoGrande extends Error {}
 
 /** Prefixos <slug>/ do bucket, no máximo MAX_DRAFTS, como a lista os enxerga. */
-async function slugsDoBucket(env: DraftEnv): Promise<string[]> {
+async function slugsDoBucket(env: Pick<DraftEnv, 'DRAFTS'>): Promise<string[]> {
   const prefixes: string[] = [];
   let cursor: string | undefined;
   do {
@@ -574,6 +572,19 @@ async function slugsDoBucket(env: DraftEnv): Promise<string[]> {
     cursor = page.truncated ? page.cursor : undefined;
   } while (cursor && prefixes.length < MAX_DRAFTS);
   return prefixes.slice(0, MAX_DRAFTS).map((p) => p.replace(/\/$/, ''));
+}
+
+/** Quantos artigos (kind blog, manifesto válido) aguardam aprovação da versão atual, pela mesma regra da lista:
+ * só conta quem tem a prévia conferindo (lê o HTML só dos não aprovados; continua sem chamar o GitHub). */
+export async function rascunhosAguardando(env: Pick<DraftEnv, 'DB' | 'DRAFTS'>): Promise<number> {
+  let n = 0;
+  for (const slug of await slugsDoBucket(env)) {
+    const m = await readManifest(env.DRAFTS, slug);
+    if (!m || m.kind !== 'blog') continue;
+    if (state(await approvals(env.DB, slug), m).approved) continue;
+    if (await versionHtml(env, m)) n++;
+  }
+  return n;
 }
 
 /** Remove o rascunho publicado da versão `m` e devolve se removeu. Reduz o risco de um envio que aconteça durante a
@@ -696,7 +707,7 @@ async function listPage(env: DraftEnv, deps: DraftDeps, msg: Mensagem | undefine
   }
   const body = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow"><title>Rascunhos | Insights</title><style>${PAGE_STYLE}</style></head><body>
-<p><a href="/admin">Assinantes</a> · Rascunhos</p><h1>Rascunhos do blog</h1>
+${nav('rascunhos')}<h1>Rascunhos do blog</h1>
 ${msg ? `<p class="aviso ${msg.erro ? 'erro' : 'ok'}" role="status">${esc(msg.texto)}</p>` : ''}
 ${registroFalhou ? `<p class="aviso erro" role="status">${esc(REGISTRO_FALHOU)}</p>` : ''}
 ${rows.length ? `<table><thead><tr><th>Título</th><th>Prévia enviada</th><th>Estado</th></tr></thead><tbody>${rows.join('')}</tbody></table>`
