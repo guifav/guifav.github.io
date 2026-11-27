@@ -16,7 +16,8 @@ export function d1(falha?: RegExp, mensagem = 'D1_ERROR: UNIQUE constraint faile
       if (pendura?.test(sql)) return new Promise(() => {}); // D1 que nunca responde
       if (porta && /conversions/.test(sql)) await porta; // D1 que só grava/lê `conversions` quando o teste libera (waitUntil, C9)
       if (falha?.test(sql)) throw new Error(mensagem);
-      return db.prepare(sql).run(...(args as never[]));
+      const r = db.prepare(sql).run(...(args as never[]));
+      return { success: true, meta: { changes: Number(r.changes) } };
     },
     first: async <T>() => {
       if (pendura?.test(sql)) return new Promise<T | null>(() => {});
@@ -33,7 +34,10 @@ export function d1Arquivo(caminho: string): D1Like & { raw: DatabaseSync } {
   const db = new DatabaseSync(caminho);
   const stmt = (sql: string, args: unknown[] = []): D1Stmt => ({
     bind: (...v: unknown[]) => stmt(sql, v),
-    run: async () => db.prepare(sql).run(...(args as never[])),
+    run: async () => {
+      const r = db.prepare(sql).run(...(args as never[]));
+      return { success: true, meta: { changes: Number(r.changes) } };
+    },
     first: async <T>() => {
       const r = db.prepare(sql).get(...(args as never[]));
       return (r ? JSON.parse(JSON.stringify(r)) : null) as T;

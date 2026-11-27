@@ -61,6 +61,8 @@ export interface Env {
   GA4_API_SECRET?: string;
   /** Segredo do webhook do Resend para o heating (épico #197, formato svix `whsec_` + base64). */
   RESEND_HEATING_WEBHOOK_SECRET?: string;
+  /** Slugs dos cursos (separados por vírgula) com engajamento próprio no heating (`<slug>@guifav.dev` -> `curso:<slug>`). */
+  HEATING_CURSOS?: string;
 }
 
 export interface Deps {
@@ -390,9 +392,10 @@ async function prioridade(req: Request, env: Env, deps: Deps): Promise<Response>
   const email = normalizeEmail(fields('email') ?? '');
   if (!email) return redirect(`${page}#erro-email`);
 
-  // Sem confirmação por email: a oposição só protege (épico #197). Não cria contato nem envia email.
-  // D1Like deste Worker não declara batch; os três comandos rodam em sequência com a marca primeiro, para que
-  // uma falha nos DELETEs já bloqueie eventos novos enquanto o titular recebe #erro para tentar novamente.
+  // Sem confirmação por email: a oposição só protege (épico #197) e vale para todos os contextos (`site` e cursos).
+  // Não cria contato nem envia email. D1Like deste Worker não declara batch; os três comandos rodam em sequência com
+  // a marca primeiro, para que uma falha nos DELETEs já bloqueie eventos novos enquanto o titular recebe #erro para
+  // tentar novamente.
   const nowIso = new Date(deps.now()).toISOString();
   try {
     const hmac = await heatingOptoutHmac(email, env.FORGET_HMAC_KEY);
@@ -400,6 +403,7 @@ async function prioridade(req: Request, env: Env, deps: Deps): Promise<Response>
       .prepare('INSERT INTO heating_optout (email_hmac, opted_out_at) VALUES (?, ?) ON CONFLICT(email_hmac) DO UPDATE SET opted_out_at = excluded.opted_out_at')
       .bind(hmac, nowIso)
       .run();
+    // Os dois DELETEs apagam todos os contextos do email (oposição geral).
     await env.DB.prepare('DELETE FROM engagement_events WHERE email = ?').bind(email).run();
     await env.DB.prepare('DELETE FROM heating WHERE email = ?').bind(email).run();
   } catch (e) {

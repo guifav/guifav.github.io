@@ -52,6 +52,11 @@ WORKER_URL = "https://insights.guifav.dev"
 TURNSTILE_HOSTNAME = "guifav.dev"
 # GA4 do site: o Worker manda o evento material_download pelo Measurement Protocol (issue #99).
 GA4_MEASUREMENT_ID = "G-K7Y87QNCX8"
+# Slugs dos cursos (separados por vírgula) cujo engajamento no heating é separado do site (épico #197, decisão de
+# 2026-11-27). Quando `data.from` no webhook do Resend é `<slug>@guifav.dev` e `<slug>` está nesta lista (padrão
+# `[a-z0-9][a-z0-9-]{0,63}`; slugs fora do padrão são ignorados), o contexto gravado é `curso:<slug>`; qualquer outro
+# remetente entra em `site`. Cada curso novo precisa de um remetente `<slug>@guifav.dev` e do slug nesta lista.
+HEATING_CURSOS = "chatgpt-no-dia-a-dia"
 
 # Garantia A6: cerca de 5 pedidos por IP e 1 email de confirmação por endereço, a cada 60 s. O rate limit
 # do Workers é aproximado e conta separado em cada localidade do Cloudflare: contém abuso junto com o

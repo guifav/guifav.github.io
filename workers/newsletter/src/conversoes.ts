@@ -5,9 +5,12 @@
 import type { Interesse } from './materiais.ts';
 import { CANAIS, FONTES, UTM, entradaValida, type Origem } from './origem.ts';
 
+export interface D1RunResult {
+  meta?: { changes?: number };
+}
 export interface D1Stmt {
   bind(...v: unknown[]): D1Stmt;
-  run(): Promise<unknown>;
+  run(): Promise<D1RunResult>;
   first<T = Record<string, unknown>>(): Promise<T | null>;
 }
 export interface D1Like {

@@ -6,6 +6,7 @@ import { createHash, createHmac } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import { handle, type Env } from '../src/index.ts';
+import type { D1Like, D1Stmt } from '../src/conversoes.ts';
 import { forgetHmac, heatingOptoutHmac } from '../src/forget.ts';
 import { MAX_WEBHOOK_BODY } from '../src/resend-webhook.ts';
 import { d1, rows, capturaErros } from './d1.ts';
@@ -28,17 +29,19 @@ function assinarSvix(id: string, tsSec: number, body: string, rawKey: Buffer = W
 type SetupOpts = {
   now?: number;
   webhookSecret?: string | undefined;
+  heatingCursos?: string | undefined;
   forgetKey?: string;
   turnstile?: unknown;
   rlIp?: boolean;
   d1Falha?: RegExp;
   d1Mensagem?: string;
+  db?: D1Like & { raw: DatabaseSync };
 };
 
 function setup(opts: SetupOpts = {}) {
   const calls: Array<{ url: string; method: string; body: unknown }> = [];
   const rl: string[] = [];
-  const db = d1(opts.d1Falha, opts.d1Mensagem ?? 'D1_ERROR: falha para leitor@exemplo.com');
+  const db = opts.db ?? d1(opts.d1Falha, opts.d1Mensagem ?? 'D1_ERROR: falha para leitor@exemplo.com');
   const pending: Promise<unknown>[] = [];
   const waitUntil = (p: Promise<unknown>) => void pending.push(p);
   const fetchFn = async (input: string | URL | Request, init?: RequestInit) => {
@@ -59,6 +62,7 @@ function setup(opts: SetupOpts = {}) {
     CONFIRM_SECRET: SECRET,
     FORGET_HMAC_KEY: opts.forgetKey ?? FORGET_KEY,
     RESEND_HEATING_WEBHOOK_SECRET: 'webhookSecret' in opts ? opts.webhookSecret : WEBHOOK_SECRET,
+    HEATING_CURSOS: 'heatingCursos' in opts ? opts.heatingCursos : tomlVar('HEATING_CURSOS'),
     FROM: tomlVar('FROM'),
     MATERIAL_FROM: tomlVar('MATERIAL_FROM'),
     REPLY_TO: tomlVar('REPLY_TO'),
@@ -194,40 +198,90 @@ test('M2: migração 0010 falha sem perder a tabela original se houver linha com
   assert.deepEqual(restantes.map((r) => [r.id, r.verified]), [['ok-1', 1], ['bad-2', 2]]);
 });
 
-test('M3: migração 0011 aplica CHECKs de engagement_events, heating e heating_optout', () => {
+test('M3: migração 0011 aplica CHECKs de context, PK composta (context, email) e índices em engagement_events, heating e heating_optout', () => {
   const db = d1().raw;
   const iso = '2026-11-27T12:00:00.000Z';
 
-  // engagement_events: válido passa; sinal, fonte, email maiúsculo, id/ref e data fora do formato são recusados.
-  db.prepare(`INSERT INTO engagement_events (id, email, signal, source, ref, occurred_at, recorded_at)
-    VALUES ('rs:abc_1.2-3', 'leitor@exemplo.com', 'email_aberto', 'resend', 'email_123', ?, ?)`).run(iso, iso);
-  assert.throws(() => db.prepare(`INSERT INTO engagement_events (id, email, signal, source, ref, occurred_at, recorded_at)
-    VALUES ('id-2', 'Leitor@exemplo.com', 'email_aberto', 'resend', null, ?, ?)`).run(iso, iso), /CHECK/);
-  assert.throws(() => db.prepare(`INSERT INTO engagement_events (id, email, signal, source, ref, occurred_at, recorded_at)
-    VALUES ('id-3', 'leitor@exemplo.com', 'sinal_falso', 'resend', null, ?, ?)`).run(iso, iso), /CHECK/);
-  assert.throws(() => db.prepare(`INSERT INTO engagement_events (id, email, signal, source, ref, occurred_at, recorded_at)
-    VALUES ('id-4', 'leitor@exemplo.com', 'email_aberto', 'outra', null, ?, ?)`).run(iso, iso), /CHECK/);
-  assert.throws(() => db.prepare(`INSERT INTO engagement_events (id, email, signal, source, ref, occurred_at, recorded_at)
-    VALUES ('id/ruim', 'leitor@exemplo.com', 'email_aberto', 'resend', null, ?, ?)`).run(iso, iso), /CHECK/);
-  assert.throws(() => db.prepare(`INSERT INTO engagement_events (id, email, signal, source, ref, occurred_at, recorded_at)
-    VALUES ('id-5', 'leitor@exemplo.com', 'email_aberto', 'resend', null, '2026-11-27T12:00:00Z', ?)`).run(iso), /CHECK/);
+  // engagement_events: contextos válidos (`site` e `curso:<slug>` com 1..64 chars de [a-z0-9-] começando por letra/número) passam.
+  const contextosValidos = ['site', 'curso:a', 'curso:0', 'curso:chatgpt-no-dia-a-dia', `curso:${'a'.repeat(64)}`, 'curso:a--b-1'];
+  for (let i = 0; i < contextosValidos.length; i++) {
+    db.prepare(`INSERT INTO engagement_events (id, context, email, signal, source, ref, occurred_at, recorded_at)
+      VALUES (?, ?, 'leitor@exemplo.com', 'email_aberto', 'resend', 'email_123', ?, ?)`).run(`rs:ok_${i}`, contextosValidos[i], iso, iso);
+  }
+  const contextosInvalidos = [
+    '',
+    'SITE',
+    'curso',
+    'curso:',
+    'curso:-abc',
+    'curso:Abc',
+    'curso:abcDef',
+    'curso:abc_def',
+    'curso:abc:def',
+    'curso:abc.def',
+    'curso:abc def',
+    `curso:${'a'.repeat(65)}`,
+    'outro:abc',
+  ];
+  for (let i = 0; i < contextosInvalidos.length; i++) {
+    const ruim = contextosInvalidos[i];
+    assert.throws(
+      () => db.prepare(`INSERT INTO engagement_events (id, context, email, signal, source, ref, occurred_at, recorded_at)
+        VALUES (?, ?, 'leitor@exemplo.com', 'email_aberto', 'resend', null, ?, ?)`).run(`rs:badctx_${i}`, ruim, iso, iso),
+      /CHECK/,
+      `engagement_events context=${ruim}`,
+    );
+    assert.throws(
+      () => db.prepare(`INSERT INTO heating (context, email, score, band, signals, computed_at)
+        VALUES (?, 'ctx@exemplo.com', 50, 'morno', '[]', ?)`).run(ruim, iso),
+      /CHECK/,
+      `heating context=${ruim}`,
+    );
+  }
 
-  // heating: score 0..100, band, json_valid(signals) <= 2000, twenty_person_id.
-  db.prepare(`INSERT INTO heating (email, score, band, signals, computed_at, twenty_person_id)
-    VALUES ('leitor@exemplo.com', 75, 'quente', '["site_agende","email_clicado"]', ?, 'uuid-123')`).run(iso);
-  assert.throws(() => db.prepare(`INSERT INTO heating (email, score, band, signals, computed_at)
-    VALUES ('a@b.co', 101, 'quente', '[]', ?)`).run(iso), /CHECK/);
-  assert.throws(() => db.prepare(`INSERT INTO heating (email, score, band, signals, computed_at)
-    VALUES ('a@b.co', 50, 'fervendo', '[]', ?)`).run(iso), /CHECK/);
-  assert.throws(() => db.prepare(`INSERT INTO heating (email, score, band, signals, computed_at)
-    VALUES ('a@b.co', 50, 'morno', 'nao-json', ?)`).run(iso), /CHECK/);
-  assert.throws(() => db.prepare(`INSERT INTO heating (email, score, band, signals, computed_at, twenty_person_id)
-    VALUES ('a@b.co', 50, 'morno', '[]', ?, 'id/invalido')`).run(iso), /CHECK/);
+  // Outros CHECKs de engagement_events: sinal, fonte, email maiúsculo, id/ref e data fora do formato são recusados.
+  assert.throws(() => db.prepare(`INSERT INTO engagement_events (id, context, email, signal, source, ref, occurred_at, recorded_at)
+    VALUES ('id-2', 'site', 'Leitor@exemplo.com', 'email_aberto', 'resend', null, ?, ?)`).run(iso, iso), /CHECK/);
+  assert.throws(() => db.prepare(`INSERT INTO engagement_events (id, context, email, signal, source, ref, occurred_at, recorded_at)
+    VALUES ('id-3', 'site', 'leitor@exemplo.com', 'sinal_falso', 'resend', null, ?, ?)`).run(iso, iso), /CHECK/);
+  assert.throws(() => db.prepare(`INSERT INTO engagement_events (id, context, email, signal, source, ref, occurred_at, recorded_at)
+    VALUES ('id-4', 'site', 'leitor@exemplo.com', 'email_aberto', 'outra', null, ?, ?)`).run(iso, iso), /CHECK/);
+  assert.throws(() => db.prepare(`INSERT INTO engagement_events (id, context, email, signal, source, ref, occurred_at, recorded_at)
+    VALUES ('id/ruim', 'site', 'leitor@exemplo.com', 'email_aberto', 'resend', null, ?, ?)`).run(iso, iso), /CHECK/);
+  assert.throws(() => db.prepare(`INSERT INTO engagement_events (id, context, email, signal, source, ref, occurred_at, recorded_at)
+    VALUES ('id-5', 'site', 'leitor@exemplo.com', 'email_aberto', 'resend', null, '2026-11-27T12:00:00Z', ?)`).run(iso), /CHECK/);
 
-  // heating_optout: 64 hex minúsculos e ISO UTC com ms.
+  // heating: dois contextos para o mesmo email coexistem (PK composta), mas repetir o mesmo (context, email) falha.
+  db.prepare(`INSERT INTO heating (context, email, score, band, signals, computed_at, twenty_person_id)
+    VALUES ('site', 'leitor@exemplo.com', 75, 'quente', '["site_agende","email_clicado"]', ?, 'uuid-123')`).run(iso);
+  db.prepare(`INSERT INTO heating (context, email, score, band, signals, computed_at, twenty_person_id)
+    VALUES ('curso:chatgpt-no-dia-a-dia', 'leitor@exemplo.com', 40, 'morno', '["curso_aula"]', ?, 'uuid-123')`).run(iso);
+  assert.equal(rows(db, 'heating').length, 2);
+  assert.throws(() => db.prepare(`INSERT INTO heating (context, email, score, band, signals, computed_at)
+    VALUES ('site', 'leitor@exemplo.com', 10, 'frio', '[]', ?)`).run(iso), /UNIQUE|PRIMARY KEY/);
+
+  // Outros CHECKs de heating: score 0..100, band, json_valid(signals) <= 2000, twenty_person_id.
+  assert.throws(() => db.prepare(`INSERT INTO heating (context, email, score, band, signals, computed_at)
+    VALUES ('site', 'a@b.co', 101, 'quente', '[]', ?)`).run(iso), /CHECK/);
+  assert.throws(() => db.prepare(`INSERT INTO heating (context, email, score, band, signals, computed_at)
+    VALUES ('site', 'a@b.co', 50, 'fervendo', '[]', ?)`).run(iso), /CHECK/);
+  assert.throws(() => db.prepare(`INSERT INTO heating (context, email, score, band, signals, computed_at)
+    VALUES ('site', 'a@b.co', 50, 'morno', 'nao-json', ?)`).run(iso), /CHECK/);
+  assert.throws(() => db.prepare(`INSERT INTO heating (context, email, score, band, signals, computed_at, twenty_person_id)
+    VALUES ('site', 'a@b.co', 50, 'morno', '[]', ?, 'id/invalido')`).run(iso), /CHECK/);
+
+  // heating_optout: 64 hex minúsculos e ISO UTC com ms (sem contexto: vale para todos).
   db.prepare('INSERT INTO heating_optout (email_hmac, opted_out_at) VALUES (?, ?)').run('a'.repeat(64), iso);
   assert.throws(() => db.prepare('INSERT INTO heating_optout (email_hmac, opted_out_at) VALUES (?, ?)').run('A'.repeat(64), iso), /CHECK/);
   assert.throws(() => db.prepare('INSERT INTO heating_optout (email_hmac, opted_out_at) VALUES (?, ?)').run('b'.repeat(64), '2026-11-27'), /CHECK/);
+
+  // Índices esperados para leitura do job por contexto e DELETE por email.
+  const idxEvents = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'engagement_events' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+    .all() as Array<{ name: string }>).map((i) => i.name);
+  assert.deepEqual(idxEvents, ['engagement_events_context_email_occurred', 'engagement_events_email', 'engagement_events_signal_ref']);
+  const idxHeating = (db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'heating' AND name NOT LIKE 'sqlite_%' ORDER BY name")
+    .all() as Array<{ name: string }>).map((i) => i.name);
+  assert.deepEqual(idxHeating, ['heating_context_score_email', 'heating_email']);
 });
 
 // ---------------------------------------------------------------- HMAC com prefixo separado
@@ -265,6 +319,7 @@ test('W1: assinatura válida grava os quatro tipos mapeados de forma síncrona (
     const linha = todas[i];
     assert.deepEqual(linha, {
       id: `rs:${createHash('sha256').update(`${svixId}\nleitor@exemplo.com`).digest('hex')}`,
+      context: 'site',
       email: 'leitor@exemplo.com',
       signal: expectedSignal,
       source: 'resend',
@@ -350,9 +405,13 @@ test('W5: método diferente de POST devolve 405 com allow: POST', async () => {
 test('W6: reentrega com o mesmo svix-id não duplica', async () => {
   const s = setup();
   const payload = { type: 'email.delivered', created_at: '2026-11-27T12:00:00.000Z', data: { email_id: 'em_dup', to: ['leitor@exemplo.com'] } };
-  assert.equal((await s.run(webhookReq(payload, { id: 'msg_mesmo' }))).status, 200);
+  const r1 = await s.run(webhookReq(payload, { id: 'msg_mesmo' }));
+  assert.equal(r1.status, 200);
+  assert.deepEqual(await r1.json(), { ok: true, gravados: 1 });
   s.avanca(10_000);
-  assert.equal((await s.run(webhookReq(payload, { id: 'msg_mesmo', tsSec: Math.floor((NOW + 10_000) / 1000) }))).status, 200);
+  const r2 = await s.run(webhookReq(payload, { id: 'msg_mesmo', tsSec: Math.floor((NOW + 10_000) / 1000) }));
+  assert.equal(r2.status, 200);
+  assert.deepEqual(await r2.json(), { ok: true, gravados: 0 });
   const todas = s.rows('engagement_events');
   assert.equal(todas.length, 1);
   assert.equal(todas[0].recorded_at, new Date(NOW).toISOString());
@@ -507,16 +566,147 @@ test('W13: falha do D1 no webhook devolve 500 e o log não contém o email', asy
   }
 });
 
+test('W14: contexto do curso sai de data.from quando o domínio é guifav.dev e o slug está em HEATING_CURSOS', async () => {
+  const s = setup({ heatingCursos: 'chatgpt-no-dia-a-dia, ia-para-lideres' });
+  const casos: Array<[string, string]> = [
+    ['Guilherme Favaron | ChatGPT no dia a dia <chatgpt-no-dia-a-dia@guifav.dev>', 'curso:chatgpt-no-dia-a-dia'],
+    ['chatgpt-no-dia-a-dia@guifav.dev', 'curso:chatgpt-no-dia-a-dia'],
+    ['Curso <ChatGPT-No-Dia-A-Dia@GUIFAV.DEV>', 'curso:chatgpt-no-dia-a-dia'],
+    ['Guilherme <ia-para-lideres@guifav.dev>', 'curso:ia-para-lideres'],
+  ];
+  for (let i = 0; i < casos.length; i++) {
+    const [from, esperado] = casos[i];
+    const r = await s.run(webhookReq({
+      type: 'email.opened',
+      created_at: '2026-11-27T12:00:00.000Z',
+      data: { email_id: `em_c_${i}`, from, to: ['aluna@exemplo.com'] },
+    }, { id: `msg_curso_${i}` }));
+    assert.equal(r.status, 200, from);
+    assert.equal(s.rows('engagement_events')[i].context, esperado, from);
+  }
+});
+
+test('W15: remetente fora da lista, outro domínio, from ausente ou inválido viram contexto site', async () => {
+  const s = setup();
+  const casos: Array<[string, unknown]> = [
+    ['fora da lista no mesmo domínio', 'Guilherme Favaron <insights@guifav.dev>'],
+    ['subdomínio expert.guifav.dev', 'Guilherme Favaron | Expert Insights <newsletter@expert.guifav.dev>'],
+    ['mesmo slug em subdomínio', 'chatgpt-no-dia-a-dia@expert.guifav.dev'],
+    ['mesmo slug em outro domínio', 'Curso <chatgpt-no-dia-a-dia@outro.com>'],
+    ['from ausente', undefined],
+    ['from vazio', '   '],
+    ['from não string', 42],
+    ['from sem arroba', 'chatgpt-no-dia-a-dia'],
+    ['from com < sem >', 'Curso <chatgpt-no-dia-a-dia@guifav.dev'],
+    ['from com dois pares <>', '<outro@exemplo.com> <chatgpt-no-dia-a-dia@guifav.dev>'],
+  ];
+  for (let i = 0; i < casos.length; i++) {
+    const [nome, from] = casos[i];
+    const data: Record<string, unknown> = { email_id: `em_s_${i}`, to: ['leitor@exemplo.com'] };
+    if (from !== undefined) data.from = from;
+    const r = await s.run(webhookReq({
+      type: 'email.delivered',
+      created_at: '2026-11-27T12:00:00.000Z',
+      data,
+    }, { id: `msg_site_${i}` }));
+    assert.equal(r.status, 200, nome);
+    assert.equal(s.rows('engagement_events')[i].context, 'site', nome);
+  }
+
+  // Sem HEATING_CURSOS configurada, até o remetente do curso cai em `site`.
+  const sSem = setup({ heatingCursos: undefined });
+  const rSem = await sSem.run(webhookReq({
+    type: 'email.delivered',
+    created_at: '2026-11-27T12:00:00.000Z',
+    data: { email_id: 'em_sem', from: 'chatgpt-no-dia-a-dia@guifav.dev', to: ['leitor@exemplo.com'] },
+  }, { id: 'msg_sem_var' }));
+  assert.equal(rSem.status, 200);
+  assert.equal(sSem.rows('engagement_events')[0].context, 'site');
+});
+
+test('W16: slug inválido em HEATING_CURSOS é ignorado com log curto enquanto slugs válidos continuam valendo', async () => {
+  const s = setup({ heatingCursos: `chatgpt-no-dia-a-dia, -invalido, Maiuscula, com_underline, ${'a'.repeat(65)}` });
+  let rCurso!: Response;
+  let rIgnorado!: Response;
+  const erros = await capturaErros(async () => {
+    rCurso = await s.run(webhookReq({
+      type: 'email.opened',
+      created_at: '2026-11-27T12:00:00.000Z',
+      data: { email_id: 'em_v', from: 'chatgpt-no-dia-a-dia@guifav.dev', to: ['leitor@exemplo.com'] },
+    }, { id: 'msg_slug_ok' }));
+    rIgnorado = await s.run(webhookReq({
+      type: 'email.opened',
+      created_at: '2026-11-27T12:00:00.000Z',
+      data: { email_id: 'em_i', from: 'maiuscula@guifav.dev', to: ['leitor@exemplo.com'] },
+    }, { id: 'msg_slug_bad' }));
+  });
+  assert.equal(rCurso.status, 200);
+  assert.equal(rIgnorado.status, 200);
+  const todas = s.rows('engagement_events');
+  assert.deepEqual(todas.map((x) => x.context), ['curso:chatgpt-no-dia-a-dia', 'site']);
+  assert.equal(erros.length, 2);
+  assert.match(erros[0], /4 slug\(s\) inválido\(s\) em HEATING_CURSOS ignorado\(s\)/);
+});
+
+test('W17: corrida com POST /prioridade — se a oposição grava a marca imediatamente antes do INSERT do webhook, nenhum evento do email fica gravado', async () => {
+  const base = d1();
+  const email = 'corrida@exemplo.com';
+  const hmac = await heatingOptoutHmac(email, FORGET_KEY);
+  const isoAnterior = new Date(NOW - 60_000).toISOString();
+  base.raw.prepare(`INSERT INTO engagement_events (id, context, email, signal, source, ref, occurred_at, recorded_at)
+    VALUES ('rs:previo', 'site', ?, 'email_entregue', 'resend', 'em_previo', ?, ?)`).run(email, isoAnterior, isoAnterior);
+
+  let prioridadeExecutou = false;
+  const d1Corrida: D1Like & { raw: DatabaseSync } = {
+    raw: base.raw,
+    prepare(sql: string) {
+      const wrap = (inner: D1Stmt): D1Stmt => ({
+        bind: (...v: unknown[]) => wrap(inner.bind(...v)),
+        first: <T>() => inner.first<T>(),
+        run: async () => {
+          if (!prioridadeExecutou && /INSERT\s+INTO\s+engagement_events\b/i.test(sql)) {
+            prioridadeExecutou = true;
+            // Simula POST /prioridade terminando imediatamente antes do INSERT do webhook:
+            // grava a marca de oposição e apaga eventos e heating anteriores do email.
+            base.raw.prepare(
+              'INSERT INTO heating_optout (email_hmac, opted_out_at) VALUES (?, ?) ON CONFLICT(email_hmac) DO UPDATE SET opted_out_at = excluded.opted_out_at',
+            ).run(hmac, new Date(NOW).toISOString());
+            base.raw.prepare('DELETE FROM engagement_events WHERE email = ?').run(email);
+            base.raw.prepare('DELETE FROM heating WHERE email = ?').run(email);
+          }
+          return inner.run();
+        },
+      });
+      return wrap(base.prepare(sql));
+    },
+  };
+
+  const s = setup({ db: d1Corrida });
+  const r = await s.run(webhookReq({
+    type: 'email.opened',
+    created_at: new Date(NOW).toISOString(),
+    data: { email_id: 'em_corrida', to: [email] },
+  }, { id: 'msg_corrida_1' }));
+
+  assert.equal(r.status, 200);
+  assert.equal(prioridadeExecutou, true);
+  assert.equal(s.rows('heating_optout').length, 1);
+  assert.equal(s.rows('engagement_events').length, 0);
+  assert.deepEqual(await r.json(), { ok: true, gravados: 0 });
+});
+
 // ---------------------------------------------------------------- POST /prioridade
 
-test('P1: /prioridade grava a marca, apaga eventos e heating só do email informado e não chama o Resend', async () => {
+test('P1: /prioridade grava a marca, apaga eventos e heating de todos os contextos só do email informado e não chama o Resend', async () => {
   const s = setup();
   const iso = new Date(NOW - 60_000).toISOString();
   for (const email of ['leitor@exemplo.com', 'outro@exemplo.com']) {
-    s.db.prepare(`INSERT INTO engagement_events (id, email, signal, source, ref, occurred_at, recorded_at)
-      VALUES (?, ?, 'email_aberto', 'resend', 'em_1', ?, ?)`).run(`rs:${email.split('@')[0]}`, email, iso, iso);
-    s.db.prepare(`INSERT INTO heating (email, score, band, signals, computed_at)
-      VALUES (?, 60, 'morno', '["email_aberto"]', ?)`).run(email, iso);
+    for (const ctx of ['site', 'curso:chatgpt-no-dia-a-dia']) {
+      s.db.prepare(`INSERT INTO engagement_events (id, context, email, signal, source, ref, occurred_at, recorded_at)
+        VALUES (?, ?, ?, 'email_aberto', 'resend', 'em_1', ?, ?)`).run(`rs:${ctx}:${email.split('@')[0]}`, ctx, email, iso, iso);
+      s.db.prepare(`INSERT INTO heating (context, email, score, band, signals, computed_at)
+        VALUES (?, ?, 60, 'morno', '["email_aberto"]', ?)`).run(ctx, email, iso);
+    }
   }
 
   const r = await s.run(prioridadeReq({ email: '  Leitor@Exemplo.COM ', 'cf-turnstile-response': 'tok' }));
@@ -530,8 +720,14 @@ test('P1: /prioridade grava a marca, apaga eventos e heating só do email inform
     email_hmac: await heatingOptoutHmac('leitor@exemplo.com', FORGET_KEY),
     opted_out_at: new Date(NOW).toISOString(),
   });
-  assert.deepEqual(s.rows('engagement_events').map((x) => x.email), ['outro@exemplo.com']);
-  assert.deepEqual(s.rows('heating').map((x) => x.email), ['outro@exemplo.com']);
+  assert.deepEqual(s.rows('engagement_events').map((x) => [x.context, x.email]), [
+    ['site', 'outro@exemplo.com'],
+    ['curso:chatgpt-no-dia-a-dia', 'outro@exemplo.com'],
+  ]);
+  assert.deepEqual(s.rows('heating').map((x) => [x.context, x.email]), [
+    ['site', 'outro@exemplo.com'],
+    ['curso:chatgpt-no-dia-a-dia', 'outro@exemplo.com'],
+  ]);
 
   // Repetir a oposição depois atualiza opted_out_at (upsert) sem erro.
   s.avanca(5_000);
@@ -540,14 +736,19 @@ test('P1: /prioridade grava a marca, apaga eventos e heating só do email inform
   assert.equal(loc(r2), 'https://guifav.dev/prioridade/#pronto');
   assert.equal(s.rows('heating_optout')[0].opted_out_at, new Date(NOW + 5_000).toISOString());
 
-  // Webhook que chega depois não volta a gravar eventos do email oposto.
-  const rw = await s.run(webhookReq({
-    type: 'email.clicked',
-    created_at: new Date(NOW + 5_000).toISOString(),
-    data: { email_id: 'em_pos', to: ['leitor@exemplo.com'], click: { link: 'https://guifav.dev/blog/post/' } },
-  }, { id: 'msg_pos_optout', tsSec: Math.floor((NOW + 5_000) / 1000) }));
-  assert.equal(rw.status, 200);
-  assert.deepEqual(s.rows('engagement_events').map((x) => x.email), ['outro@exemplo.com']);
+  // Webhook que chega depois (tanto do site quanto do curso) não volta a gravar eventos do email oposto.
+  for (const [id, from] of [
+    ['msg_pos_optout_site', 'Guilherme Favaron <insights@guifav.dev>'],
+    ['msg_pos_optout_curso', 'Guilherme Favaron | ChatGPT no dia a dia <chatgpt-no-dia-a-dia@guifav.dev>'],
+  ] as const) {
+    const rw = await s.run(webhookReq({
+      type: 'email.clicked',
+      created_at: new Date(NOW + 5_000).toISOString(),
+      data: { email_id: 'em_pos', from, to: ['leitor@exemplo.com'], click: { link: 'https://guifav.dev/blog/post/' } },
+    }, { id, tsSec: Math.floor((NOW + 5_000) / 1000) }));
+    assert.equal(rw.status, 200, id);
+  }
+  assert.deepEqual(s.rows('engagement_events').map((x) => x.email), ['outro@exemplo.com', 'outro@exemplo.com']);
 });
 
 test('P2: /prioridade aceita multipart/form-data e não revela se o email existia', async () => {
@@ -618,8 +819,8 @@ test('P3: /prioridade valida método, Origin, tamanho do corpo, limite por IP, T
 test('P4: falha do D1 em /prioridade redireciona para #erro, sem email no log, e grava a marca antes dos DELETEs', async () => {
   const s = setup({ d1Falha: /DELETE FROM heating/, d1Mensagem: 'D1_ERROR: falha ao apagar sigiloso@exemplo.com' });
   const iso = new Date(NOW).toISOString();
-  s.db.prepare(`INSERT INTO engagement_events (id, email, signal, source, ref, occurred_at, recorded_at)
-    VALUES ('rs:1', 'sigiloso@exemplo.com', 'email_aberto', 'resend', 'em_1', ?, ?)`).run(iso, iso);
+  s.db.prepare(`INSERT INTO engagement_events (id, context, email, signal, source, ref, occurred_at, recorded_at)
+    VALUES ('rs:1', 'site', 'sigiloso@exemplo.com', 'email_aberto', 'resend', 'em_1', ?, ?)`).run(iso, iso);
 
   let r!: Response;
   const erros = await capturaErros(async () => {
@@ -635,7 +836,9 @@ test('P4: falha do D1 em /prioridade redireciona para #erro, sem email no log, e
   assert.equal(s.rows('engagement_events').length, 0);
 });
 
-test('C1: wrangler.toml documenta RESEND_HEATING_WEBHOOK_SECRET em comentário e não atribui segredo', () => {
+test('C1: wrangler.toml documenta RESEND_HEATING_WEBHOOK_SECRET sem segredo e declara HEATING_CURSOS', () => {
   assert.match(TOML, /#.*RESEND_HEATING_WEBHOOK_SECRET/);
   assert.doesNotMatch(TOML, /RESEND_HEATING_WEBHOOK_SECRET\s*=|whsec_[A-Za-z0-9+/=]{16,}/);
+  assert.equal(tomlVar('HEATING_CURSOS'), 'chatgpt-no-dia-a-dia');
+  assert.match(TOML, /#.*<slug>@guifav\.dev/);
 });

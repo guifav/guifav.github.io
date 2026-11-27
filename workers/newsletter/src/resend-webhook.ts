@@ -1,8 +1,10 @@
 // Webhook do Resend para o heating de contatos (épico #197, corte 1): POST /resend/webhook.
 // Recebe email.delivered, email.opened, email.clicked e email.complained de todos os envios da conta, verifica a
 // assinatura svix via WebCrypto (sem dependências), filtra cliques que não pontuam (links inválidos, descadastro e
-// página /prioridade), respeita a oposição em `heating_optout` e grava de forma síncrona em `engagement_events` antes
-// de responder 200. Em falha do D1, devolve 500 para o Resend reenviar, com log curto sem email.
+// página /prioridade), classifica o contexto a partir de `data.from` e `HEATING_CURSOS` (`curso:<slug>` para remetentes
+// `<slug>@guifav.dev` na lista, `site` em qualquer outro caso — decisão do Gui, 2026-11-27), respeita a oposição global
+// em `heating_optout` e grava de forma síncrona em `engagement_events` antes de responder 200. Em falha do D1, devolve
+// 500 para o Resend reenviar, com log curto sem email.
 import { normalizeEmail } from './email.ts';
 import { heatingOptoutHmac } from './forget.ts';
 import { motivo, type D1Like } from './conversoes.ts';
@@ -16,6 +18,8 @@ const SVIX_MAX_SIGNATURES = 16;
 const SVIX_ID_RE = /^[0-9A-Za-z_-]{1,100}$/;
 const SVIX_TS_RE = /^\d{1,12}$/;
 const REF_RE = /^[0-9A-Za-z:_.-]{1,128}$/;
+const CURSO_SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
+const CURSO_DOMAIN = 'guifav.dev';
 const ISO_RE = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|[+-]\d{2}(?::?\d{2})?)$/;
 const ISO_UTC_MS_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
@@ -195,12 +199,60 @@ function clickIgnoredReason(link: string): string | null {
   return null;
 }
 
+function parseHeatingCursos(raw: string | undefined): Set<string> {
+  const slugs = new Set<string>();
+  if (typeof raw !== 'string' || !raw.trim()) return slugs;
+  let invalidCount = 0;
+  for (const part of raw.split(',')) {
+    const slug = part.trim();
+    if (!slug) continue;
+    if (!CURSO_SLUG_RE.test(slug)) {
+      invalidCount++;
+      continue;
+    }
+    slugs.add(slug);
+  }
+  if (invalidCount > 0) {
+    console.error(`webhook resend: ${invalidCount} slug(s) inválido(s) em HEATING_CURSOS ignorado(s)`);
+  }
+  return slugs;
+}
+
+function extractFromAddress(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  const lt = trimmed.indexOf('<');
+  const gt = trimmed.indexOf('>');
+  if (lt !== -1 || gt !== -1) {
+    if (lt === -1 || gt === -1 || gt < lt || trimmed.indexOf('<', lt + 1) !== -1 || trimmed.indexOf('>', gt + 1) !== -1) {
+      return null;
+    }
+    return trimmed.slice(lt + 1, gt).trim().toLowerCase();
+  }
+  return trimmed.toLowerCase();
+}
+
+function resolveContext(from: unknown, cursos: Set<string>): string {
+  const addr = extractFromAddress(from);
+  if (!addr) return 'site';
+  const at = addr.indexOf('@');
+  if (at <= 0 || addr.indexOf('@', at + 1) !== -1) return 'site';
+  const local = addr.slice(0, at);
+  const domain = addr.slice(at + 1);
+  if (domain === CURSO_DOMAIN && cursos.has(local)) {
+    return `curso:${local}`;
+  }
+  return 'site';
+}
+
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
 export interface ResendWebhookEnv {
   RESEND_HEATING_WEBHOOK_SECRET?: string;
+  HEATING_CURSOS?: string;
   FORGET_HMAC_KEY: string;
   DB: D1Like;
 }
@@ -272,6 +324,9 @@ export async function handleResendWebhook(
     if (reason) return json(200, { ok: true, ignorado: reason });
   }
 
+  const cursos = parseHeatingCursos(env.HEATING_CURSOS);
+  const context = resolveContext(data.from, cursos);
+
   const emails = new Set<string>();
   let invalidCount = 0;
   for (const item of toList) {
@@ -288,17 +343,19 @@ export async function handleResendWebhook(
   try {
     for (const email of emails) {
       const hmac = await heatingOptoutHmac(email, env.FORGET_HMAC_KEY);
-      const optedOut = await env.DB.prepare('SELECT 1 FROM heating_optout WHERE email_hmac = ?').bind(hmac).first();
-      if (optedOut) continue;
-
       const id = `rs:${await sha256Hex(`${svixId}\n${email}`)}`;
+      // Checa heating_optout e insere na mesma instrução para eliminar a corrida com POST /prioridade.
+      // O WHERE NOT EXISTS também desambigua o ON CONFLICT no parser do SQLite (INSERT ... SELECT).
       // Só a repetição do id (reentrega do Resend) é ignorada; violação de CHECK continua virando erro 500.
-      await env.DB
-        .prepare(`INSERT INTO engagement_events (id, email, signal, source, ref, occurred_at, recorded_at)
-          VALUES (?, ?, ?, 'resend', ?, ?, ?) ON CONFLICT(id) DO NOTHING`)
-        .bind(id, email, signal, emailId, occurredAt, recordedAt)
+      const res = await env.DB
+        .prepare(`INSERT INTO engagement_events (id, context, email, signal, source, ref, occurred_at, recorded_at)
+          SELECT ?, ?, ?, ?, 'resend', ?, ?, ?
+          WHERE NOT EXISTS (SELECT 1 FROM heating_optout WHERE email_hmac = ?)
+          ON CONFLICT(id) DO NOTHING`)
+        .bind(id, context, email, signal, emailId, occurredAt, recordedAt, hmac)
         .run();
-      gravados++;
+      const changes = res?.meta?.changes;
+      if (typeof changes === 'number' && changes > 0) gravados += changes;
     }
   } catch (e) {
     console.error(`webhook resend falhou: ${motivo(e)}`);
