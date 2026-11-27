@@ -3447,12 +3447,13 @@ def check_old_youtube_handle(site: Path) -> list[str]:
 
 
 class _PriorityPage(HTMLParser):
-    """Coleta <script src>, <form> e seus <input type=email name=email> e widgets Turnstile fora de comentário/template/noscript/hidden."""
+    """Coleta <script src>, elementos com id, <form> e seus <input type=email name=email> e widgets Turnstile fora de comentário/template/noscript/hidden."""
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.stack: list[tuple[str, bool]] = []
         self.scripts: list[str] = []
+        self.id_attrs: dict[str, dict[str, str]] = {}
         self.forms: list[dict[str, object]] = []
         self.active_form: dict[str, object] | None = None
 
@@ -3467,6 +3468,9 @@ class _PriorityPage(HTMLParser):
             a.setdefault(k, v or "")
         inert = any(i for _, i in self.stack) or tag in ("template", "noscript") or "hidden" in a
         if not inert:
+            eid = a.get("id", "").strip()
+            if eid:
+                self.id_attrs.setdefault(eid, a)
             if tag == "script":
                 stype = a.get("type", "").strip().lower()
                 if not stype or stype in ("text/javascript", "module", "application/javascript"):
@@ -3525,15 +3529,20 @@ def check_priority(site: Path) -> list[str]:
         problems.append(f"{PRIORITY_PAGE}: a página precisa de um H1 {PRIORITY_H1!r}, tem {h1s}")
     if "/privacidade/#prioridade" not in p.refs:
         problems.append(f"{PRIORITY_PAGE}: falta link para /privacidade/#prioridade")
-    ids = _LiveIds()
-    ids.feed(html)
-    ids.close()
-    for frag in PRIORITY_FRAGMENTS:
-        if frag not in ids.ids:
-            problems.append(f"{PRIORITY_PAGE}: falta a mensagem #{frag}")
     pf = _PriorityPage()
     pf.feed(html)
     pf.close()
+    for frag in PRIORITY_FRAGMENTS:
+        if frag not in pf.id_attrs:
+            problems.append(f"{PRIORITY_PAGE}: falta a mensagem #{frag}")
+        elif pf.id_attrs[frag].get("tabindex", "").strip() != "-1":
+            problems.append(f'{PRIORITY_PAGE}: mensagem #{frag} precisa de tabindex="-1"')
+    has_focus_script = any(
+        "location.hash" in _js_mask(body, keep_strings=True) and ".focus(" in _js_mask(body, keep_strings=True)
+        for body in _exec_scripts(html)
+    )
+    if not has_focus_script:
+        problems.append(f"{PRIORITY_PAGE}: falta o script de foco nas mensagens de fragmento")
     if TURNSTILE_SCRIPT_SRC not in pf.scripts:
         problems.append(f"{PRIORITY_PAGE}: falta o script do Turnstile ({TURNSTILE_SCRIPT_SRC})")
     forms = [f for f in pf.forms if f["attrs"].get("action") == PRIORITY_ACTION]

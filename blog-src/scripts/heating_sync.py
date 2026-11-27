@@ -406,12 +406,27 @@ def parse_exclude_env(raw: str | None) -> set[str]:
 
 
 def is_excluded(email: str, excluded: set[str]) -> bool:
-    if email in excluded:
+    """Diz se `email` fica fora das notas e da criação no CRM (`HEATING_EXCLUDE` e domínios de teste).
+
+    Compara em minúsculas:
+    - correspondência exata com qualquer item de `excluded`;
+    - para itens de `excluded` sem `+` na parte local, exclui também aliases `local+tag@dominio`
+      comparando pela forma canônica (parte local antes do primeiro `+`, mais `@` e o domínio),
+      sem tratar pontos do Gmail;
+    - um item de `excluded` que já contenha `+` na parte local vale apenas para aquele alias exato;
+    - domínios de teste (`DOMINIOS_TESTE_EXATOS` e `DOMINIOS_TESTE_SUFIXOS`).
+    """
+    norm = email.strip().lower()
+    excluded_norm = {e.strip().lower() for e in excluded if e and e.strip()}
+    if norm in excluded_norm:
         return True
-    at = email.rfind("@")
+    at = norm.rfind("@")
     if at < 0:
         return False
-    domain = email[at + 1:]
+    local, domain = norm[:at], norm[at + 1:]
+    plus = local.find("+")
+    if plus > 0 and f"{local[:plus]}@{domain}" in excluded_norm:
+        return True
     if domain in DOMINIOS_TESTE_EXATOS:
         return True
     return any(domain.endswith(suf) for suf in DOMINIOS_TESTE_SUFIXOS)
@@ -1088,6 +1103,7 @@ def run(
     # ------------------------------------------------------------------ 1) Leituras e validações (antes de qualquer escrita)
     raw_convs = c.d1(
         "SELECT id, email, action, material, interests, occurred_at, verified, ga_client_id, request_id, file, "
+        "twenty_person_id, "
         + ", ".join(CS.ORIGEM_COLS)
         + " FROM conversions ORDER BY occurred_at, id"
     )
@@ -1547,6 +1563,9 @@ def run(
                 candidate_emails.add(ev["email"])
             for hr in existing_heating_rows:
                 candidate_emails.add(hr["email"])
+            for rc in raw_convs:
+                if isinstance(rc.get("email"), str):
+                    candidate_emails.add(rc["email"].strip().lower())
             for _ctx, em in heating_by_ctx_email:
                 candidate_emails.add(em)
             for docs_by_email in cursos_disponiveis.values():
@@ -1570,10 +1589,21 @@ def run(
                 person_heating_present = [k for k in PERSON_HEATING_FIELDS if k in meta["person"]]
                 updated_pids = {pid for pid, _ in person_updates}
                 cleared_pids = {pid for pid, _ in person_clears}
+                active_people_by_id = {p["id"]: p for p in people if not p.get("deletedAt")}
+                ref_pids_by_email: dict[str, set[str]] = {}
+                for row in (*existing_heating_rows, *raw_convs):
+                    raw_em = row.get("email")
+                    ref_pid = row.get("twenty_person_id")
+                    if isinstance(raw_em, str) and CS._full(CS.TWENTY_PERSON_ID, ref_pid):
+                        ref_pids_by_email.setdefault(raw_em.strip().lower(), set()).add(ref_pid)
+
                 late_pids_to_clear: set[str] = set()
                 for em in late_optout_emails:
-                    for p in idx.get(em) or []:
-                        pid = p["id"]
+                    candidate_people: dict[str, dict] = {p["id"]: p for p in (idx.get(em) or [])}
+                    for ref_pid in ref_pids_by_email.get(em, ()):
+                        if ref_pid in active_people_by_id:
+                            candidate_people[ref_pid] = active_people_by_id[ref_pid]
+                    for pid, p in candidate_people.items():
                         had_before = any(_filled(p.get(k)) for k in person_heating_present)
                         if pid in updated_pids or (had_before and pid not in cleared_pids):
                             late_pids_to_clear.add(pid)
