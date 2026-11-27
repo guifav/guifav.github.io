@@ -53,12 +53,15 @@ export function twentyCell(
   personId: string | null | undefined,
   syncedAt: string | null | undefined,
   verified: number,
+  emailNoCrmOuComprovado: number | boolean,
   twentyOrigin: string,
 ): string {
   const url = twentyPersonUrl(personId, twentyOrigin);
   if (url) return `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">abrir no Twenty</a>`;
-  if (!syncedAt) return verified === 1 ? 'ainda não está no CRM' : 'pedido ainda não está no CRM';
-  return 'sem link';
+  if (syncedAt) return 'sincronizada, sem link';
+  if (verified === 1) return 'email confirmado: entra no CRM na próxima sincronização';
+  if (emailNoCrmOuComprovado) return 'email já confirmado ou no CRM: entra na próxima sincronização';
+  return 'email não confirmado: não abriu o link do material';
 }
 
 /** Célula de página de entrada: só vira link se o caminho casar com o CHECK da migração 0006. */
@@ -140,6 +143,7 @@ type RecentRow = {
   occurred_at: string;
   synced_at: string | null;
   twenty_person_id: string | null;
+  email_no_crm_ou_comprovado: number;
 };
 
 export async function resumoPage(
@@ -171,10 +175,18 @@ export async function resumoPage(
     tryRead(async () =>
       (
         await env.DB.prepare(
-          `SELECT id, email, action, material, file, verified, occurred_at, synced_at, twenty_person_id
-           FROM conversions
-           ORDER BY occurred_at DESC, id
-           LIMIT 10`,
+          `SELECT p.id, p.email, p.action, p.material, p.file, p.verified, p.occurred_at, p.synced_at, p.twenty_person_id,
+                  EXISTS (
+                    SELECT 1 FROM conversions c2
+                    WHERE c2.email = p.email AND c2.id != p.id AND (c2.verified = 1 OR c2.synced_at IS NOT NULL)
+                  ) AS email_no_crm_ou_comprovado
+           FROM (
+             SELECT id, email, action, material, file, verified, occurred_at, synced_at, twenty_person_id
+             FROM conversions
+             ORDER BY occurred_at DESC, id
+             LIMIT 10
+           ) p
+           ORDER BY p.occurred_at DESC, p.id`,
         ).all<RecentRow>()
       ).results,
     ),
@@ -237,7 +249,7 @@ export async function resumoPage(
   <td>${esc(r.email)}</td>
   <td>${esc(actionLabel(r.action))}</td>
   <td>${materialCell(r.material, r.file)}</td>
-  <td>${twentyCell(r.twenty_person_id, r.synced_at, r.verified, env.TWENTY_ORIGIN)}</td>
+  <td>${twentyCell(r.twenty_person_id, r.synced_at, r.verified, r.email_no_crm_ou_comprovado, env.TWENTY_ORIGIN)}</td>
 </tr>`,
         )
         .join('');
@@ -305,6 +317,7 @@ type ContatoRow = {
   utm_campaign: string | null;
   landing_path: string | null;
   twenty_person_id: string | null;
+  email_no_crm_ou_comprovado: number;
 };
 
 export async function contatosPage(url: URL, env: PainelEnv): Promise<Response> {
@@ -313,12 +326,21 @@ export async function contatosPage(url: URL, env: PainelEnv): Promise<Response> 
   const offset = (f.page - 1) * PAINEL_PAGE_SIZE;
   const rows = (
     await env.DB.prepare(
-      `SELECT id, email, action, material, file, verified, occurred_at, synced_at,
-              origin_channel, origin_source, utm_source, utm_medium, utm_campaign, landing_path, twenty_person_id
-       FROM conversions
-       ${CONTATOS_WHERE}
-       ORDER BY occurred_at DESC, id
-       LIMIT ${PAINEL_PAGE_SIZE} OFFSET ${offset}`,
+      `SELECT p.id, p.email, p.action, p.material, p.file, p.verified, p.occurred_at, p.synced_at,
+              p.origin_channel, p.origin_source, p.utm_source, p.utm_medium, p.utm_campaign, p.landing_path, p.twenty_person_id,
+              EXISTS (
+                SELECT 1 FROM conversions c2
+                WHERE c2.email = p.email AND c2.id != p.id AND (c2.verified = 1 OR c2.synced_at IS NOT NULL)
+              ) AS email_no_crm_ou_comprovado
+       FROM (
+         SELECT id, email, action, material, file, verified, occurred_at, synced_at,
+                origin_channel, origin_source, utm_source, utm_medium, utm_campaign, landing_path, twenty_person_id
+         FROM conversions
+         ${CONTATOS_WHERE}
+         ORDER BY occurred_at DESC, id
+         LIMIT ${PAINEL_PAGE_SIZE} OFFSET ${offset}
+       ) p
+       ORDER BY p.occurred_at DESC, p.id`,
     )
       .bind(...args)
       .all<ContatoRow>()
@@ -354,7 +376,7 @@ export async function contatosPage(url: URL, env: PainelEnv): Promise<Response> 
   <td>${esc(formatOrigin(r.origin_channel, r.origin_source))}</td>
   <td>${esc(formatUtm(r.utm_source, r.utm_medium, r.utm_campaign))}</td>
   <td>${landingCell(r.landing_path, env.SITE_ORIGIN)}</td>
-  <td>${twentyCell(r.twenty_person_id, r.synced_at, r.verified, env.TWENTY_ORIGIN)}</td>
+  <td>${twentyCell(r.twenty_person_id, r.synced_at, r.verified, r.email_no_crm_ou_comprovado, env.TWENTY_ORIGIN)}</td>
 </tr>`,
     )
     .join('');
