@@ -1052,7 +1052,7 @@ test('W20: assinatura svix é verificada sobre id.ts. + bytes brutos do corpo (c
 
 // ---------------------------------------------------------------- POST /prioridade
 
-test('P1: /prioridade grava a marca, apaga eventos e heating de todos os contextos só do email informado e não chama o Resend', async () => {
+test('P1: /prioridade grava a marca, apaga eventos, heating (todos os contextos) e site_identities (todos os uids) só do email informado e não chama o Resend', async () => {
   const s = setup();
   const iso = new Date(NOW - 60_000).toISOString();
   for (const email of ['leitor@exemplo.com', 'outro@exemplo.com']) {
@@ -1063,6 +1063,9 @@ test('P1: /prioridade grava a marca, apaga eventos e heating de todos os context
         VALUES (?, ?, 60, 'morno', '["email_aberto"]', ?)`).run(ctx, email, iso);
     }
   }
+  s.db.prepare('INSERT INTO site_identities (uid, email, linked_at) VALUES (?, ?, ?)').run('UidLeitor1', 'leitor@exemplo.com', iso);
+  s.db.prepare('INSERT INTO site_identities (uid, email, linked_at) VALUES (?, ?, ?)').run('UidLeitor2', 'leitor@exemplo.com', iso);
+  s.db.prepare('INSERT INTO site_identities (uid, email, linked_at) VALUES (?, ?, ?)').run('UidOutro1', 'outro@exemplo.com', iso);
 
   const r = await s.run(prioridadeReq({ email: '  Leitor@Exemplo.COM ', 'cf-turnstile-response': 'tok' }));
   assert.equal(r.status, 303);
@@ -1082,6 +1085,9 @@ test('P1: /prioridade grava a marca, apaga eventos e heating de todos os context
   assert.deepEqual(s.rows('heating').map((x) => [x.context, x.email]), [
     ['site', 'outro@exemplo.com'],
     ['curso:chatgpt-no-dia-a-dia', 'outro@exemplo.com'],
+  ]);
+  assert.deepEqual(s.rows('site_identities').map((x) => [x.uid, x.email]), [
+    ['UidOutro1', 'outro@exemplo.com'],
   ]);
 
   // Repetir a oposição depois atualiza opted_out_at (upsert) sem erro.
@@ -1189,6 +1195,19 @@ test('P4: falha do D1 em /prioridade redireciona para #erro, sem email no log, e
   // Como a marca é gravada primeiro, mesmo com falha no DELETE o opt-out já protege contra novos eventos.
   assert.equal(s.rows('heating_optout').length, 1);
   assert.equal(s.rows('engagement_events').length, 0);
+
+  // Falha no DELETE de site_identities também redireciona para #erro sem vazar email e mantém a marca gravada.
+  const sId = setup({ d1Falha: /DELETE FROM site_identities/, d1Mensagem: 'D1_ERROR: falha ao apagar sigiloso@exemplo.com' });
+  sId.db.prepare('INSERT INTO site_identities (uid, email, linked_at) VALUES (?, ?, ?)').run('UidSig1', 'sigiloso@exemplo.com', iso);
+  let rId!: Response;
+  const errosId = await capturaErros(async () => {
+    rId = await sId.run(prioridadeReq({ email: 'sigiloso@exemplo.com', 'cf-turnstile-response': 'tok' }));
+  });
+  assert.equal(rId.status, 303);
+  assert.equal(loc(rId), 'https://guifav.dev/prioridade/#erro');
+  assert.equal(errosId.length, 1);
+  assert.ok(!errosId[0].includes('sigiloso'), errosId[0]);
+  assert.equal(sId.rows('heating_optout').length, 1);
 });
 
 test('P5: FORGET_HMAC_KEY ausente/curta e TURNSTILE_SECRET ausente em /prioridade devolvem 500 Worker sem configuração', async () => {

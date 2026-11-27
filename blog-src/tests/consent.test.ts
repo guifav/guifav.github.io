@@ -10,6 +10,7 @@ const DAY = 24 * 3600 * 1000;
 const NOW = Date.UTC(2026, 10, 14, 3, 0, 0);
 const GRANTED = { ad_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'granted', analytics_storage: 'granted' };
 const DENIED = { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied', analytics_storage: 'denied' };
+const AD_DENIED = { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' };
 
 class Node {
   tag: string;
@@ -277,9 +278,10 @@ function inlineBase(): string {
   return "const GA4_ID = 'G-K7Y87QNCX8'; const CONTENT_GROUP = 'insights-artigo';" + m![1];
 }
 
-function runInline(rel: string, stored: unknown) {
+function runInline(rel: string, stored: unknown, heatingUid?: unknown) {
   const storage = new Storage();
   if (stored !== undefined) storage.setItem('consent-v1', typeof stored === 'string' ? stored : JSON.stringify(stored));
+  if (heatingUid !== undefined) storage.setItem('heating-uid-v1', typeof heatingUid === 'string' ? heatingUid : JSON.stringify(heatingUid));
   const ctx: Record<string, unknown> = { localStorage: storage, location: { hostname: 'guifav.dev' }, JSON, Date: Object.assign(function () {}, { now: () => NOW }) };
   ctx.window = ctx;
   vm.runInContext(rel === 'Base.astro' ? inlineBase() : inlineGa(rel), vm.createContext(ctx));
@@ -292,8 +294,8 @@ const MATERIAIS = [
   'ferramentas/mapa-decisao-ia',
   'materiais/livro-desbloqueando-a-inteligencia-artificial',
 ].flatMap((m) => [`${m}/index.html`, `${m}/enviado/index.html`]);
-for (const rel of ['index.html', 'portfolio/index.html', 'consultoria/index.html', 'ferramentas/index.html', 'ferramentas/llm-ranking/index.html', 'cursos/index.html', 'privacidade/index.html', 'termos/index.html', ...MATERIAIS, 'Base.astro']) {
-  test(`${rel}: padrão negado antes do config; aceite válido vira update granted antes do config; vencido não`, () => {
+for (const rel of ['index.html', 'portfolio/index.html', 'consultoria/index.html', 'ferramentas/index.html', 'ferramentas/llm-ranking/index.html', 'cursos/index.html', 'prioridade/index.html', 'privacidade/index.html', 'termos/index.html', ...MATERIAIS, 'Base.astro']) {
+  test(`${rel}: padrão negado antes do config; aceite válido vira update granted e lê heating-uid-v1 antes do config`, () => {
     const names = (l: unknown[][]) => l.map((c) => `${c[0]}:${c[0] === 'consent' ? c[1] : ''}`);
     const none = runInline(rel, undefined);
     assert.deepEqual(none.find((c) => c[0] === 'consent'), ['consent', 'default', DENIED]);
@@ -303,9 +305,47 @@ for (const rel of ['index.html', 'portfolio/index.html', 'consultoria/index.html
     assert.deepEqual(ok.find((c) => c[0] === 'consent' && c[1] === 'update')![2], GRANTED);
     const sets = (l: unknown[][]) => l.filter((c) => c[0] === 'set').map((c) => c.slice(1));
     assert.deepEqual(sets(none), [['ads_data_redaction', true]]);
+    assert.deepEqual(sets(ok), [['ads_data_redaction', true]]);
     for (const stored of [{ v: 'granted', t: NOW - 366 * DAY }, { v: 'denied', t: NOW }, { v: 'granted' },
       { v: 'granted', t: NOW + DAY }, '{"v":"granted","t":1e400}']) {
       assert.deepEqual(names(runInline(rel, stored)).filter((n) => n === 'consent:update'), [], JSON.stringify(stored));
+    }
+
+    // Com consent-v1 granted e heating-uid-v1 válido: nega os 3 sinais de anúncio (analytics_storage continua granted),
+    // desliga sinais no GA4 e seta user_id ANTES do config.
+    const withUid = runInline(rel, { v: 'granted', t: NOW - DAY }, { uid: 'UidHead123', t: NOW - DAY });
+    assert.deepEqual(
+      names(withUid).filter((n) => n.startsWith('consent') || n.startsWith('config')),
+      ['consent:default', 'consent:update', 'consent:update', 'config:'],
+    );
+    assert.deepEqual(updates(withUid), [GRANTED, AD_DENIED]);
+    const configIdx = withUid.findIndex((c) => c[0] === 'config');
+    const adDeniedIdx = withUid.findIndex((c) => c[0] === 'consent' && c[1] === 'update' && (c[2] as { ad_storage?: string }).ad_storage === 'denied');
+    const sigIdx = withUid.findIndex((c) => c[0] === 'set' && c[1] === 'allow_google_signals' && c[2] === false);
+    const persIdx = withUid.findIndex((c) => c[0] === 'set' && c[1] === 'allow_ad_personalization_signals' && c[2] === false);
+    const uidIdx = withUid.findIndex((c) => c[0] === 'set' && typeof c[1] === 'object' && (c[1] as { user_id?: string }).user_id === 'UidHead123');
+    assert.ok(adDeniedIdx > 0 && sigIdx > adDeniedIdx && persIdx > sigIdx && uidIdx > persIdx && configIdx > uidIdx, JSON.stringify(withUid));
+
+    // Sem consent-v1 granted, heating-uid-v1 nunca seta sinais, consentimento nem user_id.
+    for (const consent of [undefined, { v: 'denied', t: NOW }, { v: 'granted', t: NOW - 366 * DAY }]) {
+      const res = runInline(rel, consent, { uid: 'UidHead123', t: NOW - DAY });
+      assert.deepEqual(sets(res), [['ads_data_redaction', true]], JSON.stringify(consent));
+      assert.deepEqual(updates(res), [], JSON.stringify(consent));
+    }
+
+    // heating-uid-v1 vencido, futuro, inválido ou quebrado é ignorado (não nega anúncios nem seta user_id).
+    for (const badUid of [
+      { uid: 'UidHead123', t: NOW - 366 * DAY },
+      { uid: 'UidHead123', t: NOW + DAY },
+      '{"uid":"UidHead123","t":1e400}',
+      { uid: '', t: NOW },
+      { uid: 'uid-com-traco', t: NOW },
+      { uid: 'a'.repeat(129), t: NOW },
+      '{quebrado',
+    ]) {
+      const res = runInline(rel, { v: 'granted', t: NOW - DAY }, badUid);
+      assert.deepEqual(sets(res), [['ads_data_redaction', true]], JSON.stringify(badUid));
+      assert.deepEqual(updates(res), [GRANTED], JSON.stringify(badUid));
     }
   });
 }

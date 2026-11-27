@@ -5674,21 +5674,40 @@ class PrioritySourcesTest(unittest.TestCase):
             "dados do Google (Firestore). A abertura e o clique nos emails do curso ficam no registro de engajamento, "
             'no Cloudflare, como descrito em <a href="#prioridade">Prioridade de contato</a>. A inscrição no curso, '
             "com a nota de engajamento, fica no meu CRM, ligada ao seu contato.",
+            # 11a: restrição aos emails no parágrafo do registro.
+            "Para isso, guardo um registro com o seu email, o tipo de sinal, a data e de onde ele veio. Dos emails, "
+            "não guardo o link em que você clicou, o que você leu nem o seu endereço IP.",
+            # 11b: visitas logadas incluídas na lista "Entram na conta" antes de "Cada sinal vale pontos".
+            "Entram na conta: a confirmação da inscrição nos Expert Insights, o pedido e o download de materiais e a "
+            "abertura e o clique nos emails dos Expert Insights e dos materiais. Se você entrar no site com a sua conta "
+            "Google e ligar a sua atividade ao seu contato, entram também as suas visitas ao site, como descrito abaixo. "
+            "Cada sinal vale pontos",
+            # 11c: parágrafo do corte 2 com consentimento separado da base legal do legítimo interesse.
             "Se você entrar no site com a sua conta Google, aceitar os cookies e confirmar o aviso do login, as suas "
             "visitas ficam ligadas ao seu contato: páginas vistas, tempo de leitura, rolagem e cliques em Agende e "
             "Contato. Essas visitas entram na prioridade de contato. O Google Analytics recebe um código da sua conta, "
             "nunca o seu email, e essas visitas não são usadas para anúncios. A base legal é o seu consentimento "
             "(Lei 13.709/2018, art. 7º, I). Para desligar, saia da conta, desligue no menu da conta ou clique em "
             "Cookies no rodapé. Você pode pedir que eu apague o que já foi registrado, inclusive no Google Analytics.",
+            # 11d: Firebase Auth, GIS, gstatic, accounts.google.com, carregamento condicional e cookie g_state.
             "<strong>Google Identity Platform e Firestore</strong>: o login com a conta Google e o banco de dados com "
-            "os dados do curso (inscrição e progresso). O login do site usa o Google Identity Services (o botão e o "
-            "aviso do Google), carregado só depois que você responde ao aviso de cookies; ao carregar, o Google recebe "
-            "o endereço IP e o navegador usado (user agent).",
+            "os dados do curso (inscrição e progresso). O login do site usa o Firebase Authentication e, para o login "
+            "de um toque, o Google Identity Services. Eles só são carregados (de www.gstatic.com e "
+            "accounts.google.com) depois que você responde ao aviso de cookies, se você já entrou antes neste "
+            "navegador ou se clicar em Entrar; ao carregar, o Google recebe o endereço IP e o navegador usado (user "
+            "agent). O login de um toque grava o cookie g_state, do Google, para lembrar se você fechou o convite e "
+            "não insistir.",
             "Eu paro de calcular na hora e apago os registros no site, inclusive os dos cursos; as notas no meu CRM "
             "saem na atualização diária seguinte. Você continua recebendo os Expert Insights e o curso normalmente.",
         ):
             self.assertIn(must, t)
-        self.assertLess(t.index("Para que serve:"), t.index("confirmar o aviso do login"))
+        # 11c: parágrafo do corte 2 vem DEPOIS do parágrafo da base legal do legítimo interesse e ANTES da oposição.
+        legit = "A base legal é o meu legítimo interesse (Lei 13.709/2018, art. 7º, IX), com o teste de balanceamento registrado."
+        self.assertLess(t.index("Para que serve:"), t.index(legit))
+        self.assertLess(t.index(legit), t.index("confirmar o aviso do login"))
+        self.assertLess(t.index("confirmar o aviso do login"), t.index("Se você não quiser ser pontuado"))
+        self.assertNotIn("veio. Não guardo o link em que você clicou", t)
+        self.assertNotIn("o botão e o aviso do Google", t)
         self.assertNotIn("inscrição, progresso e abertura e clique nos emails do curso", t)
         self.assertNotIn("apago as notas e os registros", t)
 
@@ -5713,7 +5732,12 @@ class AuthCheckTest(unittest.TestCase):
 
     def valid_site(self) -> None:
         self.w("assets/track.js", "var AUTH_SRC = '/assets/auth.js?v=202611271230';")
-        self.w("assets/auth.js", "var NO_ONE_TAP_PREFIXES = ['/privacidade', '/termos', '/prioridade', '/404'];")
+        self.w(
+            "assets/auth.js",
+            "var NO_ONE_TAP_PREFIXES = ['/privacidade', '/termos', '/prioridade', '/404'];\n"
+            "sendGtag('consent', 'update', { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' });\n"
+            "sendGtag('consent', 'update', { ad_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'granted' });\n",
+        )
         self.w("404.html", "<!DOCTYPE html><html><body><h1>404</h1><script src='/assets/site.js?v=202611241500'></script></body></html>")
         for rel in ("privacidade/index.html", "termos/index.html", "prioridade/index.html"):
             self.w(rel, "<!DOCTYPE html><html><body><script src='/assets/track.js?v=202611271230'></script></body></html>")
@@ -5744,6 +5768,23 @@ class AuthCheckTest(unittest.TestCase):
         self.assertTrue(any("/404" in p for p in got))
 
         self.valid_site()
+        self.w("assets/auth.js", "var NO_ONE_TAP_PREFIXES = ['/privacidade', '/termos', '/prioridade', '/404'];")
+        got_ad = C.check_auth(self.site)
+        self.assertTrue(any("negar ad_storage" in p for p in got_ad), got_ad)
+        self.assertTrue(any("devolver ad_storage" in p for p in got_ad), got_ad)
+
+        self.valid_site()
+        self.w(
+            "assets/auth.js",
+            "var NO_ONE_TAP_PREFIXES = ['/privacidade', '/termos', '/prioridade', '/404'];\n"
+            "// sendGtag('consent', 'update', { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' });\n"
+            "var x = \"sendGtag('consent','update',{ad_storage:'granted',ad_user_data:'granted',ad_personalization:'granted'})\";\n",
+        )
+        got_ad_fake = C.check_auth(self.site)
+        self.assertTrue(any("negar ad_storage" in p for p in got_ad_fake), got_ad_fake)
+        self.assertTrue(any("devolver ad_storage" in p for p in got_ad_fake), got_ad_fake)
+
+        self.valid_site()
         self.w("404.html", "<!DOCTYPE html><html><body><script src='/assets/track.js?v=202611271230'></script></body></html>")
         self.assertTrue(any("404.html: página 404 não pode carregar" in p for p in C.check_auth(self.site)))
 
@@ -5756,10 +5797,61 @@ class AuthCheckTest(unittest.TestCase):
                 self.w(rel, "<!DOCTYPE html><html><body><script src='/assets/auth.js?v=202611271230'></script></body></html>")
                 self.assertTrue(any(rel in p and "/assets/auth.js" in p for p in C.check_auth(self.site)))
 
+    def test_ga_uid_snippet_rule_and_all_repo_pages(self):
+        ga_tag = '<script async src="https://www.googletagmanager.com/gtag/js?id=G-K7Y87QNCX8"></script>'
+        uid_block = (
+            "if(window.guifavConsent==='granted'){"
+            "gtag('consent','update',{ad_storage:'granted',ad_user_data:'granted',ad_personalization:'granted',analytics_storage:'granted'});"
+            "try{var u=JSON.parse(localStorage.getItem('heating-uid-v1')||'null');"
+            "if(u&&typeof u.uid==='string'&&/^[0-9A-Za-z]{1,128}$/.test(u.uid)&&typeof u.t==='number'&&Date.now()-u.t>=0&&Date.now()-u.t<31536e6){"
+            "gtag('consent','update',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});"
+            "gtag('set','allow_google_signals',false);"
+            "gtag('set','allow_ad_personalization_signals',false);"
+            "gtag('set',{user_id:u.uid});"
+            "}}catch(e){}}"
+        )
+        cfg = "gtag('js',new Date());gtag('config','G-K7Y87QNCX8',{content_group:'home'});"
+        self.assertEqual(C.check_ga_uid_snippet("index.html", f"<html><head>{ga_tag}<script>{uid_block}{cfg}</script></head></html>"), [])
+        self.assertEqual(C.check_ga_uid_snippet("404.html", "<html><head></head></html>"), [])
+
+        for name, js in {
+            "sem bloco": cfg,
+            "depois do config": cfg + uid_block,
+            "sem consent update de anuncio": uid_block.replace("gtag('consent','update',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});", "") + cfg,
+            "sem sinais de anuncio": uid_block.replace("gtag('set','allow_google_signals',false);", "") + cfg,
+            "sem user_id": uid_block.replace("gtag('set',{user_id:u.uid});", "") + cfg,
+            "comentado": f"/* {uid_block} */" + cfg,
+            "em string": f'var x="{uid_block}";' + cfg,
+        }.items():
+            with self.subTest(name=name):
+                got = C.check_ga_uid_snippet("index.html", f"<html><head>{ga_tag}<script>{js}</script></head></html>")
+                self.assertEqual(len(got), 1, (name, got))
+
+        # Todas as 15 páginas HTML raiz e Base.astro do repositório precisam passar na verificação exata.
+        root_pages = (
+            "index.html", "portfolio/index.html", C.CONSULTING_PAGE,
+            *sorted(C.MATERIAL_PAGES), *sorted(C.TOOLS_PAGES),
+            C.COURSES_PAGE, *C.LEGAL_PAGES, C.PRIORITY_PAGE,
+        )
+        self.assertEqual(len(root_pages), 15)
+        for rel in root_pages:
+            with self.subTest(rel=rel):
+                self.assertEqual(C.check_ga_uid_snippet(rel, (self.REPO / rel).read_text(encoding="utf-8")), [])
+        base_astro = (self.REPO / "blog-src/src/layouts/Base.astro").read_text(encoding="utf-8")
+        # Simula a saída do Astro (GA4_ID resolvido na tag script async).
+        base_rendered = base_astro.replace("src={`https://www.googletagmanager.com/gtag/js?id=${GA4_ID}`}",
+                                           'src="https://www.googletagmanager.com/gtag/js?id=G-K7Y87QNCX8"')
+        self.assertEqual(C.check_ga_uid_snippet("blog/index.html", base_rendered), [])
+
     def test_repo_sources_pass_check_auth(self):
         with tempfile.TemporaryDirectory() as d:
             site = Path(d)
-            for rel in ("assets/track.js", "assets/auth.js", "404.html", "privacidade/index.html", "termos/index.html", "prioridade/index.html"):
+            for rel in (
+                "assets/track.js", "assets/auth.js", "404.html",
+                "index.html", "portfolio/index.html", C.CONSULTING_PAGE,
+                *sorted(C.MATERIAL_PAGES), *sorted(C.TOOLS_PAGES),
+                C.COURSES_PAGE, *C.LEGAL_PAGES, C.PRIORITY_PAGE,
+            ):
                 dst = site / rel
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 dst.write_text((self.REPO / rel).read_text(encoding="utf-8"), encoding="utf-8")

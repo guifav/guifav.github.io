@@ -1,7 +1,7 @@
 // Registro do vínculo uid -> email das sessões logadas (épico #197, corte 2): POST /identidade.
 // Verifica o ID token do Firebase (RS256 via WebCrypto contra o JWKS do securetoken, cacheado em memória pelo
-// max-age do Cache-Control, com prazo de 3 s na busca), exige iss, aud, exp/iat (±5 min), sub válido,
-// email_verified === true, email válido e firebase.tenant === "guifav-dev-g6dp4".
+// max-age do Cache-Control, com prazo de 3 s na busca), exige iss, aud, exp no futuro (folga zero), iat no passado
+// (folga de 5 min), sub válido, email_verified === true, email válido e firebase.tenant === "guifav-dev-g6dp4".
 // Respeita oposição global em heating_optout (204 sem gravar) e faz upsert em site_identities por uid (204).
 // CORS restrito a env.SITE_ORIGIN (https://guifav.dev), sem credenciais/cookies, corpo vazio e limite por IP.
 import { normalizeEmail } from './email.ts';
@@ -217,7 +217,7 @@ async function verifyIdToken(token: string, deps: IdentidadeDeps): Promise<Verif
   if (typeof iat !== 'number' || !Number.isFinite(iat)) return { ok: false, reason: 'iat_invalido' };
 
   const nowSec = deps.now() / 1000;
-  if (exp <= nowSec - CLOCK_SKEW_SEC) return { ok: false, reason: 'expirado' };
+  if (exp <= nowSec) return { ok: false, reason: 'expirado' };
   if (iat > nowSec + CLOCK_SKEW_SEC) return { ok: false, reason: 'iat_futuro' };
 
   const sub = payload.sub;

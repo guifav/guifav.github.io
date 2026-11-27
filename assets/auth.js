@@ -1,17 +1,25 @@
 // Login com Google One Tap, aviso próprio do login e user_id no GA4 (épico #197, corte 2).
 // Carregado tardiamente pelo assets/track.js, só em guifav.dev e nunca em prévias locais nem em /admin.
 //
+// - Nada do Google (Firebase SDK em gstatic.com nem GIS em accounts.google.com) carrega antes de:
+//   (a) o banner de cookies ter sido respondido (granted ou denied), (b) haver sessão Firebase salva
+//   no IndexedDB (firebaseLocalStorageDb / firebaseLocalStorage), ou (c) clique em "Entrar com Google".
 // - Compartilha o app [DEFAULT] e o tenant guifav-dev-g6dp4 com o curso (mesma origem): quem entrou no curso
 //   já aparece logado aqui. Sessões de outro tenant são ignoradas.
 // - Google One Tap (GIS): só para quem não está logado, só depois que o visitante respondeu ao banner de
 //   cookies (consent-v1 válido, granted ou denied), e nunca em /privacidade/, /termos/, /prioridade/ nem 404.
-// - Aviso do login (heating-link-v1 no localStorage, 365 dias por uid): consentimento próprio para ligar a
-//   atividade do site ao contato.
+// - Aviso do login (heating-link-v1 no localStorage, 365 dias por uid): só aparece depois do banner respondido
+//   e com consent-v1 granted.
 // - Só com as 3 condições (logado no tenant, consent-v1 granted e heating-link-v1 granted para o uid):
-//   desliga sinais de anúncio no GA4, grava user_id, envia auth_identified uma vez por sessão e envia
+//   mantém heating-uid-v1 = {uid, t} no localStorage (lida pelo snippet do <head> antes do gtag('config')),
+//   nega ad_storage/ad_user_data/ad_personalization (mantendo analytics_storage granted), desliga sinais de
+//   anúncio no GA4, grava user_id, envia auth_identified uma vez por sessão e envia
 //   POST https://insights.guifav.dev/identidade com o ID token uma vez por sessão e por uid.
-// - Quando qualquer condição deixa de valer: gtag('set', { user_id: null }) e nada mais é enviado.
-// - Nunca acessa nem envia email; nunca chama clarity('identify'). Falha em silêncio se o Firebase ou o GIS não carregarem.
+// - Quando qualquer condição deixa de valer (ou em outra aba via evento storage): apaga heating-uid-v1,
+//   envia gtag('set', { user_id: null }), devolve ad_storage/ad_user_data/ad_personalization para granted
+//   se consent-v1 continuar granted, e nada mais é enviado.
+// - Nunca acessa nem envia email; nunca chama clarity('identify'); mascara botão, menu e aviso no Clarity.
+//   Falha em silêncio se o Firebase ou o GIS não carregarem.
 (function () {
   var d = document;
   var w = window;
@@ -33,9 +41,13 @@
   var FIREBASE_AUTH_URL = 'https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js';
   var GIS_URL = 'https://accounts.google.com/gsi/client';
   var IDENTITY_URL = 'https://insights.guifav.dev/identidade';
+  var IDB_NAME = 'firebaseLocalStorageDb';
+  var IDB_STORE = 'firebaseLocalStorage';
+  var IDB_USER_KEY = 'firebase:authUser:' + FIREBASE_CONFIG.apiKey + ':[DEFAULT]';
 
   var CONSENT_KEY = 'consent-v1';
   var LINK_KEY = 'heating-link-v1';
+  var UID_KEY = 'heating-uid-v1';
   var IDENTIFIED_PREFIX = 'guifav_auth_identified:';
   var IDENTITY_SENT_PREFIX = 'guifav_identidade_sent:';
   var ONE_TAP_SUPPRESSED_KEY = 'guifav_one_tap_suppressed';
@@ -47,12 +59,15 @@
 
   var fbAuth = null;
   var authInstance = null;
+  var firebasePromise = null;
   var currentUser = null;
   var authResolved = false;
   var activeUid = null;
+  var headSentUid = false;
   var identityInFlightUid = null;
   var oneTapStarted = false;
   var menuOpen = false;
+  var menuFocusIdx = -1;
   var popupBusy = false;
 
   var rootEl = null;
@@ -105,6 +120,33 @@
     } catch (e) { /* sem storage */ }
   }
 
+  function readHeatingUid() {
+    try {
+      var u = JSON.parse(w.localStorage.getItem(UID_KEY) || 'null');
+      if (u && typeof u.uid === 'string' && UID_RE.test(u.uid) && validAge(u.t)) return u.uid;
+    } catch (e) { /* sem storage ou valor quebrado */ }
+    return null;
+  }
+
+  function hasRawHeatingUid() {
+    try { return w.localStorage.getItem(UID_KEY) !== null; } catch (e) { return false; }
+  }
+
+  function writeHeatingUid(uid) {
+    if (!uid || !UID_RE.test(uid)) return;
+    if (readHeatingUid() === uid) return;
+    try {
+      w.localStorage.setItem(UID_KEY, JSON.stringify({ uid: uid, t: Date.now() }));
+    } catch (e) { /* sem storage */ }
+  }
+
+  function removeHeatingUid() {
+    if (!hasRawHeatingUid()) return;
+    try {
+      w.localStorage.removeItem(UID_KEY);
+    } catch (e) { /* sem storage */ }
+  }
+
   function sessionGet(key) {
     try { return w.sessionStorage.getItem(key); } catch (e) { return null; }
   }
@@ -138,9 +180,24 @@
     return Boolean(user && user.tenantId === TENANT_ID && typeof user.uid === 'string' && UID_RE.test(user.uid));
   }
 
-  function clearUserId() {
+  function clearUserId(removeStored) {
+    var wasIdentified = activeUid !== null || headSentUid;
     activeUid = null;
+    headSentUid = false;
+    if (removeStored !== false) removeHeatingUid();
     sendGtag('set', { user_id: null });
+    if (wasIdentified && readConsent() === 'granted') {
+      sendGtag('consent', 'update', { ad_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'granted' });
+    }
+  }
+
+  function canIdentify(uid) {
+    return Boolean(
+      validTenantUser(currentUser)
+      && currentUser.uid === uid
+      && readConsent() === 'granted'
+      && readHeatingLink(uid) === 'granted'
+    );
   }
 
   function sendIdentity(user) {
@@ -168,22 +225,16 @@
     });
   }
 
-  function canIdentify(uid) {
-    return Boolean(
-      validTenantUser(currentUser)
-      && currentUser.uid === uid
-      && readConsent() === 'granted'
-      && readHeatingLink(uid) === 'granted'
-    );
-  }
-
   function syncIdentityState(forceClear) {
     if (validTenantUser(currentUser) && readConsent() === 'granted' && readHeatingLink(currentUser.uid) === 'granted') {
       var uid = currentUser.uid;
+      writeHeatingUid(uid);
+      sendGtag('consent', 'update', { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' });
       sendGtag('set', 'allow_google_signals', false);
       sendGtag('set', 'allow_ad_personalization_signals', false);
       sendGtag('set', { user_id: uid });
       activeUid = uid;
+      headSentUid = false;
       if (sessionGet(IDENTIFIED_PREFIX + uid) !== '1') {
         sendGtag('event', 'auth_identified');
         sessionSet(IDENTIFIED_PREFIX + uid, '1');
@@ -191,8 +242,9 @@
       sendIdentity(currentUser);
       return;
     }
-    if (activeUid !== null || forceClear) {
-      clearUserId();
+    removeHeatingUid();
+    if (activeUid !== null || headSentUid || forceClear) {
+      clearUserId(false);
     }
   }
 
@@ -202,7 +254,7 @@
     var style = d.createElement('style');
     style.setAttribute('id', 'guifav-auth-style');
     style.textContent = [
-      '.guifav-auth{position:fixed;right:16px;bottom:16px;z-index:900;min-width:168px;display:flex;flex-direction:column;align-items:flex-end;gap:8px;font-family:inherit}',
+      '.guifav-auth{position:fixed;right:16px;bottom:16px;z-index:900;min-width:168px;display:flex;flex-direction:column-reverse;align-items:flex-end;gap:8px;font-family:inherit}',
       '.guifav-auth[hidden]{display:none}',
       '.guifav-auth-btn{display:inline-flex;align-items:center;justify-content:center;min-width:168px;height:36px;padding:0 14px;border:1px solid var(--border,#e5e5e5);border-radius:999px;background:var(--bg-card,#fff);color:var(--text,#171717);box-shadow:var(--shadow,0 4px 16px rgba(0,0,0,.12));font:600 13px/1 inherit;cursor:pointer;white-space:nowrap}',
       '.guifav-auth-btn:hover{border-color:var(--text-secondary,#525252)}',
@@ -234,10 +286,30 @@
     return node;
   }
 
+  function getMenuItems() {
+    var items = [];
+    if (toggleBtn) items.push(toggleBtn);
+    if (signOutBtn) items.push(signOutBtn);
+    return items;
+  }
+
+  function focusMenuItem(idx) {
+    var items = getMenuItems();
+    if (!items.length) return;
+    var next = ((idx % items.length) + items.length) % items.length;
+    menuFocusIdx = next;
+    if (typeof items[next].focus === 'function') items[next].focus();
+  }
+
   function setMenuOpen(open) {
     menuOpen = Boolean(open);
     if (menuEl) menuEl.hidden = !menuOpen;
     if (triggerBtn) triggerBtn.setAttribute('aria-expanded', menuOpen ? 'true' : 'false');
+    if (menuOpen) {
+      focusMenuItem(0);
+    } else {
+      menuFocusIdx = -1;
+    }
   }
 
   function updateToggleLabel() {
@@ -257,9 +329,11 @@
       noticeEl = el('div', {
         'class': 'guifav-auth-notice',
         role: 'dialog',
-        'aria-label': 'Aviso de atividade da conta'
+        'aria-label': 'Aviso de atividade da conta',
+        'aria-describedby': 'guifav-auth-notice-desc',
+        'data-clarity-mask': 'true'
       });
-      var p = el('p', {}, noticeEl);
+      var p = el('p', { id: 'guifav-auth-notice-desc' }, noticeEl);
       p.textContent = NOTICE_TEXT;
       var actions = el('div', { 'class': 'guifav-auth-actions' }, noticeEl);
       var yesBtn = el('button', { type: 'button', 'class': 'guifav-auth-yes' }, actions);
@@ -288,13 +362,29 @@
     noticeEl.hidden = false;
   }
 
+  function syncNotice() {
+    if (validTenantUser(currentUser) && readConsent() === 'granted' && readHeatingLink(currentUser.uid) === null) {
+      showNotice();
+    } else {
+      hideNotice();
+    }
+  }
+
   function isExpectedAuthError(err) {
     var code = err && typeof err.code === 'string' ? err.code : '';
     return code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request';
   }
 
   function signInPopup() {
-    if (!authInstance || !fbAuth || popupBusy) return;
+    if (popupBusy) return;
+    if (!authInstance || !fbAuth) {
+      popupBusy = true;
+      loadFirebase().then(function (ok) {
+        popupBusy = false;
+        if (ok && !currentUser) signInPopup();
+      });
+      return;
+    }
     popupBusy = true;
     try {
       authInstance.tenantId = TENANT_ID;
@@ -315,19 +405,42 @@
     }
   }
 
+  function disableOneTapAutoSelect() {
+    try {
+      var id = w.google && w.google.accounts && w.google.accounts.id;
+      if (id && typeof id.disableAutoSelect === 'function') id.disableAutoSelect();
+    } catch (e) { /* ignora */ }
+  }
+
   function renderWidget() {
     if (!d.body) return;
     if (!rootEl) {
       injectStyles();
-      rootEl = el('div', { 'class': 'guifav-auth' });
+      rootEl = el('div', { 'class': 'guifav-auth', 'data-clarity-mask': 'true' });
 
-      menuEl = el('div', { 'class': 'guifav-auth-menu', id: 'guifav-auth-menu', role: 'menu' }, rootEl);
+      // Botão antes do menu no DOM; flex-direction: column-reverse coloca o menu visualmente acima.
+      triggerBtn = el('button', { type: 'button', 'class': 'guifav-auth-btn' }, rootEl);
+      triggerBtn.addEventListener('click', function () {
+        if (!currentUser) {
+          signInPopup();
+          return;
+        }
+        updateToggleLabel();
+        setMenuOpen(!menuOpen);
+      });
+
+      menuEl = el('div', {
+        'class': 'guifav-auth-menu',
+        id: 'guifav-auth-menu',
+        role: 'menu',
+        'data-clarity-mask': 'true'
+      }, rootEl);
       menuEl.hidden = true;
 
       toggleBtn = el('button', {
         type: 'button',
         'class': 'guifav-auth-item',
-        role: 'switch',
+        role: 'menuitemcheckbox',
         'aria-checked': 'false'
       }, menuEl);
       var toggleLabel = el('span', {}, toggleBtn);
@@ -347,24 +460,16 @@
       signOutBtn = el('button', { type: 'button', 'class': 'guifav-auth-item', role: 'menuitem' }, menuEl);
       signOutBtn.textContent = 'Sair';
       signOutBtn.addEventListener('click', function () {
+        sessionSet(ONE_TAP_SUPPRESSED_KEY, '1');
+        disableOneTapAutoSelect();
         setMenuOpen(false);
         hideNotice();
-        clearUserId();
+        clearUserId(true);
         if (authInstance && fbAuth && typeof fbAuth.signOut === 'function') {
           Promise.resolve(fbAuth.signOut(authInstance)).catch(function () {
             logWarn('falha ao sair');
           });
         }
-      });
-
-      triggerBtn = el('button', { type: 'button', 'class': 'guifav-auth-btn' }, rootEl);
-      triggerBtn.addEventListener('click', function () {
-        if (!currentUser) {
-          signInPopup();
-          return;
-        }
-        updateToggleLabel();
-        setMenuOpen(!menuOpen);
       });
 
       d.body.appendChild(rootEl);
@@ -377,17 +482,43 @@
       });
 
       d.addEventListener('keydown', function (e) {
-        if (!e || e.key !== 'Escape') return;
+        if (!e || typeof e.key !== 'string') return;
         if (menuOpen) {
-          setMenuOpen(false);
+          var items = getMenuItems();
+          var active = (d && d.activeElement) || (e && e.target);
+          var idx = items.indexOf(active);
+          if (idx < 0) idx = menuFocusIdx;
+          if (e.key === 'Escape') {
+            if (typeof e.preventDefault === 'function') e.preventDefault();
+            setMenuOpen(false);
+            if (triggerBtn && typeof triggerBtn.focus === 'function') triggerBtn.focus();
+          } else if (e.key === 'ArrowDown') {
+            if (typeof e.preventDefault === 'function') e.preventDefault();
+            focusMenuItem(idx < 0 ? 0 : idx + 1);
+          } else if (e.key === 'ArrowUp') {
+            if (typeof e.preventDefault === 'function') e.preventDefault();
+            focusMenuItem(idx < 0 ? items.length - 1 : idx - 1);
+          } else if (e.key === 'Home') {
+            if (typeof e.preventDefault === 'function') e.preventDefault();
+            focusMenuItem(0);
+          } else if (e.key === 'End') {
+            if (typeof e.preventDefault === 'function') e.preventDefault();
+            focusMenuItem(items.length - 1);
+          }
+          return;
+        }
+        if (e.key === 'Escape' && noticeEl && !noticeEl.hidden) {
+          if (typeof e.preventDefault === 'function') e.preventDefault();
+          hideNotice();
           if (triggerBtn && typeof triggerBtn.focus === 'function') triggerBtn.focus();
         }
       });
     }
 
     if (currentUser) {
-      triggerBtn.textContent = firstName(currentUser);
-      triggerBtn.setAttribute('aria-label', 'Menu da conta');
+      var name = firstName(currentUser);
+      triggerBtn.textContent = name;
+      triggerBtn.setAttribute('aria-label', name + ', menu da conta');
       triggerBtn.setAttribute('aria-haspopup', 'menu');
       triggerBtn.setAttribute('aria-controls', 'guifav-auth-menu');
       triggerBtn.setAttribute('aria-expanded', menuOpen ? 'true' : 'false');
@@ -474,9 +605,110 @@
     parent.appendChild(s);
   }
 
+  function hasSavedFirebaseSession() {
+    return new Promise(function (resolve) {
+      try {
+        var idb = w.indexedDB;
+        if (!idb || typeof idb.open !== 'function') {
+          resolve(false);
+          return;
+        }
+        var done = false;
+        var finish = function (val, db) {
+          if (done) return;
+          done = true;
+          try { if (db && typeof db.close === 'function') db.close(); } catch (e) { /* ignora */ }
+          resolve(Boolean(val));
+        };
+        var req = idb.open(IDB_NAME);
+        if (!req) {
+          finish(false);
+          return;
+        }
+        req.onupgradeneeded = function () {
+          try {
+            if (req.transaction && typeof req.transaction.abort === 'function') req.transaction.abort();
+          } catch (e) { /* ignora */ }
+          finish(false, req.result);
+        };
+        req.onerror = function () { finish(false); };
+        req.onblocked = function () { finish(false); };
+        req.onsuccess = function () {
+          var db = req.result;
+          try {
+            var names = db && db.objectStoreNames;
+            var hasStore = Boolean(
+              names && (
+                (typeof names.contains === 'function' && names.contains(IDB_STORE))
+                || (typeof names.indexOf === 'function' && names.indexOf(IDB_STORE) >= 0)
+              )
+            );
+            if (!hasStore) {
+              finish(false, db);
+              return;
+            }
+            var tx = db.transaction(IDB_STORE, 'readonly');
+            tx.onerror = function () { finish(false, db); };
+            var store = tx.objectStore(IDB_STORE);
+            var getReq = store.get(IDB_USER_KEY);
+            getReq.onerror = function () { finish(false, db); };
+            getReq.onsuccess = function () {
+              var res = getReq.result;
+              var has = Boolean(res && (!Object.prototype.hasOwnProperty.call(res, 'value') || res.value));
+              finish(has, db);
+            };
+          } catch (e) {
+            finish(false, db);
+          }
+        };
+      } catch (e) {
+        resolve(false);
+      }
+    });
+  }
+
+  function loadFirebase() {
+    if (authInstance && fbAuth) return Promise.resolve(true);
+    if (firebasePromise) return firebasePromise;
+    firebasePromise = Promise.all([import(FIREBASE_APP_URL), import(FIREBASE_AUTH_URL)]).then(function (mods) {
+      var fbApp = mods[0];
+      fbAuth = mods[1];
+      var apps = typeof fbApp.getApps === 'function' ? fbApp.getApps() : [];
+      var app = apps.length ? fbApp.getApp() : fbApp.initializeApp(FIREBASE_CONFIG);
+      authInstance = fbAuth.getAuth(app);
+      authInstance.tenantId = TENANT_ID;
+
+      fbAuth.onAuthStateChanged(authInstance, function (user) {
+        authResolved = true;
+        if (validTenantUser(user)) {
+          currentUser = user;
+          cancelOneTap();
+          renderWidget();
+          syncNotice();
+          syncIdentityState(false);
+        } else {
+          var hadIdentity = currentUser !== null || activeUid !== null || headSentUid;
+          currentUser = null;
+          hideNotice();
+          renderWidget();
+          syncIdentityState(hadIdentity);
+          maybeStartOneTap();
+        }
+      });
+      return true;
+    }).catch(function () {
+      firebasePromise = null;
+      logWarn('Firebase indisponivel');
+      return false;
+    });
+    return firebasePromise;
+  }
+
   if (typeof w.addEventListener === 'function') {
     w.addEventListener('guifav-consent', function (e) {
       var detail = e && e.detail;
+      loadFirebase();
+      syncNotice();
       if (detail === 'granted') {
         syncIdentityState(false);
         maybeStartOneTap();
@@ -485,40 +717,39 @@
         maybeStartOneTap();
       }
     });
-  }
 
-  Promise.all([import(FIREBASE_APP_URL), import(FIREBASE_AUTH_URL)]).then(function (mods) {
-    var fbApp = mods[0];
-    fbAuth = mods[1];
-    var apps = typeof fbApp.getApps === 'function' ? fbApp.getApps() : [];
-    var app = apps.length ? fbApp.getApp() : fbApp.initializeApp(FIREBASE_CONFIG);
-    authInstance = fbAuth.getAuth(app);
-    authInstance.tenantId = TENANT_ID;
-
-    renderWidget();
-
-    fbAuth.onAuthStateChanged(authInstance, function (user) {
-      authResolved = true;
-      if (validTenantUser(user)) {
-        currentUser = user;
-        cancelOneTap();
-        renderWidget();
-        if (readHeatingLink(user.uid) === null) {
-          showNotice();
+    w.addEventListener('storage', function (e) {
+      var k = e ? e.key : null;
+      if (k !== null && k !== CONSENT_KEY && k !== LINK_KEY && k !== UID_KEY) return;
+      if (readConsent() !== null) loadFirebase();
+      updateToggleLabel();
+      syncNotice();
+      if (k === UID_KEY) {
+        if (!validTenantUser(currentUser) || readHeatingUid() !== currentUser.uid) {
+          if (activeUid !== null || headSentUid) clearUserId(false);
         } else {
-          hideNotice();
+          syncIdentityState(false);
         }
+        return;
+      }
+      if (validTenantUser(currentUser) && readConsent() === 'granted' && readHeatingLink(currentUser.uid) === 'granted') {
         syncIdentityState(false);
       } else {
-        var hadIdentity = currentUser !== null || activeUid !== null;
-        currentUser = null;
-        hideNotice();
-        renderWidget();
-        syncIdentityState(hadIdentity);
-        maybeStartOneTap();
+        syncIdentityState(true);
       }
+      if (k === CONSENT_KEY || k === null) maybeStartOneTap();
     });
-  }).catch(function () {
-    logWarn('Firebase indisponivel');
-  });
+  }
+
+  headSentUid = readConsent() === 'granted' && readHeatingUid() !== null;
+  if (readConsent() !== 'granted') removeHeatingUid();
+  renderWidget();
+
+  if (readConsent() !== null) {
+    loadFirebase();
+  } else {
+    hasSavedFirebaseSession().then(function (has) {
+      if (has) loadFirebase();
+    });
+  }
 })();

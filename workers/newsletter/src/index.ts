@@ -4,7 +4,7 @@
 //   POST /material           formulário das páginas de material: Turnstile, validação e email com o link
 //   GET  /material/download  link assinado do email (7 dias): entrega o arquivo (bundle ou R2) e grava a conversão (issue #97)
 //   POST /resend/webhook     webhook do Resend (svix): grava eventos de email em engagement_events para o heating (#197)
-//   POST /prioridade         formulário de oposição ao heating: grava heating_optout e apaga eventos e nota do email (#197)
+//   POST /prioridade         formulário de oposição ao heating: grava heating_optout e apaga eventos, nota e vínculos do email (#197)
 //   POST /identidade         vínculo uid -> email das sessões logadas (Firebase ID token RS256 -> site_identities, #197 corte 2)
 // Desde a issue #114, a inscrição e o pedido de material levam a origem da visita (src/origem.ts) até a conversão.
 // As garantias A1 a A9 estão no PR e em tests/worker.test.ts; as dos materiais, em tests/material.test.ts;
@@ -399,9 +399,9 @@ async function prioridade(req: Request, env: Env, deps: Deps): Promise<Response>
   if (!email) return redirect(`${page}#erro-email`);
 
   // Sem confirmação por email: a oposição só protege (épico #197) e vale para todos os contextos (`site` e cursos).
-  // Não cria contato nem envia email. D1Like deste Worker não declara batch; os três comandos rodam em sequência com
-  // a marca primeiro, para que uma falha nos DELETEs já bloqueie eventos novos enquanto o titular recebe #erro para
-  // tentar novamente.
+  // Não cria contato nem envia email. D1Like deste Worker não declara batch; os quatro comandos rodam em sequência com
+  // a marca primeiro, para que uma falha nos DELETEs já bloqueie eventos e vínculos novos enquanto o titular recebe
+  // #erro para tentar novamente.
   const nowIso = new Date(deps.now()).toISOString();
   try {
     const hmac = await heatingOptoutHmac(email, env.FORGET_HMAC_KEY);
@@ -409,9 +409,10 @@ async function prioridade(req: Request, env: Env, deps: Deps): Promise<Response>
       .prepare('INSERT INTO heating_optout (email_hmac, opted_out_at) VALUES (?, ?) ON CONFLICT(email_hmac) DO UPDATE SET opted_out_at = excluded.opted_out_at')
       .bind(hmac, nowIso)
       .run();
-    // Os dois DELETEs apagam todos os contextos do email (oposição geral).
+    // Os três DELETEs apagam todos os contextos e vínculos de identidade (todos os uids) do email (oposição geral).
     await env.DB.prepare('DELETE FROM engagement_events WHERE email = ?').bind(email).run();
     await env.DB.prepare('DELETE FROM heating WHERE email = ?').bind(email).run();
+    await env.DB.prepare('DELETE FROM site_identities WHERE email = ?').bind(email).run();
   } catch (e) {
     console.error(`oposição ao heating não gravada: ${motivo(e)}`);
     return redirect(`${page}#erro`);

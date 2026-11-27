@@ -4,7 +4,7 @@
 -- Quem grava: Worker `blog-newsletter` (`POST /identidade`), após verificar o ID token do Firebase no tenant
 -- `guifav-dev-g6dp4` e confirmar que não há oposição em `heating_optout`.
 -- Quem lê: job diário `blog-src/scripts/heating_sync.py` (corte 2), ao cruzar eventos do BigQuery (GA4) pelo `user_id`.
--- Remoção: o `--forget` apaga as linhas deste email em `site_identities`.
+-- Remoção: o POST /prioridade apaga as linhas deste email em `site_identities`; o `--forget` e o `--optout` apagam a partir do PR 6.
 
 CREATE TABLE IF NOT EXISTS site_identities (
   uid TEXT PRIMARY KEY NOT NULL

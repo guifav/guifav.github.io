@@ -65,7 +65,18 @@ const base = import.meta.env.BASE_URL;
         return c && c.v === 'granted' && typeof c.t === 'number' && Date.now() - c.t >= 0 && Date.now() - c.t < 31536e6 ? 'granted' : null;
       } catch (e) { return null; }
     }();
-    if (window.guifavConsent === 'granted') gtag('consent', 'update', { ad_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'granted', analytics_storage: 'granted' });
+    if (window.guifavConsent === 'granted') {
+      gtag('consent', 'update', { ad_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'granted', analytics_storage: 'granted' });
+      try {
+        var u = JSON.parse(localStorage.getItem('heating-uid-v1') || 'null');
+        if (u && typeof u.uid === 'string' && /^[0-9A-Za-z]{1,128}$/.test(u.uid) && typeof u.t === 'number' && Date.now() - u.t >= 0 && Date.now() - u.t < 31536e6) {
+          gtag('consent', 'update', { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' });
+          gtag('set', 'allow_google_signals', false);
+          gtag('set', 'allow_ad_personalization_signals', false);
+          gtag('set', { user_id: u.uid });
+        }
+      } catch (e) {}
+    }
     gtag('js', new Date());
     gtag('config', GA4_ID, { content_group: CONTENT_GROUP });
   </script>}

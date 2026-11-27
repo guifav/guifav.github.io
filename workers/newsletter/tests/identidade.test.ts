@@ -306,50 +306,45 @@ test('oposição ao heating (heating_optout): responde 204 e não grava em site_
   assert.deepEqual(s.rows('site_identities'), []);
 });
 
-test('regras do ID token: rejeita cada falha com 401 sem detalhe e log curto sem email nem token', async () => {
+test('regras do ID token: rejeita cada falha com 401 sem detalhe e log curto com motivo exato sem email nem token', async () => {
   const s = setup();
-  const cases: Array<[string, () => Promise<Request>]> = [
-    ['sem Authorization', async () => idReq({ token: null })],
-    ['Authorization sem Bearer', async () => idReq({ authHeader: 'Basic abc' })],
-    ['token malformado', async () => idReq({ token: 'nao-e-jwt' })],
-    ['alg none', async () => {
-      const h = b64urlJson({ alg: 'none', kid: KEY1.kid });
-      const p = b64urlJson(validPayload());
-      return idReq({ token: `${h}.${p}.AAAA` });
-    }],
-    ['alg HS256', async () => {
-      const h = b64urlJson({ alg: 'HS256', kid: KEY1.kid });
-      const p = b64urlJson(validPayload());
-      return idReq({ token: `${h}.${p}.AAAA` });
-    }],
-    ['kid ausente', async () => idReq({ token: await signJwt(validPayload(), { header: { alg: 'RS256' } }) })],
-    ['kid desconhecido', async () => idReq({ token: await signJwt(validPayload(), { header: { alg: 'RS256', kid: 'desconhecido' } }) })],
-    ['assinatura de outra chave', async () => idReq({ token: await signJwt(validPayload(), { privateKey: KEY2.privateKey }) })],
-    ['tenant errado', async () => idReq({ token: await signJwt(validPayload({ firebase: { tenant: 'outro-app' } })) })],
-    ['tenant ausente', async () => idReq({ token: await signJwt(validPayload({ firebase: { sign_in_provider: 'google.com' } })) })],
-    ['campo firebase ausente', async () => {
+  const cases: Array<[string, string, () => Promise<Request>]> = [
+    ['sem Authorization', 'authorization_ausente', async () => idReq({ token: null })],
+    ['Authorization sem Bearer', 'authorization_ausente', async () => idReq({ authHeader: 'Basic abc' })],
+    ['token malformado', 'token_invalido', async () => idReq({ token: 'nao-e-jwt' })],
+    ['alg none com assinatura RS256 válida', 'alg_invalido', async () => idReq({ token: await signJwt(validPayload(), { header: { alg: 'none', typ: 'JWT', kid: KEY1.kid } }) })],
+    ['alg HS256 com assinatura RS256 válida', 'alg_invalido', async () => idReq({ token: await signJwt(validPayload(), { header: { alg: 'HS256', typ: 'JWT', kid: KEY1.kid } }) })],
+    ['alg RS512 com assinatura RS256 válida', 'alg_invalido', async () => idReq({ token: await signJwt(validPayload(), { header: { alg: 'RS512', typ: 'JWT', kid: KEY1.kid } }) })],
+    ['kid ausente', 'kid_ausente', async () => idReq({ token: await signJwt(validPayload(), { header: { alg: 'RS256' } }) })],
+    ['kid desconhecido', 'kid_desconhecido', async () => idReq({ token: await signJwt(validPayload(), { header: { alg: 'RS256', kid: 'desconhecido' } }) })],
+    ['assinatura de outra chave', 'assinatura_invalida', async () => idReq({ token: await signJwt(validPayload(), { privateKey: KEY2.privateKey }) })],
+    ['tenant errado', 'tenant_invalido', async () => idReq({ token: await signJwt(validPayload({ firebase: { tenant: 'outro-app' } })) })],
+    ['tenant ausente', 'tenant_invalido', async () => idReq({ token: await signJwt(validPayload({ firebase: { sign_in_provider: 'google.com' } })) })],
+    ['campo firebase ausente', 'tenant_invalido', async () => {
       const p = validPayload();
       delete p.firebase;
       return idReq({ token: await signJwt(p) });
     }],
-    ['email não verificado', async () => idReq({ token: await signJwt(validPayload({ email_verified: false })) })],
-    ['email_verified ausente', async () => {
+    ['email não verificado', 'email_nao_verificado', async () => idReq({ token: await signJwt(validPayload({ email_verified: false })) })],
+    ['email_verified ausente', 'email_nao_verificado', async () => {
       const p = validPayload();
       delete p.email_verified;
       return idReq({ token: await signJwt(p) });
     }],
-    ['email inválido', async () => idReq({ token: await signJwt(validPayload({ email: 'invalido@' })) })],
-    ['iss errado', async () => idReq({ token: await signJwt(validPayload({ iss: 'https://securetoken.google.com/outro' })) })],
-    ['aud errado', async () => idReq({ token: await signJwt(validPayload({ aud: 'outro-projeto' })) })],
-    ['exp expirado (> 5 min)', async () => idReq({ token: await signJwt(validPayload({ exp: NOW_SEC - 301 })) })],
-    ['iat no futuro (> 5 min)', async () => idReq({ token: await signJwt(validPayload({ iat: NOW_SEC + 301 })) })],
-    ['sub com caracteres inválidos', async () => idReq({ token: await signJwt(validPayload({ sub: 'uid-com-traco' })) })],
-    ['sub longo demais', async () => idReq({ token: await signJwt(validPayload({ sub: 'a'.repeat(129) })) })],
+    ['email inválido', 'email_invalido', async () => idReq({ token: await signJwt(validPayload({ email: 'invalido@' })) })],
+    ['iss errado', 'iss_invalido', async () => idReq({ token: await signJwt(validPayload({ iss: 'https://securetoken.google.com/outro' })) })],
+    ['aud errado', 'aud_invalido', async () => idReq({ token: await signJwt(validPayload({ aud: 'outro-projeto' })) })],
+    ['exp no instante atual (folga zero)', 'expirado', async () => idReq({ token: await signJwt(validPayload({ exp: NOW_SEC })) })],
+    ['exp expirado há 1 s (folga zero)', 'expirado', async () => idReq({ token: await signJwt(validPayload({ exp: NOW_SEC - 1 })) })],
+    ['iat no futuro (> 5 min)', 'iat_futuro', async () => idReq({ token: await signJwt(validPayload({ iat: NOW_SEC + 301 })) })],
+    ['sub com caracteres inválidos', 'sub_invalido', async () => idReq({ token: await signJwt(validPayload({ sub: 'uid-com-traco' })) })],
+    ['sub longo demais', 'sub_invalido', async () => idReq({ token: await signJwt(validPayload({ sub: 'a'.repeat(129) })) })],
   ];
 
-  for (const [label, makeReq] of cases) {
+  for (const [label, expectedReason, makeReq] of cases) {
     const req = await makeReq();
     const rawAuth = req.headers.get('authorization') ?? '';
+    const fetchesBefore = s.jwksFetches();
     let res!: Response;
     const logs = await capturaErros(async () => {
       res = await s.run(req);
@@ -358,6 +353,10 @@ test('regras do ID token: rejeita cada falha com 401 sem detalhe e log curto sem
     assert.equal(await res.text(), '', `${label}: 401 não deve expor detalhe`);
     assert.equal(logs.length, 1, `${label}: esperado 1 log curto`);
     const line = logs[0];
+    assert.equal(line, `identidade recusada: ${expectedReason}`, `${label}: motivo inesperado no log`);
+    if (expectedReason === 'alg_invalido') {
+      assert.equal(s.jwksFetches(), fetchesBefore, `${label}: alg inválido não deve buscar JWKS`);
+    }
     assert.ok(!line.toLowerCase().includes('leitor@exemplo.com'), `${label}: log vazou email`);
     assert.ok(!line.includes('@'), `${label}: log contém @`);
     if (rawAuth.startsWith('Bearer ')) {
@@ -367,12 +366,30 @@ test('regras do ID token: rejeita cada falha com 401 sem detalhe e log curto sem
   assert.deepEqual(s.rows('site_identities'), []);
 });
 
-test('tolerância de 5 min em exp e iat aceita desvios dentro do limite', async () => {
-  const s = setup();
-  const tExp = await signJwt(validPayload({ sub: 'UidSkewExp1', exp: NOW_SEC - 120, iat: NOW_SEC - 600 }));
-  assert.equal((await s.run(idReq({ token: tExp }))).status, 204);
+test('JWKS ignora chaves com alg diferente de RS256', async () => {
+  const s = setup({ jwksKeys: [{ ...KEY1.jwk, alg: 'RS512' }, KEY2.jwk] });
+  const tok = await signJwt(validPayload());
+  let res!: Response;
+  const logs = await capturaErros(async () => {
+    res = await s.run(idReq({ token: tok }));
+  });
+  assert.equal(res.status, 401);
+  assert.equal(logs[0], 'identidade recusada: kid_desconhecido');
+  assert.deepEqual(s.rows('site_identities'), []);
+});
 
-  const tIat = await signJwt(validPayload({ sub: 'UidSkewIat2', iat: NOW_SEC + 120, exp: NOW_SEC + 3600 }));
+test('exp exige folga zero e iat mantém tolerância de 5 min', async () => {
+  const s = setup();
+  const tExpOk = await signJwt(validPayload({ sub: 'UidExpOk1', exp: NOW_SEC + 1, iat: NOW_SEC - 60 }));
+  assert.equal((await s.run(idReq({ token: tExpOk }))).status, 204);
+
+  const tExpZero = await signJwt(validPayload({ sub: 'UidExpZero', exp: NOW_SEC - 1, iat: NOW_SEC - 60 }));
+  const logs = await capturaErros(async () => {
+    assert.equal((await s.run(idReq({ token: tExpZero }))).status, 401);
+  });
+  assert.equal(logs[0], 'identidade recusada: expirado');
+
+  const tIat = await signJwt(validPayload({ sub: 'UidSkewIat2', iat: NOW_SEC + 300, exp: NOW_SEC + 3600 }));
   assert.equal((await s.run(idReq({ token: tIat }))).status, 204);
   assert.equal(s.rows('site_identities').length, 2);
 });
