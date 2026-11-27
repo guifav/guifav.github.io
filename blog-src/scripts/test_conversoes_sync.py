@@ -657,10 +657,10 @@ class ForgetTest(unittest.TestCase):
         self.assertEqual(f.db.execute("SELECT count(*) FROM conversions WHERE email = 'a@x.com'").fetchone()[0], 0)
         self.assertEqual(f.people["p1"], before)  # Pessoa e campos site* como estavam
         self.assertNotIn("DELETE", [m for m, p, d, _ in f.calls if p.startswith("/rest/people")])
-        # a ordem (r1): o Twenty pelos ids do D1, a releitura e só então o D1
+        # a ordem (r1): o Twenty pelos ids do D1, a releitura e só então o D1 (conversions, engagement_events e heating de site)
         seq = [("d1" if p.endswith("/query") else "tw") for m, p, d, _ in f.calls
                if (p.endswith("/query") and d["sql"].startswith("DELETE")) or m == "DELETE"]
-        self.assertEqual(seq, ["tw", "tw", "d1"])
+        self.assertEqual(seq, ["tw", "tw", "d1", "d1", "d1"])
         self.assertIn(FORGET := S.FORGET_MARK, out)
         self.assertTrue(FORGET)
         counts, _ = run(f, apply=True)
@@ -988,7 +988,7 @@ class CliTest(unittest.TestCase):
         f.add(1, "a@x.com")
         self.assertEqual(self.cli(f, "--apply")[0], 0)
         self.assertEqual(self.cli(f, "--forget", "--apply", stdin="a@x.com\n")[0], 0)
-        self.assertEqual(seen, [("UPDATE", "preso"), ("DELETE", "preso")])
+        self.assertEqual(seen, [("UPDATE", "preso"), ("DELETE", "preso"), ("DELETE", "preso"), ("DELETE", "preso")])
 
     def test_twenty_sync_d1_without_params_keeps_the_old_payload(self):
         seen = []
@@ -1552,6 +1552,54 @@ class TwentyPersonIdTest(unittest.TestCase):
         self.assertEqual(f.pending(), [])
         self.assertEqual(f.row(1)["twenty_person_id"], "p-old")
         self.assertNotEqual(f.row(1)["twenty_person_id"], nova["id"])
+
+    def test_forget_clears_site_heating_and_keeps_course_context_intact(self):
+        # Épico #197: --forget apaga engagement_events e heating do contexto `site` e limpa os 4 campos heating* da
+        # Pessoa, mantendo os campos site* e deixando intactos os contextos de curso (`curso:<slug>`).
+        f = Fake(people=[person(
+            "p1", "a@x.com",
+            heatingNota=42, heatingFaixa="QUENTE", heatingSinais="Download de material (12,0)",
+            heatingCalculadoEm="2026-11-27T10:00:00.000Z",
+        )])
+        for k, t in (("heatingNota", "NUMBER"), ("heatingFaixa", "SELECT"), ("heatingSinais", "TEXT"), ("heatingCalculadoEm", "DATE_TIME")):
+            f.person_fields[k] = {"id": f"pf-{k}", "name": k, "type": t, "options": None}
+        f.add(1, "a@x.com")
+        run(f, apply=True)
+        # Eventos e notas nos dois contextos (site e curso) + outro email no site.
+        f.db.execute(
+            "INSERT INTO engagement_events (id, context, email, signal, source, ref, occurred_at, recorded_at) VALUES "
+            "('ev-site-a', 'site', 'a@x.com', 'material_baixado', 'conversoes', 'planilha-custos-ia', '2026-11-26T10:00:00.000Z', '2026-11-27T10:00:00.000Z'),"
+            "('ev-curso-a', 'curso:chatgpt-no-dia-a-dia', 'a@x.com', 'curso_cadastro', 'curso', NULL, '2026-11-26T10:00:00.000Z', '2026-11-27T10:00:00.000Z'),"
+            "('ev-site-b', 'site', 'b@x.com', 'material_baixado', 'conversoes', 'planilha-custos-ia', '2026-11-26T10:00:00.000Z', '2026-11-27T10:00:00.000Z')"
+        )
+        f.db.execute(
+            "INSERT INTO heating (context, email, score, band, signals, computed_at, twenty_person_id) VALUES "
+            "('site', 'a@x.com', 42, 'quente', '[]', '2026-11-27T10:00:00.000Z', 'p1'),"
+            "('curso:chatgpt-no-dia-a-dia', 'a@x.com', 15, 'morno', '[]', '2026-11-27T10:00:00.000Z', 'p1'),"
+            "('site', 'b@x.com', 12, 'frio', '[]', '2026-11-27T10:00:00.000Z', NULL)"
+        )
+        f.db.commit()
+
+        # Simulação não apaga nada nem limpa a Pessoa.
+        counts_dry, out_dry = forget(f, "a@x.com", apply=False)
+        self.assertEqual((counts_dry["eventos_site"], counts_dry["heating_site"], counts_dry["pessoas_heating_limpas"]), (1, 1, 1))
+        self.assertEqual(f.people["p1"]["heatingNota"], 42)
+        self.assertIn("simulação", out_dry)
+
+        # Com --apply, limpa apenas o contexto site e os 4 campos heating* da Pessoa.
+        counts, _ = forget(f, "a@x.com", apply=True)
+        self.assertEqual((counts["eventos_site"], counts["heating_site"], counts["pessoas_heating_limpas"]), (1, 1, 1))
+        self.assertEqual([r[0] for r in f.db.execute("SELECT id FROM engagement_events ORDER BY id")], ["ev-curso-a", "ev-site-b"])
+        self.assertEqual(
+            [(r[0], r[1]) for r in f.db.execute("SELECT context, email FROM heating ORDER BY context, email")],
+            [("curso:chatgpt-no-dia-a-dia", "a@x.com"), ("site", "b@x.com")],
+        )
+        p1 = f.people["p1"]
+        for k in S.HEATING_PERSON_FIELDS:
+            self.assertIsNone(p1[k], k)
+        # Campos site* da Pessoa continuam preservados (decisão de 23/11).
+        self.assertEqual(p1["siteInteresses"], ["CUSTO_IA"])
+        self.assertIs(p1["siteEmailComprovado"], True)
 
 
 if __name__ == "__main__":

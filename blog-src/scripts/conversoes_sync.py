@@ -64,10 +64,13 @@ Twenty, --forget --apply grava um marcador mínimo na tabela `forgotten` do D1 (
 `forgotten_at` (pelo relógio do próprio D1, em ISO UTC com milissegundos). Com esse marcador, o Worker recusa links
 assinados emitidos antes (ou no instante) da remoção. As linhas do email no D1 continuam sendo o diário da remoção:
 apaga no Twenty (de vez, inclusive as que estão na lixeira) as Conversões cujos eventoId são os ids dessas linhas, relê
-o Twenty com a lixeira para provar que nenhuma sobrou e só então apaga as linhas no D1 (levando junto
-`twenty_person_id` e a origem). Uma queda no meio (mesmo na leitura do Twenty) deixa o marcador gravado e o D1 intacto,
-e repetir o comando conclui, mesmo que o email da Pessoa tenha mudado no CRM. A Pessoa e os campos site* dela ficam
-como estão (decisão do Gui, 2026-11-23). Simulação sem --apply.
+o Twenty com a lixeira para provar que nenhuma sobrou, limpa os quatro campos `heating*` (heatingNota, heatingFaixa,
+heatingSinais e heatingCalculadoEm) da Pessoa ativa (a nota não fica no resumo que sobra na Pessoa; épico #197) e só
+então apaga as linhas no D1 em `conversions` (levando junto `twenty_person_id` e a origem), `engagement_events` e
+`heating` no contexto `site` (não toca nos contextos de curso `curso:<slug>`). Uma queda no meio (mesmo na leitura do
+Twenty ou na limpeza dos campos heating da Pessoa) deixa o marcador gravado e o D1 intacto, e repetir o comando conclui,
+mesmo que o email da Pessoa tenha mudado no CRM. A Pessoa e os campos site* dela ficam como estão (decisão do Gui,
+2026-11-23). Simulação sem --apply.
 
 Limpeza dos marcadores (issue #134): os marcadores em `forgotten` ficam por 8 dias (o link mais longo vale 7 dias, mais
 1 dia de folga de relógio). No sync e no --forget com --apply, os marcadores com `forgotten_at` mais velho que 8 dias
@@ -155,6 +158,7 @@ PERSON_FIELDS = OrderedDict([
     ("siteEmailComprovado", {"type": "BOOLEAN", "label": "Email comprovado no site", "icon": "IconMailCheck"}),
     ("siteGaClientId", {"type": "TEXT", "label": "client_id do GA4 (site)", "icon": "IconChartLine"}),
 ])
+HEATING_PERSON_FIELDS = ("heatingNota", "heatingFaixa", "heatingSinais", "heatingCalculadoEm")
 MULTI = {"interesses", "siteInteresses"}
 
 HEX64 = re.compile(r"[0-9a-f]{64}")
@@ -620,7 +624,8 @@ def run(c: TS.Clients, *, apply: bool = False, out=None) -> Counter:
 
 
 def forget(c: TS.Clients, email: str, *, apply: bool = False, out=None, forget_key: str | None = None) -> Counter:
-    """Grava o marcador `forgotten` (issue #134), apaga as conversões do Twenty e do D1 (levando junto `twenty_person_id`), e limpa marcadores vencidos."""
+    """Grava o marcador `forgotten` (issue #134), apaga as conversões do Twenty e do D1, limpa o heating do contexto
+    `site` no D1 e na Pessoa do Twenty (épico #197, sem tocar nos contextos de curso), e limpa marcadores vencidos."""
     out = out or sys.stdout
     key = c.env.get("FORGET_HMAC_KEY", "") if forget_key is None else forget_key
     email = email.strip().lower()
@@ -633,6 +638,8 @@ def forget(c: TS.Clients, email: str, *, apply: bool = False, out=None, forget_k
     # As linhas do D1 são o diário: enquanto existirem, os ids delas acham as Conversões no Twenty, qualquer que seja o
     # email atual da Pessoa no CRM.
     ids = {r["id"] for r in c.d1("SELECT id FROM conversions WHERE email = ?", [email])}
+    site_events = int(c.d1("SELECT count(*) AS n FROM engagement_events WHERE context = 'site' AND email = ?", [email])[0]["n"])
+    site_heating = int(c.d1("SELECT count(*) AS n FROM heating WHERE context = 'site' AND email = ?", [email])[0]["n"])
     expired_marks = _count_expired_marks(c, exclude_hmac=email_hmac)
     if apply and expired_marks:
         # Limpeza dos marcadores vencidos independe do Twenty (#134).
@@ -640,18 +647,31 @@ def forget(c: TS.Clients, email: str, *, apply: bool = False, out=None, forget_k
     meta = read_metadata(c)
     persons = people_by_email(list_records(c, "people")).get(email) or []
     convs = [x for x in list_records(c, PLURAL) if x.get("eventoId") in ids] if meta["conv_id"] else []
+    heating_fields = [k for k in HEATING_PERSON_FIELDS if k in meta["person"]]
+    to_clear = [p for p in persons if any(p.get(k) is not None for k in heating_fields)]
     counts["d1_linhas"], counts["conversoes_no_crm"], counts["pessoas_mantidas"] = len(ids), len(convs), len(persons)
+    counts["eventos_site"], counts["heating_site"], counts["pessoas_heating_limpas"] = site_events, site_heating, len(to_clear)
     counts["marcadores_vencidos"] = expired_marks
     if apply:
-        # 2) Apaga no Twenty e relê para provar que nenhuma sobrou.
+        # 2) Apaga no Twenty e relê para provar que nenhuma sobrou; limpa os quatro campos heating* na Pessoa.
         for x in convs:
             c.twenty("DELETE", f"/rest/{PLURAL}/{urllib.parse.quote(x['id'])}", op="apagar conversão")
         if meta["conv_id"] and any(x.get("eventoId") in ids for x in list_records(c, PLURAL)):
             raise SyncError("ainda há Conversões do email no Twenty; o D1 ficou intacto, rode de novo")
-        # 3) Apaga as linhas do email em `conversions` e confirma.
+        if heating_fields:
+            clear_patch = {k: None for k in heating_fields}
+            for p in to_clear:
+                c.twenty("PATCH", f"/rest/people/{urllib.parse.quote(p['id'])}", clear_patch, op="limpar heating da pessoa")
+        # 3) Apaga as linhas do email em `conversions`, `engagement_events` (site) e `heating` (site) e confirma.
         c.d1("DELETE FROM conversions WHERE email = ?", [email])
         if c.d1("SELECT count(*) AS n FROM conversions WHERE email = ?", [email])[0]["n"] != 0:
             raise SyncError("o D1 ainda tem linhas do email depois da remoção")
+        c.d1("DELETE FROM engagement_events WHERE context = 'site' AND email = ?", [email])
+        if c.d1("SELECT count(*) AS n FROM engagement_events WHERE context = 'site' AND email = ?", [email])[0]["n"] != 0:
+            raise SyncError("o D1 ainda tem eventos de site do email depois da remoção")
+        c.d1("DELETE FROM heating WHERE context = 'site' AND email = ?", [email])
+        if c.d1("SELECT count(*) AS n FROM heating WHERE context = 'site' AND email = ?", [email])[0]["n"] != 0:
+            raise SyncError("o D1 ainda tem nota de site do email depois da remoção")
     _report(counts, out, FORGET_MARK if apply else "simulação: nada foi apagado (use --apply)")
     return counts
 
