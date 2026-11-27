@@ -1717,7 +1717,13 @@ test('Kimi P1 (rodada 6): sessão logada sem vínculo nega anúncios, marca logi
   const beforeOut = s.gtagCalls.length;
   await s.emitAuth(null);
   assert.equal(s.local.getItem('heating-login-v1'), null);
-  assert.deepEqual(s.gtagCalls.slice(beforeOut).filter((c) => c[0] === 'consent'), [['consent', 'update', AD_CONSENT_GRANTED]]);
+  // Kimi P2 (rodada 7): user_id null e depois anúncios e os dois sinais juntos de volta ao consentimento comum.
+  assert.deepEqual(s.gtagCalls.slice(beforeOut), [
+    ['set', { user_id: null }],
+    ['consent', 'update', AD_CONSENT_GRANTED],
+    ['set', 'allow_google_signals', true],
+    ['set', 'allow_ad_personalization_signals', true],
+  ]);
 
   // Com o vínculo ligado no navegador, o logout não devolve anúncios.
   const r = await setupAuth({
@@ -1790,5 +1796,29 @@ test('Claude P3 (rodada 7): Sim no banner depois de o Firebase confirmar a conta
   const q = await setupAuth({ idbMode: 'session', initialUser: null });
   await q.emitConsent('granted');
   assert.deepEqual(q.gtagCalls, []);
+});
+
+test('Kimi P2 e P3 (rodada 7): Não -> Sim logado sem vínculo desliga os sinais; logout remoto com foco no menu devolve o foco', async () => {
+  const s = await setupAuth({ consent: { v: 'denied', t: NOW - 1000 }, initialUser: makeUser() });
+  assert.deepEqual(s.gtagCalls, []);
+  await s.emitConsent('granted');
+  assert.deepEqual(s.gtagCalls, LOGIN_AD_DENY);
+
+  const k = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' }, initialUser: makeUser() });
+  const btn = k.findClass('guifav-auth-btn')!;
+  await k.click(btn);
+  const sair = k.body.findAll((e) => e.textContent === 'Sair')[0];
+  sair.focus();
+  await k.emitAuth(null); // Sair feito em outra aba
+  assert.equal(k.activeElement(), btn, 'o foco sai do item escondido e volta ao botão');
+  assert.equal(btn.textContent, 'Entrar com Google');
+
+  // Fechar o menu com clique fora não rouba o foco de onde a pessoa clicou.
+  const c = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' }, initialUser: makeUser() });
+  await c.click(c.findClass('guifav-auth-btn')!);
+  const input = c.body.appendChild(c.createElement('input'));
+  input.focus();
+  await c.clickOutside();
+  assert.equal(c.activeElement(), input);
 });
 

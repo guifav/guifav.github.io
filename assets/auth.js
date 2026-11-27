@@ -160,6 +160,13 @@
     return validTenantUser(currentUser) || loginMarkedInBrowser() || linkGrantedInBrowser();
   }
 
+  // Volta ao consentimento comum (cookies aceitos, sem sessão logada nem vínculo): anúncios e sinais de novo ligados.
+  function restoreAdSignals() {
+    sendGtag('consent', 'update', { ad_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'granted' });
+    sendGtag('set', 'allow_google_signals', true);
+    sendGtag('set', 'allow_ad_personalization_signals', true);
+  }
+
   function denyAdSignals() {
     sendGtag('consent', 'update', { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' });
     sendGtag('set', 'allow_google_signals', false);
@@ -293,9 +300,7 @@
     headSentUid = false;
     if (removeStored !== false) removeHeatingUid();
     sendGtag('set', { user_id: null });
-    if (wasIdentified && readConsent() === 'granted' && !adsBlockedInBrowser()) {
-      sendGtag('consent', 'update', { ad_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'granted' });
-    }
+    if (wasIdentified && readConsent() === 'granted' && !adsBlockedInBrowser()) restoreAdSignals();
   }
 
   function canIdentify(uid) {
@@ -421,6 +426,9 @@
   }
 
   function setMenuOpen(open) {
+    // Fechar o menu com o foco num item dele (Sair, logout em outra aba, troca de conta): o foco volta ao botão da conta.
+    var active = d.activeElement;
+    var focusInMenu = !open && Boolean(menuEl && active && typeof menuEl.contains === 'function' && menuEl.contains(active));
     menuOpen = Boolean(open);
     if (menuEl) menuEl.hidden = !menuOpen;
     if (triggerBtn) triggerBtn.setAttribute('aria-expanded', menuOpen ? 'true' : 'false');
@@ -428,6 +436,7 @@
       focusMenuItem(0);
     } else {
       menuFocusIdx = -1;
+      if (focusInMenu && triggerBtn && typeof triggerBtn.focus === 'function') triggerBtn.focus();
     }
   }
 
@@ -638,7 +647,6 @@
         sessionSet(ONE_TAP_SUPPRESSED_KEY, '1');
         disableOneTapAutoSelect();
         setMenuOpen(false);
-        if (triggerBtn && typeof triggerBtn.focus === 'function') triggerBtn.focus();
         hideNotice();
         clearUserId(true);
         if (authInstance && fbAuth && typeof fbAuth.signOut === 'function') {
@@ -884,10 +892,7 @@
           hideNotice();
           renderWidget();
           syncIdentityState(hadIdentity);
-          // Os sinais allow_google_signals e allow_ad_personalization_signals só voltam na página seguinte (lado conservador).
-          if (wasUser && hadAdsBlocked && readConsent() === 'granted' && !adsBlockedInBrowser()) {
-            sendGtag('consent', 'update', { ad_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'granted' });
-          }
+          if (wasUser && hadAdsBlocked && readConsent() === 'granted' && !adsBlockedInBrowser()) restoreAdSignals();
           maybeStartOneTap();
         }
       });
