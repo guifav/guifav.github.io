@@ -2,16 +2,31 @@
 ou removidas, logo depois do deploy.
 
 Fluxo no workflow do Pages:
-1. build: `diff` compara os sitemaps do _site/ com os publicados (ainda o deploy anterior) e grava o plano
-   (modo, URLs e o sha256 de cada sitemap novo) num arquivo, que vai como artefato ao job seguinte.
-   URL sem lastmod no sitemap (a capa do blog) entra quando o HTML publicado difere do build.
+1. build: restaura o registro de URLs já avisadas do cache do GitHub Actions (`indexnow-registry-*`) e roda
+   `diff --registry`, que compara os sitemaps do _site/ com os publicados (ainda o deploy anterior) e inclui
+   também as URLs do build cuja versão atual difere da do registro. Grava o plano (modo, URLs, sha256 de cada
+   sitemap novo, base do registro e versões) num arquivo, que vai como artefato ao job seguinte.
+   URL sem lastmod no sitemap (a capa do blog e as páginas de tema, `/blog/tema/...`) entra quando o HTML
+   publicado difere do build ou quando a versão registrada (`sha256:<hex>` do arquivo no `_site`) difere da atual.
    Se não conseguir ler o site publicado, o plano vira modo "all": todas as URLs do build mais as que saíram do
    índice desde o commit anterior (git diff contra github.event.before). Sem esse commit, o plano é marcado
    incompleto e o job termina vermelho depois do envio. O deploy nunca depende do IndexNow.
-2. depois do deploy: `submit` espera os três sitemaps publicados ficarem iguais aos do build (e a chave estar
-   no ar) e manda as URLs.
+2. depois do deploy: `submit --registry-out` espera os três sitemaps publicados ficarem iguais aos do build
+   (e a chave estar no ar), manda as URLs e grava o registro atualizado (salvo no cache do Actions mesmo quando
+   o envio falha, para que os lotes já aceitos fiquem registrados).
+
+Registro (cache do Actions):
+- Fica no cache do GitHub Actions (`indexnow-registry-*`), fora do repositório.
+- Guarda a versão já avisada de cada URL: o `lastmod` do sitemap quando existe, ou `sha256:<hex>` do arquivo no
+  `_site` quando não há `lastmod`. Por isso, qualquer falha antes do envio (ou rejeição de lote, ou falha ao
+  salvar o cache) deixa a versão antiga no registro e a URL volta no deploy seguinte.
+- Ausência ou invalidez do cache faz avisar todas as URLs do build uma vez e recria o registro.
+- O cache do Actions some depois de 7 dias sem acesso, o que também só causa um reenvio completo.
+- Re-executar o job `indexnow` de um deploy antigo depois de um mais novo pode salvar um registro mais velho
+  como o mais recente; um registro mais velho só faz reenviar, nunca deixa de avisar.
 
 À mão: `all` avisa tudo o que está publicado; `urls URL...` avisa URLs escolhidas (remoções, por exemplo).
+Os comandos manuais (`all` e `urls`) não leem nem gravam o registro.
     python3 scripts/indexnow.py all
 
 A chave fica pública em https://guifav.dev/<KEY>.txt, como o protocolo exige.
@@ -25,6 +40,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -47,6 +63,7 @@ UA = "guifav-indexnow/1"
 SITEMAPS = ("/sitemap.xml", "/sitemap-site.xml", "/blog/sitemap.xml")
 MODES = ("diff", "all")
 POSTS_DIR = "blog-src/src/content/posts/"
+REGISTRY_VERSION = 1
 
 
 class LiveError(Exception):
@@ -228,9 +245,77 @@ def git_removals(repo: Path, before: str | None, site: Path, git=_git) -> list[s
     return sorted(out)
 
 
-def plan(site: Path, get=http_get, repo: Path = Path("."), before: str | None = None, git=_git) -> dict:
+def load_registry(path: Path) -> tuple[dict[str, str], str]:
+    """Lê o registro JSON de URLs já avisadas: devolve (entradas, estado).
+
+    Estado é "ok", "ausente" (arquivo não existe) ou "inválido". Quando ausente ou inválido devolve {},
+    o que faz o plano avisar todas as URLs do build.
+    """
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return {}, "ausente"
+    except (OSError, UnicodeDecodeError):
+        return {}, "inválido"
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        return {}, "inválido"
+    if (not isinstance(data, dict)
+            or type(data.get("version")) is not int
+            or data["version"] != REGISTRY_VERSION):
+        return {}, "inválido"
+    urls = data.get("urls")
+    if not isinstance(urls, dict):
+        return {}, "inválido"
+    for k, v in urls.items():
+        if not isinstance(k, str) or not isinstance(v, str) or not _same_host(k):
+            return {}, "inválido"
+    return dict(urls), "ok"
+
+
+def save_registry(path: Path, entries: dict[str, str]) -> None:
+    """Grava o registro de forma atômica (temporário no mesmo diretório e os.replace)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps({"version": REGISTRY_VERSION, "urls": dict(sorted(entries.items()))}, separators=(",", ":"))
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(payload)
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+    print(f"IndexNow: registro com {len(entries)} URLs gravado em {path}")
+
+
+def versions(site: Path, new: dict[str, str]) -> dict[str, str]:
+    """Versão de cada URL do build: o lastmod do sitemap quando existe, ou 'sha256:<hex>' do arquivo no _site."""
+    out: dict[str, str] = {}
+    for loc, lm in new.items():
+        if lm:
+            out[loc] = lm
+        else:
+            f = _local(site, loc)
+            out[loc] = f"sha256:{sha256(f.read_bytes())}" if f is not None and f.is_file() else ""
+    return out
+
+
+def never_sent(versions: dict[str, str], registry: dict[str, str]) -> list[str]:
+    """URLs do build cuja versão difere da do registro (inclui ausentes e as de versão vazia, sem arquivo para assinar)."""
+    return sorted(loc for loc, ver in versions.items() if not ver or registry.get(loc) != ver)
+
+
+def plan(site: Path, get=http_get, repo: Path = Path("."), before: str | None = None, git=_git,
+         registry: dict[str, str] | None = None) -> dict:
     new = built_entries(site)
+    vers = versions(site, new)
     shas = {p: sha256((site / p.lstrip("/")).read_bytes()) for p in SITEMAPS}
+    pending = never_sent(vers, registry) if registry is not None else []
+    base = {u: v for u, v in registry.items() if u in new} if registry is not None else None
     try:
         old = live_entries(get)
     except LiveError as e:
@@ -238,9 +323,16 @@ def plan(site: Path, get=http_get, repo: Path = Path("."), before: str | None = 
         print(f"::warning::IndexNow: sitemaps publicados ilegíveis ({e}); depois do deploy vão todas as URLs do build"
               + (f" e {len(removed)} que saíram do índice desde {before[:12]}" if removed is not None
                  else ", sem as remoções (sem commit anterior): o job vai terminar vermelho"))
-        return {"mode": "all", "urls": sorted(set(new) | set(removed or [])), "sitemaps": shas,
-                "incomplete": removed is None}
-    return {"mode": "diff", "urls": changed(old, new, site, get), "sitemaps": shas, "incomplete": False}
+        urls = sorted(set(new) | set(removed or []) | set(pending))
+        return {"mode": "all", "urls": urls, "sitemaps": shas, "incomplete": removed is None,
+                "registry": base, "versions": {u: vers[u] for u in urls if u in vers}}
+    urls = sorted(set(changed(old, new, site, get)) | set(pending))
+    return {"mode": "diff", "urls": urls, "sitemaps": shas, "incomplete": False,
+            "registry": base, "versions": {u: vers[u] for u in urls if u in vers}}
+
+
+def _str_dict(d) -> bool:
+    return isinstance(d, dict) and all(isinstance(k, str) and isinstance(v, str) for k, v in d.items())
 
 
 def valid_plan(p) -> bool:
@@ -248,7 +340,9 @@ def valid_plan(p) -> bool:
             and isinstance(p.get("urls"), list) and all(isinstance(u, str) for u in p["urls"])
             and isinstance(p.get("sitemaps"), dict) and set(p["sitemaps"]) == set(SITEMAPS)
             and all(isinstance(v, str) and len(v) == 64 for v in p["sitemaps"].values())
-            and isinstance(p.get("incomplete"), bool))
+            and isinstance(p.get("incomplete"), bool)
+            and "registry" in p and (p["registry"] is None or _str_dict(p["registry"]))
+            and _str_dict(p.get("versions")))
 
 
 def _is(resp: tuple[int, bytes], sha: str) -> bool:
@@ -270,19 +364,36 @@ def wait_live(sitemaps: dict[str, str], get=http_get, sleep=time.sleep, timeout:
         waited += every
 
 
-def submit(urls: list[str], post=http_post) -> list[str]:
-    """Manda em lotes. Devolve os erros (vazio = tudo aceito, 200 ou 202)."""
+def send(urls: list[str], post=http_post) -> tuple[list[str], list[str]]:
+    """Manda em lotes. Devolve (aceitas, erros) por lote (200 ou 202 entra em aceitas)."""
     bad = [u for u in urls if not _same_host(u)]
     if bad:
-        return [f"URL fora de {HOST}: {bad[0]}"]
-    errors = []
+        return [], [f"URL fora de {HOST}: {bad[0]}"]
+    accepted: list[str] = []
+    errors: list[str] = []
     for i in range(0, len(urls), BATCH):
         batch = urls[i:i + BATCH]
         status, body = post(ENDPOINT, {"host": HOST, "key": KEY, "keyLocation": KEY_LOCATION, "urlList": batch})
         print(f"IndexNow: {len(batch)} URLs -> HTTP {status}")
-        if status not in (200, 202):
+        if status in (200, 202):
+            accepted.extend(batch)
+        else:
             errors.append(f"HTTP {status}: {body[:200].decode(errors='replace')}")
-    return errors
+    return accepted, errors
+
+
+def submit(urls: list[str], post=http_post) -> list[str]:
+    """Manda em lotes. Devolve os erros (vazio = tudo aceito, 200 ou 202)."""
+    return send(urls, post)[1]
+
+
+def _maybe_save_registry(out: str | None, entries: dict[str, str] | None) -> None:
+    if not out:
+        return
+    if entries is None:
+        print(f"::warning::IndexNow: plano gerado sem registro; nada gravado em {out}")
+        return
+    save_registry(Path(out), entries)
 
 
 def main(argv: list[str] | None = None, get=http_get, post=http_post, sleep=time.sleep) -> int:
@@ -293,19 +404,29 @@ def main(argv: list[str] | None = None, get=http_get, post=http_post, sleep=time
     d.add_argument("--out", required=True)
     d.add_argument("--repo", default=".")
     d.add_argument("--before", default=os.environ.get("INDEXNOW_BEFORE"), help="commit publicado antes (github.event.before)")
+    d.add_argument("--registry", help="arquivo JSON com as URLs já avisadas (cache do Actions)")
     s = sub.add_parser("submit", help="espera o deploy e avisa as URLs do plano")
     s.add_argument("--plan", required=True, help="arquivo JSON gerado pelo diff")
     s.add_argument("--timeout", type=float, default=600)
+    s.add_argument("--registry-out", help="arquivo onde gravar o registro atualizado depois do envio")
     sub.add_parser("all", help="avisa todas as URLs publicadas (uso manual)")
     u = sub.add_parser("urls", help="avisa as URLs dadas (uso manual, por exemplo remoções)")
     u.add_argument("url", nargs="+")
     args = ap.parse_args(argv)
 
     if args.cmd == "diff":
-        p = plan(Path(args.site), get, Path(args.repo), args.before)
+        reg: dict[str, str] | None = None
+        if args.registry:
+            reg, state = load_registry(Path(args.registry))
+            if state != "ok":
+                print(f"::warning::IndexNow: registro {state} em {args.registry}; "
+                      "todas as URLs do build vão como nunca avisadas")
+        p = plan(Path(args.site), get, Path(args.repo), args.before, registry=reg)
         Path(args.out).parent.mkdir(parents=True, exist_ok=True)
         Path(args.out).write_text(json.dumps(p, separators=(",", ":")), encoding="utf-8")
-        print(f"IndexNow ({p['mode']}): {len(p['urls'])} URLs para avisar depois do deploy")
+        # Nunca avisadas = ausentes do registro; as que só mudaram de versão não entram na conta.
+        extra = f" ({sum(1 for u in p['versions'] if u not in reg)} nunca avisadas)" if reg is not None else ""
+        print(f"IndexNow ({p['mode']}): {len(p['urls'])} URLs para avisar depois do deploy{extra}")
         for u in p["urls"][:50]:
             print("  " + u)
         return 0
@@ -321,11 +442,22 @@ def main(argv: list[str] | None = None, get=http_get, post=http_post, sleep=time
             return 1
         if not p["urls"]:
             print("IndexNow: nada mudou nos sitemaps, nenhum aviso")
+            _maybe_save_registry(args.registry_out, p["registry"])
             return 0
         if not wait_live(p["sitemaps"], get, sleep, args.timeout):
             print("ERRO: os sitemaps publicados não ficaram iguais aos do build, ou a chave não está no ar", file=sys.stderr)
             return 1
-        errors = submit(p["urls"], post)
+        accepted, errors = send(p["urls"], post)
+        if p["registry"] is not None:
+            updated = dict(p["registry"])
+            for u in accepted:
+                if u in p["versions"]:
+                    updated[u] = p["versions"][u]
+                else:
+                    updated.pop(u, None)
+            _maybe_save_registry(args.registry_out, updated)
+        else:
+            _maybe_save_registry(args.registry_out, None)
         if p["incomplete"]:
             errors.append("o build não leu o site publicado e não tinha o commit anterior: URLs que saíram do índice "
                           "neste deploy podem não ter sido avisadas; avise-as com `indexnow.py urls URL...`")
