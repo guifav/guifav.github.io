@@ -7,8 +7,10 @@ import vm from 'node:vm';
 
 const SRC = readFileSync(new URL('../../assets/consent.js', import.meta.url), 'utf8');
 const DAY = 24 * 3600 * 1000;
+const MIN = 60 * 1000;
 const NOW = Date.UTC(2026, 10, 14, 3, 0, 0);
 const GRANTED = { ad_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'granted', analytics_storage: 'granted' };
+const IDENTIFIED_GRANTED = { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied', analytics_storage: 'granted' };
 const DENIED = { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied', analytics_storage: 'denied' };
 const AD_DENIED = { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' };
 
@@ -71,8 +73,8 @@ const Blocked = {
   },
 };
 
-function setup(opts: { lang?: string; stored?: unknown; storage?: Storage | typeof Blocked; gtag?: boolean;
-  cookies?: string; clarityLoaded?: boolean } = {}) {
+function setup(opts: { lang?: string; stored?: unknown; heatingUid?: unknown; authIdentified?: () => boolean;
+  storage?: Storage | typeof Blocked; gtag?: boolean; cookies?: string; clarityLoaded?: boolean } = {}) {
   const calls: unknown[][] = [];
   const cookieWrites: string[] = [];
   const clarity: number[] = [];
@@ -90,6 +92,7 @@ function setup(opts: { lang?: string; stored?: unknown; storage?: Storage | type
   other.attrs.href = '/';
   const storage = opts.storage ?? new Storage();
   if (opts.stored !== undefined && storage instanceof Storage) storage.setItem('consent-v1', typeof opts.stored === 'string' ? opts.stored : JSON.stringify(opts.stored));
+  if (opts.heatingUid !== undefined && storage instanceof Storage) storage.setItem('heating-uid-v1', typeof opts.heatingUid === 'string' ? opts.heatingUid : JSON.stringify(opts.heatingUid));
   const listeners: ((e: unknown) => void)[] = [];
   const document = {
     documentElement: html,
@@ -131,6 +134,7 @@ function setup(opts: { lang?: string; stored?: unknown; storage?: Storage | type
     },
   };
   ctx.window = ctx;
+  if (opts.authIdentified) ctx.guifavAuthIdentified = opts.authIdentified;
   if (opts.clarityLoaded) ctx.clarity = () => {};
   if (opts.gtag !== false) ctx.gtag = (...a: unknown[]) => calls.push(JSON.parse(JSON.stringify(a)));
   vm.runInContext(SRC, vm.createContext(ctx));
@@ -254,6 +258,47 @@ test('Sim e Não disparam CustomEvent guifav-consent com detail granted ou denie
   assert.deepEqual(s.consentEvents, ['granted', 'denied']);
 });
 
+test('Sim com sessão identificada (heating-uid-v1 válido até 30 min ou sinal do auth.js) concede só analytics_storage e mantém anúncios negados', () => {
+  // Reabrir "Cookies" no rodapé e confirmar "Sim" com heating-uid-v1 dentro da janela de 30 min: nunca concede ad_*.
+  for (const age of [0, 10 * MIN, 30 * MIN - 1]) {
+    const s = setup({ stored: { v: 'granted', t: NOW - DAY }, heatingUid: { uid: 'UidAtivo123', t: NOW - age } });
+    s.click(s.cookieLink);
+    s.click(s.btn('consent-yes'));
+    assert.deepEqual(updates(s.calls), [IDENTIFIED_GRANTED], `age=${age}`);
+    assert.equal(s.clarity.length, 1);
+    assert.deepEqual(s.consentEvents, ['granted']);
+  }
+
+  // Sinal do auth.js (ex.: troca de "Não" para "Sim" estando logado com heating-link-v1 aceito, sem heating-uid-v1 gravado).
+  const switched = setup({ stored: { v: 'denied', t: NOW - MIN }, authIdentified: () => true });
+  switched.click(switched.cookieLink);
+  switched.click(switched.btn('consent-yes'));
+  assert.deepEqual(updates(switched.calls), [IDENTIFIED_GRANTED]);
+
+  // heating-uid-v1 vencido (>= 30 min), futuro, inválido ou quebrado: volta a conceder os quatro sinais normalmente.
+  for (const badUid of [
+    { uid: 'UidVelho123', t: NOW - 30 * MIN },
+    { uid: 'UidVelho123', t: NOW - 31 * MIN },
+    { uid: 'UidVelho123', t: NOW - DAY },
+    { uid: 'UidFuturo1', t: NOW + 1 },
+    '{"uid":"UidInf","t":1e400}',
+    { uid: '', t: NOW },
+    { uid: 'uid-invalido', t: NOW },
+    { uid: 'a'.repeat(129), t: NOW },
+    '{quebrado',
+  ]) {
+    const s = setup({ heatingUid: badUid });
+    s.click(s.btn('consent-yes'));
+    assert.deepEqual(updates(s.calls), [GRANTED], JSON.stringify(badUid));
+  }
+
+  // Clicar em "Não" com heating-uid-v1 válido continua negando os quatro sinais.
+  const denied = setup({ stored: { v: 'granted', t: NOW - DAY }, heatingUid: { uid: 'UidAtivo123', t: NOW - 5 * MIN } });
+  denied.click(denied.cookieLink);
+  denied.click(denied.btn('consent-no'));
+  assert.deepEqual(updates(denied.calls), [DENIED]);
+});
+
 test('sem localStorage: banner a cada página, Sim ainda concede, nada quebra; sem gtag também não quebra', () => {
   const s = setup({ storage: Blocked });
   assert.ok(s.banner());
@@ -311,9 +356,9 @@ for (const rel of ['index.html', 'portfolio/index.html', 'consultoria/index.html
       assert.deepEqual(names(runInline(rel, stored)).filter((n) => n === 'consent:update'), [], JSON.stringify(stored));
     }
 
-    // Com consent-v1 granted e heating-uid-v1 válido: nega os 3 sinais de anúncio (analytics_storage continua granted),
+    // Com consent-v1 granted e heating-uid-v1 válido (até 30 min): nega os 3 sinais de anúncio (analytics_storage continua granted),
     // desliga sinais no GA4 e seta user_id ANTES do config.
-    const withUid = runInline(rel, { v: 'granted', t: NOW - DAY }, { uid: 'UidHead123', t: NOW - DAY });
+    const withUid = runInline(rel, { v: 'granted', t: NOW - DAY }, { uid: 'UidHead123', t: NOW - 29 * MIN });
     assert.deepEqual(
       names(withUid).filter((n) => n.startsWith('consent') || n.startsWith('config')),
       ['consent:default', 'consent:update', 'consent:update', 'config:'],
@@ -328,13 +373,16 @@ for (const rel of ['index.html', 'portfolio/index.html', 'consultoria/index.html
 
     // Sem consent-v1 granted, heating-uid-v1 nunca seta sinais, consentimento nem user_id.
     for (const consent of [undefined, { v: 'denied', t: NOW }, { v: 'granted', t: NOW - 366 * DAY }]) {
-      const res = runInline(rel, consent, { uid: 'UidHead123', t: NOW - DAY });
+      const res = runInline(rel, consent, { uid: 'UidHead123', t: NOW - 5 * MIN });
       assert.deepEqual(sets(res), [['ads_data_redaction', true]], JSON.stringify(consent));
       assert.deepEqual(updates(res), [], JSON.stringify(consent));
     }
 
-    // heating-uid-v1 vencido, futuro, inválido ou quebrado é ignorado (não nega anúncios nem seta user_id).
+    // heating-uid-v1 vencido (>= 30 min), futuro, inválido ou quebrado é ignorado (não nega anúncios nem seta user_id).
     for (const badUid of [
+      { uid: 'UidHead123', t: NOW - 30 * MIN },
+      { uid: 'UidHead123', t: NOW - 31 * MIN },
+      { uid: 'UidHead123', t: NOW - DAY },
       { uid: 'UidHead123', t: NOW - 366 * DAY },
       { uid: 'UidHead123', t: NOW + DAY },
       '{"uid":"UidHead123","t":1e400}',

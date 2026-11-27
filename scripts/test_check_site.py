@@ -5689,14 +5689,14 @@ class PrioritySourcesTest(unittest.TestCase):
             "nunca o seu email, e essas visitas não são usadas para anúncios. A base legal é o seu consentimento "
             "(Lei 13.709/2018, art. 7º, I). Para desligar, saia da conta, desligue no menu da conta ou clique em "
             "Cookies no rodapé. Você pode pedir que eu apague o que já foi registrado, inclusive no Google Analytics.",
-            # 11d: Firebase Auth, GIS, gstatic, accounts.google.com, carregamento condicional e cookie g_state.
+            # 11d: Firebase Auth, GIS, gstatic, accounts.google.com, apis.google.com no clique, carregamento condicional e cookie g_state.
             "<strong>Google Identity Platform e Firestore</strong>: o login com a conta Google e o banco de dados com "
             "os dados do curso (inscrição e progresso). O login do site usa o Firebase Authentication e, para o login "
             "de um toque, o Google Identity Services. Eles só são carregados (de www.gstatic.com e "
-            "accounts.google.com) depois que você responde ao aviso de cookies, se você já entrou antes neste "
-            "navegador ou se clicar em Entrar; ao carregar, o Google recebe o endereço IP e o navegador usado (user "
-            "agent). O login de um toque grava o cookie g_state, do Google, para lembrar se você fechou o convite e "
-            "não insistir.",
+            "accounts.google.com; no clique em Entrar, também de apis.google.com) depois que você responde ao aviso "
+            "de cookies, se você já entrou antes neste navegador ou se clicar em Entrar; ao carregar, o Google recebe "
+            "o endereço IP e o navegador usado (user agent). O login de um toque grava o cookie g_state, do Google, "
+            "para lembrar se você fechou o convite e não insistir.",
             "Eu paro de calcular na hora e apago os registros no site, inclusive os dos cursos; as notas no meu CRM "
             "saem na atualização diária seguinte. Você continua recebendo os Expert Insights e o curso normalmente.",
         ):
@@ -5706,6 +5706,7 @@ class PrioritySourcesTest(unittest.TestCase):
         self.assertLess(t.index("Para que serve:"), t.index(legit))
         self.assertLess(t.index(legit), t.index("confirmar o aviso do login"))
         self.assertLess(t.index("confirmar o aviso do login"), t.index("Se você não quiser ser pontuado"))
+        self.assertNotIn("(de www.gstatic.com e accounts.google.com)", t)
         self.assertNotIn("veio. Não guardo o link em que você clicou", t)
         self.assertNotIn("o botão e o aviso do Google", t)
         self.assertNotIn("inscrição, progresso e abertura e clique nos emails do curso", t)
@@ -5803,7 +5804,7 @@ class AuthCheckTest(unittest.TestCase):
             "if(window.guifavConsent==='granted'){"
             "gtag('consent','update',{ad_storage:'granted',ad_user_data:'granted',ad_personalization:'granted',analytics_storage:'granted'});"
             "try{var u=JSON.parse(localStorage.getItem('heating-uid-v1')||'null');"
-            "if(u&&typeof u.uid==='string'&&/^[0-9A-Za-z]{1,128}$/.test(u.uid)&&typeof u.t==='number'&&Date.now()-u.t>=0&&Date.now()-u.t<31536e6){"
+            "if(u&&typeof u.uid==='string'&&/^[0-9A-Za-z]{1,128}$/.test(u.uid)&&typeof u.t==='number'&&Date.now()-u.t>=0&&Date.now()-u.t<18e5){"
             "gtag('consent','update',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});"
             "gtag('set','allow_google_signals',false);"
             "gtag('set','allow_ad_personalization_signals',false);"
@@ -5817,6 +5818,7 @@ class AuthCheckTest(unittest.TestCase):
         for name, js in {
             "sem bloco": cfg,
             "depois do config": cfg + uid_block,
+            "validade antiga de 365 dias": uid_block.replace("<18e5", "<31536e6") + cfg,
             "sem consent update de anuncio": uid_block.replace("gtag('consent','update',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});", "") + cfg,
             "sem sinais de anuncio": uid_block.replace("gtag('set','allow_google_signals',false);", "") + cfg,
             "sem user_id": uid_block.replace("gtag('set',{user_id:u.uid});", "") + cfg,

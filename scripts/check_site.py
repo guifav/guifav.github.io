@@ -3587,7 +3587,7 @@ GA_UID_BLOCK = (
     "if(window.guifavConsent==='granted'){"
     "gtag('consent','update',{ad_storage:'granted',ad_user_data:'granted',ad_personalization:'granted',analytics_storage:'granted'});"
     "try{varu=JSON.parse(localStorage.getItem('heating-uid-v1')||'null');"
-    "if(u&&typeofu.uid==='string'&&/^[0-9A-Za-z]{1,128}$/.test(u.uid)&&typeofu.t==='number'&&Date.now()-u.t>=0&&Date.now()-u.t<31536e6){"
+    "if(u&&typeofu.uid==='string'&&/^[0-9A-Za-z]{1,128}$/.test(u.uid)&&typeofu.t==='number'&&Date.now()-u.t>=0&&Date.now()-u.t<18e5){"
     "gtag('consent','update',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});"
     "gtag('set','allow_google_signals',false);"
     "gtag('set','allow_ad_personalization_signals',false);"

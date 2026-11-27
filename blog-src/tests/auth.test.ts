@@ -6,8 +6,10 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
 const AUTH_SRC = readFileSync(new URL('../../assets/auth.js', import.meta.url), 'utf8');
+const CONSENT_SRC = readFileSync(new URL('../../assets/consent.js', import.meta.url), 'utf8');
 const TRACK_SRC = readFileSync(new URL('../../assets/track.js', import.meta.url), 'utf8');
 const DAY = 24 * 3600 * 1000;
+const MIN = 60 * 1000;
 const NOW = Date.UTC(2026, 10, 27, 15, 0, 0);
 const TENANT_ID = 'guifav-dev-g6dp4';
 const CLIENT_ID = '486000748530-fj4un9nf6q94dcfjkttbrb87v026eboi.apps.googleusercontent.com';
@@ -17,6 +19,9 @@ const NOTICE_TEXT =
   'Ao entrar, sua atividade neste site fica ligada ao seu contato: páginas vistas, tempo de leitura, rolagem e cliques em Agende e Contato. Uso para saber quem abordar primeiro. Você pode desligar quando quiser no menu da conta.';
 const AD_CONSENT_DENIED = { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' };
 const AD_CONSENT_GRANTED = { ad_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'granted' };
+const INDEXED_DB_PERSISTENCE = { type: 'INDEXED_DB' };
+const BROWSER_LOCAL_PERSISTENCE = { type: 'LOCAL' };
+const BROWSER_POPUP_RESOLVER = { type: 'POPUP_REDIRECT_RESOLVER' };
 
 assert.ok(AUTH_SRC.includes('https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js'));
 assert.ok(AUTH_SRC.includes('https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js'));
@@ -122,6 +127,7 @@ interface SetupOpts {
   hostname?: string;
   pathname?: string;
   title?: string;
+  now?: number;
   consent?: unknown;
   heatingLink?: unknown;
   heatingUid?: unknown;
@@ -130,10 +136,13 @@ interface SetupOpts {
   initialUser?: FakeUser | null;
   firebaseFail?: boolean;
   gisAvailable?: boolean;
+  gisThrowOn?: 'initialize' | 'prompt';
   identityStatus?: number;
   identityThrow?: boolean;
   idbMode?: FakeIdbMode;
   signOutFn?: () => Promise<void>;
+  signInPopupFn?: () => Promise<unknown>;
+  withConsentScript?: boolean;
 }
 
 async function flush() {
@@ -226,8 +235,12 @@ async function setupAuth(opts: SetupOpts = {}) {
   const oneTapCancels: number[] = [];
   const oneTapDisableAutoSelects: number[] = [];
   const signInCredCalls: Array<{ tenantId: string | null; cred: unknown }> = [];
-  const signInPopupCalls: Array<{ tenantId: string | null }> = [];
+  const signInPopupCalls: Array<{ tenantId: string | null; resolver: unknown }> = [];
+  const initializeAuthCalls: Array<{ app: unknown; deps: Record<string, unknown> | undefined }> = [];
+  const apiJsRequests: string[] = [];
+  let getAuthCalls = 0;
   let signOutCalls = 0;
+  let currentNow = opts.now ?? NOW;
   let initializedConfig: Record<string, unknown> | null = null;
   let authListener: ((u: FakeUser | null) => void) | null = null;
   let promptCb: ((n: Record<string, unknown>) => void) | null = null;
@@ -268,7 +281,23 @@ async function setupAuth(opts: SetupOpts = {}) {
       },
     },
     'https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js': {
-      getAuth: () => authObj,
+      indexedDBLocalPersistence: INDEXED_DB_PERSISTENCE,
+      browserLocalPersistence: BROWSER_LOCAL_PERSISTENCE,
+      browserPopupRedirectResolver: BROWSER_POPUP_RESOLVER,
+      // Simula firebase-auth 12.12.1 em Safari/iOS/celular: getAuth() ou initializeAuth com popupRedirectResolver
+      // dispara carregamento proativo de https://apis.google.com/js/api.js.
+      getAuth: () => {
+        getAuthCalls += 1;
+        apiJsRequests.push('https://apis.google.com/js/api.js');
+        return authObj;
+      },
+      initializeAuth: (app: unknown, deps?: Record<string, unknown>) => {
+        initializeAuthCalls.push({ app, deps });
+        if (deps && deps.popupRedirectResolver) {
+          apiJsRequests.push('https://apis.google.com/js/api.js');
+        }
+        return authObj;
+      },
       onAuthStateChanged: (_a: unknown, cb: (u: FakeUser | null) => void) => {
         authListener = cb;
         if ('initialUser' in opts) {
@@ -293,8 +322,13 @@ async function setupAuth(opts: SetupOpts = {}) {
         signInCredCalls.push({ tenantId: a.tenantId, cred });
         return { user: opts.initialUser };
       },
-      signInWithPopup: async (a: { tenantId: string | null }) => {
-        signInPopupCalls.push({ tenantId: a.tenantId });
+      signInWithPopup: async (a: { tenantId: string | null }, _provider: unknown, resolver?: unknown) => {
+        signInPopupCalls.push({ tenantId: a.tenantId, resolver });
+        if (!resolver) {
+          throw Object.assign(new Error('missing popupRedirectResolver'), { code: 'auth/argument-error' });
+        }
+        apiJsRequests.push('https://apis.google.com/js/api.js');
+        if (opts.signInPopupFn) return opts.signInPopupFn();
         return { user: opts.initialUser };
       },
       signOut: async () => {
@@ -309,11 +343,17 @@ async function setupAuth(opts: SetupOpts = {}) {
     documentElement: html,
     head,
     body,
+    cookie: '',
     title: opts.title ?? 'Guilherme Favaron | Builder e CTO',
     get activeElement() {
       return activeElement;
     },
     createElement: (t: string) => new El(t, setActive),
+    createTextNode: (t: string) => {
+      const n = new El('#text', setActive);
+      n.textContent = t;
+      return n;
+    },
     getElementById: (id: string) => html.findAll((e) => e.attrs.id === id)[0] ?? null,
     querySelector: (sel: string) => {
       const m = sel.match(/^script\[src="([^"]+)"\]$/);
@@ -333,13 +373,27 @@ async function setupAuth(opts: SetupOpts = {}) {
     location: {
       hostname: opts.hostname ?? 'guifav.dev',
       pathname: opts.pathname ?? '/',
+      reload: () => {},
     },
     JSON,
     Promise,
-    Date: { now: () => NOW },
+    Date: { now: () => currentNow },
     console: { warn: (...a: unknown[]) => warns.push(a.map(String).join(' ')) },
     gtag: (...a: unknown[]) => gtagCalls.push(JSON.parse(JSON.stringify(a))),
     clarity: (...a: unknown[]) => clarityCalls.push(JSON.parse(JSON.stringify(a))),
+    guifavClarity: () => {},
+    CustomEvent: class FakeCustomEvent {
+      type: string;
+      detail: unknown;
+      constructor(type: string, init?: { detail?: unknown }) {
+        this.type = type;
+        this.detail = init?.detail;
+      }
+    },
+    dispatchEvent: (ev: { type?: string; detail?: unknown }) => {
+      for (const fn of winHandlers[String(ev?.type || '')] ?? []) fn(ev);
+      return true;
+    },
     fetch: async (url: string, init?: RequestInit) => {
       fetchCalls.push({ url, init: init ? JSON.parse(JSON.stringify(init)) : undefined });
       if (opts.identityThrow) throw new Error('NetworkError');
@@ -363,8 +417,12 @@ async function setupAuth(opts: SetupOpts = {}) {
     ctx.google = {
       accounts: {
         id: {
-          initialize: (cfg: Record<string, unknown>) => oneTapInits.push(cfg),
+          initialize: (cfg: Record<string, unknown>) => {
+            if (opts.gisThrowOn === 'initialize') throw new Error('GIS init broken');
+            oneTapInits.push(cfg);
+          },
           prompt: (cb: (n: Record<string, unknown>) => void) => {
+            if (opts.gisThrowOn === 'prompt') throw new Error('FedCM prompt error');
             oneTapPrompts.push(1);
             promptCb = cb;
           },
@@ -377,7 +435,17 @@ async function setupAuth(opts: SetupOpts = {}) {
 
   if (opts.gisAvailable) installGis();
 
-  vm.runInContext(AUTH_TEST_SRC, vm.createContext(ctx));
+  const vmCtx = vm.createContext(ctx);
+  if (opts.withConsentScript) {
+    html.attrs.lang = 'pt-BR';
+    const cookieLink = body.appendChild(new El('a', setActive));
+    cookieLink.setAttribute('href', '/privacidade/#cookies');
+    cookieLink.setAttribute('data-consent-open', '');
+    (cookieLink as El & { closest?: (sel: string) => El | null }).closest = (sel: string) =>
+      sel === '[data-consent-open]' ? cookieLink : null;
+    vm.runInContext(CONSENT_SRC, vmCtx);
+  }
+  vm.runInContext(AUTH_TEST_SRC, vmCtx);
   await flush();
 
   const gisScripts = () => html.findAll((e) => e.tag === 'script' && e.attrs.src === 'https://accounts.google.com/gsi/client');
@@ -392,7 +460,7 @@ async function setupAuth(opts: SetupOpts = {}) {
   };
 
   const emitConsent = async (detail: 'granted' | 'denied') => {
-    local.setItem('consent-v1', JSON.stringify({ v: detail, t: NOW }));
+    local.setItem('consent-v1', JSON.stringify({ v: detail, t: currentNow }));
     for (const fn of winHandlers['guifav-consent'] ?? []) fn({ type: 'guifav-consent', detail });
     await flush();
   };
@@ -440,7 +508,13 @@ async function setupAuth(opts: SetupOpts = {}) {
     oneTapDisableAutoSelects,
     signInCredCalls,
     signInPopupCalls,
+    initializeAuthCalls,
+    apiJsRequests,
+    getAuthCalls: () => getAuthCalls,
     signOutCalls: () => signOutCalls,
+    setNow: (ms: number) => {
+      currentNow = ms;
+    },
     initializedConfig: () => initializedConfig,
     idbStats: idb.stats,
     activeElement: () => activeElement,
@@ -1110,4 +1184,227 @@ test('falha do Firebase não quebra a página e emite só log curto sem dado pes
   assert.match(s.warns[0], /guifav-auth:/);
   assert.ok(!s.warns[0].includes('@'));
   assert.deepEqual(s.gtagCalls, []);
+});
+
+test('initializeAuth sem popupRedirectResolver não pede apis.google.com sem clique; clique em Entrar passa browserPopupRedirectResolver', async () => {
+  assert.ok(!AUTH_SRC.includes('getAuth'), 'não deve usar getAuth (carrega apis.google.com em Safari/iOS/celular)');
+
+  // Carregamento via banner respondido (granted ou denied), sessão salva no IndexedDB ou One Tap: zero apis.google.com.
+  for (const scenario of [
+    { name: 'consent granted', opts: { consent: { v: 'granted', t: NOW - 1000 }, initialUser: null, gisAvailable: true } },
+    { name: 'consent denied', opts: { consent: { v: 'denied', t: NOW - 1000 }, initialUser: null, gisAvailable: true } },
+    { name: 'sessão salva IDB', opts: { idbMode: 'session' as FakeIdbMode, initialUser: makeUser() } },
+  ]) {
+    const s = await setupAuth(scenario.opts);
+    assert.equal(s.getAuthCalls(), 0, scenario.name);
+    assert.equal(s.initializeAuthCalls.length, 1, scenario.name);
+    const deps = s.initializeAuthCalls[0].deps;
+    assert.ok(deps && typeof deps === 'object', scenario.name);
+    assert.deepEqual(Object.keys(deps), ['persistence'], scenario.name);
+    const persistence = deps.persistence as unknown[];
+    assert.equal(persistence.length, 2, scenario.name);
+    assert.equal(persistence[0], INDEXED_DB_PERSISTENCE, scenario.name);
+    assert.equal(persistence[1], BROWSER_LOCAL_PERSISTENCE, scenario.name);
+    assert.equal(deps.popupRedirectResolver, undefined, scenario.name);
+    assert.deepEqual(s.apiJsRequests, [], `${scenario.name}: nada de apis.google.com sem clique em Entrar`);
+  }
+
+  // Somente ao clicar em "Entrar com Google" o signInWithPopup recebe browserPopupRedirectResolver (disparando apis.google.com).
+  const clicked = await setupAuth({ consent: { v: 'denied', t: NOW - 1000 }, initialUser: null });
+  assert.deepEqual(clicked.apiJsRequests, []);
+  await clicked.click(clicked.findClass('guifav-auth-btn')!);
+  assert.equal(clicked.signInPopupCalls.length, 1);
+  assert.equal(clicked.signInPopupCalls[0].tenantId, TENANT_ID);
+  assert.equal(clicked.signInPopupCalls[0].resolver, BROWSER_POPUP_RESOLVER);
+  assert.deepEqual(clicked.apiJsRequests, ['https://apis.google.com/js/api.js']);
+  assert.deepEqual(clicked.warns, []);
+});
+
+test('heating-uid-v1 tem validade deslizante de 30 min: renova a cada página, não ultrapassa heating-link-v1 e nunca grava se vencido', async () => {
+  const local = new Storage();
+  const session = new Storage();
+  local.setItem('consent-v1', JSON.stringify({ v: 'granted', t: NOW - DAY }));
+  local.setItem('heating-link-v1', JSON.stringify({ v: 'granted', t: NOW - DAY, uid: 'UidCurso123ABC' }));
+
+  // Página 1 em NOW: grava heating-uid-v1 com t = NOW.
+  await setupAuth({ local, session, now: NOW, initialUser: makeUser() });
+  assert.deepEqual(JSON.parse(local.getItem('heating-uid-v1')!), { uid: 'UidCurso123ABC', t: NOW });
+
+  // Página 2 em NOW + 20 min (dentro dos 30 min): renova t para NOW + 20 min após confirmar as 3 condições.
+  const t2 = NOW + 20 * MIN;
+  await setupAuth({ local, session, now: t2, initialUser: makeUser() });
+  assert.deepEqual(JSON.parse(local.getItem('heating-uid-v1')!), { uid: 'UidCurso123ABC', t: t2 });
+
+  // Página 3 em t2 + 31 min (passou de 30 min): se deslogou no curso, auth.js limpa a chave vencida sem precisar mandar user_id null
+  // (o snippet do <head> já ignorou a chave vencida).
+  const t3 = t2 + 31 * MIN;
+  const loggedOut = await setupAuth({ local, session, now: t3, initialUser: null });
+  assert.equal(local.getItem('heating-uid-v1'), null);
+  assert.deepEqual(loggedOut.gtagCalls, [], 'head não enviou user_id com chave vencida (> 30 min)');
+
+  // Nova visita em t3 + 5 min com Firebase ainda logado: auth.js confirma as 3 condições e grava novo t.
+  const t4 = t3 + 5 * MIN;
+  await setupAuth({ local, session, now: t4, initialUser: makeUser() });
+  assert.deepEqual(JSON.parse(local.getItem('heating-uid-v1')!), { uid: 'UidCurso123ABC', t: t4 });
+
+  // Quando heating-link-v1 está a 5 min de vencer (dia 365): heating-uid-v1 limita t para expirar junto com heating-link-v1.
+  const linkStart = NOW - 365 * DAY + 5 * MIN;
+  const nearExpiry = await setupAuth({
+    now: NOW,
+    consent: { v: 'granted', t: NOW - DAY },
+    heatingLink: { v: 'granted', t: linkStart, uid: 'UidCurso123ABC' },
+    initialUser: makeUser(),
+  });
+  const written = JSON.parse(nearExpiry.local.getItem('heating-uid-v1')!);
+  assert.equal(written.uid, 'UidCurso123ABC');
+  assert.equal(written.t + 30 * MIN, linkStart + 365 * DAY, 'não pode ultrapassar a validade de heating-link-v1');
+
+  // Quando heating-link-v1 já venceu: nunca grava heating-uid-v1 e remove se houver sobra.
+  const expiredLink = await setupAuth({
+    now: NOW,
+    consent: { v: 'granted', t: NOW - DAY },
+    heatingLink: { v: 'granted', t: NOW - 365 * DAY, uid: 'UidCurso123ABC' },
+    heatingUid: { uid: 'UidCurso123ABC', t: NOW - 5 * MIN },
+    initialUser: makeUser(),
+  });
+  assert.equal(expiredLink.local.getItem('heating-uid-v1'), null);
+
+  // Evento storage de heating-uid-v1 vindo de outra aba com mesmo uid não reescreve heating-uid-v1 (evita loop entre abas).
+  const tab = await setupAuth({
+    now: NOW,
+    consent: { v: 'granted', t: NOW - DAY },
+    heatingLink: { v: 'granted', t: NOW - DAY, uid: 'UidCurso123ABC' },
+    initialUser: makeUser(),
+  });
+  tab.setNow(NOW + 5000);
+  const fromOtherTab = JSON.stringify({ uid: 'UidCurso123ABC', t: NOW + 1000 });
+  await tab.emitStorage('heating-uid-v1', fromOtherTab);
+  assert.equal(tab.local.getItem('heating-uid-v1'), fromOtherTab);
+});
+
+test('integração consent.js + auth.js: clicar Sim com sessão identificada ou logada com heating-link-v1 nunca concede ad_* nem transitoriamente', async () => {
+  // Caso 1: visitante já identificado reabre "Cookies" no rodapé e confirma "Sim".
+  const active = await setupAuth({
+    withConsentScript: true,
+    consent: { v: 'granted', t: NOW - DAY },
+    heatingLink: { v: 'granted', t: NOW - DAY, uid: 'UidCurso123ABC' },
+    heatingUid: { uid: 'UidCurso123ABC', t: NOW - 5 * MIN },
+    initialUser: makeUser(),
+  });
+  const callsBefore1 = active.gtagCalls.length;
+  const cookieLink1 = active.body.findAll((e) => e.getAttribute('data-consent-open') !== null)[0];
+  await active.click(cookieLink1);
+  await active.click(active.findClass('consent-yes')!);
+  const updates1 = active.gtagCalls
+    .slice(callsBefore1)
+    .filter((c) => c[0] === 'consent' && c[1] === 'update')
+    .map((c) => c[2] as Record<string, string>);
+  assert.ok(updates1.length >= 1);
+  assert.deepEqual(updates1[0], {
+    ad_storage: 'denied',
+    ad_user_data: 'denied',
+    ad_personalization: 'denied',
+    analytics_storage: 'granted',
+  });
+  for (const u of updates1) {
+    assert.notEqual(u.ad_storage, 'granted');
+    assert.notEqual(u.ad_user_data, 'granted');
+    assert.notEqual(u.ad_personalization, 'granted');
+  }
+
+  // Caso 2: visitante estava com cookies "Não" (heating-uid-v1 apagado), mas logado com heating-link-v1 aceito, e muda para "Sim".
+  const switched = await setupAuth({
+    withConsentScript: true,
+    consent: { v: 'denied', t: NOW - MIN },
+    heatingLink: { v: 'granted', t: NOW - DAY, uid: 'UidCurso123ABC' },
+    initialUser: makeUser(),
+  });
+  assert.equal(switched.local.getItem('heating-uid-v1'), null);
+  const callsBefore2 = switched.gtagCalls.length;
+  const cookieLink2 = switched.body.findAll((e) => e.getAttribute('data-consent-open') !== null)[0];
+  await switched.click(cookieLink2);
+  await switched.click(switched.findClass('consent-yes')!);
+  const updates2 = switched.gtagCalls
+    .slice(callsBefore2)
+    .filter((c) => c[0] === 'consent' && c[1] === 'update')
+    .map((c) => c[2] as Record<string, string>);
+  assert.ok(updates2.length >= 1);
+  assert.deepEqual(updates2[0], {
+    ad_storage: 'denied',
+    ad_user_data: 'denied',
+    ad_personalization: 'denied',
+    analytics_storage: 'granted',
+  });
+  for (const u of updates2) {
+    assert.notEqual(u.ad_storage, 'granted');
+    assert.notEqual(u.ad_user_data, 'granted');
+    assert.notEqual(u.ad_personalization, 'granted');
+  }
+  assert.deepEqual(JSON.parse(switched.local.getItem('heating-uid-v1')!), { uid: 'UidCurso123ABC', t: NOW });
+});
+
+test('initOneTap envolve initialize e prompt em try/catch com log curto', async () => {
+  for (const phase of ['initialize', 'prompt'] as const) {
+    const s = await setupAuth({
+      consent: { v: 'denied', t: NOW - 1000 },
+      initialUser: null,
+      gisAvailable: true,
+      gisThrowOn: phase,
+    });
+    assert.equal(s.warns.length, 1, phase);
+    assert.equal(s.warns[0], 'guifav-auth: falha no One Tap', phase);
+    assert.ok(!s.warns[0].includes('@'), phase);
+  }
+});
+
+test('antes do banner: clique em Entrar com popup fechado e sessão IDB que resolve deslogada não iniciam One Tap nem carregam GIS', async () => {
+  // 1. Sem banner respondido, clique em Entrar e popup fechado pelo usuário -> Firebase carrega e resolve deslogado, mas GIS/One Tap NÃO iniciam.
+  const popupClosed = await setupAuth({
+    pathname: '/',
+    idbMode: 'empty',
+    initialUser: null,
+    signInPopupFn: async () => {
+      throw Object.assign(new Error('closed'), { code: 'auth/popup-closed-by-user' });
+    },
+  });
+  await popupClosed.click(popupClosed.findClass('guifav-auth-btn')!);
+  assert.equal(popupClosed.firebaseImports.length, 2);
+  assert.equal(popupClosed.signInPopupCalls.length, 1);
+  assert.equal(popupClosed.gisScripts().length, 0, 'não deve carregar GIS antes do banner após fechar popup');
+  assert.equal(popupClosed.oneTapPrompts.length, 0, 'não deve chamar prompt antes do banner');
+  assert.deepEqual(popupClosed.warns, []);
+
+  // Mesmo se GIS já estivesse no window: não chama prompt nem initialize antes do banner.
+  const popupClosedGisPresent = await setupAuth({
+    pathname: '/',
+    idbMode: 'empty',
+    initialUser: null,
+    gisAvailable: true,
+    signInPopupFn: async () => {
+      throw Object.assign(new Error('closed'), { code: 'auth/popup-closed-by-user' });
+    },
+  });
+  await popupClosedGisPresent.click(popupClosedGisPresent.findClass('guifav-auth-btn')!);
+  assert.equal(popupClosedGisPresent.oneTapInits.length, 0);
+  assert.equal(popupClosedGisPresent.oneTapPrompts.length, 0);
+
+  // 2. Sem banner respondido, sessão salva no IndexedDB que resolve deslogada (null) -> Firebase carrega, mas GIS/One Tap NÃO carregam nem iniciam.
+  const staleIdb = await setupAuth({
+    pathname: '/',
+    idbMode: 'session',
+    initialUser: null,
+  });
+  assert.equal(staleIdb.firebaseImports.length, 2);
+  assert.equal(staleIdb.gisScripts().length, 0, 'sessão IDB deslogada não deve carregar GIS antes do banner');
+  assert.equal(staleIdb.oneTapPrompts.length, 0);
+
+  const staleIdbGisPresent = await setupAuth({
+    pathname: '/',
+    idbMode: 'session',
+    initialUser: null,
+    gisAvailable: true,
+  });
+  assert.equal(staleIdbGisPresent.firebaseImports.length, 2);
+  assert.equal(staleIdbGisPresent.oneTapInits.length, 0);
+  assert.equal(staleIdbGisPresent.oneTapPrompts.length, 0);
 });

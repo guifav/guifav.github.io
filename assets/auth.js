@@ -4,6 +4,8 @@
 // - Nada do Google (Firebase SDK em gstatic.com nem GIS em accounts.google.com) carrega antes de:
 //   (a) o banner de cookies ter sido respondido (granted ou denied), (b) haver sessão Firebase salva
 //   no IndexedDB (firebaseLocalStorageDb / firebaseLocalStorage), ou (c) clique em "Entrar com Google".
+//   initializeAuth sem popupRedirectResolver evita apis.google.com/js/api.js no carregamento (Safari/iOS/celular);
+//   browserPopupRedirectResolver vai só no signInWithPopup (clique em Entrar).
 // - Compartilha o app [DEFAULT] e o tenant guifav-dev-g6dp4 com o curso (mesma origem): quem entrou no curso
 //   já aparece logado aqui. Sessões de outro tenant são ignoradas.
 // - Google One Tap (GIS): só para quem não está logado, só depois que o visitante respondeu ao banner de
@@ -11,9 +13,10 @@
 // - Aviso do login (heating-link-v1 no localStorage, 365 dias por uid): só aparece depois do banner respondido
 //   e com consent-v1 granted.
 // - Só com as 3 condições (logado no tenant, consent-v1 granted e heating-link-v1 granted para o uid):
-//   mantém heating-uid-v1 = {uid, t} no localStorage (lida pelo snippet do <head> antes do gtag('config')),
-//   nega ad_storage/ad_user_data/ad_personalization (mantendo analytics_storage granted), desliga sinais de
-//   anúncio no GA4, grava user_id, envia auth_identified uma vez por sessão e envia
+//   mantém heating-uid-v1 = {uid, t} no localStorage com validade deslizante de 30 min (renovada a cada página
+//   depois de confirmar as 3 condições, sem nunca ultrapassar heating-link-v1; lida pelo snippet do <head> antes
+//   do gtag('config')), nega ad_storage/ad_user_data/ad_personalization (mantendo analytics_storage granted),
+//   desliga sinais de anúncio no GA4, grava user_id, envia auth_identified uma vez por sessão e envia
 //   POST https://insights.guifav.dev/identidade com o ID token uma vez por sessão e por uid.
 // - Quando qualquer condição deixa de valer (ou em outra aba via evento storage): apaga heating-uid-v1,
 //   envia gtag('set', { user_id: null }), devolve ad_storage/ad_user_data/ad_personalization para granted
@@ -52,6 +55,7 @@
   var IDENTITY_SENT_PREFIX = 'guifav_identidade_sent:';
   var ONE_TAP_SUPPRESSED_KEY = 'guifav_one_tap_suppressed';
   var TTL_MS = 365 * 24 * 3600 * 1000;
+  var UID_TTL_MS = 30 * 60 * 1000;
   var UID_RE = /^[0-9A-Za-z]{1,128}$/;
 
   var NO_ONE_TAP_PREFIXES = ['/privacidade', '/termos', '/prioridade', '/404'];
@@ -90,27 +94,32 @@
     } catch (e) { /* ignora */ }
   }
 
-  function validAge(t) {
+  function validAge(t, ttlMs) {
     if (typeof t !== 'number' || !isFinite(t)) return false;
     var age = Date.now() - t;
-    return age >= 0 && age < TTL_MS;
+    return age >= 0 && age < (ttlMs || TTL_MS);
   }
 
   function readConsent() {
     try {
       var c = JSON.parse(w.localStorage.getItem(CONSENT_KEY) || 'null');
-      if (c && (c.v === 'granted' || c.v === 'denied') && validAge(c.t)) return c.v;
+      if (c && (c.v === 'granted' || c.v === 'denied') && validAge(c.t, TTL_MS)) return c.v;
+    } catch (e) { /* sem storage ou valor quebrado */ }
+    return null;
+  }
+
+  function readHeatingLinkEntry(uid) {
+    if (!uid) return null;
+    try {
+      var c = JSON.parse(w.localStorage.getItem(LINK_KEY) || 'null');
+      if (c && (c.v === 'granted' || c.v === 'denied') && c.uid === uid && validAge(c.t, TTL_MS)) return c;
     } catch (e) { /* sem storage ou valor quebrado */ }
     return null;
   }
 
   function readHeatingLink(uid) {
-    if (!uid) return null;
-    try {
-      var c = JSON.parse(w.localStorage.getItem(LINK_KEY) || 'null');
-      if (c && (c.v === 'granted' || c.v === 'denied') && c.uid === uid && validAge(c.t)) return c.v;
-    } catch (e) { /* sem storage ou valor quebrado */ }
-    return null;
+    var entry = readHeatingLinkEntry(uid);
+    return entry ? entry.v : null;
   }
 
   function writeHeatingLink(uid, v) {
@@ -123,7 +132,7 @@
   function readHeatingUid() {
     try {
       var u = JSON.parse(w.localStorage.getItem(UID_KEY) || 'null');
-      if (u && typeof u.uid === 'string' && UID_RE.test(u.uid) && validAge(u.t)) return u.uid;
+      if (u && typeof u.uid === 'string' && UID_RE.test(u.uid) && validAge(u.t, UID_TTL_MS)) return u.uid;
     } catch (e) { /* sem storage ou valor quebrado */ }
     return null;
   }
@@ -134,9 +143,14 @@
 
   function writeHeatingUid(uid) {
     if (!uid || !UID_RE.test(uid)) return;
-    if (readHeatingUid() === uid) return;
+    if (!validTenantUser(currentUser) || currentUser.uid !== uid || readConsent() !== 'granted') return;
+    var link = readHeatingLinkEntry(uid);
+    if (!link || link.v !== 'granted') return;
+    var now = Date.now();
+    var maxT = link.t + TTL_MS - UID_TTL_MS;
+    var t = now < maxT ? now : maxT;
     try {
-      w.localStorage.setItem(UID_KEY, JSON.stringify({ uid: uid, t: Date.now() }));
+      w.localStorage.setItem(UID_KEY, JSON.stringify({ uid: uid, t: t }));
     } catch (e) { /* sem storage */ }
   }
 
@@ -225,10 +239,10 @@
     });
   }
 
-  function syncIdentityState(forceClear) {
+  function syncIdentityState(forceClear, skipUidWrite) {
     if (validTenantUser(currentUser) && readConsent() === 'granted' && readHeatingLink(currentUser.uid) === 'granted') {
       var uid = currentUser.uid;
-      writeHeatingUid(uid);
+      if (!skipUidWrite) writeHeatingUid(uid);
       sendGtag('consent', 'update', { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' });
       sendGtag('set', 'allow_google_signals', false);
       sendGtag('set', 'allow_ad_personalization_signals', false);
@@ -392,7 +406,7 @@
       if (typeof provider.setCustomParameters === 'function') {
         provider.setCustomParameters({ prompt: 'select_account' });
       }
-      Promise.resolve(fbAuth.signInWithPopup(authInstance, provider)).then(function () {
+      Promise.resolve(fbAuth.signInWithPopup(authInstance, provider, fbAuth.browserPopupRedirectResolver)).then(function () {
         sessionRemove(ONE_TAP_SUPPRESSED_KEY);
       }).catch(function (err) {
         if (!isExpectedAuthError(err)) logWarn('falha no login');
@@ -542,37 +556,41 @@
 
   function initOneTap() {
     if (currentUser || !authInstance || !fbAuth) return;
-    var id = w.google && w.google.accounts && w.google.accounts.id;
-    if (!id || typeof id.initialize !== 'function' || typeof id.prompt !== 'function') return;
+    try {
+      var id = w.google && w.google.accounts && w.google.accounts.id;
+      if (!id || typeof id.initialize !== 'function' || typeof id.prompt !== 'function') return;
 
-    id.initialize({
-      client_id: GOOGLE_CLIENT_ID,
-      itp_support: true,
-      cancel_on_tap_outside: false,
-      callback: function (response) {
-        if (!response || !response.credential) return;
+      id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        itp_support: true,
+        cancel_on_tap_outside: false,
+        callback: function (response) {
+          if (!response || !response.credential) return;
+          try {
+            sessionRemove(ONE_TAP_SUPPRESSED_KEY);
+            authInstance.tenantId = TENANT_ID;
+            var cred = fbAuth.GoogleAuthProvider.credential(response.credential);
+            Promise.resolve(fbAuth.signInWithCredential(authInstance, cred)).catch(function (err) {
+              if (!isExpectedAuthError(err)) logWarn('falha no One Tap');
+            });
+          } catch (e) {
+            logWarn('falha no One Tap');
+          }
+        }
+      });
+
+      id.prompt(function (notification) {
         try {
-          sessionRemove(ONE_TAP_SUPPRESSED_KEY);
-          authInstance.tenantId = TENANT_ID;
-          var cred = fbAuth.GoogleAuthProvider.credential(response.credential);
-          Promise.resolve(fbAuth.signInWithCredential(authInstance, cred)).catch(function (err) {
-            if (!isExpectedAuthError(err)) logWarn('falha no One Tap');
-          });
-        } catch (e) {
-          logWarn('falha no One Tap');
-        }
-      }
-    });
-
-    id.prompt(function (notification) {
-      try {
-        if (!notification || typeof notification.isSkippedMoment !== 'function' || !notification.isSkippedMoment()) return;
-        var reason = typeof notification.getSkippedReason === 'function' ? notification.getSkippedReason() : '';
-        if (reason === 'user_cancel' || reason === 'tap_outside') {
-          sessionSet(ONE_TAP_SUPPRESSED_KEY, '1');
-        }
-      } catch (e) { /* ignora */ }
-    });
+          if (!notification || typeof notification.isSkippedMoment !== 'function' || !notification.isSkippedMoment()) return;
+          var reason = typeof notification.getSkippedReason === 'function' ? notification.getSkippedReason() : '';
+          if (reason === 'user_cancel' || reason === 'tap_outside') {
+            sessionSet(ONE_TAP_SUPPRESSED_KEY, '1');
+          }
+        } catch (e) { /* ignora */ }
+      });
+    } catch (e) {
+      logWarn('falha no One Tap');
+    }
   }
 
   function maybeStartOneTap() {
@@ -675,7 +693,9 @@
       fbAuth = mods[1];
       var apps = typeof fbApp.getApps === 'function' ? fbApp.getApps() : [];
       var app = apps.length ? fbApp.getApp() : fbApp.initializeApp(FIREBASE_CONFIG);
-      authInstance = fbAuth.getAuth(app);
+      authInstance = fbAuth.initializeAuth(app, {
+        persistence: [fbAuth.indexedDBLocalPersistence, fbAuth.browserLocalPersistence]
+      });
       authInstance.tenantId = TENANT_ID;
 
       fbAuth.onAuthStateChanged(authInstance, function (user) {
@@ -728,7 +748,7 @@
         if (!validTenantUser(currentUser) || readHeatingUid() !== currentUser.uid) {
           if (activeUid !== null || headSentUid) clearUserId(false);
         } else {
-          syncIdentityState(false);
+          syncIdentityState(false, true);
         }
         return;
       }
@@ -740,6 +760,10 @@
       if (k === CONSENT_KEY || k === null) maybeStartOneTap();
     });
   }
+
+  w.guifavAuthIdentified = function () {
+    return Boolean(validTenantUser(currentUser) && readHeatingLink(currentUser.uid) === 'granted');
+  };
 
   headSentUid = readConsent() === 'granted' && readHeatingUid() !== null;
   if (readConsent() !== 'granted') removeHeatingUid();

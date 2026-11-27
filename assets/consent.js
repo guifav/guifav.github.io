@@ -8,8 +8,9 @@
 // Este arquivo:
 // - mostra o banner ("Aceitar os cookies?", Sim e Não, link para a política) enquanto não há escolha válida;
 // - grava a escolha em localStorage "consent-v1" ({v: "granted"|"denied", t: epoch ms}), válida por 365 dias;
-// - Sim: consent update granted e carrega o Clarity; Não: consent update denied e apaga os cookies do GA4 e do
-//   Clarity (se o Clarity já estava gravando, recarrega a página para ele parar);
+// - Sim: consent update granted (se a sessão já está identificada, concede só analytics_storage e mantém
+//   ad_storage/ad_user_data/ad_personalization negados) e carrega o Clarity; Não: consent update denied e apaga os
+//   cookies do GA4 e do Clarity (se o Clarity já estava gravando, recarrega a página para ele parar);
 // - qualquer link com data-consent-open (o "Cookies" do rodapé) reabre o banner;
 // - texto em português ou inglês conforme o idioma da página (e muda junto com o seletor de idioma).
 // Sem localStorage, o banner aparece a cada página e nada é gravado; sem gtag, nada quebra.
@@ -17,6 +18,9 @@
   var d = document;
   var KEY = 'consent-v1';
   var MAX_AGE = 365 * 24 * 3600 * 1000;
+  var UID_KEY = 'heating-uid-v1';
+  var UID_MAX_AGE = 18e5; // 30 minutos (mesma regra do snippet do <head>)
+  var UID_RE = /^[0-9A-Za-z]{1,128}$/;
   var POLICY = '/privacidade/#cookies';
   var TEXT = {
     pt: { q: 'Aceitar os cookies?', yes: 'Sim', no: 'Não', policy: 'Política de privacidade e cookies' },
@@ -39,9 +43,35 @@
     try { localStorage.setItem(KEY, JSON.stringify({ v: v, t: Date.now() })); } catch (e) { /* sem storage */ }
   }
 
+  function hasValidHeatingUid() {
+    try {
+      var u = JSON.parse(localStorage.getItem(UID_KEY) || 'null');
+      if (u && typeof u.uid === 'string' && UID_RE.test(u.uid) && typeof u.t === 'number') {
+        var age = Date.now() - u.t;
+        return age >= 0 && age < UID_MAX_AGE;
+      }
+    } catch (e) { /* sem storage ou valor quebrado */ }
+    return false;
+  }
+
+  function isIdentified() {
+    if (hasValidHeatingUid()) return true;
+    try {
+      if (typeof window.guifavAuthIdentified === 'function' && window.guifavAuthIdentified()) return true;
+    } catch (e) { /* ignora */ }
+    return false;
+  }
+
   function consent(v) {
     var o = {};
-    for (var i = 0; i < ALL.length; i++) o[ALL[i]] = v;
+    if (v === 'granted' && isIdentified()) {
+      o.ad_storage = 'denied';
+      o.ad_user_data = 'denied';
+      o.ad_personalization = 'denied';
+      o.analytics_storage = 'granted';
+    } else {
+      for (var i = 0; i < ALL.length; i++) o[ALL[i]] = v;
+    }
     if (typeof window.gtag === 'function') window.gtag('consent', 'update', o);
   }
 

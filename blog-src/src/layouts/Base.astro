@@ -69,7 +69,7 @@ const base = import.meta.env.BASE_URL;
       gtag('consent', 'update', { ad_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'granted', analytics_storage: 'granted' });
       try {
         var u = JSON.parse(localStorage.getItem('heating-uid-v1') || 'null');
-        if (u && typeof u.uid === 'string' && /^[0-9A-Za-z]{1,128}$/.test(u.uid) && typeof u.t === 'number' && Date.now() - u.t >= 0 && Date.now() - u.t < 31536e6) {
+        if (u && typeof u.uid === 'string' && /^[0-9A-Za-z]{1,128}$/.test(u.uid) && typeof u.t === 'number' && Date.now() - u.t >= 0 && Date.now() - u.t < 18e5) {
           gtag('consent', 'update', { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' });
           gtag('set', 'allow_google_signals', false);
           gtag('set', 'allow_ad_personalization_signals', false);
