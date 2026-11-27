@@ -7,6 +7,8 @@
 -- streaming buffer). As sessões são gravadas antes do primeiro DELETE e nunca são cortadas (acima de 1.000.000
 -- caracteres a remoção não começa e o job alerta). Da 5ª tentativa em diante, tabela ainda adiada mantém o item na
 -- fila (o job alerta). O item só sai da fila quando o GA4 está feito e o BigQuery terminou (`bq_concluido = 1`).
+-- `geracao` sobe a cada reenfileiramento pelo trigger: o job só fecha ou atualiza o item na mesma geração que leu, então
+-- um novo vínculo apagado durante uma chamada ao Google nunca é sobrescrito nem apagado pelo processamento antigo.
 CREATE TABLE IF NOT EXISTS ga4_purge_queue (
   uid TEXT PRIMARY KEY NOT NULL
     CHECK (length(uid) BETWEEN 1 AND 128 AND uid NOT GLOB '*[^0-9A-Za-z]*'),
@@ -18,6 +20,8 @@ CREATE TABLE IF NOT EXISTS ga4_purge_queue (
     CHECK (bq_tentativas BETWEEN 0 AND 5),
   bq_concluido INTEGER NOT NULL DEFAULT 0
     CHECK (bq_concluido IN (0, 1)),
+  geracao INTEGER NOT NULL DEFAULT 0
+    CHECK (geracao >= 0),
   proxima_em TEXT NOT NULL
     CHECK (proxima_em GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z'),
   criado_em TEXT NOT NULL
@@ -43,5 +47,6 @@ BEGIN
     ga4_pendente = 1,
     bq_tentativas = 0,
     bq_concluido = 0,
+    geracao = geracao + 1,
     proxima_em = strftime('%Y-%m-%dT%H:%M:%fZ', 'now');
 END;

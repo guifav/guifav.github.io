@@ -69,7 +69,8 @@ Modos:
   `ga4_remocao_pendente`, e executa o DELETE no BigQuery em `events_*`, `users_YYYYMMDD` existentes e linhas exclusivas
   de `pseudonymous_users_YYYYMMDD` somando as `sessoes` já salvas às descobertas agora, repetido em D+1, D+3 e enquanto
   houver tabela adiada por streaming buffer: da 5ª tentativa em diante repete diariamente e conta `bq_remocao_travada`;
-  acima de 1.000.000 de sessões o item fica e conta `bq_sessoes_excedidas`; o item só sai da fila quando GA4 e BigQuery
+  com o JSON das sessões acima de 1.000.000 de caracteres (cerca de 25 mil sessões) o item fica e conta
+  `bq_sessoes_excedidas`; o fechamento vale só na `geracao` lida; o item só sai da fila quando GA4 e BigQuery
   terminam),
   calcula a régua por contexto em relação ao instante T, substitui `heating` no D1 via payload `batch` da API REST e
   atualiza o Twenty (somente o que mudou).
@@ -2184,6 +2185,9 @@ def optout(
                 if g_res["bq_remocao_falhou"]:
                     counts["bq_remocao_falhou"] = g_res["bq_remocao_falhou"]
                     bq_falhou = True
+                if g_res["bq_sessoes_excedidas"]:
+                    counts["bq_sessoes_excedidas"] = g_res["bq_sessoes_excedidas"]
+                    bq_falhou = True
                 ga4_pendente = g_res["ga4_remocao_pendente"] > 0
 
     if apply:
@@ -2331,6 +2335,7 @@ def main(
                     now_dt=now_dt,
                 )
                 if a.apply and (counts.get("ga4_remocao_pendente", 0) > 0 or counts.get("bq_remocao_falhou", 0) > 0
+                                or counts.get("bq_sessoes_excedidas", 0) > 0
                                 or counts.get("ga4_fila_pendente_total", 0) > 0):
                     rc = 2
             else:

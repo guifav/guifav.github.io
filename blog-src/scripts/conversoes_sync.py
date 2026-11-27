@@ -1144,7 +1144,7 @@ def processar_fila_ga4(
             part = valid_uids[i:i + MARK_CHUNK]
             ph = ",".join("?" * len(part))
             for r in c.d1(
-                f"SELECT uid, ga4_pendente, sessoes, bq_tentativas, bq_concluido, proxima_em, criado_em "
+                f"SELECT uid, ga4_pendente, sessoes, bq_tentativas, bq_concluido, geracao, proxima_em, criado_em "
                 f"FROM ga4_purge_queue WHERE uid IN ({ph}) ORDER BY uid",
                 part,
             ):
@@ -1153,7 +1153,7 @@ def processar_fila_ga4(
                     rows.append(r)
     elif only_due:
         for r in c.d1(
-            "SELECT uid, ga4_pendente, sessoes, bq_tentativas, bq_concluido, proxima_em, criado_em "
+            "SELECT uid, ga4_pendente, sessoes, bq_tentativas, bq_concluido, geracao, proxima_em, criado_em "
             "FROM ga4_purge_queue WHERE proxima_em <= ? ORDER BY proxima_em, uid",
             [now_iso],
         ):
@@ -1166,7 +1166,7 @@ def processar_fila_ga4(
                 part = extra[i:i + MARK_CHUNK]
                 ph = ",".join("?" * len(part))
                 for r in c.d1(
-                    f"SELECT uid, ga4_pendente, sessoes, bq_tentativas, bq_concluido, proxima_em, criado_em "
+                    f"SELECT uid, ga4_pendente, sessoes, bq_tentativas, bq_concluido, geracao, proxima_em, criado_em "
                     f"FROM ga4_purge_queue WHERE uid IN ({ph}) ORDER BY uid",
                     part,
                 ):
@@ -1191,6 +1191,8 @@ def processar_fila_ga4(
         ga4_pend = 1 if int(r.get("ga4_pendente") or 0) else 0
         saved_sessoes = _parse_sessoes_json(r.get("sessoes"))
         bq_tent = int(r.get("bq_tentativas") or 0)
+        # Geração lida: fechar ou atualizar só nela preserva um reenfileiramento feito durante as chamadas ao Google.
+        gen = int(r.get("geracao") or 0)
 
         if ga4_pend == 1:
             if ga4_delete is not None:
@@ -1259,13 +1261,14 @@ def processar_fila_ga4(
                 next_due = now_iso
 
         if ga4_pend == 0 and bq_done:
-            c.d1("DELETE FROM ga4_purge_queue WHERE uid = ?", [uid])
+            c.d1("DELETE FROM ga4_purge_queue WHERE uid = ? AND geracao = ?", [uid, gen])
             res["ga4_fila_processados"] += 1
         elif bq_failed:
             # As sessões já gravadas por `persistir` ficam como estão (nada de sobrescrever com uma lista velha).
             c.d1(
-                "UPDATE ga4_purge_queue SET ga4_pendente = ?, bq_tentativas = ?, proxima_em = ? WHERE uid = ?",
-                [ga4_pend, bq_tent, next_due, uid],
+                "UPDATE ga4_purge_queue SET ga4_pendente = ?, bq_tentativas = ?, proxima_em = ? "
+                "WHERE uid = ? AND geracao = ?",
+                [ga4_pend, bq_tent, next_due, uid, gen],
             )
             res["ga4_fila_restantes"] += 1
             if stop_on_bq_error:
@@ -1273,8 +1276,8 @@ def processar_fila_ga4(
         else:
             c.d1(
                 "UPDATE ga4_purge_queue SET ga4_pendente = ?, sessoes = ?, bq_tentativas = ?, bq_concluido = ?, "
-                "proxima_em = ? WHERE uid = ?",
-                [ga4_pend, _dump_sessoes_json(known["sessoes"]), new_tent, 1 if bq_done else 0, next_due, uid],
+                "proxima_em = ? WHERE uid = ? AND geracao = ?",
+                [ga4_pend, _dump_sessoes_json(known["sessoes"]), new_tent, 1 if bq_done else 0, next_due, uid, gen],
             )
             res["ga4_fila_processados"] += 1
             res["ga4_fila_restantes"] += 1
@@ -1394,6 +1397,9 @@ def forget(
                 if g_res["bq_remocao_falhou"]:
                     counts["bq_remocao_falhou"] = g_res["bq_remocao_falhou"]
                     bq_falhou = True
+                if g_res["bq_sessoes_excedidas"]:
+                    counts["bq_sessoes_excedidas"] = g_res["bq_sessoes_excedidas"]
+                    bq_falhou = True
                 ga4_pendente = g_res["ga4_remocao_pendente"] > 0
     if apply:
         # A fila não depende do vínculo deste email (já apagado numa rodada anterior): o comando repetido continua
@@ -1469,6 +1475,7 @@ def main(
                 now_dt=now_dt,
             )
             if a.apply and (counts.get("ga4_remocao_pendente", 0) > 0 or counts.get("bq_remocao_falhou", 0) > 0
+                            or counts.get("bq_sessoes_excedidas", 0) > 0
                             or counts.get("ga4_fila_pendente_total", 0) > 0):
                 rc = 2
         else:

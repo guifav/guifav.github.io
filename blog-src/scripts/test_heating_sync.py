@@ -194,7 +194,7 @@ class Fake:
         return [
             dict(r)
             for r in self.db.execute(
-                "SELECT uid, ga4_pendente, sessoes, bq_tentativas, bq_concluido, proxima_em, criado_em "
+                "SELECT uid, ga4_pendente, sessoes, bq_tentativas, bq_concluido, geracao, proxima_em, criado_em "
                 "FROM ga4_purge_queue ORDER BY uid"
             )
         ]
@@ -2623,6 +2623,55 @@ class Ga4EBigQueryTest(unittest.TestCase):
         self.assertIn("bq_sessoes_excedidas: 1", outh)
         row_h = [r for r in h.purge_queue_rows() if r["uid"] == "UidMuitas1"][0]
         self.assertEqual((row_h["sessoes"], row_h["bq_concluido"]), ("[]", 0))
+
+    def test_fila_reenfileirada_durante_o_google_nao_e_apagada_nem_sobrescrita(self):
+        # Kimi P2 (rodada 3 do #204): o trigger reabre o item enquanto o BigQuery roda. O fechamento só vale na geração
+        # lida, então a nova solicitação fica inteira na fila (GA4 pendente, tentativas zeradas, BigQuery a fazer).
+        for tent, nome in ((2, "fechamento (DELETE)"), (0, "atualização (UPDATE)")):
+            f = Fake(schema=True)
+            f.add_purge_queue("UidCorrida1", NOW_ISO, ga4_pendente=0, bq_tentativas=tent)
+
+            def bq_com_reabertura(uid, saved, persistir, _f=f):
+                _f.add_identity(uid, "corrida@corp.com")
+                _f.db.execute("DELETE FROM site_identities WHERE uid = ?", (uid,))
+                _f.db.commit()
+                return {"tabelas_limpas": 1, "adiadas": 0, "sessoes": [("psCorrida", 9)]}
+
+            run_job(f, apply=True, bq_delete=bq_com_reabertura)
+            rows = [r for r in f.purge_queue_rows() if r["uid"] == "UidCorrida1"]
+            self.assertEqual(len(rows), 1, nome)
+            r = rows[0]
+            self.assertEqual(
+                (r["ga4_pendente"], r["bq_tentativas"], r["bq_concluido"], r["geracao"]), (1, 0, 0, 1), nome
+            )
+            # As sessões descobertas no meio ficam (persistir/união não depende da geração).
+            # Na rodada seguinte a nova geração é processada normalmente (proxima_em do trigger vem do relógio real).
+            f.db.execute("UPDATE ga4_purge_queue SET proxima_em = ? WHERE uid = ?", (NOW_ISO, "UidCorrida1"))
+            f.db.commit()
+            ga4: list[str] = []
+            run_job(f, apply=True, ga4_delete=lambda u: ga4.append(u) or True,
+                    bq_delete=lambda _u, _s: {"tabelas_limpas": 1, "adiadas": 0, "sessoes": []})
+            self.assertEqual(ga4, ["UidCorrida1"], nome)
+            r2 = [x for x in f.purge_queue_rows() if x["uid"] == "UidCorrida1"][0]
+            self.assertEqual((r2["ga4_pendente"], r2["bq_tentativas"], r2["geracao"]), (0, 1, 1), nome)
+
+    def test_optout_com_sessoes_excedidas_avisa_e_sai_com_codigo_2(self):
+        # Kimi P2 (rodada 3 do #204): GA4 feito e BigQuery sem começar por excesso de sessões não pode sair com 0.
+        f = Fake(people=[person("p1", "muitas@corp.com")], schema=True)
+        f.add_identity("UidMuitas9", "muitas@corp.com")
+
+        def bq_muitas(uid, saved, persistir):
+            persistir([(f"ps{i:07d}", i) for i in range(60000)])
+            return {"tabelas_limpas": 1, "adiadas": 0, "sessoes": []}
+
+        rc, txt = self._cli(f, "--optout", "--apply", stdin="muitas@corp.com\n",
+                            ga4_delete=lambda _u: True, bq_delete=bq_muitas)
+        self.assertEqual(rc, 2, txt)
+        self.assertIn("bq_sessoes_excedidas: 1", txt)
+        self.assertIn(CS.BQ_PURGE_PENDENTE_MSG, txt)
+        self.assertNotIn("UidMuitas9", txt)
+        row = [r for r in f.purge_queue_rows() if r["uid"] == "UidMuitas9"][0]
+        self.assertEqual((row["ga4_pendente"], row["bq_concluido"]), (0, 0))
 
     def test_ga4_sem_vinculo_oposicao_e_ligacao_so_na_sessao(self):
         f = Fake(schema=True)

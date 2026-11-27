@@ -1893,6 +1893,24 @@ class ForgetGooglePurgeTest(unittest.TestCase):
             ],
         )
 
+    def test_forget_com_sessoes_excedidas_avisa_e_sai_com_codigo_2(self):
+        # Kimi P2 (rodada 3 do #204): mesmo com o GA4 feito, BigQuery barrado por excesso de sessões sai com código 2.
+        f = Fake(people=[person("p1", "muitas@x.com")])
+        f.add(1, "muitas@x.com")
+        run(f, apply=True)
+        f.add_identity("UidMuitasF1", "muitas@x.com")
+
+        def bq_muitas(uid, saved, persistir):
+            persistir([(f"ps{i:07d}", i) for i in range(60000)])
+            return {"tabelas_limpas": 1, "adiadas": 0, "sessoes": []}
+
+        rc, out = self._run_cli(f, "--forget", "--apply", stdin="muitas@x.com\n",
+                                ga4_delete=lambda _u: True, bq_delete=bq_muitas)
+        self.assertEqual(rc, 2, out)
+        self.assertIn("bq_sessoes_excedidas: 1", out)
+        self.assertIn(S.BQ_PURGE_PENDENTE_MSG, out)
+        self.assertNotIn("UidMuitasF1", out)
+
     def test_forget_ga4_403_bq_falha_e_sem_sa_file(self):
         from datetime import datetime, timedelta, timezone
         now = datetime(2026, 11, 27, 12, 0, 0, tzinfo=timezone.utc)
