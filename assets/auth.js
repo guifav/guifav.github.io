@@ -884,6 +884,7 @@
           hideNotice();
           renderWidget();
           syncIdentityState(hadIdentity);
+          // Os sinais allow_google_signals e allow_ad_personalization_signals só voltam na página seguinte (lado conservador).
           if (wasUser && hadAdsBlocked && readConsent() === 'granted' && !adsBlockedInBrowser()) {
             sendGtag('consent', 'update', { ad_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'granted' });
           }
@@ -905,6 +906,10 @@
       loadFirebase();
       syncNotice();
       if (detail === 'granted') {
+        // "Sim" com sessão logada ou vínculo ligado: o consent.js já negou ad_*; aqui também saem os sinais de anúncio
+        // (a identificação, quando acontece agora, já nega tudo e não precisa repetir).
+        var identifyingNow = validTenantUser(currentUser) && readHeatingLink(currentUser.uid) === 'granted';
+        if (adsBlockedInBrowser() && !identifyingNow) denyAdSignals();
         syncIdentityState(false);
         maybeStartOneTap();
       } else {

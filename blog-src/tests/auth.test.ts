@@ -1441,7 +1441,9 @@ test('antes de o Firebase responder: Sim no banner não apaga o uid do <head> ne
   const before = s.gtagCalls.length;
   await s.emitConsent('granted');
   assert.ok(s.local.getItem('heating-uid-v1'), 'o uid do <head> continua até o Firebase decidir');
-  assert.deepEqual(s.gtagCalls.slice(before), [], 'nada de user_id null nem anúncio concedido antes de o Firebase responder');
+  // Nada de user_id null nem anúncio concedido antes de o Firebase responder; com o vínculo ligado, o Sim reafirma a
+  // negação de anúncios e sinais (igual ao snippet do <head>).
+  assert.deepEqual(s.gtagCalls.slice(before), LOGIN_AD_DENY);
 
   // O Firebase confirma a sessão: identificação normal, com anúncios negados antes do user_id.
   await s.emitAuth(makeUser());
@@ -1771,3 +1773,22 @@ test('Kimi P1 (rodada 6): sem a marca de login gravável, a sessão confirmada a
   await s.emitAuth(null);
   assert.equal(authIdentified(), false, 'depois do logout e sem vínculo, o banner volta a conceder');
 });
+
+test('Claude P3 (rodada 7): Sim no banner depois de o Firebase confirmar a conta desliga também os sinais de anúncio', async () => {
+  // Logado, sem vínculo, banner ainda sem resposta quando o Firebase confirma; depois Sim.
+  const s = await setupAuth({ idbMode: 'session', initialUser: makeUser() });
+  assert.deepEqual(s.gtagCalls, []);
+  await s.emitConsent('granted');
+  assert.deepEqual(s.gtagCalls, LOGIN_AD_DENY);
+
+  // Só com o vínculo ligado no navegador, sem sessão: o mesmo.
+  const r = await setupAuth({ heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' }, idbMode: 'session', initialUser: null });
+  await r.emitConsent('granted');
+  assert.deepEqual(r.gtagCalls, LOGIN_AD_DENY);
+
+  // Sem sessão nem vínculo: o Sim não nega nada.
+  const q = await setupAuth({ idbMode: 'session', initialUser: null });
+  await q.emitConsent('granted');
+  assert.deepEqual(q.gtagCalls, []);
+});
+
