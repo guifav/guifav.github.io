@@ -630,6 +630,9 @@ PRIORITY_TITLE = "Não quero ser pontuado" + TITLE_SEP + SITE_NAME
 PRIORITY_H1 = "Não quero ser pontuado"
 PRIORITY_ACTION = "https://insights.guifav.dev/prioridade"
 PRIORITY_FRAGMENTS = ("pronto", "erro-verificacao", "erro-email", "erro-limite", "erro")
+# Turnstile (#197): espelha TURNSTILE_SITE_KEY de blog-src/src/consts.ts.
+TURNSTILE_SITE_KEY = "0x4AAAAAAF8raRhCn4ciudgW"
+TURNSTILE_SCRIPT_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js"
 # Marcador de data pendente (#197): nenhuma página publicada pode sair com "[DATA]" literal.
 DATE_PLACEHOLDER = "[DATA]"
 EXPERT_INSIGHTS_PAGES = {f"blog/{p}/index.html" for p in
@@ -3443,6 +3446,55 @@ def check_old_youtube_handle(site: Path) -> list[str]:
     return problems
 
 
+class _PriorityPage(HTMLParser):
+    """Coleta <script src>, <form> e seus <input type=email name=email> e widgets Turnstile fora de comentário/template/noscript/hidden."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.stack: list[tuple[str, bool]] = []
+        self.scripts: list[str] = []
+        self.forms: list[dict[str, object]] = []
+        self.active_form: dict[str, object] | None = None
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+        if tag not in VOID_TAGS:
+            self.handle_endtag(tag)
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        a: dict[str, str] = {}
+        for k, v in attrs:
+            a.setdefault(k, v or "")
+        inert = any(i for _, i in self.stack) or tag in ("template", "noscript") or "hidden" in a
+        if not inert:
+            if tag == "script":
+                stype = a.get("type", "").strip().lower()
+                if not stype or stype in ("text/javascript", "module", "application/javascript"):
+                    src = a.get("src", "").strip()
+                    if src:
+                        self.scripts.append(src)
+            elif tag == "form":
+                form: dict[str, object] = {"attrs": a, "email_inputs": 0, "turnstile_sitekeys": []}
+                self.forms.append(form)
+                self.active_form = form
+            elif self.active_form is not None:
+                if tag == "input" and a.get("type", "").strip().lower() == "email" and a.get("name", "") == "email":
+                    self.active_form["email_inputs"] = int(self.active_form["email_inputs"]) + 1
+                elif tag == "div" and "cf-turnstile" in a.get("class", "").split():
+                    self.active_form["turnstile_sitekeys"].append(a.get("data-sitekey", ""))
+        if tag not in VOID_TAGS:
+            self.stack.append((tag, tag in ("template", "noscript") or "hidden" in a))
+
+    def handle_endtag(self, tag: str) -> None:
+        for i in range(len(self.stack) - 1, -1, -1):
+            if self.stack[i][0] == tag:
+                closed = self.stack[i:]
+                del self.stack[i:]
+                if any(t == "form" for t, _ in closed):
+                    self.active_form = None
+                return
+
+
 def check_priority(site: Path) -> list[str]:
     """#197: /prioridade/ existe com noindex, canonical próprio, título, H1, formulário com Turnstile e os 5 fragmentos, fora do sitemap."""
     problems: list[str] = []
@@ -3479,20 +3531,25 @@ def check_priority(site: Path) -> list[str]:
     for frag in PRIORITY_FRAGMENTS:
         if frag not in ids.ids:
             problems.append(f"{PRIORITY_PAGE}: falta a mensagem #{frag}")
-    forms = [f for f in re.findall(r"<form\b[^>]*>.*?</form>", visible, flags=re.S | re.I)
-             if f'action="{PRIORITY_ACTION}"' in f]
+    pf = _PriorityPage()
+    pf.feed(html)
+    pf.close()
+    if TURNSTILE_SCRIPT_SRC not in pf.scripts:
+        problems.append(f"{PRIORITY_PAGE}: falta o script do Turnstile ({TURNSTILE_SCRIPT_SRC})")
+    forms = [f for f in pf.forms if f["attrs"].get("action") == PRIORITY_ACTION]
     if len(forms) != 1:
         problems.append(f"{PRIORITY_PAGE}: esperado um formulário para {PRIORITY_ACTION}, achados {len(forms)}")
     else:
         form = forms[0]
-        if not re.search(r'<form\b[^>]*\bmethod="post"', form, flags=re.I):
-            problems.append(f"{PRIORITY_PAGE}: formulário precisa usar method=\"post\"")
-        if 'data-clarity-mask="true"' not in form:
-            problems.append(f"{PRIORITY_PAGE}: formulário precisa de data-clarity-mask=\"true\"")
-        if not re.search(r'<input\b[^>]*\btype="email"[^>]*\bname="email"|<input\b[^>]*\bname="email"[^>]*\btype="email"', form, flags=re.I):
+        attrs = form["attrs"]
+        if attrs.get("method", "").lower() != "post":
+            problems.append(f'{PRIORITY_PAGE}: formulário precisa usar method="post"')
+        if attrs.get("data-clarity-mask") != "true":
+            problems.append(f'{PRIORITY_PAGE}: formulário precisa de data-clarity-mask="true"')
+        if int(form["email_inputs"]) < 1:
             problems.append(f"{PRIORITY_PAGE}: formulário sem campo de email")
-        if 'class="cf-turnstile"' not in form or 'data-sitekey="' not in form:
-            problems.append(f"{PRIORITY_PAGE}: formulário sem widget do Turnstile")
+        if form["turnstile_sitekeys"] != [TURNSTILE_SITE_KEY]:
+            problems.append(f'{PRIORITY_PAGE}: formulário sem widget do Turnstile com data-sitekey="{TURNSTILE_SITE_KEY}"')
     return problems
 
 

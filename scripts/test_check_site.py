@@ -1566,7 +1566,7 @@ class TrackingSourcesTest(unittest.TestCase):
                      "https://adssettings.google.com/", "https://tools.google.com/dlpage/gaoptout",
                      "https://policies.google.com/technologies/partner-sites"):
             self.assertIn(must, t)
-        self.assertRegex(t, r"Atualizada em (?:\d{1,2} de [a-zç]+ de 20\d\d|\[DATA\])\.")  # #68: Cookies; 23/11: Materiais; 24/11: CRM (#97) e /privacidade/ (#146); 26/11: terceiros (#154) e remoção (#134); #197: prioridade e cursos
+        self.assertRegex(t, r"Atualizada em \d{1,2} de [a-zç]+ de 20\d\d\.")  # #68: Cookies; 23/11: Materiais; 24/11: CRM (#97) e /privacidade/ (#146); 26/11: terceiros (#154) e remoção (#134); #197: prioridade e cursos
 
     def test_privacy_says_material_record_goes_to_the_crm(self):
         # #97 fase 2 e #134: o registro dos materiais vai ao Twenty. O download cria o contato; o pedido sem download só
@@ -4299,6 +4299,18 @@ class LegalTest(unittest.TestCase):
                     got = C.check_legal(self.site)
                     self.assertTrue(any(f"#{anchor}" in p for p in got), got)
 
+    def test_privacy_requires_priority_and_courses_anchors(self):
+        base_anchors = ("cookies", "materiais", "origem", "prioridade", "cursos", "quem-processa")
+        for missing in ("prioridade", "cursos"):
+            with self.subTest(missing=missing):
+                self.build_valid_site()
+                body = "".join(f'<h2 id="{a}">{a}</h2>' for a in base_anchors if a != missing)
+                self.w("privacidade/index.html", self.legal_doc(
+                    "/privacidade/", "Política de privacidade | Guilherme Favaron", "Política de privacidade", body,
+                ))
+                got = C.check_legal(self.site)
+                self.assertTrue(any(f"#{missing}" in p for p in got), got)
+
     def test_footer_rules_with_and_without_ga(self):
         doc_ga = lambda body: f"<!DOCTYPE html><html><head>{self.GA}</head><body>{body}</body></html>"
         doc_noga = lambda body: f"<!DOCTYPE html><html><head></head><body>{body}</body></html>"
@@ -5390,6 +5402,7 @@ class PriorityTest(unittest.TestCase):
                      robots: str = ROBOTS_NOINDEX, canonical: str | None = "https://guifav.dev/prioridade/",
                      frags: tuple[str, ...] = C.PRIORITY_FRAGMENTS,
                      privacy_link: str = '<a href="/privacidade/#prioridade">Política de privacidade</a>',
+                     turnstile_script: str = f'<script async defer src="{C.TURNSTILE_SCRIPT_SRC}"></script>',
                      form: str | None = None) -> str:
         c = "" if canonical is None else f'<link rel="canonical" href="{canonical}">'
         msgs = "".join(f'<p id="{fid}" class="form-msg">{fid}</p>' for fid in frags)
@@ -5397,10 +5410,10 @@ class PriorityTest(unittest.TestCase):
             f'<form data-site-form data-clarity-mask="true" method="post" action="{C.PRIORITY_ACTION}">'
             '<input type="email" name="email" required>'
             '<button type="submit">Não quero ser pontuado</button>'
-            '<div class="cf-turnstile" data-sitekey="0x4AAAAAAF8raRhCn4ciudgW"></div>'
+            f'<div class="cf-turnstile" data-sitekey="{C.TURNSTILE_SITE_KEY}"></div>'
             "</form>"
         )
-        return (f'<!DOCTYPE html><html lang="pt-BR"><head><title>{title}</title>{robots}{c}{self.GA}</head>'
+        return (f'<!DOCTYPE html><html lang="pt-BR"><head><title>{title}</title>{robots}{c}{turnstile_script}{self.GA}</head>'
                 f'<body><main><h1>{h1}</h1><p>{privacy_link}</p>{msgs}{default_form if form is None else form}</main>{self.FOOT}</body></html>')
 
     def build_valid_site(self) -> None:
@@ -5427,6 +5440,7 @@ class PriorityTest(unittest.TestCase):
         self.assertTrue(any("sitemap-site.xml" in p and "/prioridade/" in p for p in C.check_priority(self.site)))
 
     def test_page_requirements(self):
+        key = C.TURNSTILE_SITE_KEY
         for name, kw, needle in (
             ("sem noindex", {"robots": ROBOTS_INDEX}, "noindex"),
             ("sem canonical", {"canonical": None}, "canonical"),
@@ -5437,8 +5451,21 @@ class PriorityTest(unittest.TestCase):
             ("falta #pronto", {"frags": ("erro-verificacao", "erro-email", "erro-limite", "erro")}, "#pronto"),
             ("falta #erro-limite", {"frags": ("pronto", "erro-verificacao", "erro-email", "erro")}, "#erro-limite"),
             ("sem form", {"form": ""}, C.PRIORITY_ACTION),
-            ("sem clarity mask", {"form": f'<form method="post" action="{C.PRIORITY_ACTION}"><input type="email" name="email"><div class="cf-turnstile" data-sitekey="x"></div></form>'}, "data-clarity-mask"),
+            ("action fora da tag form", {"form": f'<form data-clarity-mask="true" method="post" action="https://outro.example/"><p action="{C.PRIORITY_ACTION}"></p><input type="email" name="email"><div class="cf-turnstile" data-sitekey="{key}"></div></form>'}, C.PRIORITY_ACTION),
+            ("method get", {"form": f'<form data-clarity-mask="true" method="get" action="{C.PRIORITY_ACTION}"><input type="email" name="email"><div class="cf-turnstile" data-sitekey="{key}"></div></form>'}, 'method="post"'),
+            ("sem method", {"form": f'<form data-clarity-mask="true" action="{C.PRIORITY_ACTION}"><input type="email" name="email"><div class="cf-turnstile" data-sitekey="{key}"></div></form>'}, 'method="post"'),
+            ("sem clarity mask", {"form": f'<form method="post" action="{C.PRIORITY_ACTION}"><input type="email" name="email"><div class="cf-turnstile" data-sitekey="{key}"></div></form>'}, "data-clarity-mask"),
+            ("clarity mask fora da tag form", {"form": f'<form method="post" action="{C.PRIORITY_ACTION}"><input type="email" name="email"><p data-clarity-mask="true">nota</p><div class="cf-turnstile" data-sitekey="{key}"></div></form>'}, "data-clarity-mask"),
+            ("sem campo email", {"form": f'<form data-clarity-mask="true" method="post" action="{C.PRIORITY_ACTION}"><div class="cf-turnstile" data-sitekey="{key}"></div></form>'}, "campo de email"),
+            ("input com name diferente", {"form": f'<form data-clarity-mask="true" method="post" action="{C.PRIORITY_ACTION}"><input type="email" name="endereco"><div class="cf-turnstile" data-sitekey="{key}"></div></form>'}, "campo de email"),
+            ("input com type text", {"form": f'<form data-clarity-mask="true" method="post" action="{C.PRIORITY_ACTION}"><input type="text" name="email"><div class="cf-turnstile" data-sitekey="{key}"></div></form>'}, "campo de email"),
+            ("input email fora do form", {"form": f'<input type="email" name="email"><form data-clarity-mask="true" method="post" action="{C.PRIORITY_ACTION}"><div class="cf-turnstile" data-sitekey="{key}"></div></form>'}, "campo de email"),
             ("sem turnstile", {"form": f'<form data-clarity-mask="true" method="post" action="{C.PRIORITY_ACTION}"><input type="email" name="email"></form>'}, "Turnstile"),
+            ("turnstile sem data-sitekey", {"form": f'<form data-clarity-mask="true" method="post" action="{C.PRIORITY_ACTION}"><input type="email" name="email"><div class="cf-turnstile"></div></form>'}, "Turnstile"),
+            ("turnstile sitekey vazio", {"form": f'<form data-clarity-mask="true" method="post" action="{C.PRIORITY_ACTION}"><input type="email" name="email"><div class="cf-turnstile" data-sitekey=""></div></form>'}, "Turnstile"),
+            ("turnstile sitekey errado", {"form": f'<form data-clarity-mask="true" method="post" action="{C.PRIORITY_ACTION}"><input type="email" name="email"><div class="cf-turnstile" data-sitekey="0x4AAAAAAF00000000000000"></div></form>'}, "Turnstile"),
+            ("sem script do turnstile", {"turnstile_script": ""}, C.TURNSTILE_SCRIPT_SRC),
+            ("script do turnstile comentado", {"turnstile_script": f'<!-- <script src="{C.TURNSTILE_SCRIPT_SRC}"></script> -->'}, C.TURNSTILE_SCRIPT_SRC),
         ):
             with self.subTest(case=name):
                 self.build_valid_site()
@@ -5480,6 +5507,15 @@ class PrioritySourcesTest(unittest.TestCase):
         self.assertEqual(C.check_courses_footer(C.PRIORITY_PAGE, html), [])
         self.assertEqual(C.check_youtube_footer(C.PRIORITY_PAGE, html), [])
         self.assertEqual(C.check_page_date_placeholder(C.PRIORITY_PAGE, html), [])
+        self.assertIn(
+            '<p id="pronto" class="form-msg" role="status">Pronto. A partir de agora você não é pontuado. '
+            'Os registros no site foram apagados, e a nota no meu CRM sai na atualização diária seguinte.</p>',
+            html,
+        )
+        consts = (self.REPO / "blog-src/src/consts.ts").read_text(encoding="utf-8")
+        m = re.search(r"export const TURNSTILE_SITE_KEY = '([^']+)';", consts)
+        self.assertIsNotNone(m)
+        self.assertEqual(C.TURNSTILE_SITE_KEY, m.group(1))
         styles = re.findall(r"<style[^>]*>(.*?)</style>", html, flags=re.S | re.I)
         self.assertEqual(C.contrast_problems([site_css, *styles]), [])
         self.assertNotIn("\u2014", html)
@@ -5497,6 +5533,7 @@ class PrioritySourcesTest(unittest.TestCase):
 
     def test_privacy_has_priority_and_courses_sections_without_cut2_paragraph(self):
         t = (self.REPO / "privacidade/index.html").read_text(encoding="utf-8")
+        self.assertEqual(C.check_page_date_placeholder("privacidade/index.html", t), [])
         for must in (
             '<h2 id="prioridade">Prioridade de contato</h2>',
             '<h2 id="cursos">Cursos</h2>',
@@ -5506,10 +5543,22 @@ class PrioritySourcesTest(unittest.TestCase):
             "guifav.dev/cursos/",
             "Aberturas de email, sozinhas, nunca deixam alguém na faixa quente.",
             "Cada curso tem uma nota de engajamento própria, separada da prioridade de contato do site",
+            "a home, os materiais para baixar, os artigos do blog e a página Não quero ser pontuado",
+            "o registro de engajamento da prioridade de contato e as marcas de oposição",
+            "Guardo o seu email, o nome que vem da conta Google, a data de entrada e as aulas concluídas num banco de "
+            "dados do Google (Firestore). A abertura e o clique nos emails do curso ficam no registro de engajamento, "
+            'no Cloudflare, como descrito em <a href="#prioridade">Prioridade de contato</a>. A inscrição no curso, '
+            "com a nota de engajamento, fica no meu CRM, ligada ao seu contato.",
+            "<strong>Google Identity Platform e Firestore</strong>: o login com a conta Google e o banco de dados com "
+            "os dados do curso (inscrição e progresso).",
+            "Eu paro de calcular na hora e apago os registros no site, inclusive os dos cursos; as notas no meu CRM "
+            "saem na atualização diária seguinte. Você continua recebendo os Expert Insights e o curso normalmente.",
         ):
             self.assertIn(must, t)
         self.assertNotIn("confirmar o aviso do login", t)
         self.assertNotIn("código da sua conta, nunca o seu email", t)
+        self.assertNotIn("inscrição, progresso e abertura e clique nos emails do curso", t)
+        self.assertNotIn("apago as notas e os registros", t)
 
 
 class DatePlaceholderTest(unittest.TestCase):
