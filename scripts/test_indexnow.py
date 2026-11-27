@@ -6,6 +6,7 @@ import http.server
 import io
 import json
 import os
+import re
 import socket
 import subprocess
 import tempfile
@@ -389,8 +390,9 @@ class SubmitTest(Site):
             return (503, body) if "sitemap" in url and status == 200 else (status, body)
         return get
 
-    def plan(self, urls, mode="diff", incomplete=False):
-        return {"mode": mode, "urls": urls, "sitemaps": self.shas(), "incomplete": incomplete}
+    def plan(self, urls, mode="diff", incomplete=False, registry=None, lastmod=None):
+        return {"mode": mode, "urls": urls, "sitemaps": self.shas(), "incomplete": incomplete,
+                "registry": registry, "lastmod": {} if lastmod is None else lastmod}
 
     def test_submits_after_live_matches(self):
         post = FakePost([202])
@@ -547,6 +549,237 @@ class UrlsTest(Site):
                 self.assertEqual(post.bodies, [])
 
 
+class RegistryTest(Site):
+    """Registro de URLs já avisadas (#102): impede que URLs nunca avisadas ou de envios falhos sumam do diff."""
+
+    def live(self, **override: bytes) -> FakeWeb:
+        pages = dict(self.built(), **{I.KEY_LOCATION: I.KEY.encode()})
+        pages.update(override)
+        return FakeWeb(pages)
+
+    def make_plan(self, urls, registry, lastmod=None, mode="diff", incomplete=False):
+        return {"mode": mode, "urls": urls, "sitemaps": self.shas(), "incomplete": incomplete,
+                "registry": registry, "lastmod": {} if lastmod is None else lastmod}
+
+    def run_submit(self, plan: dict, web, post: FakePost, reg_out: Path, timeout: str = "60"):
+        pf = self.site / "plan.json"
+        pf.write_text(json.dumps(plan), encoding="utf-8")
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            rc = I.main(["submit", "--plan", str(pf), "--timeout", timeout, "--registry-out", str(reg_out)],
+                        get=web, post=post, sleep=lambda _: None)
+        return rc, out.getvalue(), err.getvalue()
+
+    def test_load_registry(self):
+        self.assertEqual(I.load_registry(self.site / "nao-existe.json"), ({}, "ausente"))
+        bad_cases = {
+            "json ilegível": b"{quebrado",
+            "bytes inválidos": b"\xff\xfe",
+            "raiz lista": b"[]",
+            "sem versão": json.dumps({"urls": {}}).encode(),
+            "versão errada": json.dumps({"version": 2, "urls": {}}).encode(),
+            "versão bool": json.dumps({"version": True, "urls": {}}).encode(),
+            "urls lista": json.dumps({"version": 1, "urls": []}).encode(),
+            "urls string": json.dumps({"version": 1, "urls": "x"}).encode(),
+            "valor int": json.dumps({"version": 1, "urls": {"https://guifav.dev/": 123}}).encode(),
+            "outro host": json.dumps({"version": 1, "urls": {"https://outro.dev/": ""}}).encode(),
+            "http sem tls": json.dumps({"version": 1, "urls": {"http://guifav.dev/": ""}}).encode(),
+        }
+        for name, raw in bad_cases.items():
+            with self.subTest(name=name):
+                p = self.site / "reg.json"
+                p.write_bytes(raw)
+                self.assertEqual(I.load_registry(p), ({}, "inválido"))
+        valid = {"https://guifav.dev/": "2026-11-12T10:00:00-03:00", "https://guifav.dev/blog/": ""}
+        p = self.site / "reg-ok.json"
+        p.write_text(json.dumps({"version": I.REGISTRY_VERSION, "urls": valid}), encoding="utf-8")
+        self.assertEqual(I.load_registry(p), (valid, "ok"))
+
+    def test_empty_diff_with_empty_registry_announces_all_built_urls(self):
+        p = I.plan(self.site, FakeWeb(self.built()), registry={})
+        expected = {**SITE_NEW, **BLOG_NEW}
+        self.assertEqual(p["mode"], "diff")
+        self.assertEqual(p["urls"], sorted(expected))
+        self.assertEqual(p["registry"], {})
+        self.assertEqual(p["lastmod"], expected)
+
+    def test_complete_registry_and_unchanged_site_produces_empty_plan(self):
+        reg = {**SITE_NEW, **BLOG_NEW}
+        p = I.plan(self.site, FakeWeb(self.built()), registry=reg)
+        self.assertEqual((p["urls"], p["registry"], p["lastmod"]), ([], reg, {}))
+
+    def test_stale_registry_lastmod_enters_even_when_live_matches_build(self):
+        reg = {**SITE_NEW, **BLOG_NEW, "https://guifav.dev/blog/a/": "2025-01-01T00:00:00.000Z"}
+        p = I.plan(self.site, FakeWeb(self.built()), registry=reg)
+        self.assertEqual(p["urls"], ["https://guifav.dev/blog/a/"])
+        self.assertEqual(p["lastmod"], {"https://guifav.dev/blog/a/": BLOG_NEW["https://guifav.dev/blog/a/"]})
+
+    def test_url_without_lastmod_enters_only_if_absent_from_registry(self):
+        blog = dict(BLOG_NEW, **{"https://guifav.dev/blog/": ""})
+        self.w("blog/sitemap.xml", urlset(blog))
+        self.w("blog/index.html", b"<html>capa</html>")
+        pages = dict(self.built(), **{"https://guifav.dev/blog/": b"<html>capa</html>"})
+        without = {**SITE_NEW, **{k: v for k, v in blog.items() if k != "https://guifav.dev/blog/"}}
+        p = I.plan(self.site, FakeWeb(pages), registry=without)
+        self.assertEqual(p["urls"], ["https://guifav.dev/blog/"])
+        self.assertEqual(p["lastmod"], {"https://guifav.dev/blog/": ""})
+        with_capa = dict(without, **{"https://guifav.dev/blog/": ""})
+        self.assertEqual(I.plan(self.site, FakeWeb(pages), registry=with_capa)["urls"], [])
+
+    def test_prunes_removed_urls_from_plan_registry(self):
+        reg = {**SITE_NEW, **BLOG_NEW, "https://guifav.dev/blog/sumiu/": "2025-01-01T00:00:00.000Z"}
+        p = I.plan(self.site, FakeWeb(self.built()), registry=reg)
+        self.assertNotIn("https://guifav.dev/blog/sumiu/", p["registry"])
+        self.assertEqual(p["registry"], {**SITE_NEW, **BLOG_NEW})
+
+    def test_plan_without_registry_preserves_legacy_behavior(self):
+        p = I.plan(self.site, self.old_web())
+        self.assertIsNone(p["registry"])
+        self.assertEqual(p["urls"], sorted([
+            "https://guifav.dev/", "https://guifav.dev/portfolio/",
+            "https://guifav.dev/blog/", "https://guifav.dev/blog/novo/", "https://guifav.dev/blog/sumiu/",
+        ]))
+        self.assertNotIn("https://guifav.dev/blog/sumiu/", p["lastmod"])
+        self.assertEqual(p["lastmod"], {
+            "https://guifav.dev/": SITE_NEW["https://guifav.dev/"],
+            "https://guifav.dev/portfolio/": SITE_NEW["https://guifav.dev/portfolio/"],
+            "https://guifav.dev/blog/": BLOG_NEW["https://guifav.dev/blog/"],
+            "https://guifav.dev/blog/novo/": BLOG_NEW["https://guifav.dev/blog/novo/"],
+        })
+
+    def test_cli_diff_with_missing_or_invalid_registry(self):
+        missing = self.site / "nao-existe.json"
+        invalid = self.site / "quebrado.json"
+        invalid.write_text("{quebrado", encoding="utf-8")
+        for motivo, reg_path in (("ausente", missing), ("inválido", invalid)):
+            with self.subTest(motivo=motivo):
+                plan_out = self.site / f"plan-{motivo}.json"
+                out = io.StringIO()
+                with redirect_stdout(out):
+                    rc = I.main(["diff", "--site", str(self.site), "--out", str(plan_out),
+                                 "--registry", str(reg_path)], get=FakeWeb(self.built()))
+                self.assertEqual(rc, 0)
+                self.assertIn("::warning::", out.getvalue())
+                self.assertIn(motivo, out.getvalue())
+                self.assertIn("5 URLs para avisar depois do deploy (5 nunca avisadas)", out.getvalue())
+                p = json.loads(plan_out.read_text(encoding="utf-8"))
+                self.assertTrue(I.valid_plan(p))
+                self.assertEqual(p["urls"], sorted({**SITE_NEW, **BLOG_NEW}))
+                self.assertEqual(p["registry"], {})
+
+    def test_cli_diff_counts_only_urls_absent_from_registry_as_never_sent(self):
+        reg_path = self.site / "reg.json"
+        reg = {**SITE_NEW, **BLOG_NEW, "https://guifav.dev/blog/a/": "2025-01-01T00:00:00.000Z"}
+        reg_path.write_text(json.dumps({"version": I.REGISTRY_VERSION, "urls": reg}), encoding="utf-8")
+        out = io.StringIO()
+        with redirect_stdout(out):
+            rc = I.main(["diff", "--site", str(self.site), "--out", str(self.site / "plan.json"),
+                         "--registry", str(reg_path)], get=FakeWeb(self.built()))
+        self.assertEqual(rc, 0)
+        self.assertNotIn("::warning::", out.getvalue())
+        self.assertIn("1 URLs para avisar depois do deploy (0 nunca avisadas)", out.getvalue())
+
+    def test_cli_submit_updates_registry_and_drops_removals(self):
+        reg_out = self.site / "reg" / "registry.json"
+        plan = self.make_plan(
+            urls=["https://guifav.dev/blog/novo/", "https://guifav.dev/blog/sumiu/"],
+            registry={"https://guifav.dev/": SITE_NEW["https://guifav.dev/"],
+                      "https://guifav.dev/blog/sumiu/": "2025-01-01T00:00:00.000Z"},
+            lastmod={"https://guifav.dev/blog/novo/": BLOG_NEW["https://guifav.dev/blog/novo/"]},
+        )
+        rc, out, _ = self.run_submit(plan, self.live(), FakePost([200]), reg_out)
+        self.assertEqual(rc, 0)
+        self.assertIn(f"IndexNow: registro com 2 URLs gravado em {reg_out}", out)
+        saved = json.loads(reg_out.read_text(encoding="utf-8"))
+        self.assertEqual(saved, {
+            "version": I.REGISTRY_VERSION,
+            "urls": {
+                "https://guifav.dev/": SITE_NEW["https://guifav.dev/"],
+                "https://guifav.dev/blog/novo/": BLOG_NEW["https://guifav.dev/blog/novo/"],
+            },
+        })
+
+    def test_partial_submit_records_only_accepted_batches(self):
+        old_batch = I.BATCH
+        I.BATCH = 2
+        self.addCleanup(setattr, I, "BATCH", old_batch)
+        reg_out = self.site / "registry.json"
+        urls = ["https://guifav.dev/blog/a/", "https://guifav.dev/blog/b/", "https://guifav.dev/blog/c/"]
+        lastmod = {u: f"2026-11-0{i}T00:00:00.000Z" for i, u in enumerate(urls, 1)}
+        base = {"https://guifav.dev/": SITE_NEW["https://guifav.dev/"]}
+        plan = self.make_plan(urls=urls, registry=base, lastmod=lastmod)
+        rc, _, err = self.run_submit(plan, self.live(), FakePost([200, 500]), reg_out)
+        self.assertEqual(rc, 1)
+        self.assertIn("HTTP 500", err)
+        saved = json.loads(reg_out.read_text(encoding="utf-8"))
+        self.assertEqual(saved["urls"], {
+            **base,
+            "https://guifav.dev/blog/a/": lastmod["https://guifav.dev/blog/a/"],
+            "https://guifav.dev/blog/b/": lastmod["https://guifav.dev/blog/b/"],
+        })
+
+    def test_wait_live_failure_preserves_base_registry(self):
+        reg_out = self.site / "registry.json"
+        base = {"https://guifav.dev/": SITE_NEW["https://guifav.dev/"]}
+        plan = self.make_plan(urls=["https://guifav.dev/blog/novo/"], registry=base,
+                              lastmod={"https://guifav.dev/blog/novo/": BLOG_NEW["https://guifav.dev/blog/novo/"]})
+        post = FakePost()
+        rc, _, _ = self.run_submit(plan, FakeWeb({}), post, reg_out, timeout="0")
+        self.assertEqual((rc, post.bodies), (1, []))
+        self.assertEqual(json.loads(reg_out.read_text(encoding="utf-8"))["urls"], base)
+
+    def test_empty_plan_preserves_base_registry(self):
+        reg_out = self.site / "registry.json"
+        base = {"https://guifav.dev/": SITE_NEW["https://guifav.dev/"]}
+        plan = self.make_plan(urls=[], registry=base, lastmod={})
+        web, post = self.live(), FakePost()
+        rc, _, _ = self.run_submit(plan, web, post, reg_out)
+        self.assertEqual((rc, web.calls, post.bodies), (0, [], []))
+        self.assertEqual(json.loads(reg_out.read_text(encoding="utf-8"))["urls"], base)
+
+    def test_null_registry_plan_with_registry_out_warns_and_writes_nothing(self):
+        reg_out = self.site / "registry.json"
+        plan = self.make_plan(urls=["https://guifav.dev/"], registry=None,
+                              lastmod={"https://guifav.dev/": SITE_NEW["https://guifav.dev/"]})
+        rc, out, _ = self.run_submit(plan, self.live(), FakePost([200]), reg_out)
+        self.assertEqual(rc, 0)
+        self.assertFalse(reg_out.exists())
+        self.assertIn("::warning::", out)
+        self.assertIn("sem registro", out)
+
+    def test_valid_plan_rejects_malformed_registry_and_lastmod(self):
+        good = self.make_plan(urls=["https://guifav.dev/"], registry={}, lastmod={"https://guifav.dev/": ""})
+        self.assertTrue(I.valid_plan(good))
+        bad_cases = {
+            "sem registry": {k: v for k, v in good.items() if k != "registry"},
+            "registry lista": dict(good, registry=[]),
+            "registry valor int": dict(good, registry={"https://guifav.dev/": 1}),
+            "registry string": dict(good, registry="x"),
+            "sem lastmod": {k: v for k, v in good.items() if k != "lastmod"},
+            "lastmod nulo": dict(good, lastmod=None),
+            "lastmod lista": dict(good, lastmod=[]),
+            "lastmod valor int": dict(good, lastmod={"https://guifav.dev/": 1}),
+        }
+        for name, bad in bad_cases.items():
+            with self.subTest(name=name):
+                self.assertFalse(I.valid_plan(bad))
+
+    def test_submit_and_load_registry_roundtrip(self):
+        reg_out = self.site / "novo-dir" / "registry.json"
+        expected = {
+            "https://guifav.dev/": SITE_NEW["https://guifav.dev/"],
+            "https://guifav.dev/blog/novo/": BLOG_NEW["https://guifav.dev/blog/novo/"],
+        }
+        plan = self.make_plan(
+            urls=["https://guifav.dev/blog/novo/"],
+            registry={"https://guifav.dev/": SITE_NEW["https://guifav.dev/"]},
+            lastmod={"https://guifav.dev/blog/novo/": BLOG_NEW["https://guifav.dev/blog/novo/"]},
+        )
+        rc, _, _ = self.run_submit(plan, self.live(), FakePost([202]), reg_out)
+        self.assertEqual(rc, 0)
+        self.assertEqual(I.load_registry(reg_out), (expected, "ok"))
+
+
 class RepoTest(unittest.TestCase):
     """A chave publicada é a do script e vai ao ar pelo manifesto; o workflow passa o plano por artefato."""
 
@@ -579,6 +812,26 @@ class RepoTest(unittest.TestCase):
         self.assertIn("scripts/build_sitemaps.py", indexnow)  # import do indexnow.py no checkout esparso
         self.assertIn('submit --plan "$RUNNER_TEMP/indexnow/plan.json"', indexnow)
         self.assertNotIn("indexnow", build.split("\n  deploy:\n")[1].split("needs:")[1].split("\n")[0])
+
+        # Registro no cache do Actions (#102): restore antes do diff, save depois do submit com mesmo path/key.
+        self.assertLess(build.index("actions/cache/restore@"), build.index("Plano do IndexNow"))
+        restore_step = build.split("Restaurar registro do IndexNow")[1].split("\n      - ")[0]
+        self.assertIn("continue-on-error: true", restore_step)
+        self.assertIn("restore-keys: indexnow-registry-", restore_step)
+        plan_step = build.split("Plano do IndexNow")[1].split("\n      - ")[0]
+        self.assertIn('--registry "$RUNNER_TEMP/indexnow-registry/registry.json"', plan_step)
+
+        self.assertIn('--registry-out "$RUNNER_TEMP/indexnow-registry/registry.json"', indexnow)
+        self.assertLess(indexnow.index('submit --plan "$RUNNER_TEMP/indexnow/plan.json"'),
+                        indexnow.index("actions/cache/save@"))
+        save_step = indexnow.split("Salvar registro do IndexNow")[1].split("\n      - ")[0]
+        self.assertIn("!cancelled()", save_step)
+        for field in ("path", "key"):
+            r_match = re.search(rf"^\s+{field}:\s*(.+)$", restore_step, re.M)
+            s_match = re.search(rf"^\s+{field}:\s*(.+)$", save_step, re.M)
+            self.assertIsNotNone(r_match, f"restore sem {field}")
+            self.assertIsNotNone(s_match, f"save sem {field}")
+            self.assertEqual(r_match.group(1).strip(), s_match.group(1).strip())
 
 
 if __name__ == "__main__":
