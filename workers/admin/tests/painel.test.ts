@@ -554,7 +554,7 @@ test('P4: contatos mostra colunas, links do Twenty, textos sem id, filtros, esca
   assert.ok(html.includes('<a href="https://crm.guifav.dev/object/person/abc-123-XYZ" target="_blank" rel="noopener noreferrer">abrir no Twenty</a>'));
   assert.ok(html.includes('<td>email não confirmado: não abriu o link do material</td>'));
   assert.ok(html.includes('<td>email confirmado: entra no CRM na próxima sincronização</td>'));
-  assert.ok(html.includes('<td>no CRM, sem link</td>'));
+  assert.ok(html.includes('<td>sincronizada, sem link</td>'));
   // Escape de email hostil
   assert.ok(!html.includes('<script>x</script>'));
   assert.ok(html.includes('&lt;script&gt;x&lt;/script&gt;@evil.com'));
@@ -861,7 +861,7 @@ test('P4: status da coluna Twenty em /admin/contatos e /admin cobre os cinco est
   const todosRows = rowsOf(todosHtml);
   assert.deepEqual(
     todosRows.filter((r) => r[1] === 'pedido-ja-sync@x.com').map((r) => r.at(-1)),
-    ['email já confirmado ou no CRM: entra na próxima sincronização', 'no CRM, sem link'],
+    ['email já confirmado ou no CRM: entra na próxima sincronização', 'sincronizada, sem link'],
   );
   assert.equal(
     todosRows.find((r) => r[1] === 'sync-antigo@x.com' && r[2] === 'download')?.at(-1),
@@ -875,7 +875,7 @@ test('P4: status da coluna Twenty em /admin/contatos e /admin cobre os cinco est
   assert.equal(rowsFiltrado.find((r) => r[1] === 'sync-antigo@x.com')?.at(-1), 'email já confirmado ou no CRM: entra na próxima sincronização');
   assert.deepEqual(
     rowsFiltrado.filter((r) => r[1] === 'pedido-ja-sync@x.com').map((r) => r.at(-1)),
-    ['email já confirmado ou no CRM: entra na próxima sincronização', 'no CRM, sem link'],
+    ['email já confirmado ou no CRM: entra na próxima sincronização', 'sincronizada, sem link'],
   );
   assert.deepEqual(
     rowsFiltrado.filter((r) => r[1] === 'dois-pedidos@x.com').map((r) => r.at(-1)),
@@ -901,9 +901,9 @@ test('P4: funções isoladas recusam twenty_person_id e landing_path fora do pad
   for (const bad of ['', null, 'a b', 'a/b', '../x', 'a'.repeat(65), '<script>', 'id?x=1']) {
     assert.equal(twentyPersonUrl(bad, 'https://crm.guifav.dev'), null, String(bad));
     const cel = twentyCell(bad, '2026-11-12T10:00:00Z', 1, 1, 'https://crm.guifav.dev');
-    assert.equal(cel, 'no CRM, sem link', String(bad));
+    assert.equal(cel, 'sincronizada, sem link', String(bad));
   }
-  assert.equal(twentyCell(null, '2026-11-12T10:00:00Z', 0, 0, 'https://crm.guifav.dev'), 'no CRM, sem link');
+  assert.equal(twentyCell(null, '2026-11-12T10:00:00Z', 0, 0, 'https://crm.guifav.dev'), 'sincronizada, sem link');
   // Estado 3: synced_at nulo e verified = 1
   assert.equal(twentyCell(null, null, 1, 1, 'https://crm.guifav.dev'), 'email confirmado: entra no CRM na próxima sincronização');
   assert.equal(twentyCell(null, null, 1, 0, 'https://crm.guifav.dev'), 'email confirmado: entra no CRM na próxima sincronização');

@@ -58,7 +58,7 @@ export function twentyCell(
 ): string {
   const url = twentyPersonUrl(personId, twentyOrigin);
   if (url) return `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">abrir no Twenty</a>`;
-  if (syncedAt) return 'no CRM, sem link';
+  if (syncedAt) return 'sincronizada, sem link';
   if (verified === 1) return 'email confirmado: entra no CRM na próxima sincronização';
   if (emailNoCrmOuComprovado) return 'email já confirmado ou no CRM: entra na próxima sincronização';
   return 'email não confirmado: não abriu o link do material';
