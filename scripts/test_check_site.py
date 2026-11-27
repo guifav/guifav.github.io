@@ -5688,7 +5688,8 @@ class PrioritySourcesTest(unittest.TestCase):
             "Contato. Essas visitas entram na prioridade de contato. O Google Analytics recebe um código da sua conta, "
             "nunca o seu email, e essas visitas não são usadas para anúncios. A base legal é o seu consentimento "
             "(Lei 13.709/2018, art. 7º, I). Para desligar, saia da conta, desligue no menu da conta ou clique em "
-            "Cookies no rodapé. Você pode pedir que eu apague o que já foi registrado, inclusive no Google Analytics.",
+            "Cookies no rodapé e responda Não. Você pode pedir que eu apague o que já foi registrado, inclusive no Google "
+            "Analytics.",
             # 11d: Firebase Auth, GIS, gstatic, accounts.google.com, apis.google.com no clique, carregamento condicional e cookie g_state.
             "<strong>Google Identity Platform e Firestore</strong>: o login com a conta Google e o banco de dados com "
             "os dados do curso (inscrição e progresso). O login do site usa o Firebase Authentication e, para o login "
