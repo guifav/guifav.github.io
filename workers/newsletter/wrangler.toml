@@ -4,9 +4,12 @@
 #   RESEND_API_KEY    chave do Resend com full_access (cria contatos)
 #   TURNSTILE_SECRET  chave secreta do widget do Turnstile de guifav.dev
 #   CONFIRM_SECRET    32 caracteres ou mais; assina o link de confirmação (openssl rand -base64 48)
-#   FORGET_HMAC_KEY   32 caracteres ou mais; calcula o HMAC da tabela `forgotten` (issue #134), igual no wrapper da KVM
+#   FORGET_HMAC_KEY   32 caracteres ou mais; calcula o HMAC da tabela `forgotten` (issue #134) e da tabela
+#                     `heating_optout` (épico #197, prefixo próprio), igual no wrapper da KVM
 #   GA4_API_SECRET    segredo do Measurement Protocol do GA4 (Admin > Fluxos de dados > guifav.dev > Segredos da API do
 #                     Measurement Protocol); sem ele, o evento de download de material não vai ao GA4 (issue #99)
+#   RESEND_HEATING_WEBHOOK_SECRET  segredo svix (`whsec_` + base64) do webhook do Resend para POST /resend/webhook
+#                     (épico #197); sem ele ou fora do formato, a rota responde 503 sem ler o corpo
 name = "blog-newsletter"
 main = "src/worker.ts"
 compatibility_date = "2026-11-01"
@@ -25,8 +28,9 @@ fallthrough = false
 binding = "MATERIAIS_R2"
 bucket_name = "blog-materiais"
 
-# D1 do painel (`workers/admin`, dono do esquema e das migrações): conversões do site (issues #97, #99 e #114) e
-# marcador mínimo de remoção `forgotten` (issue #134). As migrações 0004 a 0007 precisam estar aplicadas antes do deploy.
+# D1 do painel (`workers/admin`, dono do esquema e das migrações): conversões do site (issues #97, #99 e #114),
+# marcador mínimo de remoção `forgotten` (issue #134) e tabelas do heating (`engagement_events`, `heating`,
+# `heating_optout`, épico #197). As migrações 0004 a 0011 precisam estar aplicadas antes do deploy.
 [[d1_databases]]
 binding = "DB"
 database_name = "blog-admin"
