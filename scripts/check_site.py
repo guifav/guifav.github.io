@@ -621,8 +621,20 @@ LEGAL_SPECS = (
     ("privacidade/index.html", "/privacidade/", "Política de privacidade" + TITLE_SEP + SITE_NAME, "Política de privacidade"),
     ("termos/index.html", "/termos/", "Termos de uso" + TITLE_SEP + SITE_NAME, "Termos de uso"),
 )
-PRIVACY_ANCHORS = ("cookies", "materiais", "origem", "quem-processa")
+PRIVACY_ANCHORS = ("cookies", "materiais", "origem", "prioridade", "cursos", "quem-processa")
 LEGAL_FOOTER_HREFS = ("/privacidade/", "/termos/", "/privacidade/#cookies")
+# Página de oposição ao heating (#197): noindex, fora do sitemap, formulário POST para insights.guifav.dev/prioridade.
+PRIORITY_PAGE = "prioridade/index.html"
+PRIORITY_URL = "/prioridade/"
+PRIORITY_TITLE = "Não quero ser pontuado" + TITLE_SEP + SITE_NAME
+PRIORITY_H1 = "Não quero ser pontuado"
+PRIORITY_ACTION = "https://insights.guifav.dev/prioridade"
+PRIORITY_FRAGMENTS = ("pronto", "erro-verificacao", "erro-email", "erro-limite", "erro")
+# Turnstile (#197): espelha TURNSTILE_SITE_KEY de blog-src/src/consts.ts.
+TURNSTILE_SITE_KEY = "0x4AAAAAAF8raRhCn4ciudgW"
+TURNSTILE_SCRIPT_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js"
+# Marcador de data pendente (#197): nenhuma página publicada pode sair com "[DATA]" literal.
+DATE_PLACEHOLDER = "[DATA]"
 EXPERT_INSIGHTS_PAGES = {f"blog/{p}/index.html" for p in
                          ("assinar", "inscricao-enviada", "inscricao-confirmada", "inscricao-invalida")}
 
@@ -634,7 +646,7 @@ def expected_content_group(rel: str) -> str | None:
         return "portfolio"
     if rel == "consultoria/index.html":
         return "consultoria"
-    if rel in LEGAL_PAGES:
+    if rel in LEGAL_PAGES or rel == PRIORITY_PAGE:
         return "legal"
     if (rel == "blog/index.html" or re.fullmatch(r"blog/pagina/\d+/index\.html", rel)
             or re.fullmatch(r"blog/tema/[a-z0-9][a-z0-9-]*/index\.html", rel)):
@@ -3434,6 +3446,130 @@ def check_old_youtube_handle(site: Path) -> list[str]:
     return problems
 
 
+class _PriorityPage(HTMLParser):
+    """Coleta <script src>, <form> e seus <input type=email name=email> e widgets Turnstile fora de comentário/template/noscript/hidden."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.stack: list[tuple[str, bool]] = []
+        self.scripts: list[str] = []
+        self.forms: list[dict[str, object]] = []
+        self.active_form: dict[str, object] | None = None
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+        if tag not in VOID_TAGS:
+            self.handle_endtag(tag)
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        a: dict[str, str] = {}
+        for k, v in attrs:
+            a.setdefault(k, v or "")
+        inert = any(i for _, i in self.stack) or tag in ("template", "noscript") or "hidden" in a
+        if not inert:
+            if tag == "script":
+                stype = a.get("type", "").strip().lower()
+                if not stype or stype in ("text/javascript", "module", "application/javascript"):
+                    src = a.get("src", "").strip()
+                    if src:
+                        self.scripts.append(src)
+            elif tag == "form":
+                form: dict[str, object] = {"attrs": a, "email_inputs": 0, "turnstile_sitekeys": []}
+                self.forms.append(form)
+                self.active_form = form
+            elif self.active_form is not None:
+                if tag == "input" and a.get("type", "").strip().lower() == "email" and a.get("name", "") == "email":
+                    self.active_form["email_inputs"] = int(self.active_form["email_inputs"]) + 1
+                elif tag == "div" and "cf-turnstile" in a.get("class", "").split():
+                    self.active_form["turnstile_sitekeys"].append(a.get("data-sitekey", ""))
+        if tag not in VOID_TAGS:
+            self.stack.append((tag, tag in ("template", "noscript") or "hidden" in a))
+
+    def handle_endtag(self, tag: str) -> None:
+        for i in range(len(self.stack) - 1, -1, -1):
+            if self.stack[i][0] == tag:
+                closed = self.stack[i:]
+                del self.stack[i:]
+                if any(t == "form" for t, _ in closed):
+                    self.active_form = None
+                return
+
+
+def check_priority(site: Path) -> list[str]:
+    """#197: /prioridade/ existe com noindex, canonical próprio, título, H1, formulário com Turnstile e os 5 fragmentos, fora do sitemap."""
+    problems: list[str] = []
+    entries = _sitemap(site, "sitemap-site.xml", "urlset", "url", problems)
+    sitemap_locs = {loc for loc, _ in entries} if entries is not None else None
+    if sitemap_locs is not None and SITE_ORIGIN + PRIORITY_URL in sitemap_locs:
+        problems.append(f"sitemap-site.xml: {SITE_ORIGIN}{PRIORITY_URL} tem noindex e não entra no sitemap")
+    page = site / PRIORITY_PAGE
+    if not page.is_file():
+        return problems + [f"{PRIORITY_PAGE}: página de oposição ausente no site montado (site-manifest.txt)"]
+    html = page.read_text(encoding="utf-8")
+    p = _Page()
+    p.feed(html)
+    p.close()
+    if not any(_robots_noindex(r) for r in p.robots):
+        problems.append(f"{PRIORITY_PAGE}: página de oposição precisa de noindex")
+    if not p.canonicals or not canonical_is_self(p.canonicals, PRIORITY_URL):
+        problems.append(f"{PRIORITY_PAGE}: página de oposição precisa de canonical próprio "
+                        f"({SITE_ORIGIN}{PRIORITY_URL}), tem {p.canonicals}")
+    visible = _visible_html(html)
+    m = re.search(r"<title[^>]*>(.*?)</title\s*>", visible, flags=re.S | re.I)
+    title = unescape(m.group(1)).strip() if m else None
+    if title != PRIORITY_TITLE:
+        problems.append(f"{PRIORITY_PAGE}: o título precisa ser {PRIORITY_TITLE!r}: {title!r}")
+    h1s = [re.sub(r"\s+", " ", unescape(re.sub(r"<[^>]+>", "", h))).strip()
+           for h in re.findall(r"<h1\b[^>]*>(.*?)</h1\s*>", visible, flags=re.S | re.I)]
+    if h1s != [PRIORITY_H1]:
+        problems.append(f"{PRIORITY_PAGE}: a página precisa de um H1 {PRIORITY_H1!r}, tem {h1s}")
+    if "/privacidade/#prioridade" not in p.refs:
+        problems.append(f"{PRIORITY_PAGE}: falta link para /privacidade/#prioridade")
+    ids = _LiveIds()
+    ids.feed(html)
+    ids.close()
+    for frag in PRIORITY_FRAGMENTS:
+        if frag not in ids.ids:
+            problems.append(f"{PRIORITY_PAGE}: falta a mensagem #{frag}")
+    pf = _PriorityPage()
+    pf.feed(html)
+    pf.close()
+    if TURNSTILE_SCRIPT_SRC not in pf.scripts:
+        problems.append(f"{PRIORITY_PAGE}: falta o script do Turnstile ({TURNSTILE_SCRIPT_SRC})")
+    forms = [f for f in pf.forms if f["attrs"].get("action") == PRIORITY_ACTION]
+    if len(forms) != 1:
+        problems.append(f"{PRIORITY_PAGE}: esperado um formulário para {PRIORITY_ACTION}, achados {len(forms)}")
+    else:
+        form = forms[0]
+        attrs = form["attrs"]
+        if attrs.get("method", "").lower() != "post":
+            problems.append(f'{PRIORITY_PAGE}: formulário precisa usar method="post"')
+        if attrs.get("data-clarity-mask") != "true":
+            problems.append(f'{PRIORITY_PAGE}: formulário precisa de data-clarity-mask="true"')
+        if int(form["email_inputs"]) < 1:
+            problems.append(f"{PRIORITY_PAGE}: formulário sem campo de email")
+        if form["turnstile_sitekeys"] != [TURNSTILE_SITE_KEY]:
+            problems.append(f'{PRIORITY_PAGE}: formulário sem widget do Turnstile com data-sitekey="{TURNSTILE_SITE_KEY}"')
+    return problems
+
+
+def check_page_date_placeholder(rel: str, html: str) -> list[str]:
+    """#197: o marcador '[DATA]' não pode aparecer em nenhuma página HTML publicada (texto, atributo, entidade ou script)."""
+    decoded = unescape(html)
+    if DATE_PLACEHOLDER in html or DATE_PLACEHOLDER in decoded:
+        return [f"{rel}: contém o marcador de data não substituído ({DATE_PLACEHOLDER})"]
+    return []
+
+
+def check_date_placeholder(site: Path) -> list[str]:
+    """#197: nenhuma página HTML do site montado pode sair com '[DATA]' literal."""
+    problems: list[str] = []
+    for f in html_files(site):
+        rel = f.relative_to(site).as_posix()
+        problems += check_page_date_placeholder(rel, f.read_text(encoding="utf-8"))
+    return problems
+
+
 # Séries de artigos com links cruzados obrigatórios no corpo do post (#106), na ordem de leitura.
 SERIES: tuple[tuple[str, ...], ...] = (
     (
@@ -3525,6 +3661,8 @@ def main(argv: list[str] | None = None) -> int:
         problems += check_post_residues(Path(args.posts))
         problems += check_llm_ranking(Path(args.site))
         problems += check_legal(Path(args.site))
+        problems += check_priority(Path(args.site))
+        problems += check_date_placeholder(Path(args.site))
         problems += check_llms_txt(Path(args.site), Path(args.posts))
         problems += check_courses(Path(args.site))
         problems += check_youtube(Path(args.site))
