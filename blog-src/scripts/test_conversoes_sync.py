@@ -1981,13 +1981,14 @@ class ForgetGooglePurgeTest(unittest.TestCase):
             self.assertNotIn(secret.lower(), out_bq.lower())
 
         # 3) Sem HEATING_GCP_SA_FILE (ex.: no Mac): apaga site_identities (trigger enfileira), informa que ficou
-        #    enfileirado para o job diário e sai com código 0 (sem chamar Google).
+        #    enfileirado para o job diário e sai com código 2 enquanto o GA4 está pendente na fila (sem chamar Google).
         g = Fake(people=[person("p1", "mac@x.com")])
         g.add(1, "mac@x.com")
         run(g, apply=True)
         g.add_identity("UidSemSa1", "mac@x.com")
         rc_mac, out_mac = self._run_cli(g, "--forget", "--apply", stdin="mac@x.com\n", now_dt=now, sa_file=None)
-        self.assertEqual(rc_mac, 0, out_mac)
+        self.assertEqual(rc_mac, 2, out_mac)
+        self.assertIn("ga4_fila_pendente_total: 1", out_mac)
         self.assertIn("ga4_fila_enfileirados: 1", out_mac)
         self.assertIn(S.GA4_FILA_SEM_CRED_MSG, out_mac)
         self.assertNotIn(S.GA4_PURGE_PENDENTE_MSG, out_mac)

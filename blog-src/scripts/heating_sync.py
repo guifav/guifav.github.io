@@ -340,6 +340,8 @@ RUN_COUNT_KEYS = (
     "ga4_remocao_pendente",
     "ga4_fila_processados",
     "bq_remocao_adiada",
+    "bq_remocao_travada",
+    "bq_sessoes_excedidas",
     "conversao_invalida",
     "curso_invalido",
     "curso_indisponivel",
@@ -766,9 +768,7 @@ def ler_ga4_dia(dia: date, sa_file: str | None = None) -> list[dict] | None:
                 return None
             raise
         sql = ga4_day_query_sql(dia)
-        cfg = bigquery.QueryJobConfig(
-            query_parameters=[bigquery.ScalarQueryParameter("stream_id", "STRING", GA4_STREAM_ID)]
-        )
+        cfg = CS._bq_cfg(bigquery, query_parameters=[bigquery.ScalarQueryParameter("stream_id", "STRING", GA4_STREAM_ID)])
         location = getattr(table, "location", None) or BQ_LOCATION
         rows = client.query(sql, job_config=cfg, location=location).result()
         out: list[dict] = []
@@ -1420,6 +1420,25 @@ def run(
         for i, (_dia, day_rows) in enumerate(day_results):
             if day_rows is not None:
                 last_found_idx = i
+        # Janela inteira sem tabela (por exemplo, 14 dias sem evento nenhum logo depois de ligar a fonte): sem isto o
+        # marcador nunca nasceria e toda rodada voltaria ao mesmo bloco. Se a tabela de ontem já existe, os dias da
+        # janela são dias sem evento e o marcador anda até o fim da janela (as linhas lidas de ontem ficam para a rodada
+        # em que ontem entrar na janela).
+        if last_found_idx is None and day_results and len(day_results) == len(ga4_days_eligible):
+            ontem_probe = now_dt.date() - timedelta(days=1)
+            if ga4_days_eligible[-1] < ontem_probe:
+                try:
+                    probe_rows = ga4_reader(ontem_probe)
+                except (Ga4Indisponivel, CS.GoogleIndisponivel, OSError):
+                    counts["ga4_indisponivel"] = 1
+                    probe_rows = None
+                    day_results = []
+                if probe_rows is not None:
+                    day_results = [(dia, []) for dia, _rows in day_results]
+                    counts["ga4_dia_sem_tabela"] += sum(
+                        1 for dia, _r in day_results if ga4_marker_before is None or dia > ga4_marker_before
+                    )
+                    last_found_idx = len(day_results) - 1
         if last_found_idx is not None:
             for dia, day_rows in day_results[:last_found_idx + 1]:
                 if day_rows is None:
@@ -1931,6 +1950,8 @@ def run(
                 counts["ga4_fila_processados"] += q_res["ga4_fila_processados"]
                 counts["bq_remocao_adiada"] += q_res["bq_remocao_adiada"]
                 counts["ga4_remocao_pendente"] += q_res["ga4_remocao_pendente"]
+                counts["bq_remocao_travada"] += q_res["bq_remocao_travada"]
+                counts["bq_sessoes_excedidas"] += q_res["bq_sessoes_excedidas"]
                 if q_res["bq_remocao_falhou"]:
                     counts["ga4_indisponivel"] = 1
 
@@ -2161,7 +2182,14 @@ def optout(
                     bq_falhou = True
                 ga4_pendente = g_res["ga4_remocao_pendente"] > 0
 
+    if apply:
+        # Mesmo repetido depois de o vínculo sumir, o comando continua avisando enquanto houver GA4 pendente na fila.
+        counts["ga4_fila_pendente_total"] = int(
+            c.d1("SELECT count(*) AS n FROM ga4_purge_queue WHERE ga4_pendente = 1")[0]["n"]
+        )
     CS._report(counts, out, "oposição registrada" if apply else "simulação: nada foi apagado (use --apply)")
+    if apply and counts.get("ga4_fila_pendente_total", 0) > 0 and not ga4_pendente and not sem_cred_enfileirado:
+        print(CS.GA4_FILA_PENDENTE_MSG, file=out)
     if apply and sem_cred_enfileirado:
         print(GA4_FILA_SEM_CRED_MSG, file=out)
     else:
@@ -2298,7 +2326,8 @@ def main(
                     bq_delete=bq_delete,
                     now_dt=now_dt,
                 )
-                if a.apply and (counts.get("ga4_remocao_pendente", 0) > 0 or counts.get("bq_remocao_falhou", 0) > 0):
+                if a.apply and (counts.get("ga4_remocao_pendente", 0) > 0 or counts.get("bq_remocao_falhou", 0) > 0
+                                or counts.get("ga4_fila_pendente_total", 0) > 0):
                     rc = 2
             else:
                 forget_curso(c, a.forget_curso, lines[0], apply=a.apply, forget_key=forget_key)

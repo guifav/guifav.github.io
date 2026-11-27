@@ -116,6 +116,7 @@ import argparse
 import fcntl
 import hashlib
 import hmac
+import inspect
 import json
 import os
 import re
@@ -234,12 +235,23 @@ BQ_TABLE_SUFFIX_RE = re.compile(r"(?:intraday_)?\d{8}")
 BQ_DAY_SUFFIX_RE = re.compile(r"\d{8}")
 BQ_USERS_TABLE_RE = re.compile(r"users_(\d{8})")
 BQ_PSEUDO_TABLE_RE = re.compile(r"pseudonymous_users_(\d{8})")
-GA4_PURGE_SESSOES_MAX = 20_000
+# Teto do JSON de sessões guardado na fila (CHECK da 0014): cerca de 25 mil sessões por pessoa. Nunca se corta a lista:
+# acima disso a remoção no BigQuery não começa (o item fica na fila e conta em `bq_sessoes_excedidas`, o wrapper alerta).
+GA4_PURGE_SESSOES_MAX = 1_000_000
 GA4_PURGE_MAX_TENTATIVAS = 5
+# Teto de bytes por consulta do BigQuery (o export do site tem poucos MB por dia; o teto só barra consulta fora do normal).
+BQ_MAX_BYTES = 10 * 1024 ** 3
+GA4_FILA_PENDENTE_MSG = (
+    "há remoções no GA4 pendentes na fila (o job diário repete); confira o papel de Editor da conta de serviço"
+)
 
 
 class GoogleIndisponivel(Exception):
     """Falha de autenticação, rede, permissão ou ausência de biblioteca/credencial no Google."""
+
+
+class SessoesExcedidas(GoogleIndisponivel):
+    """As sessões descobertas não cabem no teto da fila: a remoção no BigQuery não começa, para nada se perder."""
 
 
 def _full(rx: re.Pattern, v) -> bool:
@@ -762,17 +774,20 @@ def _parse_sessoes_json(raw: str | None) -> list[tuple[str, int]]:
 
 
 def _dump_sessoes_json(sessoes) -> str:
+    """JSON compacto das sessões; nunca corta: acima do teto levanta `SessoesExcedidas`."""
     pairs = _normalize_sessoes(sessoes)
     encoded = json.dumps([[p, s] for p, s in pairs], separators=(",", ":"), ensure_ascii=False)
-    if len(encoded) <= GA4_PURGE_SESSOES_MAX:
-        return encoded
-    out: list[list] = []
-    for p, s in pairs:
-        cand = out + [[p, s]]
-        if len(json.dumps(cand, separators=(",", ":"), ensure_ascii=False)) > GA4_PURGE_SESSOES_MAX:
-            break
-        out = cand
-    return json.dumps(out, separators=(",", ":"), ensure_ascii=False)
+    if len(encoded) > GA4_PURGE_SESSOES_MAX:
+        raise SessoesExcedidas("sessões acima do teto da fila")
+    return encoded
+
+
+def _bq_cfg(bigquery, query_parameters=None):
+    """Config de consulta do BigQuery com o teto de bytes cobrados (BQ_MAX_BYTES)."""
+    cfg = bigquery.QueryJobConfig()
+    cfg.query_parameters = list(query_parameters or [])
+    cfg.maximum_bytes_billed = BQ_MAX_BYTES
+    return cfg
 
 
 def _bq_user_tables_info_sql() -> str:
@@ -867,7 +882,7 @@ def _bq_sessoes_param(bigquery, name: str, sessoes: list[tuple[str, int]]):
     )
 
 
-def _bq_apagar_uid(uid: str, sa_file: str, sessoes_conhecidas=()) -> dict:
+def _bq_apagar_uid(uid: str, sa_file: str, sessoes_conhecidas=(), persistir=None) -> dict:
     """Remove os dados do `uid` no export do GA4 no BigQuery tabela por tabela (nunca DELETE no wildcard):
     - `events_YYYYMMDD` e `events_intraday_YYYYMMDD`: linhas com `user_id = @uid` e linhas anônimas
       (`user_id IS NULL OR user_id = ''`) dos pares `(user_pseudo_id, ga_session_id)` descobertos ou já salvos
@@ -876,7 +891,9 @@ def _bq_apagar_uid(uid: str, sa_file: str, sessoes_conhecidas=()) -> dict:
     - `pseudonymous_users_YYYYMMDD` existentes: `WHERE pseudo_user_id IN UNNEST(@pseudo_ids)` apenas para os
       `user_pseudo_id` descobertos que nunca apareceram com outro `user_id` em `events_*`.
     Dataset ou tabela não encontrados na descoberta levantam `GoogleIndisponivel` (erro, não sucesso).
-    Tabelas com recusa de DML por streaming buffer contam em `adiadas`."""
+    Tabelas com recusa de DML por streaming buffer contam em `adiadas`.
+    `persistir(sessoes)` é chamado com a união das sessões logo depois da descoberta e ANTES do primeiro DELETE: uma
+    falha no meio não perde as sessões (as linhas com o uid já apagadas não deixariam redescobri-las)."""
     if not _full(SITE_UID_RE, uid):
         raise SyncError("uid inválido na remoção do BigQuery")
     if not sa_file:
@@ -895,7 +912,7 @@ def _bq_apagar_uid(uid: str, sa_file: str, sessoes_conhecidas=()) -> dict:
         client = bigquery.Client(project=GCP_PROJECT, credentials=creds)
 
         # 1) Descobre tabelas de usuário existentes (e valida existência do dataset; NotFound é erro).
-        info_rows = list(client.query(_bq_user_tables_info_sql(), location=BQ_LOCATION).result())
+        info_rows = list(client.query(_bq_user_tables_info_sql(), job_config=_bq_cfg(bigquery), location=BQ_LOCATION).result())
         users_suffixes: set[str] = set()
         pseudo_suffixes: set[str] = set()
         for r in info_rows:
@@ -917,7 +934,7 @@ def _bq_apagar_uid(uid: str, sa_file: str, sessoes_conhecidas=()) -> dict:
         rows = list(
             client.query(
                 discover_sql,
-                job_config=bigquery.QueryJobConfig(query_parameters=disc_params),
+                job_config=_bq_cfg(bigquery, query_parameters=disc_params),
                 location=BQ_LOCATION,
             ).result()
         )
@@ -938,10 +955,15 @@ def _bq_apagar_uid(uid: str, sa_file: str, sessoes_conhecidas=()) -> dict:
                     sess.add((psid, sid))
                     all_sessoes.add((psid, sid))
 
+        # 2b) Guarda a união das sessões antes de qualquer DELETE.
+        if persistir is not None:
+            persistir(sorted(all_sessoes))
+
         # 3) Antes de apagar `events_*`, verifica quais `user_pseudo_id` apareceram com outro `user_id`.
         exclusive_pseudo_ids: list[str] = []
         if pseudo_suffixes and candidate_pseudo_ids:
-            shared_cfg = bigquery.QueryJobConfig(
+            shared_cfg = _bq_cfg(
+                bigquery,
                 query_parameters=[
                     bigquery.ScalarQueryParameter("uid", "STRING", uid),
                     bigquery.ArrayQueryParameter("pseudo_ids", "STRING", sorted(candidate_pseudo_ids)),
@@ -969,7 +991,7 @@ def _bq_apagar_uid(uid: str, sa_file: str, sessoes_conhecidas=()) -> dict:
             try:
                 client.query(
                     del_sql,
-                    job_config=bigquery.QueryJobConfig(query_parameters=params),
+                    job_config=_bq_cfg(bigquery, query_parameters=params),
                     location=BQ_LOCATION,
                 ).result()
                 tabelas_limpas += 1
@@ -993,7 +1015,8 @@ def _bq_apagar_uid(uid: str, sa_file: str, sessoes_conhecidas=()) -> dict:
             u_rows = list(
                 client.query(
                     users_disc_sql,
-                    job_config=bigquery.QueryJobConfig(
+                    job_config=_bq_cfg(
+                bigquery,
                         query_parameters=[bigquery.ScalarQueryParameter("uid", "STRING", uid)]
                     ),
                     location=BQ_LOCATION,
@@ -1009,7 +1032,8 @@ def _bq_apagar_uid(uid: str, sa_file: str, sessoes_conhecidas=()) -> dict:
                 try:
                     client.query(
                         del_u_sql,
-                        job_config=bigquery.QueryJobConfig(
+                        job_config=_bq_cfg(
+                bigquery,
                             query_parameters=[bigquery.ScalarQueryParameter("uid", "STRING", uid)]
                         ),
                         location=BQ_LOCATION,
@@ -1030,7 +1054,8 @@ def _bq_apagar_uid(uid: str, sa_file: str, sessoes_conhecidas=()) -> dict:
                 f"FROM `{GCP_PROJECT}.{BQ_DATASET}.pseudonymous_users_*`\n"
                 f"WHERE pseudo_user_id IN UNNEST(@pseudo_ids)"
             )
-            p_cfg = bigquery.QueryJobConfig(
+            p_cfg = _bq_cfg(
+                bigquery,
                 query_parameters=[bigquery.ArrayQueryParameter("pseudo_ids", "STRING", exclusive_pseudo_ids)]
             )
             p_rows = list(client.query(pseudo_disc_sql, job_config=p_cfg, location=BQ_LOCATION).result())
@@ -1047,7 +1072,8 @@ def _bq_apagar_uid(uid: str, sa_file: str, sessoes_conhecidas=()) -> dict:
                 try:
                     client.query(
                         del_p_sql,
-                        job_config=bigquery.QueryJobConfig(
+                        job_config=_bq_cfg(
+                bigquery,
                             query_parameters=[bigquery.ArrayQueryParameter("pseudo_ids", "STRING", exclusive_pseudo_ids)]
                         ),
                         location=BQ_LOCATION,
@@ -1085,15 +1111,19 @@ def processar_fila_ga4(
     - GA4 (`submitUserDeletion`) enquanto `ga4_pendente = 1`: sucesso zera `ga4_pendente`; 403/erro mantém 1 e conta
       em `ga4_remocao_pendente`;
     - BigQuery (`_bq_apagar_uid`) com os pares salvos em `sessoes` somados aos descobertos agora, repetido em D+1
-      (tentativa 2), D+3 (tentativa 3) e enquanto houver tabela adiada por streaming buffer (até 5 tentativas).
+      (tentativa 2), D+3 (tentativa 3) e enquanto houver tabela adiada por streaming buffer. As sessões descobertas
+      são gravadas na fila antes do primeiro DELETE (`persistir`). Da 5ª tentativa em diante, tabela ainda adiada não
+      tira o item da fila: ele continua todo dia e conta em `bq_remocao_travada` (o wrapper alerta).
       Em falha operacional do BigQuery, mantém `bq_tentativas` e agenda `proxima_em = agora` (tentativa imediata).
-    O item só sai da fila quando GA4 está feito (`ga4_pendente = 0`) e o BigQuery terminou."""
+    O item só sai da fila quando GA4 está feito (`ga4_pendente = 0`) e o BigQuery terminou (`bq_concluido = 1`)."""
     res = {
         "ga4_removidos": 0,
         "ga4_remocao_pendente": 0,
         "bq_tabelas_limpas": 0,
         "bq_remocao_adiada": 0,
         "bq_remocao_falhou": 0,
+        "bq_remocao_travada": 0,
+        "bq_sessoes_excedidas": 0,
         "ga4_fila_processados": 0,
         "ga4_fila_restantes": 0,
         "sem_credencial": False,
@@ -1113,7 +1143,7 @@ def processar_fila_ga4(
             part = valid_uids[i:i + MARK_CHUNK]
             ph = ",".join("?" * len(part))
             for r in c.d1(
-                f"SELECT uid, ga4_pendente, sessoes, bq_tentativas, proxima_em, criado_em "
+                f"SELECT uid, ga4_pendente, sessoes, bq_tentativas, bq_concluido, proxima_em, criado_em "
                 f"FROM ga4_purge_queue WHERE uid IN ({ph}) ORDER BY uid",
                 part,
             ):
@@ -1122,7 +1152,7 @@ def processar_fila_ga4(
                     rows.append(r)
     elif only_due:
         for r in c.d1(
-            "SELECT uid, ga4_pendente, sessoes, bq_tentativas, proxima_em, criado_em "
+            "SELECT uid, ga4_pendente, sessoes, bq_tentativas, bq_concluido, proxima_em, criado_em "
             "FROM ga4_purge_queue WHERE proxima_em <= ? ORDER BY proxima_em, uid",
             [now_iso],
         ):
@@ -1135,7 +1165,7 @@ def processar_fila_ga4(
                 part = extra[i:i + MARK_CHUNK]
                 ph = ",".join("?" * len(part))
                 for r in c.d1(
-                    f"SELECT uid, ga4_pendente, sessoes, bq_tentativas, proxima_em, criado_em "
+                    f"SELECT uid, ga4_pendente, sessoes, bq_tentativas, bq_concluido, proxima_em, criado_em "
                     f"FROM ga4_purge_queue WHERE uid IN ({ph}) ORDER BY uid",
                     part,
                 ):
@@ -1177,58 +1207,73 @@ def processar_fila_ga4(
             else:
                 res["ga4_remocao_pendente"] += 1
 
-        bq_done = bq_tent >= GA4_PURGE_MAX_TENTATIVAS
+        bq_done = bool(int(r.get("bq_concluido") or 0))
         bq_failed = False
         new_tent = bq_tent
-        merged_sessoes = saved_sessoes
+        # Sessões conhecidas: as salvas e as que a descoberta desta tentativa gravar antes do primeiro DELETE.
+        known = {"sessoes": list(saved_sessoes)}
+
+        def persistir(novas, _uid=uid, _known=known):
+            merged = _normalize_sessoes(list(_known["sessoes"]) + list(novas or ()))
+            c.d1("UPDATE ga4_purge_queue SET sessoes = ? WHERE uid = ?", [_dump_sessoes_json(merged), _uid])
+            _known["sessoes"] = merged
+
         next_due = stamp(now + timedelta(days=1))
 
         if not bq_done:
             try:
                 if bq_delete is not None:
-                    bq_res = bq_delete(uid, saved_sessoes) or {}
+                    try:
+                        accepts = "persistir" in inspect.signature(bq_delete).parameters
+                    except (TypeError, ValueError):
+                        accepts = False
+                    bq_res = (bq_delete(uid, saved_sessoes, persistir=persistir) if accepts
+                              else bq_delete(uid, saved_sessoes)) or {}
                 elif sa_file:
-                    bq_res = _bq_apagar_uid(uid, sa_file, sessoes_conhecidas=saved_sessoes)
+                    bq_res = _bq_apagar_uid(uid, sa_file, sessoes_conhecidas=saved_sessoes, persistir=persistir)
                 else:
                     raise GoogleIndisponivel("HEATING_GCP_SA_FILE ausente")
                 res["bq_tabelas_limpas"] += int(bq_res.get("tabelas_limpas", 0))
                 adiadas = int(bq_res.get("adiadas", 0))
                 res["bq_remocao_adiada"] += adiadas
-                merged_sessoes = _normalize_sessoes(list(saved_sessoes) + list(bq_res.get("sessoes") or ()))
-                new_tent = bq_tent + 1
+                known["sessoes"] = _normalize_sessoes(list(known["sessoes"]) + list(bq_res.get("sessoes") or ()))
+                new_tent = min(bq_tent + 1, GA4_PURGE_MAX_TENTATIVAS)
                 if new_tent == 1:
-                    next_due = stamp(now + timedelta(days=1))
+                    next_due = stamp(now + timedelta(days=1))  # D+1
                 elif new_tent == 2:
-                    next_due = stamp(now + timedelta(days=2))
-                elif new_tent < GA4_PURGE_MAX_TENTATIVAS:
-                    if adiadas == 0:
-                        bq_done = True
-                    else:
-                        next_due = stamp(now + timedelta(days=1))
-                else:
+                    next_due = stamp(now + timedelta(days=2))  # D+3
+                elif adiadas == 0:
                     bq_done = True
+                else:
+                    next_due = stamp(now + timedelta(days=1))
+                    if new_tent >= GA4_PURGE_MAX_TENTATIVAS:
+                        res["bq_remocao_travada"] += 1
+            except SessoesExcedidas:
+                bq_failed = True
+                res["bq_sessoes_excedidas"] += 1
+                next_due = stamp(now + timedelta(days=1))
             except (GoogleIndisponivel, OSError):
                 bq_failed = True
                 res["bq_remocao_falhou"] += 1
                 next_due = now_iso
 
-        sessoes_json = _dump_sessoes_json(merged_sessoes)
         if ga4_pend == 0 and bq_done:
             c.d1("DELETE FROM ga4_purge_queue WHERE uid = ?", [uid])
             res["ga4_fila_processados"] += 1
         elif bq_failed:
+            # As sessões já gravadas por `persistir` ficam como estão (nada de sobrescrever com uma lista velha).
             c.d1(
-                "UPDATE ga4_purge_queue SET ga4_pendente = ?, sessoes = ?, bq_tentativas = ?, proxima_em = ? WHERE uid = ?",
-                [ga4_pend, sessoes_json, bq_tent, now_iso, uid],
+                "UPDATE ga4_purge_queue SET ga4_pendente = ?, bq_tentativas = ?, proxima_em = ? WHERE uid = ?",
+                [ga4_pend, bq_tent, next_due, uid],
             )
             res["ga4_fila_restantes"] += 1
             if stop_on_bq_error:
                 break
         else:
-            stored_tent = GA4_PURGE_MAX_TENTATIVAS if bq_done else new_tent
             c.d1(
-                "UPDATE ga4_purge_queue SET ga4_pendente = ?, sessoes = ?, bq_tentativas = ?, proxima_em = ? WHERE uid = ?",
-                [ga4_pend, sessoes_json, stored_tent, next_due, uid],
+                "UPDATE ga4_purge_queue SET ga4_pendente = ?, sessoes = ?, bq_tentativas = ?, bq_concluido = ?, "
+                "proxima_em = ? WHERE uid = ?",
+                [ga4_pend, _dump_sessoes_json(known["sessoes"]), new_tent, 1 if bq_done else 0, next_due, uid],
             )
             res["ga4_fila_processados"] += 1
             res["ga4_fila_restantes"] += 1
@@ -1349,7 +1394,15 @@ def forget(
                     counts["bq_remocao_falhou"] = g_res["bq_remocao_falhou"]
                     bq_falhou = True
                 ga4_pendente = g_res["ga4_remocao_pendente"] > 0
+    if apply:
+        # A fila não depende do vínculo deste email (já apagado numa rodada anterior): o comando repetido continua
+        # avisando e saindo com código 2 enquanto houver remoção no GA4 pendente, até o job diário concluir.
+        counts["ga4_fila_pendente_total"] = int(
+            c.d1("SELECT count(*) AS n FROM ga4_purge_queue WHERE ga4_pendente = 1")[0]["n"]
+        )
     _report(counts, out, FORGET_MARK if apply else "simulação: nada foi apagado (use --apply)")
+    if apply and counts.get("ga4_fila_pendente_total", 0) > 0 and not ga4_pendente and not sem_cred_enfileirado:
+        print(GA4_FILA_PENDENTE_MSG, file=out)
     if apply and sem_cred_enfileirado:
         print(GA4_FILA_SEM_CRED_MSG, file=out)
     else:
@@ -1414,7 +1467,8 @@ def main(
                 bq_delete=bq_delete,
                 now_dt=now_dt,
             )
-            if a.apply and (counts.get("ga4_remocao_pendente", 0) > 0 or counts.get("bq_remocao_falhou", 0) > 0):
+            if a.apply and (counts.get("ga4_remocao_pendente", 0) > 0 or counts.get("bq_remocao_falhou", 0) > 0
+                            or counts.get("ga4_fila_pendente_total", 0) > 0):
                 rc = 2
         else:
             run(c, apply=a.apply)
