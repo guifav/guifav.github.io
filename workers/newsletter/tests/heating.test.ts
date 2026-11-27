@@ -220,10 +220,12 @@ test('M1: migração 0010 preserva table_xinfo, índices, linhas e todos os CHEC
   const checksInvalidos: Array<[string, unknown]> = [
     ['origin_channel', 'canal_invalido'],
     ['origin_source', 'fonte_invalida'],
+    ['origin_source', 'facebook'],
     ['utm_source', 'MAIUSCULA'],
     ['utm_medium', 'com espaco'],
     ['utm_campaign', 'camp?query=1'],
     ['landing_path', 'sem-barra-inicial'],
+    ['landing_path', '/blog//post'],
     ['twenty_person_id', 'id/invalido'],
     ['verified', 2],
     ['verified', -1],
@@ -304,7 +306,7 @@ test('M3: migração 0011 aplica CHECKs de context, PK composta (context, email)
     );
   }
 
-  // Outros CHECKs de engagement_events: sinal, fonte, email maiúsculo, id/ref e data fora do formato são recusados.
+  // Outros CHECKs de engagement_events: sinal fora da lista, fonte, email maiúsculo, id/ref fora do GLOB e data fora do formato são recusados.
   assert.throws(() => db.prepare(`INSERT INTO engagement_events (id, context, email, signal, source, ref, occurred_at, recorded_at)
     VALUES ('id-2', 'site', 'Leitor@exemplo.com', 'email_aberto', 'resend', null, ?, ?)`).run(iso, iso), /CHECK/);
   assert.throws(() => db.prepare(`INSERT INTO engagement_events (id, context, email, signal, source, ref, occurred_at, recorded_at)
@@ -313,6 +315,8 @@ test('M3: migração 0011 aplica CHECKs de context, PK composta (context, email)
     VALUES ('id-4', 'site', 'leitor@exemplo.com', 'email_aberto', 'outra', null, ?, ?)`).run(iso, iso), /CHECK/);
   assert.throws(() => db.prepare(`INSERT INTO engagement_events (id, context, email, signal, source, ref, occurred_at, recorded_at)
     VALUES ('id/ruim', 'site', 'leitor@exemplo.com', 'email_aberto', 'resend', null, ?, ?)`).run(iso, iso), /CHECK/);
+  assert.throws(() => db.prepare(`INSERT INTO engagement_events (id, context, email, signal, source, ref, occurred_at, recorded_at)
+    VALUES ('id-ref-ruim', 'site', 'leitor@exemplo.com', 'email_aberto', 'resend', 'ref/invalida', ?, ?)`).run(iso, iso), /CHECK/);
   assert.throws(() => db.prepare(`INSERT INTO engagement_events (id, context, email, signal, source, ref, occurred_at, recorded_at)
     VALUES ('id-5', 'site', 'leitor@exemplo.com', 'email_aberto', 'resend', null, '2026-11-27T12:00:00Z', ?)`).run(iso), /CHECK/);
 
@@ -325,7 +329,9 @@ test('M3: migração 0011 aplica CHECKs de context, PK composta (context, email)
   assert.throws(() => db.prepare(`INSERT INTO heating (context, email, score, band, signals, computed_at)
     VALUES ('site', 'leitor@exemplo.com', 10, 'frio', '[]', ?)`).run(iso), /UNIQUE|PRIMARY KEY/);
 
-  // Outros CHECKs de heating: score 0..100, band, json_valid(signals) <= 2000, twenty_person_id.
+  // Outros CHECKs de heating: email maiúsculo, score 0..100, band, json_valid(signals) <= 2000, twenty_person_id.
+  assert.throws(() => db.prepare(`INSERT INTO heating (context, email, score, band, signals, computed_at)
+    VALUES ('site', 'Leitor@exemplo.com', 50, 'morno', '[]', ?)`).run(iso), /CHECK/);
   assert.throws(() => db.prepare(`INSERT INTO heating (context, email, score, band, signals, computed_at)
     VALUES ('site', 'a@b.co', 101, 'quente', '[]', ?)`).run(iso), /CHECK/);
   assert.throws(() => db.prepare(`INSERT INTO heating (context, email, score, band, signals, computed_at)
@@ -435,6 +441,8 @@ test('W3: assinatura errada, base64 não canônico na assinatura, timestamp fora
   const macNaoCanonico = base64NaoCanonico(macCanonico);
   assert.ok(Buffer.from(macNaoCanonico, 'base64').equals(Buffer.from(macCanonico, 'base64')));
   assert.equal((await s.run(webhookReq(null, { id: 'msg_b64', tsSec: tsNow, rawBody: raw, sig: `v1,${macNaoCanonico}` }))).status, 401);
+  // Prefixo v2 com base64 válido do HMAC certo é recusado (o prefixo v1, é obrigatório)
+  assert.equal((await s.run(webhookReq(null, { id: 'msg_b64', tsSec: tsNow, rawBody: raw, sig: `v2,${macCanonico}` }))).status, 401);
   // Sem header svix-signature
   assert.equal((await s.run(webhookReq(payload, { sig: '' }))).status, 401);
   // Timestamp 5 min + 1 s no passado e no futuro
@@ -545,32 +553,38 @@ test('W7: vários destinatários: entrega e spam gravam por destinatário (pulan
   assert.deepEqual(await rSpam.json(), { ok: true, gravados: 2 });
   assert.equal(s.rows('engagement_events').length, 4);
 
-  // Abertura e clique com mais de um destinatário válido não gravam nada (200 ignorado: varios_destinatarios).
-  const rOpenMulti = await s.run(webhookReq({
-    type: 'email.opened',
-    created_at: '2026-11-27T12:00:00.000Z',
-    data: { email_id: 'em_open_multi', from: FROM_SITE, to: ['um@exemplo.com', 'dois@exemplo.com'] },
-  }, { id: 'msg_open_multi' }));
-  assert.equal(rOpenMulti.status, 200);
-  assert.deepEqual(await rOpenMulti.json(), { ok: true, ignorado: 'varios_destinatarios' });
+  // Abertura e clique só gravam quando a lista `to` inteira tem exatamente um item (contando inválidos e repetidos).
+  for (const [idPrefix, to] of [
+    ['multi', ['um@exemplo.com', 'dois@exemplo.com']],
+    ['com_invalido', ['um@exemplo.com', 'Dois <dois@exemplo.com>']],
+    ['repetido', ['Um@Exemplo.com', 'um@exemplo.com']],
+  ] as const) {
+    const rOpen = await s.run(webhookReq({
+      type: 'email.opened',
+      created_at: '2026-11-27T12:00:00.000Z',
+      data: { email_id: `em_open_${idPrefix}`, from: FROM_SITE, to },
+    }, { id: `msg_open_${idPrefix}` }));
+    assert.equal(rOpen.status, 200, idPrefix);
+    assert.deepEqual(await rOpen.json(), { ok: true, ignorado: 'varios_destinatarios' }, idPrefix);
 
-  const rClickMulti = await s.run(webhookReq({
-    type: 'email.clicked',
-    created_at: '2026-11-27T12:00:00.000Z',
-    data: { email_id: 'em_click_multi', from: FROM_SITE, to: ['um@exemplo.com', 'dois@exemplo.com'], click: { link: 'https://guifav.dev/blog/post/' } },
-  }, { id: 'msg_click_multi' }));
-  assert.equal(rClickMulti.status, 200);
-  assert.deepEqual(await rClickMulti.json(), { ok: true, ignorado: 'varios_destinatarios' });
+    const rClick = await s.run(webhookReq({
+      type: 'email.clicked',
+      created_at: '2026-11-27T12:00:00.000Z',
+      data: { email_id: `em_click_${idPrefix}`, from: FROM_SITE, to, click: { link: 'https://guifav.dev/blog/post/' } },
+    }, { id: `msg_click_${idPrefix}` }));
+    assert.equal(rClick.status, 200, idPrefix);
+    assert.deepEqual(await rClick.json(), { ok: true, ignorado: 'varios_destinatarios' }, idPrefix);
+  }
   assert.equal(s.rows('engagement_events').length, 4);
 
-  // Mesmo endereço repetido em to (1 destinatário único válido) continua pontuando em abertura e clique.
-  const rOpenDup = await s.run(webhookReq({
+  // Com exatamente 1 item válido em `to`, abertura volta a gravar normalmente.
+  const rOpenUnico = await s.run(webhookReq({
     type: 'email.opened',
     created_at: '2026-11-27T12:00:00.000Z',
-    data: { email_id: 'em_open_dup', from: FROM_SITE, to: ['Um@Exemplo.com', 'um@exemplo.com'] },
-  }, { id: 'msg_open_dup' }));
-  assert.equal(rOpenDup.status, 200);
-  assert.deepEqual(await rOpenDup.json(), { ok: true, gravados: 1 });
+    data: { email_id: 'em_open_unico', from: FROM_SITE, to: ['Um@Exemplo.com'] },
+  }, { id: 'msg_open_unico' }));
+  assert.equal(rOpenUnico.status, 200);
+  assert.deepEqual(await rOpenUnico.json(), { ok: true, gravados: 1 });
   assert.equal(s.rows('engagement_events').length, 5);
 });
 
@@ -637,10 +651,32 @@ test('W9: tipo que não interessa (inclusive propriedades do Object.prototype) r
   assert.equal(s.rows('engagement_events').length, 0);
 });
 
-test('W10: corpo maior que 64 KiB devolve 413 (com e sem content-length)', async () => {
+test('W10: corpo maior que 64 KiB devolve 413 (com Content-Length sem ler o corpo e em streaming sem Content-Length)', async () => {
   const s = setup();
   const grande = 'x'.repeat(MAX_WEBHOOK_BODY + 1);
   assert.equal((await s.run(webhookReq(null, { rawBody: grande }))).status, 413);
+
+  // Content-Length acima de 64 KiB é recusado sem ler o corpo.
+  let leuCorpo = false;
+  const streamNaoLido = new ReadableStream({
+    pull(controller) {
+      leuCorpo = true;
+      controller.enqueue(new TextEncoder().encode('{}'));
+      controller.close();
+    },
+  }, { highWaterMark: 0 });
+  const reqClGrande = new Request('https://insights.guifav.dev/resend/webhook', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'content-length': String(MAX_WEBHOOK_BODY + 1),
+    },
+    body: streamNaoLido,
+    duplex: 'half',
+  } as RequestInit);
+  assert.equal((await s.run(reqClGrande)).status, 413);
+  assert.equal(leuCorpo, false, 'não deve ler o corpo quando Content-Length já excede 64 KiB');
+  assert.equal(reqClGrande.bodyUsed, false, 'bodyUsed deve continuar false quando Content-Length já excede 64 KiB');
 
   // Streaming sem content-length também barra ao passar de 64 KiB.
   const stream = new ReadableStream({
@@ -930,6 +966,88 @@ test('W18: FORGET_HMAC_KEY ausente ou curta no webhook devolve 500 Worker sem co
     assert.equal(await r.text(), 'Worker sem configuração');
     assert.equal(s.rows('engagement_events').length, 0);
   }
+});
+
+test('W19: slug de HEATING_CURSOS cujo <slug>@guifav.dev está em HEATING_REMETENTES_SITE sai dos cursos com log curto e continua site', async () => {
+  const s = setup({
+    heatingCursos: 'insights, chatgpt-no-dia-a-dia',
+    heatingSiteSenders: 'insights@guifav.dev, insights@expert.guifav.dev',
+  });
+  let rSite!: Response;
+  let rCurso!: Response;
+  const erros = await capturaErros(async () => {
+    rSite = await s.run(webhookReq({
+      type: 'email.opened',
+      created_at: '2026-11-27T12:00:00.000Z',
+      data: { email_id: 'em_conf_site', from: 'Guilherme Favaron <insights@guifav.dev>', to: ['leitor@exemplo.com'] },
+    }, { id: 'msg_conf_site' }));
+    rCurso = await s.run(webhookReq({
+      type: 'email.opened',
+      created_at: '2026-11-27T12:00:00.000Z',
+      data: { email_id: 'em_conf_curso', from: 'chatgpt-no-dia-a-dia@guifav.dev', to: ['leitor@exemplo.com'] },
+    }, { id: 'msg_conf_curso' }));
+  });
+  assert.equal(rSite.status, 200);
+  assert.equal(rCurso.status, 200);
+  assert.deepEqual(
+    s.rows('engagement_events').map((x) => [x.ref, x.context]),
+    [['em_conf_site', 'site'], ['em_conf_curso', 'curso:chatgpt-no-dia-a-dia']],
+  );
+  assert.ok(
+    erros.some((e) => /1 slug\(s\) de HEATING_CURSOS em conflito com HEATING_REMETENTES_SITE ignorado\(s\)/.test(e)),
+    erros.join('\n'),
+  );
+  for (const e of erros) {
+    assert.ok(!e.includes('insights'), e);
+    assert.ok(!e.includes('guifav.dev'), e);
+  }
+});
+
+test('W20: assinatura svix é verificada sobre id.ts. + bytes brutos do corpo (corpo com BOM UTF-8 passa só com assinatura sobre os bytes)', async () => {
+  const s = setup();
+  const ts = Math.floor(NOW / 1000);
+  const jsonText = JSON.stringify({
+    type: 'email.opened',
+    created_at: '2026-11-27T12:00:00.000Z',
+    data: { email_id: 'em_bom', from: FROM_SITE, to: ['bom@exemplo.com'] },
+  });
+  const jsonBytes = Buffer.from(jsonText, 'utf-8');
+  const bomBytes = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), jsonBytes]);
+
+  // Assinatura calculada sobre os bytes brutos (com o BOM): passa e grava o evento.
+  const sigSobreBytes = `v1,${createHmac('sha256', WEBHOOK_RAW)
+    .update(Buffer.concat([Buffer.from(`msg_bom_ok.${ts}.`, 'utf-8'), bomBytes]))
+    .digest('base64')}`;
+  const reqOk = new Request('https://insights.guifav.dev/resend/webhook', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'svix-id': 'msg_bom_ok',
+      'svix-timestamp': String(ts),
+      'svix-signature': sigSobreBytes,
+    },
+    body: bomBytes,
+  });
+  const rOk = await s.run(reqOk);
+  assert.equal(rOk.status, 200);
+  assert.deepEqual(await rOk.json(), { ok: true, gravados: 1 });
+  assert.deepEqual(s.rows('engagement_events').map((x) => [x.email, x.ref]), [['bom@exemplo.com', 'em_bom']]);
+
+  // Assinatura calculada sobre o texto decodificado sem o BOM para o mesmo corpo com BOM: recusada (401).
+  const sigSemBom = assinarSvix('msg_bom_sem', ts, jsonText);
+  const reqRuim = new Request('https://insights.guifav.dev/resend/webhook', {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'svix-id': 'msg_bom_sem',
+      'svix-timestamp': String(ts),
+      'svix-signature': sigSemBom,
+    },
+    body: bomBytes,
+  });
+  const rRuim = await s.run(reqRuim);
+  assert.equal(rRuim.status, 401);
+  assert.equal(s.rows('engagement_events').length, 1);
 });
 
 // ---------------------------------------------------------------- POST /prioridade

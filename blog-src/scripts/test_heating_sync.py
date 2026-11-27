@@ -1,8 +1,9 @@
 """Testes do heating de contatos (épico #197, corte 1). Rodar em blog-src/: python3 scripts/test_heating_sync.py
 
 O D1 falso é um SQLite em memória com as migrações reais do painel (0001 em diante, incluindo 0010, 0011 e 0012), com
-suporte ao payload `batch` transacional da API REST do Cloudflare D1, e o Twenty falso guarda estado como o servidor
-(lixeira, campos únicos `emails` e `inscricaoId`, objeto `courseEnrollment` e relação `pessoa`).
+suporte ao payload `batch` da API REST do Cloudflare D1 (incluindo simulação de falha no meio do batch sem rollback), e o
+Twenty falso guarda estado como o servidor (lixeira, campos únicos `emails` e `inscricaoId`, objeto `courseEnrollment` e
+relação `pessoa`).
 """
 import contextlib
 import copy
@@ -1051,6 +1052,105 @@ class CliAndOutputTest(unittest.TestCase):
         import hmac as _hmac
         esperado = _hmac.new(FORGET_KEY.encode("utf-8"), b"heating-optout-v1\nleitor@exemplo.com", hashlib.sha256).hexdigest()
         self.assertEqual(H.heating_optout_hmac("  Leitor@Exemplo.COM ", FORGET_KEY), esperado)
+
+    def test_metadados_nota_mudou_em_e_nao_renomeia_campo_existente(self):
+        # 1) Criação do esquema do zero: rótulos e descrições explicam que só muda quando a nota muda
+        #    e que a data do último cálculo fica em heating.computed_at no D1 (painel).
+        f = Fake(people=[person("p1", "ana@corp.com")], schema=False)
+        f.add_conv(1, "ana@corp.com", action="material_download", material="planilha-custos-ia", when=ago(days=0))
+        docs = [{
+            "email": "ana@corp.com",
+            "status": "active",
+            "googleUid": "uid_ana",
+            "name": "Ana",
+            "createdAt": ago(days=0),
+            "aulas": [],
+        }]
+        run_job(f, apply=True, ler_curso=lambda _s: docs)
+
+        spec_person = f.person_fields["heatingCalculadoEm"]["_spec"]
+        self.assertEqual(spec_person["label"], "Heating: nota mudou em")
+        self.assertIn("heating.computed_at", spec_person["description"])
+        self.assertIn("D1", spec_person["description"])
+
+        spec_enroll = f.enroll_fields["calculadoEm"]["_spec"]
+        self.assertEqual(spec_enroll["label"], "Nota mudou em")
+        self.assertIn("heating.computed_at", spec_enroll["description"])
+        self.assertIn("D1", spec_enroll["description"])
+
+        # 2) Se os campos já existirem no Twenty com outro label, o script NÃO renomeia nem chama updateOneField.
+        g = Fake(people=[person("p1", "ana@corp.com")], schema=True)
+        g.person_fields["heatingCalculadoEm"]["_spec"]["label"] = "Heating: calculado em"
+        g.enroll_fields["calculadoEm"]["_spec"]["label"] = "Calculado em"
+        g.add_conv(1, "ana@corp.com", action="material_download", material="planilha-custos-ia", when=ago(days=0))
+        run_job(g, apply=True, ler_curso=lambda _s: docs)
+
+        meta_muts = [
+            d["query"] for m, p, d, _ in g.calls
+            if p == "/metadata" and any(x in d["query"] for x in ("createOne", "updateOne"))
+        ]
+        self.assertEqual(meta_muts, [])
+        self.assertEqual(g.person_fields["heatingCalculadoEm"]["_spec"]["label"], "Heating: calculado em")
+        self.assertEqual(g.enroll_fields["calculadoEm"]["_spec"]["label"], "Calculado em")
+
+    def test_falha_no_meio_do_batch_sem_rollback_recupera_na_rodada_seguinte(self):
+        # D1 falso que executa parte do `batch` de `heating` (DELETE + 1º INSERT de 14 linhas) fazendo commit
+        # SEM rollback e falha antes do 2º INSERT (6 linhas). A rodada seguinte precisa refazer `heating` inteira.
+        class PartialBatchFake(Fake):
+            def __init__(self, *args, **kwargs):
+                self.fail_mid_batch = True
+                self.mid_batch_triggered = False
+                super().__init__(*args, **kwargs)
+
+            def __call__(self, method, url, headers, body):
+                data = json.loads(body) if body else None
+                u = urllib.parse.urlparse(url)
+                if (
+                    self.fail_mid_batch
+                    and u.netloc == "api.cloudflare.com"
+                    and isinstance(data, dict)
+                    and "batch" in data
+                    and len(data["batch"]) >= 3
+                    and data["batch"][0]["sql"] == "DELETE FROM heating"
+                ):
+                    self.calls.append((method, u.path, data, u.query))
+                    self.fail_mid_batch = False
+                    self.mid_batch_triggered = True
+                    # Executa e commita só o DELETE e o primeiro INSERT, sem rollback, e devolve 500 no meio.
+                    for item in data["batch"][:2]:
+                        self.db.execute(item["sql"], item.get("params") or [])
+                    self.db.commit()
+                    return 500, {"success": False, "errors": [{"message": "falha no meio do batch"}]}
+                return super().__call__(method, url, headers, body)
+
+        f = PartialBatchFake(schema=True)
+        # Linha antiga em `heating` que deve sumir na troca.
+        f.db.execute(
+            "INSERT INTO heating (context, email, score, band, signals, computed_at, twenty_person_id) "
+            "VALUES ('site', 'antigo@corp.com', 99, 'quente', '[]', ?, NULL)",
+            (ago(days=1),),
+        )
+        f.db.commit()
+        for i in range(1, 21):
+            f.add_conv(i, f"u{i:02d}@corp.com", action="newsletter_confirm", when=ago(days=0))
+
+        # 1ª rodada: falha no meio do batch sem rollback -> SyncError e tabela `heating` parcial (14 de 20).
+        with self.assertRaisesRegex(H.SyncError, "D1 respondeu 500"):
+            run_job(f, apply=True)
+        self.assertTrue(f.mid_batch_triggered)
+        parcial = f.heating_rows()
+        self.assertEqual(len(parcial), H.HEATING_CHUNK)  # 14 linhas gravadas sem rollback
+        self.assertNotIn(("site", "antigo@corp.com"), parcial)
+
+        # 2ª rodada: sem falha, refaz `heating` inteira com as 20 linhas certas.
+        counts2, _ = run_job(f, apply=True)
+        self.assertEqual(counts2["notas_site"], 20)
+        final = f.heating_rows()
+        self.assertEqual(len(final), 20)
+        self.assertNotIn(("site", "antigo@corp.com"), final)
+        for i in range(1, 21):
+            row = final[("site", f"u{i:02d}@corp.com")]
+            self.assertEqual((row["score"], row["band"], row["computed_at"]), (10, "frio", NOW_ISO))
 
 
 if __name__ == "__main__":

@@ -9,11 +9,20 @@ Contextos separados (decisão do Gui, 2026-11-27):
 - `curso:<slug>`: cadastro, aulas concluídas e emails do próprio curso. A nota vai para `heating` no D1 e para o objeto
   `courseEnrollment` ("Inscrição em curso") ligado à Person no Twenty.
 
+Campos de data no Twenty (criados se faltarem; campos já existentes no Twenty nunca são renomeados nem alterados):
+- `heatingCalculadoEm` na Person (rótulo "Heating: nota mudou em") e `calculadoEm` na Inscrição em curso (rótulo
+  "Nota mudou em") só mudam quando a nota/estado muda, para não reescrever Pessoas e Inscrições todo dia. A data do
+  último cálculo diário fica em `heating.computed_at` no D1 (exibida no painel `/admin/contatos?ordem=heating`). Se o
+  campo já existir no Twenty com outro rótulo, o script mantém o campo existente sem renomeá-lo.
+
 Modos:
 - Padrão (`heating_sync.py [--apply]`): traz conversões e curso para `engagement_events`, aplica oposição
   (`heating_optout`), exclusões (`HEATING_EXCLUDE` e domínios de teste), esquecidos de curso (`curso_esquecido`) e
-  retenção (365 dias), calcula a régua por contexto em relação ao instante T, troca `heating` no D1 numa única
-  transação (`batch`) e atualiza o Twenty (somente o que mudou).
+  retenção (365 dias), calcula a régua por contexto em relação ao instante T, substitui `heating` no D1 via payload
+  `batch` da API REST e atualiza o Twenty (somente o que mudou).
+  Risco aceito na troca de `heating`: a documentação da Cloudflare garante transação no `batch()` do binding em
+  Workers, não no `batch` da API REST; se a troca falhar no meio sem rollback (deixando `heating` vazia ou parcial),
+  a rodada seguinte refaz a tabela inteira a partir de `engagement_events`.
 - Oposição (`heating_sync.py --optout [--apply]`): lê UM email da entrada padrão, grava a marca permanente em
   `heating_optout`, apaga eventos e notas de todos os contextos no D1 e limpa os campos `heating*` da Person e
   nota/faixa/sinais/calculadoEm das Inscrições no Twenty.
@@ -198,7 +207,15 @@ PERSON_HEATING_FIELDS = OrderedDict([
     ("heatingNota", {"type": "NUMBER", "label": "Heating: nota", "icon": "IconFlame"}),
     ("heatingFaixa", {"type": "SELECT", "label": "Heating: faixa", "icon": "IconTemperature", "options": FAIXA_OPTIONS}),
     ("heatingSinais", {"type": "TEXT", "label": "Heating: sinais", "icon": "IconListDetails"}),
-    ("heatingCalculadoEm", {"type": "DATE_TIME", "label": "Heating: calculado em", "icon": "IconClock"}),
+    ("heatingCalculadoEm", {
+        "type": "DATE_TIME",
+        "label": "Heating: nota mudou em",
+        "icon": "IconClock",
+        "description": (
+            "Data da última mudança da nota, faixa ou sinais no Twenty (não muda em rodadas sem alteração); "
+            "a data do último cálculo diário fica em heating.computed_at no D1 (painel)."
+        ),
+    }),
 ])
 
 
@@ -244,7 +261,15 @@ ENROLL_FIELDS = OrderedDict([
     ("nota", {"type": "NUMBER", "label": "Nota", "icon": "IconFlame"}),
     ("faixa", {"type": "SELECT", "label": "Faixa", "icon": "IconTemperature", "options": FAIXA_OPTIONS}),
     ("sinais", {"type": "TEXT", "label": "Sinais", "icon": "IconListDetails"}),
-    ("calculadoEm", {"type": "DATE_TIME", "label": "Calculado em", "icon": "IconClock"}),
+    ("calculadoEm", {
+        "type": "DATE_TIME",
+        "label": "Nota mudou em",
+        "icon": "IconClock",
+        "description": (
+            "Data da última mudança da inscrição ou da nota no Twenty (não muda em rodadas sem alteração); "
+            "a data do último cálculo diário fica em heating.computed_at no D1 (painel)."
+        ),
+    }),
 ])
 
 RUN_COUNT_KEYS = (
@@ -381,7 +406,9 @@ def formatar_sinais_texto(sinais: list[dict]) -> str:
 
 
 def d1_batch(c: TS.Clients, stmts: list[tuple[str, list | None]]) -> list[list[dict]]:
-    """Executa várias instruções no D1 numa única transação via payload `batch` da API REST da Cloudflare."""
+    """Envia várias instruções no D1 via payload `batch` da API REST da Cloudflare.
+    Risco aceito: a documentação da Cloudflare garante transação no `batch()` do binding em Workers, não na API REST;
+    se a troca de `heating` falhar no meio sem rollback, a rodada seguinte refaz a tabela inteira."""
     e = c.env
     url = (f"https://api.cloudflare.com/client/v4/accounts/{e['CLOUDFLARE_ACCOUNT_ID']}/d1/database/"
            f"{e['D1_DATABASE_ID']}/query")
@@ -1310,7 +1337,8 @@ def run(
         if retention_delete_count:
             c.d1("DELETE FROM engagement_events WHERE occurred_at < ?", [retention_cutoff])
 
-        # 5e) Troca a tabela `heating` inteira numa única transação (`batch`), se houve mudança.
+        # 5e) Troca a tabela `heating` inteira via `batch` da API REST, se houve mudança (risco aceito: sem garantia
+        # de transação na API REST; se falhar no meio sem rollback, a rodada seguinte refaz a tabela inteira).
         desired_heating: list[tuple] = []
         for (ctx, email), h in sorted(heating_by_ctx_email.items()):
             persons = idx.get(email) or []
