@@ -2824,6 +2824,9 @@ class Ga4EBigQueryTest(unittest.TestCase):
         try:
             import duckdb  # type: ignore[import-not-found]
         except ImportError:
+            # No CI o duckdb é instalado no workflow: lá a ausência é falha, nunca pulo silencioso.
+            if os.environ.get("CI"):
+                raise
             self.skipTest("duckdb não disponível no Python local")
 
         con = duckdb.connect(":memory:")
