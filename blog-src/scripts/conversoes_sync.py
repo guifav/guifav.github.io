@@ -59,25 +59,37 @@ Regras:
 Remoção (direito do titular), --forget (issue #134 e épico #197, corte 2): lê UM email da entrada padrão (fora do
 histórico do shell e da lista de processos). Exige FORGET_HMAC_KEY (32 caracteres ou mais, igual à do Worker) antes de
 qualquer leitura ou escrita; o sync normal não precisa dela. Logo depois de validar a chave e o email, antes de qualquer
-leitura do D1 ou do Twenty, --forget --apply grava um marcador mínimo na tabela `forgotten` do D1 (upsert, fica a data
-mais recente): `email_hmac` (HMAC-SHA256 em hex minúsculo de `forget-v1\\n` + email normalizado, nunca o email em claro)
-e `forgotten_at` (pelo relógio do próprio D1, em ISO UTC com milissegundos). Com esse marcador, o Worker recusa links
-assinados emitidos antes (ou no instante) da remoção. As linhas do email no D1 continuam sendo o diário da remoção:
+leitura do D1 ou do Twenty, --forget --apply grava:
+- o marcador mínimo na tabela `forgotten` do D1 (upsert, fica a data mais recente): `email_hmac` (HMAC-SHA256 em hex
+  minúsculo de `forget-v1\\n` + email normalizado, nunca o email em claro) e `forgotten_at` (pelo relógio do próprio D1,
+  em ISO UTC com milissegundos). Com esse marcador, o Worker recusa links assinados emitidos antes (ou no instante) da
+  remoção;
+- a oposição permanente ao heating na tabela `heating_optout` do D1 (decisão do Gui, 2026-11-27; mesmo upsert do Worker,
+  com `email_hmac` = HMAC-SHA256 em hex minúsculo de `heating-optout-v1\\n` + email normalizado com `FORGET_HMAC_KEY` e
+  `opted_out_at` pelo relógio do próprio D1), antes de apagar o resto. Assim, quem pede para apagar tudo não volta a ser
+  pontuado pelo job do heating nem volta a ser ligado pelo login (`/identidade` do PR #203 recusa quem tem a marca).
+As linhas do email no D1 continuam sendo o diário da remoção:
 apaga no Twenty (de vez, inclusive as que estão na lixeira) as Conversões cujos eventoId são os ids dessas linhas, relê
 o Twenty com a lixeira para provar que nenhuma sobrou, limpa os quatro campos `heating*` (heatingNota, heatingFaixa,
 heatingSinais e heatingCalculadoEm) da Pessoa ativa — tanto as achadas pelo email quanto as referenciadas pelos
 `twenty_person_id` salvos nas linhas de `conversions` e de `heating` (contexto `site`) do email antes de apagá-las
 (a nota não fica no resumo que sobra na Pessoa mesmo se o email mudou no CRM; épico #197) — e só então apaga as linhas
 no D1 em `conversions` (levando junto `twenty_person_id` e a origem), `engagement_events` e `heating` no contexto `site`
-(não toca nos contextos de curso `curso:<slug>`). Para cada `uid` ligado ao email em `site_identities` (migração 0013),
-envia a remoção no GA4 (Admin API `properties.submitUserDeletion`), apaga as linhas do `uid` e de suas sessões no
-BigQuery tabela por tabela (`events_YYYYMMDD` e `events_intraday_YYYYMMDD`, nunca no wildcard), agenda repetição do
-BigQuery em `ga4_purge_queue` (migração 0014, D+1 e D+3, porque o export do GA4 atrasa) e apaga as linhas do email em
-`site_identities`. Se `HEATING_GCP_SA_FILE` estiver ausente (por exemplo no Mac) ou se o GA4 responder 403/erro, a
-remoção no GA4 fica pendente com mensagem fixa no fim e saída com código 2, sem impedir as demais remoções. Uma queda
-no meio (mesmo na leitura do Twenty ou na limpeza dos campos heating da Pessoa) deixa o marcador gravado e o D1 intacto,
-e repetir o comando conclui, mesmo que o email da Pessoa tenha mudado no CRM. A Pessoa e os campos site* dela ficam como
-estão (decisão do Gui, 2026-11-23). Simulação sem --apply.
+(não toca nos contextos de curso `curso:<slug>`). Em seguida apaga as linhas do email em `site_identities` (migração
+0013): o trigger `AFTER DELETE ON site_identities` da migração 0014 enfileira automaticamente cada `uid` removido na
+fila única `ga4_purge_queue` (`ga4_pendente = 1`, `bq_tentativas = 0`, `sessoes = '[]'`). Quando há credencial GCP
+(`HEATING_GCP_SA_FILE`), processa imediatamente os `uid`s enfileirados: envia a remoção no GA4 (Admin API
+`properties.submitUserDeletion`), apaga no BigQuery tabela por tabela (`events_YYYYMMDD`, `events_intraday_YYYYMMDD`,
+`users_YYYYMMDD` existentes e linhas exclusivas de `pseudonymous_users_YYYYMMDD`, nunca no wildcard e nunca tocando em
+linhas com `user_id` de outra pessoa) e persiste os pares `(user_pseudo_id, ga_session_id)` descobertos em `sessoes`
+para as repetições D+1, D+3 e eventuais adiamentos por streaming buffer (até 5 tentativas) no job diário. Sem
+`HEATING_GCP_SA_FILE` (por exemplo no Mac), apenas apaga `site_identities` (o trigger enfileira para o job diário na
+KVM) e informa isso na saída, com código 0. Com credencial, se o GA4 responder 403/erro ou se o BigQuery falhar, o item
+permanece pendente em `ga4_purge_queue` para o job diário retomar, com mensagem fixa (sem `uid`) e saída com código 2,
+sem impedir as demais remoções. Uma queda no meio (mesmo na leitura do Twenty ou na limpeza dos campos heating da
+Pessoa) deixa os marcadores (`forgotten` e `heating_optout`) gravados e o D1 intacto, e repetir o comando conclui, mesmo
+que o email da Pessoa tenha mudado no CRM. A Pessoa e os campos site* dela ficam como estão (decisão do Gui, 2026-11-23).
+Simulação sem --apply.
 
 Papéis mínimos da conta de serviço (`HEATING_GCP_SA_FILE`, projeto `mindapps`):
 - BigQuery Job User (`roles/bigquery.jobUser`) no projeto `mindapps`;
@@ -189,8 +201,10 @@ TWENTY_PERSON_ID = re.compile(r"[0-9A-Za-z-]{1,64}")  # o CHECK de twenty_person
 MAX_LABEL = 120
 MARK_CHUNK = 50  # ids por UPDATE no D1 (até 52 parâmetros com synced_at e twenty_person_id; limite de 100 do D1)
 FORGET_MARK = "conversões apagadas"
-# Marcador mínimo de remoção (issue #134): mesmo prefixo e piso de chave do Worker (workers/newsletter/src/forget.ts).
+# Marcador mínimo de remoção (issue #134) e oposição ao heating (épico #197): mesmos prefixos e piso de chave do Worker
+# (workers/newsletter/src/forget.ts).
 FORGET_PREFIX = "forget-v1\n"
+HEATING_OPTOUT_PREFIX = "heating-optout-v1\n"
 MIN_FORGET_KEY = 32
 # Retenção dos marcadores em dias (issue #134): precisa cobrir o maior TTL dos links assinados (`TTL_MS` e
 # `MATERIAL_TTL_MS` em `workers/newsletter/src/token.ts`) mais 1 dia de folga. Ao alterar um TTL, atualize junto este
@@ -211,11 +225,17 @@ BQ_LOCATION = "southamerica-east1"
 GA4_DELETE_URL = f"https://analyticsadmin.googleapis.com/v1alpha/properties/{GA4_PROPERTY_ID}:submitUserDeletion"
 GA4_EDIT_SCOPE = "https://www.googleapis.com/auth/analytics.edit"
 GA4_PURGE_PENDENTE_MSG = (
-    "remoção no GA4 pendente: faça pelo Explorador de usuários ou confira o papel de Editor da conta de serviço"
+    "remoção no GA4 pendente na fila para o job diário: confira o papel de Editor da conta de serviço na propriedade GA4"
 )
-BQ_PURGE_PENDENTE_MSG = "remoção no BigQuery pendente: agendada na fila para o job diário"
+BQ_PURGE_PENDENTE_MSG = "remoção no BigQuery pendente na fila para o job diário"
+GA4_FILA_SEM_CRED_MSG = "remoção no GA4 e no BigQuery enfileirada para o job diário (sem credencial GCP neste ambiente)"
 SITE_UID_RE = re.compile(r"[0-9A-Za-z]{1,128}")  # CHECK da migração 0013 (site_identities) e 0014 (ga4_purge_queue)
 BQ_TABLE_SUFFIX_RE = re.compile(r"(?:intraday_)?\d{8}")
+BQ_DAY_SUFFIX_RE = re.compile(r"\d{8}")
+BQ_USERS_TABLE_RE = re.compile(r"users_(\d{8})")
+BQ_PSEUDO_TABLE_RE = re.compile(r"pseudonymous_users_(\d{8})")
+GA4_PURGE_SESSOES_MAX = 20_000
+GA4_PURGE_MAX_TENTATIVAS = 5
 
 
 class GoogleIndisponivel(Exception):
@@ -245,11 +265,30 @@ def forget_hmac(email: str, key: str) -> str:
     return hmac.new(key.encode("utf-8"), (FORGET_PREFIX + norm).encode("utf-8"), hashlib.sha256).hexdigest()
 
 
+def heating_optout_hmac(email: str, key: str) -> str:
+    """HMAC-SHA256 em hex minúsculo de `heating-optout-v1\\n` + email normalizado (épico #197), igual ao Worker."""
+    if not isinstance(key, str) or len(key) < MIN_FORGET_KEY:
+        raise SyncError("FORGET_HMAC_KEY ausente ou curta demais")
+    norm = email.strip().lower() if isinstance(email, str) else ""
+    if not valid_email(norm):
+        raise SyncError("email inválido na entrada")
+    return hmac.new(key.encode("utf-8"), (HEATING_OPTOUT_PREFIX + norm).encode("utf-8"), hashlib.sha256).hexdigest()
+
+
 def _upsert_forget_mark(c: TS.Clients, email_hmac: str) -> None:
     # Relógio do próprio D1 (issue #134): evita diferença entre a KVM e o Cloudflare; o upsert mantém a data mais recente.
     c.d1(
         f"INSERT INTO forgotten (email_hmac, forgotten_at) VALUES (?, {_D1_NOW_SQL}) "
         f"ON CONFLICT (email_hmac) DO UPDATE SET forgotten_at = max(forgotten.forgotten_at, {_D1_NOW_SQL})",
+        [email_hmac],
+    )
+
+
+def _upsert_heating_optout(c: TS.Clients, email_hmac: str) -> None:
+    # Mesmo upsert do Worker (com relógio do D1): grava a oposição permanente ao heating (épico #197).
+    c.d1(
+        f"INSERT INTO heating_optout (email_hmac, opted_out_at) VALUES (?, {_D1_NOW_SQL}) "
+        f"ON CONFLICT(email_hmac) DO UPDATE SET opted_out_at = excluded.opted_out_at",
         [email_hmac],
     )
 
@@ -696,20 +735,64 @@ def _ga4_submit_user_deletion(uid: str, sa_file: str) -> bool:
         raise
 
 
-def _bq_apagar_uid(uid: str, sa_file: str) -> dict[str, int]:
-    """Descobre as tabelas `events_*` e `events_intraday_*` com linhas do `uid` (ou de suas sessões) e executa um
-    `DELETE` por tabela diária (nunca no wildcard). Intraday recusando DML por streaming buffer conta em `adiadas`."""
-    if not _full(SITE_UID_RE, uid):
-        raise SyncError("uid inválido na remoção do BigQuery")
-    if not sa_file:
-        raise GoogleIndisponivel("HEATING_GCP_SA_FILE ausente")
-    try:
-        from google.cloud import bigquery  # type: ignore[import-not-found]
-        from google.oauth2 import service_account  # type: ignore[import-not-found]
-    except ImportError as e:
-        raise GoogleIndisponivel("biblioteca do BigQuery ausente") from e
+def _normalize_sessoes(raw) -> list[tuple[str, int]]:
+    seen: set[tuple[str, int]] = set()
+    if not raw:
+        return []
+    for item in raw:
+        if isinstance(item, (list, tuple)) and len(item) == 2:
+            psid, sid = item
+        elif isinstance(item, dict):
+            psid, sid = item.get("user_pseudo_id"), item.get("ga_session_id")
+        else:
+            continue
+        if isinstance(psid, str) and psid and isinstance(sid, int) and not isinstance(sid, bool):
+            seen.add((psid, sid))
+    return sorted(seen)
 
-    discover_sql = (
+
+def _parse_sessoes_json(raw: str | None) -> list[tuple[str, int]]:
+    if not isinstance(raw, str) or not raw.strip():
+        return []
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        return []
+    return _normalize_sessoes(data) if isinstance(data, list) else []
+
+
+def _dump_sessoes_json(sessoes) -> str:
+    pairs = _normalize_sessoes(sessoes)
+    encoded = json.dumps([[p, s] for p, s in pairs], separators=(",", ":"), ensure_ascii=False)
+    if len(encoded) <= GA4_PURGE_SESSOES_MAX:
+        return encoded
+    out: list[list] = []
+    for p, s in pairs:
+        cand = out + [[p, s]]
+        if len(json.dumps(cand, separators=(",", ":"), ensure_ascii=False)) > GA4_PURGE_SESSOES_MAX:
+            break
+        out = cand
+    return json.dumps(out, separators=(",", ":"), ensure_ascii=False)
+
+
+def _bq_user_tables_info_sql() -> str:
+    return (
+        f"SELECT table_name\n"
+        f"FROM `{GCP_PROJECT}.{BQ_DATASET}.INFORMATION_SCHEMA.TABLES`\n"
+        f"WHERE table_name LIKE 'users_%'\n"
+        f"   OR table_name LIKE 'pseudonymous_users_%'"
+    )
+
+
+def _bq_discover_events_sql(has_known_sessoes: bool = False) -> str:
+    extra_union = (
+        "\n  UNION DISTINCT\n"
+        "  SELECT s.user_pseudo_id, s.ga_session_id\n"
+        "  FROM UNNEST(@sessoes_conhecidas) AS s"
+        if has_known_sessoes
+        else ""
+    )
+    return (
         f"WITH eventos AS (\n"
         f"  SELECT\n"
         f"    _TABLE_SUFFIX AS table_suffix,\n"
@@ -723,7 +806,8 @@ def _bq_apagar_uid(uid: str, sa_file: str) -> dict[str, int]:
         f"  FROM eventos\n"
         f"  WHERE user_id = @uid\n"
         f"    AND user_pseudo_id IS NOT NULL\n"
-        f"    AND ga_session_id IS NOT NULL\n"
+        f"    AND ga_session_id IS NOT NULL"
+        f"{extra_union}\n"
         f")\n"
         f"SELECT DISTINCT\n"
         f"  e.table_suffix,\n"
@@ -734,21 +818,113 @@ def _bq_apagar_uid(uid: str, sa_file: str) -> dict[str, int]:
         f"  ON e.user_pseudo_id = s.user_pseudo_id\n"
         f" AND e.ga_session_id = s.ga_session_id\n"
         f"WHERE e.user_id = @uid\n"
-        f"   OR s.user_pseudo_id IS NOT NULL"
+        f"   OR ((e.user_id IS NULL OR e.user_id = '') AND s.user_pseudo_id IS NOT NULL)"
     )
+
+
+def _bq_delete_events_sql(table_ref: str, has_sessoes: bool) -> str:
+    if not has_sessoes:
+        return f"DELETE FROM {table_ref}\nWHERE user_id = @uid"
+    return (
+        f"DELETE FROM {table_ref}\n"
+        f"WHERE user_id = @uid\n"
+        f"   OR (\n"
+        f"     (user_id IS NULL OR user_id = '')\n"
+        f"     AND STRUCT(\n"
+        f"       user_pseudo_id,\n"
+        f"       (SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'ga_session_id')\n"
+        f"     ) IN (\n"
+        f"       SELECT AS STRUCT s.user_pseudo_id, s.ga_session_id\n"
+        f"       FROM UNNEST(@sessoes) AS s\n"
+        f"     )\n"
+        f"   )"
+    )
+
+
+def _bq_shared_pseudo_ids_sql() -> str:
+    return (
+        f"SELECT DISTINCT user_pseudo_id\n"
+        f"FROM `{GCP_PROJECT}.{BQ_DATASET}.events_*`\n"
+        f"WHERE user_pseudo_id IN UNNEST(@pseudo_ids)\n"
+        f"  AND user_id IS NOT NULL\n"
+        f"  AND user_id != ''\n"
+        f"  AND user_id != @uid"
+    )
+
+
+def _bq_sessoes_param(bigquery, name: str, sessoes: list[tuple[str, int]]):
+    return bigquery.ArrayQueryParameter(
+        name,
+        "STRUCT",
+        [
+            bigquery.StructQueryParameter(
+                None,
+                bigquery.ScalarQueryParameter("user_pseudo_id", "STRING", psid),
+                bigquery.ScalarQueryParameter("ga_session_id", "INT64", sid),
+            )
+            for psid, sid in sessoes
+        ],
+    )
+
+
+def _bq_apagar_uid(uid: str, sa_file: str, sessoes_conhecidas=()) -> dict:
+    """Remove os dados do `uid` no export do GA4 no BigQuery tabela por tabela (nunca DELETE no wildcard):
+    - `events_YYYYMMDD` e `events_intraday_YYYYMMDD`: linhas com `user_id = @uid` e linhas anônimas
+      (`user_id IS NULL OR user_id = ''`) dos pares `(user_pseudo_id, ga_session_id)` descobertos ou já salvos
+      (nunca apaga linhas com `user_id` de outra pessoa);
+    - `users_YYYYMMDD` existentes: `WHERE user_id = @uid`;
+    - `pseudonymous_users_YYYYMMDD` existentes: `WHERE pseudo_user_id IN UNNEST(@pseudo_ids)` apenas para os
+      `user_pseudo_id` descobertos que nunca apareceram com outro `user_id` em `events_*`.
+    Dataset ou tabela não encontrados na descoberta levantam `GoogleIndisponivel` (erro, não sucesso).
+    Tabelas com recusa de DML por streaming buffer contam em `adiadas`."""
+    if not _full(SITE_UID_RE, uid):
+        raise SyncError("uid inválido na remoção do BigQuery")
+    if not sa_file:
+        raise GoogleIndisponivel("HEATING_GCP_SA_FILE ausente")
+    try:
+        from google.cloud import bigquery  # type: ignore[import-not-found]
+        from google.oauth2 import service_account  # type: ignore[import-not-found]
+    except ImportError as e:
+        raise GoogleIndisponivel("biblioteca do BigQuery ausente") from e
+
+    known_sessoes = _normalize_sessoes(sessoes_conhecidas)
+    discover_sql = _bq_discover_events_sql(bool(known_sessoes))
 
     try:
         creds = service_account.Credentials.from_service_account_file(sa_file)
         client = bigquery.Client(project=GCP_PROJECT, credentials=creds)
-        try:
-            job_cfg = bigquery.QueryJobConfig(query_parameters=[bigquery.ScalarQueryParameter("uid", "STRING", uid)])
-            rows = list(client.query(discover_sql, job_config=job_cfg, location=BQ_LOCATION).result())
-        except Exception as e:  # noqa: BLE001
-            if _is_not_found(e):
-                return {"tabelas_limpas": 0, "adiadas": 0}
-            raise
+
+        # 1) Descobre tabelas de usuário existentes (e valida existência do dataset; NotFound é erro).
+        info_rows = list(client.query(_bq_user_tables_info_sql(), location=BQ_LOCATION).result())
+        users_suffixes: set[str] = set()
+        pseudo_suffixes: set[str] = set()
+        for r in info_rows:
+            tname = r["table_name"]
+            if not isinstance(tname, str):
+                continue
+            m_u = BQ_USERS_TABLE_RE.fullmatch(tname)
+            if m_u:
+                users_suffixes.add(m_u.group(1))
+                continue
+            m_p = BQ_PSEUDO_TABLE_RE.fullmatch(tname)
+            if m_p:
+                pseudo_suffixes.add(m_p.group(1))
+
+        # 2) Descobre tabelas `events_*` e pares `(user_pseudo_id, ga_session_id)` (NotFound é erro).
+        disc_params: list = [bigquery.ScalarQueryParameter("uid", "STRING", uid)]
+        if known_sessoes:
+            disc_params.append(_bq_sessoes_param(bigquery, "sessoes_conhecidas", known_sessoes))
+        rows = list(
+            client.query(
+                discover_sql,
+                job_config=bigquery.QueryJobConfig(query_parameters=disc_params),
+                location=BQ_LOCATION,
+            ).result()
+        )
 
         tabelas: dict[str, set[tuple[str, int]]] = {}
+        all_sessoes: set[tuple[str, int]] = set(known_sessoes)
+        candidate_pseudo_ids: set[str] = {psid for psid, _ in all_sessoes}
         for row in rows:
             suffix = row["table_suffix"]
             if not _full(BQ_TABLE_SUFFIX_RE, suffix):
@@ -756,44 +932,40 @@ def _bq_apagar_uid(uid: str, sa_file: str) -> dict[str, int]:
             sess = tabelas.setdefault(suffix, set())
             psid = row["user_pseudo_id"]
             sid = row["ga_session_id"]
-            if isinstance(psid, str) and psid and isinstance(sid, int) and not isinstance(sid, bool):
-                sess.add((psid, sid))
+            if isinstance(psid, str) and psid:
+                candidate_pseudo_ids.add(psid)
+                if isinstance(sid, int) and not isinstance(sid, bool):
+                    sess.add((psid, sid))
+                    all_sessoes.add((psid, sid))
+
+        # 3) Antes de apagar `events_*`, verifica quais `user_pseudo_id` apareceram com outro `user_id`.
+        exclusive_pseudo_ids: list[str] = []
+        if pseudo_suffixes and candidate_pseudo_ids:
+            shared_cfg = bigquery.QueryJobConfig(
+                query_parameters=[
+                    bigquery.ScalarQueryParameter("uid", "STRING", uid),
+                    bigquery.ArrayQueryParameter("pseudo_ids", "STRING", sorted(candidate_pseudo_ids)),
+                ]
+            )
+            shared_rows = list(
+                client.query(_bq_shared_pseudo_ids_sql(), job_config=shared_cfg, location=BQ_LOCATION).result()
+            )
+            shared_pseudo_ids = {
+                r["user_pseudo_id"] for r in shared_rows if isinstance(r["user_pseudo_id"], str) and r["user_pseudo_id"]
+            }
+            exclusive_pseudo_ids = sorted(candidate_pseudo_ids - shared_pseudo_ids)
 
         tabelas_limpas = 0
         adiadas = 0
+
+        # 4) DELETE tabela por tabela em `events_*` (nunca no wildcard, nunca em outro `user_id`).
         for suffix in sorted(tabelas):
             table_ref = f"`{GCP_PROJECT}.{BQ_DATASET}.events_{suffix}`"
             sessoes_list = sorted(tabelas[suffix])
             params: list = [bigquery.ScalarQueryParameter("uid", "STRING", uid)]
             if sessoes_list:
-                del_sql = (
-                    f"DELETE FROM {table_ref}\n"
-                    f"WHERE user_id = @uid\n"
-                    f"   OR STRUCT(\n"
-                    f"     user_pseudo_id,\n"
-                    f"     (SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'ga_session_id')\n"
-                    f"   ) IN (\n"
-                    f"     SELECT AS STRUCT s.user_pseudo_id, s.ga_session_id\n"
-                    f"     FROM UNNEST(@sessoes) AS s\n"
-                    f"   )"
-                )
-                params.append(
-                    bigquery.ArrayQueryParameter(
-                        "sessoes",
-                        "STRUCT",
-                        [
-                            bigquery.StructQueryParameter(
-                                None,
-                                bigquery.ScalarQueryParameter("user_pseudo_id", "STRING", psid),
-                                bigquery.ScalarQueryParameter("ga_session_id", "INT64", sid),
-                            )
-                            for psid, sid in sessoes_list
-                        ],
-                    )
-                )
-            else:
-                del_sql = f"DELETE FROM {table_ref}\nWHERE user_id = @uid"
-
+                params.append(_bq_sessoes_param(bigquery, "sessoes", sessoes_list))
+            del_sql = _bq_delete_events_sql(table_ref, bool(sessoes_list))
             try:
                 client.query(
                     del_sql,
@@ -804,11 +976,92 @@ def _bq_apagar_uid(uid: str, sa_file: str) -> dict[str, int]:
             except Exception as e:  # noqa: BLE001
                 if suffix.startswith("intraday_") and (_is_streaming_buffer_err(e) or _is_not_found(e)):
                     adiadas += 1
+                elif _is_streaming_buffer_err(e):
+                    adiadas += 1
                 elif _is_not_found(e):
                     continue
                 else:
                     raise
-        return {"tabelas_limpas": tabelas_limpas, "adiadas": adiadas}
+
+        # 5) DELETE tabela por tabela em `users_YYYYMMDD` existentes (`WHERE user_id = @uid`).
+        if users_suffixes:
+            users_disc_sql = (
+                f"SELECT DISTINCT _TABLE_SUFFIX AS table_suffix\n"
+                f"FROM `{GCP_PROJECT}.{BQ_DATASET}.users_*`\n"
+                f"WHERE user_id = @uid"
+            )
+            u_rows = list(
+                client.query(
+                    users_disc_sql,
+                    job_config=bigquery.QueryJobConfig(
+                        query_parameters=[bigquery.ScalarQueryParameter("uid", "STRING", uid)]
+                    ),
+                    location=BQ_LOCATION,
+                ).result()
+            )
+            matched_u = sorted({
+                r["table_suffix"]
+                for r in u_rows
+                if _full(BQ_DAY_SUFFIX_RE, r["table_suffix"]) and r["table_suffix"] in users_suffixes
+            })
+            for suffix in matched_u:
+                del_u_sql = f"DELETE FROM `{GCP_PROJECT}.{BQ_DATASET}.users_{suffix}`\nWHERE user_id = @uid"
+                try:
+                    client.query(
+                        del_u_sql,
+                        job_config=bigquery.QueryJobConfig(
+                            query_parameters=[bigquery.ScalarQueryParameter("uid", "STRING", uid)]
+                        ),
+                        location=BQ_LOCATION,
+                    ).result()
+                    tabelas_limpas += 1
+                except Exception as e:  # noqa: BLE001
+                    if _is_streaming_buffer_err(e):
+                        adiadas += 1
+                    elif _is_not_found(e):
+                        continue
+                    else:
+                        raise
+
+        # 6) DELETE tabela por tabela em `pseudonymous_users_YYYYMMDD` existentes (só `user_pseudo_id` exclusivos).
+        if pseudo_suffixes and exclusive_pseudo_ids:
+            pseudo_disc_sql = (
+                f"SELECT DISTINCT _TABLE_SUFFIX AS table_suffix\n"
+                f"FROM `{GCP_PROJECT}.{BQ_DATASET}.pseudonymous_users_*`\n"
+                f"WHERE pseudo_user_id IN UNNEST(@pseudo_ids)"
+            )
+            p_cfg = bigquery.QueryJobConfig(
+                query_parameters=[bigquery.ArrayQueryParameter("pseudo_ids", "STRING", exclusive_pseudo_ids)]
+            )
+            p_rows = list(client.query(pseudo_disc_sql, job_config=p_cfg, location=BQ_LOCATION).result())
+            matched_p = sorted({
+                r["table_suffix"]
+                for r in p_rows
+                if _full(BQ_DAY_SUFFIX_RE, r["table_suffix"]) and r["table_suffix"] in pseudo_suffixes
+            })
+            for suffix in matched_p:
+                del_p_sql = (
+                    f"DELETE FROM `{GCP_PROJECT}.{BQ_DATASET}.pseudonymous_users_{suffix}`\n"
+                    f"WHERE pseudo_user_id IN UNNEST(@pseudo_ids)"
+                )
+                try:
+                    client.query(
+                        del_p_sql,
+                        job_config=bigquery.QueryJobConfig(
+                            query_parameters=[bigquery.ArrayQueryParameter("pseudo_ids", "STRING", exclusive_pseudo_ids)]
+                        ),
+                        location=BQ_LOCATION,
+                    ).result()
+                    tabelas_limpas += 1
+                except Exception as e:  # noqa: BLE001
+                    if _is_streaming_buffer_err(e):
+                        adiadas += 1
+                    elif _is_not_found(e):
+                        continue
+                    else:
+                        raise
+
+        return {"tabelas_limpas": tabelas_limpas, "adiadas": adiadas, "sessoes": sorted(all_sessoes)}
     except GoogleIndisponivel:
         raise
     except Exception as e:  # noqa: BLE001
@@ -817,87 +1070,168 @@ def _bq_apagar_uid(uid: str, sa_file: str) -> dict[str, int]:
         raise
 
 
-def apagar_no_google(
+def processar_fila_ga4(
     c: TS.Clients,
-    uids,
     *,
-    apply: bool,
+    uids: list[str] | None = None,
+    only_due: bool = False,
+    include_uids: list[str] | None = None,
     ga4_delete=None,
     bq_delete=None,
     now_dt: datetime | None = None,
+    stop_on_bq_error: bool = False,
 ) -> dict:
-    """Remove os `uids` no GA4 (`submitUserDeletion`) e no BigQuery (tabela por tabela), agendando repetição no
-    BigQuery em `ga4_purge_queue` (D+1 e D+3; e attempt=1 se o BigQuery foi pulado ou falhou). Nunca lança erro
-    operacional do Google para não impedir as demais remoções."""
-    uid_list = sorted({u for u in uids if isinstance(u, str) and _full(SITE_UID_RE, u)})
+    """Processa itens da fila única `ga4_purge_queue` (migração 0014):
+    - GA4 (`submitUserDeletion`) enquanto `ga4_pendente = 1`: sucesso zera `ga4_pendente`; 403/erro mantém 1 e conta
+      em `ga4_remocao_pendente`;
+    - BigQuery (`_bq_apagar_uid`) com os pares salvos em `sessoes` somados aos descobertos agora, repetido em D+1
+      (tentativa 2), D+3 (tentativa 3) e enquanto houver tabela adiada por streaming buffer (até 5 tentativas).
+      Em falha operacional do BigQuery, mantém `bq_tentativas` e agenda `proxima_em = agora` (tentativa imediata).
+    O item só sai da fila quando GA4 está feito (`ga4_pendente = 0`) e o BigQuery terminou."""
     res = {
         "ga4_removidos": 0,
-        "ga4_remocao_falhou": 0,
+        "ga4_remocao_pendente": 0,
         "bq_tabelas_limpas": 0,
         "bq_remocao_adiada": 0,
         "bq_remocao_falhou": 0,
-        "ga4_fila_agendada": 0,
-        "ga4_pendente": False,
+        "ga4_fila_processados": 0,
+        "ga4_fila_restantes": 0,
+        "sem_credencial": False,
     }
-    if not uid_list or not apply:
-        return res
-
     now = now_dt or _now()
     if now.tzinfo is None:
         now = now.replace(tzinfo=timezone.utc)
     else:
         now = now.astimezone(timezone.utc)
-    sa_file = (c.env.get("HEATING_GCP_SA_FILE") or "").strip()
+    now_iso = stamp(now)
 
-    def agendar(uid: str, schedule: tuple[tuple[int, int], ...]) -> None:
-        for attempt, delta_days in schedule:
-            due_iso = stamp(now + timedelta(days=delta_days))
-            c.d1(
-                "INSERT INTO ga4_purge_queue (uid, due_at, attempt) VALUES (?, ?, ?) "
-                "ON CONFLICT(uid, attempt) DO UPDATE SET due_at = min(ga4_purge_queue.due_at, excluded.due_at)",
-                [uid, due_iso, attempt],
-            )
-            res["ga4_fila_agendada"] += 1
+    rows: list[dict] = []
+    seen_uids: set[str] = set()
+    if uids is not None:
+        valid_uids = sorted({u for u in uids if isinstance(u, str) and _full(SITE_UID_RE, u)})
+        for i in range(0, len(valid_uids), MARK_CHUNK):
+            part = valid_uids[i:i + MARK_CHUNK]
+            ph = ",".join("?" * len(part))
+            for r in c.d1(
+                f"SELECT uid, ga4_pendente, sessoes, bq_tentativas, proxima_em, criado_em "
+                f"FROM ga4_purge_queue WHERE uid IN ({ph}) ORDER BY uid",
+                part,
+            ):
+                if r["uid"] not in seen_uids:
+                    seen_uids.add(r["uid"])
+                    rows.append(r)
+    elif only_due:
+        for r in c.d1(
+            "SELECT uid, ga4_pendente, sessoes, bq_tentativas, proxima_em, criado_em "
+            "FROM ga4_purge_queue WHERE proxima_em <= ? ORDER BY proxima_em, uid",
+            [now_iso],
+        ):
+            if r["uid"] not in seen_uids:
+                seen_uids.add(r["uid"])
+                rows.append(r)
+        if include_uids:
+            extra = sorted({u for u in include_uids if isinstance(u, str) and _full(SITE_UID_RE, u) and u not in seen_uids})
+            for i in range(0, len(extra), MARK_CHUNK):
+                part = extra[i:i + MARK_CHUNK]
+                ph = ",".join("?" * len(part))
+                for r in c.d1(
+                    f"SELECT uid, ga4_pendente, sessoes, bq_tentativas, proxima_em, criado_em "
+                    f"FROM ga4_purge_queue WHERE uid IN ({ph}) ORDER BY uid",
+                    part,
+                ):
+                    if r["uid"] not in seen_uids:
+                        seen_uids.add(r["uid"])
+                        rows.append(r)
 
-    if not sa_file and ga4_delete is None and bq_delete is None:
-        res["ga4_remocao_falhou"] = len(uid_list)
-        res["ga4_pendente"] = True
-        for uid in uid_list:
-            agendar(uid, ((1, 0), (2, 1), (3, 3)))
+    if not rows:
         return res
 
-    for uid in uid_list:
-        if ga4_delete is not None:
-            try:
-                ok_ga4 = bool(ga4_delete(uid))
-            except (GoogleIndisponivel, OSError):
-                ok_ga4 = False
-        elif sa_file:
-            ok_ga4 = _ga4_submit_user_deletion(uid, sa_file)
-        else:
-            ok_ga4 = False
+    sa_file = (c.env.get("HEATING_GCP_SA_FILE") or "").strip()
+    has_cred = bool(sa_file) or ga4_delete is not None or bq_delete is not None
+    if not has_cred:
+        res["sem_credencial"] = True
+        res["ga4_fila_restantes"] = len(rows)
+        return res
 
-        if ok_ga4:
-            res["ga4_removidos"] += 1
-        else:
-            res["ga4_remocao_falhou"] += 1
-            res["ga4_pendente"] = True
+    for r in rows:
+        uid = r.get("uid")
+        if not _full(SITE_UID_RE, uid):
+            continue
+        ga4_pend = 1 if int(r.get("ga4_pendente") or 0) else 0
+        saved_sessoes = _parse_sessoes_json(r.get("sessoes"))
+        bq_tent = int(r.get("bq_tentativas") or 0)
 
-        bq_ok = False
-        try:
-            if bq_delete is not None:
-                bq_res = bq_delete(uid) or {}
+        if ga4_pend == 1:
+            if ga4_delete is not None:
+                try:
+                    ok_ga4 = bool(ga4_delete(uid))
+                except (GoogleIndisponivel, OSError):
+                    ok_ga4 = False
             elif sa_file:
-                bq_res = _bq_apagar_uid(uid, sa_file)
+                ok_ga4 = _ga4_submit_user_deletion(uid, sa_file)
             else:
-                raise GoogleIndisponivel("HEATING_GCP_SA_FILE ausente")
-            res["bq_tabelas_limpas"] += int(bq_res.get("tabelas_limpas", 0))
-            res["bq_remocao_adiada"] += int(bq_res.get("adiadas", 0))
-            bq_ok = True
-        except (GoogleIndisponivel, OSError):
-            res["bq_remocao_falhou"] += 1
+                ok_ga4 = False
+            if ok_ga4:
+                ga4_pend = 0
+                res["ga4_removidos"] += 1
+            else:
+                res["ga4_remocao_pendente"] += 1
 
-        agendar(uid, ((2, 1), (3, 3)) if bq_ok else ((1, 0), (2, 1), (3, 3)))
+        bq_done = bq_tent >= GA4_PURGE_MAX_TENTATIVAS
+        bq_failed = False
+        new_tent = bq_tent
+        merged_sessoes = saved_sessoes
+        next_due = stamp(now + timedelta(days=1))
+
+        if not bq_done:
+            try:
+                if bq_delete is not None:
+                    bq_res = bq_delete(uid, saved_sessoes) or {}
+                elif sa_file:
+                    bq_res = _bq_apagar_uid(uid, sa_file, sessoes_conhecidas=saved_sessoes)
+                else:
+                    raise GoogleIndisponivel("HEATING_GCP_SA_FILE ausente")
+                res["bq_tabelas_limpas"] += int(bq_res.get("tabelas_limpas", 0))
+                adiadas = int(bq_res.get("adiadas", 0))
+                res["bq_remocao_adiada"] += adiadas
+                merged_sessoes = _normalize_sessoes(list(saved_sessoes) + list(bq_res.get("sessoes") or ()))
+                new_tent = bq_tent + 1
+                if new_tent == 1:
+                    next_due = stamp(now + timedelta(days=1))
+                elif new_tent == 2:
+                    next_due = stamp(now + timedelta(days=2))
+                elif new_tent < GA4_PURGE_MAX_TENTATIVAS:
+                    if adiadas == 0:
+                        bq_done = True
+                    else:
+                        next_due = stamp(now + timedelta(days=1))
+                else:
+                    bq_done = True
+            except (GoogleIndisponivel, OSError):
+                bq_failed = True
+                res["bq_remocao_falhou"] += 1
+                next_due = now_iso
+
+        sessoes_json = _dump_sessoes_json(merged_sessoes)
+        if ga4_pend == 0 and bq_done:
+            c.d1("DELETE FROM ga4_purge_queue WHERE uid = ?", [uid])
+            res["ga4_fila_processados"] += 1
+        elif bq_failed:
+            c.d1(
+                "UPDATE ga4_purge_queue SET ga4_pendente = ?, sessoes = ?, bq_tentativas = ?, proxima_em = ? WHERE uid = ?",
+                [ga4_pend, sessoes_json, bq_tent, now_iso, uid],
+            )
+            res["ga4_fila_restantes"] += 1
+            if stop_on_bq_error:
+                break
+        else:
+            stored_tent = GA4_PURGE_MAX_TENTATIVAS if bq_done else new_tent
+            c.d1(
+                "UPDATE ga4_purge_queue SET ga4_pendente = ?, sessoes = ?, bq_tentativas = ?, proxima_em = ? WHERE uid = ?",
+                [ga4_pend, sessoes_json, stored_tent, next_due, uid],
+            )
+            res["ga4_fila_processados"] += 1
+            res["ga4_fila_restantes"] += 1
 
     return res
 
@@ -913,19 +1247,23 @@ def forget(
     bq_delete=None,
     now_dt: datetime | None = None,
 ) -> Counter:
-    """Grava o marcador `forgotten` (issue #134), apaga as conversões do Twenty e do D1, limpa o heating do contexto
-    `site` no D1 e na Pessoa do Twenty (épico #197, sem tocar nos contextos de curso), remove no GA4 e no BigQuery os
-    uids ligados ao email em `site_identities` (agendando D+1 e D+3 em `ga4_purge_queue`), apaga `site_identities` e
-    limpa marcadores vencidos."""
+    """Grava o marcador `forgotten` (issue #134) e a oposição permanente ao heating em `heating_optout` (decisão do
+    Gui, 2026-11-27; épico #197) antes de apagar o resto, apaga as conversões do Twenty e do D1, limpa o heating do
+    contexto `site` no D1 e na Pessoa do Twenty (sem tocar nos contextos de curso), apaga `site_identities` (cujo
+    trigger enfileira os `uid`s em `ga4_purge_queue`), processa a fila imediatamente quando há credencial GCP e limpa
+    marcadores vencidos de `forgotten`."""
     out = out or sys.stdout
     key = c.env.get("FORGET_HMAC_KEY", "") if forget_key is None else forget_key
     email = email.strip().lower()
     email_hmac = forget_hmac(email, key)  # valida chave e email antes de qualquer leitura ou escrita
+    optout_hmac = heating_optout_hmac(email, key)
     counts: Counter = Counter()
     if apply:
-        # 1) Marcador mínimo no D1 logo após validar chave e email, antes de qualquer leitura do D1 ou do Twenty (#134):
-        #    mesmo que a leitura do Twenty falhe em seguida, links antigos já ficam bloqueados.
+        # 1) Marcadores no D1 logo após validar chave e email, antes de qualquer leitura do D1 ou do Twenty (#134, #197):
+        #    mesmo que a leitura do Twenty falhe em seguida, links antigos já ficam bloqueados e a oposição permanente
+        #    ao heating impede nova pontuação e novo vínculo pelo login (`/identidade`).
         _upsert_forget_mark(c, email_hmac)
+        _upsert_heating_optout(c, optout_hmac)
     # As linhas do D1 são o diário: enquanto existirem, os ids delas acham as Conversões no Twenty e os
     # `twenty_person_id` de `conversions` e `heating` (contexto `site`) acham a Pessoa ativa mesmo se o email mudou.
     conv_rows = c.d1("SELECT id, twenty_person_id FROM conversions WHERE email = ?", [email])
@@ -963,6 +1301,7 @@ def forget(
     counts["marcadores_vencidos"] = expired_marks
     ga4_pendente = False
     bq_falhou = False
+    sem_cred_enfileirado = False
     if apply:
         # 2) Apaga no Twenty e relê para provar que nenhuma sobrou; limpa os quatro campos heating* na Pessoa.
         for x in convs:
@@ -983,27 +1322,41 @@ def forget(
         c.d1("DELETE FROM heating WHERE context = 'site' AND email = ?", [email])
         if c.d1("SELECT count(*) AS n FROM heating WHERE context = 'site' AND email = ?", [email])[0]["n"] != 0:
             raise SyncError("o D1 ainda tem nota de site do email depois da remoção")
-        # 4) Remove os uids do email no GA4 e no BigQuery (e agenda D+1/D+3), depois apaga `site_identities`.
-        if site_uids:
-            g_res = apagar_no_google(c, site_uids, apply=True, ga4_delete=ga4_delete, bq_delete=bq_delete, now_dt=now_dt)
-            counts["ga4_removidos"] = g_res["ga4_removidos"]
-            counts["ga4_remocao_falhou"] = g_res["ga4_remocao_falhou"]
-            counts["bq_tabelas_limpas"] = g_res["bq_tabelas_limpas"]
-            counts["bq_remocao_adiada"] = g_res["bq_remocao_adiada"]
-            counts["ga4_fila_agendada"] = g_res["ga4_fila_agendada"]
-            if g_res["bq_remocao_falhou"]:
-                counts["bq_remocao_falhou"] = g_res["bq_remocao_falhou"]
-                bq_falhou = True
-            ga4_pendente = bool(g_res["ga4_pendente"])
+        # 4) Apaga `site_identities` (o trigger da 0014 enfileira os uids em `ga4_purge_queue`);
+        #    quando há credencial GCP, processa a fila na hora; sem credencial (Mac), só enfileira e avisa.
         if raw_identities:
             c.d1("DELETE FROM site_identities WHERE email = ?", [email])
             if c.d1("SELECT count(*) AS n FROM site_identities WHERE email = ?", [email])[0]["n"] != 0:
                 raise SyncError("o D1 ainda tem identidades do site do email depois da remoção")
+        if site_uids:
+            g_res = processar_fila_ga4(
+                c,
+                uids=site_uids,
+                ga4_delete=ga4_delete,
+                bq_delete=bq_delete,
+                now_dt=now_dt,
+            )
+            if g_res["sem_credencial"]:
+                counts["ga4_fila_enfileirados"] = len(site_uids)
+                sem_cred_enfileirado = True
+            else:
+                counts["ga4_removidos"] = g_res["ga4_removidos"]
+                counts["ga4_remocao_pendente"] = g_res["ga4_remocao_pendente"]
+                counts["bq_tabelas_limpas"] = g_res["bq_tabelas_limpas"]
+                counts["bq_remocao_adiada"] = g_res["bq_remocao_adiada"]
+                counts["ga4_fila_restantes"] = g_res["ga4_fila_restantes"]
+                if g_res["bq_remocao_falhou"]:
+                    counts["bq_remocao_falhou"] = g_res["bq_remocao_falhou"]
+                    bq_falhou = True
+                ga4_pendente = g_res["ga4_remocao_pendente"] > 0
     _report(counts, out, FORGET_MARK if apply else "simulação: nada foi apagado (use --apply)")
-    if apply and ga4_pendente:
-        print(GA4_PURGE_PENDENTE_MSG, file=out)
-    elif apply and bq_falhou:
-        print(BQ_PURGE_PENDENTE_MSG, file=out)
+    if apply and sem_cred_enfileirado:
+        print(GA4_FILA_SEM_CRED_MSG, file=out)
+    else:
+        if apply and ga4_pendente:
+            print(GA4_PURGE_PENDENTE_MSG, file=out)
+        if apply and bq_falhou:
+            print(BQ_PURGE_PENDENTE_MSG, file=out)
     return counts
 
 
@@ -1061,7 +1414,7 @@ def main(
                 bq_delete=bq_delete,
                 now_dt=now_dt,
             )
-            if a.apply and (counts.get("ga4_remocao_falhou", 0) > 0 or counts.get("bq_remocao_falhou", 0) > 0):
+            if a.apply and (counts.get("ga4_remocao_pendente", 0) > 0 or counts.get("bq_remocao_falhou", 0) > 0):
                 rc = 2
         else:
             run(c, apply=a.apply)

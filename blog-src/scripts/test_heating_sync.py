@@ -13,6 +13,7 @@ import hashlib
 import io
 import json
 import os
+import re
 import sqlite3
 import sys
 import tempfile
@@ -68,11 +69,11 @@ class Fake:
         self.db = sqlite3.connect(db_path)
         self.db.row_factory = sqlite3.Row
         mig_files = sorted(n for n in os.listdir(MIGRATIONS) if n.endswith(".sql"))
+        if not any(n.startswith("0013_") for n in mig_files):
+            self.db.executescript(SITE_IDENTITIES_0013_SQL)
         for name in mig_files:
             with open(os.path.join(MIGRATIONS, name), encoding="utf-8") as fh:
                 self.db.executescript(fh.read())
-        if not any(n.startswith("0013_") for n in mig_files):
-            self.db.executescript(SITE_IDENTITIES_0013_SQL)
         self.people = {p["id"]: copy.deepcopy(p) for p in people}
         self.person_fields = {
             n: {"id": f"pf-{n}", "name": n, "type": t, "options": None}
@@ -171,15 +172,31 @@ class Fake:
         )
         self.db.commit()
 
-    def add_purge_queue(self, uid: str, due_at: str, attempt: int):
+    def add_purge_queue(
+        self,
+        uid: str,
+        proxima_em: str = NOW_ISO,
+        *,
+        ga4_pendente: int = 1,
+        sessoes: str = "[]",
+        bq_tentativas: int = 0,
+        criado_em: str | None = None,
+    ):
         self.db.execute(
-            "INSERT INTO ga4_purge_queue (uid, due_at, attempt) VALUES (?, ?, ?)",
-            (uid, due_at, attempt),
+            "INSERT INTO ga4_purge_queue (uid, ga4_pendente, sessoes, bq_tentativas, proxima_em, criado_em) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (uid, ga4_pendente, sessoes, bq_tentativas, proxima_em, criado_em or NOW_ISO),
         )
         self.db.commit()
 
     def purge_queue_rows(self) -> list[dict]:
-        return [dict(r) for r in self.db.execute("SELECT uid, due_at, attempt FROM ga4_purge_queue ORDER BY uid, attempt")]
+        return [
+            dict(r)
+            for r in self.db.execute(
+                "SELECT uid, ga4_pendente, sessoes, bq_tentativas, proxima_em, criado_em "
+                "FROM ga4_purge_queue ORDER BY uid"
+            )
+        ]
 
     def meta_get(self, k: str) -> str | None:
         r = self.db.execute("SELECT v FROM meta WHERE k = ?", (k,)).fetchone()
@@ -395,6 +412,7 @@ def run_job(
     ga4_desde=None,
     exclude_emails=None,
     extra_env=None,
+    ga4_delete=None,
     bq_delete=None,
 ):
     out = io.StringIO()
@@ -413,6 +431,7 @@ def run_job(
         ler_ga4_dia=ler_ga4_dia,
         forget_key=FORGET_KEY,
         exclude_emails=exclude_emails,
+        ga4_delete=ga4_delete,
         bq_delete=bq_delete,
     )
     return counts, out.getvalue()
@@ -2382,10 +2401,15 @@ class Ga4EBigQueryTest(unittest.TestCase):
         self.assertEqual((hrows[("site", "cid@corp.com")]["score"], hrows[("site", "cid@corp.com")]["band"]), (100, "quente"))
         self.assertGreater(hrows[("site", "bia@corp.com")]["score"], hrows[("site", "ana@corp.com")]["score"])
 
-        # 3) Rodada seguinte no mesmo dia: marcador já está em ontem (2026-11-26) -> não chama ler_ga4_dia.
+        # 3) Rodada seguinte no mesmo dia: relê a janela retroativa (2026-11-25 e 2026-11-26), mas ids determinísticos
+        #    deduplicam (eventos_ga4_novos == 0) e o marcador não regride (mata mutação M13).
         seen_days.clear()
+        ev_count_before = len(f.event_ids())
         c2, _ = run_job(f, apply=True, ga4_desde="2026-11-25", ler_ga4_dia=reader)
-        self.assertEqual((seen_days, c2["ga4_dias_lidos"], c2["eventos_ga4_novos"]), ([], 0, 0))
+        self.assertEqual(seen_days, [date(2026, 11, 25), date(2026, 11, 26)])
+        self.assertEqual((c2["ga4_dias_lidos"], c2["eventos_ga4_novos"]), (2, 0))
+        self.assertEqual(len(f.event_ids()), ev_count_before)
+        self.assertEqual(f.meta_get(H.GA4_META_KEY), "2026-11-26")
 
         # 4) Falha ao gravar eventos do dia 2 não avança marcador para o dia 2 (mantém dia 1).
         state = {"armed": True}
@@ -2408,13 +2432,56 @@ class Ga4EBigQueryTest(unittest.TestCase):
             run_job(g, apply=True, ga4_desde="2026-11-25", ler_ga4_dia=lambda d: data_by_day.get(d))
         self.assertEqual(g.meta_get(H.GA4_META_KEY), "2026-11-25")
 
-    def test_ga4_tabela_inexistente_interrompe_sequencia_sem_erro(self):
+    def test_ga4_eventos_atrasados_rele_3_dias_anteriores_e_deduplica(self):
         f = Fake(schema=True)
         f.add_identity("UidAna123", "ana@corp.com")
-        seen = []
+        f.meta_set(H.GA4_META_KEY, "2026-11-25")
+        h_ana = hashlib.sha256(b"UidAna123").hexdigest()[:16]
+        # Evento de visita do dia 24 já existia antes.
+        f.add_event(
+            f"ga:20261124:{h_ana}:site_visita",
+            "ana@corp.com",
+            "site_visita",
+            source="ga4",
+            ref=None,
+            when="2026-11-24T10:00:00.000Z",
+        )
+        seen: list[date] = []
 
         def reader(dia: date):
             seen.append(dia)
+            if dia == date(2026, 11, 24):
+                # Chegou evento atrasado (schedule_click) no dia 24 dentro da janela de 72 h do GA4!
+                return [{
+                    "user_id": "UidAna123", "sessoes": 1, "page_views": 1, "engagement_time_msec": 0,
+                    "scrolls": 0, "cliques_contato": 0, "cliques_agenda": 1,
+                    "min_ts_visita": _ts_us(datetime(2026, 11, 24, 10, 0, tzinfo=timezone.utc)),
+                    "min_ts_engajamento": None, "min_ts_contato": None,
+                    "min_ts_agenda": _ts_us(datetime(2026, 11, 24, 10, 5, tzinfo=timezone.utc)),
+                }]
+            return []
+
+        counts, _ = run_job(f, apply=True, ga4_desde="2026-11-20", ler_ga4_dia=reader)
+        # Relê os 3 dias até o marcador (23, 24, 25) + dia novo (26).
+        self.assertEqual(seen, [date(2026, 11, 23), date(2026, 11, 24), date(2026, 11, 25), date(2026, 11, 26)])
+        # Só o evento atrasado `site_agende` é novo; `site_visita` já existente foi deduplicado.
+        self.assertEqual(counts["eventos_ga4_novos"], 1)
+        self.assertIn(f"ga:20261124:{h_ana}:site_agende", f.event_ids())
+        self.assertEqual(f.meta_get(H.GA4_META_KEY), "2026-11-26")
+
+        # Rodada seguinte sem eventos novos: `eventos_ga4_novos == 0` e nenhuma duplicata.
+        counts2, _ = run_job(f, apply=True, ga4_desde="2026-11-20", ler_ga4_dia=reader)
+        self.assertEqual(counts2["eventos_ga4_novos"], 0)
+        self.assertEqual(len(f.event_ids()), 2)
+
+    def test_ga4_dia_sem_tabela_espera_ou_avanca_quando_posterior_existe(self):
+        # 1) Nenhum dia posterior tem tabela ainda: espera (não conta ga4_dia_sem_tabela nem avança marcador).
+        f = Fake(schema=True)
+        f.add_identity("UidAna123", "ana@corp.com")
+        seen_wait: list[date] = []
+
+        def reader_wait(dia: date):
+            seen_wait.append(dia)
             if dia == date(2026, 11, 24):
                 return [{
                     "user_id": "UidAna123", "sessoes": 1, "page_views": 1, "engagement_time_msec": 0,
@@ -2422,14 +2489,33 @@ class Ga4EBigQueryTest(unittest.TestCase):
                     "min_ts_visita": _ts_us(datetime(2026, 11, 24, 10, 0, tzinfo=timezone.utc)),
                     "min_ts_engajamento": None, "min_ts_contato": None, "min_ts_agenda": None,
                 }]
-            if dia == date(2026, 11, 25):
-                return None  # tabela ainda não existe
-            raise AssertionError("não deveria consultar dia 26 após None no dia 25")
+            return None  # dias 25 e 26 ainda sem tabela
 
-        counts, _ = run_job(f, apply=True, ga4_desde="2026-11-24", ler_ga4_dia=reader)
-        self.assertEqual(seen, [date(2026, 11, 24), date(2026, 11, 25)])
-        self.assertEqual((counts["ga4_dias_lidos"], counts["eventos_ga4_novos"], counts["ga4_indisponivel"]), (1, 1, 0))
+        c_wait, _ = run_job(f, apply=True, ga4_desde="2026-11-24", ler_ga4_dia=reader_wait)
+        self.assertEqual(seen_wait, [date(2026, 11, 24), date(2026, 11, 25), date(2026, 11, 26)])
+        self.assertEqual(
+            (c_wait["ga4_dias_lidos"], c_wait["ga4_dia_sem_tabela"], c_wait["eventos_ga4_novos"], c_wait["ga4_indisponivel"]),
+            (1, 0, 1, 0),
+        )
         self.assertEqual(f.meta_get(H.GA4_META_KEY), "2026-11-24")
+
+        # 2) Dia 25 sem tabela (dia sem eventos), mas dia 26 já tem tabela: conta ga4_dia_sem_tabela=1 e marcador segue!
+        def reader_gap(dia: date):
+            if dia == date(2026, 11, 25):
+                return None
+            if dia == date(2026, 11, 26):
+                return [{
+                    "user_id": "UidAna123", "sessoes": 1, "page_views": 1, "engagement_time_msec": 0,
+                    "scrolls": 0, "cliques_contato": 0, "cliques_agenda": 0,
+                    "min_ts_visita": _ts_us(datetime(2026, 11, 26, 11, 0, tzinfo=timezone.utc)),
+                    "min_ts_engajamento": None, "min_ts_contato": None, "min_ts_agenda": None,
+                }]
+            return []
+
+        c_gap, out_gap = run_job(f, apply=True, ga4_desde="2026-11-24", ler_ga4_dia=reader_gap)
+        self.assertEqual((c_gap["ga4_dia_sem_tabela"], c_gap["ga4_dias_lidos"], c_gap["eventos_ga4_novos"]), (1, 2, 1))
+        self.assertIn("ga4_dia_sem_tabela: 1", out_gap)
+        self.assertEqual(f.meta_get(H.GA4_META_KEY), "2026-11-26")
 
     def test_ga4_teto_de_14_dias_por_rodada(self):
         f = Fake(schema=True)
@@ -2440,12 +2526,19 @@ class Ga4EBigQueryTest(unittest.TestCase):
         self.assertEqual(c1["ga4_dias_lidos"], 14)
         self.assertEqual(f.meta_get(H.GA4_META_KEY), "2026-11-14")
 
-        # Segunda rodada retoma do dia 15 até ontem (26) = 12 dias.
+        # Segunda rodada relê 3 dias (12, 13, 14) + 11 dias novos (15..25) respeitando o teto de 14 dias.
         seen2: list[date] = []
         c2, _ = run_job(f, apply=True, ga4_desde="2026-11-01", ler_ga4_dia=lambda d: seen2.append(d) or [])
-        self.assertEqual(len(seen2), 12)
-        self.assertEqual((seen2[0], seen2[-1]), (date(2026, 11, 15), date(2026, 11, 26)))
-        self.assertEqual(c2["ga4_dias_lidos"], 12)
+        self.assertEqual(len(seen2), 14)
+        self.assertEqual((seen2[0], seen2[-1]), (date(2026, 11, 12), date(2026, 11, 25)))
+        self.assertEqual(c2["ga4_dias_lidos"], 14)
+        self.assertEqual(f.meta_get(H.GA4_META_KEY), "2026-11-25")
+
+        # Terceira rodada conclui até ontem (26): relê 23..25 + novo 26.
+        seen3: list[date] = []
+        c3, _ = run_job(f, apply=True, ga4_desde="2026-11-01", ler_ga4_dia=lambda d: seen3.append(d) or [])
+        self.assertEqual(seen3, [date(2026, 11, 23), date(2026, 11, 24), date(2026, 11, 25), date(2026, 11, 26)])
+        self.assertEqual(c3["ga4_dias_lidos"], 4)
         self.assertEqual(f.meta_get(H.GA4_META_KEY), "2026-11-26")
 
     def test_ga4_sem_vinculo_oposicao_e_ligacao_so_na_sessao(self):
@@ -2605,11 +2698,22 @@ class Ga4EBigQueryTest(unittest.TestCase):
             self.assertIn("`mindapps.analytics_341040810.events_20261126`", sql)
             self.assertNotIn("events_*", sql)
             self.assertNotIn("intraday", sql.lower())
-            self.assertIn("privacy_info.analytics_storage = 'Yes'", sql)
-            self.assertIn("stream_id = @stream_id", sql)
-            self.assertIn("HAVING COUNT(DISTINCT user_id) = 1", sql)
-            self.assertIn("user_pseudo_id", sql)
-            self.assertIn("ga_session_id", sql)
+            # Asserções estruturais sobre a SQL normalizada (matam mutações M1, M2, M3, M4 e M6/M17).
+            nsql = re.sub(r"\s+", " ", sql).strip()
+            self.assertIn("WHERE stream_id = @stream_id AND privacy_info.analytics_storage = 'Yes'", nsql)
+            self.assertIn(
+                "sessoes_uid AS ( SELECT user_pseudo_id, ga_session_id, ANY_VALUE(user_id) AS session_user_id "
+                "FROM base WHERE user_id IS NOT NULL AND user_id != '' AND user_pseudo_id IS NOT NULL "
+                "AND ga_session_id IS NOT NULL GROUP BY user_pseudo_id, ga_session_id HAVING COUNT(DISTINCT user_id) = 1 )",
+                nsql,
+            )
+            self.assertIn("COALESCE(NULLIF(b.user_id, ''), s.session_user_id) AS uid", nsql)
+            self.assertIn(
+                "FROM base AS b LEFT JOIN sessoes_uid AS s "
+                "ON b.user_pseudo_id = s.user_pseudo_id AND b.ga_session_id = s.ga_session_id",
+                nsql,
+            )
+            self.assertIn("FROM ligados WHERE uid IS NOT NULL AND uid != '' GROUP BY uid", nsql)
             self.assertEqual([(p.name, p.value) for p in cfg.query_parameters], [("stream_id", "13120304692")])
             self.assertEqual(loc, "southamerica-east1")
 
@@ -2633,54 +2737,261 @@ class Ga4EBigQueryTest(unittest.TestCase):
             for k, v in saved.items():
                 sys.modules.pop(k, None) if v is None else sys.modules.__setitem__(k, v)
 
-    def test_fila_ga4_purge_queue_processada_pelo_job_e_checks_0014(self):
+    def test_ga4_day_query_sql_execucao_real_duckdb(self):
+        try:
+            import duckdb  # type: ignore[import-not-found]
+        except ImportError:
+            self.skipTest("duckdb não disponível no Python local")
+
+        con = duckdb.connect(":memory:")
+        con.execute(
+            """
+            CREATE TABLE events_20261126 (
+              stream_id VARCHAR,
+              privacy_info STRUCT(analytics_storage VARCHAR),
+              user_id VARCHAR,
+              user_pseudo_id VARCHAR,
+              event_name VARCHAR,
+              event_timestamp BIGINT,
+              event_params STRUCT(key VARCHAR, value STRUCT(int_value BIGINT))[]
+            )
+            """
+        )
+
+        def ep(sid, eng=None):
+            arr = []
+            if sid is not None:
+                arr.append({"key": "ga_session_id", "value": {"int_value": sid}})
+            if eng is not None:
+                arr.append({"key": "engagement_time_msec", "value": {"int_value": eng}})
+            return arr
+
+        # - Sessão (ps1, 100): page_view anônimo antes do login (eng 65s) + auth_identified com UidA -> liga retroativo!
+        # - Outra sessão (ps1, 200): scroll anônimo -> NÃO liga a UidA (sessão diferente).
+        # - Sessão mista (ps2, 300): scroll anônimo + UidB + UidC -> HAVING = 1 bloqueia ligação do anônimo.
+        # - Sem consentimento / outro stream -> filtrados fora.
+        # - Sem ga_session_id -> anônimo não liga.
+        con.executemany(
+            "INSERT INTO events_20261126 VALUES (?, {'analytics_storage': ?}, ?, ?, ?, ?, ?)",
+            [
+                (H.GA4_STREAM_ID, "Yes", None, "ps1", "page_view", 1000, ep(100, 65000)),
+                (H.GA4_STREAM_ID, "Yes", "UidA", "ps1", "auth_identified", 2000, ep(100, 0)),
+                (H.GA4_STREAM_ID, "Yes", None, "ps1", "scroll", 3000, ep(200, 5000)),
+                (H.GA4_STREAM_ID, "Yes", None, "ps2", "scroll", 4000, ep(300, 0)),
+                (H.GA4_STREAM_ID, "Yes", "UidB", "ps2", "page_view", 5000, ep(300, 1000)),
+                (H.GA4_STREAM_ID, "Yes", "UidC", "ps2", "contact_click", 6000, ep(300, 0)),
+                (H.GA4_STREAM_ID, "No", "UidSemCons", "ps3", "page_view", 7000, ep(400, 70000)),
+                ("9999999999", "Yes", "UidOutroStream", "ps4", "page_view", 8000, ep(500, 70000)),
+                (H.GA4_STREAM_ID, "Yes", None, "ps1", "schedule_click", 9000, ep(None, 0)),
+            ],
+        )
+
+        raw_sql = H.ga4_day_query_sql(date(2026, 11, 26))
+        duck_sql = (
+            raw_sql.replace("`mindapps.analytics_341040810.events_20261126`", "events_20261126")
+            .replace("@stream_id", f"'{H.GA4_STREAM_ID}'")
+            .replace("UNNEST(event_params)", "UNNEST(event_params) AS _p(ep)")
+            .replace("SELECT value.int_value FROM UNNEST(event_params) AS _p(ep) WHERE key =", "SELECT ep.value.int_value FROM UNNEST(event_params) AS _p(ep) WHERE ep.key =")
+            .replace("CAST(ga_session_id AS STRING)", "CAST(ga_session_id AS VARCHAR)")
+            .replace("COUNTIF(", "COUNT(*) FILTER (WHERE ")
+            .replace("IF(engagement_time_msec > 0 OR event_name = 'scroll', event_timestamp, NULL)", "CASE WHEN engagement_time_msec > 0 OR event_name = 'scroll' THEN event_timestamp ELSE NULL END")
+            .replace("IF(event_name = 'contact_click', event_timestamp, NULL)", "CASE WHEN event_name = 'contact_click' THEN event_timestamp ELSE NULL END")
+            .replace("IF(event_name = 'schedule_click', event_timestamp, NULL)", "CASE WHEN event_name = 'schedule_click' THEN event_timestamp ELSE NULL END")
+        )
+        cols = [d[0] for d in con.execute(duck_sql).description]
+        by_uid = {r[0]: dict(zip(cols, r)) for r in con.execute(duck_sql).fetchall()}
+        self.assertEqual(set(by_uid), {"UidA", "UidB", "UidC"})
+        # UidA recebeu o page_view + 65000ms anônimo da sessão 100, mas NÃO recebeu scroll da sessão 200 nem schedule_click sem sessão.
+        self.assertEqual((by_uid["UidA"]["page_views"], by_uid["UidA"]["engagement_time_msec"], by_uid["UidA"]["scrolls"], by_uid["UidA"]["cliques_agenda"]), (1, 65000, 0, 0))
+        self.assertEqual(by_uid["UidA"]["min_ts_visita"], 1000)
+        # Sessão mista: scroll anônimo não foi para UidB nem UidC.
+        self.assertEqual((by_uid["UidB"]["scrolls"], by_uid["UidC"]["scrolls"], by_uid["UidC"]["cliques_contato"]), (0, 0, 1))
+
+    def test_fila_ga4_purge_queue_trigger_ciclo_completo_e_checks_0014(self):
         f = Fake(schema=True)
-        # CHECKs da migração 0014: uid inválido, due_at inválido e attempt fora de 1..3 são recusados.
-        for bad_uid, bad_due, bad_att in (
-            ("uid_com_underscore", NOW_ISO, 2),
-            ("", NOW_ISO, 2),
-            ("UidOk1", "2026-11-27", 2),
-            ("UidOk1", NOW_ISO, 0),
-            ("UidOk1", NOW_ISO, 4),
+        # 1) CHECKs da migração 0014: uid, ga4_pendente, sessoes (json_valid e <= 20000), bq_tentativas (0..5), datas.
+        for kw in (
+            {"uid": "uid_com_underscore"},
+            {"uid": ""},
+            {"uid": "UidOk1", "ga4_pendente": 2},
+            {"uid": "UidOk1", "sessoes": "nao-json"},
+            {"uid": "UidOk1", "sessoes": '"' + ("a" * 20001) + '"'},
+            {"uid": "UidOk1", "bq_tentativas": -1},
+            {"uid": "UidOk1", "bq_tentativas": 6},
+            {"uid": "UidOk1", "proxima_em": "2026-11-27"},
+            {"uid": "UidOk1", "criado_em": "2026-11-27"},
         ):
-            with self.assertRaises(sqlite3.IntegrityError):
-                f.add_purge_queue(bad_uid, bad_due, bad_att)
+            with self.assertRaises(sqlite3.IntegrityError, msg=str(kw)):
+                f.add_purge_queue(**kw)
 
-        # Agenda 2 vencidos (mesmo uid com attempt 2 e 3? + outro uid) e 1 futuro.
-        f.add_purge_queue("UidVencido1", CS.stamp(NOW - timedelta(hours=1)), 2)
-        f.add_purge_queue("UidVencido1", NOW_ISO, 3)
-        f.add_purge_queue("UidFuturo2", CS.stamp(NOW + timedelta(days=2)), 3)
+        # 2) Trigger AFTER DELETE ON site_identities (como o Worker faz no POST /prioridade): enfileira automaticamente.
+        f.add_identity("UidViaWorker1", "web@corp.com")
+        f.db.execute("DELETE FROM site_identities WHERE email = ?", ("web@corp.com",))
+        f.db.commit()
+        q_trig = f.purge_queue_rows()
+        self.assertEqual(len(q_trig), 1)
+        self.assertEqual(
+            (q_trig[0]["uid"], q_trig[0]["ga4_pendente"], q_trig[0]["sessoes"], q_trig[0]["bq_tentativas"]),
+            ("UidViaWorker1", 1, "[]", 0),
+        )
+        # Atualiza proxima_em para NOW_ISO (para independência do relógio real nos testes) e testa ON CONFLICT preservando sessoes.
+        f.db.execute(
+            "UPDATE ga4_purge_queue SET ga4_pendente = 0, sessoes = ?, bq_tentativas = 2, proxima_em = ? WHERE uid = ?",
+            ('[["ps0",77]]', CS.stamp(NOW + timedelta(days=2)), "UidViaWorker1"),
+        )
+        f.db.commit()
+        f.add_identity("UidViaWorker1", "web@corp.com")
+        f.db.execute("DELETE FROM site_identities WHERE email = ?", ("web@corp.com",))
+        f.db.commit()
+        q_retrig = f.purge_queue_rows()[0]
+        self.assertEqual((q_retrig["ga4_pendente"], q_retrig["sessoes"], q_retrig["bq_tentativas"]), (1, '[["ps0",77]]', 0))
+        f.db.execute("UPDATE ga4_purge_queue SET proxima_em = ? WHERE uid = ?", (NOW_ISO, "UidViaWorker1"))
+        f.db.commit()
 
-        bq_calls: list[str] = []
+        # Também adiciona um item futuro (não vence agora).
+        f.add_purge_queue("UidFuturo2", CS.stamp(NOW + timedelta(days=10)), ga4_pendente=0, bq_tentativas=2)
 
-        def fake_bq(uid):
-            bq_calls.append(uid)
-            return {"tabelas_limpas": 2, "adiadas": 1}
+        # Simulação não chama Google nem altera fila.
+        ga4_calls: list[str] = []
+        bq_calls: list[tuple[str, list]] = []
+        c_dry, _ = run_job(
+            f, apply=False,
+            ga4_delete=lambda u: ga4_calls.append(u) or True,
+            bq_delete=lambda u, s: bq_calls.append((u, list(s))) or {"tabelas_limpas": 1, "adiadas": 0, "sessoes": []},
+        )
+        self.assertEqual((ga4_calls, bq_calls, c_dry["ga4_fila_processados"]), ([], [], 1))
 
-        # Simulação não chama BigQuery nem remove da fila.
-        c_dry, _ = run_job(f, apply=False, bq_delete=fake_bq)
-        self.assertEqual((bq_calls, c_dry["ga4_fila_processados"]), ([], 2))
-        self.assertEqual(len(f.purge_queue_rows()), 3)
+        # 3) Ciclo completo no job diário:
+        #    D0: GA4 dá 403 -> conta ga4_remocao_pendente=1; BQ recebe ps0 e descobre ps1 -> salva ambas, bq_tentativas=1, D+1.
+        c_d0, out_d0 = run_job(
+            f, apply=True, now_dt=NOW,
+            ga4_delete=lambda u: ga4_calls.append(u) or False,
+            bq_delete=lambda u, s: bq_calls.append((u, list(s))) or {
+                "tabelas_limpas": 2, "adiadas": 1, "sessoes": [("ps1", 101)],
+            },
+        )
+        self.assertEqual(
+            (c_d0["ga4_remocao_pendente"], c_d0["bq_remocao_adiada"], c_d0["ga4_fila_processados"], c_d0["ga4_indisponivel"]),
+            (1, 1, 1, 0),
+        )
+        self.assertIn("ga4_remocao_pendente: 1", out_d0)
+        self.assertNotIn("uidviaworker1", out_d0.lower())
+        self.assertEqual(bq_calls[-1], ("UidViaWorker1", [("ps0", 77)]))
+        row_d0 = [r for r in f.purge_queue_rows() if r["uid"] == "UidViaWorker1"][0]
+        self.assertEqual(
+            (row_d0["ga4_pendente"], row_d0["sessoes"], row_d0["bq_tentativas"], row_d0["proxima_em"]),
+            (1, '[["ps0",77],["ps1",101]]', 1, CS.stamp(NOW + timedelta(days=1))),
+        )
 
-        # --apply roda BigQuery 1x para UidVencido1 (sem chamar GA4!), conta adiada, remove os 2 vencidos e mantém o futuro.
-        c_app, out_app = run_job(f, apply=True, bq_delete=fake_bq)
-        self.assertEqual(bq_calls, ["UidVencido1"])
-        self.assertEqual((c_app["ga4_fila_processados"], c_app["bq_remocao_adiada"], c_app["ga4_indisponivel"]), (2, 1, 0))
+        #    D+1: GA4 agora dá 200 -> zera ga4_pendente; BQ recebe as duas sessões salvas, bq_tentativas=2, D+3.
+        ga4_calls.clear()
+        bq_calls.clear()
+        c_d1, _ = run_job(
+            f, apply=True, now_dt=NOW + timedelta(days=1),
+            ga4_delete=lambda u: ga4_calls.append(u) or True,
+            bq_delete=lambda u, s: bq_calls.append((u, list(s))) or {"tabelas_limpas": 1, "adiadas": 0, "sessoes": []},
+        )
+        self.assertEqual((ga4_calls, bq_calls), (["UidViaWorker1"], [("UidViaWorker1", [("ps0", 77), ("ps1", 101)])]))
+        self.assertEqual((c_d1["ga4_remocao_pendente"], c_d1["ga4_fila_processados"]), (0, 1))
+        row_d1 = [r for r in f.purge_queue_rows() if r["uid"] == "UidViaWorker1"][0]
+        self.assertEqual((row_d1["ga4_pendente"], row_d1["bq_tentativas"], row_d1["proxima_em"]), (0, 2, CS.stamp(NOW + timedelta(days=3))))
+
+        #    D+3: GA4 não é mais chamado (ga4_pendente=0); BQ tem tabela adiada (streaming buffer) -> NÃO sai da fila!
+        ga4_calls.clear()
+        bq_calls.clear()
+        c_d3, _ = run_job(
+            f, apply=True, now_dt=NOW + timedelta(days=3),
+            ga4_delete=lambda u: ga4_calls.append(u) or True,
+            bq_delete=lambda u, s: bq_calls.append((u, list(s))) or {"tabelas_limpas": 0, "adiadas": 1, "sessoes": []},
+        )
+        self.assertEqual((ga4_calls, c_d3["bq_remocao_adiada"]), ([], 1))
+        row_d3 = [r for r in f.purge_queue_rows() if r["uid"] == "UidViaWorker1"][0]
+        self.assertEqual((row_d3["bq_tentativas"], row_d3["proxima_em"]), (3, CS.stamp(NOW + timedelta(days=4))))
+
+        #    D+4: ainda adiada -> bq_tentativas=4, D+5.
+        run_job(
+            f, apply=True, now_dt=NOW + timedelta(days=4),
+            ga4_delete=lambda _u: True,
+            bq_delete=lambda _u, _s: {"tabelas_limpas": 0, "adiadas": 1, "sessoes": []},
+        )
+        row_d4 = [r for r in f.purge_queue_rows() if r["uid"] == "UidViaWorker1"][0]
+        self.assertEqual((row_d4["bq_tentativas"], row_d4["proxima_em"]), (4, CS.stamp(NOW + timedelta(days=5))))
+
+        #    D+5: 5ª tentativa (teto) -> sai da fila; só UidFuturo2 permanece!
+        run_job(
+            f, apply=True, now_dt=NOW + timedelta(days=5),
+            ga4_delete=lambda _u: True,
+            bq_delete=lambda _u, _s: {"tabelas_limpas": 1, "adiadas": 0, "sessoes": []},
+        )
         self.assertEqual([r["uid"] for r in f.purge_queue_rows()], ["UidFuturo2"])
-        self.assertNotIn("uidvencido1", out_app.lower())
 
-        # Se BigQuery falhar ao processar a fila, ga4_indisponivel=1 e a linha fica na fila.
-        f.add_purge_queue("UidFalha3", NOW_ISO, 2)
+        # 4) Item NÃO sai da fila quando BQ termina (D+3 sem adiamento) mas GA4 continua em 403; sai quando GA4 volta 200
+        #    (e não chama BQ de novo).
+        f.add_purge_queue("UidSoGa4", NOW_ISO, ga4_pendente=1, bq_tentativas=2)
+        c_keep, _ = run_job(
+            f, apply=True, now_dt=NOW,
+            ga4_delete=lambda _u: False,
+            bq_delete=lambda _u, _s: {"tabelas_limpas": 1, "adiadas": 0, "sessoes": []},
+        )
+        self.assertEqual(c_keep["ga4_remocao_pendente"], 1)
+        row_keep = [r for r in f.purge_queue_rows() if r["uid"] == "UidSoGa4"][0]
+        self.assertEqual((row_keep["ga4_pendente"], row_keep["bq_tentativas"]), (1, 5))
 
-        def fail_bq(_uid):
+        bq_extra: list[str] = []
+        c_done, _ = run_job(
+            f, apply=True, now_dt=NOW + timedelta(days=1),
+            ga4_delete=lambda _u: True,
+            bq_delete=lambda u, _s: bq_extra.append(u) or {},
+        )
+        self.assertEqual((bq_extra, c_done["ga4_remocao_pendente"]), ([], 0))
+        self.assertEqual([r["uid"] for r in f.purge_queue_rows()], ["UidFuturo2"])
+
+        # 5) Se BigQuery falhar ao processar a fila, ga4_indisponivel=1, ga4_fila_processados=0 e linha fica na fila.
+        f.add_purge_queue("UidFalha3", NOW_ISO, ga4_pendente=0, bq_tentativas=1)
+
+        def fail_bq(_uid, _sess):
             raise CS.GoogleIndisponivel("BQ indisponível")
 
         c_fail, _ = run_job(f, apply=True, bq_delete=fail_bq)
         self.assertEqual((c_fail["ga4_indisponivel"], c_fail["ga4_fila_processados"]), (1, 0))
         self.assertEqual([r["uid"] for r in f.purge_queue_rows()], ["UidFalha3", "UidFuturo2"])
 
+    def test_site_identities_lida_com_oposicao_ou_fila_mesmo_sem_ga4_desde(self):
+        # 1) HEATING_GA4_DESDE ausente (0 dias do GA4), mas há oposição em `heating_optout` com `site_identities`
+        #    remanescente: o job lê `site_identities`, apaga (disparando o trigger) e processa GA4 + BigQuery!
+        f = Fake(schema=True)
+        f.add_optout("opt@corp.com")
+        f.add_identity("UidOptPendente1", "opt@corp.com")
+        f.add_identity("UidAtivo2", "ativo@corp.com")
+        ga4_calls: list[str] = []
+        bq_calls: list[tuple[str, list]] = []
+
+        c, _ = run_job(
+            f, apply=True, ga4_desde=None,
+            ga4_delete=lambda u: ga4_calls.append(u) or True,
+            bq_delete=lambda u, s: bq_calls.append((u, list(s))) or {"tabelas_limpas": 1, "adiadas": 0, "sessoes": [("psOpt", 9)]},
+        )
+        self.assertEqual((c["oposicao_aplicada"], c["ga4_dias_lidos"], c["ga4_fila_processados"]), (1, 0, 1))
+        self.assertEqual((ga4_calls, bq_calls), (["UidOptPendente1"], [("UidOptPendente1", [])]))
+        self.assertEqual([r[0] for r in f.db.execute("SELECT uid FROM site_identities")], ["UidAtivo2"])
+        q = f.purge_queue_rows()
+        self.assertEqual([(r["uid"], r["ga4_pendente"], r["bq_tentativas"]) for r in q], [("UidOptPendente1", 0, 1)])
+
+        # 2) HEATING_GA4_DESDE ausente e sem oposição, mas há item vencido na fila: `site_identities` também é lida.
+        g = Fake(schema=True)
+        g.add_purge_queue("UidNaFila1", NOW_ISO, ga4_pendente=1, bq_tentativas=2)
+        run_job(
+            g, apply=True, ga4_desde=None,
+            ga4_delete=lambda _u: True,
+            bq_delete=lambda _u, _s: {"tabelas_limpas": 1, "adiadas": 0, "sessoes": []},
+        )
+        self.assertTrue(
+            any(isinstance(d, dict) and "FROM site_identities" in d.get("sql", "") for _m, _p, d, _q in g.calls)
+        )
+        self.assertEqual(g.purge_queue_rows(), [])
+
     def test_optout_remove_no_google_agenda_fila_trata_403_sem_sa_e_forget_curso_nao_mexe_no_ga4(self):
-        # 1) --optout com sucesso: chama GA4 e BigQuery com os uids certos, agenda D+1 e D+3, apaga site_identities.
+        # 1) --optout com sucesso: apaga site_identities (trigger enfileira), processa GA4 e BigQuery na hora, agenda D+1.
         f = Fake(
             people=[person("p1", "segredo@corp.com", heatingNota=50, heatingFaixa="QUENTE", heatingSinais="x", heatingCalculadoEm=NOW_ISO)],
             schema=True,
@@ -2691,13 +3002,13 @@ class Ga4EBigQueryTest(unittest.TestCase):
         f.add_event("ev-1", "segredo@corp.com", "site_visita", source="ga4", ref=None, when=ago(days=1))
 
         ga4_calls: list[str] = []
-        bq_calls: list[str] = []
+        bq_calls: list[tuple[str, list]] = []
 
         # Simulação não chama Google nem apaga site_identities.
         rc_dry, txt_dry = self._cli(
             f, "--optout", stdin="segredo@corp.com\n",
             ga4_delete=lambda u: ga4_calls.append(u) or True,
-            bq_delete=lambda u: bq_calls.append(u) or {"tabelas_limpas": 1, "adiadas": 0},
+            bq_delete=lambda u, s: bq_calls.append((u, list(s))) or {"tabelas_limpas": 1, "adiadas": 0, "sessoes": []},
         )
         self.assertEqual((rc_dry, ga4_calls, bq_calls), (0, [], []))
         self.assertIn("identidades_site: 2", txt_dry)
@@ -2707,11 +3018,13 @@ class Ga4EBigQueryTest(unittest.TestCase):
         rc_ok, txt_ok = self._cli(
             f, "--optout", "--apply", stdin="segredo@corp.com\n",
             ga4_delete=lambda u: ga4_calls.append(u) or True,
-            bq_delete=lambda u: bq_calls.append(u) or {"tabelas_limpas": 2, "adiadas": 1},
+            bq_delete=lambda u, s: bq_calls.append((u, list(s))) or {
+                "tabelas_limpas": 2, "adiadas": 1, "sessoes": [("ps-" + u, 42)],
+            },
         )
         self.assertEqual(rc_ok, 0, txt_ok)
         self.assertEqual(ga4_calls, ["UidSecretoA1", "UidSecretoB2"])
-        self.assertEqual(bq_calls, ["UidSecretoA1", "UidSecretoB2"])
+        self.assertEqual(bq_calls, [("UidSecretoA1", []), ("UidSecretoB2", [])])
         self.assertIn("ga4_removidos: 2", txt_ok)
         self.assertIn("bq_remocao_adiada: 2", txt_ok)
         self.assertNotIn(H.GA4_PURGE_PENDENTE_MSG, txt_ok)
@@ -2720,19 +3033,20 @@ class Ga4EBigQueryTest(unittest.TestCase):
         # Só a identidade de outro@corp.com sobrou.
         rem_ids = [r[0] for r in f.db.execute("SELECT uid FROM site_identities")]
         self.assertEqual(rem_ids, ["UidOutroC3"])
-        # Fila agendada com attempt 2 (+1d) e 3 (+3d) para cada uid.
-        qrows = f.purge_queue_rows()
+        # Fila com sessões salvas, ga4_pendente=0, bq_tentativas=1, proxima_em=D+1.
+        qrows = [
+            (r["uid"], r["ga4_pendente"], r["sessoes"], r["bq_tentativas"], r["proxima_em"])
+            for r in f.purge_queue_rows()
+        ]
         self.assertEqual(
             qrows,
             [
-                {"uid": "UidSecretoA1", "due_at": CS.stamp(NOW + timedelta(days=1)), "attempt": 2},
-                {"uid": "UidSecretoA1", "due_at": CS.stamp(NOW + timedelta(days=3)), "attempt": 3},
-                {"uid": "UidSecretoB2", "due_at": CS.stamp(NOW + timedelta(days=1)), "attempt": 2},
-                {"uid": "UidSecretoB2", "due_at": CS.stamp(NOW + timedelta(days=3)), "attempt": 3},
+                ("UidSecretoA1", 0, '[["ps-UidSecretoA1",42]]', 1, CS.stamp(NOW + timedelta(days=1))),
+                ("UidSecretoB2", 0, '[["ps-UidSecretoB2",42]]', 1, CS.stamp(NOW + timedelta(days=1))),
             ],
         )
 
-        # 2) 403 no GA4: código 2 + mensagem fixa, mas BigQuery, fila, site_identities, D1 e Twenty concluídos!
+        # 2) 403 no GA4: código 2 + mensagem fixa; BigQuery, fila (com ga4_pendente=1), site_identities, D1 e Twenty concluídos!
         g = Fake(
             people=[person("p1", "falha403@corp.com", heatingNota=30, heatingFaixa="MORNO", heatingSinais="x", heatingCalculadoEm=NOW_ISO)],
             schema=True,
@@ -2743,47 +3057,192 @@ class Ga4EBigQueryTest(unittest.TestCase):
         rc_403, txt_403 = self._cli(
             g, "--optout", "--apply", stdin="falha403@corp.com\n",
             ga4_delete=lambda _u: False,  # simula 403 no GA4
-            bq_delete=lambda u: bq_403.append(u) or {"tabelas_limpas": 1, "adiadas": 0},
+            bq_delete=lambda u, _s: bq_403.append(u) or {"tabelas_limpas": 1, "adiadas": 0, "sessoes": [("ps403", 7)]},
         )
         self.assertEqual(rc_403, 2, txt_403)
-        self.assertIn("ga4_remocao_falhou: 1", txt_403)
+        self.assertIn("ga4_remocao_pendente: 1", txt_403)
         self.assertIn(H.GA4_PURGE_PENDENTE_MSG, txt_403)
         self.assertEqual(bq_403, ["UidQuatroZeroTres"])
         self.assertEqual(g.db.execute("SELECT count(*) FROM site_identities").fetchone()[0], 0)
         self.assertEqual(g.event_ids(), [])
         self.assertIsNone(g.people["p1"]["heatingNota"])
-        self.assertEqual([(r["uid"], r["attempt"]) for r in g.purge_queue_rows()], [("UidQuatroZeroTres", 2), ("UidQuatroZeroTres", 3)])
+        self.assertEqual(
+            [(r["uid"], r["ga4_pendente"], r["bq_tentativas"], r["sessoes"]) for r in g.purge_queue_rows()],
+            [("UidQuatroZeroTres", 1, 1, '[["ps403",7]]')],
+        )
         for secret in ("falha403@corp.com", "UidQuatroZeroTres"):
             self.assertNotIn(secret.lower(), txt_403.lower())
 
-        # 3) Sem HEATING_GCP_SA_FILE (ex.: no Mac): pula parte do Google com mensagem fixa e código 2, mas limpa D1/Twenty e agenda fila.
+        # 3) GA4 200 mas BigQuery falha: código 2 + BQ_PURGE_PENDENTE_MSG + bq_tentativas=0 com proxima_em=agora (mata M15/M17).
+        m = Fake(
+            people=[person("p1", "bqfail@corp.com", heatingNota=25, heatingFaixa="MORNO", heatingSinais="x", heatingCalculadoEm=NOW_ISO)],
+            schema=True,
+        )
+        m.add_identity("UidBqFailOpt", "bqfail@corp.com")
+
+        def fail_bq(_u, _s):
+            raise CS.GoogleIndisponivel("BQ fora")
+
+        rc_bq, txt_bq = self._cli(
+            m, "--optout", "--apply", stdin="bqfail@corp.com\n",
+            ga4_delete=lambda _u: True,
+            bq_delete=fail_bq,
+        )
+        self.assertEqual(rc_bq, 2, txt_bq)
+        self.assertIn("bq_remocao_falhou: 1", txt_bq)
+        self.assertIn(H.BQ_PURGE_PENDENTE_MSG, txt_bq)
+        self.assertNotIn(H.GA4_PURGE_PENDENTE_MSG, txt_bq)
+        self.assertEqual(
+            [(r["uid"], r["ga4_pendente"], r["bq_tentativas"], r["proxima_em"]) for r in m.purge_queue_rows()],
+            [("UidBqFailOpt", 0, 0, NOW_ISO)],
+        )
+
+        # 4) Sem HEATING_GCP_SA_FILE (ex.: no Mac): apaga site_identities (trigger enfileira), informa e sai com código 0.
         h = Fake(
             people=[person("p1", "mac@corp.com", heatingNota=20, heatingFaixa="MORNO", heatingSinais="x", heatingCalculadoEm=NOW_ISO)],
             schema=True,
         )
         h.add_identity("UidSemSaMac1", "mac@corp.com")
         rc_mac, txt_mac = self._cli(h, "--optout", "--apply", stdin="mac@corp.com\n")
-        self.assertEqual(rc_mac, 2, txt_mac)
-        self.assertIn("ga4_remocao_falhou: 1", txt_mac)
-        self.assertIn(H.GA4_PURGE_PENDENTE_MSG, txt_mac)
+        self.assertEqual(rc_mac, 0, txt_mac)
+        self.assertIn("ga4_fila_enfileirados: 1", txt_mac)
+        self.assertIn(H.GA4_FILA_SEM_CRED_MSG, txt_mac)
+        self.assertNotIn(H.GA4_PURGE_PENDENTE_MSG, txt_mac)
         self.assertEqual(h.db.execute("SELECT count(*) FROM site_identities").fetchone()[0], 0)
         self.assertIsNone(h.people["p1"]["heatingNota"])
-        self.assertEqual([(r["uid"], r["attempt"]) for r in h.purge_queue_rows()], [("UidSemSaMac1", 1), ("UidSemSaMac1", 2), ("UidSemSaMac1", 3)])
+        self.assertEqual(
+            [(r["uid"], r["ga4_pendente"], r["bq_tentativas"], r["sessoes"]) for r in h.purge_queue_rows()],
+            [("UidSemSaMac1", 1, 0, "[]")],
+        )
         for secret in ("mac@corp.com", "UidSemSaMac1"):
             self.assertNotIn(secret.lower(), txt_mac.lower())
 
-        # 4) --forget-curso NÃO mexe no GA4, BigQuery, site_identities nem ga4_purge_queue.
+        # 5) --forget-curso NÃO mexe no GA4, BigQuery, site_identities, ga4_purge_queue nem heating_optout.
         k = Fake(people=[person("p1", "curso@corp.com")], schema=True)
         k.add_identity("UidCursoIntacto", "curso@corp.com")
         k.add_event("ev-c", "curso@corp.com", "curso_cadastro", context=CTX_CURSO, source="curso", ref=None, when=ago(days=1))
         rc_fc, txt_fc = self._cli(
             k, "--forget-curso", SLUG, "--apply", stdin="curso@corp.com\n",
             ga4_delete=lambda _u: (_ for _ in ()).throw(AssertionError("não deve chamar GA4")),
-            bq_delete=lambda _u: (_ for _ in ()).throw(AssertionError("não deve chamar BigQuery")),
+            bq_delete=lambda _u, _s: (_ for _ in ()).throw(AssertionError("não deve chamar BigQuery")),
         )
         self.assertEqual(rc_fc, 0, txt_fc)
         self.assertEqual([r[0] for r in k.db.execute("SELECT uid FROM site_identities")], ["UidCursoIntacto"])
         self.assertEqual(k.purge_queue_rows(), [])
+        self.assertEqual(k.db.execute("SELECT count(*) FROM heating_optout").fetchone()[0], 0)
+
+    def test_forget_site_grava_heating_optout_e_job_depois_nao_recria_nota_enquanto_forget_curso_nao_grava(self):
+        # Decisão do Gui (2026-11-27):
+        # 1) conversoes_sync.py --forget --apply grava heating_optout (mesmo HMAC do Worker) antes de apagar o resto,
+        #    e uma rodada seguinte de heating_sync.py --apply não recria nota (nem no D1 nem no Twenty) para o email.
+        f = Fake(
+            people=[
+                person("p1", "alvo@corp.com", heatingNota=62, heatingFaixa="QUENTE", heatingSinais="Download de material", heatingCalculadoEm=NOW_ISO),
+                person("p2", "outro@corp.com"),
+            ],
+            schema=True,
+        )
+        f.add_conv(1, "alvo@corp.com", action="material_download", material="planilha-custos-ia", when=ago(days=1))
+        f.add_event("ev-alvo-site", "alvo@corp.com", "site_agende", source="ga4", ref=None, when=ago(days=1))
+        f.db.execute(
+            "INSERT INTO heating (context, email, score, band, signals, computed_at, twenty_person_id) "
+            "VALUES ('site', 'alvo@corp.com', 62, 'quente', '[]', ?, 'p1')",
+            (NOW_ISO,),
+        )
+        f.add_identity("UidAlvo1", "alvo@corp.com")
+        f.add_identity("UidOutro2", "outro@corp.com")
+        f.db.commit()
+
+        out_forget = io.StringIO()
+        CS.forget(
+            TS.Clients(ENV, f, sleep=lambda s: None),
+            "  Alvo@Corp.com ",
+            apply=True,
+            out=out_forget,
+            forget_key=FORGET_KEY,
+            ga4_delete=lambda _u: True,
+            bq_delete=lambda _u, _s: {"tabelas_limpas": 1, "adiadas": 0, "sessoes": []},
+            now_dt=NOW,
+        )
+        expected_mac = H.heating_optout_hmac("alvo@corp.com", FORGET_KEY)
+        opt_rows = [dict(r) for r in f.db.execute("SELECT email_hmac, opted_out_at FROM heating_optout")]
+        self.assertEqual(len(opt_rows), 1)
+        self.assertEqual(opt_rows[0]["email_hmac"], expected_mac)
+        self.assertRegex(opt_rows[0]["opted_out_at"], r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$")
+        self.assertIsNone(f.people["p1"]["heatingNota"])
+
+        # Chegam novos sinais depois da remoção (nova conversão, atividade no curso, evento no GA4 e outro email ativo).
+        f.add_conv(2, "alvo@corp.com", action="material_download", material="planilha-custos-ia", when=ago(days=0))
+        f.add_conv(3, "outro@corp.com", action="material_download", material="planilha-custos-ia", when=ago(days=0))
+        curso_docs = [
+            {
+                "email": "alvo@corp.com",
+                "status": "active",
+                "source": "google",
+                "googleUid": "uid_alvo_c",
+                "name": "Alvo",
+                "createdAt": ago(days=0),
+                "aulas": [{"dayId": "day-01", "completed": True, "updatedAt": ago(days=0)}],
+            }
+        ]
+        ts = _ts_us(datetime(2026, 11, 26, 12, 0, tzinfo=timezone.utc))
+        ga4_rows = [
+            {
+                "user_id": "UidOutro2", "sessoes": 1, "page_views": 2, "engagement_time_msec": 70000,
+                "scrolls": 1, "cliques_contato": 0, "cliques_agenda": 0,
+                "min_ts_visita": ts, "min_ts_engajamento": ts, "min_ts_contato": None, "min_ts_agenda": None,
+            }
+        ]
+        counts, _ = run_job(
+            f,
+            apply=True,
+            ler_curso=lambda _s: curso_docs,
+            ga4_desde="2026-11-26",
+            ler_ga4_dia=lambda _d: ga4_rows,
+            ga4_delete=lambda _u: True,
+            bq_delete=lambda _u, _s: {"tabelas_limpas": 0, "adiadas": 0, "sessoes": []},
+        )
+        self.assertGreaterEqual(counts["oposicao_aplicada"], 1)
+        hrows = f.heating_rows()
+        self.assertNotIn(("site", "alvo@corp.com"), hrows)
+        self.assertNotIn((CTX_CURSO, "alvo@corp.com"), hrows)
+        self.assertEqual(
+            f.db.execute("SELECT count(*) FROM engagement_events WHERE email = 'alvo@corp.com'").fetchone()[0],
+            0,
+        )
+        for k in H.PERSON_HEATING_FIELDS:
+            self.assertIsNone(f.people["p1"].get(k), k)
+        # Outro email continua pontuando normalmente.
+        self.assertIn(("site", "outro@corp.com"), hrows)
+        self.assertGreater(f.people["p2"]["heatingNota"], 0)
+
+        # 2) --forget-curso NÃO grava heating_optout: o curso fica esquecido, mas o contexto `site` segue pontuando.
+        g = Fake(people=[person("p1", "aluno@corp.com")], schema=True)
+        g.add_event("ev-c", "aluno@corp.com", "curso_cadastro", context=CTX_CURSO, source="curso", ref=None, when=ago(days=1))
+        rc_fc, txt_fc = self._cli(g, "--forget-curso", SLUG, "--apply", stdin="aluno@corp.com\n")
+        self.assertEqual(rc_fc, 0, txt_fc)
+        self.assertEqual(g.db.execute("SELECT count(*) FROM curso_esquecido").fetchone()[0], 1)
+        self.assertEqual(g.db.execute("SELECT count(*) FROM heating_optout").fetchone()[0], 0)
+
+        # Na rodada seguinte do job, o curso segue bloqueado, enquanto uma conversão no site gera nota normalmente.
+        g.add_conv(1, "aluno@corp.com", action="material_download", material="planilha-custos-ia", when=ago(days=0))
+        aluno_docs = [
+            {
+                "email": "aluno@corp.com",
+                "status": "active",
+                "source": "google",
+                "googleUid": "uid_aluno",
+                "name": "Aluno",
+                "createdAt": ago(days=0),
+                "aulas": [{"dayId": "day-01", "completed": True, "updatedAt": ago(days=0)}],
+            }
+        ]
+        run_job(g, apply=True, ler_curso=lambda _s: aluno_docs)
+        hrows_g = g.heating_rows()
+        self.assertNotIn((CTX_CURSO, "aluno@corp.com"), hrows_g)
+        self.assertIn(("site", "aluno@corp.com"), hrows_g)
+        self.assertEqual(hrows_g[("site", "aluno@corp.com")]["score"], 12)
+        self.assertEqual(g.people["p1"]["heatingNota"], 12)
 
 
 if __name__ == "__main__":

@@ -37,14 +37,18 @@ Decisões registradas do desenho:
   hex do SHA-256 do email normalizado para que dois documentos com o mesmo `googleUid` e emails diferentes não colidam.
   Como ainda não há evento de curso gravado em produção, não precisa de migração de ids.
 - Engajamento no site pelo export do GA4 no BigQuery (corte 2): ativado apenas quando `HEATING_GA4_DESDE` (`AAAA-MM-DD`)
-  está definida no ambiente (ausente = fonte desligada e nada é lido). Lê do dia seguinte ao marcador
-  `heating_ga4_ultimo_dia` (D1 `meta`) até ontem (UTC), no máximo 14 dias por rodada, consultando apenas a tabela
-  fechada do dia (`mindapps.analytics_341040810.events_YYYYMMDD`, nunca intraday nem wildcard), com filtro
-  `stream_id = '13120304692'` e `privacy_info.analytics_storage = 'Yes'` e ligação retroativa só dentro da mesma sessão
-  (`user_pseudo_id` + `ga_session_id` quando a sessão tem exatamente um `user_id`). Resolve `uid -> email` em
-  `site_identities` (migração 0013); `uid` sem vínculo é ignorado (`ga4_sem_vinculo`). Um dia cuja tabela ainda não
-  existe interrompe a sequência sem erro; erro/indisponibilidade do BigQuery marca `ga4_indisponivel: 1`, segue sem a
-  fonte e não avança `heating_ga4_ultimo_dia`. O marcador só avança depois de gravar os eventos do dia.
+  está definida no ambiente (ausente = fonte desligada e nada é lido). Como o GA4 atualiza a tabela diária por até
+  3 dias, cada rodada relê os 3 dias até o marcador `heating_ga4_ultimo_dia` (D1 `meta`) além dos dias novos até ontem
+  (UTC), no máximo 14 dias por rodada, consultando apenas a tabela fechada do dia
+  (`mindapps.analytics_341040810.events_YYYYMMDD`, nunca intraday nem wildcard), com filtro `stream_id = '13120304692'`
+  e `privacy_info.analytics_storage = 'Yes'` e ligação retroativa só dentro da mesma sessão (`user_pseudo_id` +
+  `ga_session_id` quando a sessão tem exatamente um `user_id`). Os ids determinísticos (`ga:<yyyymmdd>:<sha16>:<sig>`)
+  deduplicam a releitura e o marcador nunca regride. Resolve `uid -> email` em `site_identities` (migração 0013), que
+  também é lida sempre que houver oposição pendente ou fila (`ga4_purge_queue`), mesmo sem dias novos do GA4; `uid` sem
+  vínculo é ignorado (`ga4_sem_vinculo`). Um dia sem tabela (dia sem eventos) não trava a sequência: se um dia
+  posterior já tem tabela, conta em `ga4_dia_sem_tabela` e o marcador segue; se nenhum dia posterior tem tabela ainda,
+  espera sem erro. Erro/indisponibilidade do BigQuery marca `ga4_indisponivel: 1`, segue sem a fonte e não avança
+  `heating_ga4_ultimo_dia`. O marcador só avança depois de gravar os eventos do dia.
 
 Dependências e papéis da conta de serviço na KVM (`HEATING_GCP_SA_FILE`, projeto `mindapps`):
 - Usa `google-auth`, `google-cloud-firestore` e `google-cloud-bigquery` (3.43.0), já instalados no Python do sistema da
@@ -53,36 +57,42 @@ Dependências e papéis da conta de serviço na KVM (`HEATING_GCP_SA_FILE`, proj
 - Papéis mínimos da conta de serviço (`guifav-heating@mindapps`):
   - `roles/datastore.viewer` no projeto `mindapps` (leitura do Firestore do curso);
   - BigQuery Job User (`roles/bigquery.jobUser`) no projeto `mindapps`;
-  - WRITER no dataset `analytics_341040810` (leitura diária e DELETE por tabela na remoção);
-  - Editor na propriedade GA4 `341040810` (para `properties.submitUserDeletion` no `--optout` e no `--forget`).
+  - WRITER no dataset `analytics_341040810` (leitura diária e DELETE por tabela em `events_*`, `users_*` e `pseudonymous_users_*`);
+  - Editor na propriedade GA4 `341040810` (para `properties.submitUserDeletion` na fila de remoção).
 
 Modos:
 - Padrão (`heating_sync.py [--apply]`): traz conversões, curso e GA4 (quando `HEATING_GA4_DESDE` está definida) para
-  `engagement_events`, aplica oposição (`heating_optout`), exclusões (`HEATING_EXCLUDE` e domínios de teste), esquecidos
-  de curso (`curso_esquecido`) e retenção (365 dias), processa itens vencidos de `ga4_purge_queue` (migração 0014,
-  repetindo o DELETE no BigQuery em D+1 e D+3 sem chamar o GA4), calcula a régua por contexto em relação ao instante T,
-  substitui `heating` no D1 via payload `batch` da API REST e atualiza o Twenty (somente o que mudou).
+  `engagement_events`, aplica oposição (`heating_optout`, apagando também `site_identities` remanescentes para disparar
+  o trigger), exclusões (`HEATING_EXCLUDE` e domínios de teste), esquecidos de curso (`curso_esquecido`) e retenção
+  (365 dias), processa itens vencidos da fila única `ga4_purge_queue` (migração 0014, alimentada por trigger `AFTER
+  DELETE ON site_identities`: chama `submitUserDeletion` no GA4 enquanto `ga4_pendente = 1`, contando 403/erro em
+  `ga4_remocao_pendente`, e executa o DELETE no BigQuery em `events_*`, `users_YYYYMMDD` existentes e linhas exclusivas
+  de `pseudonymous_users_YYYYMMDD` somando as `sessoes` já salvas às descobertas agora, repetido em D+1, D+3 e enquanto
+  houver tabela adiada por streaming buffer, até 5 tentativas; o item só sai da fila quando GA4 e BigQuery terminam),
+  calcula a régua por contexto em relação ao instante T, substitui `heating` no D1 via payload `batch` da API REST e
+  atualiza o Twenty (somente o que mudou).
   Risco aceito na troca de `heating`: a documentação da Cloudflare garante transação no `batch()` do binding em
   Workers, não no `batch` da API REST; se a troca falhar no meio sem rollback (deixando `heating` vazia ou parcial),
   a rodada seguinte refaz a tabela inteira a partir de `engagement_events`.
 - Oposição (`heating_sync.py --optout [--apply]`): lê UM email da entrada padrão, grava a marca permanente em
   `heating_optout`, apaga eventos e notas de todos os contextos no D1, limpa os campos `heating*` da Person e
-  nota/faixa/sinais/calculadoEm das Inscrições no Twenty, remove no GA4 e no BigQuery os `uid`s ligados ao email em
-  `site_identities` (agendando D+1 e D+3 em `ga4_purge_queue`) e apaga as linhas de `site_identities`. Sem
-  `HEATING_GCP_SA_FILE` ou em caso de 403/erro no GA4, imprime a mensagem fixa de pendência no GA4 e sai com código 2,
-  sem impedir as outras remoções.
+  nota/faixa/sinais/calculadoEm das Inscrições no Twenty, apaga as linhas do email em `site_identities` (o trigger
+  enfileira cada `uid` em `ga4_purge_queue`) e processa a fila na hora quando há credencial GCP (`HEATING_GCP_SA_FILE`).
+  Sem credencial (por exemplo no Mac), apenas enfileira e informa isso com código 0. Com credencial, se GA4 responder
+  403/erro ou o BigQuery falhar, o item fica pendente na fila para o job diário, imprime mensagem fixa (sem `uid`) e
+  sai com código 2, sem impedir as outras remoções.
 - Esquecimento de curso (`heating_sync.py --forget-curso <slug> [--apply]`): lê UM email da entrada padrão, grava a
   marca permanente em `curso_esquecido` (migração 0012) para impedir rematerialização do Firestore, apaga de vez a
   Inscrição no Twenty (inclusive da lixeira) conferindo na releitura e apaga eventos e nota daquele curso no D1, sem
-  apagar a Pessoa nem tocar no contexto `site` nem no GA4/BigQuery.
+  apagar a Pessoa nem tocar no contexto `site`, em `heating_optout` nem no GA4/BigQuery.
 
 Lock compartilhado: usa o mesmo arquivo de lock do `conversoes_sync.py` (`CONVERSOES_SYNC_LOCK`, padrão
 `/tmp/guifav-conversoes-sync.lock`), porque os dois apagam e gravam nas mesmas tabelas. Se o lock estiver ocupado,
 espera até 10 minutos e falha com mensagem fixa.
 
 Wrapper da KVM: roda diariamente às 10:53 (BRT) a partir da `main` atualizada, com alerta por email se o script sair
-com erro ou se `curso_indisponivel`, `ga4_indisponivel`, `conversao_invalida`, `curso_invalido` ou `pessoa_na_lixeira`
-forem maiores que zero.
+com erro ou se `curso_indisponivel`, `ga4_indisponivel`, `ga4_remocao_pendente`, `conversao_invalida`, `curso_invalido`
+ou `pessoa_na_lixeira` forem maiores que zero.
 
 Rodar na KVM (todas as credenciais vêm do ambiente):
     CLOUDFLARE_API_TOKEN=... CLOUDFLARE_ACCOUNT_ID=... D1_DATABASE_ID=... TWENTY_API_KEY=... \\
@@ -230,7 +240,7 @@ DOMINIOS_TESTE_EXATOS = frozenset({"example.com", "example.org", "example.net", 
 DOMINIOS_TESTE_SUFIXOS = (".test", ".invalid", ".example")
 
 # Prefixos HMAC (iguais aos do Worker / migração 0012).
-OPTOUT_PREFIX = "heating-optout-v1\n"
+OPTOUT_PREFIX = CS.HEATING_OPTOUT_PREFIX
 CURSO_ESQUECIDO_PREFIX = "curso-esquecido-v1\n"
 
 # Lock compartilhado com conversoes_sync.py: espera até 10 minutos.
@@ -324,8 +334,10 @@ RUN_COUNT_KEYS = (
     "eventos_curso_novos",
     "eventos_ga4_novos",
     "ga4_dias_lidos",
+    "ga4_dia_sem_tabela",
     "ga4_sem_vinculo",
     "ga4_indisponivel",
+    "ga4_remocao_pendente",
     "ga4_fila_processados",
     "bq_remocao_adiada",
     "conversao_invalida",
@@ -355,10 +367,12 @@ BQ_LOCATION = CS.BQ_LOCATION
 SITE_UID_RE = CS.SITE_UID_RE
 GA4_PURGE_PENDENTE_MSG = CS.GA4_PURGE_PENDENTE_MSG
 BQ_PURGE_PENDENTE_MSG = CS.BQ_PURGE_PENDENTE_MSG
-apagar_no_google = CS.apagar_no_google
+GA4_FILA_SEM_CRED_MSG = CS.GA4_FILA_SEM_CRED_MSG
+processar_fila_ga4 = CS.processar_fila_ga4
 
 GA4_META_KEY = "heating_ga4_ultimo_dia"
 GA4_MAX_DIAS = 14
+GA4_REPROCESS_DIAS = 3
 GA4_ENGAGED_MSEC_MIN = 60_000
 GA4_DIA_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 
@@ -389,11 +403,7 @@ def _check_key(key: str) -> None:
 
 def heating_optout_hmac(email: str, key: str) -> str:
     """HMAC-SHA256 em hex minúsculo de `heating-optout-v1\\n` + email normalizado, igual ao Worker."""
-    _check_key(key)
-    norm = email.strip().lower() if isinstance(email, str) else ""
-    if not CS.valid_email(norm):
-        raise SyncError("email inválido na entrada")
-    return hmac.new(key.encode("utf-8"), (OPTOUT_PREFIX + norm).encode("utf-8"), hashlib.sha256).hexdigest()
+    return CS.heating_optout_hmac(email, key)
 
 
 def curso_esquecido_hmac(context: str, email: str, key: str) -> str:
@@ -1264,6 +1274,7 @@ def run(
     exclude_emails: set[str] | None = None,
     email_desde: str | None = ...,
     ga4_desde: str | None = ...,
+    ga4_delete=None,
     bq_delete=None,
 ) -> Counter:
     out = out or sys.stdout
@@ -1330,20 +1341,22 @@ def run(
         if isinstance(r.get("email"), str)
     }
     due_purges = c.d1(
-        "SELECT uid, due_at, attempt FROM ga4_purge_queue WHERE due_at <= ? ORDER BY due_at, uid, attempt",
+        "SELECT uid, ga4_pendente, sessoes, bq_tentativas, proxima_em, criado_em "
+        "FROM ga4_purge_queue WHERE proxima_em <= ? ORDER BY proxima_em, uid",
         [now_iso],
     )
 
-    # Leitura do marcador e do vínculo uid -> email só quando HEATING_GA4_DESDE está definida (ausente = fonte desligada).
+    # Marcador do GA4 só é lido quando HEATING_GA4_DESDE está definida (ausente = fonte desligada).
+    # O GA4 atualiza a tabela diária por até 3 dias: cada rodada relê os 3 dias até o marcador além dos novos.
     ga4_days_eligible: list[date] = []
-    uid_to_email: dict[str, str] = {}
+    ga4_marker_before: date | None = None
     if ga4_desde_date is not None:
         meta_rows = c.d1("SELECT v FROM meta WHERE k = ?", [GA4_META_KEY])
         if meta_rows:
-            ultimo_dia = parse_iso_date(meta_rows[0].get("v"))
-            if ultimo_dia is None:
+            ga4_marker_before = parse_iso_date(meta_rows[0].get("v"))
+            if ga4_marker_before is None:
                 raise SyncError("heating_ga4_ultimo_dia inválido no D1")
-            inicio = max(ga4_desde_date, ultimo_dia + timedelta(days=1))
+            inicio = max(ga4_desde_date, ga4_marker_before - timedelta(days=GA4_REPROCESS_DIAS - 1))
         else:
             inicio = ga4_desde_date
         ontem = now_dt.date() - timedelta(days=1)
@@ -1351,12 +1364,15 @@ def run(
         while cur_dia <= ontem and len(ga4_days_eligible) < GA4_MAX_DIAS:
             ga4_days_eligible.append(cur_dia)
             cur_dia += timedelta(days=1)
-        if ga4_days_eligible:
-            for r in c.d1("SELECT uid, email FROM site_identities"):
-                u = r.get("uid")
-                em = r.get("email").strip().lower() if isinstance(r.get("email"), str) else ""
-                if CS._full(SITE_UID_RE, u) and CS.valid_email(em):
-                    uid_to_email[u] = em
+
+    # `site_identities` é lida sempre que houver dias do GA4 a ler, oposição pendente ou fila vencida.
+    uid_to_email: dict[str, str] = {}
+    if ga4_days_eligible or optout_hmacs or due_purges:
+        for r in c.d1("SELECT uid, email FROM site_identities"):
+            u = r.get("uid")
+            em = r.get("email").strip().lower() if isinstance(r.get("email"), str) else ""
+            if CS._full(SITE_UID_RE, u) and CS.valid_email(em):
+                uid_to_email[u] = em
 
     # Metadados e registros do Twenty (com lixeira).
     meta = read_metadata(c)
@@ -1379,6 +1395,8 @@ def run(
         cursos_disponiveis[slug] = _parse_curso_docs(slug, docs, counts)
 
     # Leitura do export do GA4 no BigQuery (dia por dia, no máximo 14 por rodada).
+    # Dia sem tabela: se um dia posterior já tem tabela, conta em `ga4_dia_sem_tabela` e o marcador segue;
+    # se nenhum dia posterior tem tabela ainda, espera sem erro e sem avançar o marcador além do último dia existente.
     ga4_raw_days: list[tuple[date, list[dict]]] = []
     if ga4_days_eligible:
         ga4_reader = (
@@ -1386,19 +1404,29 @@ def run(
             if ler_ga4_dia is not None
             else (lambda dia: globals()["ler_ga4_dia"](dia, c.env.get("HEATING_GCP_SA_FILE", "").strip()))
         )
+        day_results: list[tuple[date, list[dict] | None]] = []
         for dia in ga4_days_eligible:
             try:
                 day_rows = ga4_reader(dia)
             except (Ga4Indisponivel, CS.GoogleIndisponivel, OSError):
                 counts["ga4_indisponivel"] = 1
-                ga4_raw_days = []
+                day_results = []
                 break
-            if day_rows is None:
-                # Tabela do dia ainda não existe: interrompe a sequência sem erro (tenta de novo amanhã).
-                break
-            if not isinstance(day_rows, list):
+            if day_rows is not None and not isinstance(day_rows, list):
                 raise SyncError("retorno da leitura do GA4 inválido")
-            ga4_raw_days.append((dia, day_rows))
+            day_results.append((dia, day_rows))
+
+        last_found_idx: int | None = None
+        for i, (_dia, day_rows) in enumerate(day_results):
+            if day_rows is not None:
+                last_found_idx = i
+        if last_found_idx is not None:
+            for dia, day_rows in day_results[:last_found_idx + 1]:
+                if day_rows is None:
+                    if ga4_marker_before is None or dia > ga4_marker_before:
+                        counts["ga4_dia_sem_tabela"] += 1
+                else:
+                    ga4_raw_days.append((dia, day_rows))
 
     # ------------------------------------------------------------------ 2) Preparar novos eventos e aplicar oposição / esquecidos / retenção
     existing_event_ids = {ev["id"] for ev in existing_events}
@@ -1568,10 +1596,17 @@ def run(
         ga4_days_to_write.append((dia, day_events))
     counts["ga4_dias_lidos"] = len(ga4_days_to_write)
     counts["eventos_ga4_novos"] = len(new_ga4_events)
+    # Passo 3: oposição, esquecidos e retenção sobre eventos, notas e `site_identities` já existentes no D1
+    optout_identities_delete: set[str] = set()
+    optout_identities_uids: set[str] = set()
+    for u, em in uid_to_email.items():
+        if is_optout(em):
+            optout_seen.add(em)
+            optout_identities_delete.add(em)
+            optout_identities_uids.add(u)
     if not apply:
-        counts["ga4_fila_processados"] = len(due_purges)
+        counts["ga4_fila_processados"] = len({r["uid"] for r in due_purges} | optout_identities_uids)
 
-    # Passo 3: oposição, esquecidos e retenção sobre eventos e notas já existentes no D1
     kept_events: list[dict] = []
     retention_delete_count = 0
     for ev in existing_events:
@@ -1852,48 +1887,52 @@ def run(
             part = all_new_events[i:i + EVENT_CHUNK]
             sql, params = _insert_events_sql(part, key)
             c.d1(sql, params)
+        ga4_marker = ga4_marker_before
         for dia, day_events in ga4_days_to_write:
             for i in range(0, len(day_events), EVENT_CHUNK):
                 part = day_events[i:i + EVENT_CHUNK]
                 sql, params = _insert_events_sql(part, key)
                 c.d1(sql, params)
-            c.d1(
-                "INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v",
-                [GA4_META_KEY, dia.isoformat()],
-            )
+            if ga4_marker is None or dia > ga4_marker:
+                c.d1(
+                    "INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = max(meta.v, excluded.v)",
+                    [GA4_META_KEY, dia.isoformat()],
+                )
+                ga4_marker = dia
         if optout_emails_d1_delete:
             del_list = sorted(optout_emails_d1_delete)
             for i in range(0, len(del_list), DELETE_CHUNK):
                 part = del_list[i:i + DELETE_CHUNK]
                 c.d1(f"DELETE FROM engagement_events WHERE email IN ({','.join('?' * len(part))})", part)
+        if optout_identities_delete:
+            # Apagar `site_identities` dispara o trigger da 0014 e enfileira cada uid em `ga4_purge_queue`.
+            id_del_list = sorted(optout_identities_delete)
+            for i in range(0, len(id_del_list), DELETE_CHUNK):
+                part = id_del_list[i:i + DELETE_CHUNK]
+                c.d1(f"DELETE FROM site_identities WHERE email IN ({','.join('?' * len(part))})", part)
         for ctx, email in sorted(esquecido_d1_delete):
             c.d1("DELETE FROM engagement_events WHERE context = ? AND email = ?", [ctx, email])
         if retention_delete_count:
             c.d1("DELETE FROM engagement_events WHERE occurred_at < ?", [retention_cutoff])
 
-        if due_purges:
-            due_by_uid: OrderedDict[str, list[int]] = OrderedDict()
-            for r in due_purges:
-                u = r.get("uid")
-                att = r.get("attempt")
-                if CS._full(SITE_UID_RE, u) and isinstance(att, int) and not isinstance(att, bool):
-                    due_by_uid.setdefault(u, []).append(att)
-            sa_file = (c.env.get("HEATING_GCP_SA_FILE") or "").strip()
-            for uid, attempts in due_by_uid.items():
-                try:
-                    if bq_delete is not None:
-                        bq_res = bq_delete(uid) or {}
-                    elif sa_file:
-                        bq_res = CS._bq_apagar_uid(uid, sa_file)
-                    else:
-                        raise CS.GoogleIndisponivel("HEATING_GCP_SA_FILE ausente")
-                except (Ga4Indisponivel, CS.GoogleIndisponivel, OSError):
+        if due_purges or optout_identities_uids:
+            q_res = processar_fila_ga4(
+                c,
+                only_due=True,
+                include_uids=sorted(optout_identities_uids),
+                ga4_delete=ga4_delete,
+                bq_delete=bq_delete,
+                now_dt=now_dt,
+                stop_on_bq_error=True,
+            )
+            if q_res["sem_credencial"]:
+                counts["ga4_indisponivel"] = 1
+            else:
+                counts["ga4_fila_processados"] += q_res["ga4_fila_processados"]
+                counts["bq_remocao_adiada"] += q_res["bq_remocao_adiada"]
+                counts["ga4_remocao_pendente"] += q_res["ga4_remocao_pendente"]
+                if q_res["bq_remocao_falhou"]:
                     counts["ga4_indisponivel"] = 1
-                    break
-                counts["bq_remocao_adiada"] += int(bq_res.get("adiadas", 0))
-                ph = ",".join("?" * len(attempts))
-                c.d1(f"DELETE FROM ga4_purge_queue WHERE uid = ? AND attempt IN ({ph})", [uid, *attempts])
-                counts["ga4_fila_processados"] += len(attempts)
 
         # 5e) Troca a tabela `heating` inteira via `batch` da API REST (com INSERT condicional em heating_optout),
         #     se houve mudança (risco aceito: sem garantia de transação na API REST; se falhar no meio sem rollback,
@@ -1939,6 +1978,9 @@ def run(
             for p in people:
                 if not p.get("deletedAt"):
                     candidate_emails.update(TS._emails(p))
+            for r in c.d1("SELECT email FROM site_identities"):
+                if isinstance(r.get("email"), str):
+                    candidate_emails.add(r["email"].strip().lower())
 
             late_optout_emails = sorted(
                 em for em in candidate_emails
@@ -1950,6 +1992,7 @@ def run(
                     ph = ",".join("?" * len(part))
                     c.d1(f"DELETE FROM engagement_events WHERE email IN ({ph})", part)
                     c.d1(f"DELETE FROM heating WHERE email IN ({ph})", part)
+                    c.d1(f"DELETE FROM site_identities WHERE email IN ({ph})", part)
 
                 person_heating_present = [k for k in PERSON_HEATING_FIELDS if k in meta["person"]]
                 updated_pids = {pid for pid, _ in person_updates}
@@ -2024,8 +2067,9 @@ def optout(
 ) -> Counter:
     """Registra oposição permanente ao heating (`heating_optout`), apaga eventos e notas de todos os contextos no D1,
     limpa campos heating* na Person (tanto achadas pelo email quanto pelos `twenty_person_id` salvos em `heating` e
-    `conversions` antes de apagar o D1) e nota/faixa/sinais/calculadoEm das Inscrições no Twenty, remove os uids do
-    email no GA4 e no BigQuery (agendando D+1 e D+3 em `ga4_purge_queue`) e apaga `site_identities`."""
+    `conversions` antes de apagar o D1) e nota/faixa/sinais/calculadoEm das Inscrições no Twenty, apaga
+    `site_identities` (cujo trigger enfileira os `uid`s em `ga4_purge_queue`) e processa a fila na hora quando há
+    credencial GCP (sem credencial, apenas enfileira e informa)."""
     out = out or sys.stdout
     key = c.env.get("FORGET_HMAC_KEY", "") if forget_key is None else forget_key
     norm = email.strip().lower()
@@ -2034,11 +2078,7 @@ def optout(
 
     if apply:
         # Grava a marca permanente antes de ler o Twenty (mesmo upsert do Worker, com relógio do D1).
-        c.d1(
-            f"INSERT INTO heating_optout (email_hmac, opted_out_at) VALUES (?, {CS._D1_NOW_SQL}) "
-            f"ON CONFLICT(email_hmac) DO UPDATE SET opted_out_at = excluded.opted_out_at",
-            [opt_hmac],
-        )
+        CS._upsert_heating_optout(c, opt_hmac)
 
     ev_count = int(c.d1("SELECT count(*) AS n FROM engagement_events WHERE email = ?", [norm])[0]["n"])
     heat_rows = c.d1("SELECT twenty_person_id FROM heating WHERE email = ?", [norm])
@@ -2083,6 +2123,7 @@ def optout(
 
     ga4_pendente = False
     bq_falhou = False
+    sem_cred_enfileirado = False
     if apply:
         if person_heating_present:
             patch_p = {k: None for k in person_heating_present}
@@ -2094,27 +2135,40 @@ def optout(
                 c.twenty("PATCH", f"/rest/{ENROLL_PLURAL}/{urllib.parse.quote(x['id'])}", patch_e, op="limpar heating da inscrição")
         c.d1("DELETE FROM engagement_events WHERE email = ?", [norm])
         c.d1("DELETE FROM heating WHERE email = ?", [norm])
-        if site_uids:
-            g_res = apagar_no_google(c, site_uids, apply=True, ga4_delete=ga4_delete, bq_delete=bq_delete, now_dt=now_dt)
-            counts["ga4_removidos"] = g_res["ga4_removidos"]
-            counts["ga4_remocao_falhou"] = g_res["ga4_remocao_falhou"]
-            counts["bq_tabelas_limpas"] = g_res["bq_tabelas_limpas"]
-            counts["bq_remocao_adiada"] = g_res["bq_remocao_adiada"]
-            counts["ga4_fila_agendada"] = g_res["ga4_fila_agendada"]
-            if g_res["bq_remocao_falhou"]:
-                counts["bq_remocao_falhou"] = g_res["bq_remocao_falhou"]
-                bq_falhou = True
-            ga4_pendente = bool(g_res["ga4_pendente"])
         if raw_identities:
             c.d1("DELETE FROM site_identities WHERE email = ?", [norm])
             if c.d1("SELECT count(*) AS n FROM site_identities WHERE email = ?", [norm])[0]["n"] != 0:
                 raise SyncError("o D1 ainda tem identidades do site do email depois da oposição")
+        if site_uids:
+            g_res = processar_fila_ga4(
+                c,
+                uids=site_uids,
+                ga4_delete=ga4_delete,
+                bq_delete=bq_delete,
+                now_dt=now_dt,
+            )
+            if g_res["sem_credencial"]:
+                counts["ga4_fila_enfileirados"] = len(site_uids)
+                sem_cred_enfileirado = True
+            else:
+                counts["ga4_removidos"] = g_res["ga4_removidos"]
+                counts["ga4_remocao_pendente"] = g_res["ga4_remocao_pendente"]
+                counts["bq_tabelas_limpas"] = g_res["bq_tabelas_limpas"]
+                counts["bq_remocao_adiada"] = g_res["bq_remocao_adiada"]
+                counts["ga4_fila_restantes"] = g_res["ga4_fila_restantes"]
+                if g_res["bq_remocao_falhou"]:
+                    counts["bq_remocao_falhou"] = g_res["bq_remocao_falhou"]
+                    bq_falhou = True
+                ga4_pendente = g_res["ga4_remocao_pendente"] > 0
 
     CS._report(counts, out, "oposição registrada" if apply else "simulação: nada foi apagado (use --apply)")
-    if apply and ga4_pendente:
-        print(GA4_PURGE_PENDENTE_MSG, file=out)
-    elif apply and bq_falhou:
-        print(BQ_PURGE_PENDENTE_MSG, file=out)
+    if apply and sem_cred_enfileirado:
+        print(GA4_FILA_SEM_CRED_MSG, file=out)
+    else:
+        if apply and ga4_pendente:
+            print(GA4_PURGE_PENDENTE_MSG, file=out)
+        if apply and bq_falhou:
+            print(BQ_PURGE_PENDENTE_MSG, file=out)
     return counts
 
 
@@ -2244,7 +2298,7 @@ def main(
                     bq_delete=bq_delete,
                     now_dt=now_dt,
                 )
-                if a.apply and (counts.get("ga4_remocao_falhou", 0) > 0 or counts.get("bq_remocao_falhou", 0) > 0):
+                if a.apply and (counts.get("ga4_remocao_pendente", 0) > 0 or counts.get("bq_remocao_falhou", 0) > 0):
                     rc = 2
             else:
                 forget_curso(c, a.forget_curso, lines[0], apply=a.apply, forget_key=forget_key)
@@ -2256,6 +2310,7 @@ def main(
                 ler_curso=ler_curso,
                 ler_ga4_dia=ler_ga4_dia,
                 forget_key=forget_key,
+                ga4_delete=ga4_delete,
                 bq_delete=bq_delete,
             )
     except SyncError as e:
