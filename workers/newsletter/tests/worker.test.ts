@@ -618,6 +618,7 @@ test('C7: /confirm concluído grava uma conversão newsletter_confirm; o mesmo l
     action: 'newsletter_confirm', material: null, interests: JSON.stringify([{ id: 'EXPERT_INSIGHTS', rotulo: 'Expert Insights' }]),
     occurred_at: new Date(NOW).toISOString(), synced_at: null, verified: 1, ga_client_id: null, request_id: null, file: null,
     ...SEM_ORIGEM, // link v1, sem origem (emitido antes da #114)
+    twenty_person_id: null, // gravada só pelo conversoes_sync.py (#193)
   });
   assert.ok(!JSON.stringify(c).includes(new URLSearchParams(q).get('s')!), 'o D1 nunca guarda a assinatura do link');
 });

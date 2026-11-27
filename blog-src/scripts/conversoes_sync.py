@@ -33,6 +33,20 @@ Regras:
   (workers/newsletter/src/origem.ts) e do CHECK da migração 0006. Linha anterior à #114 tem a origem toda nula e vira
   Conversão com os campos de origem vazios. Origem fora do formato (canal ou fonte fora da lista, UTM ou página de
   entrada que não casam, fonte sem canal) é linha inválida. O --forget apaga a Conversão inteira, e a origem sai junto.
+- Id da Pessoa no D1 (issue #193, migração 0008): ao marcar `synced_at`, o sync grava em `twenty_person_id` o id da
+  Pessoa no Twenty a que as Conversões do grupo foram ligadas (para o link do painel /admin/contatos). Se o Twenty
+  devolver um id fora do padrão do CHECK (letras ASCII, números e hífen, de 1 a 64), a linha é marcada com
+  `twenty_person_id` nulo e conta em `pessoa_id_invalido`. Linhas já sincronizadas antes da migração
+  (`synced_at IS NOT NULL AND twenty_person_id IS NULL`) são preenchidas a partir da relação `pessoa` (`pessoaId`) das
+  Conversões já lidas do Twenty (inclusive as da lixeira), sem escrever nada no Twenty e mesmo quando não há linhas
+  pendentes; contam em `ids_a_preencher` e só são gravadas com --apply. Ficam com `twenty_person_id` nulo as linhas
+  ainda pendentes (como o pedido sem Pessoa e a pessoa na lixeira) e as já sincronizadas cuja Conversão não está no
+  Twenty ou não tem um `pessoaId` válido (contadas em `sem_conversao_no_crm`, sem erro). Enquanto houver linha
+  sincronizada sem id (inclusive as que ficam nulas de vez, como a de uma Conversão apagada de vez no CRM), cada rodada
+  lê os metadados e as Conversões do Twenty (sem listar Pessoas quando não há pendentes válidas), e uma falha do Twenty
+  nessa leitura faz o sync falhar como em qualquer outra leitura. O sync consulta `twenty_person_id` logo no início e
+  falha sem gravar nada enquanto a migração 0008 não estiver aplicada. O --forget apaga a linha inteira de
+  `conversions`, e a coluna sai junto.
 - Lixeira do Twenty: a listagem padrão da REST esconde registros apagados pela interface, mas os campos únicos (eventoId
   e o email principal da Pessoa) continuam valendo para eles. Por isso Pessoas e Conversões são lidas com a lixeira.
   Conversão na lixeira conta como já existente (não é recriada; a linha é marcada). Email cuja única Pessoa está na
@@ -47,10 +61,10 @@ Twenty, --forget --apply grava um marcador mínimo na tabela `forgotten` do D1 (
 `forgotten_at` (pelo relógio do próprio D1, em ISO UTC com milissegundos). Com esse marcador, o Worker recusa links
 assinados emitidos antes (ou no instante) da remoção. As linhas do email no D1 continuam sendo o diário da remoção:
 apaga no Twenty (de vez, inclusive as que estão na lixeira) as Conversões cujos eventoId são os ids dessas linhas, relê
-o Twenty com a lixeira para provar que nenhuma sobrou e só então apaga as linhas no D1. Uma queda no meio (mesmo na
-leitura do Twenty) deixa o marcador gravado e o D1 intacto, e repetir o comando conclui, mesmo que o email da Pessoa
-tenha mudado no CRM. A Pessoa e os campos site* dela ficam como estão (decisão do Gui, 2026-11-23). Simulação sem
---apply.
+o Twenty com a lixeira para provar que nenhuma sobrou e só então apaga as linhas no D1 (levando junto
+`twenty_person_id` e a origem). Uma queda no meio (mesmo na leitura do Twenty) deixa o marcador gravado e o D1 intacto,
+e repetir o comando conclui, mesmo que o email da Pessoa tenha mudado no CRM. A Pessoa e os campos site* dela ficam
+como estão (decisão do Gui, 2026-11-23). Simulação sem --apply.
 
 Limpeza dos marcadores (issue #134): os marcadores em `forgotten` ficam por 8 dias (o link mais longo vale 7 dias, mais
 1 dia de folga de relógio). No sync e no --forget com --apply, os marcadores com `forgotten_at` mais velho que 8 dias
@@ -152,8 +166,9 @@ GA_CID = re.compile(r"[0-9]{1,20}\.[0-9]{1,20}")  # o parseGaClientId de workers
 UTM = re.compile(r"[a-z0-9._-]{1,64}")  # o UTM de workers/newsletter/src/origem.ts
 ENTRADA = re.compile(r"/(?:[A-Za-z0-9._-]+/)*[A-Za-z0-9._-]*")  # o ENTRADA de origem.ts: segmentos não vazios
 MAX_ENTRADA = 200
+TWENTY_PERSON_ID = re.compile(r"[0-9A-Za-z-]{1,64}")  # o CHECK de twenty_person_id na migração 0008 (issue #193)
 MAX_LABEL = 120
-MARK_CHUNK = 50  # ids por UPDATE no D1 (limite de 100 parâmetros por consulta)
+MARK_CHUNK = 50  # ids por UPDATE no D1 (até 52 parâmetros com synced_at e twenty_person_id; limite de 100 do D1)
 FORGET_MARK = "conversões apagadas"
 # Marcador mínimo de remoção (issue #134): mesmo prefixo e piso de chave do Worker (workers/newsletter/src/forget.ts).
 FORGET_PREFIX = "forget-v1\n"
@@ -469,6 +484,7 @@ def run(c: TS.Clients, *, apply: bool = False, out=None) -> Counter:
     # 1) Leituras e validações. Nenhuma escrita de conversões antes de a fonte e o CRM estarem lidos por inteiro.
     raw = c.d1("SELECT id, email, action, material, interests, occurred_at, verified, ga_client_id, request_id, file, "
                + ", ".join(ORIGEM_COLS) + " FROM conversions WHERE synced_at IS NULL ORDER BY occurred_at, id")
+    to_fill = [r["id"] for r in c.d1("SELECT id FROM conversions WHERE synced_at IS NOT NULL AND twenty_person_id IS NULL ORDER BY id")]
     rows = []
     for r in raw:
         p = parse_row(r)
@@ -483,9 +499,10 @@ def run(c: TS.Clients, *, apply: bool = False, out=None) -> Counter:
     if apply and expired_marks:
         _prune_expired_marks(c)
     for k in ("linha_invalida", "pedido_sem_pessoa", "pessoa_na_lixeira", "email_em_mais_de_uma_pessoa", "pessoas_a_criar",
-              "pessoas_a_atualizar", "conversoes_a_criar", "conversoes_ja_no_crm", "conversoes_na_lixeira", "linhas_a_marcar"):
+              "pessoas_a_atualizar", "conversoes_a_criar", "conversoes_ja_no_crm", "conversoes_na_lixeira", "linhas_a_marcar",
+              "ids_a_preencher", "sem_conversao_no_crm", "pessoa_id_invalido"):
         counts[k] += 0  # sempre visíveis na saída
-    if not rows:
+    if not rows and not to_fill:
         if apply and expired_marks:
             tail = "nada pendente; marcadores vencidos apagados" if not raw else "só linhas inválidas; marcadores vencidos apagados"
         else:
@@ -493,10 +510,11 @@ def run(c: TS.Clients, *, apply: bool = False, out=None) -> Counter:
         _report(counts, out, tail)
         return counts
     meta = read_metadata(c)
-    people = list_records(c, "people")
+    people = list_records(c, "people") if rows else []
     existing = list_records(c, PLURAL) if meta["conv_id"] else []
     known = {x.get("eventoId") for x in existing if x.get("eventoId")}
     trashed_conv = {x.get("eventoId") for x in existing if x.get("eventoId") and x.get("deletedAt")}
+    conv_person = {x["eventoId"]: x.get("pessoaId") for x in existing if x.get("eventoId")}
     idx = people_by_email(people)
     trashed = trashed_emails(people)
 
@@ -531,10 +549,20 @@ def run(c: TS.Clients, *, apply: bool = False, out=None) -> Counter:
         counts["conversoes_ja_no_crm"] += len(rs) - len(new)
         counts["conversoes_na_lixeira"] += sum(r["id"] in trashed_conv for r in rs)
         counts["linhas_a_marcar"] += len(rs)
+        if target is not None and not _full(TWENTY_PERSON_ID, target.get("id")):
+            counts["pessoa_id_invalido"] += len(rs)
         for r in rs:
             for i, lbl in r["interests"].items():
                 labels[i] = lbl  # rótulo do catálogo mais recente (linhas em ordem de data)
         plan.append((g["email"], target, patch, new, rs))
+    fill_plan: OrderedDict[str, list[str]] = OrderedDict()
+    for row_id in to_fill:
+        pid = conv_person.get(row_id)
+        if _full(TWENTY_PERSON_ID, pid):
+            fill_plan.setdefault(pid, []).append(row_id)
+            counts["ids_a_preencher"] += 1
+        else:
+            counts["sem_conversao_no_crm"] += 1
     missing_obj = 0 if meta["conv_id"] else 1
     counts["objeto_a_criar"] = missing_obj
     counts["campos_a_criar"] = (sum(k not in meta["person"] for k in PERSON_FIELDS) + sum(k not in meta["conv"] for k in CONV_FIELDS)
@@ -542,7 +570,8 @@ def run(c: TS.Clients, *, apply: bool = False, out=None) -> Counter:
     counts["opcoes_a_criar"] = sum(len([v for v in labels if v not in _option_values(meta[o].get(n))])
                                    for o, n in (("person", "siteInteresses"), ("conv", "interesses")))
 
-    # 3) Escritas no Twenty e marcação em `conversions`, só com --apply: esquema, depois cada email (Pessoa, Conversões, marca no D1).
+    # 3) Escritas no Twenty e marcação em `conversions`, só com --apply: esquema, depois cada email (Pessoa, Conversões,
+    # marca no D1) e por fim o preenchimento de `twenty_person_id` nas linhas antigas (#193).
     if apply and plan:
         ensure_schema(c, meta, labels)
         now = stamp(_now())
@@ -557,18 +586,27 @@ def run(c: TS.Clients, *, apply: bool = False, out=None) -> Counter:
                     c.twenty("PATCH", f"/rest/people/{urllib.parse.quote(pid)}", patch, op="atualizar pessoa")
             for r in new:
                 c.twenty("POST", f"/rest/{PLURAL}", conversion_body(r, pid), op="criar conversão")
+            valid_pid = pid if _full(TWENTY_PERSON_ID, pid) else None
+            if valid_pid is None and target is None:
+                counts["pessoa_id_invalido"] += len(rs)
             ids = [r["id"] for r in rs]
             for i in range(0, len(ids), MARK_CHUNK):
                 part = ids[i:i + MARK_CHUNK]
-                c.d1(f"UPDATE conversions SET synced_at = ? WHERE synced_at IS NULL AND id IN ({','.join('?' * len(part))})",
-                     [now, *part])
+                c.d1(f"UPDATE conversions SET synced_at = ?, twenty_person_id = ? WHERE synced_at IS NULL AND id IN ({','.join('?' * len(part))})",
+                     [now, valid_pid, *part])
             counts["linhas_marcadas"] += len(rs)
+    if apply and fill_plan:
+        for pid, ids in fill_plan.items():
+            for i in range(0, len(ids), MARK_CHUNK):
+                part = ids[i:i + MARK_CHUNK]
+                c.d1(f"UPDATE conversions SET twenty_person_id = ? WHERE twenty_person_id IS NULL AND id IN ({','.join('?' * len(part))})",
+                     [pid, *part])
     _report(counts, out, "gravado" if apply else "simulação: nada foi gravado (use --apply)")
     return counts
 
 
 def forget(c: TS.Clients, email: str, *, apply: bool = False, out=None, forget_key: str | None = None) -> Counter:
-    """Grava o marcador `forgotten` (issue #134), apaga as conversões do Twenty e do D1, e limpa marcadores vencidos."""
+    """Grava o marcador `forgotten` (issue #134), apaga as conversões do Twenty e do D1 (levando junto `twenty_person_id`), e limpa marcadores vencidos."""
     out = out or sys.stdout
     key = c.env.get("FORGET_HMAC_KEY", "") if forget_key is None else forget_key
     email = email.strip().lower()

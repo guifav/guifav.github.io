@@ -361,6 +361,7 @@ test('C1: o clique no link grava a conversão com email, material e interesses; 
     occurred_at: new Date(NOW).toISOString(), synced_at: null, verified: 1, ga_client_id: null,
     request_id: pedidoEsperado('mapa-decisao-ia', 'leitor@exemplo.com', q), file: 'mapa-decisao-pdf',
     ...SEM_ORIGEM, // link de um pedido sem linha no D1 (ou anterior à #114): o download não tem de onde herdar a origem
+    twenty_person_id: null, // gravada só pelo conversoes_sync.py (#193)
   });
   assert.ok(!JSON.stringify(c).includes(sig(q)), 'o D1 nunca guarda a assinatura do link');
 });
@@ -384,6 +385,7 @@ test('C2: o pedido grava material_request com o email não comprovado, os intere
     material: 'planilha-custos-ia', interests: JSON.stringify([INTERESSES.CUSTO_IA]), occurred_at: new Date(NOW).toISOString(),
     synced_at: null, verified: 0, ga_client_id: '1234567890.1700000000', request_id: null, file: null,
     ...SEM_ORIGEM, origin_channel: 'desconhecida', // formulário sem os campos de origem (#114)
+    twenty_person_id: null, // gravada só pelo conversoes_sync.py (#193)
   }]);
   assert.equal((await s.rows('sqlite_master')).filter((t) => t.name === 'material_requests').length, 0, 'a contagem sem email saiu (0005)');
 });

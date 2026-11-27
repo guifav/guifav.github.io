@@ -129,9 +129,11 @@ test('P1: ponta a ponta, uma inscrição e um pedido de material gravam canal, f
     ['material_download', 'assistente', 'chatgpt', 'chatgpt.com', null, null, '/ferramentas/mapa-decisao-ia/'],
     ['newsletter_confirm', 'assistente', 'chatgpt', 'chatgpt.com', null, null, '/ferramentas/mapa-decisao-ia/'],
   ]);
-  // Só as colunas de antes e as seis da origem: nenhuma coluna nova além delas.
+  // Só as colunas de antes, as seis da origem e twenty_person_id (gravada só pelo conversoes_sync.py, #193; o Worker deixa nula).
   assert.deepEqual(Object.keys(linhas[0]), ['id', 'email', 'action', 'material', 'interests', 'occurred_at', 'synced_at', 'verified',
-    'ga_client_id', 'request_id', 'file', 'origin_channel', 'origin_source', 'utm_source', 'utm_medium', 'utm_campaign', 'landing_path']);
+    'ga_client_id', 'request_id', 'file', 'origin_channel', 'origin_source', 'utm_source', 'utm_medium', 'utm_campaign', 'landing_path',
+    'twenty_person_id']);
+  assert.ok(linhas.every((l) => l.twenty_person_id === null));
   const tudo = JSON.stringify(linhas);
   for (const p of PROIBIDOS) assert.ok(!tudo.includes(p), `o D1 não guarda ${p}`);
 });
