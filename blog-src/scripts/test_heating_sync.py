@@ -181,12 +181,14 @@ class Fake:
         sessoes: str = "[]",
         bq_tentativas: int = 0,
         bq_concluido: int = 0,
+        geracao: int = 0,
         criado_em: str | None = None,
     ):
         self.db.execute(
-            "INSERT INTO ga4_purge_queue (uid, ga4_pendente, sessoes, bq_tentativas, bq_concluido, proxima_em, criado_em) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (uid, ga4_pendente, sessoes, bq_tentativas, bq_concluido, proxima_em, criado_em or NOW_ISO),
+            "INSERT INTO ga4_purge_queue "
+            "(uid, ga4_pendente, sessoes, bq_tentativas, bq_concluido, geracao, proxima_em, criado_em) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (uid, ga4_pendente, sessoes, bq_tentativas, bq_concluido, geracao, proxima_em, criado_em or NOW_ISO),
         )
         self.db.commit()
 
@@ -2627,14 +2629,20 @@ class Ga4EBigQueryTest(unittest.TestCase):
     def test_fila_reenfileirada_durante_o_google_nao_e_apagada_nem_sobrescrita(self):
         # Kimi P2 (rodada 3 do #204): o trigger reabre o item enquanto o BigQuery roda. O fechamento só vale na geração
         # lida, então a nova solicitação fica inteira na fila (GA4 pendente, tentativas zeradas, BigQuery a fazer).
-        for tent, nome in ((2, "fechamento (DELETE)"), (0, "atualização (UPDATE)")):
+        for tent, nome, falha in (
+            (2, "fechamento (DELETE)", False),
+            (0, "atualização (UPDATE)", False),
+            (0, "falha do BigQuery (UPDATE do caminho de erro)", True),
+        ):
             f = Fake(schema=True)
             f.add_purge_queue("UidCorrida1", NOW_ISO, ga4_pendente=0, bq_tentativas=tent)
 
-            def bq_com_reabertura(uid, saved, persistir, _f=f):
+            def bq_com_reabertura(uid, saved, persistir, _f=f, _falha=falha):
                 _f.add_identity(uid, "corrida@corp.com")
                 _f.db.execute("DELETE FROM site_identities WHERE uid = ?", (uid,))
                 _f.db.commit()
+                if _falha:
+                    raise CS.GoogleIndisponivel("BigQuery fora depois da reabertura")
                 return {"tabelas_limpas": 1, "adiadas": 0, "sessoes": [("psCorrida", 9)]}
 
             run_job(f, apply=True, bq_delete=bq_com_reabertura)
@@ -2944,7 +2952,8 @@ class Ga4EBigQueryTest(unittest.TestCase):
 
     def test_fila_ga4_purge_queue_trigger_ciclo_completo_e_checks_0014(self):
         f = Fake(schema=True)
-        # 1) CHECKs da migração 0014: uid, ga4_pendente, sessoes (json_valid e <= 20000), bq_tentativas (0..5), datas.
+        # 1) CHECKs da migração 0014: uid, ga4_pendente, sessoes (json_valid e até 1.000.000 de caracteres), bq_concluido,
+        #    bq_tentativas (0..5), geracao (>= 0) e datas.
         for kw in (
             {"uid": "uid_com_underscore"},
             {"uid": ""},
@@ -2954,6 +2963,7 @@ class Ga4EBigQueryTest(unittest.TestCase):
             {"uid": "UidOk1", "bq_concluido": 2},
             {"uid": "UidOk1", "bq_tentativas": -1},
             {"uid": "UidOk1", "bq_tentativas": 6},
+            {"uid": "UidOk1", "geracao": -1},
             {"uid": "UidOk1", "proxima_em": "2026-11-27"},
             {"uid": "UidOk1", "criado_em": "2026-11-27"},
         ):
