@@ -19,6 +19,12 @@ const NOTICE_TEXT =
   'Ao entrar, sua atividade neste site fica ligada ao seu contato: páginas vistas, tempo de leitura, rolagem e cliques em Agende e Contato. Uso para saber quem abordar primeiro. Você pode desligar quando quiser no menu da conta.';
 const AD_CONSENT_DENIED = { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' };
 const AD_CONSENT_GRANTED = { ad_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'granted' };
+// Sessão logada sem identificar (aviso pendente ou recusado): anúncios e sinais negados (desenho do #197, item 4).
+const LOGIN_AD_DENY = [
+  ['consent', 'update', { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' }],
+  ['set', 'allow_google_signals', false],
+  ['set', 'allow_ad_personalization_signals', false],
+];
 const INDEXED_DB_PERSISTENCE = { type: 'INDEXED_DB' };
 const BROWSER_LOCAL_PERSISTENCE = { type: 'LOCAL' };
 const BROWSER_POPUP_RESOLVER = { type: 'POPUP_REDIRECT_RESOLVER' };
@@ -532,6 +538,7 @@ async function setupAuth(opts: SetupOpts = {}) {
       currentNow = ms;
     },
     pendingTimers: () => pendingTimers.size,
+    win: ctx,
     createElement: (t: string) => new El(t, setActive),
     // Avança o relógio rodando, em ordem, os temporizadores que vencem no caminho (inclusive os agendados por eles).
     advance: async (ms: number) => {
@@ -814,9 +821,12 @@ test('tenant errado é ignorado; tenant certo mostra primeiro nome e aviso do lo
   assert.equal(notice.findAll((e) => e.tag === 'p')[0].textContent, NOTICE_TEXT);
   assert.equal(ok.findClass('guifav-auth-yes')?.textContent, 'Ligar');
   assert.equal(ok.findClass('guifav-auth-no')?.textContent, 'Agora não');
-  // Antes de clicar em "Ligar", não manda user_id, não grava heating-uid-v1 nem chama POST /identidade.
+  // Antes de clicar em "Ligar", não manda user_id, não grava heating-uid-v1 nem chama POST /identidade; a sessão logada
+  // já nega anúncios e sinais e grava a marca de login (sem uid nem email) para o <head> das próximas páginas.
   assert.equal(ok.local.getItem('heating-uid-v1'), null);
-  assert.deepEqual(ok.gtagCalls, []);
+  assert.deepEqual(ok.gtagCalls, LOGIN_AD_DENY);
+  assert.deepEqual(JSON.parse(ok.local.getItem('heating-login-v1')!), { t: NOW });
+  assert.equal(wrongTenant.local.getItem('heating-login-v1'), null, 'outro tenant não marca login');
   assert.deepEqual(ok.fetchCalls, []);
 });
 
@@ -839,8 +849,10 @@ test('as três condições do user_id, heating-uid-v1 sincronizado, sinais de an
     t: NOW,
   });
 
-  // Ordem no GA4: consentimento de anúncio negado (sem mexer em analytics_storage) e sinais desligados antes de user_id, seguido de auth_identified.
+  // Ordem no GA4: a sessão logada já negou anúncios ao entrar; no "Ligar", consentimento de anúncio negado (sem mexer em
+  // analytics_storage) e sinais desligados antes de user_id, seguido de auth_identified.
   assert.deepEqual(s.gtagCalls, [
+    ...LOGIN_AD_DENY,
     ['consent', 'update', AD_CONSENT_DENIED],
     ['set', 'allow_google_signals', false],
     ['set', 'allow_ad_personalization_signals', false],
@@ -886,7 +898,7 @@ test('as três condições do user_id, heating-uid-v1 sincronizado, sinais de an
   });
   assert.ok(otherUid.findClass('guifav-auth-notice'));
   assert.equal(local.getItem('heating-uid-v1'), null);
-  assert.deepEqual(otherUid.gtagCalls, [['set', { user_id: null }]]);
+  assert.deepEqual(otherUid.gtagCalls, [...LOGIN_AD_DENY, ['set', { user_id: null }]]);
   assert.equal(otherUid.fetchCalls.length, 0);
 
   // Troca de usuário para outro uid na mesma página sem reload: limpa user_id; anúncios seguem negados (vínculo ligado no navegador).
@@ -921,7 +933,7 @@ test('as três condições do user_id, heating-uid-v1 sincronizado, sinais de an
   assert.equal(staleSession.local.getItem('heating-uid-v1'), null);
   assert.deepEqual(staleSession.gtagCalls, [['set', { user_id: null }]]);
 
-  // heating-link-v1 vencido (> 365 dias) não vale, limpa heating-uid-v1, devolve anúncios para granted e reabre o aviso.
+  // heating-link-v1 vencido (> 365 dias) não vale: limpa heating-uid-v1 e reabre o aviso.
   const expired = await setupAuth({
     consent: { v: 'granted', t: NOW - 1000 },
     heatingLink: { v: 'granted', t: NOW - 366 * DAY, uid: 'UidCurso123ABC' },
@@ -930,10 +942,8 @@ test('as três condições do user_id, heating-uid-v1 sincronizado, sinais de an
   });
   assert.ok(expired.findClass('guifav-auth-notice'));
   assert.equal(expired.local.getItem('heating-uid-v1'), null);
-  assert.deepEqual(expired.gtagCalls, [
-    ['set', { user_id: null }],
-    ['consent', 'update', AD_CONSENT_GRANTED],
-  ]);
+  // Vínculo vencido, mas a sessão continua logada: anúncios seguem negados (não voltam a granted).
+  assert.deepEqual(expired.gtagCalls, [...LOGIN_AD_DENY, ['set', { user_id: null }]]);
   assert.equal(expired.fetchCalls.length, 0);
 });
 
@@ -950,10 +960,10 @@ test('limpeza de heating-uid-v1, user_id null literal e retorno do consentimento
     uid: 'UidCurso123ABC',
   });
   assert.equal(s1.local.getItem('heating-uid-v1'), null);
-  assert.deepEqual(s1.gtagCalls, [['set', { user_id: null }]]);
-  assert.equal((s1.gtagCalls[0][1] as { user_id: unknown }).user_id, null);
+  assert.deepEqual(s1.gtagCalls, [...LOGIN_AD_DENY, ['set', { user_id: null }]]);
+  assert.equal((s1.gtagCalls[3][1] as { user_id: unknown }).user_id, null);
 
-  // 2. Desligar no menu da conta: limpa user_id e devolve os 3 de anúncio para granted (consent-v1 continua granted).
+  // 2. Desligar no menu da conta: limpa user_id; logado, os anúncios continuam negados (só voltam depois do logout).
   const s2 = await setupAuth({
     consent: { v: 'granted', t: NOW - 1000 },
     heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
@@ -967,10 +977,7 @@ test('limpeza de heating-uid-v1, user_id null literal e retorno do consentimento
   await s2.click(toggle);
   assert.equal(toggle.attrs['aria-checked'], 'false');
   assert.equal(s2.local.getItem('heating-uid-v1'), null);
-  assert.deepEqual(s2.gtagCalls.slice(callsBeforeOff), [
-    ['set', { user_id: null }],
-    ['consent', 'update', AD_CONSENT_GRANTED],
-  ]);
+  assert.deepEqual(s2.gtagCalls.slice(callsBeforeOff), [['set', { user_id: null }]]);
 
   // 3. Logout ("Sair"): limpa heating-uid-v1 e user_id, marca supressão na sessão, chama disableAutoSelect() e NÃO dispara One Tap; anúncios seguem negados (o vínculo deste navegador continua ligado).
   const s3 = await setupAuth({
@@ -1036,7 +1043,7 @@ test('limpeza de heating-uid-v1, user_id null literal e retorno do consentimento
 });
 
 test('outra aba (evento storage): ressincroniza toggle, aviso, heating-uid-v1, user_id null e consentimento de anúncios', async () => {
-  // 1. Outra aba desliga heating-link-v1 -> atualiza toggle, manda user_id null e devolve anúncios para granted.
+  // 1. Outra aba desliga heating-link-v1 -> atualiza toggle e manda user_id null; logado, os anúncios seguem negados.
   const s1 = await setupAuth({
     consent: { v: 'granted', t: NOW - 1000 },
     heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
@@ -1048,10 +1055,7 @@ test('outra aba (evento storage): ressincroniza toggle, aviso, heating-uid-v1, u
   await s1.emitStorage('heating-link-v1', JSON.stringify({ v: 'denied', t: NOW, uid: 'UidCurso123ABC' }));
   assert.equal(toggle1.attrs['aria-checked'], 'false');
   assert.equal(s1.local.getItem('heating-uid-v1'), null);
-  assert.deepEqual(s1.gtagCalls.slice(calls1), [
-    ['set', { user_id: null }],
-    ['consent', 'update', AD_CONSENT_GRANTED],
-  ]);
+  assert.deepEqual(s1.gtagCalls.slice(calls1), [['set', { user_id: null }]]);
 
   // 2. Outra aba revoga consent-v1 -> manda user_id null e NÃO devolve anúncios para granted.
   const s2 = await setupAuth({
@@ -1697,4 +1701,73 @@ test('Claude P3 (rodada 5): 409 que chega depois de trocar de conta não desliga
   assert.ok(s.gtagCalls.some((c) => isUserIdSet(c, 'UidOutraConta9')));
   const last = s.gtagCalls.filter((c) => c[0] === 'set' && typeof c[1] === 'object' && c[1] !== null && 'user_id' in (c[1] as object)).pop();
   assert.deepEqual(last, ['set', { user_id: 'UidOutraConta9' }]);
+});
+
+test('Kimi P1 (rodada 6): sessão logada sem vínculo nega anúncios, marca login e só devolve anúncios no logout', async () => {
+  const s = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: makeUser() });
+  assert.deepEqual(s.gtagCalls, LOGIN_AD_DENY);
+  assert.ok(s.local.getItem('heating-login-v1'));
+  // "Agora não" mantém a sessão logada: anúncios continuam negados.
+  const beforeNo = s.gtagCalls.length;
+  await s.click(s.findClass('guifav-auth-no')!);
+  assert.ok(!s.gtagCalls.slice(beforeNo).some((c) => c[0] === 'consent'), 'nada de anúncio concedido logado');
+  // Logout (Firebase propaga null): a marca sai e os anúncios voltam, porque o vínculo não está ligado.
+  const beforeOut = s.gtagCalls.length;
+  await s.emitAuth(null);
+  assert.equal(s.local.getItem('heating-login-v1'), null);
+  assert.deepEqual(s.gtagCalls.slice(beforeOut).filter((c) => c[0] === 'consent'), [['consent', 'update', AD_CONSENT_GRANTED]]);
+
+  // Com o vínculo ligado no navegador, o logout não devolve anúncios.
+  const r = await setupAuth({
+    consent: { v: 'granted', t: NOW - 1000 },
+    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
+    initialUser: makeUser(),
+  });
+  const beforeR = r.gtagCalls.length;
+  await r.emitAuth(null);
+  assert.equal(r.local.getItem('heating-login-v1'), null);
+  assert.equal(r.gtagCalls.slice(beforeR).filter((c) => c[0] === 'consent').length, 0);
+
+  // Cookies recusados: login não manda nada ao GA4 (anúncios já negados por padrão), mas marca o login.
+  const q = await setupAuth({ consent: { v: 'denied', t: NOW - 1000 }, initialUser: makeUser() });
+  assert.deepEqual(q.gtagCalls, []);
+  assert.ok(q.local.getItem('heating-login-v1'));
+});
+
+test('Kimi P2 (rodada 6): logout em outra aba suprime o One Tap nesta aba; Kimi P3: Sair pelo teclado devolve o foco', async () => {
+  const s = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: makeUser(), gisAvailable: true });
+  assert.equal(s.session.getItem('guifav_one_tap_suppressed'), null);
+  await s.emitAuth(null); // Sair feito em outra aba
+  assert.equal(s.session.getItem('guifav_one_tap_suppressed'), '1');
+  assert.equal(s.oneTapPrompts.length, 0, 'o convite não aparece logo depois do logout remoto');
+  // Visitante que nunca entrou continua vendo o One Tap (a supressão só vem de uma saída).
+  const fresh = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: null, gisAvailable: true });
+  assert.equal(fresh.oneTapPrompts.length, 1);
+
+  const k = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' }, initialUser: makeUser() });
+  const btn = k.findClass('guifav-auth-btn')!;
+  await k.click(btn);
+  const sair = k.body.findAll((e) => e.textContent === 'Sair')[0];
+  sair.focus();
+  await k.click(sair);
+  assert.equal(k.activeElement(), btn, 'o foco volta ao botão da conta');
+});
+
+test('Kimi P1 (rodada 6): sem a marca de login gravável, a sessão confirmada ainda segura anúncios; guifavAuthIdentified', async () => {
+  const s = await setupAuth({
+    consent: { v: 'granted', t: NOW - 1000 },
+    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
+    initialUser: makeUser(),
+  });
+  const authIdentified = () => (s.win.guifavAuthIdentified as () => boolean)();
+  assert.equal(authIdentified(), true);
+  // Armazenamento sem a marca (bloqueado ou apagado): desligar o vínculo logado não devolve anúncios.
+  s.local.removeItem('heating-login-v1');
+  await s.click(s.findClass('guifav-auth-btn')!);
+  const before = s.gtagCalls.length;
+  await s.click(s.body.findAll((e) => e.attrs.role === 'menuitemcheckbox')[0]);
+  assert.deepEqual(s.gtagCalls.slice(before), [['set', { user_id: null }]]);
+  assert.equal(authIdentified(), true, 'logado sem vínculo: o consent.js mantém anúncios negados');
+  await s.emitAuth(null);
+  assert.equal(authIdentified(), false, 'depois do logout e sem vínculo, o banner volta a conceder');
 });

@@ -53,6 +53,7 @@
   var CONSENT_KEY = 'consent-v1';
   var LINK_KEY = 'heating-link-v1';
   var UID_KEY = 'heating-uid-v1';
+  var LOGIN_KEY = 'heating-login-v1';
   var IDENTIFIED_PREFIX = 'guifav_auth_identified:';
   var IDENTITY_SENT_PREFIX = 'guifav_identidade_sent:';
   var ONE_TAP_SUPPRESSED_KEY = 'guifav_one_tap_suppressed';
@@ -135,6 +136,34 @@
       var c = JSON.parse(w.localStorage.getItem(LINK_KEY) || 'null');
       return Boolean(c && c.v === 'granted' && typeof c.uid === 'string' && UID_RE.test(c.uid) && validAge(c.t, TTL_MS));
     } catch (e) { return false; }
+  }
+
+  // Marca de sessão logada (só o instante, sem uid nem email), lida pelo snippet do <head> e pelo consent.js antes de o
+  // Firebase responder: sessão logada nunca alimenta anúncio (desenho do #197, item 4). Sai no logout.
+  function loginMarkedInBrowser() {
+    try {
+      var g = JSON.parse(w.localStorage.getItem(LOGIN_KEY) || 'null');
+      return Boolean(g && validAge(g.t, TTL_MS));
+    } catch (e) { return false; }
+  }
+
+  function writeLoginMark() {
+    try { w.localStorage.setItem(LOGIN_KEY, JSON.stringify({ t: Date.now() })); } catch (e) { /* sem storage */ }
+  }
+
+  function removeLoginMark() {
+    try { if (w.localStorage.getItem(LOGIN_KEY) !== null) w.localStorage.removeItem(LOGIN_KEY); } catch (e) { /* sem storage */ }
+  }
+
+  // Anúncio fica negado neste navegador com sessão logada (confirmada agora ou marcada) ou com o vínculo ligado.
+  function adsBlockedInBrowser() {
+    return validTenantUser(currentUser) || loginMarkedInBrowser() || linkGrantedInBrowser();
+  }
+
+  function denyAdSignals() {
+    sendGtag('consent', 'update', { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' });
+    sendGtag('set', 'allow_google_signals', false);
+    sendGtag('set', 'allow_ad_personalization_signals', false);
   }
 
   function writeHeatingLink(uid, v) {
@@ -264,7 +293,7 @@
     headSentUid = false;
     if (removeStored !== false) removeHeatingUid();
     sendGtag('set', { user_id: null });
-    if (wasIdentified && readConsent() === 'granted' && !linkGrantedInBrowser()) {
+    if (wasIdentified && readConsent() === 'granted' && !adsBlockedInBrowser()) {
       sendGtag('consent', 'update', { ad_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'granted' });
     }
   }
@@ -609,6 +638,7 @@
         sessionSet(ONE_TAP_SUPPRESSED_KEY, '1');
         disableOneTapAutoSelect();
         setMenuOpen(false);
+        if (triggerBtn && typeof triggerBtn.focus === 'function') triggerBtn.focus();
         hideNotice();
         clearUserId(true);
         if (authInstance && fbAuth && typeof fbAuth.signOut === 'function') {
@@ -833,17 +863,30 @@
       fbAuth.onAuthStateChanged(authInstance, function (user) {
         authResolved = true;
         if (validTenantUser(user)) {
+          var wasLoggedIn = validTenantUser(currentUser);
           currentUser = user;
+          writeLoginMark();
+          // Sessão logada nunca alimenta anúncio: com cookies aceitos e sem identificar agora (a identificação já nega),
+          // nega na hora. Com cookies recusados os anúncios já estão negados e nada é coletado.
+          if (!wasLoggedIn && readConsent() === 'granted' && readHeatingLink(user.uid) !== 'granted') denyAdSignals();
           cancelOneTap();
           renderWidget();
           syncNotice();
           syncIdentityState(false);
         } else {
-          var hadIdentity = currentUser !== null || activeUid !== null || headSentUid;
+          var wasUser = currentUser !== null;
+          var hadIdentity = wasUser || activeUid !== null || headSentUid;
+          var hadAdsBlocked = adsBlockedInBrowser();
           currentUser = null;
+          removeLoginMark();
+          // Saiu aqui ou em outra aba (o Firebase propaga): o One Tap não reaparece nesta aba até um novo login.
+          if (wasUser) sessionSet(ONE_TAP_SUPPRESSED_KEY, '1');
           hideNotice();
           renderWidget();
           syncIdentityState(hadIdentity);
+          if (wasUser && hadAdsBlocked && readConsent() === 'granted' && !adsBlockedInBrowser()) {
+            sendGtag('consent', 'update', { ad_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'granted' });
+          }
           maybeStartOneTap();
         }
       });
@@ -915,8 +958,9 @@
     });
   }
 
+  // Lido pelo consent.js no "Sim" do banner: com sessão logada ou vínculo ligado, os anúncios continuam negados.
   w.guifavAuthIdentified = function () {
-    return Boolean(validTenantUser(currentUser) && readHeatingLink(currentUser.uid) === 'granted');
+    return adsBlockedInBrowser();
   };
 
   var headUid = readConsent() === 'granted' ? readHeatingUid() : null;

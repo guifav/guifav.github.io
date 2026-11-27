@@ -19,6 +19,7 @@
   var KEY = 'consent-v1';
   var MAX_AGE = 365 * 24 * 3600 * 1000;
   var LINK_KEY = 'heating-link-v1';
+  var LOGIN_KEY = 'heating-login-v1';
   var UID_RE = /^[0-9A-Za-z]{1,128}$/;
   var POLICY = '/privacidade/#cookies';
   var TEXT = {
@@ -55,8 +56,20 @@
     return false;
   }
 
+  // Sessão logada (marca gravada pelo auth.js quando o Firebase confirma a conta, 365 dias): também nega anúncio.
+  function hasLoginMark() {
+    try {
+      var g = JSON.parse(localStorage.getItem(LOGIN_KEY) || 'null');
+      if (g && typeof g.t === 'number') {
+        var age = Date.now() - g.t;
+        return age >= 0 && age < MAX_AGE;
+      }
+    } catch (e) { /* sem storage ou valor quebrado */ }
+    return false;
+  }
+
   function isIdentified() {
-    if (hasHeatingLinkGranted()) return true;
+    if (hasHeatingLinkGranted() || hasLoginMark()) return true;
     try {
       if (typeof window.guifavAuthIdentified === 'function' && window.guifavAuthIdentified()) return true;
     } catch (e) { /* ignora */ }

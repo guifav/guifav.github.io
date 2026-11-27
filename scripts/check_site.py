@@ -3584,16 +3584,15 @@ def check_date_placeholder(site: Path) -> list[str]:
 
 
 GA_UID_BLOCK = (
-    "if(window.guifavConsent==='granted'){"
-    "gtag('consent','update',{ad_storage:'granted',ad_user_data:'granted',ad_personalization:'granted',analytics_storage:'granted'});"
-    "try{vark=JSON.parse(localStorage.getItem('heating-link-v1')||'null'),n=Date.now();"
-    "if(k&&k.v==='granted'&&typeofk.uid==='string'&&/^[0-9A-Za-z]{1,128}$/.test(k.uid)&&typeofk.t==='number'&&n-k.t>=0&&n-k.t<31536e6){"
-    "gtag('consent','update',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});"
+    "if(window.guifavConsent==='granted'){gtag('consent','update',{ad_storage:'granted',ad_user_data:'granted',ad_personalization:'granted',analytics_storage:'granted'});"
+    "(function(){varp=function(x){try{returnJSON.parse(localStorage.getItem(x)||'null')}catch(e){returnnull}},k=p('heating-link-v1'),g=p('heating-login-v1'),n=Date.now(),l=!!(k&&k.v==='granted'&&typeofk.uid==='string'&&/^[0-9A-Za-z]{1,128}$/.test(k.uid)&&typeofk.t==='number'&&n-k.t>=0&&n-k.t<31536e6);"
+    "if(l||(g&&typeofg.t==='number'&&n-g.t>=0&&n-g.t<31536e6)){gtag('consent','update',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});"
     "gtag('set','allow_google_signals',false);"
     "gtag('set','allow_ad_personalization_signals',false);"
-    "varu=JSON.parse(localStorage.getItem('heating-uid-v1')||'null');"
+    "}if(l){varu=p('heating-uid-v1');"
     "if(u&&u.uid===k.uid&&typeofu.t==='number'&&n-u.t>=0&&n-u.t<18e5)gtag('set',{user_id:u.uid});"
-    "}}catch(e){}}"
+    "}})();"
+    "}"
 )
 AUTH_AD_CONSENT_DENIED = "sendGtag('consent','update',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'})"
 AUTH_AD_CONSENT_GRANTED = "sendGtag('consent','update',{ad_storage:'granted',ad_user_data:'granted',ad_personalization:'granted'})"

@@ -5803,14 +5803,16 @@ class AuthCheckTest(unittest.TestCase):
         uid_block = (
             "if(window.guifavConsent==='granted'){"
             "gtag('consent','update',{ad_storage:'granted',ad_user_data:'granted',ad_personalization:'granted',analytics_storage:'granted'});"
-            "try{var k=JSON.parse(localStorage.getItem('heating-link-v1')||'null'),n=Date.now();"
-            "if(k&&k.v==='granted'&&typeof k.uid==='string'&&/^[0-9A-Za-z]{1,128}$/.test(k.uid)&&typeof k.t==='number'&&n-k.t>=0&&n-k.t<31536e6){"
+            "(function(){var p=function(x){try{return JSON.parse(localStorage.getItem(x)||'null')}catch(e){return null}},"
+            "k=p('heating-link-v1'),g=p('heating-login-v1'),n=Date.now(),"
+            "l=!!(k&&k.v==='granted'&&typeof k.uid==='string'&&/^[0-9A-Za-z]{1,128}$/.test(k.uid)&&typeof k.t==='number'&&n-k.t>=0&&n-k.t<31536e6);"
+            "if(l||(g&&typeof g.t==='number'&&n-g.t>=0&&n-g.t<31536e6)){"
             "gtag('consent','update',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});"
             "gtag('set','allow_google_signals',false);"
-            "gtag('set','allow_ad_personalization_signals',false);"
-            "var u=JSON.parse(localStorage.getItem('heating-uid-v1')||'null');"
-            "if(u&&u.uid===k.uid&&typeof u.t==='number'&&n-u.t>=0&&n-u.t<18e5)gtag('set',{user_id:u.uid});"
-            "}}catch(e){}}"
+            "gtag('set','allow_ad_personalization_signals',false);}"
+            "if(l){var u=p('heating-uid-v1');"
+            "if(u&&u.uid===k.uid&&typeof u.t==='number'&&n-u.t>=0&&n-u.t<18e5)gtag('set',{user_id:u.uid});}"
+            "})();}"
         )
         cfg = "gtag('js',new Date());gtag('config','G-K7Y87QNCX8',{content_group:'home'});"
         self.assertEqual(C.check_ga_uid_snippet("index.html", f"<html><head>{ga_tag}<script>{uid_block}{cfg}</script></head></html>"), [])
@@ -5825,6 +5827,8 @@ class AuthCheckTest(unittest.TestCase):
             "sem consent update de anuncio": uid_block.replace("gtag('consent','update',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});", "") + cfg,
             "sem sinais de anuncio": uid_block.replace("gtag('set','allow_google_signals',false);", "") + cfg,
             "sem user_id": uid_block.replace("gtag('set',{user_id:u.uid});", "") + cfg,
+            "sem marca de login": uid_block.replace("l||(g&&typeof g.t==='number'&&n-g.t>=0&&n-g.t<31536e6)", "l") + cfg,
+            "user_id sem vinculo": uid_block.replace("if(l){var u=", "{var u=") + cfg,
             "comentado": f"/* {uid_block} */" + cfg,
             "em string": f'var x="{uid_block}";' + cfg,
         }.items():

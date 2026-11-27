@@ -73,7 +73,7 @@ const Blocked = {
   },
 };
 
-function setup(opts: { lang?: string; stored?: unknown; heatingUid?: unknown; heatingLink?: unknown; authIdentified?: () => boolean;
+function setup(opts: { lang?: string; stored?: unknown; heatingUid?: unknown; heatingLink?: unknown; heatingLogin?: unknown; authIdentified?: () => boolean;
   storage?: Storage | typeof Blocked; gtag?: boolean; cookies?: string; clarityLoaded?: boolean } = {}) {
   const calls: unknown[][] = [];
   const cookieWrites: string[] = [];
@@ -94,6 +94,7 @@ function setup(opts: { lang?: string; stored?: unknown; heatingUid?: unknown; he
   if (opts.stored !== undefined && storage instanceof Storage) storage.setItem('consent-v1', typeof opts.stored === 'string' ? opts.stored : JSON.stringify(opts.stored));
   if (opts.heatingUid !== undefined && storage instanceof Storage) storage.setItem('heating-uid-v1', typeof opts.heatingUid === 'string' ? opts.heatingUid : JSON.stringify(opts.heatingUid));
   if (opts.heatingLink !== undefined && storage instanceof Storage) storage.setItem('heating-link-v1', typeof opts.heatingLink === 'string' ? opts.heatingLink : JSON.stringify(opts.heatingLink));
+  if (opts.heatingLogin !== undefined && storage instanceof Storage) storage.setItem('heating-login-v1', typeof opts.heatingLogin === 'string' ? opts.heatingLogin : JSON.stringify(opts.heatingLogin));
   const listeners: ((e: unknown) => void)[] = [];
   const document = {
     documentElement: html,
@@ -270,6 +271,20 @@ test('Sim com o vínculo do login ligado (heating-link-v1 granted) ou sinal do a
     assert.deepEqual(s.consentEvents, ['granted']);
   }
 
+  // Marca de sessão logada (heating-login-v1, até 365 dias), sem vínculo: também nunca concede ad_* (Kimi P1, rodada 6).
+  for (const age of [0, 200 * DAY, 365 * DAY - 1]) {
+    const s = setup({ stored: { v: 'denied', t: NOW - DAY }, heatingLogin: { t: NOW - age } });
+    s.click(s.cookieLink);
+    s.click(s.btn('consent-yes'));
+    assert.deepEqual(updates(s.calls), [IDENTIFIED_GRANTED], `login age=${age}`);
+  }
+  for (const badLogin of [{ t: NOW - 365 * DAY }, { t: NOW + 1 }, { t: 'x' }, '{quebrado']) {
+    const s = setup({ stored: { v: 'denied', t: NOW - DAY }, heatingLogin: badLogin });
+    s.click(s.cookieLink);
+    s.click(s.btn('consent-yes'));
+    assert.notDeepEqual(updates(s.calls), [IDENTIFIED_GRANTED], JSON.stringify(badLogin));
+  }
+
   // Sinal do auth.js (sessão confirmada pelo Firebase, mesmo sem heating-link-v1 legível).
   const switched = setup({ stored: { v: 'denied', t: NOW - MIN }, authIdentified: () => true });
   switched.click(switched.cookieLink);
@@ -328,11 +343,12 @@ function inlineBase(): string {
   return "const GA4_ID = 'G-K7Y87QNCX8'; const CONTENT_GROUP = 'insights-artigo';" + m![1];
 }
 
-function runInline(rel: string, stored: unknown, heatingUid?: unknown, heatingLink?: unknown) {
+function runInline(rel: string, stored: unknown, heatingUid?: unknown, heatingLink?: unknown, heatingLogin?: unknown) {
   const storage = new Storage();
   if (stored !== undefined) storage.setItem('consent-v1', typeof stored === 'string' ? stored : JSON.stringify(stored));
   if (heatingUid !== undefined) storage.setItem('heating-uid-v1', typeof heatingUid === 'string' ? heatingUid : JSON.stringify(heatingUid));
   if (heatingLink !== undefined) storage.setItem('heating-link-v1', typeof heatingLink === 'string' ? heatingLink : JSON.stringify(heatingLink));
+  if (heatingLogin !== undefined) storage.setItem('heating-login-v1', typeof heatingLogin === 'string' ? heatingLogin : JSON.stringify(heatingLogin));
   const ctx: Record<string, unknown> = { localStorage: storage, location: { hostname: 'guifav.dev' }, JSON, Date: Object.assign(function () {}, { now: () => NOW }) };
   ctx.window = ctx;
   vm.runInContext(rel === 'Base.astro' ? inlineBase() : inlineGa(rel), vm.createContext(ctx));
@@ -398,6 +414,22 @@ for (const rel of ['index.html', 'portfolio/index.html', 'consultoria/index.html
       assert.deepEqual(sets(res), [['ads_data_redaction', true]], JSON.stringify(link));
       assert.deepEqual(updates(res), [GRANTED], JSON.stringify(link));
     }
+
+    // Marca de sessão logada sem vínculo: nega anúncios e sinais antes do config, sem user_id (mesmo com uid sobrando).
+    for (const age of [0, 200 * DAY, 365 * DAY - 1]) {
+      const res = runInline(rel, { v: 'granted', t: NOW - DAY }, { uid: 'UidHead123', t: NOW - MIN }, undefined, { t: NOW - age });
+      assert.deepEqual(updates(res), [GRANTED, AD_DENIED], `login age=${age}`);
+      assert.ok(res.some((c) => c[0] === 'set' && c[1] === 'allow_google_signals' && c[2] === false));
+      assert.ok(res.some((c) => c[0] === 'set' && c[1] === 'allow_ad_personalization_signals' && c[2] === false));
+      assert.equal(uidSet(res), undefined);
+      assert.ok(res.findIndex((c) => c[0] === 'config') > res.findIndex((c) => c[0] === 'set' && c[1] === 'allow_google_signals'));
+    }
+    // Marca vencida, futura, sem t ou quebrada: nada negado. Vínculo quebrado não impede a marca de negar.
+    for (const login of [{ t: NOW - 365 * DAY }, { t: NOW + DAY }, {}, '{quebrado']) {
+      const res = runInline(rel, { v: 'granted', t: NOW - DAY }, undefined, undefined, login);
+      assert.deepEqual(updates(res), [GRANTED], JSON.stringify(login));
+    }
+    assert.deepEqual(updates(runInline(rel, { v: 'granted', t: NOW - DAY }, undefined, '{quebrado', { t: NOW })), [GRANTED, AD_DENIED]);
 
     // Sem consent-v1 granted, o vínculo e o uid nunca setam sinais, consentimento nem user_id.
     for (const consent of [undefined, { v: 'denied', t: NOW }, { v: 'granted', t: NOW - 366 * DAY }]) {
