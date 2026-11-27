@@ -28,6 +28,15 @@ import twenty_sync as TS  # noqa: E402
 ENV = {"CLOUDFLARE_API_TOKEN": "cf", "CLOUDFLARE_ACCOUNT_ID": "acc", "D1_DATABASE_ID": "db", "TWENTY_API_KEY": "tw",
        "TWENTY_LOCAL_URL": "http://127.0.0.1:3100"}
 MIGRATIONS = os.path.join(HERE, "..", "..", "workers", "admin", "migrations")
+# Esquema da migração 0013 (`site_identities`, do PR #203): criado apenas enquanto 0013_*.sql não estiver em MIGRATIONS.
+# Após o merge do #203, os testes passam a usar a migração real automaticamente.
+SITE_IDENTITIES_0013_SQL = (
+    "CREATE TABLE IF NOT EXISTS site_identities ("
+    "uid TEXT PRIMARY KEY NOT NULL CHECK (length(uid) BETWEEN 1 AND 128 AND uid NOT GLOB '*[^0-9A-Za-z]*'), "
+    "email TEXT NOT NULL CHECK (length(email) BETWEEN 3 AND 254 AND email = lower(email)), "
+    "linked_at TEXT NOT NULL CHECK (linked_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z')); "
+    "CREATE INDEX IF NOT EXISTS site_identities_email ON site_identities (email);"
+)
 CUSTO = {"id": "CUSTO_IA", "rotulo": "Custo de IA"}
 ARQ = {"id": "ARQUITETURA_IA", "rotulo": "Arquitetura de IA (RAG, SQL, contexto longo)"}
 EXPERT = {"id": "EXPERT_INSIGHTS", "rotulo": "Expert Insights"}
@@ -43,9 +52,12 @@ class Fake:
     def __init__(self, people=(), schema=False, fail=None, listing=None, db_path=":memory:"):
         self.db = sqlite3.connect(db_path)
         self.db.row_factory = sqlite3.Row
-        for name in sorted(n for n in os.listdir(MIGRATIONS) if n.endswith(".sql") and n >= "0004"):
+        mig_files = sorted(n for n in os.listdir(MIGRATIONS) if n.endswith(".sql") and n >= "0004")
+        for name in mig_files:
             with open(os.path.join(MIGRATIONS, name), encoding="utf-8") as fh:
                 self.db.executescript(fh.read())
+        if not any(n.startswith("0013_") for n in mig_files):
+            self.db.executescript(SITE_IDENTITIES_0013_SQL)
         self.people = {p["id"]: copy.deepcopy(p) for p in people}
         self.person_fields = {n: {"id": f"pf-{n}", "name": n, "type": t, "options": None}
                               for n, t in (("name", "FULL_NAME"), ("emails", "EMAILS"), ("company", "RELATION"))}
@@ -87,6 +99,13 @@ class Fake:
 
     def pending(self):
         return sorted(r[0] for r in self.db.execute("SELECT id FROM conversions WHERE synced_at IS NULL"))
+
+    def add_identity(self, uid: str, email: str, linked_at: str = "2026-11-27T10:00:00.000Z"):
+        self.db.execute(
+            "INSERT INTO site_identities (uid, email, linked_at) VALUES (?, ?, ?)",
+            (uid, email.strip().lower(), linked_at),
+        )
+        self.db.commit()
 
     # ---- transporte ----
     def __call__(self, method, url, headers, body):
@@ -1657,6 +1676,266 @@ class TwentyPersonIdTest(unittest.TestCase):
         counts_v, _ = forget(f, "vazio@x.com", apply=True)
         self.assertEqual(counts_v["pessoas_heating_limpas"], 0)
         self.assertEqual(len(f.twenty_writes()), n_before)
+
+
+class ForgetGooglePurgeTest(unittest.TestCase):
+    def setUp(self):
+        fd, self.lock = tempfile.mkstemp(prefix="conversoes-lock-ga4-")
+        os.close(fd)
+        self.addCleanup(os.unlink, self.lock)
+
+    def _run_cli(self, fake, *args, stdin=None, ga4_delete=None, bq_delete=None, now_dt=None, sa_file=None):
+        out, err = io.StringIO(), io.StringIO()
+        keys = [*ENV, "CONVERSOES_SYNC_LOCK", "FORGET_HMAC_KEY", "HEATING_GCP_SA_FILE"]
+        old = {k: os.environ.get(k) for k in keys}
+        os.environ.update(ENV)
+        os.environ["CONVERSOES_SYNC_LOCK"] = self.lock
+        os.environ["FORGET_HMAC_KEY"] = FORGET_KEY
+        if sa_file is None:
+            os.environ.pop("HEATING_GCP_SA_FILE", None)
+        else:
+            os.environ["HEATING_GCP_SA_FILE"] = sa_file
+        try:
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                rc = S.main(
+                    list(args),
+                    transport=fake,
+                    sleep=lambda s: None,
+                    stdin=io.StringIO(stdin) if stdin is not None else None,
+                    ga4_delete=ga4_delete,
+                    bq_delete=bq_delete,
+                    now_dt=now_dt,
+                )
+        finally:
+            for k, v in old.items():
+                os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
+        return rc, out.getvalue() + err.getvalue()
+
+    def test_forget_site_chama_ga4_e_bq_agenda_fila_e_apaga_site_identities(self):
+        from datetime import datetime, timedelta, timezone
+        now = datetime(2026, 11, 27, 12, 0, 0, tzinfo=timezone.utc)
+        f = Fake(people=[person("p1", "segredo@x.com")])
+        f.add(1, "segredo@x.com")
+        run(f, apply=True)
+        f.add_identity("UidSiteAlpha1", "segredo@x.com")
+        f.add_identity("UidSiteBeta2", "segredo@x.com")
+        f.add_identity("UidOutroEmail3", "outro@x.com")
+
+        ga4_calls: list[str] = []
+        bq_calls: list[str] = []
+
+        # Simulação: conta identidades_site, não chama Google, não grava fila nem apaga site_identities.
+        rc_dry, out_dry = self._run_cli(
+            f, "--forget", stdin="segredo@x.com\n",
+            ga4_delete=lambda u: ga4_calls.append(u) or True,
+            bq_delete=lambda u: bq_calls.append(u) or {"tabelas_limpas": 1, "adiadas": 0},
+            now_dt=now,
+        )
+        self.assertEqual((rc_dry, ga4_calls, bq_calls), (0, [], []))
+        self.assertIn("identidades_site: 2", out_dry)
+        self.assertEqual(f.db.execute("SELECT count(*) FROM site_identities").fetchone()[0], 3)
+        self.assertEqual(f.db.execute("SELECT count(*) FROM ga4_purge_queue").fetchone()[0], 0)
+
+        # --apply: chama GA4 e BigQuery, agenda D+1 e D+3, apaga só as linhas do email em site_identities.
+        rc, out = self._run_cli(
+            f, "--forget", "--apply", stdin="segredo@x.com\n",
+            ga4_delete=lambda u: ga4_calls.append(u) or True,
+            bq_delete=lambda u: bq_calls.append(u) or {"tabelas_limpas": 2, "adiadas": 1},
+            now_dt=now,
+        )
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(ga4_calls, ["UidSiteAlpha1", "UidSiteBeta2"])
+        self.assertEqual(bq_calls, ["UidSiteAlpha1", "UidSiteBeta2"])
+        self.assertIn("ga4_removidos: 2", out)
+        self.assertIn("bq_tabelas_limpas: 4", out)
+        self.assertIn("bq_remocao_adiada: 2", out)
+        self.assertNotIn(S.GA4_PURGE_PENDENTE_MSG, out)
+        for secret in ("segredo@x.com", "UidSiteAlpha1", "UidSiteBeta2"):
+            self.assertNotIn(secret.lower(), out.lower())
+        self.assertEqual([r[0] for r in f.db.execute("SELECT uid FROM site_identities")], ["UidOutroEmail3"])
+        queue = [dict(r) for r in f.db.execute("SELECT uid, due_at, attempt FROM ga4_purge_queue ORDER BY uid, attempt")]
+        self.assertEqual(
+            queue,
+            [
+                {"uid": "UidSiteAlpha1", "due_at": S.stamp(now + timedelta(days=1)), "attempt": 2},
+                {"uid": "UidSiteAlpha1", "due_at": S.stamp(now + timedelta(days=3)), "attempt": 3},
+                {"uid": "UidSiteBeta2", "due_at": S.stamp(now + timedelta(days=1)), "attempt": 2},
+                {"uid": "UidSiteBeta2", "due_at": S.stamp(now + timedelta(days=3)), "attempt": 3},
+            ],
+        )
+
+    def test_forget_ga4_403_e_sem_sa_file_retornam_codigo_2_com_mensagem_fixa_sem_impedir_o_resto(self):
+        from datetime import datetime, timezone
+        now = datetime(2026, 11, 27, 12, 0, 0, tzinfo=timezone.utc)
+
+        # 1) 403 no GA4: código 2 + mensagem fixa; BigQuery, fila, Twenty, D1 e site_identities concluídos.
+        f = Fake(people=[person("p1", "erro403@x.com")])
+        f.add(1, "erro403@x.com")
+        run(f, apply=True)
+        f.add_identity("UidErro403", "erro403@x.com")
+        bq_calls: list[str] = []
+        rc_403, out_403 = self._run_cli(
+            f, "--forget", "--apply", stdin="erro403@x.com\n",
+            ga4_delete=lambda _u: False,
+            bq_delete=lambda u: bq_calls.append(u) or {"tabelas_limpas": 1, "adiadas": 0},
+            now_dt=now,
+        )
+        self.assertEqual(rc_403, 2, out_403)
+        self.assertIn("ga4_remocao_falhou: 1", out_403)
+        self.assertIn(S.GA4_PURGE_PENDENTE_MSG, out_403)
+        self.assertEqual(bq_calls, ["UidErro403"])
+        self.assertEqual((f.convs, f.db.execute("SELECT count(*) FROM conversions").fetchone()[0]), ({}, 0))
+        self.assertEqual(f.db.execute("SELECT count(*) FROM site_identities").fetchone()[0], 0)
+        self.assertEqual(
+            [(r["uid"], r["attempt"]) for r in f.db.execute("SELECT uid, attempt FROM ga4_purge_queue ORDER BY attempt")],
+            [("UidErro403", 2), ("UidErro403", 3)],
+        )
+        for secret in ("erro403@x.com", "UidErro403"):
+            self.assertNotIn(secret.lower(), out_403.lower())
+
+        # 2) Sem HEATING_GCP_SA_FILE (ex.: no Mac): pula Google com mensagem fixa e código 2, limpa resto e agenda fila.
+        g = Fake(people=[person("p1", "mac@x.com")])
+        g.add(1, "mac@x.com")
+        run(g, apply=True)
+        g.add_identity("UidSemSa1", "mac@x.com")
+        rc_mac, out_mac = self._run_cli(g, "--forget", "--apply", stdin="mac@x.com\n", now_dt=now, sa_file=None)
+        self.assertEqual(rc_mac, 2, out_mac)
+        self.assertIn("ga4_remocao_falhou: 1", out_mac)
+        self.assertIn(S.GA4_PURGE_PENDENTE_MSG, out_mac)
+        self.assertEqual((g.convs, g.db.execute("SELECT count(*) FROM site_identities").fetchone()[0]), ({}, 0))
+        self.assertEqual(
+            [(r["uid"], r["attempt"]) for r in g.db.execute("SELECT uid, attempt FROM ga4_purge_queue ORDER BY attempt")],
+            [("UidSemSa1", 1), ("UidSemSa1", 2), ("UidSemSa1", 3)],
+        )
+        for secret in ("mac@x.com", "UidSemSa1"):
+            self.assertNotIn(secret.lower(), out_mac.lower())
+
+    def test_ga4_submit_user_deletion_e_bq_apagar_uid_producao(self):
+        import types
+
+        ga4_posts: list[tuple] = []
+        sa_scopes: list = []
+        bq_queries: list[tuple] = []
+
+        class BadRequest(Exception):
+            __module__ = "google.api_core.exceptions"
+            code = 400
+
+        class _ScalarParam:
+            def __init__(self, name, typ, value):
+                self.name, self.type_, self.value = name, typ, value
+
+        class _StructParam:
+            def __init__(self, name, *sub):
+                self.name, self.sub = name, list(sub)
+
+        class _ArrayParam:
+            def __init__(self, name, array_type, values):
+                self.name, self.array_type, self.values = name, array_type, list(values)
+
+        class _JobCfg:
+            def __init__(self, query_parameters=()):
+                self.query_parameters = list(query_parameters)
+
+        class _QueryJob:
+            def __init__(self, rows=()):
+                self._rows = list(rows)
+
+            def result(self):
+                return self._rows
+
+        ga4_status = {"code": 200}
+
+        class _AuthSession:
+            def __init__(self, creds):
+                self.creds = creds
+
+            def post(self, url, json=None, timeout=None):
+                ga4_posts.append((url, json, timeout))
+                return types.SimpleNamespace(status_code=ga4_status["code"])
+
+        class _Creds:
+            @staticmethod
+            def from_service_account_file(path, scopes=None):
+                sa_scopes.append((path, scopes))
+                return object()
+
+        class _BqClient:
+            def __init__(self, project=None, credentials=None):
+                self.project = project
+
+            def query(self, sql, job_config=None, location=None):
+                bq_queries.append((sql, job_config, location))
+                if sql.lstrip().startswith("WITH eventos"):
+                    return _QueryJob([
+                        {"table_suffix": "20261125", "user_pseudo_id": "ps1", "ga_session_id": 1001},
+                        {"table_suffix": "20261126", "user_pseudo_id": "ps1", "ga_session_id": 1002},
+                        {"table_suffix": "intraday_20261127", "user_pseudo_id": "ps1", "ga_session_id": 1003},
+                    ])
+                if "events_intraday_20261127" in sql:
+                    raise BadRequest("UPDATE or DELETE statement over table would affect rows in the streaming buffer")
+                return _QueryJob()
+
+        fake_google = types.ModuleType("google")
+        fake_auth = types.ModuleType("google.auth")
+        fake_auth_tr = types.ModuleType("google.auth.transport")
+        fake_auth_req = types.ModuleType("google.auth.transport.requests")
+        fake_oauth = types.ModuleType("google.oauth2")
+        fake_sa = types.ModuleType("google.oauth2.service_account")
+        fake_cloud = types.ModuleType("google.cloud")
+        fake_bq = types.ModuleType("google.cloud.bigquery")
+
+        fake_auth_req.AuthorizedSession = _AuthSession
+        fake_sa.Credentials = _Creds
+        fake_bq.Client = _BqClient
+        fake_bq.QueryJobConfig = _JobCfg
+        fake_bq.ScalarQueryParameter = _ScalarParam
+        fake_bq.ArrayQueryParameter = _ArrayParam
+        fake_bq.StructQueryParameter = _StructParam
+
+        mod_map = {
+            "google": fake_google,
+            "google.auth": fake_auth,
+            "google.auth.transport": fake_auth_tr,
+            "google.auth.transport.requests": fake_auth_req,
+            "google.oauth2": fake_oauth,
+            "google.oauth2.service_account": fake_sa,
+            "google.cloud": fake_cloud,
+            "google.cloud.bigquery": fake_bq,
+        }
+        saved = {k: sys.modules.get(k) for k in mod_map}
+        sys.modules.update(mod_map)
+        try:
+            # GA4 200 -> True; 403 -> False; confere URL, escopo e payload.
+            self.assertTrue(S._ga4_submit_user_deletion("UidProd99", "/tmp/sa.json"))
+            self.assertEqual(
+                ga4_posts[-1],
+                ("https://analyticsadmin.googleapis.com/v1alpha/properties/341040810:submitUserDeletion", {"userId": "UidProd99"}, 30),
+            )
+            self.assertEqual(sa_scopes[-1], ("/tmp/sa.json", ["https://www.googleapis.com/auth/analytics.edit"]))
+            ga4_status["code"] = 403
+            self.assertFalse(S._ga4_submit_user_deletion("UidProd99", "/tmp/sa.json"))
+
+            # BigQuery: descoberta + DELETE por tabela diária (nunca DELETE no wildcard); intraday streaming buffer -> adiada.
+            res = S._bq_apagar_uid("UidProd99", "/tmp/sa.json")
+            self.assertEqual(res, {"tabelas_limpas": 2, "adiadas": 1})
+            self.assertEqual(len(bq_queries), 4)  # 1 descoberta + 3 DELETEs
+            disc_sql = bq_queries[0][0]
+            self.assertIn("_TABLE_SUFFIX", disc_sql)
+            self.assertIn("ga_session_id", disc_sql)
+            del_sqls = [q[0] for q in bq_queries[1:]]
+            for dsql in del_sqls:
+                self.assertTrue(dsql.startswith("DELETE FROM `mindapps.analytics_341040810.events_"))
+                self.assertNotIn("events_*", dsql)  # nunca DELETE no wildcard
+                self.assertIn("WHERE user_id = @uid", dsql)
+                self.assertIn("user_pseudo_id", dsql)
+                self.assertIn("ga_session_id", dsql)
+            self.assertIn("events_20261125", del_sqls[0])
+            self.assertIn("events_20261126", del_sqls[1])
+            self.assertIn("events_intraday_20261127", del_sqls[2])
+        finally:
+            for k, v in saved.items():
+                sys.modules.pop(k, None) if v is None else sys.modules.__setitem__(k, v)
 
 
 if __name__ == "__main__":
