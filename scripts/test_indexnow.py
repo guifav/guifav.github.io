@@ -718,7 +718,48 @@ class RegistryTest(Site):
             "https://guifav.dev/blog/b/": lastmod["https://guifav.dev/blog/b/"],
         })
 
-    def test_wait_live_failure_preserves_base_registry(self):
+    def test_rejected_urls_are_dropped_from_registry_and_return_on_next_plan(self):
+        # URL sem lastmod (/blog/) já presente no registro com "": se o envio falha, sai do registro e volta no próximo plan.
+        blog = dict(BLOG_NEW, **{"https://guifav.dev/blog/": ""})
+        self.w("blog/sitemap.xml", urlset(blog))
+        self.w("blog/index.html", b"<html>capa nova</html>")
+        reg_out = self.site / "reg-sem-lastmod.json"
+        base = {**SITE_NEW, **blog}
+        plan = self.make_plan(
+            urls=["https://guifav.dev/blog/"],
+            registry=base,
+            lastmod={"https://guifav.dev/blog/": ""},
+        )
+        rc, _, _ = self.run_submit(plan, self.live(), FakePost([500]), reg_out)
+        self.assertEqual(rc, 1)
+        saved, state = I.load_registry(reg_out)
+        self.assertEqual(state, "ok")
+        self.assertNotIn("https://guifav.dev/blog/", saved)
+        self.assertEqual(saved, {k: v for k, v in base.items() if k != "https://guifav.dev/blog/"})
+        pages = dict(self.built(), **{"https://guifav.dev/blog/": b"<html>capa nova</html>"})
+        next_plan = I.plan(self.site, FakeWeb(pages), registry=saved)
+        self.assertEqual(next_plan["urls"], ["https://guifav.dev/blog/"])
+        self.assertEqual(next_plan["lastmod"], {"https://guifav.dev/blog/": ""})
+
+        # URL com lastmod já presente no registro: num lote rejeitado, também sai do registro.
+        reg_out_lm = self.site / "reg-com-lastmod.json"
+        base_lm = {**SITE_NEW, **blog}
+        plan_lm = self.make_plan(
+            urls=["https://guifav.dev/blog/a/"],
+            registry=base_lm,
+            lastmod={"https://guifav.dev/blog/a/": blog["https://guifav.dev/blog/a/"]},
+        )
+        rc, _, _ = self.run_submit(plan_lm, self.live(), FakePost([500]), reg_out_lm)
+        self.assertEqual(rc, 1)
+        saved_lm, state_lm = I.load_registry(reg_out_lm)
+        self.assertEqual(state_lm, "ok")
+        self.assertNotIn("https://guifav.dev/blog/a/", saved_lm)
+        self.assertEqual(saved_lm, {k: v for k, v in base_lm.items() if k != "https://guifav.dev/blog/a/"})
+        next_plan_lm = I.plan(self.site, FakeWeb(pages), registry=saved_lm)
+        self.assertEqual(next_plan_lm["urls"], ["https://guifav.dev/blog/a/"])
+        self.assertEqual(next_plan_lm["lastmod"], {"https://guifav.dev/blog/a/": blog["https://guifav.dev/blog/a/"]})
+
+    def test_wait_live_failure_writes_no_registry(self):
         reg_out = self.site / "registry.json"
         base = {"https://guifav.dev/": SITE_NEW["https://guifav.dev/"]}
         plan = self.make_plan(urls=["https://guifav.dev/blog/novo/"], registry=base,
@@ -726,7 +767,7 @@ class RegistryTest(Site):
         post = FakePost()
         rc, _, _ = self.run_submit(plan, FakeWeb({}), post, reg_out, timeout="0")
         self.assertEqual((rc, post.bodies), (1, []))
-        self.assertEqual(json.loads(reg_out.read_text(encoding="utf-8"))["urls"], base)
+        self.assertFalse(reg_out.exists())
 
     def test_empty_plan_preserves_base_registry(self):
         reg_out = self.site / "registry.json"
@@ -779,6 +820,35 @@ class RegistryTest(Site):
         self.assertEqual(rc, 0)
         self.assertEqual(I.load_registry(reg_out), (expected, "ok"))
 
+    def test_fallback_all_with_registry_prunes_base_and_keeps_lastmod(self):
+        reg = {**SITE_NEW, **BLOG_NEW, "https://guifav.dev/blog/sumiu/": "2025-01-01T00:00:00.000Z"}
+        with redirect_stdout(io.StringIO()):
+            p = I.plan(self.site, FakeWeb({}), registry=reg)
+        expected = {**SITE_NEW, **BLOG_NEW}
+        self.assertEqual(p["mode"], "all")
+        self.assertTrue(p["incomplete"])
+        self.assertEqual(p["urls"], sorted(expected))
+        self.assertEqual(p["registry"], expected)
+        self.assertEqual(p["lastmod"], expected)
+
+    def test_incomplete_plan_saves_accepted_urls_to_registry(self):
+        reg_out = self.site / "registry.json"
+        base = {"https://guifav.dev/": SITE_NEW["https://guifav.dev/"]}
+        plan = self.make_plan(
+            urls=["https://guifav.dev/blog/novo/"],
+            mode="all",
+            incomplete=True,
+            registry=base,
+            lastmod={"https://guifav.dev/blog/novo/": BLOG_NEW["https://guifav.dev/blog/novo/"]},
+        )
+        rc, _, err = self.run_submit(plan, self.live(), FakePost([200]), reg_out)
+        self.assertEqual(rc, 1)
+        self.assertIn("indexnow.py urls", err)
+        self.assertEqual(I.load_registry(reg_out), ({
+            **base,
+            "https://guifav.dev/blog/novo/": BLOG_NEW["https://guifav.dev/blog/novo/"],
+        }, "ok"))
+
 
 class RepoTest(unittest.TestCase):
     """A chave publicada é a do script e vai ao ar pelo manifesto; o workflow passa o plano por artefato."""
@@ -824,6 +894,8 @@ class RepoTest(unittest.TestCase):
         self.assertIn('--registry-out "$RUNNER_TEMP/indexnow-registry/registry.json"', indexnow)
         self.assertLess(indexnow.index('submit --plan "$RUNNER_TEMP/indexnow/plan.json"'),
                         indexnow.index("actions/cache/save@"))
+        check_step = indexnow.split("Conferir registro do IndexNow")[1].split("\n      - ")[0]
+        self.assertIn("!cancelled()", check_step)
         save_step = indexnow.split("Salvar registro do IndexNow")[1].split("\n      - ")[0]
         self.assertIn("!cancelled()", save_step)
         for field in ("path", "key"):
@@ -831,7 +903,13 @@ class RepoTest(unittest.TestCase):
             s_match = re.search(rf"^\s+{field}:\s*(.+)$", save_step, re.M)
             self.assertIsNotNone(r_match, f"restore sem {field}")
             self.assertIsNotNone(s_match, f"save sem {field}")
-            self.assertEqual(r_match.group(1).strip(), s_match.group(1).strip())
+            r_val, s_val = r_match.group(1).strip(), s_match.group(1).strip()
+            self.assertEqual(r_val, s_val)
+            if field == "key":
+                for val in (r_val, s_val):
+                    self.assertTrue(val.startswith("indexnow-registry-"), val)
+                    self.assertIn("${{ github.run_id }}", val)
+                    self.assertIn("${{ github.run_attempt }}", val)
 
 
 if __name__ == "__main__":

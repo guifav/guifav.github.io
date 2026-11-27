@@ -6,8 +6,8 @@ Fluxo no workflow do Pages:
    `diff --registry`, que compara os sitemaps do _site/ com os publicados (ainda o deploy anterior) e inclui
    também as URLs do build que nunca foram avisadas com o lastmod atual. Grava o plano (modo, URLs, sha256 de
    cada sitemap novo, base do registro e lastmods) num arquivo, que vai como artefato ao job seguinte.
-   URL sem lastmod no sitemap (a capa do blog) entra quando o HTML publicado difere do build ou quando ainda
-   não está no registro.
+   URL sem lastmod no sitemap (a capa do blog e as páginas de tema, `/blog/tema/...`) entra quando o HTML
+   publicado difere do build ou quando ainda não está no registro.
    Se não conseguir ler o site publicado, o plano vira modo "all": todas as URLs do build mais as que saíram do
    índice desde o commit anterior (git diff contra github.event.before). Sem esse commit, o plano é marcado
    incompleto e o job termina vermelho depois do envio. O deploy nunca depende do IndexNow.
@@ -19,6 +19,8 @@ Registro (cache do Actions):
 - Fica no cache do GitHub Actions (`indexnow-registry-*`), fora do repositório.
 - Ausência ou invalidez do cache faz avisar todas as URLs do build uma vez e recria o registro.
 - O cache do Actions some depois de 7 dias sem acesso, o que também só causa um reenvio completo.
+- Re-executar o job `indexnow` de um deploy antigo depois de um mais novo pode salvar um registro mais velho
+  como o mais recente; o efeito é só reenviar URLs, nunca deixar de avisar.
 
 À mão: `all` avisa tudo o que está publicado; `urls URL...` avisa URLs escolhidas (remoções, por exemplo).
 Os comandos manuais (`all` e `urls`) não leem nem gravam o registro.
@@ -428,13 +430,13 @@ def main(argv: list[str] | None = None, get=http_get, post=http_post, sleep=time
             return 0
         if not wait_live(p["sitemaps"], get, sleep, args.timeout):
             print("ERRO: os sitemaps publicados não ficaram iguais aos do build, ou a chave não está no ar", file=sys.stderr)
-            _maybe_save_registry(args.registry_out, p["registry"])
             return 1
         accepted, errors = send(p["urls"], post)
         if p["registry"] is not None:
             updated = dict(p["registry"])
-            for u in accepted:
-                if u in p["lastmod"]:
+            accepted_set = set(accepted)
+            for u in p["urls"]:
+                if u in accepted_set and u in p["lastmod"]:
                     updated[u] = p["lastmod"][u]
                 else:
                     updated.pop(u, None)
