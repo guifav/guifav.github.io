@@ -75,6 +75,7 @@ function setup(opts: { lang?: string; stored?: unknown; storage?: Storage | type
   const calls: unknown[][] = [];
   const cookieWrites: string[] = [];
   const clarity: number[] = [];
+  const consentEvents: string[] = [];
   let reloads = 0;
   const html = new Node('html');
   html.attrs.lang = opts.lang ?? 'pt-BR';
@@ -115,6 +116,18 @@ function setup(opts: { lang?: string; stored?: unknown; storage?: Storage | type
     JSON,
     Date: { now: () => NOW },
     guifavClarity: () => clarity.push(1),
+    CustomEvent: class FakeCustomEvent {
+      type: string;
+      detail: unknown;
+      constructor(type: string, init?: { detail?: unknown }) {
+        this.type = type;
+        this.detail = init?.detail;
+      }
+    },
+    dispatchEvent: (ev: { type?: string; detail?: unknown }) => {
+      if (ev?.type === 'guifav-consent') consentEvents.push(String(ev.detail));
+      return true;
+    },
   };
   ctx.window = ctx;
   if (opts.clarityLoaded) ctx.clarity = () => {};
@@ -134,7 +147,7 @@ function setup(opts: { lang?: string; stored?: unknown; storage?: Storage | type
     for (const fn of listeners) fn(ev);
     return prevented;
   };
-  return { calls, cookieWrites, clarity, reloads: () => reloads, html, banner, btn, click, cookieLink, langBtn, other, storage };
+  return { calls, cookieWrites, clarity, consentEvents, reloads: () => reloads, html, banner, btn, click, cookieLink, langBtn, other, storage };
 }
 
 const updates = (calls: unknown[][]) => calls.filter((c) => c[0] === 'consent' && c[1] === 'update').map((c) => c[2]);
@@ -229,6 +242,15 @@ test('Não com o Clarity rodando recarrega mesmo sem escolha gravada (storage bl
   const n = setup();
   n.click(n.btn('consent-no'));
   assert.equal(n.reloads(), 0, 'sem Clarity não recarrega');
+});
+
+test('Sim e Não disparam CustomEvent guifav-consent com detail granted ou denied', () => {
+  const s = setup();
+  s.click(s.btn('consent-yes'));
+  assert.deepEqual(s.consentEvents, ['granted']);
+  s.click(s.cookieLink);
+  s.click(s.btn('consent-no'));
+  assert.deepEqual(s.consentEvents, ['granted', 'denied']);
 });
 
 test('sem localStorage: banner a cada página, Sim ainda concede, nada quebra; sem gtag também não quebra', () => {

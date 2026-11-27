@@ -74,10 +74,19 @@
     if (banner) banner.hidden = true;
   }
 
+  function notify(v) {
+    try {
+      if (typeof window.dispatchEvent === 'function' && typeof window.CustomEvent === 'function') {
+        window.dispatchEvent(new window.CustomEvent('guifav-consent', { detail: v }));
+      }
+    } catch (e) { /* sem CustomEvent */ }
+  }
+
   function choose(v) {
     write(v);
     consent(v);
     hide();
+    notify(v);
     if (v === 'granted') {
       if (typeof window.guifavClarity === 'function') window.guifavClarity();
     } else {

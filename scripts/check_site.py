@@ -836,6 +836,10 @@ def check_titles_and_groups(rel: str, html: str) -> list[str]:
 # Eventos próprios do GA4 (issue #60): assets/track.js. Contrato igual ao de check_titles_and_groups: alarme de
 # integridade sobre o HTML dos três templates (index.html, portfolio/index.html e Base.astro do blog).
 TRACK_PATH = "/assets/track.js"
+AUTH_PATH = "/assets/auth.js"
+GIS_CLIENT_URL = "accounts.google.com/gsi/client"
+NO_ONE_TAP_PAGES = ("404.html", "privacidade/index.html", "termos/index.html", "prioridade/index.html")
+NO_ONE_TAP_AUTH_PREFIXES = ("/privacidade", "/termos", "/prioridade", "/404")
 CTA_LOCATIONS = ("hero", "projetos", "consultoria", "chamada-final", "consultoria-pagina", "como-contratar")  # as duas últimas: #136
 SIGNUP_PAGE = "blog/inscricao-confirmada/index.html"
 CONTACT_EMAIL = "contact@guifav.dev"
@@ -3579,6 +3583,38 @@ def check_date_placeholder(site: Path) -> list[str]:
     return problems
 
 
+def check_auth(site: Path) -> list[str]:
+    """#197 corte 2: track.js carrega auth.js com versão (?v= de 12 dígitos) e 404, /privacidade/, /termos/ e /prioridade/ ficam sem One Tap."""
+    problems: list[str] = []
+    track_file = site / "assets/track.js"
+    auth_file = site / "assets/auth.js"
+    if not auth_file.is_file():
+        problems.append("assets/auth.js: arquivo ausente no site montado")
+    else:
+        auth_src = auth_file.read_text(encoding="utf-8")
+        for pref in NO_ONE_TAP_AUTH_PREFIXES:
+            if f"'{pref}'" not in auth_src and f'"{pref}"' not in auth_src:
+                problems.append(f"assets/auth.js: falta exclusão de One Tap para {pref}")
+    if not track_file.is_file():
+        problems.append("assets/track.js: arquivo ausente no site montado")
+    else:
+        track_src = track_file.read_text(encoding="utf-8")
+        if not re.search(r"""['"]/assets/auth\.js\?v=\d{12}['"]""", track_src):
+            problems.append("assets/track.js: precisa carregar /assets/auth.js com versão ?v= de 12 dígitos")
+    for rel in NO_ONE_TAP_PAGES:
+        f = site / rel
+        if not f.is_file():
+            continue
+        html = f.read_text(encoding="utf-8")
+        if GIS_CLIENT_URL in html:
+            problems.append(f"{rel}: não pode carregar o Google Identity Services (One Tap)")
+        if _track_loads(html, AUTH_PATH):
+            problems.append(f"{rel}: não pode carregar {AUTH_PATH} diretamente")
+        if rel == "404.html" and _track_loads(html, TRACK_PATH):
+            problems.append(f"{rel}: página 404 não pode carregar {TRACK_PATH}")
+    return problems
+
+
 # Séries de artigos com links cruzados obrigatórios no corpo do post (#106), na ordem de leitura.
 SERIES: tuple[tuple[str, ...], ...] = (
     (
@@ -3671,6 +3707,7 @@ def main(argv: list[str] | None = None) -> int:
         problems += check_llm_ranking(Path(args.site))
         problems += check_legal(Path(args.site))
         problems += check_priority(Path(args.site))
+        problems += check_auth(Path(args.site))
         problems += check_date_placeholder(Path(args.site))
         problems += check_llms_txt(Path(args.site), Path(args.posts))
         problems += check_courses(Path(args.site))
