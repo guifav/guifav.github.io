@@ -550,11 +550,11 @@ test('P4: contatos mostra colunas, links do Twenty, textos sem id, filtros, esca
   assert.ok(html.includes('sem medição'));
   assert.ok(html.includes('google / cpc / ia_2026'));
   assert.ok(html.includes('<a href="https://guifav.dev/blog/post-a/">/blog/post-a/</a>'));
-  // Link do Twenty e os 3 textos sem id
+  // Link do Twenty e os textos sem id
   assert.ok(html.includes('<a href="https://crm.guifav.dev/object/person/abc-123-XYZ" target="_blank" rel="noopener noreferrer">abrir no Twenty</a>'));
-  assert.ok(html.includes('<td>pedido ainda não está no CRM</td>'));
-  assert.ok(html.includes('<td>ainda não está no CRM</td>'));
-  assert.ok(html.includes('<td>sem link</td>'));
+  assert.ok(html.includes('<td>email não confirmado: não abriu o link do material</td>'));
+  assert.ok(html.includes('<td>email confirmado: entra no CRM na próxima sincronização</td>'));
+  assert.ok(html.includes('<td>no CRM, sem link</td>'));
   // Escape de email hostil
   assert.ok(!html.includes('<script>x</script>'));
   assert.ok(html.includes('&lt;script&gt;x&lt;/script&gt;@evil.com'));
@@ -604,15 +604,120 @@ test('P4: paginação de 100 em 100 em /admin/contatos mantendo os filtros', asy
   assert.ok(!p2.includes('>próxima<'));
 });
 
-test('P4: funções isoladas recusam twenty_person_id e landing_path fora do padrão (sem link)', () => {
+test('P4: status da coluna Twenty em /admin/contatos e /admin diferencia email não confirmado, confirmado depois e confirmado pendente', async () => {
+  const s = setup();
+  seedConversions(s.db, [
+    // Estado 5: só pedido, nunca confirmou (mesmo com outro email parecido confirmado)
+    {
+      id: 'st1',
+      email: 'so-pedido@x.com',
+      action: 'material_request',
+      material: 'planilha-custos-ia',
+      verified: 0,
+      occurred_at: '2026-11-12T10:00:00.000Z',
+      synced_at: null,
+    },
+    // Estado 4 (pedido) + Estado 3 (download) para o mesmo email, ambos pendentes
+    {
+      id: 'st2',
+      email: 'pediu-e-baixou@x.com',
+      action: 'material_request',
+      material: 'planilha-custos-ia',
+      verified: 0,
+      occurred_at: '2026-11-12T09:00:00.000Z',
+      synced_at: null,
+    },
+    {
+      id: 'st3',
+      email: 'pediu-e-baixou@x.com',
+      action: 'material_download',
+      material: 'planilha-custos-ia',
+      file: 'planilha-custos-ia',
+      verified: 1,
+      occurred_at: '2026-11-12T09:05:00.000Z',
+      synced_at: null,
+    },
+    // Estado 3: download pendente isolado
+    {
+      id: 'st4',
+      email: 'so-download@x.com',
+      action: 'material_download',
+      material: 'mapa-decisao-ia',
+      file: 'mapa-decisao-pdf',
+      verified: 1,
+      occurred_at: '2026-11-12T08:00:00.000Z',
+      synced_at: null,
+    },
+    // Outro email (inclusive prefixo parecido com so-pedido@x.com) com verified = 1 não deve mudar so-pedido@x.com
+    {
+      id: 'st5',
+      email: 'so-pedido@x.com.br',
+      action: 'material_download',
+      material: 'planilha-custos-ia',
+      file: 'planilha-custos-ia',
+      verified: 1,
+      occurred_at: '2026-11-12T07:00:00.000Z',
+      synced_at: null,
+    },
+  ]);
+
+  const rowsOf = (html: string) => {
+    const tbody = html.match(/<tbody>([\s\S]*?)<\/tbody>/)?.[1] ?? '';
+    return [...tbody.matchAll(/<tr>([\s\S]*?)<\/tr>/g)].map((m) =>
+      [...m[1].matchAll(/<td>([\s\S]*?)<\/td>/g)].map((c) => c[1]),
+    );
+  };
+
+  for (const path of ['/admin/contatos', '/admin']) {
+    const html = await (await s.req(path)).text();
+    const rows = rowsOf(html);
+    const cellFor = (email: string, actionText: string) => {
+      const row = rows.find((r) => r[1] === email && r[2] === actionText);
+      assert.ok(row, `${path}: linha ausente para ${email} (${actionText})`);
+      return row[row.length - 1];
+    };
+    assert.equal(cellFor('so-pedido@x.com', 'pedido de material'), 'email não confirmado: não abriu o link do material', path);
+    assert.equal(cellFor('pediu-e-baixou@x.com', 'pedido de material'), 'email confirmado depois: entra no CRM na próxima sincronização', path);
+    assert.equal(cellFor('pediu-e-baixou@x.com', 'download'), 'email confirmado: entra no CRM na próxima sincronização', path);
+    assert.equal(cellFor('so-download@x.com', 'download'), 'email confirmado: entra no CRM na próxima sincronização', path);
+  }
+
+  // Mesmo filtrando só linhas não comprovadas, o pedido de pediu-e-baixou@x.com continua sabendo da confirmação posterior
+  const filtrado = await (await s.req('/admin/contatos?comprovado=nao')).text();
+  const rowsFiltrado = rowsOf(filtrado);
+  assert.equal(rowsFiltrado.length, 2);
+  assert.equal(rowsFiltrado.find((r) => r[1] === 'so-pedido@x.com')?.at(-1), 'email não confirmado: não abriu o link do material');
+  assert.equal(rowsFiltrado.find((r) => r[1] === 'pediu-e-baixou@x.com')?.at(-1), 'email confirmado depois: entra no CRM na próxima sincronização');
+});
+
+test('P4: funções isoladas recusam twenty_person_id e landing_path fora do padrão e cobrem os 5 estados de twentyCell', () => {
   assert.equal(twentyPersonUrl('abc-123', 'https://crm.guifav.dev'), 'https://crm.guifav.dev/object/person/abc-123');
+  // Estado 1: twenty_person_id válido vence sempre
+  assert.equal(
+    twentyCell('abc-123', '2026-11-12T10:00:00Z', 1, 1, 'https://crm.guifav.dev'),
+    '<a href="https://crm.guifav.dev/object/person/abc-123" target="_blank" rel="noopener noreferrer">abrir no Twenty</a>',
+  );
+  assert.equal(
+    twentyCell('abc-123', null, 0, 0, 'https://crm.guifav.dev'),
+    '<a href="https://crm.guifav.dev/object/person/abc-123" target="_blank" rel="noopener noreferrer">abrir no Twenty</a>',
+  );
+  // Estado 2: synced_at preenchido sem id válido
   for (const bad of ['', null, 'a b', 'a/b', '../x', 'a'.repeat(65), '<script>', 'id?x=1']) {
     assert.equal(twentyPersonUrl(bad, 'https://crm.guifav.dev'), null, String(bad));
-    const cel = twentyCell(bad, '2026-11-12T10:00:00Z', 1, 'https://crm.guifav.dev');
-    assert.equal(cel, 'sem link', String(bad));
+    const cel = twentyCell(bad, '2026-11-12T10:00:00Z', 1, 1, 'https://crm.guifav.dev');
+    assert.equal(cel, 'no CRM, sem link', String(bad));
   }
-  assert.equal(twentyCell(null, null, 0, 'https://crm.guifav.dev'), 'pedido ainda não está no CRM');
-  assert.equal(twentyCell(null, null, 1, 'https://crm.guifav.dev'), 'ainda não está no CRM');
+  assert.equal(twentyCell(null, '2026-11-12T10:00:00Z', 0, 0, 'https://crm.guifav.dev'), 'no CRM, sem link');
+  // Estado 3: synced_at nulo e verified = 1
+  assert.equal(twentyCell(null, null, 1, 1, 'https://crm.guifav.dev'), 'email confirmado: entra no CRM na próxima sincronização');
+  assert.equal(twentyCell(null, null, 1, 0, 'https://crm.guifav.dev'), 'email confirmado: entra no CRM na próxima sincronização');
+  // Estado 4: synced_at nulo, verified = 0 e email comprovado em outra linha
+  assert.equal(twentyCell(null, null, 0, 1, 'https://crm.guifav.dev'), 'email confirmado depois: entra no CRM na próxima sincronização');
+  assert.equal(twentyCell(null, null, 0, true, 'https://crm.guifav.dev'), 'email confirmado depois: entra no CRM na próxima sincronização');
+  // Estado 5: synced_at nulo, verified = 0 e email sem nenhuma linha comprovada
+  assert.equal(twentyCell(null, null, 0, 0, 'https://crm.guifav.dev'), 'email não confirmado: não abriu o link do material');
+  assert.equal(twentyCell(null, null, 0, false, 'https://crm.guifav.dev'), 'email não confirmado: não abriu o link do material');
+
   assert.equal(landingCell('/blog/ok/', 'https://guifav.dev'), '<a href="https://guifav.dev/blog/ok/">/blog/ok/</a>');
   for (const badPath of ['javascript:alert(1)', '//evil.com/x', '/blog/a?q=1', '/blog/<script>']) {
     const out = landingCell(badPath, 'https://guifav.dev');
