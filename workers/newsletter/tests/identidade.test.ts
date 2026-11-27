@@ -497,3 +497,29 @@ test('falha do D1 responde 500 e remove qualquer email do log', async () => {
   assert.ok(!logs[0].includes('leitor@exemplo.com'));
   assert.ok(logs[0].includes('<email>'));
 });
+
+test('D1 sem contagem de linhas (sem meta.changes): 500 com log curto, nunca 204', async () => {
+  const s = setup();
+  const real = s.env.DB;
+  s.env.DB = {
+    prepare: (sql: string) => {
+      const st = real.prepare(sql);
+      const wrap = (b: typeof st): typeof st => ({
+        ...b,
+        bind: (...v: unknown[]) => wrap(b.bind(...v)),
+        run: async () => {
+          await b.run();
+          return { success: true } as Awaited<ReturnType<typeof b.run>>;
+        },
+      });
+      return wrap(st);
+    },
+  } as typeof real;
+  const token = await signJwt(validPayload({ sub: 'UidSemMeta1' }));
+  let res!: Response;
+  const logs = await capturaErros(async () => {
+    res = await s.run(idReq({ token }));
+  });
+  assert.equal(res.status, 500);
+  assert.deepEqual(logs, ['identidade sem contagem de linhas do D1']);
+});

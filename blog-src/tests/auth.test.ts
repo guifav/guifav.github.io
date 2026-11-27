@@ -139,6 +139,7 @@ interface SetupOpts {
   gisThrowOn?: 'initialize' | 'prompt';
   identityStatus?: number;
   identityThrow?: boolean;
+  identityFetch?: () => Promise<{ ok: boolean; status: number }>;
   idbMode?: FakeIdbMode;
   signOutFn?: () => Promise<void>;
   signInPopupFn?: () => Promise<unknown>;
@@ -411,6 +412,7 @@ async function setupAuth(opts: SetupOpts = {}) {
     fetch: async (url: string, init?: RequestInit) => {
       fetchCalls.push({ url, init: init ? JSON.parse(JSON.stringify(init)) : undefined });
       if (opts.identityThrow) throw new Error('NetworkError');
+      if (opts.identityFetch) return opts.identityFetch();
       const status = opts.identityStatus ?? 204;
       return { ok: status >= 200 && status < 300, status };
     },
@@ -530,6 +532,7 @@ async function setupAuth(opts: SetupOpts = {}) {
       currentNow = ms;
     },
     pendingTimers: () => pendingTimers.size,
+    createElement: (t: string) => new El(t, setActive),
     // Avança o relógio rodando, em ordem, os temporizadores que vencem no caminho (inclusive os agendados por eles).
     advance: async (ms: number) => {
       const end = currentNow + ms;
@@ -1617,4 +1620,65 @@ test('Kimi P2 (rodada 4): o aviso recebe o foco ao abrir e devolve o foco ao fec
   await q.emitConsent('denied');
   assert.equal(qn.hidden, true);
   assert.equal(q.activeElement(), qitem);
+});
+
+test('Claude P2 (rodada 5): aviso que abre sozinho não tira o foco de quem digita; anuncia por aria-live', async () => {
+  const s = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 } });
+  const input = s.body.appendChild(s.createElement('input'));
+  input.focus();
+  await s.emitAuth(makeUser());
+  const notice = s.findClass('guifav-auth-notice')!;
+  assert.equal(notice.hidden, false);
+  assert.equal(s.activeElement(), input, 'o foco continua no campo');
+  const live = s.findClass('guifav-auth-live')!;
+  assert.equal(live.attrs.role, 'status');
+  assert.equal(live.attrs['aria-live'], 'polite');
+  assert.equal(live.textContent, NOTICE_TEXT);
+  // Responder pelo clique fecha sem puxar o foco de volta para o botão da conta se ele não estava no aviso.
+  const yes = notice.findAll((e) => e.tag === 'button' && e.textContent === 'Ligar')[0];
+  await s.click(yes);
+  assert.equal(notice.hidden, true);
+  assert.equal(s.activeElement(), input);
+
+  // Sem nada focado (ou com o foco no botão da conta), o aviso toma o foco e não usa a região viva.
+  const r = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: makeUser() });
+  assert.equal(r.activeElement(), r.findClass('guifav-auth-notice'));
+  assert.equal(r.findClass('guifav-auth-live'), null);
+});
+
+test('Claude P3 (rodada 5): antes do Firebase, uid de outra pessoa gravado por outra aba tira o user_id do <head>', async () => {
+  const s = await setupAuth({
+    consent: { v: 'granted', t: NOW - 1000 },
+    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
+    heatingUid: { uid: 'UidCurso123ABC', t: NOW - 1000 },
+  });
+  const before = s.gtagCalls.length;
+  const outro = JSON.stringify({ uid: 'UidOutraConta9', t: NOW });
+  await s.emitStorage('heating-uid-v1', outro);
+  assert.deepEqual(s.gtagCalls.slice(before), [['set', { user_id: null }]]);
+  assert.equal(s.local.getItem('heating-uid-v1'), outro, 'não apaga a chave da outra aba');
+  assert.equal(s.pendingTimers(), 0);
+});
+
+test('Claude P3 (rodada 5): 409 que chega depois de trocar de conta não desliga o vínculo de quem está logado agora', async () => {
+  const responders: Array<(r: { ok: boolean; status: number }) => void> = [];
+  const s = await setupAuth({
+    consent: { v: 'granted', t: NOW - 1000 },
+    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
+    initialUser: makeUser(),
+    identityFetch: () => new Promise((res) => { responders.push(res); }),
+  });
+  assert.equal(s.fetchCalls.length, 1);
+  // Outra conta entra antes da resposta, com o vínculo dela já ligado neste navegador.
+  s.local.setItem('heating-link-v1', JSON.stringify({ v: 'granted', t: NOW, uid: 'UidOutraConta9' }));
+  await s.emitAuth(makeUser({ uid: 'UidOutraConta9', displayName: 'Outra Pessoa' }));
+  assert.equal(responders.length, 2, 'uma chamada por conta');
+  responders[0]({ ok: false, status: 409 }); // resposta atrasada da conta anterior
+  responders[1]({ ok: true, status: 204 });
+  await flush();
+  const link = JSON.parse(s.local.getItem('heating-link-v1') || 'null');
+  assert.deepEqual([link.v, link.uid], ['granted', 'UidOutraConta9'], 'o 409 da conta anterior não mexe na atual');
+  assert.ok(s.gtagCalls.some((c) => isUserIdSet(c, 'UidOutraConta9')));
+  const last = s.gtagCalls.filter((c) => c[0] === 'set' && typeof c[1] === 'object' && c[1] !== null && 'user_id' in (c[1] as object)).pop();
+  assert.deepEqual(last, ['set', { user_id: 'UidOutraConta9' }]);
 });

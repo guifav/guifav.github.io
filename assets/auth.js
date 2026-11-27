@@ -85,6 +85,7 @@
   var toggleStateEl = null;
   var signOutBtn = null;
   var noticeEl = null;
+  var liveEl = null;
 
   function logWarn(msg) {
     try {
@@ -353,6 +354,7 @@
       '.guifav-auth-state{font-size:12px;font-weight:700;color:var(--text-secondary,#525252);flex-shrink:0}',
       '.guifav-auth-notice{position:fixed;left:16px;right:16px;bottom:64px;z-index:950;max-width:560px;margin:0 auto;padding:16px 18px;border:1px solid var(--border,#e5e5e5);border-radius:12px;background:var(--bg-card,#fff);color:var(--text,#171717);box-shadow:var(--shadow,0 12px 32px rgba(0,0,0,.18));font-size:14px;line-height:1.55}',
       '.guifav-auth-notice[hidden]{display:none}',
+      '.guifav-auth-live{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}',
       '.guifav-auth-notice p{margin:0 0 12px}',
       '.guifav-auth-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}',
       '.guifav-auth-yes,.guifav-auth-no{font:600 14px/1 inherit;padding:8px 16px;border-radius:8px;cursor:pointer;border:1px solid transparent}',
@@ -460,9 +462,28 @@
     }
     if (!noticeEl.hidden) return;
     var active = d.activeElement;
-    noticeReturnFocus = active && active !== d.body ? active : null;
+    // O aviso abre sozinho de 1,5 a 4 s depois do carregamento: só toma o foco se nada estiver focado ou se o foco
+    // estiver no botão da conta (a pessoa acabou de clicar em Entrar). Quem já digita num campo continua nele, e o
+    // leitor de tela recebe o texto do aviso por uma região aria-live.
+    var free = !active || active === d.body || active === d.documentElement
+      || Boolean(rootEl && typeof rootEl.contains === 'function' && rootEl.contains(active));
+    noticeReturnFocus = active && active !== d.body && active !== d.documentElement ? active : null;
     noticeEl.hidden = false;
-    if (typeof noticeEl.focus === 'function') noticeEl.focus();
+    if (free) {
+      if (typeof noticeEl.focus === 'function') noticeEl.focus();
+    } else {
+      announce(NOTICE_TEXT);
+    }
+  }
+
+  function announce(text) {
+    if (!d.body) return;
+    if (!liveEl) {
+      liveEl = el('div', { 'class': 'guifav-auth-live', role: 'status', 'aria-live': 'polite', 'data-clarity-mask': 'true' });
+      d.body.appendChild(liveEl);
+    }
+    liveEl.textContent = '';
+    liveEl.textContent = text;
   }
 
   function syncNotice() {
@@ -844,6 +865,9 @@
           }
           return;
         }
+        // Chave apagada em outra aba limpa aqui também, mesmo com as 3 condições valendo nesta aba: pelo evento não dá
+        // para distinguir "Sair" lá (que apaga a chave antes do signOut) de um vencimento sem o Firebase confirmar, e
+        // renovar reidentificaria por instantes quem acabou de sair. A próxima página volta a identificar.
         if (!validTenantUser(currentUser) || readHeatingUid() !== currentUser.uid) {
           if (activeUid !== null || headSentUid) clearUserId(false);
         } else {
