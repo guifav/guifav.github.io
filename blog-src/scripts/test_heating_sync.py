@@ -2678,6 +2678,7 @@ class Ga4EBigQueryTest(unittest.TestCase):
         self.assertEqual(rc, 2, txt)
         self.assertIn("bq_sessoes_excedidas: 1", txt)
         self.assertIn(CS.BQ_PURGE_PENDENTE_MSG, txt)
+        self.assertNotIn(CS.BQ_FILA_COM_ERRO_MSG, txt, "a falha desta rodada já tem a própria mensagem")
         self.assertNotIn("UidMuitas9", txt)
         row = [r for r in f.purge_queue_rows() if r["uid"] == "UidMuitas9"][0]
         self.assertEqual((row["ga4_pendente"], row["bq_concluido"]), (0, 0))

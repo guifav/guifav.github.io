@@ -1909,6 +1909,7 @@ class ForgetGooglePurgeTest(unittest.TestCase):
         self.assertEqual(rc, 2, out)
         self.assertIn("bq_sessoes_excedidas: 1", out)
         self.assertIn(S.BQ_PURGE_PENDENTE_MSG, out)
+        self.assertNotIn(S.BQ_FILA_COM_ERRO_MSG, out, "a falha desta rodada já tem a própria mensagem")
         self.assertNotIn("UidMuitasF1", out)
         # Repetir o --forget com o vínculo já apagado continua avisando e saindo com 2 (Kimi P2, rodada 4).
         rc2, out2 = self._run_cli(f, "--forget", "--apply", stdin="muitas@x.com\n",

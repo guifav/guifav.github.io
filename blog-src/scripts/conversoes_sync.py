@@ -230,8 +230,11 @@ GA4_PURGE_PENDENTE_MSG = (
     "remoção no GA4 pendente na fila para o job diário: confira o papel de Editor da conta de serviço na propriedade GA4"
 )
 BQ_PURGE_PENDENTE_MSG = "remoção no BigQuery pendente na fila para o job diário"
+# Conta a fila inteira (como ga4_fila_pendente_total), não só a pessoa do comando: um item com sessões excedidas não se
+# resolve sozinho e mantém o código 2 em todo --forget/--optout até a ação manual na fila.
 BQ_FILA_COM_ERRO_MSG = (
-    "há remoções no BigQuery com erro na fila (o job diário repete e alerta em bq_remocao_falhou ou bq_sessoes_excedidas)"
+    "há remoções no BigQuery com erro na fila (o job diário repete e alerta em ga4_indisponivel ou bq_sessoes_excedidas;"
+    " sessões excedidas pedem ação manual na fila)"
 )
 GA4_FILA_SEM_CRED_MSG = "remoção no GA4 e no BigQuery enfileirada para o job diário (sem credencial GCP neste ambiente)"
 SITE_UID_RE = re.compile(r"[0-9A-Za-z]{1,128}")  # CHECK da migração 0013 (site_identities) e 0014 (ga4_purge_queue)
