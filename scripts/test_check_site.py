@@ -5398,14 +5398,23 @@ class PriorityTest(unittest.TestCase):
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content, encoding="utf-8")
 
+    DEFAULT_FOCUS_SCRIPT = (
+        "<script>(function(){function f(){var id=location.hash.slice(1);if(!id)return;"
+        "var el=document.getElementById(id);if(el&&el.classList.contains('form-msg'))el.focus();}"
+        "f();window.addEventListener('hashchange',f);})();</script>"
+    )
+
     def priority_doc(self, *, title: str = C.PRIORITY_TITLE, h1: str = C.PRIORITY_H1,
                      robots: str = ROBOTS_NOINDEX, canonical: str | None = "https://guifav.dev/prioridade/",
                      frags: tuple[str, ...] = C.PRIORITY_FRAGMENTS,
+                     msg_tabindex: str | None = "-1",
                      privacy_link: str = '<a href="/privacidade/#prioridade">Política de privacidade</a>',
                      turnstile_script: str = f'<script async defer src="{C.TURNSTILE_SCRIPT_SRC}"></script>',
+                     focus_script: str | None = None,
                      form: str | None = None) -> str:
         c = "" if canonical is None else f'<link rel="canonical" href="{canonical}">'
-        msgs = "".join(f'<p id="{fid}" class="form-msg">{fid}</p>' for fid in frags)
+        ti = "" if msg_tabindex is None else f' tabindex="{msg_tabindex}"'
+        msgs = "".join(f'<p id="{fid}" class="form-msg"{ti}>{fid}</p>' for fid in frags)
         default_form = (
             f'<form data-site-form data-clarity-mask="true" method="post" action="{C.PRIORITY_ACTION}">'
             '<input type="email" name="email" required>'
@@ -5413,8 +5422,9 @@ class PriorityTest(unittest.TestCase):
             f'<div class="cf-turnstile" data-sitekey="{C.TURNSTILE_SITE_KEY}"></div>'
             "</form>"
         )
+        fs = self.DEFAULT_FOCUS_SCRIPT if focus_script is None else focus_script
         return (f'<!DOCTYPE html><html lang="pt-BR"><head><title>{title}</title>{robots}{c}{turnstile_script}{self.GA}</head>'
-                f'<body><main><h1>{h1}</h1><p>{privacy_link}</p>{msgs}{default_form if form is None else form}</main>{self.FOOT}</body></html>')
+                f'<body><main><h1>{h1}</h1><p>{privacy_link}</p>{msgs}{default_form if form is None else form}</main>{self.FOOT}{fs}</body></html>')
 
     def build_valid_site(self) -> None:
         self.w(C.PRIORITY_PAGE, self.priority_doc())
@@ -5450,6 +5460,14 @@ class PriorityTest(unittest.TestCase):
             ("sem link privacidade", {"privacy_link": ""}, "/privacidade/#prioridade"),
             ("falta #pronto", {"frags": ("erro-verificacao", "erro-email", "erro-limite", "erro")}, "#pronto"),
             ("falta #erro-limite", {"frags": ("pronto", "erro-verificacao", "erro-email", "erro")}, "#erro-limite"),
+            ("mensagens sem tabindex=-1", {"msg_tabindex": None}, 'tabindex="-1"'),
+            ("mensagens com tabindex=0", {"msg_tabindex": "0"}, 'tabindex="-1"'),
+            ("sem script de foco", {"focus_script": ""}, "script de foco"),
+            ("script de foco comentado em HTML", {"focus_script": f"<!-- {self.DEFAULT_FOCUS_SCRIPT} -->"}, "script de foco"),
+            ("script de foco só em string", {"focus_script": '<script>var s = "location.hash .focus(";</script>'}, "script de foco"),
+            ("script de foco só em string simples e template", {"focus_script": "<script>var a = 'location.hash', b = `.focus(`;</script>"}, "script de foco"),
+            ("script de foco só em comentário //", {"focus_script": "<script>// location.hash .focus(</script>"}, "script de foco"),
+            ("script de foco só em comentário /* */", {"focus_script": "<script>/* location.hash .focus( */</script>"}, "script de foco"),
             ("sem form", {"form": ""}, C.PRIORITY_ACTION),
             ("action fora da tag form", {"form": f'<form data-clarity-mask="true" method="post" action="https://outro.example/"><p action="{C.PRIORITY_ACTION}"></p><input type="email" name="email"><div class="cf-turnstile" data-sitekey="{key}"></div></form>'}, C.PRIORITY_ACTION),
             ("method get", {"form": f'<form data-clarity-mask="true" method="get" action="{C.PRIORITY_ACTION}"><input type="email" name="email"><div class="cf-turnstile" data-sitekey="{key}"></div></form>'}, 'method="post"'),
@@ -5491,6 +5509,47 @@ class PriorityTest(unittest.TestCase):
                 for needle in needles:
                     self.assertTrue(any(needle in p for p in got), got)
 
+    def test_inert_fields_and_duplicate_forms_fail(self):
+        key = C.TURNSTILE_SITE_KEY
+        email = '<input type="email" name="email" required>'
+        turnstile = f'<div class="cf-turnstile" data-sitekey="{key}"></div>'
+        head = f'<form data-clarity-mask="true" method="post" action="{C.PRIORITY_ACTION}">'
+        valid_form = f"{head}{email}{turnstile}</form>"
+        for name, form_html, needle in (
+            ("email em template", f"{head}<template>{email}</template>{turnstile}</form>", "campo de email"),
+            ("email em noscript", f"{head}<noscript>{email}</noscript>{turnstile}</form>", "campo de email"),
+            ("email em elemento hidden", f"{head}<div hidden>{email}</div>{turnstile}</form>", "campo de email"),
+            ("email com proprio hidden", f'{head}<input type="email" name="email" hidden>{turnstile}</form>', "campo de email"),
+            ("turnstile em template", f"{head}{email}<template>{turnstile}</template></form>", "Turnstile"),
+            ("turnstile em noscript", f"{head}{email}<noscript>{turnstile}</noscript></form>", "Turnstile"),
+            ("turnstile em elemento hidden", f"{head}{email}<div hidden>{turnstile}</div></form>", "Turnstile"),
+            ("turnstile com proprio hidden", f'{head}{email}<div class="cf-turnstile" data-sitekey="{key}" hidden></div></form>', "Turnstile"),
+            ("dois formularios com mesmo action", f"{valid_form}{valid_form}", "achados 2"),
+        ):
+            with self.subTest(case=name):
+                self.build_valid_site()
+                self.w(C.PRIORITY_PAGE, self.priority_doc(form=form_html))
+                got = C.check_priority(self.site)
+                self.assertTrue(any(needle in p for p in got), got)
+
+    def test_inert_fragment_messages_fail(self):
+        # Mensagens de fragmento em blocos inertes (template, noscript ou hidden) não contam em _PriorityPage.id_attrs.
+        pronto = '<p id="pronto" class="form-msg" tabindex="-1">pronto</p>'
+        pronto_hidden = '<p id="pronto" class="form-msg" tabindex="-1" hidden>pronto</p>'
+        base = self.priority_doc()
+        self.assertIn(pronto, base)
+        for name, replacement in (
+            ("em template", f"<template>{pronto}</template>"),
+            ("em noscript", f"<noscript>{pronto}</noscript>"),
+            ("em elemento hidden", f"<div hidden>{pronto}</div>"),
+            ("com proprio hidden", pronto_hidden),
+        ):
+            with self.subTest(case=name):
+                self.build_valid_site()
+                self.w(C.PRIORITY_PAGE, base.replace(pronto, replacement, 1))
+                got = C.check_priority(self.site)
+                self.assertTrue(any("falta a mensagem #pronto" in p for p in got), got)
+
     def test_main_runs_the_priority_rule(self):
         consts = Path(self.tmp.name) / "consts.ts"
         consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
@@ -5526,7 +5585,7 @@ class PrioritySourcesTest(unittest.TestCase):
         self.assertEqual(C.check_youtube_footer(C.PRIORITY_PAGE, html), [])
         self.assertEqual(C.check_page_date_placeholder(C.PRIORITY_PAGE, html), [])
         self.assertIn(
-            '<p id="pronto" class="form-msg" role="status">Pronto. A partir de agora você não é pontuado. '
+            '<p id="pronto" class="form-msg" role="status" tabindex="-1">Pronto. A partir de agora você não é pontuado. '
             'Os registros no site foram apagados, e a nota no meu CRM sai na atualização diária seguinte.</p>',
             html,
         )
@@ -5548,6 +5607,54 @@ class PrioritySourcesTest(unittest.TestCase):
                 '<url><loc>https://guifav.dev/</loc><lastmod>2026-11-27T12:00:00-03:00</lastmod></url>'
                 "</urlset>", encoding="utf-8")
             self.assertEqual(C.check_priority(site), [])
+
+    def test_priority_focus_script_semantics_in_node(self):
+        # O script inline em prioridade/index.html foca a mensagem correspondente ao fragmento (ao carregar e em hashchange),
+        # ignora fragmentos que não existem ou não são .form-msg e nunca lança erro sem fragmento.
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("node ausente")
+        html = (self.REPO / C.PRIORITY_PAGE).read_text(encoding="utf-8")
+        focus_scripts = [b for b in C._exec_scripts(html) if "location.hash" in b and ".focus(" in b]
+        self.assertEqual(len(focus_scripts), 1)
+        script_body = focus_scripts[0]
+        frags = list(C.PRIORITY_FRAGMENTS)
+        js = (
+            f"const script = {json.dumps(script_body)};\n"
+            f"const frags = {json.dumps(frags)};\n"
+            "function run(initialHash, afterHash) {\n"
+            "  const focused = [];\n"
+            "  const listeners = {};\n"
+            "  const elems = {};\n"
+            "  for (const id of frags) {\n"
+            "    elems[id] = { classList: { contains: (c) => c === 'form-msg' }, focus: () => focused.push(id) };\n"
+            "  }\n"
+            "  elems['oposicao'] = { classList: { contains: (c) => c === 'priority-form' }, focus: () => focused.push('oposicao') };\n"
+            "  const location = { hash: initialHash };\n"
+            "  const document = { getElementById: (id) => elems[id] || null };\n"
+            "  const window = { addEventListener: (ev, fn) => { listeners[ev] = fn; } };\n"
+            "  new Function('location', 'document', 'window', script)(location, document, window);\n"
+            "  if (afterHash !== null) {\n"
+            "    location.hash = afterHash;\n"
+            "    if (listeners.hashchange) listeners.hashchange();\n"
+            "  }\n"
+            "  return focused;\n"
+            "}\n"
+            "const out = {};\n"
+            "for (const id of frags) out[id] = run('#' + id, null);\n"
+            "out.vazio = run('', null);\n"
+            "out.inexistente = run('#nao-existe', null);\n"
+            "out.form = run('#oposicao', null);\n"
+            "out.hashchange = run('', '#erro-limite');\n"
+            "console.log(JSON.stringify(out));\n"
+        )
+        got = json.loads(subprocess.run([node, "-e", js], capture_output=True, text=True, check=True).stdout)
+        for fid in C.PRIORITY_FRAGMENTS:
+            self.assertEqual(got[fid], [fid], fid)
+        self.assertEqual(got["vazio"], [])
+        self.assertEqual(got["inexistente"], [])
+        self.assertEqual(got["form"], [])
+        self.assertEqual(got["hashchange"], ["erro-limite"])
 
     def test_privacy_has_priority_and_courses_sections_without_cut2_paragraph(self):
         t = (self.REPO / "privacidade/index.html").read_text(encoding="utf-8")

@@ -75,11 +75,11 @@
         <div class="post-body">
           <p>Se você não quiser que eu calcule a nota de prioridade de contato nem as notas dos cursos para o seu endereço, informe seu email abaixo. O cálculo para de rodar e os registros são apagados, mas os emails dos Expert Insights e dos cursos continuam chegando normalmente. Veja os detalhes em <a href="/privacidade/#prioridade">Política de privacidade</a>.</p>
 
-          <p id="pronto" class="form-msg" role="status">Pronto. A partir de agora você não é pontuado. Os registros no site foram apagados, e a nota no meu CRM sai na atualização diária seguinte.</p>
-          <p id="erro-verificacao" class="form-msg" role="alert">A verificação antirrobô não passou. Tente de novo.</p>
-          <p id="erro-email" class="form-msg" role="alert">Esse endereço de email não é válido. Confira e tente de novo.</p>
-          <p id="erro-limite" class="form-msg" role="alert">Muitas tentativas em sequência. Espere um minuto e tente de novo.</p>
-          <p id="erro" class="form-msg" role="alert">Não foi possível concluir o pedido agora. Tente de novo em alguns minutos ou escreva para <a href="mailto:contact@guifav.dev">contact@guifav.dev</a>.</p>
+          <p id="pronto" class="form-msg" role="status" tabindex="-1">Pronto. A partir de agora você não é pontuado. Os registros no site foram apagados, e a nota no meu CRM sai na atualização diária seguinte.</p>
+          <p id="erro-verificacao" class="form-msg" role="alert" tabindex="-1">A verificação antirrobô não passou. Tente de novo.</p>
+          <p id="erro-email" class="form-msg" role="alert" tabindex="-1">Esse endereço de email não é válido. Confira e tente de novo.</p>
+          <p id="erro-limite" class="form-msg" role="alert" tabindex="-1">Muitas tentativas em sequência. Espere um minuto e tente de novo.</p>
+          <p id="erro" class="form-msg" role="alert" tabindex="-1">Não foi possível concluir o pedido agora. Tente de novo em alguns minutos ou escreva para <a href="mailto:contact@guifav.dev">contact@guifav.dev</a>.</p>
 
           <form id="oposicao" class="priority-form" data-site-form data-clarity-mask="true" method="post" action="https://insights.guifav.dev/prioridade">
             <label for="prioridade-email">Seu email</label>
@@ -99,5 +99,6 @@
   <script src="/assets/site.js?v=202611241500"></script>
   <script src="/assets/track.js?v=202611242230"></script>
   <script src="/assets/consent.js?v=202611242200"></script>
+  <script>(function(){function f(){var id=location.hash.slice(1);if(!id)return;var el=document.getElementById(id);if(el&&el.classList.contains('form-msg'))el.focus();}f();window.addEventListener('hashchange',f);})();</script>
 </body>
 </html>

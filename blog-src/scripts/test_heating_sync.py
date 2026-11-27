@@ -1148,6 +1148,87 @@ class HeatingSyncTest(unittest.TestCase):
         self.assertEqual(f.people["p-ok"]["heatingNota"], 12)
         self.assertEqual(f.heating_rows()[("site", "ok@corp.com")]["score"], 12)
 
+    def test_oposicao_concorrente_5f_limpa_pessoa_com_email_alterado_via_heating_e_conversions(self):
+        # Passo 5f: oposição que chega durante a rodada também resolve Pessoas ativas pelos twenty_person_id salvos em
+        # `heating` (site e curso) e `conversions` (mesmo de conversão antiga) e por `created_pid_by_email`, ignorando lixeira.
+        class LateRenamedOptoutFake(Fake):
+            def __init__(self, *args, **kwargs):
+                self.injected = False
+                super().__init__(*args, **kwargs)
+
+            def __call__(self, method, url, headers, body):
+                data = json.loads(body) if body else None
+                u = urllib.parse.urlparse(url)
+                if (
+                    u.netloc == "api.cloudflare.com"
+                    and isinstance(data, dict)
+                    and not self.injected
+                    and "batch" in data
+                    and data["batch"][0]["sql"] == "DELETE FROM heating"
+                ):
+                    self.injected = True
+                    res = super().__call__(method, url, headers, body)
+                    self.add_optout("antigo@corp.com")
+                    self.add_optout("so-conv@corp.com")
+                    self.add_optout("late-new@corp.com")
+                    return res
+                return super().__call__(method, url, headers, body)
+
+        f = LateRenamedOptoutFake(
+            people=[
+                # Mantém nota existente na rodada (had_before=True, não entra em person_clears).
+                person("p-site", "novo-site@corp.com", heatingNota=12, heatingFaixa="FRIO", heatingSinais="Download de material", heatingCalculadoEm=NOW_ISO),
+                # Ganha nota nova na rodada (entra em person_updates).
+                person("p-curso", "novo-curso@corp.com"),
+                # Mantém nota existente e é achada só pelo twenty_person_id em conversions (sem linha em heating).
+                person("p-conv", "novo-conv@corp.com", heatingNota=12, heatingFaixa="FRIO", heatingSinais="Download de material", heatingCalculadoEm=NOW_ISO),
+                # Na lixeira: nunca deve ser tocada.
+                person(
+                    "p-lixo", "novo-lixo@corp.com",
+                    deletedAt="2026-11-20T00:00:00.000Z",
+                    heatingNota=50, heatingFaixa="QUENTE", heatingSinais="x", heatingCalculadoEm=NOW_ISO,
+                ),
+            ],
+            schema=True,
+        )
+        f.db.execute(
+            "INSERT INTO heating (context, email, score, band, signals, computed_at, twenty_person_id) VALUES "
+            "('site', 'antigo@corp.com', 45, 'quente', '[]', ?, 'p-site'),"
+            "(?, 'antigo@corp.com', 20, 'morno', '[]', ?, 'p-curso')",
+            (NOW_ISO, CTX_CURSO, NOW_ISO),
+        )
+        # Conversões antigas fora da retenção: so-conv@corp.com só existe em conversions (sem linha em heating nem
+        # em engagement_events), provando a inclusão de raw_convs em candidate_emails no passo 5f.
+        f.add_conv(1, "so-conv@corp.com", action="material_download", material="planilha-custos-ia", when=ago(days=400))
+        f.add_conv(2, "antigo@corp.com", action="newsletter_confirm", when=ago(days=400))
+        f.db.execute("UPDATE conversions SET twenty_person_id = 'p-conv' WHERE id = ?", (hexid(1),))
+        f.db.execute("UPDATE conversions SET twenty_person_id = 'p-lixo' WHERE id = ?", (hexid(2),))
+        # Eventos atuais nos novos emails para manter/gravar heating* no Twenty durante 5b antes da releitura 5f.
+        f.add_conv(3, "novo-site@corp.com", action="material_download", material="planilha-custos-ia", when=ago(days=0))
+        f.add_conv(4, "novo-curso@corp.com", action="material_download", material="planilha-custos-ia", when=ago(days=0))
+        f.add_conv(5, "novo-conv@corp.com", action="material_download", material="planilha-custos-ia", when=ago(days=0))
+        f.add_conv(6, "late-new@corp.com", action="material_download", material="planilha-custos-ia", when=ago(days=0))
+        f.db.commit()
+        docs = [
+            {"email": "late-new@corp.com", "status": "active", "googleUid": "u-late", "name": "Late", "createdAt": ago(days=0), "aulas": []},
+        ]
+
+        counts, _ = run_job(f, apply=True, ler_curso=lambda _s: docs)
+        self.assertTrue(f.injected)
+        self.assertEqual(counts["oposicao_aplicada"], 3)
+        for pid in ("p-site", "p-curso", "p-conv"):
+            for k in H.PERSON_HEATING_FIELDS:
+                self.assertIsNone(f.people[pid][k], (pid, k))
+        p_new = next(p for p in f.people.values() if p["emails"]["primaryEmail"] == "late-new@corp.com")
+        for k in H.PERSON_HEATING_FIELDS:
+            self.assertIsNone(p_new[k], k)
+        self.assertEqual(f.people["p-lixo"]["heatingNota"], 50)
+        patched_lixo = [p for m, p, _, _ in f.calls if m == "PATCH" and p == "/rest/people/p-lixo"]
+        self.assertEqual(patched_lixo, [])
+        for em in ("antigo@corp.com", "so-conv@corp.com", "late-new@corp.com"):
+            self.assertEqual(f.db.execute("SELECT count(*) FROM engagement_events WHERE email = ?", (em,)).fetchone()[0], 0, em)
+            self.assertEqual(f.db.execute("SELECT count(*) FROM heating WHERE email = ?", (em,)).fetchone()[0], 0, em)
+
     def test_d1_batch_valida_resposta_e_erros_por_item(self):
         # agy P1: d1_batch rejeita data não-dict, success falso no envelope, result não-lista,
         # tamanho divergente das instruções, item não-dict, item com success=False e results inválido.
@@ -1591,6 +1672,62 @@ class HeatingSyncTest(unittest.TestCase):
         self.assertEqual((counts["pessoas_criadas"], counts["inscricoes_criadas"], counts["excluidos"]), (0, 0, 4))
         self.assertEqual(set(f.people), {"p-gui"})
         self.assertEqual(f.enrolls, {})
+
+    def test_is_excluded_aliases_forma_canonica_item_com_mais_e_dominios(self):
+        # Item sem `+` exclui ele mesmo e aliases com `+` (em minúsculas), sem tratar pontos do Gmail nem outro domínio.
+        # Item que já contém `+` exclui apenas ele mesmo (exato).
+        excluded = {"Fulano@Gmail.com", "ciclano+vip@gmail.com"}
+        for em in (
+            "fulano@gmail.com",
+            "FULANO@GMAIL.COM",
+            "fulano+teste@gmail.com",
+            "Fulano+A+B@Gmail.com",
+            "fulano+@gmail.com",
+            "ciclano+vip@gmail.com",
+            "CICLANO+VIP@GMAIL.COM",
+        ):
+            with self.subTest(excluded=em):
+                self.assertTrue(H.is_excluded(em, excluded), em)
+        for em in (
+            "fu.lano@gmail.com",
+            "fu.lano+teste@gmail.com",
+            "fulano@outro.com",
+            "fulano+teste@outro.com",
+            "ciclano@gmail.com",
+            "ciclano+outro@gmail.com",
+            "ciclano+vip+extra@gmail.com",
+            "ciclano+vip@outro.com",
+        ):
+            with self.subTest(allowed=em):
+                self.assertFalse(H.is_excluded(em, excluded), em)
+
+        # Integração no job: alias de item sem `+` e item com `+` exato não recebem nota nem criam Pessoa/Inscrição;
+        # forma base de item com `+`, outro alias, ponto do Gmail e domínio diferente continuam pontuando.
+        f = Fake(schema=True)
+        for idx_c, em in enumerate(
+            (
+                "fulano+teste@gmail.com",
+                "ciclano+vip@gmail.com",
+                "ciclano@gmail.com",
+                "ciclano+outro@gmail.com",
+                "fu.lano@gmail.com",
+                "fulano+teste@outro.com",
+            ),
+            start=1,
+        ):
+            f.add_conv(idx_c, em, action="material_download", material="planilha-custos-ia", when=ago(days=0))
+        docs = [
+            {"email": "fulano+curso@gmail.com", "status": "active", "googleUid": "u1", "name": "Fulano", "createdAt": ago(days=0), "aulas": []},
+            {"email": "ciclano+vip@gmail.com", "status": "active", "googleUid": "u2", "name": "Ciclano", "createdAt": ago(days=0), "aulas": []},
+        ]
+        counts, _ = run_job(f, apply=True, ler_curso=lambda _s: docs, exclude_emails=excluded)
+        self.assertEqual((counts["pessoas_criadas"], counts["inscricoes_criadas"], counts["excluidos"]), (0, 0, 3))
+        hrows = f.heating_rows()
+        for em in ("fulano+teste@gmail.com", "fulano+curso@gmail.com", "ciclano+vip@gmail.com"):
+            self.assertNotIn(("site", em), hrows)
+            self.assertNotIn((CTX_CURSO, em), hrows)
+        for em in ("ciclano@gmail.com", "ciclano+outro@gmail.com", "fu.lano@gmail.com", "fulano+teste@outro.com"):
+            self.assertIn(("site", em), hrows)
 
     def test_id_evento_aula_inclui_sha16_do_email_e_evita_colisao_mesmo_uid(self):
         # Claude P4: dois documentos com o mesmo googleUid e emails diferentes geram ids distintos
