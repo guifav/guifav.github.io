@@ -523,3 +523,11 @@ test('D1 sem contagem de linhas (sem meta.changes): 500 com log curto, nunca 204
   assert.equal(res.status, 500);
   assert.deepEqual(logs, ['identidade sem contagem de linhas do D1']);
 });
+
+test('README: o contrato de POST /identidade documenta 409 para quem tem oposição (o auth.js depende desse status)', () => {
+  const readme = readFileSync(new URL('../README.md', import.meta.url), 'utf-8');
+  const row = readme.split('\n').find((l) => l.startsWith('| `POST /identidade` |'));
+  assert.ok(row, 'linha de POST /identidade no README');
+  assert.match(row!, /oposição em `heating_optout`[^|]*responde `409`/);
+  assert.doesNotMatch(row!, /oposição[^|;]*não grava e responde `204`/);
+});
