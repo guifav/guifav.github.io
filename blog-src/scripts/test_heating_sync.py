@@ -933,6 +933,57 @@ class HeatingSyncTest(unittest.TestCase):
                          (None, None, None, None))
         self.assertEqual(f.enrolls["e1"]["aulasConcluidas"], 2)  # resto da Inscrição mantido
 
+    def test_optout_limpa_pessoa_com_email_alterado_via_heating_e_conversions(self):
+        # P2 / Claude P4: --optout resolve Pessoas ativas também pelos twenty_person_id salvos em `heating`
+        # (todos os contextos) e em `conversions` antes de apagar o D1, ignorando Pessoas na lixeira e ids nulos.
+        f = Fake(
+            people=[
+                person("p-site", "novo-site@corp.com", heatingNota=45, heatingFaixa="QUENTE", heatingSinais="x", heatingCalculadoEm=NOW_ISO),
+                person("p-curso", "novo-curso@corp.com", heatingNota=30, heatingFaixa="MORNO", heatingSinais="y", heatingCalculadoEm=NOW_ISO),
+                person("p-conv", "novo-conv@corp.com", heatingNota=12, heatingFaixa="FRIO", heatingSinais="z", heatingCalculadoEm=NOW_ISO),
+                person(
+                    "p-lixo", "novo-lixo@corp.com",
+                    deletedAt="2026-11-20T00:00:00.000Z",
+                    heatingNota=50, heatingFaixa="QUENTE", heatingSinais="w", heatingCalculadoEm=NOW_ISO,
+                ),
+            ],
+            schema=True,
+        )
+        f.db.execute(
+            "INSERT INTO heating (context, email, score, band, signals, computed_at, twenty_person_id) VALUES "
+            "('site', 'antigo@corp.com', 45, 'quente', '[]', ?, 'p-site'),"
+            "(?, 'antigo@corp.com', 20, 'morno', '[]', ?, 'p-curso')",
+            (NOW_ISO, CTX_CURSO, NOW_ISO),
+        )
+        f.add_conv(1, "antigo@corp.com", action="material_download", material="planilha-custos-ia", when=ago(days=1))
+        f.add_conv(2, "antigo@corp.com", action="newsletter_confirm", when=ago(days=1))
+        f.add_conv(3, "antigo@corp.com", action="material_request", material="planilha-custos-ia", when=ago(days=1))
+        f.db.execute("UPDATE conversions SET twenty_person_id = 'p-conv' WHERE id = ?", (hexid(1),))
+        f.db.execute("UPDATE conversions SET twenty_person_id = 'p-lixo' WHERE id = ?", (hexid(2),))
+        f.db.execute("UPDATE conversions SET twenty_person_id = NULL WHERE id = ?", (hexid(3),))
+        f.db.commit()
+
+        # Simulação conta as 3 Pessoas ativas (site, curso e conversions) e ignora a da lixeira, sem gravar nada.
+        out_dry = io.StringIO()
+        c_dry = H.optout(TS.Clients(ENV, f, sleep=lambda s: None), "antigo@corp.com", apply=False, out=out_dry, forget_key=FORGET_KEY)
+        self.assertEqual((c_dry["notas_apagadas"], c_dry["pessoas_limpas"]), (2, 3))
+        self.assertEqual(f.twenty_writes(), [])
+        self.assertNotIn("antigo", out_dry.getvalue().lower())
+
+        # --apply limpa as 3 Pessoas ativas (mesmo com email alterado no Twenty), não toca na lixeira e apaga D1.
+        out = io.StringIO()
+        c_app = H.optout(TS.Clients(ENV, f, sleep=lambda s: None), "antigo@corp.com", apply=True, out=out, forget_key=FORGET_KEY)
+        self.assertEqual((c_app["notas_apagadas"], c_app["pessoas_limpas"]), (2, 3))
+        self.assertNotIn("antigo", out.getvalue().lower())
+        for pid in ("p-site", "p-curso", "p-conv"):
+            for k in H.PERSON_HEATING_FIELDS:
+                self.assertIsNone(f.people[pid][k], (pid, k))
+        self.assertEqual(f.people["p-lixo"]["heatingNota"], 50)
+        patched = {p for m, p, _, _ in f.calls if m == "PATCH"}
+        self.assertEqual(patched, {"/rest/people/p-site", "/rest/people/p-curso", "/rest/people/p-conv"})
+        self.assertEqual(f.heating_rows(), {})
+        self.assertEqual(f.db.execute("SELECT count(*) FROM heating_optout").fetchone()[0], 1)
+
     def test_forget_curso_impede_rematerializacao_e_preserva_site(self):
         f = Fake(people=[person("p1", "aluna@corp.com")], schema=True)
         f.add_conv(1, "aluna@corp.com", action="material_download", material="planilha-custos-ia", when=ago(days=0))
@@ -1223,6 +1274,34 @@ class HeatingSyncTest(unittest.TestCase):
         self.assertEqual(last_patch, {"status": "CONCLUIDO"})
         self.assertEqual(enr["calculadoEm"], CS.stamp(day1))
 
+        # Mutante P3: se heatingCalculadoEm estiver ausente (None ou "") com nota, faixa e sinais iguais,
+        # _person_heating_patch e o job preenchem heatingCalculadoEm.
+        for missing_calc in (None, ""):
+            p_sem_calc = person(
+                "p-calc", "ana@corp.com",
+                heatingNota=12,
+                heatingFaixa="FRIO",
+                heatingSinais="Download de material; Inscrição na newsletter",
+                heatingCalculadoEm=missing_calc,
+            )
+            want_ana = H.calcular_heating_contexto(
+                "site",
+                [
+                    {"id": "1", "context": "site", "email": "ana@corp.com", "signal": "material_baixado", "ref": "planilha-custos-ia", "occurred_at": ev_when},
+                    {"id": "2", "context": "site", "email": "ana@corp.com", "signal": "newsletter_confirmada", "ref": None, "occurred_at": ev_when},
+                ],
+                day1,
+            )
+            patch_calc = H._person_heating_patch(p_sem_calc, want_ana, CS.stamp(day1))
+            self.assertEqual(patch_calc["heatingCalculadoEm"], CS.stamp(day1))
+
+        f.people["p1"]["heatingCalculadoEm"] = None
+        c4, _ = run_job(f, apply=True, now_dt=day2, ler_curso=lambda _s: docs_comp)
+        self.assertEqual(c4["pessoas_atualizadas"], 1)
+        self.assertEqual(f.people["p1"]["heatingCalculadoEm"], CS.stamp(day2))
+        c5, _ = run_job(f, apply=True, now_dt=day2, ler_curso=lambda _s: docs_comp)
+        self.assertEqual(c5["pessoas_atualizadas"], 0)
+
     def test_curso_status_desconhecido_bloqueia_emails_conservadoramente(self):
         # Claude P3 + Codex P2: descadastrado com cadastro (10) + clique (3) tem nota 10 com Firestore disponível,
         # e continua com nota 10 (NÃO vira 13) quando o Firestore está indisponível ou quando o inscrito sumiu.
@@ -1315,6 +1394,121 @@ class HeatingSyncTest(unittest.TestCase):
         )
         self.assertEqual(g.enrolls["e-ok"]["nota"], 30)
 
+    def test_inscricao_ausente_do_curso_com_nota_no_d1_atualiza_apenas_campos_de_nota(self):
+        # P2: Inscrição ativa no Twenty cujo email não veio na leitura atual do curso (curso disponível), mas que ainda
+        # tem nota no D1 para o contexto (email_spam ou eventos dentro da janela de 180d), atualiza só nota, faixa,
+        # sinais e calculadoEm (e só quando mudam ou falta calculadoEm), sem mexer em status/aulasConcluidas/pessoaId.
+        f = Fake(
+            people=[
+                person("p-spam", "spam@corp.com"),
+                person("p-decai", "decai@corp.com"),
+                person("p-semcalc", "semcalc@corp.com"),
+                person("p-vazia", "vazia-spam@corp.com"),
+            ],
+            schema=True,
+        )
+        # Caso do log: tinha 25/MORNO no Twenty, sumiu do Firestore e recebeu email_spam (janela de 365d).
+        f.enrolls["e-spam"] = {
+            "id": "e-spam",
+            "inscricaoId": H.inscricao_id(SLUG, "spam@corp.com"),
+            "curso": "CHATGPT_NO_DIA_A_DIA",
+            "status": "ATIVO",
+            "entrada": ago(days=40),
+            "aulasConcluidas": 2,
+            "ultimaAula": ago(days=20),
+            "nota": 25,
+            "faixa": "MORNO",
+            "sinais": "Cadastro no curso",
+            "calculadoEm": ago(days=10),
+            "pessoaId": "p-spam",
+        }
+        f.add_event("ev-spam-cur", "spam@corp.com", "email_spam", context=CTX_CURSO, source="resend", ref="em-1", when=ago(days=200))
+
+        # Decaimento: evento de cadastro há 30d -> nota 5 / FRIO / "Cadastro no curso"; sinais já era igual.
+        f.enrolls["e-decai"] = {
+            "id": "e-decai",
+            "inscricaoId": H.inscricao_id(SLUG, "decai@corp.com"),
+            "curso": "CHATGPT_NO_DIA_A_DIA",
+            "status": "ATIVO",
+            "entrada": ago(days=30),
+            "aulasConcluidas": 1,
+            "ultimaAula": ago(days=30),
+            "nota": 10,
+            "faixa": "FRIO",
+            "sinais": "Cadastro no curso",
+            "calculadoEm": ago(days=30),
+            "pessoaId": "p-decai",
+        }
+        f.add_event("ev-decai-cur", "decai@corp.com", "curso_cadastro", context=CTX_CURSO, source="curso", ref=None, when=ago(days=30))
+
+        # Mesma nota/faixa/sinais, mas sem calculadoEm -> PATCH preenche só calculadoEm.
+        f.enrolls["e-semcalc"] = {
+            "id": "e-semcalc",
+            "inscricaoId": H.inscricao_id(SLUG, "semcalc@corp.com"),
+            "curso": "CHATGPT_NO_DIA_A_DIA",
+            "status": "ATIVO",
+            "entrada": ago(days=30),
+            "aulasConcluidas": 0,
+            "ultimaAula": None,
+            "nota": 5,
+            "faixa": "FRIO",
+            "sinais": "Cadastro no curso",
+            "calculadoEm": None,
+            "pessoaId": "p-semcalc",
+        }
+        f.add_event("ev-semcalc-cur", "semcalc@corp.com", "curso_cadastro", context=CTX_CURSO, source="curso", ref=None, when=ago(days=30))
+
+        # Inscrição que estava com os 4 campos vazios no Twenty e recebeu email_spam fora do Firestore.
+        f.enrolls["e-vazia"] = {
+            "id": "e-vazia",
+            "inscricaoId": H.inscricao_id(SLUG, "vazia-spam@corp.com"),
+            "curso": "CHATGPT_NO_DIA_A_DIA",
+            "status": "CONCLUIDO",
+            "entrada": ago(days=200),
+            "aulasConcluidas": 5,
+            "ultimaAula": ago(days=190),
+            "nota": None,
+            "faixa": None,
+            "sinais": None,
+            "calculadoEm": None,
+            "pessoaId": "p-vazia",
+        }
+        f.add_event("ev-vazia-spam", "vazia-spam@corp.com", "email_spam", context=CTX_CURSO, source="resend", ref="em-2", when=ago(days=1))
+
+        c1, _ = run_job(f, apply=True, ler_curso=lambda _s: [])
+        self.assertEqual(c1["inscricoes_atualizadas"], 4)
+        patches = {
+            p.rsplit("/", 1)[1]: d
+            for m, p, d, _ in f.calls
+            if m == "PATCH" and p.startswith("/rest/courseEnrollments/")
+        }
+        self.assertEqual(patches["e-spam"], {
+            "nota": 0,
+            "faixa": "FRIO",
+            "sinais": "Reclamou de spam: não abordar",
+            "calculadoEm": NOW_ISO,
+        })
+        self.assertEqual((f.enrolls["e-spam"]["status"], f.enrolls["e-spam"]["aulasConcluidas"], f.enrolls["e-spam"]["pessoaId"]),
+                         ("ATIVO", 2, "p-spam"))
+        self.assertEqual(patches["e-decai"], {"nota": 5, "calculadoEm": NOW_ISO})
+        self.assertEqual((f.enrolls["e-decai"]["status"], f.enrolls["e-decai"]["aulasConcluidas"]), ("ATIVO", 1))
+        self.assertEqual(patches["e-semcalc"], {"calculadoEm": NOW_ISO})
+        self.assertEqual(patches["e-vazia"], {
+            "nota": 0,
+            "faixa": "FRIO",
+            "sinais": "Reclamou de spam: não abordar",
+            "calculadoEm": NOW_ISO,
+        })
+        self.assertEqual((f.enrolls["e-vazia"]["status"], f.enrolls["e-vazia"]["aulasConcluidas"]), ("CONCLUIDO", 5))
+
+        # D1 e Twenty alinhados (0/frio no spam); segunda rodada sem mudança não faz nenhum PATCH!
+        self.assertEqual((f.heating_rows()[(CTX_CURSO, "spam@corp.com")]["score"], f.heating_rows()[(CTX_CURSO, "spam@corp.com")]["band"]),
+                         (0, "frio"))
+        n_tw = len(f.twenty_writes())
+        c2, _ = run_job(f, apply=True, ler_curso=lambda _s: [])
+        self.assertEqual(c2["inscricoes_atualizadas"], 0)
+        self.assertEqual(len(f.twenty_writes()), n_tw)
+
     def test_string_vazia_nao_gera_patch_eterno_e_zero_e_preenchido(self):
         # agy P2: "" é tratado como vazio (sem PATCH eterno), e 0 (nota de spam) é tratado como preenchido.
         f = Fake(
@@ -1384,16 +1578,63 @@ class HeatingSyncTest(unittest.TestCase):
         self.assertEqual((c_opt["pessoas_limpas"], c_opt["inscricoes_limpas"]), (0, 0))
 
     def test_excluidos_e_dominios_de_teste_nao_criam_pessoa_nem_inscricao(self):
-        # Claude P3: HEATING_EXCLUDE e domínios de teste não ganham Pessoa nem Inscrição no Twenty.
-        f = Fake(schema=True)
+        # Claude P3 + mutante P3: HEATING_EXCLUDE (mesmo com Pessoa já existente no Twenty) e domínios de teste
+        # não ganham Pessoa nova nem Inscrição no Twenty.
+        f = Fake(people=[person("p-gui", "gui@corp.com")], schema=True)
         docs = [
             {"email": "gui@corp.com", "status": "active", "googleUid": "u1", "name": "Gui", "createdAt": ago(days=0), "aulas": []},
+            {"email": "ex2@corp.com", "status": "active", "googleUid": "u4", "name": "Ex2", "createdAt": ago(days=0), "aulas": []},
             {"email": "a@example.com", "status": "active", "googleUid": "u2", "name": "Ex", "createdAt": ago(days=0), "aulas": []},
             {"email": "b@foo.test", "status": "active", "googleUid": "u3", "name": "T", "createdAt": ago(days=0), "aulas": []},
         ]
-        counts, _ = run_job(f, apply=True, ler_curso=lambda _s: docs, exclude_emails={"gui@corp.com"})
-        self.assertEqual((counts["pessoas_criadas"], counts["inscricoes_criadas"], counts["excluidos"]), (0, 0, 3))
-        self.assertEqual((f.people, f.enrolls), ({}, {}))
+        counts, _ = run_job(f, apply=True, ler_curso=lambda _s: docs, exclude_emails={"gui@corp.com", "ex2@corp.com"})
+        self.assertEqual((counts["pessoas_criadas"], counts["inscricoes_criadas"], counts["excluidos"]), (0, 0, 4))
+        self.assertEqual(set(f.people), {"p-gui"})
+        self.assertEqual(f.enrolls, {})
+
+    def test_id_evento_aula_inclui_sha16_do_email_e_evita_colisao_mesmo_uid(self):
+        # Claude P4: dois documentos com o mesmo googleUid e emails diferentes geram ids distintos
+        # `cu:<slug>:aula:<googleUid>:<sha16>:<dayId>` e ambos contabilizam a aula no D1 e no Twenty.
+        f = Fake(schema=True)
+        docs = [
+            {
+                "email": "Um@Corp.com",
+                "status": "active",
+                "googleUid": "uid_shared_1",
+                "name": "Um",
+                "createdAt": ago(days=0),
+                "aulas": [{"dayId": "day-01", "completed": True, "updatedAt": ago(days=0)}],
+            },
+            {
+                "email": "dois@corp.com",
+                "status": "active",
+                "googleUid": "uid_shared_1",
+                "name": "Dois",
+                "createdAt": ago(days=0),
+                "aulas": [{"dayId": "day-01", "completed": True, "updatedAt": ago(days=0)}],
+            },
+        ]
+        counts, _ = run_job(f, apply=True, ler_curso=lambda _s: docs)
+        self.assertEqual(counts["eventos_curso_novos"], 4)  # 2 cadastros + 2 aulas sem colisão
+        id_um = f"cu:{SLUG}:aula:uid_shared_1:{H.email_sha256_32('um@corp.com')[:16]}:day-01"
+        id_dois = f"cu:{SLUG}:aula:uid_shared_1:{H.email_sha256_32('dois@corp.com')[:16]}:day-01"
+        self.assertNotEqual(id_um, id_dois)
+        ev_ids = set(f.event_ids())
+        self.assertIn(id_um, ev_ids)
+        self.assertIn(id_dois, ev_ids)
+        hrows = f.heating_rows()
+        self.assertEqual((hrows[(CTX_CURSO, "um@corp.com")]["score"], hrows[(CTX_CURSO, "um@corp.com")]["band"]), (15, "morno"))
+        self.assertEqual((hrows[(CTX_CURSO, "dois@corp.com")]["score"], hrows[(CTX_CURSO, "dois@corp.com")]["band"]), (15, "morno"))
+
+    def test_ci_pages_yml_roda_test_heating_sync_apos_conversoes(self):
+        # P1: .github/workflows/pages.yml precisa rodar test_heating_sync.py no passo "Testes dos scripts de montagem",
+        # logo depois de test_conversoes_sync.py.
+        pages_yml = os.path.join(HERE, "..", "..", ".github", "workflows", "pages.yml")
+        with open(pages_yml, encoding="utf-8") as fh:
+            lines = [ln.strip() for ln in fh]
+        step_idx = lines.index("- name: Testes dos scripts de montagem")
+        conv_idx = lines.index("python3 blog-src/scripts/test_conversoes_sync.py", step_idx)
+        self.assertEqual(lines[conv_idx + 1], "python3 blog-src/scripts/test_heating_sync.py")
 
     def test_mutacoes_sobreviventes_esquecido_optout_pessoa_nova_desempate_e_firestore(self):
         # 1) Evento pré-existente no D1 de curso_esquecido é apagado no passo 3 (preservando site).

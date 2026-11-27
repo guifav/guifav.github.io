@@ -32,6 +32,9 @@ Decisões registradas do desenho:
   condicional na mesma instrução (`WHERE NOT EXISTS (SELECT 1 FROM heating_optout WHERE email_hmac = ...)`), e no fim
   da rodada (após as escritas no D1 e no Twenty) o job relê `heating_optout` e limpa D1 e Twenty (Pessoa e Inscrições)
   para qualquer marca nova desde a leitura inicial.
+- Id do evento de aula (`curso_aula`): usa `cu:<slug>:aula:<googleUid>:<sha16>:<dayId>`, incluindo os 16 primeiros
+  hex do SHA-256 do email normalizado para que dois documentos com o mesmo `googleUid` e emails diferentes não colidam.
+  Como ainda não há evento de curso gravado em produção, não precisa de migração de ids.
 
 Dependências na KVM:
 - A leitura do Firestore usa `google-auth` (2.56.3) e `google-cloud-firestore`, já instalados no Python do sistema da
@@ -845,7 +848,12 @@ def calcular_heating_contexto(
 # ------------------------------------------------------------------ Leitura e parsing de curso
 
 def _parse_curso_docs(slug: str, raw_docs: list[dict], counts: Counter) -> dict[str, dict]:
-    """Valida documentos de `drip_subscribers` + `progress`, devolvendo estado consolidado por email normalizado."""
+    """Valida documentos de `drip_subscribers` + `progress`, devolvendo estado consolidado por email normalizado.
+
+    O id de evento `curso_aula` inclui os 16 primeiros hex do SHA-256 do email normalizado
+    (`cu:<slug>:aula:<googleUid>:<sha16>:<dayId>`) para evitar colisão entre documentos com o mesmo `googleUid` e
+    emails diferentes. Como ainda não há evento de curso gravado em produção, não precisa de migração de ids.
+    """
     by_email: dict[str, dict] = {}
     for d in raw_docs:
         if not isinstance(d, dict):
@@ -879,6 +887,7 @@ def _parse_curso_docs(slug: str, raw_docs: list[dict], counts: Counter) -> dict[
 
         aulas_ok: dict[str, tuple[str, str]] = {}  # dayId -> (ev_id, updated_at_iso)
         if uid:
+            email_sha16 = email_sha256_32(email)[:16]
             for aula in d.get("aulas") or []:
                 if not isinstance(aula, dict):
                     counts["curso_invalido"] += 1
@@ -889,7 +898,7 @@ def _parse_curso_docs(slug: str, raw_docs: list[dict], counts: Counter) -> dict[
                 if not isinstance(day_id, str) or not CS._full(CURSO_ID_RE, day_id):
                     counts["curso_invalido"] += 1
                     continue
-                ev_id = f"cu:{slug}:aula:{uid}:{day_id}"
+                ev_id = f"cu:{slug}:aula:{uid}:{email_sha16}:{day_id}"
                 if len(ev_id) > MAX_EVENT_ID:
                     counts["curso_invalido"] += 1
                     continue
@@ -1005,6 +1014,31 @@ def _enroll_patch(existing: dict, desired: dict) -> dict:
             out["calculadoEm"] = None
     elif score_changed or have_calc is None:
         out["calculadoEm"] = desired["calculadoEm"]
+    return out
+
+
+def _enroll_score_patch(existing: dict, h: dict | None, now_iso: str) -> dict:
+    """Devolve o PATCH apenas para nota, faixa, sinais e calculadoEm da Inscrição, ou {} se nada mudou."""
+    if h is None:
+        if any(_filled(existing.get(k)) for k in ("nota", "faixa", "sinais", "calculadoEm")):
+            return {"nota": None, "faixa": None, "sinais": None, "calculadoEm": None}
+        return {}
+    want = {
+        "nota": h["score"],
+        "faixa": h["band"].upper(),
+        "sinais": formatar_sinais_texto(h["signals_list"]),
+    }
+    out: dict = {}
+    for k, w in want.items():
+        have = existing.get(k)
+        if not _filled(have):
+            have = None
+        w_norm = w if _filled(w) else None
+        if have != w_norm:
+            out[k] = w_norm
+    have_calc = CS.iso_ms(existing.get("calculadoEm") or "") or None
+    if out or have_calc is None:
+        out["calculadoEm"] = now_iso
     return out
 
 
@@ -1357,11 +1391,14 @@ def run(
 
     # Inscrições ativas já existentes que não vieram na leitura atual do curso:
     # - oposição limpa nota/faixa/sinais/calculadoEm mesmo com o curso indisponível nesta rodada;
-    # - para cursos disponíveis, se o email não tem nota hoje (expirado, excluído, etc.), limpa os 4 campos.
+    # - para cursos disponíveis, se o email não tem nota hoje (expirado, excluído, etc.), limpa os 4 campos;
+    #   se ainda tem nota no D1 para o contexto (eventos dentro da janela ou spam), atualiza só nota, faixa, sinais e
+    #   calculadoEm quando mudarem (ou quando faltar calculadoEm).
     email_by_sha32: dict[str, str] = {}
     for e in (
         [ev["email"] for ev in existing_events]
         + [hr["email"] for hr in existing_heating_rows]
+        + [em for _ctx, em in heating_by_ctx_email]
         + [em for p in people for em in TS._emails(p)]
         + [em for docs in cursos_disponiveis.values() for em in docs]
     ):
@@ -1378,8 +1415,6 @@ def run(
         slug = all_curso_values.get(x.get("curso") or "")
         if not slug:
             continue
-        if not any(_filled(x.get(k)) for k in ("nota", "faixa", "sinais", "calculadoEm")):
-            continue
         owner = people_by_id.get(x.get("pessoaId") or "")
         owner_emails = TS._emails(owner) if owner else []
         matched_email = next((e for e in owner_emails if inscricao_id(slug, e) == iid), None)
@@ -1388,10 +1423,15 @@ def run(
             if cand and inscricao_id(slug, cand) == iid:
                 matched_email = cand
         if matched_email and is_optout(matched_email):
-            optout_seen.add(matched_email)
-            enrolls_to_update.append((x["id"], {"nota": None, "faixa": None, "sinais": None, "calculadoEm": None}))
-        elif slug in cursos_disponiveis and (matched_email is None or (f"curso:{slug}", matched_email) not in heating_by_ctx_email):
-            enrolls_to_update.append((x["id"], {"nota": None, "faixa": None, "sinais": None, "calculadoEm": None}))
+            patch = _enroll_score_patch(x, None, now_iso)
+            if patch:
+                optout_seen.add(matched_email)
+                enrolls_to_update.append((x["id"], patch))
+        elif slug in cursos_disponiveis:
+            h = heating_by_ctx_email.get((f"curso:{slug}", matched_email)) if matched_email is not None else None
+            patch = _enroll_score_patch(x, h, now_iso)
+            if patch:
+                enrolls_to_update.append((x["id"], patch))
 
     counts["oposicao_aplicada"] = len(optout_seen)
     counts["inscricoes_criadas"] = len(enrolls_to_create)
@@ -1578,7 +1618,8 @@ def run(
 
 def optout(c: TS.Clients, email: str, *, apply: bool = False, out=None, forget_key: str | None = None) -> Counter:
     """Registra oposição permanente ao heating (`heating_optout`), apaga eventos e notas de todos os contextos no D1
-    e limpa campos heating* na Person e nota/faixa/sinais/calculadoEm das Inscrições no Twenty."""
+    e limpa campos heating* na Person (tanto achadas pelo email quanto pelos `twenty_person_id` salvos em `heating` e
+    `conversions` antes de apagar o D1) e nota/faixa/sinais/calculadoEm das Inscrições no Twenty."""
     out = out or sys.stdout
     key = c.env.get("FORGET_HMAC_KEY", "") if forget_key is None else forget_key
     norm = email.strip().lower()
@@ -1594,10 +1635,24 @@ def optout(c: TS.Clients, email: str, *, apply: bool = False, out=None, forget_k
         )
 
     ev_count = int(c.d1("SELECT count(*) AS n FROM engagement_events WHERE email = ?", [norm])[0]["n"])
-    heat_count = int(c.d1("SELECT count(*) AS n FROM heating WHERE email = ?", [norm])[0]["n"])
+    heat_rows = c.d1("SELECT twenty_person_id FROM heating WHERE email = ?", [norm])
+    heat_count = len(heat_rows)
+    conv_rows = c.d1("SELECT twenty_person_id FROM conversions WHERE email = ?", [norm])
+    ref_pids = {
+        r["twenty_person_id"]
+        for r in (*heat_rows, *conv_rows)
+        if CS._full(CS.TWENTY_PERSON_ID, r.get("twenty_person_id"))
+    }
 
     meta = read_metadata(c)
-    persons = CS.people_by_email(CS.list_records(c, "people")).get(norm) or []
+    all_people = CS.list_records(c, "people")
+    persons = list(CS.people_by_email(all_people).get(norm) or [])
+    active_by_id = {p["id"]: p for p in all_people if not p.get("deletedAt")}
+    seen_pids = {p["id"] for p in persons}
+    for pid in sorted(ref_pids):
+        if pid not in seen_pids and pid in active_by_id:
+            seen_pids.add(pid)
+            persons.append(active_by_id[pid])
     person_heating_present = [k for k in PERSON_HEATING_FIELDS if k in meta["person"]]
     persons_to_clear = [p for p in persons if any(_filled(p.get(k)) for k in person_heating_present)]
 

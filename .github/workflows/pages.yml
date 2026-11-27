@@ -72,6 +72,7 @@ jobs:
           python3 blog-src/scripts/test_import_subscribers.py
           python3 blog-src/scripts/test_twenty_sync.py
           python3 blog-src/scripts/test_conversoes_sync.py
+          python3 blog-src/scripts/test_heating_sync.py
           python3 blog-src/scripts/test_draft_preview.py
           python3 blog-src/scripts/test_publicar_workflow.py
 
