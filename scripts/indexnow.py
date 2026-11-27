@@ -4,10 +4,10 @@ ou removidas, logo depois do deploy.
 Fluxo no workflow do Pages:
 1. build: restaura o registro de URLs já avisadas do cache do GitHub Actions (`indexnow-registry-*`) e roda
    `diff --registry`, que compara os sitemaps do _site/ com os publicados (ainda o deploy anterior) e inclui
-   também as URLs do build que nunca foram avisadas com o lastmod atual. Grava o plano (modo, URLs, sha256 de
-   cada sitemap novo, base do registro e lastmods) num arquivo, que vai como artefato ao job seguinte.
+   também as URLs do build cuja versão atual difere da do registro. Grava o plano (modo, URLs, sha256 de cada
+   sitemap novo, base do registro e versões) num arquivo, que vai como artefato ao job seguinte.
    URL sem lastmod no sitemap (a capa do blog e as páginas de tema, `/blog/tema/...`) entra quando o HTML
-   publicado difere do build ou quando ainda não está no registro.
+   publicado difere do build ou quando a versão registrada (`sha256:<hex>` do arquivo no `_site`) difere da atual.
    Se não conseguir ler o site publicado, o plano vira modo "all": todas as URLs do build mais as que saíram do
    índice desde o commit anterior (git diff contra github.event.before). Sem esse commit, o plano é marcado
    incompleto e o job termina vermelho depois do envio. O deploy nunca depende do IndexNow.
@@ -17,10 +17,13 @@ Fluxo no workflow do Pages:
 
 Registro (cache do Actions):
 - Fica no cache do GitHub Actions (`indexnow-registry-*`), fora do repositório.
+- Guarda a versão já avisada de cada URL: o `lastmod` do sitemap quando existe, ou `sha256:<hex>` do arquivo no
+  `_site` quando não há `lastmod`. Por isso, qualquer falha antes do envio (ou rejeição de lote, ou falha ao
+  salvar o cache) deixa a versão antiga no registro e a URL volta no deploy seguinte.
 - Ausência ou invalidez do cache faz avisar todas as URLs do build uma vez e recria o registro.
 - O cache do Actions some depois de 7 dias sem acesso, o que também só causa um reenvio completo.
 - Re-executar o job `indexnow` de um deploy antigo depois de um mais novo pode salvar um registro mais velho
-  como o mais recente; o efeito é só reenviar URLs, nunca deixar de avisar.
+  como o mais recente; um registro mais velho só faz reenviar, nunca deixa de avisar.
 
 À mão: `all` avisa tudo o que está publicado; `urls URL...` avisa URLs escolhidas (remoções, por exemplo).
 Os comandos manuais (`all` e `urls`) não leem nem gravam o registro.
@@ -289,17 +292,30 @@ def save_registry(path: Path, entries: dict[str, str]) -> None:
     print(f"IndexNow: registro com {len(entries)} URLs gravado em {path}")
 
 
-def never_sent(new: dict[str, str], registry: dict[str, str]) -> list[str]:
-    """URLs do build cujo lastmod no registro difere do build (inclui ausentes; sem lastmod, basta estar no registro)."""
-    return sorted(loc for loc, lm in new.items() if registry.get(loc) != lm)
+def versions(site: Path, new: dict[str, str]) -> dict[str, str]:
+    """Versão de cada URL do build: o lastmod do sitemap quando existe, ou 'sha256:<hex>' do arquivo no _site."""
+    out: dict[str, str] = {}
+    for loc, lm in new.items():
+        if lm:
+            out[loc] = lm
+        else:
+            f = _local(site, loc)
+            out[loc] = f"sha256:{sha256(f.read_bytes())}" if f is not None and f.is_file() else ""
+    return out
+
+
+def never_sent(versions: dict[str, str], registry: dict[str, str]) -> list[str]:
+    """URLs do build cuja versão difere da do registro (inclui ausentes e as de versão vazia, sem arquivo para assinar)."""
+    return sorted(loc for loc, ver in versions.items() if not ver or registry.get(loc) != ver)
 
 
 def plan(site: Path, get=http_get, repo: Path = Path("."), before: str | None = None, git=_git,
          registry: dict[str, str] | None = None) -> dict:
     new = built_entries(site)
+    vers = versions(site, new)
     shas = {p: sha256((site / p.lstrip("/")).read_bytes()) for p in SITEMAPS}
-    pending = never_sent(new, registry) if registry is not None else []
-    base = {u: lm for u, lm in registry.items() if u in new} if registry is not None else None
+    pending = never_sent(vers, registry) if registry is not None else []
+    base = {u: v for u, v in registry.items() if u in new} if registry is not None else None
     try:
         old = live_entries(get)
     except LiveError as e:
@@ -309,10 +325,10 @@ def plan(site: Path, get=http_get, repo: Path = Path("."), before: str | None = 
                  else ", sem as remoções (sem commit anterior): o job vai terminar vermelho"))
         urls = sorted(set(new) | set(removed or []) | set(pending))
         return {"mode": "all", "urls": urls, "sitemaps": shas, "incomplete": removed is None,
-                "registry": base, "lastmod": {u: new[u] for u in urls if u in new}}
+                "registry": base, "versions": {u: vers[u] for u in urls if u in vers}}
     urls = sorted(set(changed(old, new, site, get)) | set(pending))
     return {"mode": "diff", "urls": urls, "sitemaps": shas, "incomplete": False,
-            "registry": base, "lastmod": {u: new[u] for u in urls if u in new}}
+            "registry": base, "versions": {u: vers[u] for u in urls if u in vers}}
 
 
 def _str_dict(d) -> bool:
@@ -326,7 +342,7 @@ def valid_plan(p) -> bool:
             and all(isinstance(v, str) and len(v) == 64 for v in p["sitemaps"].values())
             and isinstance(p.get("incomplete"), bool)
             and "registry" in p and (p["registry"] is None or _str_dict(p["registry"]))
-            and _str_dict(p.get("lastmod")))
+            and _str_dict(p.get("versions")))
 
 
 def _is(resp: tuple[int, bytes], sha: str) -> bool:
@@ -408,8 +424,8 @@ def main(argv: list[str] | None = None, get=http_get, post=http_post, sleep=time
         p = plan(Path(args.site), get, Path(args.repo), args.before, registry=reg)
         Path(args.out).parent.mkdir(parents=True, exist_ok=True)
         Path(args.out).write_text(json.dumps(p, separators=(",", ":")), encoding="utf-8")
-        # Nunca avisadas = ausentes do registro; as que só mudaram de lastmod não entram na conta.
-        extra = f" ({sum(1 for u in p['lastmod'] if u not in reg)} nunca avisadas)" if reg is not None else ""
+        # Nunca avisadas = ausentes do registro; as que só mudaram de versão não entram na conta.
+        extra = f" ({sum(1 for u in p['versions'] if u not in reg)} nunca avisadas)" if reg is not None else ""
         print(f"IndexNow ({p['mode']}): {len(p['urls'])} URLs para avisar depois do deploy{extra}")
         for u in p["urls"][:50]:
             print("  " + u)
@@ -434,10 +450,9 @@ def main(argv: list[str] | None = None, get=http_get, post=http_post, sleep=time
         accepted, errors = send(p["urls"], post)
         if p["registry"] is not None:
             updated = dict(p["registry"])
-            accepted_set = set(accepted)
-            for u in p["urls"]:
-                if u in accepted_set and u in p["lastmod"]:
-                    updated[u] = p["lastmod"][u]
+            for u in accepted:
+                if u in p["versions"]:
+                    updated[u] = p["versions"][u]
                 else:
                     updated.pop(u, None)
             _maybe_save_registry(args.registry_out, updated)
