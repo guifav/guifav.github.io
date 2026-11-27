@@ -1624,26 +1624,42 @@ test('Kimi P2 (rodada 4): o aviso recebe o foco ao abrir e devolve o foco ao fec
 
 test('Claude P2 (rodada 5): aviso que abre sozinho não tira o foco de quem digita; anuncia por aria-live', async () => {
   const s = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 } });
+  // A região viva já existe, vazia, antes de o aviso abrir (rodada 6: leitor de tela ignora região que nasce com texto).
+  const live = s.findClass('guifav-auth-live')!;
+  assert.ok(live);
+  assert.equal(live.attrs.role, 'status');
+  assert.equal(live.attrs['aria-live'], 'polite');
+  assert.equal(live.textContent, '');
   const input = s.body.appendChild(s.createElement('input'));
   input.focus();
   await s.emitAuth(makeUser());
   const notice = s.findClass('guifav-auth-notice')!;
   assert.equal(notice.hidden, false);
   assert.equal(s.activeElement(), input, 'o foco continua no campo');
-  const live = s.findClass('guifav-auth-live')!;
-  assert.equal(live.attrs.role, 'status');
-  assert.equal(live.attrs['aria-live'], 'polite');
+  assert.equal(live.textContent, '', 'o texto entra um instante depois');
+  await s.advance(100);
   assert.equal(live.textContent, NOTICE_TEXT);
   // Responder pelo clique fecha sem puxar o foco de volta para o botão da conta se ele não estava no aviso.
   const yes = notice.findAll((e) => e.tag === 'button' && e.textContent === 'Ligar')[0];
   await s.click(yes);
   assert.equal(notice.hidden, true);
   assert.equal(s.activeElement(), input);
+  assert.equal(live.textContent, '', 'fechar o aviso apaga o texto da região viva');
+
+  // Aviso fechado antes do anúncio: o texto não entra depois.
+  const q = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 } });
+  const qin = q.body.appendChild(q.createElement('input'));
+  qin.focus();
+  await q.emitAuth(makeUser());
+  await q.emitConsent('denied');
+  await q.advance(200);
+  assert.equal(q.findClass('guifav-auth-live')!.textContent, '');
 
   // Sem nada focado (ou com o foco no botão da conta), o aviso toma o foco e não usa a região viva.
   const r = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: makeUser() });
   assert.equal(r.activeElement(), r.findClass('guifav-auth-notice'));
-  assert.equal(r.findClass('guifav-auth-live'), null);
+  await r.advance(200);
+  assert.equal(r.findClass('guifav-auth-live')!.textContent, '', 'com o foco no aviso, a região viva não repete o texto');
 });
 
 test('Claude P3 (rodada 5): antes do Firebase, uid de outra pessoa gravado por outra aba tira o user_id do <head>', async () => {

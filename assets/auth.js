@@ -86,6 +86,7 @@
   var signOutBtn = null;
   var noticeEl = null;
   var liveEl = null;
+  var announceTimer = null;
 
   function logWarn(msg) {
     try {
@@ -415,6 +416,7 @@
     var active = d.activeElement;
     var hadFocus = Boolean(active && typeof noticeEl.contains === 'function' && noticeEl.contains(active));
     noticeEl.hidden = true;
+    cancelAnnounce();
     var back = noticeReturnFocus;
     noticeReturnFocus = null;
     if (!hadFocus) return;
@@ -476,14 +478,34 @@
     }
   }
 
-  function announce(text) {
-    if (!d.body) return;
-    if (!liveEl) {
-      liveEl = el('div', { 'class': 'guifav-auth-live', role: 'status', 'aria-live': 'polite', 'data-clarity-mask': 'true' });
-      d.body.appendChild(liveEl);
+  // Região viva criada vazia junto com o widget: leitores de tela só anunciam mudança numa região que já estava na
+  // página, então o texto entra um instante depois de o aviso abrir e sai quando o aviso fecha.
+  function ensureLiveRegion() {
+    if (liveEl || !d.body) return;
+    liveEl = el('div', { 'class': 'guifav-auth-live', role: 'status', 'aria-live': 'polite', 'data-clarity-mask': 'true' });
+    d.body.appendChild(liveEl);
+  }
+
+  function cancelAnnounce() {
+    if (announceTimer !== null) {
+      try { if (typeof w.clearTimeout === 'function') w.clearTimeout(announceTimer); } catch (e) { /* ignora */ }
+      announceTimer = null;
     }
-    liveEl.textContent = '';
-    liveEl.textContent = text;
+    if (liveEl) liveEl.textContent = '';
+  }
+
+  function announce(text) {
+    ensureLiveRegion();
+    if (!liveEl) return;
+    cancelAnnounce();
+    if (typeof w.setTimeout !== 'function') {
+      liveEl.textContent = text;
+      return;
+    }
+    announceTimer = w.setTimeout(function () {
+      announceTimer = null;
+      if (liveEl) liveEl.textContent = text; // hideNotice cancela este temporizador
+    }, 100);
   }
 
   function syncNotice() {
@@ -597,6 +619,7 @@
       });
 
       d.body.appendChild(rootEl);
+      ensureLiveRegion();
 
       d.addEventListener('click', function (e) {
         if (!menuOpen || !rootEl) return;
