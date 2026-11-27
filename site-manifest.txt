@@ -24,3 +24,4 @@ materiais/
 cursos/
 privacidade/
 termos/
+prioridade/

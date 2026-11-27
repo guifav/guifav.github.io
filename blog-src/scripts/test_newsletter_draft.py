@@ -178,11 +178,28 @@ class EnvelopeTest(unittest.TestCase):
         html, text = conv("<p>Corpo.</p>")
         for s in ("Um post", "Subtítulo do post", "https://guifav.dev/blog/img/um-post/capa.jpg",
                   "Ler no site", 'href="https://guifav.dev/blog/um-post/"', "{{{RESEND_UNSUBSCRIBE_URL}}}",
+                  'href="https://guifav.dev/prioridade/"', "Não quero ser pontuado",
                   'href="https://guifav.dev/privacidade/"', "Você recebe este email porque assinou"):
             self.assertIn(s, html)
-        for s in ("Um post", "Corpo.", "https://guifav.dev/blog/um-post/", "{{{RESEND_UNSUBSCRIBE_URL}}}"):
+        for s in ("Um post", "Corpo.", "https://guifav.dev/blog/um-post/", "{{{RESEND_UNSUBSCRIBE_URL}}}",
+                  "Não quero ser pontuado: https://guifav.dev/prioridade/"):
             self.assertIn(s, text)
         self.assertIn("Descrição curta.", html)  # preheader
+
+    def test_priority_optout_link_sits_next_to_unsubscribe_in_html_and_text(self):
+        html, text = conv("<p>Corpo.</p>")
+        self.assertIn(
+            '<a href="{{{RESEND_UNSUBSCRIBE_URL}}}" style="color:#777;">Sair da lista</a> &middot; '
+            '<a href="https://guifav.dev/prioridade/" style="color:#777;">Não quero ser pontuado</a> &middot; '
+            '<a href="https://guifav.dev/privacidade/" style="color:#777;">Privacidade</a>',
+            html,
+        )
+        self.assertIn(
+            "Sair da lista: {{{RESEND_UNSUBSCRIBE_URL}}}\n"
+            "Não quero ser pontuado: https://guifav.dev/prioridade/\n"
+            "Privacidade: https://guifav.dev/privacidade/",
+            text,
+        )
 
     def test_no_em_dash_in_template(self):
         html, text = conv("<p>Corpo.</p>")

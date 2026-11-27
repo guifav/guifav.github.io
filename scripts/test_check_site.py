@@ -896,6 +896,7 @@ class TitleAndGroupTest(unittest.TestCase):
                        ("blog/pagina/2/index.html", "insights-lista"), ("blog/pagina/12/index.html", "insights-lista"),
                        ("blog/assinar/index.html", "expert-insights"),
                        ("privacidade/index.html", "legal"), ("termos/index.html", "legal"),
+                       ("prioridade/index.html", "legal"), ("prioridade/x/index.html", None),
                        ("privacidade/x/index.html", None), ("termos/x/index.html", None),
                        ("blog/inscricao-enviada/index.html", "expert-insights"),
                        ("blog/inscricao-confirmada/index.html", "expert-insights"),
@@ -1046,7 +1047,7 @@ class ClaritySourcesTest(unittest.TestCase):
         return (self.REPO / rel).read_text(encoding="utf-8")
 
     def test_root_pages(self):
-        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES), *sorted(C.TOOLS_PAGES), C.COURSES_PAGE, *C.LEGAL_PAGES):
+        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES), *sorted(C.TOOLS_PAGES), C.COURSES_PAGE, *C.LEGAL_PAGES, C.PRIORITY_PAGE):
             with self.subTest(rel=rel):
                 t = self.read(rel)
                 self.assertIn(C.GA4_TAG, t)
@@ -1064,6 +1065,7 @@ class ClaritySourcesTest(unittest.TestCase):
         for path in C.MATERIALS.values():
             self.assertIn('data-ga-client-id data-clarity-mask="true"', self.read(f"{path}/index.html"))
         self.assertIn('data-clarity-mask="true"', self.read("blog-src/src/components/SubscribeForm.astro"))
+        self.assertIn('data-clarity-mask="true"', self.read(C.PRIORITY_PAGE))
 
     def test_privacy_mentions_clarity(self):
         t = self.read("privacidade/index.html")
@@ -1087,7 +1089,7 @@ class NamingSourcesTest(unittest.TestCase):
              "blog-src/src/layouts/PostList.astro", "blog-src/src/components/SubscribeForm.astro",
              "blog-src/src/pages/[slug].astro", "blog-src/src/pages/assinar.astro",
              "blog-src/src/pages/inscricao-enviada.astro", "blog-src/src/pages/inscricao-confirmada.astro",
-             "blog-src/src/pages/inscricao-invalida.astro", "privacidade/index.html", "termos/index.html",
+             "blog-src/src/pages/inscricao-invalida.astro", "privacidade/index.html", "termos/index.html", "prioridade/index.html",
              "blog-src/src/pages/rss.xml.ts", "workers/newsletter/src/email.ts", "workers/admin/src/index.ts",
              "workers/admin/src/painel.ts", "workers/admin/src/layout.ts")
     ALLOWED = ("Newsletter no LinkedIn: O CTO na Mesa", "LinkedIn newsletter: O CTO na Mesa", "YouTube: IA Aplicada",
@@ -1369,6 +1371,7 @@ class GaHostGuardTest(unittest.TestCase):
                             *((p, "gtag('config','G-K7Y87QNCX8'") for p in sorted(C.TOOLS_PAGES)),
                             (C.COURSES_PAGE, "gtag('config','G-K7Y87QNCX8'"),
                             *((p, "gtag('config','G-K7Y87QNCX8'") for p in C.LEGAL_PAGES),
+                            (C.PRIORITY_PAGE, "gtag('config','G-K7Y87QNCX8'"),
                             ("blog-src/src/layouts/Base.astro", "gtag('config', GA4_ID")):
             with self.subTest(rel=rel):
                 t = (root / rel).read_text(encoding="utf-8")
@@ -1465,7 +1468,7 @@ class ConsentSourcesTest(unittest.TestCase):
     def test_consent_js_same_version_everywhere(self):
         src = re.search(r"CONSENT_SRC = '([^']+)'", self.read("blog-src/src/consts.ts")).group(1)
         self.assertRegex(src, r"^/assets/consent\.js\?v=\d{12}$")
-        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES), *sorted(C.TOOLS_PAGES), C.COURSES_PAGE, *C.LEGAL_PAGES):
+        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES), *sorted(C.TOOLS_PAGES), C.COURSES_PAGE, *C.LEGAL_PAGES, C.PRIORITY_PAGE):
             with self.subTest(rel=rel):
                 self.assertEqual(self.read(rel).count(f'<script src="{src}"></script>'), 1)
         self.assertEqual(self.read("blog-src/src/layouts/Base.astro").count(
@@ -1511,7 +1514,7 @@ class TrackingSourcesTest(unittest.TestCase):
         self.assertTrue(m)
         src = m.group(1)
         self.assertTrue(src.startswith(C.TRACK_PATH + "?v="))
-        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES), *sorted(C.TOOLS_PAGES), C.COURSES_PAGE, *C.LEGAL_PAGES):
+        for rel in ("index.html", "portfolio/index.html", C.CONSULTING_PAGE, *sorted(C.MATERIAL_PAGES), *sorted(C.TOOLS_PAGES), C.COURSES_PAGE, *C.LEGAL_PAGES, C.PRIORITY_PAGE):
             with self.subTest(rel=rel):
                 t = self.read(rel)
                 self.assertEqual(t.count(f'<script src="{src}"></script>'), 1)
@@ -1563,7 +1566,7 @@ class TrackingSourcesTest(unittest.TestCase):
                      "https://adssettings.google.com/", "https://tools.google.com/dlpage/gaoptout",
                      "https://policies.google.com/technologies/partner-sites"):
             self.assertIn(must, t)
-        self.assertIn("Atualizada em 26 de novembro de 2026.", t)  # #68: seção Cookies; 23/11: Materiais para baixar; 24/11: CRM (#97) e /privacidade/ (#146); 26/11: terceiros e hospedagem (#154) e marca da remoção (#134)
+        self.assertRegex(t, r"Atualizada em (?:\d{1,2} de [a-zç]+ de 20\d\d|\[DATA\])\.")  # #68: Cookies; 23/11: Materiais; 24/11: CRM (#97) e /privacidade/ (#146); 26/11: terceiros (#154) e remoção (#134); #197: prioridade e cursos
 
     def test_privacy_says_material_record_goes_to_the_crm(self):
         # #97 fase 2 e #134: o registro dos materiais vai ao Twenty. O download cria o contato; o pedido sem download só
@@ -1587,8 +1590,8 @@ class TrackingSourcesTest(unittest.TestCase):
                      "registrados.",
                      "que guardo com o pedido, também no CRM,",
                      '<h2 id="quem-processa">Quem processa</h2>', 'href="#quem-processa"',
-                     "o CRM onde ficam os inscritos da lista e o registro dos pedidos e downloads de materiais e das "
-                     "confirmações de inscrição"):
+                     "o CRM onde ficam os inscritos da lista, o registro dos pedidos e downloads de materiais e das "
+                     "confirmações de inscrição, as inscrições nos cursos e as notas de prioridade e de engajamento"):
             self.assertIn(must, t)
         # r1 (Kimi P1): a remoção não apaga o contato nem o resumo dele; a frase antiga prometia mais do que o código faz.
         self.assertNotIn("e também o contato, se você pedir", t)
@@ -3565,7 +3568,7 @@ class NavSourcesTest(unittest.TestCase):
                      "ferramentas/index.html", "ferramentas/llm-ranking/index.html",
                      "ferramentas/mapa-decisao-ia/index.html", "ferramentas/planilha-custos-ia/index.html",
                      C.BOOK_PAGE, f"materiais/{C.BOOK_ID}/enviado/index.html",
-                     "cursos/index.html", "privacidade/index.html", "termos/index.html",
+                     "cursos/index.html", "privacidade/index.html", "termos/index.html", "prioridade/index.html",
                      "blog-src/src/layouts/Base.astro"):
             self.assertIn(must, rels)
         for f in files:
@@ -4420,7 +4423,7 @@ class LegalSourcesTest(unittest.TestCase):
     def test_terms_not_in_forms_or_cookie_banner(self):
         self.assertNotIn("/termos/", (self.REPO / "assets/consent.js").read_text(encoding="utf-8"))
         self.assertNotIn("/termos/", (self.REPO / "blog-src/src/components/SubscribeForm.astro").read_text(encoding="utf-8"))
-        for rel in ("index.html", "ferramentas/planilha-custos-ia/index.html", "ferramentas/mapa-decisao-ia/index.html", C.BOOK_PAGE):
+        for rel in ("index.html", "ferramentas/planilha-custos-ia/index.html", "ferramentas/mapa-decisao-ia/index.html", C.BOOK_PAGE, C.PRIORITY_PAGE):
             html = (self.REPO / rel).read_text(encoding="utf-8")
             for form in re.findall(r"<form\b[^>]*>.*?</form>", html, flags=re.S | re.I):
                 self.assertNotIn("/termos/", form, rel)
@@ -4762,6 +4765,7 @@ class YoutubeFooterSourcesTest(unittest.TestCase):
         "cursos/index.html",
         "privacidade/index.html",
         "termos/index.html",
+        "prioridade/index.html",
         "ferramentas/index.html",
         "ferramentas/llm-ranking/index.html",
         "ferramentas/mapa-decisao-ia/index.html",
@@ -5362,6 +5366,211 @@ class BookTest(Base):
                 self.assertNotIn("\u2013", html)
 
 
+class PriorityTest(unittest.TestCase):
+    """#197: /prioridade/ existe com noindex, canonical próprio, título, H1, formulário com Turnstile e os 5 fragmentos, fora do sitemap."""
+
+    GA = TrackingTest.GA
+    FOOT = ('<footer><p><a href="/cursos/">Cursos</a><a href="/privacidade/">Privacidade</a>'
+            '<a href="/termos/">Termos</a><a href="/privacidade/#cookies" data-consent-open>Cookies</a></p></footer>')
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.site = Path(self.tmp.name) / "_site"
+        self.site.mkdir()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def w(self, rel: str, content: str) -> None:
+        p = self.site / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content, encoding="utf-8")
+
+    def priority_doc(self, *, title: str = C.PRIORITY_TITLE, h1: str = C.PRIORITY_H1,
+                     robots: str = ROBOTS_NOINDEX, canonical: str | None = "https://guifav.dev/prioridade/",
+                     frags: tuple[str, ...] = C.PRIORITY_FRAGMENTS,
+                     privacy_link: str = '<a href="/privacidade/#prioridade">Política de privacidade</a>',
+                     form: str | None = None) -> str:
+        c = "" if canonical is None else f'<link rel="canonical" href="{canonical}">'
+        msgs = "".join(f'<p id="{fid}" class="form-msg">{fid}</p>' for fid in frags)
+        default_form = (
+            f'<form data-site-form data-clarity-mask="true" method="post" action="{C.PRIORITY_ACTION}">'
+            '<input type="email" name="email" required>'
+            '<button type="submit">Não quero ser pontuado</button>'
+            '<div class="cf-turnstile" data-sitekey="0x4AAAAAAF8raRhCn4ciudgW"></div>'
+            "</form>"
+        )
+        return (f'<!DOCTYPE html><html lang="pt-BR"><head><title>{title}</title>{robots}{c}{self.GA}</head>'
+                f'<body><main><h1>{h1}</h1><p>{privacy_link}</p>{msgs}{default_form if form is None else form}</main>{self.FOOT}</body></html>')
+
+    def build_valid_site(self) -> None:
+        self.w(C.PRIORITY_PAGE, self.priority_doc())
+        self.w("sitemap-site.xml",
+               '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+               '<url><loc>https://guifav.dev/</loc><lastmod>2026-11-27T12:00:00-03:00</lastmod></url>'
+               "</urlset>")
+
+    def test_valid_priority_page_passes(self):
+        self.build_valid_site()
+        self.assertEqual(C.check_priority(self.site), [])
+
+    def test_missing_page_or_listed_in_sitemap_fails(self):
+        self.build_valid_site()
+        (self.site / C.PRIORITY_PAGE).unlink()
+        self.assertTrue(any(C.PRIORITY_PAGE in p and "ausente" in p for p in C.check_priority(self.site)))
+
+        self.build_valid_site()
+        self.w("sitemap-site.xml",
+               '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+               '<url><loc>https://guifav.dev/prioridade/</loc><lastmod>2026-11-27T12:00:00-03:00</lastmod></url>'
+               "</urlset>")
+        self.assertTrue(any("sitemap-site.xml" in p and "/prioridade/" in p for p in C.check_priority(self.site)))
+
+    def test_page_requirements(self):
+        for name, kw, needle in (
+            ("sem noindex", {"robots": ROBOTS_INDEX}, "noindex"),
+            ("sem canonical", {"canonical": None}, "canonical"),
+            ("canonical errado", {"canonical": "https://guifav.dev/prioridade"}, "canonical"),
+            ("título errado", {"title": "Prioridade | Guilherme Favaron"}, "o título precisa ser"),
+            ("H1 errado", {"h1": "Outro"}, "H1"),
+            ("sem link privacidade", {"privacy_link": ""}, "/privacidade/#prioridade"),
+            ("falta #pronto", {"frags": ("erro-verificacao", "erro-email", "erro-limite", "erro")}, "#pronto"),
+            ("falta #erro-limite", {"frags": ("pronto", "erro-verificacao", "erro-email", "erro")}, "#erro-limite"),
+            ("sem form", {"form": ""}, C.PRIORITY_ACTION),
+            ("sem clarity mask", {"form": f'<form method="post" action="{C.PRIORITY_ACTION}"><input type="email" name="email"><div class="cf-turnstile" data-sitekey="x"></div></form>'}, "data-clarity-mask"),
+            ("sem turnstile", {"form": f'<form data-clarity-mask="true" method="post" action="{C.PRIORITY_ACTION}"><input type="email" name="email"></form>'}, "Turnstile"),
+        ):
+            with self.subTest(case=name):
+                self.build_valid_site()
+                self.w(C.PRIORITY_PAGE, self.priority_doc(**kw))
+                got = C.check_priority(self.site)
+                self.assertTrue(any(needle in p for p in got), got)
+
+    def test_main_runs_the_priority_rule(self):
+        consts = Path(self.tmp.name) / "consts.ts"
+        consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
+        err = io.StringIO()
+        with isolate_main_rule("check_priority"), \
+                contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            code = C.main(["--site", str(self.site), "--posts", str(self.tmp.name), "--consts", str(consts)])
+        self.assertEqual(code, 1)
+        self.assertIn(C.PRIORITY_PAGE, err.getvalue())
+        self.build_valid_site()
+        with isolate_main_rule("check_priority"), \
+                contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(C.main(["--site", str(self.site), "--posts", str(self.tmp.name), "--consts", str(consts)]), 0)
+
+
+class PrioritySourcesTest(unittest.TestCase):
+    """#197: fontes reais da página /prioridade/, manifesto e novas seções da política de privacidade."""
+
+    REPO = Path(__file__).resolve().parent.parent
+
+    def test_priority_page_in_manifest_and_passes_all_checks(self):
+        manifest = [l.strip() for l in (self.REPO / "site-manifest.txt").read_text(encoding="utf-8").splitlines()
+                    if l.strip() and not l.startswith("#")]
+        self.assertIn("prioridade/", manifest)
+        html = (self.REPO / C.PRIORITY_PAGE).read_text(encoding="utf-8")
+        site_css = (self.REPO / "assets/site.css").read_text(encoding="utf-8")
+        self.assertEqual(C.check_titles_and_groups(C.PRIORITY_PAGE, html), [])
+        self.assertEqual(C.check_tracking(C.PRIORITY_PAGE, html), [])
+        self.assertEqual(C.check_ga_host_guard(C.PRIORITY_PAGE, html), [])
+        self.assertEqual(C.check_consent(C.PRIORITY_PAGE, html), [])
+        self.assertEqual(C.check_legal_footer(C.PRIORITY_PAGE, html), [])
+        self.assertEqual(C.check_courses_footer(C.PRIORITY_PAGE, html), [])
+        self.assertEqual(C.check_youtube_footer(C.PRIORITY_PAGE, html), [])
+        self.assertEqual(C.check_page_date_placeholder(C.PRIORITY_PAGE, html), [])
+        styles = re.findall(r"<style[^>]*>(.*?)</style>", html, flags=re.S | re.I)
+        self.assertEqual(C.contrast_problems([site_css, *styles]), [])
+        self.assertNotIn("\u2014", html)
+        self.assertNotIn("\u2013", html)
+        with tempfile.TemporaryDirectory() as d:
+            site = Path(d)
+            dst = site / C.PRIORITY_PAGE
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_text(html, encoding="utf-8")
+            (site / "sitemap-site.xml").write_text(
+                '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+                '<url><loc>https://guifav.dev/</loc><lastmod>2026-11-27T12:00:00-03:00</lastmod></url>'
+                "</urlset>", encoding="utf-8")
+            self.assertEqual(C.check_priority(site), [])
+
+    def test_privacy_has_priority_and_courses_sections_without_cut2_paragraph(self):
+        t = (self.REPO / "privacidade/index.html").read_text(encoding="utf-8")
+        for must in (
+            '<h2 id="prioridade">Prioridade de contato</h2>',
+            '<h2 id="cursos">Cursos</h2>',
+            'href="/prioridade/"',
+            "Google Identity Platform e Firestore",
+            "as inscrições nos cursos e as notas de prioridade e de engajamento",
+            "guifav.dev/cursos/",
+            "Aberturas de email, sozinhas, nunca deixam alguém na faixa quente.",
+            "Cada curso tem uma nota de engajamento própria, separada da prioridade de contato do site",
+        ):
+            self.assertIn(must, t)
+        self.assertNotIn("confirmar o aviso do login", t)
+        self.assertNotIn("código da sua conta, nunca o seu email", t)
+
+
+class DatePlaceholderTest(unittest.TestCase):
+    """#197: guarda de build que recusa o marcador '[DATA]' em qualquer página HTML publicada."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.site = Path(self.tmp.name) / "_site"
+        self.site.mkdir()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def w(self, rel: str, content: str) -> None:
+        p = self.site / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content, encoding="utf-8")
+
+    def doc(self, body: str) -> str:
+        return f"<!DOCTYPE html><html><head></head><body>{body}</body></html>"
+
+    def test_clean_site_passes(self):
+        self.w("index.html", self.doc('<p data-theme="dark">Atualizada em 27 de novembro de 2026.</p>'))
+        self.w("privacidade/index.html", self.doc("<p>Abertura e clique só contam a partir de 27 de novembro de 2026.</p>"))
+        self.assertEqual(C.check_date_placeholder(self.site), [])
+
+    def test_placeholder_fails_in_text_attribute_entity_and_script(self):
+        cases = {
+            "em texto": "<p>Atualizada em [DATA].</p>",
+            "em atributo": '<meta name="description" content="Desde [DATA]">',
+            "em entidade HTML": "<p>A partir de &#91;DATA&#93;.</p>",
+            "em script": "<script>const d = '[DATA]';</script>",
+        }
+        for name, body in cases.items():
+            with self.subTest(case=name):
+                got = C.check_page_date_placeholder("privacidade/index.html", self.doc(body))
+                self.assertEqual(len(got), 1, got)
+                self.assertIn(C.DATE_PLACEHOLDER, got[0])
+
+    def test_site_scan_and_main_wiring(self):
+        self.w("index.html", self.doc("<p>Home limpa.</p>"))
+        self.w("privacidade/index.html", self.doc("<p>Atualizada em [DATA].</p>"))
+        got = C.check_date_placeholder(self.site)
+        self.assertEqual(len(got), 1, got)
+        self.assertIn("privacidade/index.html", got[0])
+
+        consts = Path(self.tmp.name) / "consts.ts"
+        consts.write_text("export const PRE_CUTOVER_NOINDEX = false;\n", encoding="utf-8")
+        err = io.StringIO()
+        with isolate_main_rule("check_date_placeholder"), \
+                contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+            code = C.main(["--site", str(self.site), "--posts", str(self.tmp.name), "--consts", str(consts)])
+        self.assertEqual(code, 1)
+        self.assertIn(C.DATE_PLACEHOLDER, err.getvalue())
+
+        self.w("privacidade/index.html", self.doc("<p>Atualizada em 27 de novembro de 2026.</p>"))
+        with isolate_main_rule("check_date_placeholder"), \
+                contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(C.main(["--site", str(self.site), "--posts", str(self.tmp.name), "--consts", str(consts)]), 0)
+
+
 # Regras chamadas por C.main() e o retorno neutro usado ao isolar uma delas (#147).
 MAIN_RULES = {
     "check": lambda *a, **k: [],
@@ -5379,6 +5588,8 @@ MAIN_RULES = {
     "check_post_residues": lambda *a, **k: [],
     "check_llm_ranking": lambda *a, **k: [],
     "check_legal": lambda *a, **k: [],
+    "check_priority": lambda *a, **k: [],
+    "check_date_placeholder": lambda *a, **k: [],
     "check_llms_txt": lambda *a, **k: [],
     "check_courses": lambda *a, **k: [],
     "check_youtube": lambda *a, **k: [],
