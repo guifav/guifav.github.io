@@ -65,7 +65,9 @@ Twenty, --forget --apply grava um marcador mínimo na tabela `forgotten` do D1 (
 assinados emitidos antes (ou no instante) da remoção. As linhas do email no D1 continuam sendo o diário da remoção:
 apaga no Twenty (de vez, inclusive as que estão na lixeira) as Conversões cujos eventoId são os ids dessas linhas, relê
 o Twenty com a lixeira para provar que nenhuma sobrou, limpa os quatro campos `heating*` (heatingNota, heatingFaixa,
-heatingSinais e heatingCalculadoEm) da Pessoa ativa (a nota não fica no resumo que sobra na Pessoa; épico #197) e só
+heatingSinais e heatingCalculadoEm) da Pessoa ativa — tanto as achadas pelo email quanto as referenciadas pelos
+`twenty_person_id` salvos nas linhas de `conversions` e de `heating` (contexto `site`) do email antes de apagá-las
+(a nota não fica no resumo que sobra na Pessoa mesmo se o email mudou no CRM; épico #197) — e só
 então apaga as linhas no D1 em `conversions` (levando junto `twenty_person_id` e a origem), `engagement_events` e
 `heating` no contexto `site` (não toca nos contextos de curso `curso:<slug>`). Uma queda no meio (mesmo na leitura do
 Twenty ou na limpeza dos campos heating da Pessoa) deixa o marcador gravado e o D1 intacto, e repetir o comando conclui,
@@ -193,6 +195,11 @@ LOCK_DEFAULT = "/tmp/guifav-conversoes-sync.lock"
 
 def _full(rx: re.Pattern, v) -> bool:
     return isinstance(v, str) and rx.fullmatch(v) is not None
+
+
+def _filled(v) -> bool:
+    """Trata None e '' como vazios, preservando 0 (ex.: nota 0 de email_spam) e False."""
+    return v is not None and v != ""
 
 
 def valid_email(v) -> bool:
@@ -635,20 +642,35 @@ def forget(c: TS.Clients, email: str, *, apply: bool = False, out=None, forget_k
         # 1) Marcador mínimo no D1 logo após validar chave e email, antes de qualquer leitura do D1 ou do Twenty (#134):
         #    mesmo que a leitura do Twenty falhe em seguida, links antigos já ficam bloqueados.
         _upsert_forget_mark(c, email_hmac)
-    # As linhas do D1 são o diário: enquanto existirem, os ids delas acham as Conversões no Twenty, qualquer que seja o
-    # email atual da Pessoa no CRM.
-    ids = {r["id"] for r in c.d1("SELECT id FROM conversions WHERE email = ?", [email])}
+    # As linhas do D1 são o diário: enquanto existirem, os ids delas acham as Conversões no Twenty e os
+    # `twenty_person_id` de `conversions` e `heating` (contexto `site`) acham a Pessoa ativa mesmo se o email mudou.
+    conv_rows = c.d1("SELECT id, twenty_person_id FROM conversions WHERE email = ?", [email])
+    ids = {r["id"] for r in conv_rows}
     site_events = int(c.d1("SELECT count(*) AS n FROM engagement_events WHERE context = 'site' AND email = ?", [email])[0]["n"])
-    site_heating = int(c.d1("SELECT count(*) AS n FROM heating WHERE context = 'site' AND email = ?", [email])[0]["n"])
+    heating_rows = c.d1("SELECT twenty_person_id FROM heating WHERE context = 'site' AND email = ?", [email])
+    site_heating = len(heating_rows)
+    ref_pids = {
+        r["twenty_person_id"]
+        for r in (*conv_rows, *heating_rows)
+        if _full(TWENTY_PERSON_ID, r.get("twenty_person_id"))
+    }
     expired_marks = _count_expired_marks(c, exclude_hmac=email_hmac)
     if apply and expired_marks:
         # Limpeza dos marcadores vencidos independe do Twenty (#134).
         _prune_expired_marks(c)
     meta = read_metadata(c)
-    persons = people_by_email(list_records(c, "people")).get(email) or []
+    all_people = list_records(c, "people")
+    persons = people_by_email(all_people).get(email) or []
+    active_by_id = {p["id"]: p for p in all_people if not p.get("deletedAt")}
+    heating_persons = list(persons)
+    seen_pids = {p["id"] for p in heating_persons}
+    for pid in sorted(ref_pids):
+        if pid not in seen_pids and pid in active_by_id:
+            seen_pids.add(pid)
+            heating_persons.append(active_by_id[pid])
     convs = [x for x in list_records(c, PLURAL) if x.get("eventoId") in ids] if meta["conv_id"] else []
     heating_fields = [k for k in HEATING_PERSON_FIELDS if k in meta["person"]]
-    to_clear = [p for p in persons if any(p.get(k) is not None for k in heating_fields)]
+    to_clear = [p for p in heating_persons if any(_filled(p.get(k)) for k in heating_fields)]
     counts["d1_linhas"], counts["conversoes_no_crm"], counts["pessoas_mantidas"] = len(ids), len(convs), len(persons)
     counts["eventos_site"], counts["heating_site"], counts["pessoas_heating_limpas"] = site_events, site_heating, len(to_clear)
     counts["marcadores_vencidos"] = expired_marks

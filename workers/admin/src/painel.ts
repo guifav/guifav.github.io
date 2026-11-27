@@ -324,6 +324,7 @@ type ContatoRow = {
 
 export const HEATING_BANDS = ['quente', 'morno', 'frio'] as const;
 
+// Manter alinhado com CURSOS em blog-src/scripts/heating_sync.py (e HEATING_CURSOS no Worker blog-newsletter).
 export const HEATING_CURSO_LABELS: Record<string, string> = {
   'chatgpt-no-dia-a-dia': 'ChatGPT no dia a dia',
 };

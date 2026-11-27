@@ -1601,6 +1601,63 @@ class TwentyPersonIdTest(unittest.TestCase):
         self.assertEqual(p1["siteInteresses"], ["CUSTO_IA"])
         self.assertIs(p1["siteEmailComprovado"], True)
 
+    def test_forget_clears_heating_by_twenty_person_id_when_email_changed_and_treats_empty_string_as_empty(self):
+        # Codex P2 + agy P2: --forget limpa heating* nas Pessoas ativas referenciadas por twenty_person_id em
+        # conversions e heating (site), mesmo quando o email da Pessoa mudou no Twenty; trata '' como vazio e 0 como preenchido.
+        f = Fake(people=[
+            person(
+                "p1", "novo1@x.com",
+                heatingNota=30, heatingFaixa="MORNO", heatingSinais="Download de material",
+                heatingCalculadoEm="2026-11-27T10:00:00.000Z",
+            ),
+            person(
+                "p2", "novo2@x.com",
+                heatingNota=0, heatingFaixa="FRIO", heatingSinais="Reclamou de spam: não abordar",
+                heatingCalculadoEm="2026-11-27T10:00:00.000Z",
+            ),
+            person(
+                "p-lixo", "novo3@x.com", deletedAt="2026-11-20T00:00:00.000Z",
+                heatingNota=10, heatingFaixa="FRIO", heatingSinais="x",
+                heatingCalculadoEm="2026-11-27T10:00:00.000Z",
+            ),
+            person(
+                "p-vazio", "vazio@x.com",
+                heatingNota=None, heatingFaixa="", heatingSinais="", heatingCalculadoEm=None,
+            ),
+        ], schema=True)
+        for k, t in (("heatingNota", "NUMBER"), ("heatingFaixa", "SELECT"), ("heatingSinais", "TEXT"), ("heatingCalculadoEm", "DATE_TIME")):
+            f.person_fields[k] = {"id": f"pf-{k}", "name": k, "type": t, "options": None}
+        # conversions referencia p1 e p-lixo; heating (site) referencia p2.
+        f.add(1, "a@x.com", synced="2026-11-26T10:00:00.000Z", twenty_person_id="p1")
+        f.add(2, "a@x.com", synced="2026-11-26T11:00:00.000Z", twenty_person_id="p-lixo")
+        f.db.execute(
+            "INSERT INTO heating (context, email, score, band, signals, computed_at, twenty_person_id) VALUES "
+            "('site', 'a@x.com', 0, 'frio', '[]', '2026-11-27T10:00:00.000Z', 'p2'),"
+            "('curso:chatgpt-no-dia-a-dia', 'a@x.com', 20, 'morno', '[]', '2026-11-27T10:00:00.000Z', 'p-curso')"
+        )
+        f.db.commit()
+
+        # Simulação conta as 2 Pessoas ativas (p1 e p2), sem contar p-lixo.
+        counts_dry, _ = forget(f, "a@x.com", apply=False)
+        self.assertEqual(counts_dry["pessoas_heating_limpas"], 2)
+        self.assertEqual(f.people["p1"]["heatingNota"], 30)
+        self.assertEqual(f.people["p2"]["heatingNota"], 0)
+
+        # --apply limpa p1 e p2 (inclusive nota 0) e não toca em p-lixo.
+        counts, _ = forget(f, "a@x.com", apply=True)
+        self.assertEqual(counts["pessoas_heating_limpas"], 2)
+        for pid in ("p1", "p2"):
+            for k in S.HEATING_PERSON_FIELDS:
+                self.assertIsNone(f.people[pid][k], (pid, k))
+        self.assertEqual(f.people["p-lixo"]["heatingNota"], 10)
+        self.assertEqual([c for c in f.twenty_writes() if c[1] == "/rest/people/p-lixo"], [])
+
+        # Pessoa com campos '' e None não gera PATCH em --forget.
+        n_before = len(f.twenty_writes())
+        counts_v, _ = forget(f, "vazio@x.com", apply=True)
+        self.assertEqual(counts_v["pessoas_heating_limpas"], 0)
+        self.assertEqual(len(f.twenty_writes()), n_before)
+
 
 if __name__ == "__main__":
     unittest.main()

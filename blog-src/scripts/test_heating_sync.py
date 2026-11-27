@@ -180,7 +180,7 @@ class Fake:
                         assert len(params) <= 100, f"limite de 100 parâmetros excedido: {len(params)}"
                         cur = self.db.execute(item["sql"], params)
                         rows = [dict(r) for r in cur.fetchall()] if cur.description else []
-                        results.append({"results": rows})
+                        results.append({"results": rows, "success": True})
                     self.db.commit()
                 except Exception:
                     self.db.rollback()
@@ -193,7 +193,7 @@ class Fake:
             cur = self.db.execute(data["sql"], params)
             rows = [dict(r) for r in cur.fetchall()] if cur.description else []
             self.db.commit()
-            return 200, {"success": True, "result": [{"results": rows}]}
+            return 200, {"success": True, "result": [{"results": rows, "success": True}]}
         assert headers["Authorization"] == "Bearer tw" and u.netloc == "127.0.0.1:3100"
         st, res = self._twenty(method, u, data)
         return st, json.loads(json.dumps(res))
@@ -298,6 +298,8 @@ class Fake:
             eid = urllib.parse.unquote(u.path.rsplit("/", 1)[1])
             for k in data:
                 assert k in self.enroll_fields or (k == "pessoaId" and "pessoa" in self.enroll_fields), f"campo inexistente {k}"
+            if "pessoaId" in data and data["pessoaId"] == "":
+                return 400, {"messages": ["invalid input syntax for type uuid: \"\""]}
             self.enrolls[eid].update(data)
             return 200, {"data": {}}
 
@@ -500,23 +502,95 @@ class ReguaTest(unittest.TestCase):
         # Com HEATING_EMAIL_DESDE há 5 dias: só o clique (há 2 dias) conta -> 4 * 0.5**(2/30) = 3.82 -> 4.
         r = H.calcular_heating_contexto("site", evs, NOW, email_desde=ago(days=5))
         self.assertEqual((r["score"], [s["sinal"] for s in r["signals_list"]]), (4, ["email_clicado"]))
+        # Exatamente igual a HEATING_EMAIL_DESDE entra; 1 ms antes fica de fora.
+        exato = ago(days=5)
+        antes_1ms = CS.stamp(NOW - timedelta(days=5, milliseconds=1))
+        ev_eq = {**self._ev("eq", "email_clicado", days=5, ref="m-eq"), "occurred_at": exato}
+        ev_lt = {**self._ev("lt", "email_clicado", days=5, ref="m-lt"), "occurred_at": antes_1ms}
+        r_eq = H.calcular_heating_contexto("site", [ev_eq], NOW, email_desde=exato)
+        self.assertIsNotNone(r_eq)
+        self.assertEqual([s["sinal"] for s in r_eq["signals_list"]], ["email_clicado"])
+        self.assertIsNone(H.calcular_heating_contexto("site", [ev_lt], NOW, email_desde=exato))
         # Descadastrado: perde sinais de email, mas mantém outros sinais.
         evs2 = evs + [self._ev("d1", "material_baixado", days=0, ref="planilha")]
         r_unsub = H.calcular_heating_contexto("site", evs2, NOW, email_desde=ago(days=30), email_bloqueado=True)
         self.assertEqual((r_unsub["score"], [s["sinal"] for s in r_unsub["signals_list"]]), (12, ["material_baixado"]))
 
-    def test_spam_365_dias_faixas_e_top_3(self):
-        # Spam de 300 dias atrás (> 180d, <= 365d) zera mesmo com Agende hoje.
-        evs = [
-            self._ev("sp", "email_spam", days=300, ref="m0"),
-            self._ev("ag", "site_agende", days=0, ref=None),
-        ]
-        r = H.calcular_heating_contexto("site", evs, NOW)
-        self.assertEqual(r["score"], 0)
-        self.assertEqual(r["band"], "frio")
-        self.assertEqual(r["signals"], '[{"sinal":"email_spam","rotulo":"Reclamou de spam: não abordar","pontos":0}]')
+    def test_calcular_heating_contexto_usa_datetime_e_dia_utc(self):
+        # 1) email_desde sem milissegundos ('...Z') vs occurred_at com milissegundos ('...000Z'):
+        #    como texto, '.' < 'Z' falharia; por datetime, são iguais e o evento conta.
+        ev_ms = {**self._ev("c1", "email_clicado", ref="m1"), "occurred_at": "2026-11-27T12:00:00.000Z"}
+        r = H.calcular_heating_contexto("site", [ev_ms], NOW, email_desde="2026-11-27T12:00:00Z")
+        self.assertIsNotNone(r)
+        self.assertEqual(r["score"], 4)
 
-        # Faixas: 14 frio, 15 morno, 39 morno, 40 quente; top 3 sinais em JSON compacto.
+        # 2) Dia UTC por _dt (não por slice [:10]): 2026-11-26T22:00:00-03:00 == 2026-11-27T01:00:00Z,
+        #    mesmo dia UTC que 2026-11-27T02:00:00.000Z -> teto de 1 email_aberto/dia UTC mantém só 1 (1 pt, não 2).
+        evs_tz = [
+            {**self._ev("o1", "email_aberto", ref="m1"), "occurred_at": "2026-11-26T22:00:00-03:00"},
+            {**self._ev("o2", "email_aberto", ref="m2"), "occurred_at": "2026-11-27T02:00:00.000Z"},
+        ]
+        r_tz = H.calcular_heating_contexto("site", evs_tz, NOW, email_desde="2026-11-01T00:00:00Z")
+        self.assertEqual(r_tz["score"], 1)
+
+        # 3) Ordenação por _dt (não por texto): 2026-11-26T23:00:00-03:00 (2026-11-27T02:00Z) é MAIS recente
+        #    que 2026-11-27T01:00:00Z; em newsletter_confirmada (só a mais recente conta), vence a de 02:00Z.
+        now_t = datetime(2026, 11, 27, 2, 0, 0, tzinfo=timezone.utc)
+        evs_ord = [
+            {**self._ev("n-old", "newsletter_confirmada", ref=None), "occurred_at": "2026-11-01T01:00:00Z"},
+            {**self._ev("n-new", "newsletter_confirmada", ref=None), "occurred_at": "2026-11-26T23:00:00-03:00"},
+        ]
+        r_ord = H.calcular_heating_contexto("site", evs_ord, now_t)
+        self.assertEqual(r_ord["score"], 10)
+
+    def test_spam_365_dias_faixas_e_top_3(self):
+        # Spam de 300 dias e exatamente 365 dias atrás (> 180d, <= 365d) zera mesmo com Agende hoje.
+        for sp_days in (300, 365):
+            evs = [
+                self._ev("sp", "email_spam", days=sp_days, ref="m0"),
+                self._ev("ag", "site_agende", days=0, ref=None),
+            ]
+            r = H.calcular_heating_contexto("site", evs, NOW)
+            self.assertEqual(r["score"], 0)
+            self.assertEqual(r["band"], "frio")
+            self.assertEqual(r["signals"], '[{"sinal":"email_spam","rotulo":"Reclamou de spam: não abordar","pontos":0}]')
+
+        # Spam com mais de 365 dias (> 365d) NÃO zera a nota.
+        evs_old_spam = [
+            self._ev("sp-old", "email_spam", days=365, seconds=1, ref="m0"),
+            self._ev("dl", "material_baixado", days=0, ref="m1"),
+        ]
+        r_old = H.calcular_heating_contexto("site", evs_old_spam, NOW)
+        self.assertEqual((r_old["score"], r_old["band"]), (12, "frio"))
+
+        # Fronteiras exatas das faixas: 14 frio, 15 morno, 39 morno, 40 quente.
+        r14 = H.calcular_heating_contexto("site", [
+            self._ev("m1", "material_baixado", days=0, ref="a"),  # 12
+            self._ev("p1", "material_pedido", days=0, ref="b"),   # 2 -> 14
+        ], NOW)
+        self.assertEqual((r14["score"], r14["band"]), (14, "frio"))
+        r15 = H.calcular_heating_contexto("site", [
+            self._ev("m1", "material_baixado", days=0, ref="a"),  # 12
+            self._ev("g1", "site_engajada", days=0, ref=None),    # 3 -> 15
+        ], NOW)
+        self.assertEqual((r15["score"], r15["band"]), (15, "morno"))
+        r39 = H.calcular_heating_contexto("site", [
+            self._ev("m1", "material_baixado", days=0, ref="a"),  # 12
+            self._ev("m2", "material_baixado", days=0, ref="b"),  # 12
+            self._ev("m3", "material_baixado", days=0, ref="c"),  # 12
+            self._ev("g1", "site_engajada", days=0, ref=None),    # 3 -> 39
+        ], NOW)
+        self.assertEqual((r39["score"], r39["band"]), (39, "morno"))
+        r40 = H.calcular_heating_contexto("site", [
+            self._ev("m1", "material_baixado", days=0, ref="a"),  # 12
+            self._ev("m2", "material_baixado", days=0, ref="b"),  # 12
+            self._ev("m3", "material_baixado", days=0, ref="c"),  # 12
+            self._ev("p1", "material_pedido", days=0, ref="d"),   # 2
+            self._ev("p2", "material_pedido", days=0, ref="e"),   # 2 -> 40
+        ], NOW)
+        self.assertEqual((r40["score"], r40["band"]), (40, "quente"))
+
+        # Top 3 sinais em JSON compacto.
         evs_top = [
             self._ev("a1", "site_agende", days=0),       # 50
             self._ev("m1", "material_baixado", days=0, ref="mat1"),  # 12
@@ -612,11 +686,12 @@ class HeatingSyncTest(unittest.TestCase):
         self.assertEqual(counts["sem_pessoa"], 1)           # sempessoa
         self.assertLessEqual(f.max_params, 100)
 
-        # Ana: nota site = 62 (não contaminada pelo curso!), nome original preservado.
+        # Ana: nota site = 62 (não contaminada pelo curso!), nome original preservado; sinais no Twenty sem pontos.
         p_ana = f.people["p1"]
         self.assertEqual(p_ana["name"], {"firstName": "Nome", "lastName": "Original"})
         self.assertEqual((p_ana["heatingNota"], p_ana["heatingFaixa"]), (62, "QUENTE"))
-        self.assertIn("Download de material (12,0)", p_ana["heatingSinais"])
+        self.assertEqual(p_ana["heatingSinais"], "Clique em Agende; Download de material")
+        self.assertIn('"pontos":12.0', f.heating_rows()[("site", "ana@corp.com")]["signals"])
 
         # Bia: criada com firstName/lastName divididos, sem nota site na Person.
         p_bia = next(p for p in f.people.values() if p["emails"]["primaryEmail"] == "bia@corp.com")
@@ -633,11 +708,11 @@ class HeatingSyncTest(unittest.TestCase):
         self.assertEqual(hrows[(CTX_CURSO, "bia@corp.com")]["twenty_person_id"], p_bia["id"])
         self.assertEqual(hrows[(CTX_CURSO, "bounce@corp.com")]["twenty_person_id"], None)
 
-        # Inscrição da Bia no Twenty.
+        # Inscrição da Bia no Twenty (sinais sem pontos).
         enr_bia = next(e for e in f.enrolls.values() if e["pessoaId"] == p_bia["id"])
         self.assertEqual(
-            (enr_bia["curso"], enr_bia["status"], enr_bia["aulasConcluidas"], enr_bia["nota"], enr_bia["faixa"]),
-            ("CHATGPT_NO_DIA_A_DIA", "ATIVO", 1, 15, "MORNO"),
+            (enr_bia["curso"], enr_bia["status"], enr_bia["aulasConcluidas"], enr_bia["nota"], enr_bia["faixa"], enr_bia["sinais"]),
+            ("CHATGPT_NO_DIA_A_DIA", "ATIVO", 1, 15, "MORNO", "Cadastro no curso; Aula concluída no curso"),
         )
 
         # 3) Idempotência: segunda rodada sem mudança (mesmo T) não grava nada nem no D1 nem no Twenty!
@@ -786,6 +861,8 @@ class HeatingSyncTest(unittest.TestCase):
         self.assertEqual(counts["pessoa_na_lixeira"], 1)
         self.assertEqual(counts["pessoas_criadas"], 0)
         self.assertEqual(counts["inscricoes_criadas"], 0)
+        self.assertEqual(counts["inscricoes_atualizadas"], 0)
+        self.assertEqual([c for c in f.twenty_writes() if c[1] == "/rest/courseEnrollments/e-lixo"], [])
         self.assertEqual(len(f.people), 2)
         self.assertEqual(len(f.enrolls), 1)
         self.assertIsNone(f.heating_rows()[("site", "lixo@corp.com")]["twenty_person_id"])
@@ -859,6 +936,9 @@ class HeatingSyncTest(unittest.TestCase):
     def test_forget_curso_impede_rematerializacao_e_preserva_site(self):
         f = Fake(people=[person("p1", "aluna@corp.com")], schema=True)
         f.add_conv(1, "aluna@corp.com", action="material_download", material="planilha-custos-ia", when=ago(days=0))
+        # Evento de site vindo do webhook (não regenerado a partir de conversions) e evento de outro curso: devem sobreviver.
+        f.add_event("wh-site-aluna", "aluna@corp.com", "email_clicado", context="site", source="resend", ref="em-1", when=ago(days=0))
+        f.add_event("cu-outro-aluna", "aluna@corp.com", "curso_cadastro", context="curso:outro-curso", source="curso", ref=None, when=ago(days=0))
         docs = [{
             "email": "aluna@corp.com",
             "status": "active",
@@ -894,12 +974,19 @@ class HeatingSyncTest(unittest.TestCase):
         self.assertIn(("site", "aluna@corp.com"), f.heating_rows())
         self.assertNotIn((CTX_CURSO, "aluna@corp.com"), f.heating_rows())
         self.assertEqual(f.db.execute("SELECT count(*) FROM curso_esquecido").fetchone()[0], 1)
+        # Eventos de outros contextos (site do webhook e outro curso) continuam em engagement_events; os do curso saíram.
+        rem_events = {r["id"]: r["context"] for r in f.db.execute("SELECT id, context FROM engagement_events")}
+        self.assertIn("wh-site-aluna", rem_events)
+        self.assertIn("cu-outro-aluna", rem_events)
+        self.assertNotIn(CTX_CURSO, rem_events.values())
 
-        # Próxima rodada do job com os mesmos dados ainda no Firestore NÃO rematerializa o curso!
+        # Próxima rodada do job com os mesmos dados ainda no Firestore NÃO rematerializa o curso esquecido
+        # (a única nota de curso que permanece é a de `curso:outro-curso`).
         counts_next, _ = run_job(f, apply=True, ler_curso=lambda _s: docs)
-        self.assertEqual((counts_next["eventos_curso_novos"], counts_next["inscricoes_criadas"], counts_next["notas_curso"]), (0, 0, 0))
+        self.assertEqual((counts_next["eventos_curso_novos"], counts_next["inscricoes_criadas"], counts_next["notas_curso"]), (0, 0, 1))
         self.assertEqual(f.enrolls, {})
         self.assertNotIn((CTX_CURSO, "aluna@corp.com"), f.heating_rows())
+        self.assertIn(("curso:outro-curso", "aluna@corp.com"), f.heating_rows())
         self.assertIn(("site", "aluna@corp.com"), f.heating_rows())
 
     def test_forget_curso_com_sobra_no_twenty_mantem_d1_intacto(self):
@@ -912,6 +999,501 @@ class HeatingSyncTest(unittest.TestCase):
             H.forget_curso(TS.Clients(ENV, f, sleep=lambda s: None), SLUG, "aluna@corp.com", apply=True, forget_key=FORGET_KEY)
         self.assertEqual(f.event_ids(), ["cu-1"])
         self.assertEqual(f.db.execute("SELECT count(*) FROM curso_esquecido").fetchone()[0], 1)
+
+    def test_oposicao_concorrente_durante_a_rodada_condicional_e_releitura(self):
+        # Codex P1: (A) INSERT condicional em engagement_events e heating não grava quem recebeu marca no meio;
+        # (B) releitura de heating_optout no fim da rodada limpa D1 e Twenty (Pessoa e Inscrições, existentes e criadas).
+        class ConcurrentOptoutFake(Fake):
+            def __init__(self, *args, **kwargs):
+                self.injected_ev = False
+                self.injected_ht = False
+                self.injected_late = False
+                self.ev_after_insert = None
+                self.ht_after_batch = None
+                super().__init__(*args, **kwargs)
+
+            def __call__(self, method, url, headers, body):
+                data = json.loads(body) if body else None
+                u = urllib.parse.urlparse(url)
+                if u.netloc == "api.cloudflare.com" and isinstance(data, dict):
+                    sql = data.get("sql", "")
+                    if not self.injected_ev and sql.startswith("INSERT INTO engagement_events"):
+                        self.injected_ev = True
+                        # Simula POST /prioridade gravando heating_optout logo antes do INSERT de eventos.
+                        self.add_optout("corr-ev@corp.com")
+                        res = super().__call__(method, url, headers, body)
+                        self.ev_after_insert = [
+                            r[0] for r in self.db.execute("SELECT email FROM engagement_events WHERE email = 'corr-ev@corp.com'")
+                        ]
+                        return res
+                    if not self.injected_ht and "batch" in data and data["batch"][0]["sql"] == "DELETE FROM heating":
+                        self.injected_ht = True
+                        # Simula POST /prioridade gravando heating_optout logo antes do batch de heating.
+                        self.add_optout("corr-ht@corp.com")
+                        res = super().__call__(method, url, headers, body)
+                        self.ht_after_batch = [
+                            r[0] for r in self.db.execute("SELECT email FROM heating WHERE email = 'corr-ht@corp.com'")
+                        ]
+                        # E simula outro email (com Pessoa + Inscrição criadas nesta rodada) fazendo oposição
+                        # imediatamente após a troca de heating, antes da releitura final.
+                        self.add_optout("late-new@corp.com")
+                        self.injected_late = True
+                        return res
+                return super().__call__(method, url, headers, body)
+
+        f = ConcurrentOptoutFake(
+            people=[
+                person("p-ev", "corr-ev@corp.com"),
+                person("p-ht", "corr-ht@corp.com"),
+                person("p-ok", "ok@corp.com"),
+            ],
+            schema=True,
+        )
+        f.enrolls["e-ev"] = {
+            "id": "e-ev",
+            "inscricaoId": H.inscricao_id(SLUG, "corr-ev@corp.com"),
+            "curso": "CHATGPT_NO_DIA_A_DIA",
+            "status": "ATIVO",
+            "entrada": ago(days=2),
+            "aulasConcluidas": 0,
+            "ultimaAula": None,
+            "nota": None,
+            "faixa": None,
+            "sinais": None,
+            "calculadoEm": None,
+            "pessoaId": "p-ev",
+        }
+        f.add_conv(1, "corr-ev@corp.com", action="material_download", material="planilha-custos-ia", when=ago(days=0))
+        f.add_conv(2, "corr-ht@corp.com", action="material_download", material="planilha-custos-ia", when=ago(days=0))
+        f.add_conv(3, "late-new@corp.com", action="material_download", material="planilha-custos-ia", when=ago(days=0))
+        f.add_conv(4, "ok@corp.com", action="material_download", material="planilha-custos-ia", when=ago(days=0))
+        docs = [
+            {"email": "corr-ev@corp.com", "status": "active", "googleUid": "u1", "name": "Ev", "createdAt": ago(days=2), "aulas": []},
+            {"email": "corr-ht@corp.com", "status": "active", "googleUid": "u2", "name": "Ht", "createdAt": ago(days=2), "aulas": []},
+            {"email": "late-new@corp.com", "status": "active", "googleUid": "u3", "name": "Late New", "createdAt": ago(days=0), "aulas": []},
+        ]
+
+        counts, _ = run_job(f, apply=True, ler_curso=lambda _s: docs)
+        self.assertTrue(f.injected_ev and f.injected_ht and f.injected_late)
+        # (A) O próprio SQL condicional impediu a inserção em engagement_events e heating antes mesmo da releitura!
+        self.assertEqual(f.ev_after_insert, [])
+        self.assertEqual(f.ht_after_batch, [])
+        # (B) Ao final da rodada, D1 e Twenty (Pessoa e Inscrições) dos 3 emails estão limpos; ok@corp.com intacto.
+        self.assertEqual(counts["oposicao_aplicada"], 3)
+        for em in ("corr-ev@corp.com", "corr-ht@corp.com", "late-new@corp.com"):
+            self.assertEqual(f.db.execute("SELECT count(*) FROM engagement_events WHERE email = ?", (em,)).fetchone()[0], 0, em)
+            self.assertEqual(f.db.execute("SELECT count(*) FROM heating WHERE email = ?", (em,)).fetchone()[0], 0, em)
+        for pid in ("p-ev", "p-ht"):
+            for k in H.PERSON_HEATING_FIELDS:
+                self.assertIsNone(f.people[pid][k], (pid, k))
+        p_late = next(p for p in f.people.values() if p["emails"]["primaryEmail"] == "late-new@corp.com")
+        for k in H.PERSON_HEATING_FIELDS:
+            self.assertIsNone(p_late[k], k)
+        for enr in f.enrolls.values():
+            if enr["pessoaId"] in ("p-ev", "p-ht", p_late["id"]):
+                for k in ("nota", "faixa", "sinais", "calculadoEm"):
+                    self.assertIsNone(enr[k], (enr["id"], k))
+        # Contato sem oposição preservado.
+        self.assertEqual(f.people["p-ok"]["heatingNota"], 12)
+        self.assertEqual(f.heating_rows()[("site", "ok@corp.com")]["score"], 12)
+
+    def test_d1_batch_valida_resposta_e_erros_por_item(self):
+        # agy P1: d1_batch rejeita data não-dict, success falso no envelope, result não-lista,
+        # tamanho divergente das instruções, item não-dict, item com success=False e results inválido.
+        stmts = [("SELECT 1", None), ("SELECT 2", None), ("SELECT 3", None)]
+        casos = [
+            (200, []),
+            (200, None),
+            (200, {"success": False, "result": [], "errors": [{"message": "segredo@corp.com"}]}),
+            (200, {"success": True, "result": "nao-lista"}),
+            (200, {"success": True, "result": [{"results": [], "success": True}, {"results": [], "success": True}]}),
+            (200, {"success": True, "result": [{"results": [], "success": True}, {"results": [], "success": False, "error": "segredo@corp.com"}, {"results": [], "success": True}]}),
+            (200, {"success": True, "result": [{"results": [], "success": True}, "ruim", {"results": [], "success": True}]}),
+            (200, {"success": True, "result": [{"results": [], "success": True}, {"results": "ruim", "success": True}, {"results": [], "success": True}]}),
+        ]
+        for st, payload in casos:
+            c = TS.Clients(ENV, lambda _m, _u, _h, _b, _s=st, _p=payload: (_s, _p), sleep=lambda s: None)
+            with self.assertRaises(H.SyncError) as ctx:
+                H.d1_batch(c, stmts)
+            self.assertNotIn("segredo", str(ctx.exception).lower())
+
+        # Caso válido: 3 itens com success=True.
+        ok_payload = {"success": True, "result": [{"results": [{"a": 1}], "success": True}, {"results": None, "success": True}, {"results": [], "success": True}]}
+        c_ok = TS.Clients(ENV, lambda _m, _u, _h, _b: (200, ok_payload), sleep=lambda s: None)
+        self.assertEqual(H.d1_batch(c_ok, stmts), [[{"a": 1}], [], []])
+
+    def test_inscricao_orfa_e_email_trocado_religa_a_pessoa_criada(self):
+        # agy P1: Inscrição existente sem Pessoa ativa (pessoaId=None ou de Pessoa cujo email mudou) quando a Pessoa
+        # é criada nesta rodada liga a Inscrição ao novo id retornado e nunca envia pessoaId="".
+        f = Fake(people=[person("p-trocada", "outro@corp.com")], schema=True)
+        f.enrolls["e-orphan"] = {
+            "id": "e-orphan",
+            "inscricaoId": H.inscricao_id(SLUG, "orfa@corp.com"),
+            "curso": "CHATGPT_NO_DIA_A_DIA",
+            "status": "ATIVO",
+            "entrada": ago(days=5),
+            "aulasConcluidas": 0,
+            "ultimaAula": None,
+            "nota": 9,
+            "faixa": "FRIO",
+            "sinais": "Cadastro no curso",
+            "calculadoEm": ago(days=5),
+            "pessoaId": None,
+        }
+        f.enrolls["e-moved"] = {
+            "id": "e-moved",
+            "inscricaoId": H.inscricao_id(SLUG, "mudou@corp.com"),
+            "curso": "CHATGPT_NO_DIA_A_DIA",
+            "status": "ATIVO",
+            "entrada": ago(days=5),
+            "aulasConcluidas": 0,
+            "ultimaAula": None,
+            "nota": 9,
+            "faixa": "FRIO",
+            "sinais": "Cadastro no curso",
+            "calculadoEm": ago(days=5),
+            "pessoaId": "p-trocada",
+        }
+        docs = [
+            {"email": "orfa@corp.com", "status": "active", "googleUid": "u-o", "name": "Orfa", "createdAt": ago(days=5), "aulas": []},
+            {"email": "mudou@corp.com", "status": "active", "googleUid": "u-m", "name": "Mudou", "createdAt": ago(days=5), "aulas": []},
+        ]
+        # Simulação conta 2 criações de Pessoa e 2 atualizações de Inscrição sem escrever nada.
+        c_dry, _ = run_job(f, apply=False, ler_curso=lambda _s: docs)
+        self.assertEqual((c_dry["pessoas_criadas"], c_dry["inscricoes_atualizadas"]), (2, 2))
+        self.assertEqual(f.twenty_writes(), [])
+
+        # --apply cria as Pessoas e religa as duas Inscrições aos novos ids (nunca pessoaId="").
+        c_app, _ = run_job(f, apply=True, ler_curso=lambda _s: docs)
+        self.assertEqual((c_app["pessoas_criadas"], c_app["inscricoes_atualizadas"]), (2, 2))
+        p_orfa = next(p for p in f.people.values() if p["emails"]["primaryEmail"] == "orfa@corp.com")
+        p_mudou = next(p for p in f.people.values() if p["emails"]["primaryEmail"] == "mudou@corp.com")
+        self.assertEqual(f.enrolls["e-orphan"]["pessoaId"], p_orfa["id"])
+        self.assertEqual(f.enrolls["e-moved"]["pessoaId"], p_mudou["id"])
+        for m, path, data, _ in f.calls:
+            if m == "PATCH" and path.startswith("/rest/courseEnrollments/"):
+                self.assertNotEqual(data.get("pessoaId"), "")
+
+    def test_patch_diario_sinais_sem_pontos_e_sem_patch_no_dia_seguinte(self):
+        # Claude P2: mesmo evento em dois dias seguidos com mesma nota -> nenhum PATCH no Twenty no 2º dia,
+        # heatingSinais/sinais têm só rótulos sem pontos (pontos ficam no D1), e calculadoEm só muda quando
+        # nota/faixa/rótulos mudam.
+        day1 = datetime(2026, 11, 27, 12, 0, 0, tzinfo=timezone.utc)
+        day2 = datetime(2026, 11, 28, 12, 0, 0, tzinfo=timezone.utc)
+        ev_when = "2026-11-01T12:00:00.000Z"
+        f = Fake(people=[person("p1", "ana@corp.com")], schema=True)
+        f.add_conv(1, "ana@corp.com", action="material_download", material="planilha-custos-ia", when=ev_when)
+        f.add_conv(2, "ana@corp.com", action="newsletter_confirm", when=ev_when)
+        docs = [{
+            "email": "ana@corp.com",
+            "status": "active",
+            "googleUid": "uid_ana",
+            "name": "Ana",
+            "createdAt": ev_when,
+            "aulas": [{"dayId": "d1", "completed": True, "updatedAt": ev_when}],
+        }]
+
+        # Dia 1: nota site = 12 (frio), nota curso = 8 (frio).
+        c1, _ = run_job(f, apply=True, now_dt=day1, ler_curso=lambda _s: docs)
+        self.assertEqual((c1["pessoas_atualizadas"], c1["inscricoes_criadas"]), (1, 1))
+        self.assertEqual(f.people["p1"]["heatingNota"], 12)
+        self.assertEqual(f.people["p1"]["heatingSinais"], "Download de material; Inscrição na newsletter")
+        self.assertEqual(f.people["p1"]["heatingCalculadoEm"], CS.stamp(day1))
+        enr = next(iter(f.enrolls.values()))
+        self.assertEqual((enr["nota"], enr["sinais"], enr["calculadoEm"]), (8, "Cadastro no curso; Aula concluída no curso", CS.stamp(day1)))
+        d1_sig_day1 = f.heating_rows()[("site", "ana@corp.com")]["signals"]
+
+        # Dia 2: pontos decaídos mudam no D1, mas nota (12 e 8), faixa e rótulos são iguais -> ZERO PATCH no Twenty!
+        n_tw_before = len(f.twenty_writes())
+        c2, _ = run_job(f, apply=True, now_dt=day2, ler_curso=lambda _s: docs)
+        self.assertEqual((c2["pessoas_atualizadas"], c2["inscricoes_atualizadas"]), (0, 0))
+        self.assertEqual(len(f.twenty_writes()), n_tw_before)
+        self.assertEqual(f.people["p1"]["heatingCalculadoEm"], CS.stamp(day1))
+        self.assertEqual(enr["calculadoEm"], CS.stamp(day1))
+        # No D1, heating.computed_at e os pontos decaídos em heating.signals foram atualizados.
+        self.assertEqual(f.heating_rows()[("site", "ana@corp.com")]["computed_at"], CS.stamp(day2))
+        self.assertNotEqual(f.heating_rows()[("site", "ana@corp.com")]["signals"], d1_sig_day1)
+
+        # Dia 2 com mudança só de status no curso (active -> completed), mesma nota/faixa/sinais:
+        # PATCH altera só status e NÃO mexe em calculadoEm ("Nota mudou em").
+        docs_comp = [{**docs[0], "status": "completed"}]
+        c3, _ = run_job(f, apply=True, now_dt=day2, ler_curso=lambda _s: docs_comp)
+        self.assertEqual(c3["inscricoes_atualizadas"], 1)
+        last_patch = [d for m, p, d, _ in f.calls if m == "PATCH" and p.startswith("/rest/courseEnrollments/")][-1]
+        self.assertEqual(last_patch, {"status": "CONCLUIDO"})
+        self.assertEqual(enr["calculadoEm"], CS.stamp(day1))
+
+    def test_curso_status_desconhecido_bloqueia_emails_conservadoramente(self):
+        # Claude P3 + Codex P2: descadastrado com cadastro (10) + clique (3) tem nota 10 com Firestore disponível,
+        # e continua com nota 10 (NÃO vira 13) quando o Firestore está indisponível ou quando o inscrito sumiu.
+        f = Fake(people=[person("p1", "u@corp.com"), person("p2", "ativo@corp.com")], schema=True)
+        f.add_event("e-clk-u", "u@corp.com", "email_clicado", context=CTX_CURSO, ref="m1", when=ago(days=0))
+        f.add_event("e-clk-a", "ativo@corp.com", "email_clicado", context=CTX_CURSO, ref="m2", when=ago(days=0))
+        docs = [
+            {"email": "u@corp.com", "status": "unsubscribed", "googleUid": "u1", "name": "U", "createdAt": ago(days=0), "aulas": []},
+            {"email": "ativo@corp.com", "status": "active", "googleUid": "u2", "name": "A", "createdAt": ago(days=0), "aulas": []},
+        ]
+        # 1) Firestore disponível: u@ fica em 10 (bloqueado); ativo@ fica em 13 (10 + 3).
+        run_job(f, apply=True, ler_curso=lambda _s: docs, email_desde=ago(days=30))
+        self.assertEqual(f.heating_rows()[(CTX_CURSO, "u@corp.com")]["score"], 10)
+        self.assertEqual(f.heating_rows()[(CTX_CURSO, "ativo@corp.com")]["score"], 13)
+
+        # 2) Firestore indisponível: u@ continua 10 (não vira 13!), e ativo@ cai conservadoramente para 10.
+        def fail_curso(_slug):
+            raise H.CursoIndisponivel("falha Firestore")
+        run_job(f, apply=True, ler_curso=fail_curso, email_desde=ago(days=30))
+        self.assertEqual(f.heating_rows()[(CTX_CURSO, "u@corp.com")]["score"], 10)
+        self.assertEqual(f.heating_rows()[(CTX_CURSO, "ativo@corp.com")]["score"], 10)
+
+        # 3) Inscrito sumiu do Firestore (lista vazia): u@ continua 10 (não vira 13!).
+        run_job(f, apply=True, ler_curso=lambda _s: [], email_desde=ago(days=30))
+        self.assertEqual(f.heating_rows()[(CTX_CURSO, "u@corp.com")]["score"], 10)
+        self.assertEqual(f.heating_rows()[(CTX_CURSO, "ativo@corp.com")]["score"], 10)
+
+    def test_inscricao_fora_do_curso_limpa_nota_congelada_e_oposicao_limpa_com_curso_indisponivel(self):
+        # agy P2: (1) Inscrição ativa cujo email sumiu do Firestore e não tem nota hoje tem nota/faixa/sinais/calculadoEm limpos;
+        # (2) Oposição limpa a nota da Inscrição mesmo quando o Firestore do curso está indisponível.
+        f = Fake(people=[person("p1", "saiu@corp.com")], schema=True)
+        f.enrolls["e-saiu"] = {
+            "id": "e-saiu",
+            "inscricaoId": H.inscricao_id(SLUG, "saiu@corp.com"),
+            "curso": "CHATGPT_NO_DIA_A_DIA",
+            "status": "ATIVO",
+            "entrada": ago(days=200),
+            "aulasConcluidas": 2,
+            "ultimaAula": ago(days=190),
+            "nota": 25,
+            "faixa": "MORNO",
+            "sinais": "Cadastro no curso",
+            "calculadoEm": ago(days=190),
+            "pessoaId": "p1",
+        }
+        c1, _ = run_job(f, apply=True, ler_curso=lambda _s: [])
+        self.assertEqual(c1["inscricoes_atualizadas"], 1)
+        self.assertEqual(
+            (f.enrolls["e-saiu"]["nota"], f.enrolls["e-saiu"]["faixa"], f.enrolls["e-saiu"]["sinais"], f.enrolls["e-saiu"]["calculadoEm"]),
+            (None, None, None, None),
+        )
+        self.assertEqual((f.enrolls["e-saiu"]["status"], f.enrolls["e-saiu"]["aulasConcluidas"]), ("ATIVO", 2))
+
+        # Curso indisponível: oposição ainda limpa a nota da Inscrição; quem não fez oposição fica intocado.
+        g = Fake(people=[person("p-opt", "opt@corp.com"), person("p-ok", "ok@corp.com")], schema=True)
+        g.add_optout("opt@corp.com")
+        g.enrolls["e-opt"] = {
+            "id": "e-opt",
+            "inscricaoId": H.inscricao_id(SLUG, "opt@corp.com"),
+            "curso": "CHATGPT_NO_DIA_A_DIA",
+            "status": "ATIVO",
+            "entrada": ago(days=5),
+            "aulasConcluidas": 1,
+            "ultimaAula": ago(days=5),
+            "nota": 15,
+            "faixa": "MORNO",
+            "sinais": "Cadastro no curso",
+            "calculadoEm": ago(days=5),
+            "pessoaId": "p-opt",
+        }
+        g.enrolls["e-ok"] = {
+            "id": "e-ok",
+            "inscricaoId": H.inscricao_id(SLUG, "ok@corp.com"),
+            "curso": "CHATGPT_NO_DIA_A_DIA",
+            "status": "ATIVO",
+            "entrada": ago(days=5),
+            "aulasConcluidas": 1,
+            "ultimaAula": ago(days=5),
+            "nota": 30,
+            "faixa": "MORNO",
+            "sinais": "Cadastro no curso",
+            "calculadoEm": ago(days=5),
+            "pessoaId": "p-ok",
+        }
+        c2, _ = run_job(g, apply=True, ler_curso=lambda _s: (_ for _ in ()).throw(H.CursoIndisponivel("down")))
+        self.assertEqual((c2["curso_indisponivel"], c2["oposicao_aplicada"], c2["inscricoes_atualizadas"]), (1, 1, 1))
+        self.assertEqual(
+            (g.enrolls["e-opt"]["nota"], g.enrolls["e-opt"]["faixa"], g.enrolls["e-opt"]["sinais"], g.enrolls["e-opt"]["calculadoEm"]),
+            (None, None, None, None),
+        )
+        self.assertEqual(g.enrolls["e-ok"]["nota"], 30)
+
+    def test_string_vazia_nao_gera_patch_eterno_e_zero_e_preenchido(self):
+        # agy P2: "" é tratado como vazio (sem PATCH eterno), e 0 (nota de spam) é tratado como preenchido.
+        f = Fake(
+            people=[
+                person("p-vazio", "vazio@corp.com", heatingNota=None, heatingFaixa="", heatingSinais="", heatingCalculadoEm=None),
+                person("p-zero", "zero@corp.com", heatingNota=0, heatingFaixa="FRIO", heatingSinais="Reclamou de spam: não abordar", heatingCalculadoEm=NOW_ISO),
+            ],
+            schema=True,
+        )
+        f.enrolls["e-vazio"] = {
+            "id": "e-vazio",
+            "inscricaoId": H.inscricao_id(SLUG, "vazio@corp.com"),
+            "curso": "CHATGPT_NO_DIA_A_DIA",
+            "status": "ATIVO",
+            "entrada": ago(days=200),
+            "aulasConcluidas": 0,
+            "ultimaAula": None,
+            "nota": None,
+            "faixa": "",
+            "sinais": "",
+            "calculadoEm": None,
+            "pessoaId": "p-vazio",
+        }
+        f.enrolls["e-fora-vazio"] = {
+            "id": "e-fora-vazio",
+            "inscricaoId": H.inscricao_id(SLUG, "fora@corp.com"),
+            "curso": "CHATGPT_NO_DIA_A_DIA",
+            "status": "ATIVO",
+            "entrada": ago(days=200),
+            "aulasConcluidas": 0,
+            "ultimaAula": None,
+            "nota": None,
+            "faixa": None,
+            "sinais": "",
+            "calculadoEm": None,
+            "pessoaId": "p-vazio",
+        }
+        f.enrolls["e-zero"] = {
+            "id": "e-zero",
+            "inscricaoId": H.inscricao_id(SLUG, "zero@corp.com"),
+            "curso": "CHATGPT_NO_DIA_A_DIA",
+            "status": "ATIVO",
+            "entrada": ago(days=200),
+            "aulasConcluidas": 0,
+            "ultimaAula": None,
+            "nota": 0,
+            "faixa": "FRIO",
+            "sinais": "Reclamou de spam: não abordar",
+            "calculadoEm": NOW_ISO,
+            "pessoaId": "p-zero",
+        }
+        docs = [
+            {"email": "vazio@corp.com", "status": "active", "googleUid": "uv", "name": "V", "createdAt": ago(days=200), "aulas": []},
+            {"email": "zero@corp.com", "status": "active", "googleUid": "uz", "name": "Z", "createdAt": ago(days=200), "aulas": []},
+        ]
+        counts, _ = run_job(f, apply=True, ler_curso=lambda _s: docs)
+        # p-vazio, e-vazio e e-fora-vazio NÃO recebem PATCH; p-zero e e-zero (nota=0) SÃO limpos.
+        self.assertEqual((counts["pessoas_limpas"], counts["inscricoes_atualizadas"]), (1, 1))
+        patched_paths = [p for m, p, _, _ in f.calls if m == "PATCH"]
+        self.assertEqual(patched_paths, ["/rest/people/p-zero", "/rest/courseEnrollments/e-zero"])
+        self.assertIsNone(f.people["p-zero"]["heatingNota"])
+        self.assertIsNone(f.enrolls["e-zero"]["nota"])
+
+        # optout() também trata "" como vazio.
+        out_opt = io.StringIO()
+        c_opt = H.optout(TS.Clients(ENV, f, sleep=lambda s: None), "vazio@corp.com", apply=False, out=out_opt, forget_key=FORGET_KEY)
+        self.assertEqual((c_opt["pessoas_limpas"], c_opt["inscricoes_limpas"]), (0, 0))
+
+    def test_excluidos_e_dominios_de_teste_nao_criam_pessoa_nem_inscricao(self):
+        # Claude P3: HEATING_EXCLUDE e domínios de teste não ganham Pessoa nem Inscrição no Twenty.
+        f = Fake(schema=True)
+        docs = [
+            {"email": "gui@corp.com", "status": "active", "googleUid": "u1", "name": "Gui", "createdAt": ago(days=0), "aulas": []},
+            {"email": "a@example.com", "status": "active", "googleUid": "u2", "name": "Ex", "createdAt": ago(days=0), "aulas": []},
+            {"email": "b@foo.test", "status": "active", "googleUid": "u3", "name": "T", "createdAt": ago(days=0), "aulas": []},
+        ]
+        counts, _ = run_job(f, apply=True, ler_curso=lambda _s: docs, exclude_emails={"gui@corp.com"})
+        self.assertEqual((counts["pessoas_criadas"], counts["inscricoes_criadas"], counts["excluidos"]), (0, 0, 3))
+        self.assertEqual((f.people, f.enrolls), ({}, {}))
+
+    def test_mutacoes_sobreviventes_esquecido_optout_pessoa_nova_desempate_e_firestore(self):
+        # 1) Evento pré-existente no D1 de curso_esquecido é apagado no passo 3 (preservando site).
+        f1 = Fake(people=[person("p1", "esc@corp.com")], schema=True)
+        mac_esc = H.curso_esquecido_hmac(CTX_CURSO, "esc@corp.com", FORGET_KEY)
+        f1.db.execute("INSERT INTO curso_esquecido (context, email_hmac, forgotten_at) VALUES (?, ?, ?)", (CTX_CURSO, mac_esc, NOW_ISO))
+        f1.db.commit()
+        f1.add_event("ev-esc-cur", "esc@corp.com", "email_clicado", context=CTX_CURSO, source="resend", ref="m1", when=ago(days=1))
+        f1.add_event("ev-esc-site", "esc@corp.com", "material_baixado", context="site", source="conversoes", ref="m1", when=ago(days=1))
+        run_job(f1, apply=True)
+        self.assertEqual(f1.event_ids(), ["ev-esc-site"])
+
+        # 2) Oposição barra novos eventos de conversão e de curso no D1 depois do run.
+        f2 = Fake(schema=True)
+        f2.add_optout("opt@corp.com")
+        f2.add_conv(1, "opt@corp.com", action="material_download", material="planilha-custos-ia", when=ago(days=0))
+        docs2 = [{"email": "opt@corp.com", "status": "active", "googleUid": "u1", "name": "Opt", "createdAt": ago(days=0), "aulas": []}]
+        c2, _ = run_job(f2, apply=True, ler_curso=lambda _s: docs2)
+        self.assertEqual((c2["eventos_conversao_novos"], c2["eventos_curso_novos"], f2.event_ids(), f2.heating_rows()), (0, 0, [], {}))
+
+        # 3) Pessoa criada pelo curso (inclusive source="form" sem googleUid) já nasce com campos heating* do site.
+        f3 = Fake(schema=True)
+        f3.add_conv(1, "form@corp.com", action="material_download", material="planilha-custos-ia", when=ago(days=0))
+        docs3 = [{"email": "form@corp.com", "status": "active", "source": "form", "googleUid": None, "name": "Form User", "createdAt": ago(days=0), "aulas": []}]
+        c3, _ = run_job(f3, apply=True, ler_curso=lambda _s: docs3)
+        self.assertEqual((c3["pessoas_criadas"], c3["inscricoes_criadas"]), (1, 1))
+        post_people = [d for m, p, d, _ in f3.calls if m == "POST" and p == "/rest/people"]
+        self.assertEqual(len(post_people), 1)
+        self.assertEqual(
+            (post_people[0]["heatingNota"], post_people[0]["heatingFaixa"], post_people[0]["heatingSinais"], post_people[0]["heatingCalculadoEm"]),
+            (12, "FRIO", "Download de material", NOW_ISO),
+        )
+
+        # 4) Desempate de Pessoa com dois emails: vence a maior nota em qualquer ordem; em empate, desempata por email.
+        for em_high, em_low in (("a@corp.com", "b@corp.com"), ("b@corp.com", "a@corp.com")):
+            f4 = Fake(people=[person("p1", "a@corp.com", extra=["b@corp.com"])], schema=True)
+            f4.add_event("ev-hi", em_high, "site_agende", context="site", source="ga4", ref=None, when=ago(days=0))
+            f4.add_event("ev-lo", em_low, "material_baixado", context="site", source="conversoes", ref="m1", when=ago(days=0))
+            run_job(f4, apply=True)
+            self.assertEqual((f4.people["p1"]["heatingNota"], f4.people["p1"]["heatingFaixa"]), (50, "QUENTE"))
+        f4_tie = Fake(people=[person("p1", "a@corp.com", extra=["b@corp.com"])], schema=True)
+        f4_tie.add_event("ev-a", "a@corp.com", "material_baixado", context="site", source="conversoes", ref="m1", when=ago(days=0))  # 12
+        f4_tie.add_event("ev-b1", "b@corp.com", "newsletter_confirmada", context="site", source="conversoes", ref=None, when=ago(days=0))  # 10
+        f4_tie.add_event("ev-b2", "b@corp.com", "site_visita", context="site", source="ga4", ref=None, when=ago(days=0))  # 2 -> 12
+        run_job(f4_tie, apply=True)
+        self.assertEqual(f4_tie.people["p1"]["heatingSinais"], "Inscrição na newsletter; Visita ao site")
+
+        # 5) Mapeamento de exceções em ler_curso_firestore.
+        import types
+
+        with self.assertRaisesRegex(H.SyncError, "curso desconhecido"):
+            H.ler_curso_firestore("inexistente", sa_file="/tmp/fake.json")
+        with self.assertRaises(H.CursoIndisponivel):
+            H.ler_curso_firestore(SLUG, sa_file="")
+
+        class GoogleApiErr(Exception):
+            __module__ = "google.api_core.exceptions"
+
+        class GrpcErr(Exception):
+            __module__ = "grpc._channel"
+
+        for exc in (OSError("sem arquivo"), ValueError("json ruim"), GoogleApiErr("quota"), GrpcErr("rede"), RuntimeError("bug")):
+            fake_google = types.ModuleType("google")
+            fake_cloud = types.ModuleType("google.cloud")
+            fake_fs = types.ModuleType("google.cloud.firestore")
+            fake_oauth = types.ModuleType("google.oauth2")
+            fake_sa = types.ModuleType("google.oauth2.service_account")
+
+            class _Creds:
+                @staticmethod
+                def from_service_account_file(_path, _e=exc):
+                    raise _e
+
+            fake_sa.Credentials = _Creds
+            fake_fs.Client = object
+            fake_cloud.firestore = fake_fs
+            fake_oauth.service_account = fake_sa
+            fake_google.cloud = fake_cloud
+            fake_google.oauth2 = fake_oauth
+            saved = {k: sys.modules.get(k) for k in ("google", "google.cloud", "google.cloud.firestore", "google.oauth2", "google.oauth2.service_account")}
+            sys.modules.update({
+                "google": fake_google,
+                "google.cloud": fake_cloud,
+                "google.cloud.firestore": fake_fs,
+                "google.oauth2": fake_oauth,
+                "google.oauth2.service_account": fake_sa,
+            })
+            try:
+                if isinstance(exc, RuntimeError):
+                    with self.assertRaises(RuntimeError):
+                        H.ler_curso_firestore(SLUG, sa_file="/tmp/fake.json")
+                else:
+                    with self.assertRaises(H.CursoIndisponivel):
+                        H.ler_curso_firestore(SLUG, sa_file="/tmp/fake.json")
+            finally:
+                for k, v in saved.items():
+                    if v is None:
+                        sys.modules.pop(k, None)
+                    else:
+                        sys.modules[k] = v
 
 
 class CliAndOutputTest(unittest.TestCase):

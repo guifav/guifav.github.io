@@ -9,11 +9,36 @@ Contextos separados (decisão do Gui, 2026-11-27):
 - `curso:<slug>`: cadastro, aulas concluídas e emails do próprio curso. A nota vai para `heating` no D1 e para o objeto
   `courseEnrollment` ("Inscrição em curso") ligado à Person no Twenty.
 
-Campos de data no Twenty (criados se faltarem; campos já existentes no Twenty nunca são renomeados nem alterados):
+Campos no Twenty (criados se faltarem; campos já existentes no Twenty nunca são renomeados nem alterados):
+- `heatingSinais` na Person e `sinais` na Inscrição em curso guardam só os rótulos dos três principais sinais, em
+  ordem, sem os pontos (os pontos decaídos ficam em `heating.signals` no D1, exibidos no painel).
 - `heatingCalculadoEm` na Person (rótulo "Heating: nota mudou em") e `calculadoEm` na Inscrição em curso (rótulo
-  "Nota mudou em") só mudam quando a nota/estado muda, para não reescrever Pessoas e Inscrições todo dia. A data do
-  último cálculo diário fica em `heating.computed_at` no D1 (exibida no painel `/admin/contatos?ordem=heating`). Se o
-  campo já existir no Twenty com outro rótulo, o script mantém o campo existente sem renomeá-lo.
+  "Nota mudou em") só mudam quando a nota, a faixa ou a lista de rótulos mudam, para não reescrever Pessoas e
+  Inscrições todo dia. A data do último cálculo diário fica em `heating.computed_at` no D1 (exibida no painel
+  `/admin/contatos?ordem=heating`). Se o campo já existir no Twenty com outro rótulo, o script mantém o campo existente
+  sem renomeá-lo.
+
+Decisões registradas do desenho:
+- Criação de Pessoa pelos cursos: a Pessoa no Twenty é criada para todo inscrito de curso disponível, exceto email
+  inválido (`bounced`), emails excluídos (`HEATING_EXCLUDE` e domínios de teste), quem está na lixeira ou em
+  `curso_esquecido` — decisão do Gui de 2026-11-24 (os 42 inscritos vão ao CRM) e de 2026-11-27 ("o job do heating cria
+  a pessoa que entrou").
+- Teto no contexto de curso: as aulas (`curso_aula`) não têm teto somado (só 1 por dia UTC). O teto de 20 da régua
+  original existia para o curso não inflar a nota do site; com o contexto próprio, aula é exatamente o que a nota do
+  curso mede. O teto somado de 20 vale para os passivos (`email_aberto`) do curso.
+- Status desconhecido no curso (Firestore indisponível na rodada ou inscrito ausente do Firestore): os sinais de email
+  do curso não contam (bloqueio conservador).
+- Oposição concorrente (`POST /prioridade` durante a rodada): todo `INSERT` em `engagement_events` e `heating` é
+  condicional na mesma instrução (`WHERE NOT EXISTS (SELECT 1 FROM heating_optout WHERE email_hmac = ...)`), e no fim
+  da rodada (após as escritas no D1 e no Twenty) o job relê `heating_optout` e limpa D1 e Twenty (Pessoa e Inscrições)
+  para qualquer marca nova desde a leitura inicial.
+
+Dependências na KVM:
+- A leitura do Firestore usa `google-auth` (2.56.3) e `google-cloud-firestore`, já instalados no Python do sistema da
+  KVM. Se faltarem (ou se `HEATING_GCP_SA_FILE` estiver ausente ou falhar), a rodada marca `curso_indisponivel`, mantém
+  os eventos já gravados com bloqueio conservador dos sinais de email do curso e não toca nas Inscrições no Twenty
+  (exceto limpeza de nota em caso de oposição). Se faltarem no ambiente, instalar `google-auth` e
+  `google-cloud-firestore` no Python usado pelo wrapper da KVM.
 
 Modos:
 - Padrão (`heating_sync.py [--apply]`): traz conversões e curso para `engagement_events`, aplica oposição
@@ -111,10 +136,12 @@ TETO_PASSIVOS_SITE = 25.0
 
 # Pesos e tetos do contexto `curso:<slug>`:
 # - curso_cadastro (10): só o mais recente conta.
-# - curso_aula (5, teto 1/dia UTC).
+# - curso_aula (5, teto 1/dia UTC): sem teto somado (o teto de 20 da régua original existia para o curso não inflar a
+#   nota do site; com o contexto próprio, aula é exatamente o que a nota do curso mede).
 # - email_aberto (1, 1/dia UTC) e email_clicado (3, 2/dia UTC): mesma regra de robô e HEATING_EMAIL_DESDE;
-#   inscrição `unsubscribed` ou `bounced` perde os sinais de email.
-# - passivos somados (email_aberto) param em 20.
+#   inscrição `unsubscribed`, `bounced` ou com status desconhecido (Firestore indisponível ou inscrito ausente) perde os
+#   sinais de email (bloqueio conservador).
+# - passivos somados (`email_aberto`) param em 20.
 PONTOS_CURSO: dict[str, float] = {
     "curso_cadastro": 10.0,
     "curso_aula": 5.0,
@@ -157,7 +184,7 @@ CONV_SIGNAL_MAP: dict[str, str] = {
     "newsletter_confirm": "newsletter_confirmada",
 }
 
-# Catálogo de cursos (slug igual ao de HEATING_CURSOS no Worker).
+# Catálogo de cursos: manter alinhado com HEATING_CURSO_LABELS em workers/admin/src/painel.ts e HEATING_CURSOS no Worker.
 CURSOS: dict[str, dict[str, str]] = {
     "chatgpt-no-dia-a-dia": {
         "rotulo": "ChatGPT no dia a dia",
@@ -190,9 +217,9 @@ CURSO_ESQUECIDO_PREFIX = "curso-esquecido-v1\n"
 LOCK_WAIT_S = 600.0
 LOCK_POLL_S = 1.0
 
-# Limite de 100 parâmetros por instrução do D1.
-EVENT_CHUNK = 12       # 8 colunas * 12 = 96 <= 100
-HEATING_CHUNK = 14     # 7 colunas * 14 = 98 <= 100
+# Limite de 100 parâmetros por instrução do D1 (inclui 1 parâmetro `email_hmac` por linha no WHERE NOT EXISTS).
+EVENT_CHUNK = 11       # 9 parâmetros * 11 = 99 <= 100
+HEATING_CHUNK = 12     # 8 parâmetros * 12 = 96 <= 100
 DELETE_CHUNK = 90      # <= 100
 
 # ------------------------------------------------------------------ Metadados do Twenty
@@ -266,7 +293,7 @@ ENROLL_FIELDS = OrderedDict([
         "label": "Nota mudou em",
         "icon": "IconClock",
         "description": (
-            "Data da última mudança da inscrição ou da nota no Twenty (não muda em rodadas sem alteração); "
+            "Data da última mudança da nota, faixa ou sinais no Twenty (não muda em rodadas sem alteração); "
             "a data do último cálculo diário fica em heating.computed_at no D1 (painel)."
         ),
     }),
@@ -397,12 +424,66 @@ def split_name(raw: str | None) -> dict[str, str] | None:
     return {"firstName": parts[0], "lastName": parts[1] if len(parts) > 1 else ""}
 
 
+def _filled(v) -> bool:
+    """Trata None e '' como vazios, preservando 0 (ex.: nota 0 de email_spam) e False."""
+    return v is not None and v != ""
+
+
 def formatar_sinais_texto(sinais: list[dict]) -> str:
-    parts = []
-    for s in sinais:
-        pts = f"{float(s['pontos']):.1f}".replace(".", ",")
-        parts.append(f"{s['rotulo']} ({pts})")
-    return "; ".join(parts)
+    """Rótulos dos principais sinais em ordem, sem os pontos (os pontos ficam em `heating.signals` no D1)."""
+    return "; ".join(s["rotulo"] for s in sinais)
+
+
+def _insert_events_sql(part: list[dict], key: str) -> tuple[str, list]:
+    """INSERT condicional em `engagement_events`: checa `heating_optout` na mesma instrução (<= 100 params)."""
+    cols = ("id", "context", "email", "signal", "source", "ref", "occurred_at", "recorded_at")
+    params: list = []
+    selects: list[str] = []
+    for idx_row, ev in enumerate(part):
+        em_hmac = heating_optout_hmac(ev["email"], key)
+        params.extend([
+            ev["id"], ev["context"], ev["email"], ev["signal"],
+            ev["source"], ev["ref"], ev["occurred_at"], ev["recorded_at"], em_hmac,
+        ])
+        if idx_row == 0:
+            selects.append(
+                "SELECT ? AS id, ? AS context, ? AS email, ? AS signal, ? AS source, "
+                "? AS ref, ? AS occurred_at, ? AS recorded_at, ? AS email_hmac"
+            )
+        else:
+            selects.append("SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?")
+    sql = (
+        f"INSERT INTO engagement_events ({', '.join(cols)}) "
+        f"SELECT {', '.join('v.' + col for col in cols)} "
+        f"FROM ({' UNION ALL '.join(selects)}) AS v "
+        f"WHERE NOT EXISTS (SELECT 1 FROM heating_optout WHERE email_hmac = v.email_hmac) "
+        f"ON CONFLICT(id) DO NOTHING"
+    )
+    return sql, params
+
+
+def _insert_heating_sql(part: list[tuple], key: str) -> tuple[str, list]:
+    """INSERT condicional em `heating`: checa `heating_optout` na mesma instrução (<= 100 params)."""
+    cols = ("context", "email", "score", "band", "signals", "computed_at", "twenty_person_id")
+    params: list = []
+    selects: list[str] = []
+    for idx_row, row in enumerate(part):
+        em_hmac = heating_optout_hmac(row[1], key)
+        params.extend([*row, em_hmac])
+        if idx_row == 0:
+            selects.append(
+                "SELECT ? AS context, ? AS email, ? AS score, ? AS band, ? AS signals, "
+                "? AS computed_at, ? AS twenty_person_id, ? AS email_hmac"
+            )
+        else:
+            selects.append("SELECT ?, ?, ?, ?, ?, ?, ?, ?")
+    sql = (
+        f"INSERT INTO heating ({', '.join(cols)}) "
+        f"SELECT {', '.join('v.' + col for col in cols)} "
+        f"FROM ({' UNION ALL '.join(selects)}) AS v "
+        f"WHERE NOT EXISTS (SELECT 1 FROM heating_optout WHERE email_hmac = v.email_hmac)"
+    )
+    return sql, params
 
 
 def d1_batch(c: TS.Clients, stmts: list[tuple[str, list | None]]) -> list[list[dict]]:
@@ -420,10 +501,25 @@ def d1_batch(c: TS.Clients, stmts: list[tuple[str, list | None]]) -> list[list[d
          "User-Agent": "guifav-heating-sync"},
         json.dumps({"batch": batch}),
     )
-    if st != 200 or not data.get("success"):
+    if st != 200:
         raise SyncError(f"D1 respondeu {st}")
-    res = data.get("result") or []
-    return [(r or {}).get("results") or [] for r in res]
+    if not isinstance(data, dict) or not data.get("success"):
+        raise SyncError("D1 respondeu erro no batch")
+    res = data.get("result")
+    if not isinstance(res, list) or len(res) != len(stmts):
+        raise SyncError("D1 respondeu formato inesperado no batch")
+    out: list[list[dict]] = []
+    for r in res:
+        if not isinstance(r, dict) or ("success" in r and not r["success"]):
+            raise SyncError("D1 falhou em instrução do batch")
+        rows = r.get("results")
+        if rows is None:
+            out.append([])
+        elif isinstance(rows, list):
+            out.append(rows)
+        else:
+            raise SyncError("D1 respondeu formato inesperado no batch")
+    return out
 
 
 # ------------------------------------------------------------------ Leitura do curso (Firestore opcional)
@@ -622,6 +718,11 @@ def calcular_heating_contexto(
     teto_dia = TETO_DIA_SITE if is_site else TETO_DIA_CURSO
     passivos = PASSIVOS_SITE if is_site else PASSIVOS_CURSO
     teto_passivos = TETO_PASSIVOS_SITE if is_site else TETO_PASSIVOS_CURSO
+    if now_dt.tzinfo is None:
+        now_dt = now_dt.replace(tzinfo=timezone.utc)
+    else:
+        now_dt = now_dt.astimezone(timezone.utc)
+    email_desde_dt = parse_iso_dt(email_desde) if email_desde else None
 
     # 1) Filtra eventos do contexto com data válida e não futuros (occurred_at <= T).
     valid_ts: list[dict] = []
@@ -659,9 +760,9 @@ def calcular_heating_contexto(
         if ev["_idade"] > JANELA_DIAS:
             continue
         if sig in ("email_aberto", "email_clicado"):
-            if email_bloqueado or not email_desde:
+            if email_bloqueado or email_desde_dt is None:
                 continue
-            if ev["occurred_at"] < email_desde:
+            if ev["_dt"] < email_desde_dt:
                 continue
             if sig == "email_clicado" and ev["id"] in robo_ids:
                 continue
@@ -682,7 +783,7 @@ def calcular_heating_contexto(
         # newsletter_confirmada: só a mais recente conta.
         nls = [e for e in elegiveis if e["signal"] == "newsletter_confirmada"]
         if nls:
-            best = max(nls, key=lambda e: (e["occurred_at"], e["id"]))
+            best = max(nls, key=lambda e: (e["_dt"], e["id"]))
             add_contrib("newsletter_confirmada", best["_pts"])
 
         # material_pedido e material_baixado: por material (`ref`), só o evento de maior ponto conta (entre iguais, o mais recente).
@@ -691,13 +792,13 @@ def calcular_heating_contexto(
             if e["signal"] in ("material_pedido", "material_baixado"):
                 mats_by_ref.setdefault(e.get("ref") or "", []).append(e)
         for evs in mats_by_ref.values():
-            best = max(evs, key=lambda e: (e["_pts"], e["occurred_at"], e["id"]))
+            best = max(evs, key=lambda e: (e["_pts"], e["_dt"], e["id"]))
             add_contrib(best["signal"], best["_pts"])
     else:
         # curso_cadastro: só o mais recente conta.
         cads = [e for e in elegiveis if e["signal"] == "curso_cadastro"]
         if cads:
-            best = max(cads, key=lambda e: (e["occurred_at"], e["id"]))
+            best = max(cads, key=lambda e: (e["_dt"], e["id"]))
             add_contrib("curso_cadastro", best["_pts"])
 
     # Demais sinais com teto por dia UTC: escolhe os N mais recentes (maior ponto decaído) daquele dia UTC.
@@ -705,11 +806,11 @@ def calcular_heating_contexto(
     for e in elegiveis:
         sig = e["signal"]
         if sig in teto_dia:
-            dia_utc = e["occurred_at"][:10]
+            dia_utc = e["_dt"].strftime("%Y-%m-%d")
             por_sig_dia.setdefault((sig, dia_utc), []).append(e)
     for (sig, _dia), evs in por_sig_dia.items():
         limite = teto_dia[sig]
-        evs_ord = sorted(evs, key=lambda e: (e["occurred_at"], e["id"]), reverse=True)[:limite]
+        evs_ord = sorted(evs, key=lambda e: (e["_dt"], e["id"]), reverse=True)[:limite]
         for e in evs_ord:
             add_contrib(sig, e["_pts"])
 
@@ -835,7 +936,7 @@ def _parse_curso_docs(slug: str, raw_docs: list[dict], counts: Counter) -> dict[
 def _person_heating_patch(p: dict, want: dict | None, now_iso: str) -> dict:
     """Devolve o PATCH necessário para os quatro campos heating* na Person, ou {} se nada mudou."""
     if want is None:
-        if any(p.get(k) is not None for k in PERSON_HEATING_FIELDS):
+        if any(_filled(p.get(k)) for k in PERSON_HEATING_FIELDS):
             return {k: None for k in PERSON_HEATING_FIELDS}
         return {}
     sinais_txt = formatar_sinais_texto(want["signals_list"])
@@ -882,32 +983,28 @@ def _enroll_desired(insc: dict, pid: str, h: dict | None, now_iso: str) -> dict:
 
 
 def _enroll_patch(existing: dict, desired: dict) -> dict:
-    """Devolve apenas os campos alterados da Inscrição; só atualiza calculadoEm se algo mudou ou estava vazio."""
-    compare_keys = ("curso", "status", "entrada", "aulasConcluidas", "ultimaAula", "nota", "faixa", "sinais", "pessoaId")
-    changed = False
-    for k in compare_keys:
+    """Devolve apenas os campos alterados da Inscrição; `calculadoEm` só muda quando nota, faixa ou sinais mudam (ou falta/sobra)."""
+    meta_keys = ("curso", "status", "entrada", "aulasConcluidas", "ultimaAula", "pessoaId")
+    score_keys = ("nota", "faixa", "sinais")
+    out: dict = {}
+    for k in (*meta_keys, *score_keys):
         have = existing.get(k)
         want = desired[k]
         if k in ("entrada", "ultimaAula"):
             have = CS.iso_ms(have or "") or None
-        if have != want:
-            changed = True
-            break
-    if not changed:
-        have_calc = CS.iso_ms(existing.get("calculadoEm") or "") or None
-        if desired["nota"] is None and have_calc is not None:
-            return {"calculadoEm": None}
-        if desired["nota"] is not None and have_calc is None:
-            return {"calculadoEm": desired["calculadoEm"]}
-        return {}
-    out = {}
-    for k in (*compare_keys, "calculadoEm"):
-        have = existing.get(k)
-        want = desired[k]
-        if k in ("entrada", "ultimaAula", "calculadoEm"):
-            have = CS.iso_ms(have or "") or None
+        elif not _filled(have):
+            have = None
+        if not _filled(want):
+            want = None
         if have != want:
             out[k] = want
+    score_changed = any(k in out for k in score_keys)
+    have_calc = CS.iso_ms(existing.get("calculadoEm") or "") or None
+    if desired["nota"] is None:
+        if have_calc is not None:
+            out["calculadoEm"] = None
+    elif score_changed or have_calc is None:
+        out["calculadoEm"] = desired["calculadoEm"]
     return out
 
 
@@ -1119,7 +1216,7 @@ def run(
     for p in people:
         if p.get("deletedAt"):
             continue
-        if any(p.get(k) is not None for k in PERSON_HEATING_FIELDS):
+        if any(_filled(p.get(k)) for k in PERSON_HEATING_FIELDS):
             for e in TS._emails(p):
                 if is_optout(e):
                     optout_seen.add(e)
@@ -1147,7 +1244,8 @@ def run(
         else:
             slug = ctx[6:]
             insc = (inscricoes_ativas_por_curso.get(slug) or {}).get(email)
-            email_blocked = bool(insc and insc["status"] in ("unsubscribed", "bounced"))
+            # Bloqueio conservador: sem status conhecido (Firestore indisponível ou inscrito ausente), sinais de email não contam.
+            email_blocked = (insc is None) or (insc["status"] in ("unsubscribed", "bounced"))
         res = calcular_heating_contexto(ctx, evs, now_dt, email_desde=email_desde_iso, email_bloqueado=email_blocked)
         if res is not None:
             heating_by_ctx_email[(ctx, email)] = res
@@ -1165,10 +1263,13 @@ def run(
     people_by_id = {p["id"]: p for p in people}
     trashed_seen: set[str] = set()
 
-    # 4a) Pessoas a criar a partir dos cursos disponíveis (exceto status bounced, exceto lixeira).
+    # 4a) Pessoas a criar a partir dos cursos disponíveis (exceto bounced, excluídos, lixeira e curso_esquecido;
+    #     decisão do Gui de 24/11 e 27/11).
     people_to_create: OrderedDict[str, dict] = OrderedDict()  # email -> {"name": dict|None}
     for slug, kept_insc in inscricoes_ativas_por_curso.items():
         for email, insc in sorted(kept_insc.items()):
+            if is_excluded(email, excluded_set):
+                continue
             if idx.get(email):
                 continue
             if email in trashed:
@@ -1219,57 +1320,82 @@ def run(
     counts["pessoas_atualizadas"] = len(person_updates)
     counts["pessoas_limpas"] = len(person_clears)
 
-    # 4c) Inscrições em curso (`courseEnrollment`): só para cursos disponíveis nesta rodada.
+    # 4c) Inscrições em curso (`courseEnrollment`): criação e atualização para cursos disponíveis nesta rodada.
     enroll_by_iid = {x["inscricaoId"]: x for x in existing_enrolls if x.get("inscricaoId")}
     enrolls_to_create: list[tuple[str, dict, dict | None]] = []  # (email, insc, heating|None)
     enrolls_to_update: list[tuple[str, dict]] = []  # (enroll_id, patch)
+    enrolls_to_relink: list[tuple[str, str, dict, dict, dict | None]] = []  # (enroll_id, email, existing, insc, h)
     handled_iids: set[str] = set()
 
     for slug, kept_insc in inscricoes_ativas_por_curso.items():
         ctx = f"curso:{slug}"
         for email, insc in sorted(kept_insc.items()):
-            iid = inscricao_id(slug, email)
-            handled_iids.add(iid)
+            if is_excluded(email, excluded_set):
+                continue
             persons = idx.get(email) or []
             if not persons and email not in people_to_create:
                 # Pessoa na lixeira ou status bounced sem Pessoa no CRM: não cria nem atualiza Inscrição.
                 continue
+            iid = inscricao_id(slug, email)
             existing = enroll_by_iid.get(iid)
             if existing and existing.get("deletedAt"):
                 # Inscrição na lixeira: não recria (inscricaoId é único) nem restaura.
                 continue
+            handled_iids.add(iid)
             h = heating_by_ctx_email.get((ctx, email))
             if existing is None:
                 enrolls_to_create.append((email, insc, h))
-            else:
-                pid = persons[0]["id"] if persons else existing.get("pessoaId") or ""
+            elif persons:
+                pid = persons[0]["id"]
                 desired = _enroll_desired(insc, pid, h, now_iso)
                 patch = _enroll_patch(existing, desired)
                 if patch:
                     enrolls_to_update.append((existing["id"], patch))
+            else:
+                # Pessoa será criada em 5a: religa a Inscrição ao novo id retornado (nunca envia pessoaId vazio).
+                enrolls_to_relink.append((existing["id"], email, existing, insc, h))
 
-    # Inscrições ativas já existentes de cursos disponíveis cujo email tem oposição mas não veio na lista atual do curso:
-    # limpa nota, faixa, sinais e calculadoEm mantendo o resto.
-    available_curso_values = {curso_option_value(s): s for s in cursos_disponiveis}
+    # Inscrições ativas já existentes que não vieram na leitura atual do curso:
+    # - oposição limpa nota/faixa/sinais/calculadoEm mesmo com o curso indisponível nesta rodada;
+    # - para cursos disponíveis, se o email não tem nota hoje (expirado, excluído, etc.), limpa os 4 campos.
+    email_by_sha32: dict[str, str] = {}
+    for e in (
+        [ev["email"] for ev in existing_events]
+        + [hr["email"] for hr in existing_heating_rows]
+        + [em for p in people for em in TS._emails(p)]
+        + [em for docs in cursos_disponiveis.values() for em in docs]
+    ):
+        if CS.valid_email(e):
+            email_by_sha32.setdefault(email_sha256_32(e), e)
+
+    all_curso_values = {curso_option_value(s): s for s in CURSOS}
     for x in existing_enrolls:
         if x.get("deletedAt"):
             continue
         iid = x.get("inscricaoId")
         if not iid or iid in handled_iids:
             continue
-        slug = available_curso_values.get(x.get("curso") or "")
+        slug = all_curso_values.get(x.get("curso") or "")
         if not slug:
             continue
-        if all(x.get(k) is None for k in ("nota", "faixa", "sinais", "calculadoEm")):
+        if not any(_filled(x.get(k)) for k in ("nota", "faixa", "sinais", "calculadoEm")):
             continue
         owner = people_by_id.get(x.get("pessoaId") or "")
         owner_emails = TS._emails(owner) if owner else []
         matched_email = next((e for e in owner_emails if inscricao_id(slug, e) == iid), None)
+        if matched_email is None and iid.startswith(f"{slug}:"):
+            cand = email_by_sha32.get(iid[len(slug) + 1:])
+            if cand and inscricao_id(slug, cand) == iid:
+                matched_email = cand
         if matched_email and is_optout(matched_email):
+            optout_seen.add(matched_email)
+            enrolls_to_update.append((x["id"], {"nota": None, "faixa": None, "sinais": None, "calculadoEm": None}))
+        elif slug in cursos_disponiveis and (matched_email is None or (f"curso:{slug}", matched_email) not in heating_by_ctx_email):
             enrolls_to_update.append((x["id"], {"nota": None, "faixa": None, "sinais": None, "calculadoEm": None}))
 
+    counts["oposicao_aplicada"] = len(optout_seen)
     counts["inscricoes_criadas"] = len(enrolls_to_create)
-    counts["inscricoes_atualizadas"] = len(enrolls_to_update)
+    counts["inscricoes_atualizadas"] = len(enrolls_to_update) + len(enrolls_to_relink)
 
     # ------------------------------------------------------------------ 5) Escritas (somente com --apply)
     if apply:
@@ -1278,7 +1404,7 @@ def run(
             or person_clears
             or any(e in site_scores for e in people_to_create)
         )
-        need_enroll_schema = bool(enrolls_to_create or enrolls_to_update)
+        need_enroll_schema = bool(enrolls_to_create or enrolls_to_update or enrolls_to_relink)
         if need_person_schema or need_enroll_schema:
             ensure_schema(c, meta, need_person=need_person_schema, need_enroll=need_enroll_schema)
 
@@ -1306,27 +1432,38 @@ def run(
             c.twenty("PATCH", f"/rest/people/{urllib.parse.quote(pid)}", patch, op="limpar heating da pessoa")
 
         # 5c) Cria e atualiza Inscrições em curso.
+        created_enrolls_by_email: dict[str, list[tuple[str, bool]]] = {}
         for email, insc, h in enrolls_to_create:
             persons = idx.get(email) or []
             pid = persons[0]["id"] if persons else created_pid_by_email[email]
+            if not pid:
+                raise SyncError("id da Pessoa ausente ao criar inscrição")
             body = _enroll_desired(insc, pid, h, now_iso)
-            c.twenty("POST", f"/rest/{ENROLL_PLURAL}", body, op="criar inscrição em curso")
+            res = c.twenty("POST", f"/rest/{ENROLL_PLURAL}", body, op="criar inscrição em curso")
+            created_eid = ((res.get("data") or {}).get("createCourseEnrollment") or {}).get("id")
+            if created_eid:
+                created_enrolls_by_email.setdefault(email, []).append((created_eid, h is not None))
+        updated_enroll_patches: dict[str, dict] = {}
         for eid, patch in enrolls_to_update:
             c.twenty("PATCH", f"/rest/{ENROLL_PLURAL}/{urllib.parse.quote(eid)}", patch, op="atualizar inscrição em curso")
+            updated_enroll_patches[eid] = patch
+        for eid, email, existing, insc, h in enrolls_to_relink:
+            pid = created_pid_by_email[email]
+            if not pid:
+                raise SyncError("id da Pessoa ausente ao atualizar inscrição")
+            desired = _enroll_desired(insc, pid, h, now_iso)
+            patch = _enroll_patch(existing, desired)
+            if patch:
+                c.twenty("PATCH", f"/rest/{ENROLL_PLURAL}/{urllib.parse.quote(eid)}", patch, op="atualizar inscrição em curso")
+                updated_enroll_patches[eid] = patch
 
-        # 5d) Atualiza `engagement_events` no D1: insere novos, apaga oposição, esquecidos e retenção (> 365d).
+        # 5d) Atualiza `engagement_events` no D1: insere novos condicionalmente (WHERE NOT EXISTS heating_optout),
+        #     apaga oposição, esquecidos e retenção (> 365d).
         all_new_events = new_conv_events + new_curso_events
         for i in range(0, len(all_new_events), EVENT_CHUNK):
             part = all_new_events[i:i + EVENT_CHUNK]
-            placeholders = ", ".join("(?,?,?,?,?,?,?,?)" for _ in part)
-            params: list = []
-            for ev in part:
-                params.extend([ev["id"], ev["context"], ev["email"], ev["signal"], ev["source"], ev["ref"], ev["occurred_at"], ev["recorded_at"]])
-            c.d1(
-                f"INSERT INTO engagement_events (id, context, email, signal, source, ref, occurred_at, recorded_at) "
-                f"VALUES {placeholders} ON CONFLICT(id) DO NOTHING",
-                params,
-            )
+            sql, params = _insert_events_sql(part, key)
+            c.d1(sql, params)
         if optout_emails_d1_delete:
             del_list = sorted(optout_emails_d1_delete)
             for i in range(0, len(del_list), DELETE_CHUNK):
@@ -1337,8 +1474,9 @@ def run(
         if retention_delete_count:
             c.d1("DELETE FROM engagement_events WHERE occurred_at < ?", [retention_cutoff])
 
-        # 5e) Troca a tabela `heating` inteira via `batch` da API REST, se houve mudança (risco aceito: sem garantia
-        # de transação na API REST; se falhar no meio sem rollback, a rodada seguinte refaz a tabela inteira).
+        # 5e) Troca a tabela `heating` inteira via `batch` da API REST (com INSERT condicional em heating_optout),
+        #     se houve mudança (risco aceito: sem garantia de transação na API REST; se falhar no meio sem rollback,
+        #     a rodada seguinte refaz a tabela inteira).
         desired_heating: list[tuple] = []
         for (ctx, email), h in sorted(heating_by_ctx_email.items()):
             persons = idx.get(email) or []
@@ -1354,16 +1492,83 @@ def run(
             stmts: list[tuple[str, list | None]] = [("DELETE FROM heating", None)]
             for i in range(0, len(desired_heating), HEATING_CHUNK):
                 part = desired_heating[i:i + HEATING_CHUNK]
-                placeholders = ", ".join("(?,?,?,?,?,?,?)" for _ in part)
-                params = []
-                for row in part:
-                    params.extend(row)
-                stmts.append((
-                    f"INSERT INTO heating (context, email, score, band, signals, computed_at, twenty_person_id) "
-                    f"VALUES {placeholders}",
-                    params,
-                ))
+                stmts.append(_insert_heating_sql(part, key))
             d1_batch(c, stmts)
+
+        # 5f) Releitura de `heating_optout` depois das escritas no D1 e no Twenty: limpa D1 e Twenty (Pessoa e
+        #     Inscrições) para qualquer oposição registrada pelo Worker enquanto o job rodava.
+        optout_hmacs_after = {r["email_hmac"] for r in c.d1("SELECT email_hmac FROM heating_optout")}
+        new_optout_hmacs = optout_hmacs_after - optout_hmacs
+        if new_optout_hmacs:
+            candidate_emails: set[str] = set()
+            for ev in all_active_events:
+                candidate_emails.add(ev["email"])
+            for ev in existing_events:
+                candidate_emails.add(ev["email"])
+            for hr in existing_heating_rows:
+                candidate_emails.add(hr["email"])
+            for _ctx, em in heating_by_ctx_email:
+                candidate_emails.add(em)
+            for docs_by_email in cursos_disponiveis.values():
+                candidate_emails.update(docs_by_email.keys())
+            candidate_emails.update(people_to_create.keys())
+            for p in people:
+                if not p.get("deletedAt"):
+                    candidate_emails.update(TS._emails(p))
+
+            late_optout_emails = sorted(
+                em for em in candidate_emails
+                if CS.valid_email(em) and heating_optout_hmac(em, key) in new_optout_hmacs
+            )
+            if late_optout_emails:
+                for i in range(0, len(late_optout_emails), DELETE_CHUNK):
+                    part = late_optout_emails[i:i + DELETE_CHUNK]
+                    ph = ",".join("?" * len(part))
+                    c.d1(f"DELETE FROM engagement_events WHERE email IN ({ph})", part)
+                    c.d1(f"DELETE FROM heating WHERE email IN ({ph})", part)
+
+                person_heating_present = [k for k in PERSON_HEATING_FIELDS if k in meta["person"]]
+                updated_pids = {pid for pid, _ in person_updates}
+                cleared_pids = {pid for pid, _ in person_clears}
+                late_pids_to_clear: set[str] = set()
+                for em in late_optout_emails:
+                    for p in idx.get(em) or []:
+                        pid = p["id"]
+                        had_before = any(_filled(p.get(k)) for k in person_heating_present)
+                        if pid in updated_pids or (had_before and pid not in cleared_pids):
+                            late_pids_to_clear.add(pid)
+                    cpid = created_pid_by_email.get(em)
+                    if cpid and em in site_scores:
+                        late_pids_to_clear.add(cpid)
+                if person_heating_present and late_pids_to_clear:
+                    clear_p = {k: None for k in person_heating_present}
+                    for pid in sorted(late_pids_to_clear):
+                        c.twenty("PATCH", f"/rest/people/{urllib.parse.quote(pid)}", clear_p, op="limpar heating da pessoa")
+
+                enroll_score_fields = [k for k in ("nota", "faixa", "sinais", "calculadoEm") if k in meta["enroll"]]
+                if meta["enroll_id"] and enroll_score_fields:
+                    late_suffixes = {":" + email_sha256_32(em) for em in late_optout_emails}
+                    late_eids_to_clear: set[str] = set()
+                    for x in existing_enrolls:
+                        if x.get("deletedAt"):
+                            continue
+                        iid = x.get("inscricaoId")
+                        if not isinstance(iid, str) or not any(iid.endswith(suf) for suf in late_suffixes):
+                            continue
+                        eid = x["id"]
+                        eff = {**x, **(updated_enroll_patches.get(eid) or {})}
+                        if any(_filled(eff.get(k)) for k in enroll_score_fields):
+                            late_eids_to_clear.add(eid)
+                    for em in late_optout_emails:
+                        for eid, had_score in created_enrolls_by_email.get(em, []):
+                            if had_score:
+                                late_eids_to_clear.add(eid)
+                    clear_e = {k: None for k in enroll_score_fields}
+                    for eid in sorted(late_eids_to_clear):
+                        c.twenty("PATCH", f"/rest/{ENROLL_PLURAL}/{urllib.parse.quote(eid)}", clear_e, op="limpar heating da inscrição")
+
+                optout_seen.update(late_optout_emails)
+                counts["oposicao_aplicada"] = len(optout_seen)
 
     CS._report(counts, out, "gravado" if apply else "simulação: nada foi gravado (use --apply)")
     return counts
@@ -1394,7 +1599,7 @@ def optout(c: TS.Clients, email: str, *, apply: bool = False, out=None, forget_k
     meta = read_metadata(c)
     persons = CS.people_by_email(CS.list_records(c, "people")).get(norm) or []
     person_heating_present = [k for k in PERSON_HEATING_FIELDS if k in meta["person"]]
-    persons_to_clear = [p for p in persons if any(p.get(k) is not None for k in person_heating_present)]
+    persons_to_clear = [p for p in persons if any(_filled(p.get(k)) for k in person_heating_present)]
 
     enrolls = CS.list_records(c, ENROLL_PLURAL) if meta["enroll_id"] else []
     suffix = ":" + email_sha256_32(norm)
@@ -1404,7 +1609,7 @@ def optout(c: TS.Clients, email: str, *, apply: bool = False, out=None, forget_k
         if not x.get("deletedAt")
         and isinstance(x.get("inscricaoId"), str)
         and x["inscricaoId"].endswith(suffix)
-        and any(x.get(k) is not None for k in enroll_score_fields)
+        and any(_filled(x.get(k)) for k in enroll_score_fields)
     ]
 
     counts["eventos_apagados"] = ev_count

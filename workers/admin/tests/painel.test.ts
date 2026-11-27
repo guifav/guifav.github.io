@@ -8,7 +8,7 @@ import { handle, type Deps, type Env } from '../src/index.ts';
 import { resetCertsCache } from '../src/access.ts';
 import { CATALOG_MAX_BYTES, coletarCatalogo, dataExiste, validarCatalogo } from '../src/catalogo.ts';
 import { sha256Hex, versionId, type R2Like } from '../src/drafts.ts';
-import { landingCell, twentyCell, twentyPersonUrl } from '../src/painel.ts';
+import { heatingScoreCell, heatingSignalsCell, landingCell, twentyCell, twentyPersonUrl } from '../src/painel.ts';
 import type { D1Like, D1Stmt } from '../src/sync.ts';
 import { catalogoPosts } from '../../../blog-src/src/lib/catalogo.ts';
 
@@ -1478,4 +1478,49 @@ test('P7: /admin/contatos?ordem=heating pagina de 100 em 100 mantendo contexto e
   assert.ok(p2.includes('101 encontrados, página 2 de 2.'));
   assert.ok(p2.includes('a100@x.com'));
   assert.ok(p2.includes('href="/admin/contatos?ordem=heating&contexto=curso%3Achatgpt-no-dia-a-dia&faixa=quente">anterior</a>'));
+});
+
+test('P7: heatingScoreCell exibe 0 (frio) para spam e heatingSignalsCell limita a 3 sinais', async () => {
+  assert.equal(heatingScoreCell(0, 'frio'), '0 (frio)');
+  assert.equal(heatingScoreCell(null, 'frio'), 'sem nota');
+  assert.equal(heatingScoreCell(undefined, 'frio'), 'sem nota');
+  assert.equal(heatingScoreCell(10, null), 'sem nota');
+  assert.equal(heatingScoreCell(10, ''), 'sem nota');
+
+  const fourSignals = JSON.stringify([
+    { sinal: 'site_agende', rotulo: 'Sinal 1', pontos: 50 },
+    { sinal: 'material_baixado', rotulo: 'Sinal 2', pontos: 12 },
+    { sinal: 'newsletter_confirmada', rotulo: 'Sinal 3', pontos: 10 },
+    { sinal: 'site_visita', rotulo: 'Sinal 4', pontos: 2 },
+  ]);
+  const cell = heatingSignalsCell(fourSignals);
+  assert.equal(cell, 'Sinal 1 (50,0); Sinal 2 (12,0); Sinal 3 (10,0)');
+  assert.ok(!cell.includes('Sinal 4'));
+
+  // Também na página real /admin/contatos e /admin/contatos?ordem=heating.
+  const s = setup();
+  seedConversions(s.db, [
+    { id: 'sp1', email: 'spam@x.com', action: 'newsletter_confirm', occurred_at: '2026-11-12T10:00:00.000Z' },
+  ]);
+  seedHeating(s.db, [
+    {
+      context: 'site',
+      email: 'spam@x.com',
+      score: 0,
+      band: 'frio',
+      signals: [{ sinal: 'email_spam', rotulo: 'Reclamou de spam: não abordar', pontos: 0 }],
+    },
+    {
+      context: 'site',
+      email: 'quatro@x.com',
+      score: 74,
+      band: 'quente',
+      signals: JSON.parse(fourSignals),
+    },
+  ]);
+  const htmlConv = await (await s.req('/admin/contatos')).text();
+  assert.ok(htmlConv.includes('<td>0 (frio)</td>'));
+  const htmlHeat = await (await s.req('/admin/contatos?ordem=heating')).text();
+  assert.ok(htmlHeat.includes('Sinal 1 (50,0); Sinal 2 (12,0); Sinal 3 (10,0)'));
+  assert.ok(!htmlHeat.includes('Sinal 4'));
 });
