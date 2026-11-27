@@ -4,9 +4,12 @@
 #   RESEND_API_KEY    chave do Resend com full_access (cria contatos)
 #   TURNSTILE_SECRET  chave secreta do widget do Turnstile de guifav.dev
 #   CONFIRM_SECRET    32 caracteres ou mais; assina o link de confirmação (openssl rand -base64 48)
-#   FORGET_HMAC_KEY   32 caracteres ou mais; calcula o HMAC da tabela `forgotten` (issue #134), igual no wrapper da KVM
+#   FORGET_HMAC_KEY   32 caracteres ou mais; calcula o HMAC da tabela `forgotten` (issue #134) e da tabela
+#                     `heating_optout` (épico #197, prefixo próprio), igual no wrapper da KVM
 #   GA4_API_SECRET    segredo do Measurement Protocol do GA4 (Admin > Fluxos de dados > guifav.dev > Segredos da API do
 #                     Measurement Protocol); sem ele, o evento de download de material não vai ao GA4 (issue #99)
+#   RESEND_HEATING_WEBHOOK_SECRET  segredo svix (`whsec_` + base64) do webhook do Resend para POST /resend/webhook
+#                     (épico #197); sem ele ou fora do formato, a rota responde 503 sem ler o corpo
 name = "blog-newsletter"
 main = "src/worker.ts"
 compatibility_date = "2026-11-01"
@@ -25,8 +28,9 @@ fallthrough = false
 binding = "MATERIAIS_R2"
 bucket_name = "blog-materiais"
 
-# D1 do painel (`workers/admin`, dono do esquema e das migrações): conversões do site (issues #97, #99 e #114) e
-# marcador mínimo de remoção `forgotten` (issue #134). As migrações 0004 a 0007 precisam estar aplicadas antes do deploy.
+# D1 do painel (`workers/admin`, dono do esquema e das migrações): conversões do site (issues #97, #99 e #114),
+# marcador mínimo de remoção `forgotten` (issue #134) e tabelas do heating (`engagement_events`, `heating`,
+# `heating_optout`, épico #197). As migrações 0004 a 0011 precisam estar aplicadas antes do deploy.
 [[d1_databases]]
 binding = "DB"
 database_name = "blog-admin"
@@ -48,6 +52,19 @@ WORKER_URL = "https://insights.guifav.dev"
 TURNSTILE_HOSTNAME = "guifav.dev"
 # GA4 do site: o Worker manda o evento material_download pelo Measurement Protocol (issue #99).
 GA4_MEASUREMENT_ID = "G-K7Y87QNCX8"
+# Remetentes (endereços separados por vírgula, comparação em minúsculas) cujo engajamento no heating entra no
+# contexto `site` (épico #197): o remetente dos materiais e da confirmação neste Worker (`insights@guifav.dev`) e o
+# dos broadcasts dos Expert Insights em `blog-src/scripts/newsletter_draft.py` (`insights@expert.guifav.dev`).
+# Endereços fora do formato de email são ignorados com log curto. Um remetente novo do site precisa entrar nesta
+# lista (com novo deploy do Worker); qualquer remetente fora desta lista e fora de `HEATING_CURSOS` é ignorado sem
+# gravar (`200 {"ok":true,"ignorado":"remetente_desconhecido"}`).
+HEATING_REMETENTES_SITE = "insights@guifav.dev,insights@expert.guifav.dev"
+# Slugs dos cursos (separados por vírgula) cujo engajamento no heating é separado do site (épico #197, decisão de
+# 2026-11-27). Quando `data.from` no webhook do Resend é `<slug>@guifav.dev` e `<slug>` está nesta lista (padrão
+# `[a-z0-9][a-z0-9-]{0,63}`; slugs fora do padrão são ignorados), o contexto gravado é `curso:<slug>`. Qualquer
+# outro remetente fora de `HEATING_REMETENTES_SITE` e de `HEATING_CURSOS` (inclusive ausente ou malformado) é
+# ignorado sem gravar. Cada curso novo precisa de um remetente `<slug>@guifav.dev` e do slug nesta lista.
+HEATING_CURSOS = "chatgpt-no-dia-a-dia"
 
 # Garantia A6: cerca de 5 pedidos por IP e 1 email de confirmação por endereço, a cada 60 s. O rate limit
 # do Workers é aproximado e conta separado em cada localidade do Cloudflare: contém abuso junto com o

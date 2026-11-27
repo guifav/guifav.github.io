@@ -7,19 +7,29 @@ import { motivo, type D1Like } from './conversoes.ts';
 
 const enc = new TextEncoder();
 const FORGET_PREFIX = 'forget-v1\n';
+const HEATING_OPTOUT_PREFIX = 'heating-optout-v1\n';
 const ISO_UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/;
 
 /** Prazo máximo para consultar a tabela `forgotten` no D1 (issue #134): um D1 que não responde nunca segura a requisição sem limite. */
 export const FORGET_TIMEOUT_MS = 1500;
 
-/** HMAC-SHA256 em hexadecimal minúsculo de `forget-v1\n` + email normalizado, igual ao `conversoes_sync.py`. */
-export async function forgetHmac(email: string, secret: string): Promise<string> {
+async function emailHmac(prefix: string, email: string, secret: string): Promise<string> {
   if (!secret || secret.length < MIN_SECRET) throw new Error('FORGET_HMAC_KEY ausente ou curta demais');
   const norm = normalizeEmail(email);
   if (!norm) throw new Error('email inválido');
   const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, enc.encode(`${FORGET_PREFIX}${norm}`)));
+  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', key, enc.encode(`${prefix}${norm}`)));
   return [...sig].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** HMAC-SHA256 em hexadecimal minúsculo de `forget-v1\n` + email normalizado, igual ao `conversoes_sync.py`. */
+export function forgetHmac(email: string, secret: string): Promise<string> {
+  return emailHmac(FORGET_PREFIX, email, secret);
+}
+
+/** HMAC-SHA256 em hexadecimal minúsculo de `heating-optout-v1\n` + email normalizado (épico #197, oposição ao heating). */
+export function heatingOptoutHmac(email: string, secret: string): Promise<string> {
+  return emailHmac(HEATING_OPTOUT_PREFIX, email, secret);
 }
 
 export type ForgetStatus = 'ok' | 'forgotten' | 'error';
