@@ -1470,6 +1470,89 @@ class TwentyPersonIdTest(unittest.TestCase):
         self.assertEqual((f.twenty_writes(), f.d1_writes()), ([], []))
         self.assertEqual(f.db.execute("SELECT count(*) FROM forgotten").fetchone()[0], 1)
 
+    def test_pending_with_existing_conversion_uses_its_pessoa_id_not_current_email_person(self):
+        # Conversão já existe ligada a 'p-old', mas hoje o email resolve para 'p-new': grava 'p-old' sem recriar.
+        f = Fake(people=[person("p-new", "a@x.com")], schema=True)
+        f.convs["c1"] = {"id": "c1", "eventoId": hexid(1), "pessoaId": "p-old"}
+        f.add(1, "a@x.com")
+        counts_dry, _ = run(f, apply=False)
+        self.assertEqual(counts_dry["pessoa_id_invalido"], 0)
+        counts, _ = run(f, apply=True)
+        self.assertEqual((counts["conversoes_a_criar"], counts["conversoes_ja_no_crm"], counts["pessoa_id_invalido"]), (0, 1, 0))
+        self.assertEqual(len(f.convs), 1)
+        self.assertEqual(f.pending(), [])
+        self.assertIsNotNone(f.row(1)["synced_at"])
+        self.assertEqual(f.row(1)["twenty_person_id"], "p-old")
+
+    def test_pending_with_existing_conversion_without_pessoa_id_marks_null_and_counts_invalid(self):
+        # Mesma situação com pessoaId ausente na Conversão existente: marca nulo e conta 1 na simulação e no --apply.
+        f = Fake(people=[person("p-new", "a@x.com")], schema=True)
+        f.convs["c1"] = {"id": "c1", "eventoId": hexid(1)}
+        f.add(1, "a@x.com")
+        counts_dry, _ = run(f, apply=False)
+        self.assertEqual(counts_dry["pessoa_id_invalido"], 1)
+        counts, out = run(f, apply=True)
+        self.assertEqual((counts["conversoes_a_criar"], counts["conversoes_ja_no_crm"], counts["pessoa_id_invalido"]), (0, 1, 1))
+        self.assertIn("pessoa_id_invalido: 1", out)
+        self.assertEqual(f.pending(), [])
+        self.assertIsNotNone(f.row(1)["synced_at"])
+        self.assertIsNone(f.row(1)["twenty_person_id"])
+
+    def test_mixed_group_uses_existing_conversion_id_and_current_person_id_for_new(self):
+        # Grupo misto: existente ligada a 'p-old' fica com 'p-old'; nova recebe o pid da Pessoa atual ('p-new').
+        f = Fake(people=[person("p-new", "a@x.com")], schema=True)
+        f.convs["c1"] = {"id": "c1", "eventoId": hexid(1), "pessoaId": "p-old"}
+        f.add(1, "a@x.com", when="2026-11-24T10:00:00.000Z")
+        f.add(2, "a@x.com", when="2026-11-25T10:00:00.000Z")
+        counts, _ = run(f, apply=True)
+        self.assertEqual((counts["conversoes_a_criar"], counts["conversoes_ja_no_crm"], counts["pessoa_id_invalido"]), (1, 1, 0))
+        self.assertEqual(f.pending(), [])
+        self.assertEqual(f.row(1)["twenty_person_id"], "p-old")
+        self.assertEqual(f.row(2)["twenty_person_id"], "p-new")
+        self.assertEqual(conv_by_event(f)[hexid(2)]["pessoaId"], "p-new")
+        # Pessoa existente com id fora do padrão + grupo misto: conta só a linha nova, igual na simulação e no --apply.
+        g = Fake(people=[person("id invalido", "a@x.com")], schema=True)
+        g.convs["c1"] = {"id": "c1", "eventoId": hexid(1), "pessoaId": "p-old"}
+        g.add(1, "a@x.com", when="2026-11-24T10:00:00.000Z")
+        g.add(2, "a@x.com", when="2026-11-25T10:00:00.000Z")
+        counts_dry, _ = run(g, apply=False)
+        self.assertEqual(counts_dry["pessoa_id_invalido"], 1)
+        counts_apply, _ = run(g, apply=True)
+        self.assertEqual(counts_apply["pessoa_id_invalido"], 1)
+        self.assertEqual(g.pending(), [])
+        self.assertEqual(g.row(1)["twenty_person_id"], "p-old")
+        self.assertIsNone(g.row(2)["twenty_person_id"])
+
+    def test_pending_with_trashed_existing_conversion_uses_its_pessoa_id(self):
+        # Conversão já existe na lixeira ligada a 'p-old', com email hoje na Pessoa ativa 'p-new': grava 'p-old' sem recriar.
+        f = Fake(people=[person("p-new", "a@x.com")], schema=True)
+        f.convs["c1"] = {"id": "c1", "eventoId": hexid(1), "pessoaId": "p-old", "deletedAt": "2026-11-21T00:00:00.000Z"}
+        f.add(1, "a@x.com")
+        counts, _ = run(f, apply=True)
+        self.assertEqual(
+            (counts["conversoes_a_criar"], counts["conversoes_ja_no_crm"], counts["conversoes_na_lixeira"], counts["pessoa_id_invalido"]),
+            (0, 1, 1, 0),
+        )
+        self.assertEqual(len(f.convs), 1)
+        self.assertEqual(f.pending(), [])
+        self.assertEqual(f.row(1)["twenty_person_id"], "p-old")
+
+    def test_pending_with_existing_conversion_and_new_person_keeps_existing_pessoa_id(self):
+        # Conversão já existe ligada a 'p-old', email sem Pessoa (target None): cria Pessoa nova, mas mantém 'p-old' na linha.
+        f = Fake(schema=True)
+        f.convs["c1"] = {"id": "c1", "eventoId": hexid(1), "pessoaId": "p-old"}
+        f.add(1, "a@x.com")
+        counts, _ = run(f, apply=True)
+        (nova,) = f.people.values()
+        self.assertEqual(
+            (counts["pessoas_a_criar"], counts["conversoes_a_criar"], counts["conversoes_ja_no_crm"], counts["pessoa_id_invalido"]),
+            (1, 0, 1, 0),
+        )
+        self.assertEqual(len(f.convs), 1)
+        self.assertEqual(f.pending(), [])
+        self.assertEqual(f.row(1)["twenty_person_id"], "p-old")
+        self.assertNotEqual(f.row(1)["twenty_person_id"], nova["id"])
+
 
 if __name__ == "__main__":
     unittest.main()

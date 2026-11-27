@@ -34,9 +34,12 @@ Regras:
   Conversão com os campos de origem vazios. Origem fora do formato (canal ou fonte fora da lista, UTM ou página de
   entrada que não casam, fonte sem canal) é linha inválida. O --forget apaga a Conversão inteira, e a origem sai junto.
 - Id da Pessoa no D1 (issue #193, migração 0008): ao marcar `synced_at`, o sync grava em `twenty_person_id` o id da
-  Pessoa no Twenty a que as Conversões do grupo foram ligadas (para o link do painel /admin/contatos). Se o Twenty
-  devolver um id fora do padrão do CHECK (letras ASCII, números e hífen, de 1 a 64), a linha é marcada com
-  `twenty_person_id` nulo e conta em `pessoa_id_invalido`. Linhas já sincronizadas antes da migração
+  Pessoa no Twenty a que cada Conversão está ligada (para o link do painel /admin/contatos): para Conversões criadas na
+  rodada, o id da Pessoa criada ou encontrada pelo email; para linhas pendentes cuja Conversão já existia no Twenty
+  (por exemplo após queda antes da marcação), o `pessoaId` da própria Conversão existente, mesmo que o email hoje
+  resolva para outra Pessoa. Se o id (da Pessoa ou da Conversão existente) estiver ausente ou fora do padrão do CHECK
+  (letras ASCII, números e hífen, de 1 a 64), a linha é marcada com `twenty_person_id` nulo e conta em
+  `pessoa_id_invalido`. Linhas já sincronizadas antes da migração
   (`synced_at IS NOT NULL AND twenty_person_id IS NULL`) são preenchidas a partir da relação `pessoa` (`pessoaId`) das
   Conversões já lidas do Twenty (inclusive as da lixeira), sem escrever nada no Twenty e mesmo quando não há linhas
   pendentes; contam em `ids_a_preencher` e só são gravadas com --apply. Ficam com `twenty_person_id` nulo as linhas
@@ -549,8 +552,11 @@ def run(c: TS.Clients, *, apply: bool = False, out=None) -> Counter:
         counts["conversoes_ja_no_crm"] += len(rs) - len(new)
         counts["conversoes_na_lixeira"] += sum(r["id"] in trashed_conv for r in rs)
         counts["linhas_a_marcar"] += len(rs)
-        if target is not None and not _full(TWENTY_PERSON_ID, target.get("id")):
-            counts["pessoa_id_invalido"] += len(rs)
+        for r in rs:
+            if r["id"] in conv_person and not _full(TWENTY_PERSON_ID, conv_person[r["id"]]):
+                counts["pessoa_id_invalido"] += 1
+        if target is not None and new and not _full(TWENTY_PERSON_ID, target.get("id")):
+            counts["pessoa_id_invalido"] += len(new)
         for r in rs:
             for i, lbl in r["interests"].items():
                 labels[i] = lbl  # rótulo do catálogo mais recente (linhas em ordem de data)
@@ -587,13 +593,21 @@ def run(c: TS.Clients, *, apply: bool = False, out=None) -> Counter:
             for r in new:
                 c.twenty("POST", f"/rest/{PLURAL}", conversion_body(r, pid), op="criar conversão")
             valid_pid = pid if _full(TWENTY_PERSON_ID, pid) else None
-            if valid_pid is None and target is None:
-                counts["pessoa_id_invalido"] += len(rs)
-            ids = [r["id"] for r in rs]
-            for i in range(0, len(ids), MARK_CHUNK):
-                part = ids[i:i + MARK_CHUNK]
-                c.d1(f"UPDATE conversions SET synced_at = ?, twenty_person_id = ? WHERE synced_at IS NULL AND id IN ({','.join('?' * len(part))})",
-                     [now, valid_pid, *part])
+            if valid_pid is None and target is None and new:
+                counts["pessoa_id_invalido"] += len(new)
+            by_pid: OrderedDict[str | None, list[str]] = OrderedDict()
+            for r in rs:
+                if r["id"] in conv_person:
+                    raw_pid = conv_person[r["id"]]
+                    row_pid = raw_pid if _full(TWENTY_PERSON_ID, raw_pid) else None
+                else:
+                    row_pid = valid_pid
+                by_pid.setdefault(row_pid, []).append(r["id"])
+            for row_pid, ids in by_pid.items():
+                for i in range(0, len(ids), MARK_CHUNK):
+                    part = ids[i:i + MARK_CHUNK]
+                    c.d1(f"UPDATE conversions SET synced_at = ?, twenty_person_id = ? WHERE synced_at IS NULL AND id IN ({','.join('?' * len(part))})",
+                         [now, row_pid, *part])
             counts["linhas_marcadas"] += len(rs)
     if apply and fill_plan:
         for pid, ids in fill_plan.items():
