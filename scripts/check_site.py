@@ -3538,8 +3538,8 @@ def check_priority(site: Path) -> list[str]:
         elif pf.id_attrs[frag].get("tabindex", "").strip() != "-1":
             problems.append(f'{PRIORITY_PAGE}: mensagem #{frag} precisa de tabindex="-1"')
     has_focus_script = any(
-        "location.hash" in _js_mask(body, keep_strings=True) and ".focus(" in _js_mask(body, keep_strings=True)
-        for body in _exec_scripts(html)
+        "location.hash" in masked and ".focus(" in masked
+        for masked in (_js_mask(body) for body in _exec_scripts(html))
     )
     if not has_focus_script:
         problems.append(f"{PRIORITY_PAGE}: falta o script de foco nas mensagens de fragmento")

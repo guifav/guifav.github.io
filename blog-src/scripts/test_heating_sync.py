@@ -1169,6 +1169,7 @@ class HeatingSyncTest(unittest.TestCase):
                     self.injected = True
                     res = super().__call__(method, url, headers, body)
                     self.add_optout("antigo@corp.com")
+                    self.add_optout("so-conv@corp.com")
                     self.add_optout("late-new@corp.com")
                     return res
                 return super().__call__(method, url, headers, body)
@@ -1196,8 +1197,9 @@ class HeatingSyncTest(unittest.TestCase):
             "(?, 'antigo@corp.com', 20, 'morno', '[]', ?, 'p-curso')",
             (NOW_ISO, CTX_CURSO, NOW_ISO),
         )
-        # Conversões de antigo@corp.com (inclusive uma antiga fora da retenção, só com twenty_person_id em conversions).
-        f.add_conv(1, "antigo@corp.com", action="material_download", material="planilha-custos-ia", when=ago(days=400))
+        # Conversões antigas fora da retenção: so-conv@corp.com só existe em conversions (sem linha em heating nem
+        # em engagement_events), provando a inclusão de raw_convs em candidate_emails no passo 5f.
+        f.add_conv(1, "so-conv@corp.com", action="material_download", material="planilha-custos-ia", when=ago(days=400))
         f.add_conv(2, "antigo@corp.com", action="newsletter_confirm", when=ago(days=400))
         f.db.execute("UPDATE conversions SET twenty_person_id = 'p-conv' WHERE id = ?", (hexid(1),))
         f.db.execute("UPDATE conversions SET twenty_person_id = 'p-lixo' WHERE id = ?", (hexid(2),))
@@ -1213,7 +1215,7 @@ class HeatingSyncTest(unittest.TestCase):
 
         counts, _ = run_job(f, apply=True, ler_curso=lambda _s: docs)
         self.assertTrue(f.injected)
-        self.assertEqual(counts["oposicao_aplicada"], 2)
+        self.assertEqual(counts["oposicao_aplicada"], 3)
         for pid in ("p-site", "p-curso", "p-conv"):
             for k in H.PERSON_HEATING_FIELDS:
                 self.assertIsNone(f.people[pid][k], (pid, k))
@@ -1223,7 +1225,7 @@ class HeatingSyncTest(unittest.TestCase):
         self.assertEqual(f.people["p-lixo"]["heatingNota"], 50)
         patched_lixo = [p for m, p, _, _ in f.calls if m == "PATCH" and p == "/rest/people/p-lixo"]
         self.assertEqual(patched_lixo, [])
-        for em in ("antigo@corp.com", "late-new@corp.com"):
+        for em in ("antigo@corp.com", "so-conv@corp.com", "late-new@corp.com"):
             self.assertEqual(f.db.execute("SELECT count(*) FROM engagement_events WHERE email = ?", (em,)).fetchone()[0], 0, em)
             self.assertEqual(f.db.execute("SELECT count(*) FROM heating WHERE email = ?", (em,)).fetchone()[0], 0, em)
 

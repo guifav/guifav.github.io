@@ -5463,7 +5463,11 @@ class PriorityTest(unittest.TestCase):
             ("mensagens sem tabindex=-1", {"msg_tabindex": None}, 'tabindex="-1"'),
             ("mensagens com tabindex=0", {"msg_tabindex": "0"}, 'tabindex="-1"'),
             ("sem script de foco", {"focus_script": ""}, "script de foco"),
-            ("script de foco comentado", {"focus_script": f"<!-- {self.DEFAULT_FOCUS_SCRIPT} -->"}, "script de foco"),
+            ("script de foco comentado em HTML", {"focus_script": f"<!-- {self.DEFAULT_FOCUS_SCRIPT} -->"}, "script de foco"),
+            ("script de foco só em string", {"focus_script": '<script>var s = "location.hash .focus(";</script>'}, "script de foco"),
+            ("script de foco só em string simples e template", {"focus_script": "<script>var a = 'location.hash', b = `.focus(`;</script>"}, "script de foco"),
+            ("script de foco só em comentário //", {"focus_script": "<script>// location.hash .focus(</script>"}, "script de foco"),
+            ("script de foco só em comentário /* */", {"focus_script": "<script>/* location.hash .focus( */</script>"}, "script de foco"),
             ("sem form", {"form": ""}, C.PRIORITY_ACTION),
             ("action fora da tag form", {"form": f'<form data-clarity-mask="true" method="post" action="https://outro.example/"><p action="{C.PRIORITY_ACTION}"></p><input type="email" name="email"><div class="cf-turnstile" data-sitekey="{key}"></div></form>'}, C.PRIORITY_ACTION),
             ("method get", {"form": f'<form data-clarity-mask="true" method="get" action="{C.PRIORITY_ACTION}"><input type="email" name="email"><div class="cf-turnstile" data-sitekey="{key}"></div></form>'}, 'method="post"'),
@@ -5527,6 +5531,24 @@ class PriorityTest(unittest.TestCase):
                 self.w(C.PRIORITY_PAGE, self.priority_doc(form=form_html))
                 got = C.check_priority(self.site)
                 self.assertTrue(any(needle in p for p in got), got)
+
+    def test_inert_fragment_messages_fail(self):
+        # Mensagens de fragmento em blocos inertes (template, noscript ou hidden) não contam em _PriorityPage.id_attrs.
+        pronto = '<p id="pronto" class="form-msg" tabindex="-1">pronto</p>'
+        pronto_hidden = '<p id="pronto" class="form-msg" tabindex="-1" hidden>pronto</p>'
+        base = self.priority_doc()
+        self.assertIn(pronto, base)
+        for name, replacement in (
+            ("em template", f"<template>{pronto}</template>"),
+            ("em noscript", f"<noscript>{pronto}</noscript>"),
+            ("em elemento hidden", f"<div hidden>{pronto}</div>"),
+            ("com proprio hidden", pronto_hidden),
+        ):
+            with self.subTest(case=name):
+                self.build_valid_site()
+                self.w(C.PRIORITY_PAGE, base.replace(pronto, replacement, 1))
+                got = C.check_priority(self.site)
+                self.assertTrue(any("falta a mensagem #pronto" in p for p in got), got)
 
     def test_main_runs_the_priority_rule(self):
         consts = Path(self.tmp.name) / "consts.ts"
