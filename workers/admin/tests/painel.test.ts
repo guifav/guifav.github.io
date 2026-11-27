@@ -8,7 +8,7 @@ import { handle, type Deps, type Env } from '../src/index.ts';
 import { resetCertsCache } from '../src/access.ts';
 import { CATALOG_MAX_BYTES, coletarCatalogo, dataExiste, validarCatalogo } from '../src/catalogo.ts';
 import { sha256Hex, versionId, type R2Like } from '../src/drafts.ts';
-import { landingCell, twentyCell, twentyPersonUrl } from '../src/painel.ts';
+import { heatingScoreCell, heatingSignalsCell, landingCell, twentyCell, twentyPersonUrl } from '../src/painel.ts';
 import type { D1Like, D1Stmt } from '../src/sync.ts';
 import { catalogoPosts } from '../../../blog-src/src/lib/catalogo.ts';
 
@@ -1276,4 +1276,251 @@ test('P6: falha do D1 no meio do batch faz rollback e mantém o catálogo anteri
   assert.equal(col.last_success_at, '2026-11-11T10:00:00.000Z');
   assert.equal(col.item_count, 2);
   assert.ok(typeof col.last_error === 'string' && col.last_error.length > 0);
+});
+
+// ------------------------------------------------------------------ Heating em /admin/contatos (épico #197)
+
+function seedHeating(
+  db: FakeD1,
+  items: {
+    context?: string;
+    email: string;
+    score: number;
+    band: 'frio' | 'morno' | 'quente';
+    signals?: unknown;
+    computed_at?: string;
+    twenty_person_id?: string | null;
+  }[],
+) {
+  const ins = db.raw.prepare(
+    `INSERT INTO heating (context, email, score, band, signals, computed_at, twenty_person_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  );
+  for (const r of items) {
+    ins.run(
+      r.context ?? 'site',
+      r.email,
+      r.score,
+      r.band,
+      typeof r.signals === 'string' ? r.signals : JSON.stringify(r.signals ?? []),
+      r.computed_at ?? '2026-11-12T10:53:00.000Z',
+      r.twenty_person_id ?? null,
+    );
+  }
+}
+
+test('P7: /admin/contatos mostra coluna Heating do contexto site (ou "sem nota") e alterna para ?ordem=heating', async () => {
+  const s = setup();
+  seedConversions(s.db, [
+    { id: 'h1', email: 'ana@x.com', action: 'material_download', material: 'planilha-custos-ia', occurred_at: '2026-11-12T10:00:00.000Z' },
+    { id: 'h2', email: 'bia@x.com', action: 'newsletter_confirm', occurred_at: '2026-11-12T09:00:00.000Z' },
+  ]);
+  seedHeating(s.db, [
+    {
+      context: 'site',
+      email: 'ana@x.com',
+      score: 48,
+      band: 'quente',
+      signals: [{ sinal: 'material_baixado', rotulo: 'Download de material', pontos: 12 }],
+      twenty_person_id: 'p-ana-1',
+    },
+    // Nota só de curso para bia@x.com não aparece na coluna Heating (contexto site) da lista de conversões.
+    {
+      context: 'curso:chatgpt-no-dia-a-dia',
+      email: 'bia@x.com',
+      score: 30,
+      band: 'morno',
+      signals: [{ sinal: 'curso_cadastro', rotulo: 'Cadastro no curso', pontos: 10 }],
+    },
+  ]);
+
+  const html = await (await s.req('/admin/contatos')).text();
+  assert.ok(html.includes('Por conversão · <a href="/admin/contatos?ordem=heating">Por heating</a>'));
+  assert.ok(html.includes('<th>Heating</th><th>Twenty</th>'));
+  const tbody = html.match(/<tbody>([\s\S]*?)<\/tbody>/)?.[1] ?? '';
+  const rows = [...tbody.matchAll(/<tr>([\s\S]*?)<\/tr>/g)].map((m) =>
+    [...m[1].matchAll(/<td>([\s\S]*?)<\/td>/g)].map((c) => c[1]),
+  );
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0][1], 'ana@x.com');
+  assert.equal(rows[0][rows[0].length - 2], '48 (quente)');
+  assert.equal(rows[1][1], 'bia@x.com');
+  assert.equal(rows[1][rows[1].length - 2], 'sem nota');
+});
+
+test('P7: /admin/contatos?ordem=heating ordena por nota DESC e email, filtra contexto e faixa, escapa HTML e mostra link do Twenty', async () => {
+  const s = setup();
+  seedHeating(s.db, [
+    {
+      context: 'site',
+      email: 'quente-b@x.com',
+      score: 50,
+      band: 'quente',
+      signals: [
+        { sinal: 'site_agende', rotulo: 'Clique em Agende', pontos: 50 },
+        { sinal: 'material_baixado', rotulo: 'Download de material', pontos: 11.2 },
+      ],
+      computed_at: '2026-11-12T10:53:00.000Z',
+      twenty_person_id: 'pid-quente-b',
+    },
+    {
+      context: 'site',
+      email: 'quente-a@x.com',
+      score: 50,
+      band: 'quente',
+      signals: [{ sinal: 'site_contato', rotulo: 'Página de contato', pontos: 50 }],
+      computed_at: '2026-11-12T10:53:00.000Z',
+      twenty_person_id: null,
+    },
+    {
+      context: 'site',
+      email: '<script>x</script>@evil.com',
+      score: 18,
+      band: 'morno',
+      signals: [{ sinal: 'material_baixado', rotulo: '<b>Malicioso</b>', pontos: 18.0 }],
+      computed_at: '2026-11-12T10:53:00.000Z',
+      twenty_person_id: null,
+    },
+    {
+      context: 'curso:chatgpt-no-dia-a-dia',
+      email: 'aluna@x.com',
+      score: 25,
+      band: 'morno',
+      signals: [
+        { sinal: 'curso_cadastro', rotulo: 'Cadastro no curso', pontos: 10 },
+        { sinal: 'curso_aula', rotulo: 'Aula concluída no curso', pontos: 15 },
+      ],
+      computed_at: '2026-11-12T10:53:00.000Z',
+      twenty_person_id: 'pid-aluna',
+    },
+    {
+      context: 'curso:outro-curso',
+      email: 'outro@x.com',
+      score: 10,
+      band: 'frio',
+      signals: [{ sinal: 'curso_cadastro', rotulo: 'Cadastro no curso', pontos: 10 }],
+      computed_at: '2026-11-12T10:53:00.000Z',
+      twenty_person_id: null,
+    },
+  ]);
+
+  const rowsOf = (html: string) => {
+    const tbody = html.match(/<tbody>([\s\S]*?)<\/tbody>/)?.[1] ?? '';
+    return [...tbody.matchAll(/<tr>([\s\S]*?)<\/tr>/g)].map((m) =>
+      [...m[1].matchAll(/<td>([\s\S]*?)<\/td>/g)].map((c) => c[1]),
+    );
+  };
+
+  // Visão padrão (contexto = site)
+  const res = await s.req('/admin/contatos?ordem=heating');
+  assert.equal(res.status, 200);
+  const html = await res.text();
+  assert.ok(html.includes('<a href="/admin/contatos">Por conversão</a> · Por heating'));
+  assert.ok(html.includes('<option value="site" selected>Site</option>'));
+  assert.ok(html.includes('<option value="curso:chatgpt-no-dia-a-dia">ChatGPT no dia a dia</option>'));
+  assert.ok(html.includes('<option value="curso:outro-curso">curso:outro-curso</option>'));
+  assert.ok(!html.includes('<script>x</script>'));
+  assert.ok(!html.includes('<b>Malicioso</b>'));
+
+  const rows = rowsOf(html);
+  assert.equal(rows.length, 3);
+  // Empate de nota (50): desempate por email ASC (quente-a antes de quente-b)
+  assert.deepEqual(
+    rows.map((r) => [r[0], r[1], r[2]]),
+    [
+      ['50', 'quente', 'quente-a@x.com'],
+      ['50', 'quente', 'quente-b@x.com'],
+      ['18', 'morno', '&lt;script&gt;x&lt;/script&gt;@evil.com'],
+    ],
+  );
+  assert.equal(rows[0][5], 'sem Pessoa no CRM');
+  assert.equal(rows[1][3], 'Clique em Agende (50,0); Download de material (11,2)');
+  assert.equal(rows[1][4], '2026-11-12 10:53');
+  assert.equal(
+    rows[1][5],
+    '<a href="https://crm.guifav.dev/object/person/pid-quente-b" target="_blank" rel="noopener noreferrer">abrir no Twenty</a>',
+  );
+  assert.equal(rows[2][3], '&lt;b&gt;Malicioso&lt;/b&gt; (18,0)');
+
+  // Filtro por faixa
+  const htmlQuente = await (await s.req('/admin/contatos?ordem=heating&faixa=quente')).text();
+  assert.equal(rowsOf(htmlQuente).length, 2);
+  const htmlFrio = await (await s.req('/admin/contatos?ordem=heating&faixa=frio')).text();
+  assert.equal(rowsOf(htmlFrio).length, 0);
+
+  // Filtro por contexto de curso
+  const htmlCurso = await (await s.req('/admin/contatos?ordem=heating&contexto=curso:chatgpt-no-dia-a-dia')).text();
+  const rowsCurso = rowsOf(htmlCurso);
+  assert.equal(rowsCurso.length, 1);
+  assert.equal(rowsCurso[0][2], 'aluna@x.com');
+  assert.equal(rowsCurso[0][3], 'Cadastro no curso (10,0); Aula concluída no curso (15,0)');
+
+  // Contexto desconhecido/fora da tabela volta para site
+  const htmlInv = await (await s.req('/admin/contatos?ordem=heating&contexto=curso:inexistente&faixa=invalida')).text();
+  assert.equal(rowsOf(htmlInv).length, 3);
+});
+
+test('P7: /admin/contatos?ordem=heating pagina de 100 em 100 mantendo contexto e faixa', async () => {
+  const s = setup();
+  const list = Array.from({ length: 101 }, (_, i) => ({
+    context: 'curso:chatgpt-no-dia-a-dia',
+    email: `a${String(i).padStart(3, '0')}@x.com`,
+    score: 50,
+    band: 'quente' as const,
+    signals: [{ sinal: 'curso_aula', rotulo: 'Aula concluída no curso', pontos: 50 }],
+  }));
+  seedHeating(s.db, list);
+
+  const p1 = await (await s.req('/admin/contatos?ordem=heating&contexto=curso:chatgpt-no-dia-a-dia&faixa=quente')).text();
+  assert.ok(p1.includes('101 encontrados, página 1 de 2.'));
+  assert.ok(p1.includes('href="/admin/contatos?ordem=heating&contexto=curso%3Achatgpt-no-dia-a-dia&faixa=quente&p=2">próxima</a>'));
+  const p2 = await (await s.req('/admin/contatos?ordem=heating&contexto=curso:chatgpt-no-dia-a-dia&faixa=quente&p=2')).text();
+  assert.ok(p2.includes('101 encontrados, página 2 de 2.'));
+  assert.ok(p2.includes('a100@x.com'));
+  assert.ok(p2.includes('href="/admin/contatos?ordem=heating&contexto=curso%3Achatgpt-no-dia-a-dia&faixa=quente">anterior</a>'));
+});
+
+test('P7: heatingScoreCell exibe 0 (frio) para spam e heatingSignalsCell limita a 3 sinais', async () => {
+  assert.equal(heatingScoreCell(0, 'frio'), '0 (frio)');
+  assert.equal(heatingScoreCell(null, 'frio'), 'sem nota');
+  assert.equal(heatingScoreCell(undefined, 'frio'), 'sem nota');
+  assert.equal(heatingScoreCell(10, null), 'sem nota');
+  assert.equal(heatingScoreCell(10, ''), 'sem nota');
+
+  const fourSignals = JSON.stringify([
+    { sinal: 'site_agende', rotulo: 'Sinal 1', pontos: 50 },
+    { sinal: 'material_baixado', rotulo: 'Sinal 2', pontos: 12 },
+    { sinal: 'newsletter_confirmada', rotulo: 'Sinal 3', pontos: 10 },
+    { sinal: 'site_visita', rotulo: 'Sinal 4', pontos: 2 },
+  ]);
+  const cell = heatingSignalsCell(fourSignals);
+  assert.equal(cell, 'Sinal 1 (50,0); Sinal 2 (12,0); Sinal 3 (10,0)');
+  assert.ok(!cell.includes('Sinal 4'));
+
+  // Também na página real /admin/contatos e /admin/contatos?ordem=heating.
+  const s = setup();
+  seedConversions(s.db, [
+    { id: 'sp1', email: 'spam@x.com', action: 'newsletter_confirm', occurred_at: '2026-11-12T10:00:00.000Z' },
+  ]);
+  seedHeating(s.db, [
+    {
+      context: 'site',
+      email: 'spam@x.com',
+      score: 0,
+      band: 'frio',
+      signals: [{ sinal: 'email_spam', rotulo: 'Reclamou de spam: não abordar', pontos: 0 }],
+    },
+    {
+      context: 'site',
+      email: 'quatro@x.com',
+      score: 74,
+      band: 'quente',
+      signals: JSON.parse(fourSignals),
+    },
+  ]);
+  const htmlConv = await (await s.req('/admin/contatos')).text();
+  assert.ok(htmlConv.includes('<td>0 (frio)</td>'));
+  const htmlHeat = await (await s.req('/admin/contatos?ordem=heating')).text();
+  assert.ok(htmlHeat.includes('Sinal 1 (50,0); Sinal 2 (12,0); Sinal 3 (10,0)'));
+  assert.ok(!htmlHeat.includes('Sinal 4'));
 });

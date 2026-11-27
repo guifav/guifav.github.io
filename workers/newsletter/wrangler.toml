@@ -61,7 +61,8 @@ GA4_MEASUREMENT_ID = "G-K7Y87QNCX8"
 HEATING_REMETENTES_SITE = "insights@guifav.dev,insights@expert.guifav.dev"
 # Slugs dos cursos (separados por vírgula) cujo engajamento no heating é separado do site (épico #197, decisão de
 # 2026-11-27). Quando `data.from` no webhook do Resend é `<slug>@guifav.dev` e `<slug>` está nesta lista (padrão
-# `[a-z0-9][a-z0-9-]{0,63}`; slugs fora do padrão são ignorados), o contexto gravado é `curso:<slug>`. Qualquer
+# `[a-z0-9][a-z0-9-]{0,63}`; slugs fora do padrão ou cujo `<slug>@guifav.dev` também esteja em `HEATING_REMETENTES_SITE`
+# são recusados com log curto, mantendo o remetente como `site`), o contexto gravado é `curso:<slug>`. Qualquer
 # outro remetente fora de `HEATING_REMETENTES_SITE` e de `HEATING_CURSOS` (inclusive ausente ou malformado) é
 # ignorado sem gravar. Cada curso novo precisa de um remetente `<slug>@guifav.dev` e do slug nesta lista.
 HEATING_CURSOS = "chatgpt-no-dia-a-dia"

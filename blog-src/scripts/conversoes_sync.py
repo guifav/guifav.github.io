@@ -64,10 +64,15 @@ Twenty, --forget --apply grava um marcador mínimo na tabela `forgotten` do D1 (
 `forgotten_at` (pelo relógio do próprio D1, em ISO UTC com milissegundos). Com esse marcador, o Worker recusa links
 assinados emitidos antes (ou no instante) da remoção. As linhas do email no D1 continuam sendo o diário da remoção:
 apaga no Twenty (de vez, inclusive as que estão na lixeira) as Conversões cujos eventoId são os ids dessas linhas, relê
-o Twenty com a lixeira para provar que nenhuma sobrou e só então apaga as linhas no D1 (levando junto
-`twenty_person_id` e a origem). Uma queda no meio (mesmo na leitura do Twenty) deixa o marcador gravado e o D1 intacto,
-e repetir o comando conclui, mesmo que o email da Pessoa tenha mudado no CRM. A Pessoa e os campos site* dela ficam
-como estão (decisão do Gui, 2026-11-23). Simulação sem --apply.
+o Twenty com a lixeira para provar que nenhuma sobrou, limpa os quatro campos `heating*` (heatingNota, heatingFaixa,
+heatingSinais e heatingCalculadoEm) da Pessoa ativa — tanto as achadas pelo email quanto as referenciadas pelos
+`twenty_person_id` salvos nas linhas de `conversions` e de `heating` (contexto `site`) do email antes de apagá-las
+(a nota não fica no resumo que sobra na Pessoa mesmo se o email mudou no CRM; épico #197) — e só
+então apaga as linhas no D1 em `conversions` (levando junto `twenty_person_id` e a origem), `engagement_events` e
+`heating` no contexto `site` (não toca nos contextos de curso `curso:<slug>`). Uma queda no meio (mesmo na leitura do
+Twenty ou na limpeza dos campos heating da Pessoa) deixa o marcador gravado e o D1 intacto, e repetir o comando conclui,
+mesmo que o email da Pessoa tenha mudado no CRM. A Pessoa e os campos site* dela ficam como estão (decisão do Gui,
+2026-11-23). Simulação sem --apply.
 
 Limpeza dos marcadores (issue #134): os marcadores em `forgotten` ficam por 8 dias (o link mais longo vale 7 dias, mais
 1 dia de folga de relógio). No sync e no --forget com --apply, os marcadores com `forgotten_at` mais velho que 8 dias
@@ -155,6 +160,7 @@ PERSON_FIELDS = OrderedDict([
     ("siteEmailComprovado", {"type": "BOOLEAN", "label": "Email comprovado no site", "icon": "IconMailCheck"}),
     ("siteGaClientId", {"type": "TEXT", "label": "client_id do GA4 (site)", "icon": "IconChartLine"}),
 ])
+HEATING_PERSON_FIELDS = ("heatingNota", "heatingFaixa", "heatingSinais", "heatingCalculadoEm")
 MULTI = {"interesses", "siteInteresses"}
 
 HEX64 = re.compile(r"[0-9a-f]{64}")
@@ -189,6 +195,11 @@ LOCK_DEFAULT = "/tmp/guifav-conversoes-sync.lock"
 
 def _full(rx: re.Pattern, v) -> bool:
     return isinstance(v, str) and rx.fullmatch(v) is not None
+
+
+def _filled(v) -> bool:
+    """Trata None e '' como vazios, preservando 0 (ex.: nota 0 de email_spam) e False."""
+    return v is not None and v != ""
 
 
 def valid_email(v) -> bool:
@@ -620,7 +631,8 @@ def run(c: TS.Clients, *, apply: bool = False, out=None) -> Counter:
 
 
 def forget(c: TS.Clients, email: str, *, apply: bool = False, out=None, forget_key: str | None = None) -> Counter:
-    """Grava o marcador `forgotten` (issue #134), apaga as conversões do Twenty e do D1 (levando junto `twenty_person_id`), e limpa marcadores vencidos."""
+    """Grava o marcador `forgotten` (issue #134), apaga as conversões do Twenty e do D1, limpa o heating do contexto
+    `site` no D1 e na Pessoa do Twenty (épico #197, sem tocar nos contextos de curso), e limpa marcadores vencidos."""
     out = out or sys.stdout
     key = c.env.get("FORGET_HMAC_KEY", "") if forget_key is None else forget_key
     email = email.strip().lower()
@@ -630,28 +642,58 @@ def forget(c: TS.Clients, email: str, *, apply: bool = False, out=None, forget_k
         # 1) Marcador mínimo no D1 logo após validar chave e email, antes de qualquer leitura do D1 ou do Twenty (#134):
         #    mesmo que a leitura do Twenty falhe em seguida, links antigos já ficam bloqueados.
         _upsert_forget_mark(c, email_hmac)
-    # As linhas do D1 são o diário: enquanto existirem, os ids delas acham as Conversões no Twenty, qualquer que seja o
-    # email atual da Pessoa no CRM.
-    ids = {r["id"] for r in c.d1("SELECT id FROM conversions WHERE email = ?", [email])}
+    # As linhas do D1 são o diário: enquanto existirem, os ids delas acham as Conversões no Twenty e os
+    # `twenty_person_id` de `conversions` e `heating` (contexto `site`) acham a Pessoa ativa mesmo se o email mudou.
+    conv_rows = c.d1("SELECT id, twenty_person_id FROM conversions WHERE email = ?", [email])
+    ids = {r["id"] for r in conv_rows}
+    site_events = int(c.d1("SELECT count(*) AS n FROM engagement_events WHERE context = 'site' AND email = ?", [email])[0]["n"])
+    heating_rows = c.d1("SELECT twenty_person_id FROM heating WHERE context = 'site' AND email = ?", [email])
+    site_heating = len(heating_rows)
+    ref_pids = {
+        r["twenty_person_id"]
+        for r in (*conv_rows, *heating_rows)
+        if _full(TWENTY_PERSON_ID, r.get("twenty_person_id"))
+    }
     expired_marks = _count_expired_marks(c, exclude_hmac=email_hmac)
     if apply and expired_marks:
         # Limpeza dos marcadores vencidos independe do Twenty (#134).
         _prune_expired_marks(c)
     meta = read_metadata(c)
-    persons = people_by_email(list_records(c, "people")).get(email) or []
+    all_people = list_records(c, "people")
+    persons = people_by_email(all_people).get(email) or []
+    active_by_id = {p["id"]: p for p in all_people if not p.get("deletedAt")}
+    heating_persons = list(persons)
+    seen_pids = {p["id"] for p in heating_persons}
+    for pid in sorted(ref_pids):
+        if pid not in seen_pids and pid in active_by_id:
+            seen_pids.add(pid)
+            heating_persons.append(active_by_id[pid])
     convs = [x for x in list_records(c, PLURAL) if x.get("eventoId") in ids] if meta["conv_id"] else []
+    heating_fields = [k for k in HEATING_PERSON_FIELDS if k in meta["person"]]
+    to_clear = [p for p in heating_persons if any(_filled(p.get(k)) for k in heating_fields)]
     counts["d1_linhas"], counts["conversoes_no_crm"], counts["pessoas_mantidas"] = len(ids), len(convs), len(persons)
+    counts["eventos_site"], counts["heating_site"], counts["pessoas_heating_limpas"] = site_events, site_heating, len(to_clear)
     counts["marcadores_vencidos"] = expired_marks
     if apply:
-        # 2) Apaga no Twenty e relê para provar que nenhuma sobrou.
+        # 2) Apaga no Twenty e relê para provar que nenhuma sobrou; limpa os quatro campos heating* na Pessoa.
         for x in convs:
             c.twenty("DELETE", f"/rest/{PLURAL}/{urllib.parse.quote(x['id'])}", op="apagar conversão")
         if meta["conv_id"] and any(x.get("eventoId") in ids for x in list_records(c, PLURAL)):
             raise SyncError("ainda há Conversões do email no Twenty; o D1 ficou intacto, rode de novo")
-        # 3) Apaga as linhas do email em `conversions` e confirma.
+        if heating_fields:
+            clear_patch = {k: None for k in heating_fields}
+            for p in to_clear:
+                c.twenty("PATCH", f"/rest/people/{urllib.parse.quote(p['id'])}", clear_patch, op="limpar heating da pessoa")
+        # 3) Apaga as linhas do email em `conversions`, `engagement_events` (site) e `heating` (site) e confirma.
         c.d1("DELETE FROM conversions WHERE email = ?", [email])
         if c.d1("SELECT count(*) AS n FROM conversions WHERE email = ?", [email])[0]["n"] != 0:
             raise SyncError("o D1 ainda tem linhas do email depois da remoção")
+        c.d1("DELETE FROM engagement_events WHERE context = 'site' AND email = ?", [email])
+        if c.d1("SELECT count(*) AS n FROM engagement_events WHERE context = 'site' AND email = ?", [email])[0]["n"] != 0:
+            raise SyncError("o D1 ainda tem eventos de site do email depois da remoção")
+        c.d1("DELETE FROM heating WHERE context = 'site' AND email = ?", [email])
+        if c.d1("SELECT count(*) AS n FROM heating WHERE context = 'site' AND email = ?", [email])[0]["n"] != 0:
+            raise SyncError("o D1 ainda tem nota de site do email depois da remoção")
     _report(counts, out, FORGET_MARK if apply else "simulação: nada foi apagado (use --apply)")
     return counts
 

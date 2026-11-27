@@ -318,9 +318,157 @@ type ContatoRow = {
   landing_path: string | null;
   twenty_person_id: string | null;
   email_no_crm_ou_comprovado: number;
+  heating_score: number | null;
+  heating_band: string | null;
 };
 
+export const HEATING_BANDS = ['quente', 'morno', 'frio'] as const;
+
+// Manter alinhado com CURSOS em blog-src/scripts/heating_sync.py (e HEATING_CURSOS no Worker blog-newsletter).
+export const HEATING_CURSO_LABELS: Record<string, string> = {
+  'chatgpt-no-dia-a-dia': 'ChatGPT no dia a dia',
+};
+
+export function heatingContextLabel(context: string): string {
+  if (context === 'site') return 'Site';
+  if (context.startsWith('curso:')) {
+    const slug = context.slice('curso:'.length);
+    return HEATING_CURSO_LABELS[slug] ?? context;
+  }
+  return context;
+}
+
+export function heatingScoreCell(score: number | null | undefined, band: string | null | undefined): string {
+  if (score === null || score === undefined || !band) return 'sem nota';
+  return `${score} (${esc(band)})`;
+}
+
+export function heatingSignalsCell(raw: string | null | undefined): string {
+  if (!raw) return '';
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return '';
+  }
+  if (!Array.isArray(parsed)) return '';
+  const parts: string[] = [];
+  for (const item of parsed.slice(0, 3)) {
+    if (!item || typeof item !== 'object') continue;
+    const obj = item as { rotulo?: unknown; sinal?: unknown; pontos?: unknown };
+    const rotulo = typeof obj.rotulo === 'string' && obj.rotulo ? obj.rotulo : typeof obj.sinal === 'string' ? obj.sinal : '';
+    const pontos = typeof obj.pontos === 'number' && Number.isFinite(obj.pontos) ? obj.pontos : Number(obj.pontos);
+    if (!rotulo || !Number.isFinite(pontos)) continue;
+    parts.push(`${esc(rotulo)} (${pontos.toFixed(1).replace('.', ',')})`);
+  }
+  return parts.join('; ');
+}
+
+export function heatingTwentyCell(personId: string | null | undefined, twentyOrigin: string): string {
+  const url = twentyPersonUrl(personId, twentyOrigin);
+  if (url) return `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">abrir no Twenty</a>`;
+  return 'sem Pessoa no CRM';
+}
+
+type HeatingRow = {
+  context: string;
+  email: string;
+  score: number;
+  band: string;
+  signals: string;
+  computed_at: string;
+  twenty_person_id: string | null;
+};
+
+async function contatosHeatingPage(url: URL, env: PainelEnv): Promise<Response> {
+  const ctxRows = (
+    await env.DB.prepare(
+      `SELECT DISTINCT context FROM heating ORDER BY CASE WHEN context = 'site' THEN 0 ELSE 1 END, context`,
+    ).all<{ context: string }>()
+  ).results;
+  const contexts: string[] = ['site'];
+  for (const r of ctxRows) {
+    if (r.context && r.context !== 'site' && !contexts.includes(r.context)) contexts.push(r.context);
+  }
+
+  const rawCtx = url.searchParams.get('contexto') ?? '';
+  const contexto = contexts.includes(rawCtx) ? rawCtx : 'site';
+  const rawFaixa = url.searchParams.get('faixa') ?? '';
+  const faixa = (HEATING_BANDS as readonly string[]).includes(rawFaixa) ? rawFaixa : '';
+  const page = Math.max(1, Math.min(10_000, Number.parseInt(url.searchParams.get('p') ?? '1', 10) || 1));
+  const offset = (page - 1) * PAINEL_PAGE_SIZE;
+
+  const [rowsRes, totalRow] = await Promise.all([
+    env.DB.prepare(
+      `SELECT context, email, score, band, signals, computed_at, twenty_person_id
+       FROM heating
+       WHERE context = ?1
+         AND (?2 = '' OR band = ?2)
+       ORDER BY score DESC, email ASC
+       LIMIT ${PAINEL_PAGE_SIZE} OFFSET ${offset}`,
+    )
+      .bind(contexto, faixa)
+      .all<HeatingRow>(),
+    env.DB.prepare(`SELECT COUNT(*) AS n FROM heating WHERE context = ?1 AND (?2 = '' OR band = ?2)`)
+      .bind(contexto, faixa)
+      .first<{ n: number }>(),
+  ]);
+
+  const filtered = num(totalRow?.n);
+  const pages = Math.max(1, Math.ceil(filtered / PAINEL_PAGE_SIZE));
+
+  const qs = (o: { contexto?: string; faixa?: string; page?: number }) => {
+    const p = new URLSearchParams();
+    p.set('ordem', 'heating');
+    const vCtx = o.contexto ?? contexto;
+    const vFaixa = o.faixa ?? faixa;
+    const vPage = o.page ?? page;
+    if (vCtx && vCtx !== 'site') p.set('contexto', vCtx);
+    if (vFaixa) p.set('faixa', vFaixa);
+    if (vPage > 1) p.set('p', String(vPage));
+    return `?${p.toString()}`;
+  };
+
+  const opt = (name: string, cur: string, items: [string, string][]) =>
+    `<select name="${name}">${items.map(([v, l]) => `<option value="${esc(v)}"${v === cur ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
+
+  const trs = rowsRes.results
+    .map(
+      (r) => `<tr>
+  <td>${r.score}</td>
+  <td>${esc(r.band)}</td>
+  <td>${esc(r.email)}</td>
+  <td>${heatingSignalsCell(r.signals)}</td>
+  <td>${esc(formatDateTimeUtc(r.computed_at))}</td>
+  <td>${heatingTwentyCell(r.twenty_person_id, env.TWENTY_ORIGIN)}</td>
+</tr>`,
+    )
+    .join('');
+
+  const body = `<h1>Contatos</h1>
+<p><a href="/admin/contatos">Por conversão</a> · Por heating</p>
+<form class="f" method="get" action="/admin/contatos">
+  <input type="hidden" name="ordem" value="heating">
+  ${opt('contexto', contexto, contexts.map((c): [string, string] => [c, heatingContextLabel(c)]))}
+  ${opt('faixa', faixa, [
+    ['', 'todas as faixas'],
+    ['quente', 'quente'],
+    ['morno', 'morno'],
+    ['frio', 'frio'],
+  ])}
+  <button>Filtrar</button> <a href="/admin/contatos?ordem=heating">limpar</a>
+</form>
+<p>${filtered} encontrados, página ${page} de ${pages}.</p>
+<table><thead><tr><th>Nota</th><th>Faixa</th><th>Email</th><th>Sinais</th><th>Calculado em (UTC)</th><th>Twenty</th></tr></thead><tbody>${trs}</tbody></table>
+<p>${page > 1 ? `<a href="/admin/contatos${qs({ page: page - 1 })}">anterior</a> ` : ''}${page < pages ? `<a href="/admin/contatos${qs({ page: page + 1 })}">próxima</a>` : ''}</p>`;
+
+  return respond(200, htmlPage({ title: 'Contatos (Heating) | Painel', atual: 'contatos', body }), 'text/html; charset=utf-8');
+}
+
 export async function contatosPage(url: URL, env: PainelEnv): Promise<Response> {
+  if (url.searchParams.get('ordem') === 'heating') {
+    return contatosHeatingPage(url, env);
+  }
   const f = contatosFiltersFrom(url);
   const args = [f.q, f.acao, f.material, f.comprovado, f.canal];
   const offset = (f.page - 1) * PAINEL_PAGE_SIZE;
@@ -331,7 +479,9 @@ export async function contatosPage(url: URL, env: PainelEnv): Promise<Response> 
               EXISTS (
                 SELECT 1 FROM conversions c2
                 WHERE c2.email = p.email AND c2.id != p.id AND (c2.verified = 1 OR c2.synced_at IS NOT NULL)
-              ) AS email_no_crm_ou_comprovado
+              ) AS email_no_crm_ou_comprovado,
+              h.score AS heating_score,
+              h.band AS heating_band
        FROM (
          SELECT id, email, action, material, file, verified, occurred_at, synced_at,
                 origin_channel, origin_source, utm_source, utm_medium, utm_campaign, landing_path, twenty_person_id
@@ -340,6 +490,7 @@ export async function contatosPage(url: URL, env: PainelEnv): Promise<Response> 
          ORDER BY occurred_at DESC, id
          LIMIT ${PAINEL_PAGE_SIZE} OFFSET ${offset}
        ) p
+       LEFT JOIN heating h ON h.context = 'site' AND h.email = lower(p.email)
        ORDER BY p.occurred_at DESC, p.id`,
     )
       .bind(...args)
@@ -376,12 +527,14 @@ export async function contatosPage(url: URL, env: PainelEnv): Promise<Response> 
   <td>${esc(formatOrigin(r.origin_channel, r.origin_source))}</td>
   <td>${esc(formatUtm(r.utm_source, r.utm_medium, r.utm_campaign))}</td>
   <td>${landingCell(r.landing_path, env.SITE_ORIGIN)}</td>
+  <td>${heatingScoreCell(r.heating_score, r.heating_band)}</td>
   <td>${twentyCell(r.twenty_person_id, r.synced_at, r.verified, r.email_no_crm_ou_comprovado, env.TWENTY_ORIGIN)}</td>
 </tr>`,
     )
     .join('');
 
   const body = `<h1>Contatos</h1>
+<p>Por conversão · <a href="/admin/contatos?ordem=heating">Por heating</a></p>
 <form class="f" method="get" action="/admin/contatos">
   <input name="q" value="${esc(f.q)}" placeholder="buscar email" aria-label="buscar email">
   ${opt('acao', f.acao, [
@@ -400,7 +553,7 @@ export async function contatosPage(url: URL, env: PainelEnv): Promise<Response> 
   <button>Filtrar</button> <a href="/admin/contatos">limpar</a>
 </form>
 <p>${filtered} encontrados, página ${f.page} de ${pages}.</p>
-<table><thead><tr><th>Data (UTC)</th><th>Email</th><th>Ação</th><th>Material e arquivo</th><th>Comprovado</th><th>Origem</th><th>UTM</th><th>Página de entrada</th><th>Twenty</th></tr></thead><tbody>${trs}</tbody></table>
+<table><thead><tr><th>Data (UTC)</th><th>Email</th><th>Ação</th><th>Material e arquivo</th><th>Comprovado</th><th>Origem</th><th>UTM</th><th>Página de entrada</th><th>Heating</th><th>Twenty</th></tr></thead><tbody>${trs}</tbody></table>
 <p>${f.page > 1 ? `<a href="/admin/contatos${qs({ page: f.page - 1 })}">anterior</a> ` : ''}${f.page < pages ? `<a href="/admin/contatos${qs({ page: f.page + 1 })}">próxima</a>` : ''}</p>`;
 
   return respond(200, htmlPage({ title: 'Contatos | Painel', atual: 'contatos', body }), 'text/html; charset=utf-8');

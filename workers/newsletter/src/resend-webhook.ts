@@ -1,11 +1,12 @@
 // Webhook do Resend para o heating de contatos (épico #197, corte 1): POST /resend/webhook.
 // Recebe email.delivered, email.opened, email.clicked e email.complained de todos os envios da conta, verifica a
-// assinatura svix via WebCrypto (sem dependências), filtra cliques que não pontuam (links inválidos, descadastro e
-// página /prioridade), classifica o contexto a partir de `data.from` com `HEATING_CURSOS` (`curso:<slug>` para
-// `<slug>@guifav.dev` na lista) e `HEATING_REMETENTES_SITE` (`site` só para endereços nessa lista; qualquer outro
-// remetente é ignorado sem gravar), exige destinatário único para abertura e clique, respeita a oposição global
-// em `heating_optout` e grava de forma síncrona em `engagement_events` antes de responder 200. Em falha do D1, devolve
-// 500 para o Resend reenviar, com log curto sem email.
+// assinatura svix via WebCrypto (sem dependências) sobre `id.ts.` + bytes brutos do corpo, filtra cliques que não
+// pontuam (links inválidos, descadastro e página /prioridade), classifica o contexto a partir de `data.from` com
+// `HEATING_CURSOS` (`curso:<slug>` para `<slug>@guifav.dev` na lista, recusando qualquer slug cujo `<slug>@guifav.dev`
+// também esteja em `HEATING_REMETENTES_SITE`) e `HEATING_REMETENTES_SITE` (`site` só para endereços nessa lista;
+// qualquer outro remetente é ignorado sem gravar), exige lista `to` com exatamente um item (contando inválidos) para
+// abertura e clique, respeita a oposição global em `heating_optout` e grava de forma síncrona em `engagement_events`
+// antes de responder 200. Em falha do D1, devolve 500 para o Resend reenviar, com log curto sem email.
 import { normalizeEmail } from './email.ts';
 import { heatingOptoutHmac } from './forget.ts';
 import { motivo, type D1Like } from './conversoes.ts';
@@ -102,7 +103,7 @@ async function sha256Hex(s: string): Promise<string> {
 
 async function verifySvixSignature(
   headers: Headers,
-  rawBody: string,
+  rawBytes: Uint8Array<ArrayBuffer>,
   secretBytes: Uint8Array<ArrayBuffer>,
   nowMs: number,
 ): Promise<string | null> {
@@ -119,7 +120,10 @@ async function verifySvixSignature(
   if (tokens.length === 0 || tokens.length > SVIX_MAX_SIGNATURES) return null;
 
   const key = await crypto.subtle.importKey('raw', secretBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']);
-  const signedPayload = enc.encode(`${svixId}.${svixTs}.${rawBody}`);
+  const prefix = enc.encode(`${svixId}.${svixTs}.`);
+  const signedPayload = new Uint8Array(new ArrayBuffer(prefix.byteLength + rawBytes.byteLength));
+  signedPayload.set(prefix, 0);
+  signedPayload.set(rawBytes, prefix.byteLength);
 
   for (const token of tokens) {
     if (!token.startsWith('v1,')) continue;
@@ -200,10 +204,11 @@ function clickIgnoredReason(link: string): string | null {
   return null;
 }
 
-function parseHeatingCursos(raw: string | undefined): Set<string> {
+function parseHeatingCursos(raw: string | undefined, siteSenders: Set<string>): Set<string> {
   const slugs = new Set<string>();
   if (typeof raw !== 'string' || !raw.trim()) return slugs;
   let invalidCount = 0;
+  const conflicts = new Set<string>();
   for (const part of raw.split(',')) {
     const slug = part.trim();
     if (!slug) continue;
@@ -211,10 +216,17 @@ function parseHeatingCursos(raw: string | undefined): Set<string> {
       invalidCount++;
       continue;
     }
+    if (siteSenders.has(`${slug}@${CURSO_DOMAIN}`)) {
+      conflicts.add(slug);
+      continue;
+    }
     slugs.add(slug);
   }
   if (invalidCount > 0) {
     console.error(`webhook resend: ${invalidCount} slug(s) inválido(s) em HEATING_CURSOS ignorado(s)`);
+  }
+  if (conflicts.size > 0) {
+    console.error(`webhook resend: ${conflicts.size} slug(s) de HEATING_CURSOS em conflito com HEATING_REMETENTES_SITE ignorado(s)`);
   }
   return slugs;
 }
@@ -311,7 +323,7 @@ export async function handleResendWebhook(
     return plain(400, 'corpo inválido');
   }
 
-  const svixId = await verifySvixSignature(req.headers, rawBody, secretBytes, now());
+  const svixId = await verifySvixSignature(req.headers, rawBytes, secretBytes, now());
   if (!svixId) return plain(401, 'assinatura inválida');
 
   let payload: unknown;
@@ -358,12 +370,16 @@ export async function handleResendWebhook(
     if (reason) return json(200, { ok: true, ignorado: reason });
   }
 
-  const cursos = parseHeatingCursos(env.HEATING_CURSOS);
   const siteSenders = parseHeatingSiteSenders(env.HEATING_REMETENTES_SITE);
+  const cursos = parseHeatingCursos(env.HEATING_CURSOS, siteSenders);
   const context = resolveContext(data.from, cursos, siteSenders);
   if (!context) {
     console.error('webhook resend: 1 evento ignorado por remetente desconhecido');
     return json(200, { ok: true, ignorado: 'remetente_desconhecido' });
+  }
+
+  if ((eventType === 'email.opened' || eventType === 'email.clicked') && toList.length !== 1) {
+    return json(200, { ok: true, ignorado: 'varios_destinatarios' });
   }
 
   const emails = new Set<string>();
@@ -375,10 +391,6 @@ export async function handleResendWebhook(
   }
   if (invalidCount > 0) {
     console.error(`webhook resend: ${invalidCount} destinatário(s) inválido(s) ignorado(s)`);
-  }
-
-  if ((eventType === 'email.opened' || eventType === 'email.clicked') && emails.size > 1) {
-    return json(200, { ok: true, ignorado: 'varios_destinatarios' });
   }
 
   const recordedAt = new Date(now()).toISOString();
