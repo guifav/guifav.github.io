@@ -297,15 +297,31 @@ test('POST válido grava uid -> email normalizado, faz upsert no mesmo uid e ace
   ]);
 });
 
-test('oposição ao heating (heating_optout): responde 204 e não grava em site_identities', async () => {
+test('oposição ao heating (heating_optout): responde 409 com CORS, log curto e não grava em site_identities', async () => {
   const s = setup();
   const hmac = await heatingOptoutHmac('leitor@exemplo.com', FORGET_KEY);
   s.db.prepare('INSERT INTO heating_optout (email_hmac, opted_out_at) VALUES (?, ?)').run(hmac, new Date(NOW).toISOString());
 
   const token = await signJwt(validPayload({ sub: 'UidOptOut1', email: 'LEITOR@exemplo.com' }));
-  const res = await s.run(idReq({ token }));
-  assert.equal(res.status, 204);
+  let res: Response | undefined;
+  const logs = await capturaErros(async () => {
+    res = await s.run(idReq({ token }));
+  });
+  assert.equal(res!.status, 409);
+  assert.equal(res!.headers.get('access-control-allow-origin'), 'https://guifav.dev');
+  assert.equal(await res!.text(), '');
+  assert.deepEqual(logs, ['identidade recusada: oposicao']);
   assert.deepEqual(s.rows('site_identities'), []);
+
+  // Vínculo gravado antes da oposição: a nova chamada não atualiza a linha (o job a apaga) e também recebe 409.
+  const t = setup();
+  const tok = await signJwt(validPayload({ sub: 'UidAntes1', email: 'antes@exemplo.com' }));
+  assert.equal((await t.run(idReq({ token: tok }))).status, 204);
+  const antes = t.rows('site_identities');
+  t.db.prepare('INSERT INTO heating_optout (email_hmac, opted_out_at) VALUES (?, ?)')
+    .run(await heatingOptoutHmac('antes@exemplo.com', FORGET_KEY), new Date(NOW).toISOString());
+  assert.equal((await t.run(idReq({ token: tok }))).status, 409);
+  assert.deepEqual(t.rows('site_identities'), antes);
 });
 
 test('regras do ID token: rejeita cada falha com 401 sem detalhe e log curto com motivo exato sem email nem token', async () => {

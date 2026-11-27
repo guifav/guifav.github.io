@@ -245,6 +245,9 @@ async function setupAuth(opts: SetupOpts = {}) {
   let authListener: ((u: FakeUser | null) => void) | null = null;
   let promptCb: ((n: Record<string, unknown>) => void) | null = null;
   let activeElement: El | null = null;
+  let visibilityState = 'visible';
+  let nextTimerId = 1;
+  const pendingTimers = new Map<number, { fn: () => void; at: number }>();
 
   const setActive = (el: El) => {
     activeElement = el;
@@ -348,6 +351,9 @@ async function setupAuth(opts: SetupOpts = {}) {
     get activeElement() {
       return activeElement;
     },
+    get visibilityState() {
+      return visibilityState;
+    },
     createElement: (t: string) => new El(t, setActive),
     createTextNode: (t: string) => {
       const n = new El('#text', setActive);
@@ -378,6 +384,14 @@ async function setupAuth(opts: SetupOpts = {}) {
     JSON,
     Promise,
     Date: { now: () => currentNow },
+    setTimeout: (fn: () => void, ms: number) => {
+      const id = nextTimerId++;
+      pendingTimers.set(id, { fn, at: currentNow + Math.max(0, Number(ms) || 0) });
+      return id;
+    },
+    clearTimeout: (id: number) => {
+      pendingTimers.delete(id);
+    },
     console: { warn: (...a: unknown[]) => warns.push(a.map(String).join(' ')) },
     gtag: (...a: unknown[]) => gtagCalls.push(JSON.parse(JSON.stringify(a))),
     clarity: (...a: unknown[]) => clarityCalls.push(JSON.parse(JSON.stringify(a))),
@@ -514,6 +528,28 @@ async function setupAuth(opts: SetupOpts = {}) {
     signOutCalls: () => signOutCalls,
     setNow: (ms: number) => {
       currentNow = ms;
+    },
+    pendingTimers: () => pendingTimers.size,
+    // Avança o relógio rodando, em ordem, os temporizadores que vencem no caminho (inclusive os agendados por eles).
+    advance: async (ms: number) => {
+      const end = currentNow + ms;
+      for (;;) {
+        let next: [number, { fn: () => void; at: number }] | null = null;
+        for (const e of pendingTimers) if (e[1].at <= end && (!next || e[1].at < next[1].at)) next = e;
+        if (!next) break;
+        pendingTimers.delete(next[0]);
+        currentNow = Math.max(currentNow, next[1].at);
+        next[1].fn();
+        await flush();
+      }
+      currentNow = end;
+      await flush();
+    },
+    // Simula aba em segundo plano com temporizador atrasado: muda o relógio sem rodar temporizadores.
+    emitVisibility: async (state: 'visible' | 'hidden') => {
+      visibilityState = state;
+      for (const fn of docHandlers.visibilitychange ?? []) fn({ type: 'visibilitychange' });
+      await flush();
     },
     initializedConfig: () => initializedConfig,
     idbStats: idb.stats,
@@ -1416,4 +1452,169 @@ test('antes de o Firebase responder: Sim no banner não apaga o uid do <head> ne
   await r.emitConsent('denied');
   assert.equal(r.local.getItem('heating-uid-v1'), null);
   assert.deepEqual(r.gtagCalls.slice(beforeR), [['set', { user_id: null }]]);
+});
+
+test('antes de o Firebase responder: storage que não revoga não apaga o uid do <head>; uid apagado em outra aba revoga', async () => {
+  const base = {
+    consent: { v: 'granted', t: NOW - 1000 },
+    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
+    heatingUid: { uid: 'UidCurso123ABC', t: NOW - 1000 },
+  };
+  // Outra aba liga o vínculo de novo, aceita os cookies e renova o mesmo uid: nada muda nesta aba.
+  const s = await setupAuth(base);
+  const before = s.gtagCalls.length;
+  await s.emitStorage('heating-link-v1', JSON.stringify({ v: 'granted', t: NOW, uid: 'UidCurso123ABC' }));
+  await s.emitStorage('consent-v1', JSON.stringify({ v: 'granted', t: NOW }));
+  const renovado = JSON.stringify({ uid: 'UidCurso123ABC', t: NOW });
+  s.local.setItem('heating-uid-v1', renovado);
+  await s.emitStorage('heating-uid-v1', renovado);
+  assert.ok(s.local.getItem('heating-uid-v1'), 'o uid do <head> continua');
+  assert.deepEqual(s.gtagCalls.slice(before), [], 'nada de user_id null antes de o Firebase responder');
+
+  // Outra aba apaga o uid (Sair lá): revogação, o user_id do <head> sai desta aba também.
+  const r = await setupAuth(base);
+  const beforeR = r.gtagCalls.length;
+  r.local.removeItem('heating-uid-v1');
+  await r.emitStorage('heating-uid-v1', null);
+  assert.deepEqual(r.gtagCalls.slice(beforeR), [['set', { user_id: null }]]);
+
+  // Outra aba desliga o vínculo: revogação de fato, limpa mesmo antes de o Firebase responder.
+  const d = await setupAuth(base);
+  const beforeD = d.gtagCalls.length;
+  const desligado = JSON.stringify({ v: 'denied', t: NOW, uid: 'UidCurso123ABC' });
+  d.local.setItem('heating-link-v1', desligado);
+  await d.emitStorage('heating-link-v1', desligado);
+  assert.equal(d.local.getItem('heating-uid-v1'), null);
+  assert.deepEqual(d.gtagCalls.slice(beforeD)[0], ['set', { user_id: null }]);
+});
+
+const UID_TTL = 30 * 60 * 1000;
+const isUserIdSet = (c: unknown[], uid: string | null) =>
+  c[0] === 'set' && typeof c[1] === 'object' && c[1] !== null && (c[1] as { user_id?: unknown }).user_id === uid;
+
+test('Kimi P1 (rodada 4): página aberta sem o Firebase confirmar perde o user_id no vencimento de heating-uid-v1', async () => {
+  // Firebase nunca responde (sem initialUser): o uid do <head> vale até o fim dos 30 min e então sai.
+  const s = await setupAuth({
+    consent: { v: 'granted', t: NOW - 1000 },
+    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
+    heatingUid: { uid: 'UidCurso123ABC', t: NOW - (UID_TTL - 60_000) },
+  });
+  const before = s.gtagCalls.length;
+  await s.advance(59_000);
+  assert.ok(s.local.getItem('heating-uid-v1'), 'antes do vencimento nada muda');
+  assert.deepEqual(s.gtagCalls.slice(before), []);
+  await s.advance(2_000);
+  assert.equal(s.local.getItem('heating-uid-v1'), null);
+  assert.deepEqual(s.gtagCalls.slice(before), [['set', { user_id: null }]], 'sem anúncio concedido: o vínculo segue ligado');
+  assert.equal(s.pendingTimers(), 0, 'sem novo temporizador depois de limpar');
+});
+
+test('Kimi P1 (rodada 4): sessão confirmada renova no vencimento; sem as 3 condições no vencimento, limpa', async () => {
+  const s = await setupAuth({
+    consent: { v: 'granted', t: NOW - 1000 },
+    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
+    initialUser: makeUser(),
+  });
+  assert.ok(s.gtagCalls.some((c) => isUserIdSet(c, 'UidCurso123ABC')));
+  const before = s.gtagCalls.length;
+  // 3 vencimentos seguidos com as condições de pé: a chave é renovada a cada um e o user_id continua.
+  await s.advance(3 * UID_TTL + 1_000);
+  const stored = JSON.parse(s.local.getItem('heating-uid-v1') || 'null');
+  assert.equal(stored.uid, 'UidCurso123ABC');
+  assert.ok(NOW + 3 * UID_TTL + 1_000 - stored.t < UID_TTL, 'renovada dentro da janela');
+  assert.ok(!s.gtagCalls.slice(before).some((c) => isUserIdSet(c, null)), 'nenhum user_id null enquanto confirmado');
+
+  // O consentimento muda sem evento (storage perdido): no próximo vencimento a sessão não se confirma e limpa.
+  s.local.setItem('consent-v1', JSON.stringify({ v: 'denied', t: NOW }));
+  const beforeClear = s.gtagCalls.length;
+  await s.advance(UID_TTL + 1_000);
+  assert.equal(s.local.getItem('heating-uid-v1'), null);
+  assert.deepEqual(s.gtagCalls.slice(beforeClear), [['set', { user_id: null }]]);
+  assert.equal(s.pendingTimers(), 0);
+});
+
+test('Kimi P1 (rodada 4): aba que volta a ficar visível com o temporizador atrasado confere a validade na hora', async () => {
+  const s = await setupAuth({
+    consent: { v: 'granted', t: NOW - 1000 },
+    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
+    heatingUid: { uid: 'UidCurso123ABC', t: NOW - 1000 },
+  });
+  const before = s.gtagCalls.length;
+  await s.emitVisibility('hidden');
+  s.setNow(NOW + UID_TTL + 5_000); // relógio andou sem o temporizador rodar (aba em segundo plano)
+  await s.emitVisibility('visible');
+  assert.equal(s.local.getItem('heating-uid-v1'), null);
+  assert.deepEqual(s.gtagCalls.slice(before), [['set', { user_id: null }]]);
+
+  // Ainda dentro da validade: voltar à aba não muda nada.
+  const r = await setupAuth({
+    consent: { v: 'granted', t: NOW - 1000 },
+    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
+    heatingUid: { uid: 'UidCurso123ABC', t: NOW - 1000 },
+  });
+  const beforeR = r.gtagCalls.length;
+  await r.emitVisibility('visible');
+  assert.ok(r.local.getItem('heating-uid-v1'));
+  assert.deepEqual(r.gtagCalls.slice(beforeR), []);
+});
+
+test('oposição em /prioridade: /identidade responde 409, o vínculo desliga neste navegador e o user_id sai', async () => {
+  const s = await setupAuth({
+    consent: { v: 'granted', t: NOW - 1000 },
+    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
+    initialUser: makeUser(),
+    identityStatus: 409,
+  });
+  await flush();
+  assert.equal(s.fetchCalls.length, 1);
+  const link = JSON.parse(s.local.getItem('heating-link-v1') || 'null');
+  assert.equal(link.v, 'denied');
+  assert.equal(link.uid, 'UidCurso123ABC');
+  assert.equal(s.local.getItem('heating-uid-v1'), null);
+  const last = s.gtagCalls.filter((c) => c[0] === 'set' && typeof c[1] === 'object' && c[1] !== null && 'user_id' in (c[1] as object)).pop();
+  assert.deepEqual(last, ['set', { user_id: null }]);
+  assert.equal(s.session.getItem('guifav_identidade_sent:UidCurso123ABC'), null, 'não marca como enviada');
+  const state = s.findClass('guifav-auth-state')!;
+  assert.equal(state.textContent, 'Desligado');
+  assert.equal(s.pendingTimers(), 0);
+  assert.equal(s.warns.length, 0, 'oposição não é falha');
+});
+
+test('Kimi P2 (rodada 4): o aviso recebe o foco ao abrir e devolve o foco ao fechar por Ligar, Agora não ou Escape', async () => {
+  for (const how of ['Ligar', 'Agora não', 'Escape'] as const) {
+    const s = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: makeUser() });
+    const notice = s.findClass('guifav-auth-notice')!;
+    const btn = s.findClass('guifav-auth-btn')!;
+    assert.equal(notice.hidden, false, how);
+    assert.equal(notice.attrs.tabindex, '-1', how);
+    assert.equal(s.activeElement(), notice, `${how}: foco no diálogo ao abrir`);
+    if (how === 'Escape') {
+      s.keydown('Escape');
+    } else {
+      const b = notice.findAll((e) => e.tag === 'button' && e.textContent === how)[0];
+      b.focus();
+      await s.click(b);
+    }
+    assert.equal(notice.hidden, true, how);
+    assert.equal(s.activeElement(), btn, `${how}: foco volta ao botão da conta`);
+  }
+
+  // Foco estava em outro elemento quando o aviso abriu: volta para ele, não para o botão da conta.
+  const r = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 } });
+  const other = r.findClass('guifav-auth-item')!;
+  other.focus();
+  await r.emitAuth(makeUser());
+  const n = r.findClass('guifav-auth-notice')!;
+  assert.equal(r.activeElement(), n);
+  r.keydown('Escape');
+  assert.equal(r.activeElement(), other);
+
+  // Fechamento programático (cookies negados) sem foco no aviso não rouba o foco.
+  const q = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: makeUser() });
+  const qn = q.findClass('guifav-auth-notice')!;
+  const qitem = q.findClass('guifav-auth-item')!;
+  qitem.focus();
+  await q.emitConsent('denied');
+  assert.equal(qn.hidden, true);
+  assert.equal(q.activeElement(), qitem);
 });

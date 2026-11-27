@@ -75,6 +75,8 @@
   var menuOpen = false;
   var menuFocusIdx = -1;
   var popupBusy = false;
+  var uidTimer = null;
+  var noticeReturnFocus = null;
 
   var rootEl = null;
   var triggerBtn = null;
@@ -172,6 +174,54 @@
     } catch (e) { /* sem storage */ }
   }
 
+  // Fim da validade de heating-uid-v1 (ms) quando a chave é válida; null quando ausente, vencida ou quebrada.
+  function storedUidExpiry() {
+    try {
+      var u = JSON.parse(w.localStorage.getItem(UID_KEY) || 'null');
+      if (u && typeof u.uid === 'string' && UID_RE.test(u.uid) && validAge(u.t, UID_TTL_MS)) return u.t + UID_TTL_MS;
+    } catch (e) { /* sem storage ou valor quebrado */ }
+    return null;
+  }
+
+  function cancelUidExpiry() {
+    if (uidTimer === null) return;
+    try { if (typeof w.clearTimeout === 'function') w.clearTimeout(uidTimer); } catch (e) { /* ignora */ }
+    uidTimer = null;
+  }
+
+  // Página mantida aberta: no vencimento de heating-uid-v1 o user_id só continua se o Firebase já confirmou as 3
+  // condições para o mesmo uid (aí a chave é renovada, sem passar do heating-link-v1); senão a chave sai e o GA4
+  // recebe user_id: null. Também roda quando a aba volta a ficar visível (temporizador atrasado em segundo plano).
+  function scheduleUidExpiry() {
+    cancelUidExpiry();
+    if (activeUid === null && !headSentUid) return;
+    var exp = storedUidExpiry();
+    if (exp === null) {
+      checkUidExpiry();
+      return;
+    }
+    if (typeof w.setTimeout !== 'function') return;
+    var delay = exp - Date.now();
+    uidTimer = w.setTimeout(checkUidExpiry, delay > 0 ? delay : 0);
+  }
+
+  function checkUidExpiry() {
+    uidTimer = null;
+    if (activeUid === null && !headSentUid) return;
+    var uid = activeUid !== null ? activeUid : headUid;
+    if (uid !== null && readHeatingUid() === uid) {
+      scheduleUidExpiry();
+      return;
+    }
+    // writeHeatingUid só grava com o Firebase confirmando o mesmo uid, consent-v1 e heating-link-v1 granted.
+    if (uid !== null) writeHeatingUid(uid);
+    if (uid !== null && readHeatingUid() === uid) {
+      scheduleUidExpiry();
+      return;
+    }
+    clearUserId(true);
+  }
+
   function sessionGet(key) {
     try { return w.sessionStorage.getItem(key); } catch (e) { return null; }
   }
@@ -207,6 +257,7 @@
 
   function clearUserId(removeStored) {
     var wasIdentified = activeUid !== null || headSentUid;
+    cancelUidExpiry();
     activeUid = null;
     headSentUid = false;
     if (removeStored !== false) removeHeatingUid();
@@ -239,6 +290,13 @@
       }).then(function (res) {
         if (res && res.ok) {
           sessionSet(IDENTITY_SENT_PREFIX + uid, '1');
+        } else if (res && res.status === 409) {
+          // Oposição registrada em /prioridade para este email: o vínculo desliga neste navegador e o user_id sai.
+          if (validTenantUser(currentUser) && currentUser.uid === uid) {
+            writeHeatingLink(uid, 'denied');
+            updateToggleLabel();
+            syncIdentityState(true);
+          }
         } else {
           logWarn('identidade nao registrada');
         }
@@ -260,6 +318,7 @@
       sendGtag('set', { user_id: uid });
       activeUid = uid;
       headSentUid = false;
+      scheduleUidExpiry();
       if (sessionGet(IDENTIFIED_PREFIX + uid) !== '1') {
         sendGtag('event', 'auth_identified');
         sessionSet(IDENTIFIED_PREFIX + uid, '1');
@@ -347,8 +406,18 @@
     toggleStateEl.textContent = on ? 'Ligado' : 'Desligado';
   }
 
+  // Aviso não modal: ao abrir recebe o foco (leitor de tela anuncia o diálogo); ao fechar com o foco dentro dele,
+  // o foco volta para onde estava (ou para o botão da conta). Fechamentos programáticos sem foco no aviso não mexem.
   function hideNotice() {
-    if (noticeEl) noticeEl.hidden = true;
+    if (!noticeEl || noticeEl.hidden) return;
+    var active = d.activeElement;
+    var hadFocus = Boolean(active && typeof noticeEl.contains === 'function' && noticeEl.contains(active));
+    noticeEl.hidden = true;
+    var back = noticeReturnFocus;
+    noticeReturnFocus = null;
+    if (!hadFocus) return;
+    if (!back || typeof back.focus !== 'function' || back.isConnected === false) back = triggerBtn;
+    if (back && typeof back.focus === 'function') back.focus();
   }
 
   function showNotice() {
@@ -359,8 +428,10 @@
         role: 'dialog',
         'aria-label': 'Aviso de atividade da conta',
         'aria-describedby': 'guifav-auth-notice-desc',
+        tabindex: '-1',
         'data-clarity-mask': 'true'
       });
+      noticeEl.hidden = true;
       var p = el('p', { id: 'guifav-auth-notice-desc' }, noticeEl);
       p.textContent = NOTICE_TEXT;
       var actions = el('div', { 'class': 'guifav-auth-actions' }, noticeEl);
@@ -387,7 +458,11 @@
 
       d.body.appendChild(noticeEl);
     }
+    if (!noticeEl.hidden) return;
+    var active = d.activeElement;
+    noticeReturnFocus = active && active !== d.body ? active : null;
     noticeEl.hidden = false;
+    if (typeof noticeEl.focus === 'function') noticeEl.focus();
   }
 
   function syncNotice() {
@@ -538,7 +613,6 @@
         if (e.key === 'Escape' && noticeEl && !noticeEl.hidden) {
           if (typeof e.preventDefault === 'function') e.preventDefault();
           hideNotice();
-          if (triggerBtn && typeof triggerBtn.focus === 'function') triggerBtn.focus();
         }
       });
     }
@@ -759,6 +833,17 @@
       updateToggleLabel();
       syncNotice();
       if (k === UID_KEY) {
+        if (!authResolved) {
+          // Antes de o Firebase responder: outra aba que renova o mesmo uid não muda nada; uid apagado, vencido ou
+          // de outra pessoa é revogação feita lá (Sair, desligar, banner Não), e o user_id do <head> sai daqui também.
+          var other = readHeatingUid();
+          if ((other === null || (headUid !== null && other !== headUid)) && (activeUid !== null || headSentUid)) {
+            clearUserId(false);
+          } else if (headSentUid) {
+            scheduleUidExpiry();
+          }
+          return;
+        }
         if (!validTenantUser(currentUser) || readHeatingUid() !== currentUser.uid) {
           if (activeUid !== null || headSentUid) clearUserId(false);
         } else {
@@ -769,9 +854,17 @@
       if (validTenantUser(currentUser) && readConsent() === 'granted' && readHeatingLink(currentUser.uid) === 'granted') {
         syncIdentityState(false);
       } else {
-        syncIdentityState(true);
+        // Antes de o Firebase responder, só uma revogação de fato (cookies não aceitos, vínculo desligado) limpa;
+        // a outra aba ligar o vínculo ou aceitar os cookies não apaga o uid do <head>.
+        syncIdentityState(authResolved || readConsent() !== 'granted' || !linkGrantedInBrowser());
       }
       if (k === CONSENT_KEY || k === null) maybeStartOneTap();
+    });
+  }
+
+  if (typeof d.addEventListener === 'function') {
+    d.addEventListener('visibilitychange', function () {
+      if (d.visibilityState === 'visible' && (activeUid !== null || headSentUid)) checkUidExpiry();
     });
   }
 
@@ -779,8 +872,10 @@
     return Boolean(validTenantUser(currentUser) && readHeatingLink(currentUser.uid) === 'granted');
   };
 
-  headSentUid = readConsent() === 'granted' && readHeatingUid() !== null;
+  var headUid = readConsent() === 'granted' ? readHeatingUid() : null;
+  headSentUid = headUid !== null;
   if (readConsent() !== 'granted') removeHeatingUid();
+  if (headSentUid) scheduleUidExpiry();
   renderWidget();
 
   if (readConsent() !== null) {

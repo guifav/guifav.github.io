@@ -2,7 +2,8 @@
 // Verifica o ID token do Firebase (RS256 via WebCrypto contra o JWKS do securetoken, cacheado em memória pelo
 // max-age do Cache-Control, com prazo de 3 s na busca), exige iss, aud, exp no futuro (folga zero), iat no passado
 // (folga de 5 min), sub válido, email_verified === true, email válido e firebase.tenant === "guifav-dev-g6dp4".
-// Respeita oposição global em heating_optout (204 sem gravar) e faz upsert em site_identities por uid (204).
+// Respeita oposição global em heating_optout (409 sem gravar, para o site desligar o vínculo naquele navegador) e faz
+// upsert em site_identities por uid (204).
 // CORS restrito a env.SITE_ORIGIN (https://guifav.dev), sem credenciais/cookies, corpo vazio e limite por IP.
 import { normalizeEmail } from './email.ts';
 import { heatingOptoutHmac } from './forget.ts';
@@ -306,10 +307,11 @@ export async function handleIdentidade(
   }
 
   const linkedAt = new Date(deps.now()).toISOString();
+  let changes: number | undefined;
   try {
     const hmac = await heatingOptoutHmac(verified.email, env.FORGET_HMAC_KEY);
     // Checa heating_optout e faz upsert na mesma instrução para eliminar corrida com POST /prioridade.
-    await env.DB
+    const res = await env.DB
       .prepare(`INSERT INTO site_identities (uid, email, linked_at)
         SELECT ?, ?, ?
         WHERE NOT EXISTS (SELECT 1 FROM heating_optout WHERE email_hmac = ?)
@@ -318,8 +320,19 @@ export async function handleIdentidade(
           linked_at = excluded.linked_at`)
       .bind(verified.uid, verified.email, linkedAt, hmac)
       .run();
+    changes = res?.meta?.changes;
   } catch (e) {
     console.error(`identidade não gravada: ${motivo(e)}`);
+    return plain(500, 'falha ao gravar identidade', cors);
+  }
+  // O upsert sempre altera 1 linha (insere ou atualiza); 0 só acontece quando o WHERE NOT EXISTS barrou pela oposição.
+  // A resposta vai só a quem provou ser o dono do email pelo ID token, então não revela nada a terceiros.
+  if (changes === 0) {
+    console.error('identidade recusada: oposicao');
+    return empty(409, cors);
+  }
+  if (typeof changes !== 'number') {
+    console.error('identidade sem contagem de linhas do D1');
     return plain(500, 'falha ao gravar identidade', cors);
   }
 
