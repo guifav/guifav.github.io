@@ -8,10 +8,8 @@ CREATE TABLE IF NOT EXISTS content_catalog (
       length(path) BETWEEN 8 AND 200
       AND substr(path, 1, 6) = '/blog/'
       AND substr(path, length(path), 1) = '/'
-      AND substr(path, 7, length(path) - 7) NOT GLOB '*[^a-z0-9-]*'
       AND substr(path, 7, 1) != '-'
-      AND substr(path, length(path) - 1, 1) != '-'
-      AND instr(substr(path, 7, length(path) - 7), '--') = 0
+      AND substr(path, 7, length(path) - 7) NOT GLOB '*[^a-z0-9-]*'
     ),
   title TEXT NOT NULL CHECK (length(title) BETWEEN 1 AND 300),
   published_on TEXT NOT NULL CHECK (published_on GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]')

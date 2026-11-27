@@ -9,7 +9,8 @@ junta os dois:
 - escreve na home (index.html) os últimos artigos do blog, que o build do Astro deixa em
   ultimos-artigos.json (issue #136), entre os marcadores <!-- ultimos-artigos --> e
   <!-- /ultimos-artigos -->. O JSON é consumido aqui e não vai ao ar: sob /blog/ só vão páginas,
-  XML e mídia (contrato de conteúdo, barreira 2);
+  XML, mídia e o catálogo de posts (blog/catalogo.json, #193), única exceção da barreira 2 do
+  contrato de conteúdo;
 - verifica que cada arquivo publicado é byte a byte igual à sua origem (a home, igual à origem com
   a lista escrita) e que nada fora da lista aparece em _site/.
 

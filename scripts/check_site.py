@@ -8,7 +8,7 @@
 - rss.xml e sitemap.xml do blog são XML válido; o sitemap só lista páginas que existem e
   não lista posts com index: false nem as páginas da newsletter. Depois do cutover, esses
   posts e as páginas da newsletter continuam precisando de noindex.
-- Sob /blog/ só há .html, .xml e mídia da lista.
+- Sob /blog/ só há .html, .xml, mídia da lista e o catálogo de posts (blog/catalogo.json, #193).
 - Ferramentas e guias (#104, #151, #166): a home (seção e rodapé) e o rodapé do blog levam os links das ferramentas e do /ferramentas/, e /ferramentas/ lista as 4 ferramentas com CollectionPage.
 - /ferramentas/llm-ranking/ (#113, #166): a página sai com a tabela gerada no build, a data dos dados, o JSON-LD e a atribuição.
 - Alarme secundário de conteúdo ativo nas páginas do blog (ver blog-src/CONTRATO-DE-CONTEUDO.md:
@@ -72,9 +72,11 @@ IFRAME_HOSTS = {
 }
 # Os scripts do template levam este atributo; script sem ele veio do conteúdo.
 SITE_SCRIPT_ATTR = "data-site-script"
-# Sob /blog/ (contrato, barreira 2): páginas, RSS e sitemap, e mídia.
+# Sob /blog/ (contrato, barreira 2): páginas, RSS e sitemap, mídia e a única exceção JSON abaixo.
 BLOG_EXACT_SUFFIXES = {".html", ".xml"}
 BLOG_MEDIA_SUFFIXES = {".webp", ".png", ".jpg", ".jpeg", ".gif", ".avif", ".mp4", ".webm"}
+# Única exceção fora dessas extensões: gerado pelo template blog-src/src/pages/catalogo.json.ts (issue #193).
+BLOG_CATALOG_PATH = "blog/catalogo.json"
 # Rotas sob guifav.dev servidas por Workers na Cloudflare, fora do _site/ do GitHub Pages (#146, #166).
 WORKER_PATHS = frozenset({"/cursos/chatgpt-no-dia-a-dia"})
 
@@ -404,11 +406,16 @@ def check(site: Path, posts: Path, pre_cutover: bool) -> list[str]:
         else:
             indexable_slugs.add(slug)
 
-    # Contrato, barreira 2: sob /blog/ só páginas, RSS, sitemap e mídia da lista.
+    # Contrato, barreira 2: sob /blog/ só páginas, RSS, sitemap, mídia da lista e o catálogo de posts (#193).
     for f in sorted((site / "blog").rglob("*")):
-        if f.is_file() and f.suffix not in BLOG_EXACT_SUFFIXES and f.suffix.lower() not in BLOG_MEDIA_SUFFIXES:
-            problems.append(f"{f.relative_to(site).as_posix()}: extensão fora da lista do blog "
-                            f"(só .html, .xml e mídia {', '.join(sorted(BLOG_MEDIA_SUFFIXES))})")
+        if not f.is_file():
+            continue
+        rel_blog = f.relative_to(site).as_posix()
+        if rel_blog == BLOG_CATALOG_PATH:
+            continue
+        if f.suffix not in BLOG_EXACT_SUFFIXES and f.suffix.lower() not in BLOG_MEDIA_SUFFIXES:
+            problems.append(f"{rel_blog}: extensão fora da lista do blog "
+                            f"(só .html, .xml, mídia {', '.join(sorted(BLOG_MEDIA_SUFFIXES))} e {BLOG_CATALOG_PATH})")
 
     pages = []
     for f in html_files(site):

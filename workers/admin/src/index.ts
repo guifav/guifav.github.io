@@ -1,5 +1,6 @@
 // Painel do site em guifav.dev/admin (issues #40, #62, #82, #193). Só o Gui: Cloudflare Access na frente e o
-// JWT do Access conferido aqui de novo. Lê só o D1 e o R2 do próprio Worker ao abrir.
+// JWT do Access conferido aqui de novo (chaves públicas em cache). As telas leem só D1 e R2, salvo /admin/rascunhos,
+// que consulta o GitHub (artigos aprovados) e /blog/<slug>/ no site (artigos publicados / derivados sem rascunho, #80).
 //   GET  /admin              resumo do painel (redireciona 303 para /admin/assinantes com filtros/msg de assinantes)
 //   GET  /admin/assinantes   lista de assinantes, busca, filtros e contadores (cópia do Resend, src/sync.ts)
 //   GET  /admin/export.csv   os mesmos filtros dos assinantes, em CSV

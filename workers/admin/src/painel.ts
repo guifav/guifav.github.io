@@ -33,7 +33,7 @@ export const ACTIONS = ['material_request', 'material_download', 'newsletter_con
 const ACTION_LABELS: Record<string, string> = {
   material_request: 'pedido de material',
   material_download: 'download',
-  newsletter_confirm: 'confirmação da newsletter',
+  newsletter_confirm: 'inscrição nos Expert Insights',
 };
 
 export function actionLabel(action: string): string {
@@ -57,7 +57,7 @@ export function twentyCell(
 ): string {
   const url = twentyPersonUrl(personId, twentyOrigin);
   if (url) return `<a href="${esc(url)}" target="_blank" rel="noopener noreferrer">abrir no Twenty</a>`;
-  if (!syncedAt) return verified === 1 ? 'aguardando o sync' : 'pedido sem Pessoa no CRM';
+  if (!syncedAt) return verified === 1 ? 'ainda não está no CRM' : 'pedido ainda não está no CRM';
   return 'sem link';
 }
 
@@ -205,8 +205,8 @@ export async function resumoPage(
   if (convRes.ok) {
     const r = convRes.value;
     cardConv = `<div class="card"><h2><a href="/admin/contatos">Conversões</a></h2>
-<p><strong>Últimos 7 dias:</strong> ${num(r?.req_7)} pedidos, ${num(r?.dl_7)} downloads, ${num(r?.nl_7)} confirmações</p>
-<p><strong>Últimos 30 dias:</strong> ${num(r?.req_30)} pedidos, ${num(r?.dl_30)} downloads, ${num(r?.nl_30)} confirmações</p></div>`;
+<p><strong>Últimos 7 dias:</strong> ${num(r?.req_7)} pedidos, ${num(r?.dl_7)} downloads, ${num(r?.nl_7)} inscrições</p>
+<p><strong>Últimos 30 dias:</strong> ${num(r?.req_30)} pedidos, ${num(r?.dl_30)} downloads, ${num(r?.nl_30)} inscrições</p></div>`;
   } else {
     cardConv = `<div class="card"><h2><a href="/admin/contatos">Conversões</a></h2><p class="erro">indisponível agora</p></div>`;
   }
@@ -366,7 +366,7 @@ export async function contatosPage(url: URL, env: PainelEnv): Promise<Response> 
     ['', 'todas as ações'],
     ['material_request', 'pedido de material'],
     ['material_download', 'download'],
-    ['newsletter_confirm', 'confirmação da newsletter'],
+    ['newsletter_confirm', 'inscrição nos Expert Insights'],
   ])}
   ${opt('material', f.material, [['', 'todos os materiais'], ...MATERIAIS.map((m): [string, string] => [m.id, m.titulo])])}
   ${opt('comprovado', f.comprovado, [
@@ -389,7 +389,7 @@ export async function contatosPage(url: URL, env: PainelEnv): Promise<Response> 
 type Counts = { d7: number; d30: number; total: number };
 const ZERO: Counts = { d7: 0, d30: 0, total: 0 };
 
-type MatReqRow = { material: string; d7: number | null; d30: number | null; total: number | null };
+type MatReqRow = { material: string | null; d7: number | null; d30: number | null; total: number | null };
 type MatDlRow = { material: string | null; file: string | null; d7: number | null; d30: number | null; total: number | null };
 type LandingRow = {
   landing_path: string | null;
@@ -402,7 +402,14 @@ type LandingRow = {
   nl_total: number | null;
   total: number | null;
 };
-type CatalogPostRow = { path: string; title: string; published_on: string; conversoes: number | null };
+type CatalogPostRow = {
+  path: string;
+  title: string;
+  published_on: string;
+  pedidos: number | null;
+  downloads: number | null;
+  inscricoes: number | null;
+};
 
 function addCounts(a: Counts, b: Counts): Counts {
   return { d7: a.d7 + b.d7, d30: a.d30 + b.d30, total: a.total + b.total };
@@ -421,7 +428,7 @@ export async function conteudosPage(url: URL, env: PainelEnv, nowMs: number): Pr
               SUM(CASE WHEN ${TS} >= ?2 THEN 1 ELSE 0 END) AS d30,
               COUNT(*) AS total
        FROM conversions
-       WHERE action = 'material_request' AND material IS NOT NULL
+       WHERE action = 'material_request'
        GROUP BY material`,
     )
       .bind(corte7, corte30)
@@ -456,10 +463,16 @@ export async function conteudosPage(url: URL, env: PainelEnv, nowMs: number): Pr
     readCollector(env.DB),
     env.DB.prepare('SELECT COUNT(*) AS n FROM content_catalog').first<{ n: number }>(),
     env.DB.prepare(
-      `SELECT c.path, c.title, c.published_on, COALESCE(k.total, 0) AS conversoes
+      `SELECT c.path, c.title, c.published_on,
+              COALESCE(k.pedidos, 0) AS pedidos,
+              COALESCE(k.downloads, 0) AS downloads,
+              COALESCE(k.inscricoes, 0) AS inscricoes
        FROM content_catalog c
        LEFT JOIN (
-         SELECT landing_path, COUNT(*) AS total
+         SELECT landing_path,
+                SUM(CASE WHEN action = 'material_request' THEN 1 ELSE 0 END) AS pedidos,
+                SUM(CASE WHEN action = 'material_download' THEN 1 ELSE 0 END) AS downloads,
+                SUM(CASE WHEN action = 'newsletter_confirm' THEN 1 ELSE 0 END) AS inscricoes
          FROM conversions
          WHERE landing_path IS NOT NULL
          GROUP BY landing_path
@@ -472,7 +485,8 @@ export async function conteudosPage(url: URL, env: PainelEnv, nowMs: number): Pr
   // 1. Materiais e arquivos: pedidos e downloads em colunas separadas, nunca somados.
   const reqByMat = new Map<string, Counts>();
   for (const r of reqRows.results) {
-    reqByMat.set(r.material, { d7: num(r.d7), d30: num(r.d30), total: num(r.total) });
+    const key = r.material ?? '';
+    reqByMat.set(key, addCounts(reqByMat.get(key) ?? ZERO, { d7: num(r.d7), d30: num(r.d30), total: num(r.total) }));
   }
   const knownMatIds = new Set(MATERIAIS.map((m) => m.id));
   const dlByMat = new Map<string, Map<string, Counts>>();
@@ -518,13 +532,13 @@ export async function conteudosPage(url: URL, env: PainelEnv, nowMs: number): Pr
     }
   }
 
-  // Materiais gravados no D1 que não existem no catálogo MATERIAIS.
+  // Materiais gravados no D1 que não existem no catálogo MATERIAIS (inclusive material nulo).
   const unknownMats = new Set<string>();
   for (const k of reqByMat.keys()) if (!knownMatIds.has(k)) unknownMats.add(k);
   for (const k of dlByMat.keys()) if (!knownMatIds.has(k)) unknownMats.add(k);
   for (const matId of [...unknownMats].sort()) {
     const req = reqByMat.get(matId) ?? ZERO;
-    const matLabel = matId ? `${esc(matId)} (fora do catálogo)` : '(sem material) (fora do catálogo)';
+    const matLabel = matId ? `${esc(matId)} (fora do catálogo)` : '(sem material)';
     matTrs.push(
       `<tr><td>${matLabel}</td><td>${req.d7}</td><td>${req.d30}</td><td>${req.total}</td><td></td><td></td><td></td></tr>`,
     );
@@ -546,7 +560,7 @@ export async function conteudosPage(url: URL, env: PainelEnv, nowMs: number): Pr
     .map((r) => {
       const celPagina =
         r.landing_path === null
-          ? 'sem medição (antes da origem, #114)'
+          ? 'sem página de entrada registrada'
           : landingCell(r.landing_path, env.SITE_ORIGIN, r.post_title ?? materialByPath.get(r.landing_path) ?? r.landing_path);
       return `<tr>
   <td>${celPagina}</td>
@@ -575,7 +589,9 @@ export async function conteudosPage(url: URL, env: PainelEnv, nowMs: number): Pr
       (p) => `<tr>
   <td><a href="${esc(siteBase + p.path)}">${esc(p.title)}</a></td>
   <td>${esc(p.published_on)}</td>
-  <td>${num(p.conversoes)}</td>
+  <td>${num(p.pedidos)}</td>
+  <td>${num(p.downloads)}</td>
+  <td>${num(p.inscricoes)}</td>
 </tr>`,
     )
     .join('');
@@ -583,7 +599,7 @@ export async function conteudosPage(url: URL, env: PainelEnv, nowMs: number): Pr
   const postsSection =
     totalPosts > 0
       ? `<p>${totalPosts} ${totalPosts === 1 ? 'post' : 'posts'}, página ${page} de ${totalPages}.</p>
-<table><thead><tr><th>Post</th><th>Data</th><th>Conversões como entrada</th></tr></thead><tbody>${postTrs}</tbody></table>
+<table><thead><tr><th>Post</th><th>Data</th><th>Pedidos</th><th>Downloads</th><th>Inscrições</th></tr></thead><tbody>${postTrs}</tbody></table>
 <p>${page > 1 ? `<a href="/admin/conteudos${page - 1 > 1 ? `?p=${page - 1}` : ''}">anterior</a> ` : ''}${page < totalPages ? `<a href="/admin/conteudos?p=${page + 1}">próxima</a>` : ''}</p>`
       : '';
 
@@ -591,7 +607,7 @@ export async function conteudosPage(url: URL, env: PainelEnv, nowMs: number): Pr
 <h2>Materiais</h2>
 <table><thead><tr><th>Material e arquivo</th><th>Pedidos (7d)</th><th>Pedidos (30d)</th><th>Pedidos (total)</th><th>Downloads (7d)</th><th>Downloads (30d)</th><th>Downloads (total)</th></tr></thead><tbody>${matTrs.join('')}</tbody></table>
 <h2>Páginas de entrada</h2>
-${landingTrs ? `<table><thead><tr><th>Página</th><th>Pedidos (30d)</th><th>Pedidos (total)</th><th>Downloads (30d)</th><th>Downloads (total)</th><th>Newsletter (30d)</th><th>Newsletter (total)</th></tr></thead><tbody>${landingTrs}</tbody></table>` : '<p>Nenhuma conversão registrada.</p>'}
+${landingTrs ? `<table><thead><tr><th>Página</th><th>Pedidos (30d)</th><th>Pedidos (total)</th><th>Downloads (30d)</th><th>Downloads (total)</th><th>Inscrições (30d)</th><th>Inscrições (total)</th></tr></thead><tbody>${landingTrs}</tbody></table>` : '<p>Nenhuma conversão registrada.</p>'}
 <h2>Posts do site</h2>
 ${catalogStatus}${catalogErr}${postsSection}`;
 

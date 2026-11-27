@@ -10,6 +10,7 @@ import { CATALOG_MAX_BYTES, coletarCatalogo, dataExiste, validarCatalogo } from 
 import { sha256Hex, versionId, type R2Like } from '../src/drafts.ts';
 import { landingCell, twentyCell, twentyPersonUrl } from '../src/painel.ts';
 import type { D1Like, D1Stmt } from '../src/sync.ts';
+import { catalogoPosts } from '../../../blog-src/src/lib/catalogo.ts';
 
 const NOW = Date.UTC(2026, 10, 12, 12, 0, 0); // 2026-11-12T12:00:00.000Z
 const DAY_MS = 86_400_000;
@@ -436,10 +437,10 @@ test('P3: resumo calcula janelas de 7 e 30 dias com bordas exatas, conta rascunh
     `leu HTML só dos artigos não aprovados: ${htmlGets}`,
   );
   assert.deepEqual(s.externalCalls, [], 'resumo não chama GitHub nem nenhum serviço externo');
-  // Conversões: 7d -> 6 pedidos (c01, c09..c13), 2 downloads (c05, c06), 1 confirmação (c07).
-  // 30d -> 7 pedidos (+c02), 3 downloads (+c03), 2 confirmações (+c08). c04 fica fora.
-  assert.ok(html.includes('<strong>Últimos 7 dias:</strong> 6 pedidos, 2 downloads, 1 confirmações'));
-  assert.ok(html.includes('<strong>Últimos 30 dias:</strong> 7 pedidos, 3 downloads, 2 confirmações'));
+  // Conversões: 7d -> 6 pedidos (c01, c09..c13), 2 downloads (c05, c06), 1 inscrição (c07).
+  // 30d -> 7 pedidos (+c02), 3 downloads (+c03), 2 inscrições (+c08). c04 fica fora.
+  assert.ok(html.includes('<strong>Últimos 7 dias:</strong> 6 pedidos, 2 downloads, 1 inscrições'));
+  assert.ok(html.includes('<strong>Últimos 30 dias:</strong> 7 pedidos, 3 downloads, 2 inscrições'));
   // Catálogo
   assert.ok(html.includes('Catálogo de 2026-11-12 10:17 UTC, 1 post.'));
   assert.ok(html.includes('A última coleta falhou em 2026-11-12 11:17 UTC: site respondeu 503'));
@@ -539,6 +540,8 @@ test('P4: contatos mostra colunas, links do Twenty, textos sem id, filtros, esca
   assert.ok(html.includes('5 encontrados, página 1 de 1.'));
   // Colunas e formatações
   assert.ok(html.includes('2026-11-12 10:30'));
+  assert.ok(html.includes('<td>inscrição nos Expert Insights</td>'));
+  assert.ok(html.includes('<option value="newsletter_confirm">inscrição nos Expert Insights</option>'));
   assert.ok(html.includes('Mapa de decisão: RAG, Text-to-SQL ou contexto longo'));
   assert.ok(html.includes('mapa-decisao-rag-sql-contexto-longo.pdf'));
   assert.ok(html.includes('material-antigo (fora do catálogo)'));
@@ -549,9 +552,9 @@ test('P4: contatos mostra colunas, links do Twenty, textos sem id, filtros, esca
   assert.ok(html.includes('<a href="https://guifav.dev/blog/post-a/">/blog/post-a/</a>'));
   // Link do Twenty e os 3 textos sem id
   assert.ok(html.includes('<a href="https://crm.guifav.dev/object/person/abc-123-XYZ" target="_blank" rel="noopener noreferrer">abrir no Twenty</a>'));
-  assert.ok(html.includes('pedido sem Pessoa no CRM'));
-  assert.ok(html.includes('aguardando o sync'));
-  assert.ok(html.includes('sem link'));
+  assert.ok(html.includes('<td>pedido ainda não está no CRM</td>'));
+  assert.ok(html.includes('<td>ainda não está no CRM</td>'));
+  assert.ok(html.includes('<td>sem link</td>'));
   // Escape de email hostil
   assert.ok(!html.includes('<script>x</script>'));
   assert.ok(html.includes('&lt;script&gt;x&lt;/script&gt;@evil.com'));
@@ -608,8 +611,8 @@ test('P4: funções isoladas recusam twenty_person_id e landing_path fora do pad
     const cel = twentyCell(bad, '2026-11-12T10:00:00Z', 1, 'https://crm.guifav.dev');
     assert.equal(cel, 'sem link', String(bad));
   }
-  assert.equal(twentyCell(null, null, 0, 'https://crm.guifav.dev'), 'pedido sem Pessoa no CRM');
-  assert.equal(twentyCell(null, null, 1, 'https://crm.guifav.dev'), 'aguardando o sync');
+  assert.equal(twentyCell(null, null, 0, 'https://crm.guifav.dev'), 'pedido ainda não está no CRM');
+  assert.equal(twentyCell(null, null, 1, 'https://crm.guifav.dev'), 'ainda não está no CRM');
   assert.equal(landingCell('/blog/ok/', 'https://guifav.dev'), '<a href="https://guifav.dev/blog/ok/">/blog/ok/</a>');
   for (const badPath of ['javascript:alert(1)', '//evil.com/x', '/blog/a?q=1', '/blog/<script>']) {
     const out = landingCell(badPath, 'https://guifav.dev');
@@ -652,8 +655,10 @@ test('P5: conteúdos separa pedidos e downloads nas 3 janelas, mostra fora do ca
     // Material fora do catálogo: 1 pedido e 1 download
     { id: 'm7', email: 'f@x.com', action: 'material_request', material: 'ebook-antigo', occurred_at: iso(-5 * DAY_MS), landing_path: null },
     { id: 'm8', email: 'f@x.com', action: 'material_download', material: 'ebook-antigo', file: 'ebook-antigo-pdf', occurred_at: iso(-5 * DAY_MS), landing_path: '/blog/post-recente/' },
-    // Newsletter confirm sem medição e num post
+    // Newsletter confirm num post
     { id: 'm9', email: 'g@x.com', action: 'newsletter_confirm', occurred_at: iso(-4 * DAY_MS), landing_path: '/blog/post-recente/' },
+    // Pedido com material nulo: não pode sumir da visão de materiais
+    { id: 'm10', email: 'h@x.com', action: 'material_request', material: null, occurred_at: iso(-2 * DAY_MS), landing_path: null },
   ]);
 
   const html = await (await s.req('/admin/conteudos')).text();
@@ -667,28 +672,31 @@ test('P5: conteúdos separa pedidos e downloads nas 3 janelas, mostra fora do ca
   assert.ok(
     html.includes('<tr class="sub"><td>planilha-custos-ia.xlsx</td><td></td><td></td><td></td><td>1</td><td>1</td><td>1</td></tr>'),
   );
-  // Fora do catálogo (arquivo de material conhecido e material desconhecido)
+  // Fora do catálogo (arquivo de material conhecido, material desconhecido e material nulo)
   assert.ok(html.includes('<tr class="sub"><td>anexo-velho (fora do catálogo)</td><td></td><td></td><td></td><td>0</td><td>1</td><td>1</td></tr>'));
+  assert.ok(html.includes('<tr><td>(sem material)</td><td>1</td><td>1</td><td>1</td><td></td><td></td><td></td></tr>'));
   assert.ok(html.includes('<tr><td>ebook-antigo (fora do catálogo)</td><td>1</td><td>1</td><td>1</td><td></td><td></td><td></td></tr>'));
   assert.ok(html.includes('<tr class="sub"><td>ebook-antigo-pdf (fora do catálogo)</td><td></td><td></td><td></td><td>1</td><td>1</td><td>1</td></tr>'));
 
   // Páginas de entrada: título do catálogo, título do MATERIAIS, caminho cru, e nulo
+  assert.ok(html.includes('<th>Inscrições (30d)</th><th>Inscrições (total)</th>'));
   assert.ok(html.includes('<a href="https://guifav.dev/blog/post-recente/">Post Recente</a>'));
   assert.ok(html.includes('<a href="https://guifav.dev/ferramentas/planilha-custos-ia/">Planilha de custos de IA em produção</a>'));
   assert.ok(html.includes('<a href="https://guifav.dev/sobre/">/sobre/</a>'));
-  assert.ok(html.includes('sem medição (antes da origem, #114)'));
-  // Ordem das páginas de entrada: /blog/post-recente/ tem 5 conversões e aparece antes de null (2) e das outras (1)
+  assert.ok(html.includes('sem página de entrada registrada'));
+  // Ordem das páginas de entrada: /blog/post-recente/ tem 5 conversões e aparece antes de null (3) e das outras (1)
   const idxRecente = html.indexOf('<h2>Páginas de entrada</h2>');
   const secEntrada = html.slice(idxRecente, html.indexOf('<h2>Posts do site</h2>'));
-  assert.ok(secEntrada.indexOf('Post Recente') < secEntrada.indexOf('sem medição (antes da origem, #114)'));
+  assert.ok(secEntrada.indexOf('Post Recente') < secEntrada.indexOf('sem página de entrada registrada'));
 
-  // Posts do site + estado do coletor
+  // Posts do site + estado do coletor (pedidos, downloads e inscrições em colunas separadas)
   assert.ok(html.includes('Catálogo de 2026-11-12 10:17 UTC, 2 posts.'));
   assert.ok(html.includes('A última coleta falhou em 2026-11-12 11:17 UTC: tempo esgotado'));
   const secPosts = html.slice(html.indexOf('<h2>Posts do site</h2>'));
+  assert.ok(secPosts.includes('<th>Post</th><th>Data</th><th>Pedidos</th><th>Downloads</th><th>Inscrições</th>'));
   assert.ok(secPosts.indexOf('Post Recente') < secPosts.indexOf('Post Antigo'));
-  assert.match(secPosts, /Post Recente<\/a><\/td>\s*<td>2026-11-10<\/td>\s*<td>5<\/td>/);
-  assert.match(secPosts, /Post Antigo<\/a><\/td>\s*<td>2026-10-01<\/td>\s*<td>0<\/td>/);
+  assert.match(secPosts, /Post Recente<\/a><\/td>\s*<td>2026-11-10<\/td>\s*<td>2<\/td>\s*<td>2<\/td>\s*<td>1<\/td>/);
+  assert.match(secPosts, /Post Antigo<\/a><\/td>\s*<td>2026-10-01<\/td>\s*<td>0<\/td>\s*<td>0<\/td>\s*<td>0<\/td>/);
 });
 
 test('P5: lista de posts em /admin/conteudos pagina de 100 em 100', async () => {
@@ -719,8 +727,9 @@ test('P6: coleta bem-sucedida grava todos os posts em lotes <= 100 parâmetros e
     data: '2026-11-10',
   }));
   const s = setup({
-    onFetch: (url) => {
+    onFetch: (url, init) => {
       assert.equal(url, 'https://guifav.dev/blog/catalogo.json');
+      assert.equal(init?.redirect, 'manual');
       return new Response(JSON.stringify({ posts }), { status: 200, headers: { 'content-type': 'application/json; charset=utf-8' } });
     },
   });
@@ -742,10 +751,14 @@ test('P6: coleta bem-sucedida grava todos os posts em lotes <= 100 parâmetros e
   });
 });
 
-test('P6: falhas na coleta (rede, 404, content-type, prazo, corpo > 2 MiB, JSON, lista vazia, item inválido, duplicado, data inexistente) preservam catálogo anterior', { timeout: 5000 }, async () => {
+test('P6: falhas na coleta (rede, 302, 404, content-type, prazo, corpo > 2 MiB, JSON, lista vazia, item inválido, duplicado, data inexistente) preservam catálogo anterior', { timeout: 5000 }, async () => {
   let cancelouGrande = false;
   const casos: [string, (url: string, init?: RequestInit) => Promise<Response> | Response, RegExp][] = [
     ['rede', () => { throw new TypeError('network down'); }, /falha de rede/],
+    ['302', (_url, init) => {
+      assert.equal(init?.redirect, 'manual');
+      return new Response('secreto-nao-gravar', { status: 302, headers: { location: 'https://guifav.dev/outro' } });
+    }, /site respondeu 302/],
     ['404', () => new Response('secreto-nao-gravar', { status: 404, headers: { 'content-type': 'application/json' } }), /site respondeu 404/],
     ['content-type html', () => new Response('<html>erro</html>', { status: 200, headers: { 'content-type': 'text/html' } }), /content-type JSON/],
     ['prazo', (_url, init) => {
@@ -771,8 +784,9 @@ test('P6: falhas na coleta (rede, 404, content-type, prazo, corpo > 2 MiB, JSON,
     ['JSON inválido', () => new Response('{quebrado', { status: 200, headers: { 'content-type': 'application/json' } }), /JSON inválido/],
     ['lista vazia', () => Response.json({ posts: [] }), /catálogo vazio/],
     ['caminho inválido', () => Response.json({ posts: [{ caminho: '/outro/x/', titulo: 'A', data: '2026-11-10' }] }), /caminho inválido/],
+    ['slug começando com hífen', () => Response.json({ posts: [{ caminho: '/blog/-a/', titulo: 'A', data: '2026-11-10' }] }), /caminho inválido/],
     ['slug com maiúscula', () => Response.json({ posts: [{ caminho: '/blog/Post/', titulo: 'A', data: '2026-11-10' }] }), /caminho inválido/],
-    ['slug com hífen duplo', () => Response.json({ posts: [{ caminho: '/blog/a--b/', titulo: 'A', data: '2026-11-10' }] }), /caminho inválido/],
+    ['slug com sublinhado', () => Response.json({ posts: [{ caminho: '/blog/a_b/', titulo: 'A', data: '2026-11-10' }] }), /caminho inválido/],
     ['título com controle', () => Response.json({ posts: [{ caminho: '/blog/ok/', titulo: 'A\nB', data: '2026-11-10' }] }), /título inválido/],
     ['título vazio', () => Response.json({ posts: [{ caminho: '/blog/ok/', titulo: '', data: '2026-11-10' }] }), /título inválido/],
     ['caminho repetido', () => Response.json({
@@ -785,31 +799,147 @@ test('P6: falhas na coleta (rede, 404, content-type, prazo, corpo > 2 MiB, JSON,
     ['data inexistente 2026-02-29', () => Response.json({ posts: [{ caminho: '/blog/ok/', titulo: 'A', data: '2026-02-29' }] }), /data inválida/],
   ];
 
-  for (const [nome, onFetch, erroRe] of casos) {
-    const s = setup({ onFetch });
-    seedCatalog(s.db, [{ path: '/blog/previo/', title: 'Prévio', published_on: '2026-10-01' }], {
-      last_attempt_at: '2026-11-11T10:00:00.000Z',
-      last_success_at: '2026-11-11T10:00:00.000Z',
-      item_count: 1,
-    });
-    const res = await coletarCatalogo(s.env, s.deps);
-    assert.equal(res.ok, false, nome);
-    assert.match(res.error, erroRe, nome);
-    assert.ok(!res.error.includes('secreto-nao-gravar'), nome);
-    // Catálogo anterior intacto
-    const rows = plain(s.db.raw.prepare('SELECT path, title FROM content_catalog').all());
-    assert.deepEqual(rows, [{ path: '/blog/previo/', title: 'Prévio' }], nome);
-    // Collectors mantém last_success_at e item_count anteriores e grava last_attempt_at + last_error
-    const col = plain(s.db.raw.prepare("SELECT * FROM collectors WHERE source = 'catalogo_posts'").get()) as Record<string, unknown>;
-    assert.equal(col.last_attempt_at, new Date(NOW).toISOString(), nome);
-    assert.equal(col.last_success_at, '2026-11-11T10:00:00.000Z', nome);
-    assert.equal(col.item_count, 1, nome);
-    assert.match(String(col.last_error), erroRe, nome);
+  const origErr = console.error;
+  console.error = () => {};
+  try {
+    for (const [nome, onFetch, erroRe] of casos) {
+      const s = setup({ onFetch });
+      seedCatalog(s.db, [{ path: '/blog/previo/', title: 'Prévio', published_on: '2026-10-01' }], {
+        last_attempt_at: '2026-11-11T10:00:00.000Z',
+        last_success_at: '2026-11-11T10:00:00.000Z',
+        item_count: 1,
+      });
+      const res = await coletarCatalogo(s.env, s.deps);
+      assert.equal(res.ok, false, nome);
+      assert.match(res.error, erroRe, nome);
+      assert.ok(!res.error.includes('secreto-nao-gravar'), nome);
+      // Catálogo anterior intacto
+      const rows = plain(s.db.raw.prepare('SELECT path, title FROM content_catalog').all());
+      assert.deepEqual(rows, [{ path: '/blog/previo/', title: 'Prévio' }], nome);
+      // Collectors mantém last_success_at e item_count anteriores e grava last_attempt_at + last_error
+      const col = plain(s.db.raw.prepare("SELECT * FROM collectors WHERE source = 'catalogo_posts'").get()) as Record<string, unknown>;
+      assert.equal(col.last_attempt_at, new Date(NOW).toISOString(), nome);
+      assert.equal(col.last_success_at, '2026-11-11T10:00:00.000Z', nome);
+      assert.equal(col.item_count, 1, nome);
+      assert.match(String(col.last_error), erroRe, nome);
+    }
+  } finally {
+    console.error = origErr;
   }
   assert.equal(cancelouGrande, true, 'stream acima de 2 MiB foi cancelado');
   assert.equal(dataExiste('2024-02-29'), true, 'ano bissexto aceito');
   assert.equal(dataExiste('2026-04-31'), false);
   assert.throws(() => validarCatalogo({ posts: Array.from({ length: 5001 }, (_, i) => ({ caminho: `/blog/p-${i}/`, titulo: 'T', data: '2026-01-01' })) }), /5000/);
+});
+
+test('P6: padrão do slug alinha com check_site.py (a--b e a- aceitos; -a, maiúscula e _ recusados no coletor e no CHECK)', async () => {
+  const posts = [
+    { caminho: '/blog/a--b/', titulo: 'Hífen duplo', data: '2026-11-10' },
+    { caminho: '/blog/a-/', titulo: 'Termina com hífen', data: '2026-11-09' },
+  ];
+  const s = setup({ onFetch: () => Response.json({ posts }) });
+  const res = await coletarCatalogo(s.env, s.deps);
+  assert.deepEqual(res, { ok: true, count: 2 });
+  const saved = plain(s.db.raw.prepare('SELECT path FROM content_catalog ORDER BY path').all());
+  assert.deepEqual(saved, [{ path: '/blog/a--b/' }, { path: '/blog/a-/' }]);
+
+  const ins = s.db.raw.prepare("INSERT INTO content_catalog (path, title, published_on) VALUES (?, 'T', '2026-11-10')");
+  for (const bad of ['/blog/-a/', '/blog/Post/', '/blog/a_b/']) {
+    assert.throws(() => validarCatalogo({ posts: [{ caminho: bad, titulo: 'T', data: '2026-11-10' }] }), /caminho inválido/, bad);
+    assert.throws(() => ins.run(bad), /CHECK/, bad);
+  }
+});
+
+test('P6: ida e volta entre catalogoPosts do build do blog e coletarCatalogo do Worker', async () => {
+  const origem = [
+    { id: 'primeiro-post', data: { title: 'Primeiro post', date: new Date('2026-11-24T23:30:00-03:00') } },
+    { id: 'a--b', data: { title: 'Segundo post', date: new Date('2026-11-12T12:00:00Z') } },
+    { id: 'a-', data: { title: 'Terceiro post', date: new Date('2026-11-10T12:00:00Z') } },
+  ];
+  const gerado = catalogoPosts(origem, '/blog');
+  const s = setup({
+    onFetch: () => new Response(JSON.stringify(gerado), { status: 200, headers: { 'content-type': 'application/json; charset=utf-8' } }),
+  });
+  const res = await coletarCatalogo(s.env, s.deps);
+  assert.deepEqual(res, { ok: true, count: 3 });
+  const rows = plain(s.db.raw.prepare('SELECT path, title, published_on FROM content_catalog ORDER BY published_on DESC, path ASC').all());
+  assert.deepEqual(
+    rows,
+    gerado.posts.map((p) => ({ path: p.caminho, title: p.titulo, published_on: p.data })),
+  );
+});
+
+test('P6: DB.batch lançando depois do prazo de busca registra falha ao gravar e não tempo esgotado', { timeout: 5000 }, async () => {
+  let signalUsado: AbortSignal | undefined;
+  const s = setup({
+    onFetch: (_url, init) => {
+      signalUsado = init?.signal ?? undefined;
+      return Response.json({ posts: [{ caminho: '/blog/ok/', titulo: 'Ok', data: '2026-11-10' }] });
+    },
+  });
+  s.deps.catalogTimeoutMs = 25;
+  s.env.DB.batch = async () => {
+    await new Promise((r) => setTimeout(r, 60));
+    throw new Error('D1 lento falhou');
+  };
+  const origErr = console.error;
+  console.error = () => {};
+  try {
+    const res = await coletarCatalogo(s.env, s.deps);
+    assert.equal(signalUsado?.aborted, false, 'prazo de busca foi desarmado antes de gravar');
+    assert.equal(res.ok, false);
+    assert.match(res.error, /^falha ao gravar/);
+    const col = plain(s.db.raw.prepare("SELECT last_error FROM collectors WHERE source = 'catalogo_posts'").get()) as { last_error: string };
+    assert.match(col.last_error, /^falha ao gravar/);
+  } finally {
+    console.error = origErr;
+  }
+});
+
+test('P6: falha da coleta escreve console.error sem corpo; falha dupla em collectors gera segundo log e não lança', async () => {
+  const logs: string[] = [];
+  const origErr = console.error;
+  console.error = (...args: unknown[]) => {
+    logs.push(args.map(String).join(' '));
+  };
+  try {
+    const s1 = setup({
+      onFetch: () => new Response('corpo-secreto-nao-logar', { status: 503, headers: { 'content-type': 'application/json' } }),
+    });
+    const r1 = await coletarCatalogo(s1.env, s1.deps);
+    assert.deepEqual(r1, { ok: false, error: 'site respondeu 503' });
+    assert.equal(logs.length, 1);
+    assert.match(logs[0], /site respondeu 503/);
+    assert.ok(!logs[0].includes('corpo-secreto-nao-logar'));
+
+    logs.length = 0;
+    const s2 = setup({
+      onFetch: () => new Response('corpo-secreto-nao-logar', { status: 502, headers: { 'content-type': 'application/json' } }),
+    });
+    const origPrepare = s2.env.DB.prepare;
+    s2.env.DB.prepare = (sql: string) => {
+      if (/INSERT INTO collectors/.test(sql)) {
+        const st: D1Stmt = {
+          bind: () => st,
+          run: async () => { throw new Error('D1 indisponível para gui@exemplo.com'); },
+          all: async () => ({ results: [] }),
+          first: async () => null,
+        };
+        return st;
+      }
+      return origPrepare(sql);
+    };
+    const r2 = await coletarCatalogo(s2.env, s2.deps);
+    assert.deepEqual(r2, { ok: false, error: 'site respondeu 502' });
+    assert.equal(logs.length, 2);
+    assert.match(logs[0], /site respondeu 502/);
+    assert.ok(!logs[0].includes('corpo-secreto-nao-logar'));
+    assert.match(logs[1], /não gravado/);
+    assert.ok(!logs[1].includes('gui@exemplo.com'));
+    assert.ok(logs[1].includes('<email>'));
+  } finally {
+    console.error = origErr;
+  }
 });
 
 test('P6: falha do D1 no meio do batch faz rollback e mantém o catálogo anterior inteiro', async () => {
@@ -831,8 +961,14 @@ test('P6: falha do D1 no meio do batch faz rollback e mantém o catálogo anteri
     { last_attempt_at: '2026-11-11T10:00:00.000Z', last_success_at: '2026-11-11T10:00:00.000Z', item_count: 2 },
   );
 
-  const res = await coletarCatalogo(s.env, s.deps);
-  assert.equal(res.ok, false);
+  const origErr = console.error;
+  console.error = () => {};
+  try {
+    const res = await coletarCatalogo(s.env, s.deps);
+    assert.equal(res.ok, false);
+  } finally {
+    console.error = origErr;
+  }
   const rows = plain(s.db.raw.prepare('SELECT path FROM content_catalog ORDER BY path').all());
   assert.deepEqual(rows, [{ path: '/blog/velho-1/' }, { path: '/blog/velho-2/' }]);
   const col = plain(s.db.raw.prepare("SELECT * FROM collectors WHERE source = 'catalogo_posts'").get()) as Record<string, unknown>;

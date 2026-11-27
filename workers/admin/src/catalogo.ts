@@ -11,9 +11,12 @@ export const CATALOG_MAX_ITEMS = 5000;
 // Cada linha usa 3 parâmetros; 30 linhas por INSERT = 90 parâmetros, abaixo do limite de 100 do D1.
 export const CATALOG_INSERT_CHUNK = 30;
 
-// Mesmo padrão do CHECK da migração 0009 e do SLUG_RE de drafts.ts: /blog/<slug>/ com até 200 caracteres.
-export const CATALOG_PATH_RE = /^\/blog\/[a-z0-9]+(?:-[a-z0-9]+)*\/$/;
+// Mesmo padrão de página de post em scripts/check_site.py (blog/[a-z0-9][a-z0-9-]*/index.html) e do CHECK da migração 0009:
+// /blog/<slug>/ com até 200 caracteres.
+export const CATALOG_PATH_RE = /^\/blog\/[a-z0-9][a-z0-9-]*\/$/;
 const CONTROL_RE = /[\u0000-\u001f\u007f-\u009f]/;
+/** Motivo curto para o log, sem corpo nem nada que pareça um email (mesmo padrão de conversoes.ts). */
+const motivoLog = (e: unknown) => String((e as Error)?.message ?? e).replace(/[^\s@]+@[^\s@]+/g, '<email>').slice(0, 200);
 
 export interface CatalogEnv {
   DB: D1Like;
@@ -124,9 +127,10 @@ export async function coletarCatalogo(env: CatalogEnv, deps: CatalogDeps): Promi
   const nowIso = new Date(deps.now()).toISOString();
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(new DOMException('prazo', 'TimeoutError')), deps.catalogTimeoutMs ?? CATALOG_TIMEOUT_MS);
+  let fase: 'busca' | 'validacao' | 'gravacao' = 'busca';
   try {
     const url = `${env.SITE_ORIGIN}/blog/catalogo.json`;
-    const res = await deps.fetch(url, { headers: { accept: 'application/json' }, signal: ac.signal });
+    const res = await deps.fetch(url, { redirect: 'manual', headers: { accept: 'application/json' }, signal: ac.signal });
     if (res.status !== 200) {
       res.body?.cancel().catch(() => {});
       throw new CatalogError(`site respondeu ${res.status}`);
@@ -137,6 +141,10 @@ export async function coletarCatalogo(env: CatalogEnv, deps: CatalogDeps): Promi
       throw new CatalogError('resposta sem content-type JSON');
     }
     const rawText = await lerCorpoLimitado(res, CATALOG_MAX_BYTES);
+    // O prazo de 10 s cobre só a busca e a leitura do corpo; desarma antes de validar e gravar no D1.
+    clearTimeout(timer);
+
+    fase = 'validacao';
     let parsed: unknown;
     try {
       parsed = JSON.parse(rawText);
@@ -144,6 +152,8 @@ export async function coletarCatalogo(env: CatalogEnv, deps: CatalogDeps): Promi
       throw new CatalogError('JSON inválido');
     }
     const items = validarCatalogo(parsed);
+
+    fase = 'gravacao';
     const stmts: D1Stmt[] = [env.DB.prepare('DELETE FROM content_catalog')];
     for (let i = 0; i < items.length; i += CATALOG_INSERT_CHUNK) {
       const slice = items.slice(i, i + CATALOG_INSERT_CHUNK);
@@ -171,17 +181,23 @@ export async function coletarCatalogo(env: CatalogEnv, deps: CatalogDeps): Promi
     let msg: string;
     if (e instanceof CatalogError) {
       msg = e.message;
-    } else if (ac.signal.aborted || (e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError'))) {
-      msg = 'tempo esgotado';
-    } else if (e instanceof TypeError) {
-      msg = 'falha de rede';
+    } else if (fase === 'busca') {
+      if (ac.signal.aborted || (e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError'))) {
+        msg = 'tempo esgotado';
+      } else if (e instanceof TypeError) {
+        msg = 'falha de rede';
+      } else {
+        msg = `falha na busca (${e instanceof Error ? e.name : 'erro'})`;
+      }
     } else {
       msg = `falha ao gravar (${e instanceof Error ? e.name : 'erro'})`;
     }
+    console.error(`coleta do catálogo falhou: ${msg}`);
     try {
       await registrarErro(env.DB, nowIso, msg);
-    } catch {
-      // Falha dupla (ex.: D1 fora do ar): devolve o erro original sem derrubar o resto do cron.
+    } catch (regErr) {
+      // Falha dupla (ex.: D1 fora do ar): registra no log e devolve o erro original sem derrubar o resto do cron.
+      console.error(`erro da coleta do catálogo não gravado: ${motivoLog(regErr)}`);
     }
     return { ok: false, error: msg };
   } finally {
