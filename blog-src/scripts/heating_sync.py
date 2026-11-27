@@ -68,7 +68,9 @@ Modos:
   DELETE ON site_identities`: chama `submitUserDeletion` no GA4 enquanto `ga4_pendente = 1`, contando 403/erro em
   `ga4_remocao_pendente`, e executa o DELETE no BigQuery em `events_*`, `users_YYYYMMDD` existentes e linhas exclusivas
   de `pseudonymous_users_YYYYMMDD` somando as `sessoes` já salvas às descobertas agora, repetido em D+1, D+3 e enquanto
-  houver tabela adiada por streaming buffer, até 5 tentativas; o item só sai da fila quando GA4 e BigQuery terminam),
+  houver tabela adiada por streaming buffer: da 5ª tentativa em diante repete diariamente e conta `bq_remocao_travada`;
+  acima de 1.000.000 de sessões o item fica e conta `bq_sessoes_excedidas`; o item só sai da fila quando GA4 e BigQuery
+  terminam),
   calcula a régua por contexto em relação ao instante T, substitui `heating` no D1 via payload `batch` da API REST e
   atualiza o Twenty (somente o que mudou).
   Risco aceito na troca de `heating`: a documentação da Cloudflare garante transação no `batch()` do binding em
@@ -78,7 +80,8 @@ Modos:
   `heating_optout`, apaga eventos e notas de todos os contextos no D1, limpa os campos `heating*` da Person e
   nota/faixa/sinais/calculadoEm das Inscrições no Twenty, apaga as linhas do email em `site_identities` (o trigger
   enfileira cada `uid` em `ga4_purge_queue`) e processa a fila na hora quando há credencial GCP (`HEATING_GCP_SA_FILE`).
-  Sem credencial (por exemplo no Mac), apenas enfileira e informa isso com código 0. Com credencial, se GA4 responder
+  Sem credencial (por exemplo no Mac), apenas enfileira, informa `ga4_fila_pendente_total` e sai com código 2 (o job
+  diário da KVM conclui a remoção). Com credencial, se GA4 responder
   403/erro ou o BigQuery falhar, o item fica pendente na fila para o job diário, imprime mensagem fixa (sem `uid`) e
   sai com código 2, sem impedir as outras remoções.
 - Esquecimento de curso (`heating_sync.py --forget-curso <slug> [--apply]`): lê UM email da entrada padrão, grava a
@@ -91,8 +94,9 @@ Lock compartilhado: usa o mesmo arquivo de lock do `conversoes_sync.py` (`CONVER
 espera até 10 minutos e falha com mensagem fixa.
 
 Wrapper da KVM: roda diariamente às 10:53 (BRT) a partir da `main` atualizada, com alerta por email se o script sair
-com erro ou se `curso_indisponivel`, `ga4_indisponivel`, `ga4_remocao_pendente`, `conversao_invalida`, `curso_invalido`
-ou `pessoa_na_lixeira` forem maiores que zero.
+com erro ou se `curso_indisponivel`, `ga4_indisponivel` (que também sobe quando o DELETE do BigQuery falha na fila,
+`bq_remocao_falhou`), `ga4_remocao_pendente`, `bq_remocao_travada`, `bq_sessoes_excedidas`, `conversao_invalida`,
+`curso_invalido` ou `pessoa_na_lixeira` forem maiores que zero.
 
 Rodar na KVM (todas as credenciais vêm do ambiente):
     CLOUDFLARE_API_TOKEN=... CLOUDFLARE_ACCOUNT_ID=... D1_DATABASE_ID=... TWENTY_API_KEY=... \\

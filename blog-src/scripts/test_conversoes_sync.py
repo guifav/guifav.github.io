@@ -2033,6 +2033,7 @@ class ForgetGooglePurgeTest(unittest.TestCase):
         class _JobCfg:
             def __init__(self, query_parameters=()):
                 self.query_parameters = list(query_parameters)
+                self.maximum_bytes_billed = None
 
         class _QueryJob:
             def __init__(self, rows=()):
@@ -2064,6 +2065,8 @@ class ForgetGooglePurgeTest(unittest.TestCase):
 
             def query(self, sql, job_config=None, location=None):
                 bq_queries.append((sql, job_config, location))
+                if bq_mode["mode"] == "first_delete_fails" and sql.lstrip().startswith("DELETE FROM"):
+                    raise RuntimeError("falha de rede no primeiro DELETE")
                 if bq_mode["mode"] == "dataset_not_found":
                     raise NotFound("Not found: Dataset mindapps:analytics_341040810")
                 if "INFORMATION_SCHEMA.TABLES" in sql:
@@ -2140,7 +2143,14 @@ class ForgetGooglePurgeTest(unittest.TestCase):
             self.assertFalse(S._ga4_submit_user_deletion("UidProd99", "/tmp/sa.json"))
 
             # 2) BigQuery completo: events_* + users_YYYYMMDD + pseudonymous_users_YYYYMMDD (só exclusivos) + sessoes_conhecidas.
-            res = S._bq_apagar_uid("UidProd99", "/tmp/sa.json", sessoes_conhecidas=[("ps_antigo", 500)])
+            #    `persistir` registra na mesma lista das consultas, para provar que vem antes do primeiro DELETE.
+            persistidas: list[list] = []
+
+            def persistir(sessoes):
+                persistidas.append(list(sessoes))
+                bq_queries.append(("PERSISTIR", None, None))
+
+            res = S._bq_apagar_uid("UidProd99", "/tmp/sa.json", sessoes_conhecidas=[("ps_antigo", 500)], persistir=persistir)
             self.assertEqual(
                 res,
                 {
@@ -2154,6 +2164,18 @@ class ForgetGooglePurgeTest(unittest.TestCase):
                     ],
                 },
             )
+            # Sessões gravadas uma vez, com a união completa, antes do primeiro DELETE (Claude P1, rodada 3).
+            self.assertEqual(
+                persistidas,
+                [[("ps_antigo", 500), ("ps_compartilhado", 1002), ("ps_exclusivo", 1001), ("ps_exclusivo", 1003)]],
+            )
+            i_persist = [q[0] for q in bq_queries].index("PERSISTIR")
+            i_delete = next(i for i, q in enumerate(bq_queries) if q[0].lstrip().startswith("DELETE FROM"))
+            self.assertLess(i_persist, i_delete)
+            # Toda consulta leva o teto de bytes cobrados (Claude P4, rodada 3).
+            for sql_q, cfg_q, _loc in bq_queries:
+                if sql_q != "PERSISTIR":
+                    self.assertEqual(cfg_q.maximum_bytes_billed, S.BQ_MAX_BYTES, sql_q[:60])
             # Verifica estrutura exata da SQL de descoberta (mata M8a, M8b e P0 de sessão mista).
             disc_sql = norm_sql(bq_queries[1][0])
             self.assertIn(
@@ -2192,11 +2214,23 @@ class ForgetGooglePurgeTest(unittest.TestCase):
             self.assertEqual(p_param.values, ["ps_antigo", "ps_exclusivo"])
             self.assertNotIn("ps_compartilhado", p_param.values)
 
+            # 2b) O primeiro DELETE falha: a exceção sobe, mas as sessões já estavam gravadas.
+            bq_queries.clear()
+            persistidas.clear()
+            bq_mode["mode"] = "first_delete_fails"
+            with self.assertRaises(Exception):
+                S._bq_apagar_uid("UidProd99", "/tmp/sa.json", persistir=persistir)
+            self.assertEqual(len(persistidas), 1)
+            self.assertIn(("ps_exclusivo", 1001), persistidas[0])
+            bq_mode["mode"] = "full"
+
             # 3) Quando não existem tabelas `users_YYYYMMDD` ainda, não falha nem consulta `users_*`.
             bq_queries.clear()
             bq_mode["mode"] = "no_users_tables"
             res_no_u = S._bq_apagar_uid("UidProd99", "/tmp/sa.json")
             self.assertEqual(res_no_u["tabelas_limpas"], 3)
+            for sql_q, cfg_q, _loc in bq_queries:
+                self.assertEqual(cfg_q.maximum_bytes_billed, S.BQ_MAX_BYTES, sql_q[:60])
             self.assertFalse(any(".users_*" in q[0] for q in bq_queries))
 
             # 4) Dataset ou tabela `events_*` não encontrados na descoberta -> erro (GoogleIndisponivel), NÃO sucesso!

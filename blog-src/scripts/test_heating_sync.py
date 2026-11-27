@@ -2923,7 +2923,8 @@ class Ga4EBigQueryTest(unittest.TestCase):
         )
         # Atualiza proxima_em para NOW_ISO (para independência do relógio real nos testes) e testa ON CONFLICT preservando sessoes.
         f.db.execute(
-            "UPDATE ga4_purge_queue SET ga4_pendente = 0, sessoes = ?, bq_tentativas = 2, proxima_em = ? WHERE uid = ?",
+            "UPDATE ga4_purge_queue SET ga4_pendente = 0, sessoes = ?, bq_tentativas = 2, bq_concluido = 1, proxima_em = ? "
+            "WHERE uid = ?",
             ('[["ps0",77]]', CS.stamp(NOW + timedelta(days=2)), "UidViaWorker1"),
         )
         f.db.commit()
@@ -2931,7 +2932,11 @@ class Ga4EBigQueryTest(unittest.TestCase):
         f.db.execute("DELETE FROM site_identities WHERE email = ?", ("web@corp.com",))
         f.db.commit()
         q_retrig = f.purge_queue_rows()[0]
-        self.assertEqual((q_retrig["ga4_pendente"], q_retrig["sessoes"], q_retrig["bq_tentativas"]), (1, '[["ps0",77]]', 0))
+        # O trigger reabre tudo (inclusive bq_concluido) e preserva as sessões salvas.
+        self.assertEqual(
+            (q_retrig["ga4_pendente"], q_retrig["sessoes"], q_retrig["bq_tentativas"], q_retrig["bq_concluido"]),
+            (1, '[["ps0",77]]', 0, 0),
+        )
         f.db.execute("UPDATE ga4_purge_queue SET proxima_em = ? WHERE uid = ?", (NOW_ISO, "UidViaWorker1"))
         f.db.commit()
 

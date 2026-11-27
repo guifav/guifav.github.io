@@ -82,9 +82,10 @@ fila única `ga4_purge_queue` (`ga4_pendente = 1`, `bq_tentativas = 0`, `sessoes
 `properties.submitUserDeletion`), apaga no BigQuery tabela por tabela (`events_YYYYMMDD`, `events_intraday_YYYYMMDD`,
 `users_YYYYMMDD` existentes e linhas exclusivas de `pseudonymous_users_YYYYMMDD`, nunca no wildcard e nunca tocando em
 linhas com `user_id` de outra pessoa) e persiste os pares `(user_pseudo_id, ga_session_id)` descobertos em `sessoes`
-para as repetições D+1, D+3 e eventuais adiamentos por streaming buffer (até 5 tentativas) no job diário. Sem
-`HEATING_GCP_SA_FILE` (por exemplo no Mac), apenas apaga `site_identities` (o trigger enfileira para o job diário na
-KVM) e informa isso na saída, com código 0. Com credencial, se o GA4 responder 403/erro ou se o BigQuery falhar, o item
+para as repetições D+1, D+3 e eventuais adiamentos por streaming buffer no job diário (da 5ª tentativa em diante,
+diárias enquanto houver tabela adiada, contando `bq_remocao_travada`). Sem `HEATING_GCP_SA_FILE` (por exemplo no Mac),
+apenas apaga `site_identities` (o trigger enfileira para o job diário na KVM), informa `ga4_fila_pendente_total` e sai
+com código 2. Com credencial, se o GA4 responder 403/erro ou se o BigQuery falhar, o item
 permanece pendente em `ga4_purge_queue` para o job diário retomar, com mensagem fixa (sem `uid`) e saída com código 2,
 sem impedir as demais remoções. Uma queda no meio (mesmo na leitura do Twenty ou na limpeza dos campos heating da
 Pessoa) deixa os marcadores (`forgotten` e `heating_optout`) gravados e o D1 intacto, e repetir o comando conclui, mesmo
