@@ -1566,7 +1566,7 @@ class TrackingSourcesTest(unittest.TestCase):
                      "https://adssettings.google.com/", "https://tools.google.com/dlpage/gaoptout",
                      "https://policies.google.com/technologies/partner-sites"):
             self.assertIn(must, t)
-        self.assertRegex(t, r"Atualizada em \d{1,2} de [a-zç]+ de 20\d\d\.")  # #68: Cookies; 23/11: Materiais; 24/11: CRM (#97) e /privacidade/ (#146); 26/11: terceiros (#154) e remoção (#134); #197: prioridade e cursos
+        self.assertIn("Atualizada em 27 de novembro de 2026.", t)  # #68: Cookies; 23/11: Materiais; 24/11: CRM (#97) e /privacidade/ (#146); 26/11: terceiros (#154) e remoção (#134); 27/11: prioridade e cursos (#197)
 
     def test_privacy_says_material_record_goes_to_the_crm(self):
         # #97 fase 2 e #134: o registro dos materiais vai ao Twenty. O download cria o contato; o pedido sem download só
@@ -5472,6 +5472,24 @@ class PriorityTest(unittest.TestCase):
                 self.w(C.PRIORITY_PAGE, self.priority_doc(**kw))
                 got = C.check_priority(self.site)
                 self.assertTrue(any(needle in p for p in got), got)
+
+    def test_fields_after_closing_form_fail(self):
+        # Ao fechar </form>, _PriorityPage zera active_form: campo de email e Turnstile depois do fechamento não contam.
+        key = C.TURNSTILE_SITE_KEY
+        email = '<input type="email" name="email" required>'
+        turnstile = f'<div class="cf-turnstile" data-sitekey="{key}"></div>'
+        head = f'<form data-clarity-mask="true" method="post" action="{C.PRIORITY_ACTION}">'
+        for name, form_html, needles in (
+            ("email depois de </form>", f"{head}{turnstile}</form>{email}", ("campo de email",)),
+            ("turnstile depois de </form>", f"{head}{email}</form>{turnstile}", ("Turnstile",)),
+            ("email e turnstile depois de </form>", f"{head}</form>{email}{turnstile}", ("campo de email", "Turnstile")),
+        ):
+            with self.subTest(case=name):
+                self.build_valid_site()
+                self.w(C.PRIORITY_PAGE, self.priority_doc(form=form_html))
+                got = C.check_priority(self.site)
+                for needle in needles:
+                    self.assertTrue(any(needle in p for p in got), got)
 
     def test_main_runs_the_priority_rule(self):
         consts = Path(self.tmp.name) / "consts.ts"
