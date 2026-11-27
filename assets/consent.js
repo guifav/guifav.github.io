@@ -78,7 +78,8 @@
 
   function consent(v) {
     var o = {};
-    if (v === 'granted' && isIdentified()) {
+    var blocked = v === 'granted' && isIdentified();
+    if (blocked) {
       o.ad_storage = 'denied';
       o.ad_user_data = 'denied';
       o.ad_personalization = 'denied';
@@ -86,7 +87,14 @@
     } else {
       for (var i = 0; i < ALL.length; i++) o[ALL[i]] = v;
     }
-    if (typeof window.gtag === 'function') window.gtag('consent', 'update', o);
+    if (typeof window.gtag !== 'function') return;
+    window.gtag('consent', 'update', o);
+    // No "Sim", os dois sinais de anúncio acompanham o consentimento na hora, sem depender do auth.js (carregado depois):
+    // desligados com sessão logada ou vínculo ligado, ligados de novo no consentimento comum.
+    if (v === 'granted') {
+      window.gtag('set', 'allow_google_signals', !blocked);
+      window.gtag('set', 'allow_ad_personalization_signals', !blocked);
+    }
   }
 
   function clearCookies() {

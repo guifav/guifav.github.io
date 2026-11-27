@@ -285,6 +285,27 @@ test('Sim com o vínculo do login ligado (heating-link-v1 granted) ou sinal do a
     assert.notDeepEqual(updates(s.calls), [IDENTIFIED_GRANTED], JSON.stringify(badLogin));
   }
 
+  // Kimi P2 (rodada 8): no Sim, os dois sinais de anúncio saem do próprio consent.js, sem depender do auth.js carregado:
+  // desligados com sessão marcada ou vínculo ligado, ligados de novo no consentimento comum; o Não não mexe nos sinais.
+  const sinais = (calls: unknown[][]) => calls.filter((c) => c[0] === 'set' && typeof c[1] === 'string' && String(c[1]).startsWith('allow_'));
+  for (const opts of [{ heatingLogin: { t: NOW - DAY } }, { heatingLink: { v: 'granted', t: NOW - DAY, uid: 'UidAtivo123' } }]) {
+    const s = setup({ stored: { v: 'denied', t: NOW - DAY }, ...opts });
+    s.click(s.cookieLink);
+    s.click(s.btn('consent-yes'));
+    assert.deepEqual(sinais(s.calls), [['set', 'allow_google_signals', false], ['set', 'allow_ad_personalization_signals', false]], JSON.stringify(opts));
+    const iUpd = s.calls.findIndex((c) => c[0] === 'consent' && c[1] === 'update');
+    const iSig = s.calls.findIndex((c) => c[0] === 'set' && c[1] === 'allow_google_signals');
+    assert.ok(iUpd >= 0 && iSig > iUpd);
+  }
+  const comum = setup({ stored: { v: 'denied', t: NOW - DAY } });
+  comum.click(comum.cookieLink);
+  comum.click(comum.btn('consent-yes'));
+  assert.deepEqual(sinais(comum.calls), [['set', 'allow_google_signals', true], ['set', 'allow_ad_personalization_signals', true]]);
+  const nao = setup({ stored: { v: 'granted', t: NOW - DAY }, heatingLogin: { t: NOW - DAY } });
+  nao.click(nao.cookieLink);
+  nao.click(nao.btn('consent-no'));
+  assert.deepEqual(sinais(nao.calls), []);
+
   // Sinal do auth.js (sessão confirmada pelo Firebase, mesmo sem heating-link-v1 legível).
   const switched = setup({ stored: { v: 'denied', t: NOW - MIN }, authIdentified: () => true });
   switched.click(switched.cookieLink);

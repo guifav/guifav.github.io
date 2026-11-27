@@ -1441,9 +1441,8 @@ test('antes de o Firebase responder: Sim no banner não apaga o uid do <head> ne
   const before = s.gtagCalls.length;
   await s.emitConsent('granted');
   assert.ok(s.local.getItem('heating-uid-v1'), 'o uid do <head> continua até o Firebase decidir');
-  // Nada de user_id null nem anúncio concedido antes de o Firebase responder; com o vínculo ligado, o Sim reafirma a
-  // negação de anúncios e sinais (igual ao snippet do <head>).
-  assert.deepEqual(s.gtagCalls.slice(before), LOGIN_AD_DENY);
+  // Nada de user_id null nem anúncio concedido antes de o Firebase responder (os sinais do Sim são do consent.js).
+  assert.deepEqual(s.gtagCalls.slice(before), []);
 
   // O Firebase confirma a sessão: identificação normal, com anúncios negados antes do user_id.
   await s.emitAuth(makeUser());
@@ -1469,7 +1468,8 @@ test('antes de o Firebase responder: storage que não revoga não apaga o uid do
     heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
     heatingUid: { uid: 'UidCurso123ABC', t: NOW - 1000 },
   };
-  // Outra aba liga o vínculo de novo, aceita os cookies e renova o mesmo uid: nada muda nesta aba.
+  // Outra aba liga o vínculo de novo, aceita os cookies e renova o mesmo uid: o uid fica, nada de user_id null; o vínculo
+  // ligado lá só reafirma aqui a negação de anúncios e sinais.
   const s = await setupAuth(base);
   const before = s.gtagCalls.length;
   await s.emitStorage('heating-link-v1', JSON.stringify({ v: 'granted', t: NOW, uid: 'UidCurso123ABC' }));
@@ -1478,7 +1478,7 @@ test('antes de o Firebase responder: storage que não revoga não apaga o uid do
   s.local.setItem('heating-uid-v1', renovado);
   await s.emitStorage('heating-uid-v1', renovado);
   assert.ok(s.local.getItem('heating-uid-v1'), 'o uid do <head> continua');
-  assert.deepEqual(s.gtagCalls.slice(before), [], 'nada de user_id null antes de o Firebase responder');
+  assert.deepEqual(s.gtagCalls.slice(before), LOGIN_AD_DENY, 'nada de user_id null antes de o Firebase responder');
 
   // Outra aba apaga o uid (Sair lá): revogação, o user_id do <head> sai desta aba também.
   const r = await setupAuth(base);
@@ -1780,15 +1780,16 @@ test('Kimi P1 (rodada 6): sem a marca de login gravável, a sessão confirmada a
   assert.equal(authIdentified(), false, 'depois do logout e sem vínculo, o banner volta a conceder');
 });
 
-test('Claude P3 (rodada 7): Sim no banner depois de o Firebase confirmar a conta desliga também os sinais de anúncio', async () => {
-  // Logado, sem vínculo, banner ainda sem resposta quando o Firebase confirma; depois Sim.
+test('Claude P3 (rodada 7) e Kimi P2 (rodada 8): no Sim, o auth.js só nega quando a marca de login não é legível', async () => {
+  // Logado com a marca legível: o consent.js nega ad_* e os dois sinais na hora; o auth.js não repete.
   const s = await setupAuth({ idbMode: 'session', initialUser: makeUser() });
-  assert.deepEqual(s.gtagCalls, []);
+  assert.ok(s.local.getItem('heating-login-v1'));
   await s.emitConsent('granted');
-  assert.deepEqual(s.gtagCalls, LOGIN_AD_DENY);
+  assert.deepEqual(s.gtagCalls, []);
 
-  // Só com o vínculo ligado no navegador, sem sessão: o mesmo.
-  const r = await setupAuth({ heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' }, idbMode: 'session', initialUser: null });
+  // Sessão confirmada nesta página mas a marca sumiu (armazenamento bloqueado ou apagado): o auth.js nega no Sim.
+  const r = await setupAuth({ idbMode: 'session', initialUser: makeUser() });
+  r.local.removeItem('heating-login-v1');
   await r.emitConsent('granted');
   assert.deepEqual(r.gtagCalls, LOGIN_AD_DENY);
 
@@ -1799,10 +1800,12 @@ test('Claude P3 (rodada 7): Sim no banner depois de o Firebase confirmar a conta
 });
 
 test('Kimi P2 e P3 (rodada 7): Não -> Sim logado sem vínculo desliga os sinais; logout remoto com foco no menu devolve o foco', async () => {
+  // Não -> Sim logado sem vínculo: quem nega ad_* e os sinais é o consent.js (testado em consent.test.ts); o auth.js
+  // não duplica.
   const s = await setupAuth({ consent: { v: 'denied', t: NOW - 1000 }, initialUser: makeUser() });
   assert.deepEqual(s.gtagCalls, []);
   await s.emitConsent('granted');
-  assert.deepEqual(s.gtagCalls, LOGIN_AD_DENY);
+  assert.deepEqual(s.gtagCalls, []);
 
   const k = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' }, initialUser: makeUser() });
   const btn = k.findClass('guifav-auth-btn')!;
@@ -1822,3 +1825,53 @@ test('Kimi P2 e P3 (rodada 7): Não -> Sim logado sem vínculo desliga os sinais
   assert.equal(c.activeElement(), input);
 });
 
+test('Kimi P2 (rodada 8): outra aba que entra na conta ou liga o vínculo nega anúncios e sinais aqui na hora', async () => {
+  // Esta aba deslogada (Firebase sem usuário), cookies aceitos: outra aba entra e grava a marca de login.
+  const s = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: null });
+  const before = s.gtagCalls.length;
+  await s.emitStorage('heating-login-v1', JSON.stringify({ t: NOW }));
+  assert.deepEqual(s.gtagCalls.slice(before), LOGIN_AD_DENY);
+
+  // Outra aba liga o vínculo.
+  const r = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: null });
+  const beforeR = r.gtagCalls.length;
+  await r.emitStorage('heating-link-v1', JSON.stringify({ v: 'granted', t: NOW, uid: 'UidCurso123ABC' }));
+  assert.deepEqual(r.gtagCalls.slice(beforeR).slice(0, 3), LOGIN_AD_DENY);
+
+  // Marca apagada ou vínculo desligado em outra aba não nega; cookies recusados também não.
+  const q = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: null });
+  const beforeQ = q.gtagCalls.length;
+  await q.emitStorage('heating-login-v1', null);
+  await q.emitStorage('heating-link-v1', JSON.stringify({ v: 'denied', t: NOW, uid: 'UidCurso123ABC' }));
+  assert.ok(!q.gtagCalls.slice(beforeQ).some((c) => c[0] === 'set' && c[1] === 'allow_google_signals'));
+  const n = await setupAuth({ consent: { v: 'denied', t: NOW - 1000 }, initialUser: null });
+  await n.emitStorage('heating-login-v1', JSON.stringify({ t: NOW }));
+  assert.deepEqual(n.gtagCalls, []);
+});
+
+
+test('Claude P4 (rodada 8): antes do Firebase, vínculo apagado em outra aba sem marca de login devolve anúncios e sinais', async () => {
+  const s = await setupAuth({
+    consent: { v: 'granted', t: NOW - 1000 },
+    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
+    heatingUid: { uid: 'UidCurso123ABC', t: NOW - 1000 },
+  });
+  const before = s.gtagCalls.length;
+  await s.emitStorage('heating-link-v1', null);
+  assert.deepEqual(s.gtagCalls.slice(before), [
+    ['set', { user_id: null }],
+    ['consent', 'update', AD_CONSENT_GRANTED],
+    ['set', 'allow_google_signals', true],
+    ['set', 'allow_ad_personalization_signals', true],
+  ]);
+  // Com a marca de login, o mesmo apagamento só tira o user_id.
+  const r = await setupAuth({
+    consent: { v: 'granted', t: NOW - 1000 },
+    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
+    heatingUid: { uid: 'UidCurso123ABC', t: NOW - 1000 },
+  });
+  r.local.setItem('heating-login-v1', JSON.stringify({ t: NOW }));
+  const beforeR = r.gtagCalls.length;
+  await r.emitStorage('heating-link-v1', null);
+  assert.deepEqual(r.gtagCalls.slice(beforeR), [['set', { user_id: null }]]);
+});

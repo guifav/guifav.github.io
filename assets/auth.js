@@ -911,10 +911,10 @@
       loadFirebase();
       syncNotice();
       if (detail === 'granted') {
-        // "Sim" com sessão logada ou vínculo ligado: o consent.js já negou ad_*; aqui também saem os sinais de anúncio
-        // (a identificação, quando acontece agora, já nega tudo e não precisa repetir).
+        // "Sim" com sessão confirmada nesta página, sem a marca ainda legível pelo consent.js (armazenamento bloqueado):
+        // nega aqui também. O consent.js já nega com a marca ou o vínculo; a identificação, quando acontece agora, nega tudo.
         var identifyingNow = validTenantUser(currentUser) && readHeatingLink(currentUser.uid) === 'granted';
-        if (adsBlockedInBrowser() && !identifyingNow) denyAdSignals();
+        if (validTenantUser(currentUser) && !loginMarkedInBrowser() && !linkGrantedInBrowser() && !identifyingNow) denyAdSignals();
         syncIdentityState(false);
         maybeStartOneTap();
       } else {
@@ -925,7 +925,14 @@
 
     w.addEventListener('storage', function (e) {
       var k = e ? e.key : null;
-      if (k !== null && k !== CONSENT_KEY && k !== LINK_KEY && k !== UID_KEY) return;
+      if (k !== null && k !== CONSENT_KEY && k !== LINK_KEY && k !== UID_KEY && k !== LOGIN_KEY) return;
+      // Outra aba entrou na conta ou ligou o vínculo: com cookies aceitos, os anúncios e sinais saem aqui também, sem
+      // esperar o Firebase propagar (nem depender dele carregar).
+      if ((k === LOGIN_KEY && loginMarkedInBrowser()) || (k === LINK_KEY && linkGrantedInBrowser())) {
+        var identifiedHere = validTenantUser(currentUser) && readHeatingLink(currentUser.uid) === 'granted';
+        if (readConsent() === 'granted' && !identifiedHere) denyAdSignals();
+      }
+      if (k === LOGIN_KEY) return;
       if (readConsent() !== null) loadFirebase();
       updateToggleLabel();
       syncNotice();
