@@ -1566,7 +1566,7 @@ class TrackingSourcesTest(unittest.TestCase):
                      "https://adssettings.google.com/", "https://tools.google.com/dlpage/gaoptout",
                      "https://policies.google.com/technologies/partner-sites"):
             self.assertIn(must, t)
-        self.assertIn("Atualizada em 27 de novembro de 2026.", t)  # #68: Cookies; 23/11: Materiais; 24/11: CRM (#97) e /privacidade/ (#146); 26/11: terceiros (#154) e remoção (#134); 27/11: prioridade e cursos (#197)
+        self.assertIn("Atualizada em 28 de novembro de 2026.", t)  # #68: Cookies; 23/11: Materiais; 24/11: CRM (#97) e /privacidade/ (#146); 26/11: terceiros (#154) e remoção (#134); 27/11: prioridade e cursos (#197); 28/11: login vira conversão
 
     def test_privacy_says_material_record_goes_to_the_crm(self):
         # #97 fase 2 e #134: o registro dos materiais vai ao Twenty. O download cria o contato; o pedido sem download só
@@ -5686,7 +5686,9 @@ class PrioritySourcesTest(unittest.TestCase):
             "Se você entrar no site com a sua conta Google, aceitar os cookies e confirmar o aviso do login, as suas "
             "visitas ficam ligadas ao seu contato: páginas vistas, tempo de leitura, rolagem e cliques em Agende e "
             "Contato. Essas visitas entram na prioridade de contato. O Google Analytics recebe um código da sua conta, "
-            "nunca o seu email, e essas visitas não são usadas para anúncios. A base legal é o seu consentimento "
+            "nunca o seu email, e essas visitas não são usadas para anúncios. O primeiro login também fica registrado, "
+            "com a origem da visita, e cria no meu CRM um contato só com o seu email, se ele ainda não existir, como no "
+            "download de um material. A base legal é o seu consentimento "
             "(Lei 13.709/2018, art. 7º, I). Para desligar, saia da conta, desligue no menu da conta ou clique em "
             "Cookies no rodapé e responda Não. Você pode pedir que eu apague o que já foi registrado, inclusive no Google "
             "Analytics.",

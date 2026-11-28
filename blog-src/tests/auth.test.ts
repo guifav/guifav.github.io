@@ -2043,3 +2043,31 @@ test('P3 (rodada 11 do #203): marca gravada em outra aba não suprime; apagada c
   assert.equal(s.session.getItem('guifav_one_tap_suppressed'), '1');
   assert.equal(s.oneTapCancels.length, 1, 'o convite aberto é cancelado');
 });
+
+test('login vira conversão (#197): o POST /identidade leva a origem da visita urlencoded, só com rótulos', async () => {
+  const s = await setupAuth({
+    consent: { v: 'granted', t: NOW - 1000 },
+    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
+  });
+  s.win.guifavOrigin = {
+    current: () => ({ canal: 'busca', fonte: 'google', utm_source: 'news', utm_medium: null, utm_campaign: 'lanc 1', entrada: '/blog/x/' }),
+  };
+  await s.emitAuth(makeUser());
+  assert.equal(s.fetchCalls.length, 1);
+  const init = s.fetchCalls[0].init as { headers: Record<string, string>; body?: string };
+  assert.deepEqual(init.headers, { Authorization: 'Bearer jwt.token.falso', 'Content-Type': 'application/x-www-form-urlencoded' });
+  assert.equal(init.body, 'origem_canal=busca&origem_fonte=google&utm_source=news&utm_campaign=lanc%201&origem_entrada=%2Fblog%2Fx%2F');
+  assert.ok(!String(init.body).includes('@'), 'nunca o email');
+
+  // Sem guifavOrigin (track.js ausente) ou com valor estranho: POST sem corpo, como antes.
+  const r = await setupAuth({
+    consent: { v: 'granted', t: NOW - 1000 },
+    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
+  });
+  r.win.guifavOrigin = { current: () => { throw new Error('quebrado'); } };
+  await r.emitAuth(makeUser());
+  const initR = r.fetchCalls[0].init as { headers: Record<string, string>; body?: string };
+  assert.deepEqual(initR.headers, { Authorization: 'Bearer jwt.token.falso' });
+  assert.equal(initR.body, undefined);
+});
+

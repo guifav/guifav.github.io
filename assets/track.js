@@ -40,7 +40,7 @@
   var WORKER_HOST = 'insights.guifav.dev';
   var ORIGIN_FORMS = { '/subscribe': 1, '/material': 1 };
   // Login com Google One Tap e user_id no GA4 (épico #197, corte 2): carregado em idle, só em guifav.dev e fora de /admin.
-  var AUTH_SRC = '/assets/auth.js?v=202611281030';
+  var AUTH_SRC = '/assets/auth.js?v=202611281400';
 
   // ---- Origem da visita (issue #114). Listas iguais às de workers/newsletter/src/origem.ts e da migração 0006. ----
   var CANAIS = ['busca', 'assistente', 'social', 'email', 'pago', 'outro_site', 'direto', 'desconhecida'];

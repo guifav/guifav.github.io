@@ -312,6 +312,23 @@
     );
   }
 
+  // Origem da visita (a mesma que o track.js põe nos formulários), em campos urlencoded para o POST /identidade gravar
+  // com a conversão do login. Só rótulos de listas fixas, sem URL, termo buscado nem identificador; o Worker revalida.
+  function originBody() {
+    try {
+      var o = w.guifavOrigin && typeof w.guifavOrigin.current === 'function' ? w.guifavOrigin.current() : null;
+      if (!o || typeof o !== 'object') return '';
+      var campos = [['origem_canal', o.canal], ['origem_fonte', o.fonte], ['utm_source', o.utm_source],
+        ['utm_medium', o.utm_medium], ['utm_campaign', o.utm_campaign], ['origem_entrada', o.entrada]];
+      var partes = [];
+      for (var i = 0; i < campos.length; i++) {
+        var v = campos[i][1];
+        if (typeof v === 'string' && v) partes.push(campos[i][0] + '=' + encodeURIComponent(v));
+      }
+      return partes.join('&');
+    } catch (e) { return ''; }
+  }
+
   function sendIdentity(user) {
     var uid = user.uid;
     if (sessionGet(IDENTITY_SENT_PREFIX + uid) === '1' || identityInFlightUid === uid) return;
@@ -320,10 +337,13 @@
     Promise.resolve(user.getIdToken()).then(function (token) {
       if (!token || typeof token !== 'string') return;
       if (!canIdentify(uid)) return;
-      return w.fetch(IDENTITY_URL, {
-        method: 'POST',
-        headers: { Authorization: 'Bearer ' + token }
-      }).then(function (res) {
+      var body = originBody();
+      var init = { method: 'POST', headers: { Authorization: 'Bearer ' + token } };
+      if (body) {
+        init.headers['Content-Type'] = 'application/x-www-form-urlencoded';
+        init.body = body;
+      }
+      return w.fetch(IDENTITY_URL, init).then(function (res) {
         if (res && res.ok) {
           sessionSet(IDENTITY_SENT_PREFIX + uid, '1');
         } else if (res && res.status === 409) {
