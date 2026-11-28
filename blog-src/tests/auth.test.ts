@@ -2070,4 +2070,3 @@ test('login vira conversão (#197): o POST /identidade leva a origem da visita u
   assert.deepEqual(initR.headers, { Authorization: 'Bearer jwt.token.falso' });
   assert.equal(initR.body, undefined);
 });
-

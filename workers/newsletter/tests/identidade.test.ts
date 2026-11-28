@@ -605,4 +605,3 @@ test('oposição gravada entre o vínculo e a conversão (corrida com --forget):
   assert.equal(res.status, 204);
   assert.deepEqual(s.rows('conversions'), []);
 });
-
