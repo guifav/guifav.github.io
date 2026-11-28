@@ -883,16 +883,19 @@
           syncIdentityState(false);
         } else {
           var wasUser = currentUser !== null;
+          // Marca de login ainda presente quando o Firebase responde sem usuário: houve sessão neste navegador e ela saiu
+          // (por exemplo, logout em outra aba antes da primeira resposta daqui). Conta como saída, igual a wasUser.
+          var hadSession = wasUser || loginMarkedInBrowser();
           var hadIdentity = wasUser || activeUid !== null || headSentUid;
           var hadAdsBlocked = adsBlockedInBrowser();
           currentUser = null;
           removeLoginMark();
           // Saiu aqui ou em outra aba (o Firebase propaga): o One Tap não reaparece nesta aba até um novo login.
-          if (wasUser) sessionSet(ONE_TAP_SUPPRESSED_KEY, '1');
+          if (hadSession) sessionSet(ONE_TAP_SUPPRESSED_KEY, '1');
           hideNotice();
           renderWidget();
           syncIdentityState(hadIdentity);
-          if (wasUser && hadAdsBlocked && readConsent() === 'granted' && !adsBlockedInBrowser()) restoreAdSignals();
+          if (hadSession && hadAdsBlocked && readConsent() === 'granted' && !adsBlockedInBrowser()) restoreAdSignals();
           maybeStartOneTap();
         }
       });

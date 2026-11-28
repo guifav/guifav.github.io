@@ -1909,3 +1909,37 @@ test('Roger P2 (86e90be): login e logout em outra aba, com esta aba deslogada, d
   await n.emitStorage('heating-login-v1', null);
   assert.deepEqual(n.gtagCalls, []);
 });
+
+test('Kimi P2 (rodada 9): logout em outra aba antes da primeira resposta do Firebase desta aba', async () => {
+  // A marca existia no carregamento (o <head> negou anúncios); o Firebase daqui responde sem usuário.
+  const local = new Storage();
+  local.setItem('consent-v1', JSON.stringify({ v: 'granted', t: NOW - 1000 }));
+  local.setItem('heating-login-v1', JSON.stringify({ t: NOW - 1000 }));
+  const s = await setupAuth({ local, gisAvailable: true });
+  const before = s.gtagCalls.length;
+  await s.emitAuth(null);
+  assert.equal(local.getItem('heating-login-v1'), null);
+  assert.equal(s.session.getItem('guifav_one_tap_suppressed'), '1');
+  assert.equal(s.oneTapPrompts.length, 0, 'sem One Tap logo depois da saída');
+  assert.deepEqual(s.gtagCalls.slice(before), [
+    ['consent', 'update', AD_CONSENT_GRANTED],
+    ['set', 'allow_google_signals', true],
+    ['set', 'allow_ad_personalization_signals', true],
+  ]);
+
+  // Se a remoção da marca chega antes pelo evento storage, a restauração acontece ali e a resposta do Firebase não repete.
+  const local2 = new Storage();
+  local2.setItem('consent-v1', JSON.stringify({ v: 'granted', t: NOW - 1000 }));
+  local2.setItem('heating-login-v1', JSON.stringify({ t: NOW - 1000 }));
+  const r = await setupAuth({ local: local2 });
+  const beforeR = r.gtagCalls.length;
+  await r.emitStorage('heating-login-v1', null);
+  await r.emitAuth(null);
+  assert.equal(r.gtagCalls.slice(beforeR).filter((c) => c[0] === 'consent').length, 1);
+
+  // Visitante sem marca: a primeira resposta sem usuário não suprime o One Tap nem mexe em anúncios.
+  const v = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, gisAvailable: true });
+  await v.emitAuth(null);
+  assert.equal(v.session.getItem('guifav_one_tap_suppressed'), null);
+  assert.deepEqual(v.gtagCalls, []);
+});
