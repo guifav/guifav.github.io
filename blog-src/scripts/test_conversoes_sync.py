@@ -42,6 +42,9 @@ class Fake:
 
     def __init__(self, people=(), schema=False, fail=None, listing=None, db_path=":memory:"):
         self.db = sqlite3.connect(db_path)
+        # Os mesmos limites do D1 de produção (medidos em 28/11): 5 termos num SELECT composto e 50 caracteres de padrão.
+        self.db.setlimit(sqlite3.SQLITE_LIMIT_COMPOUND_SELECT, 5)
+        self.db.setlimit(sqlite3.SQLITE_LIMIT_LIKE_PATTERN_LENGTH, 50)
         self.db.row_factory = sqlite3.Row
         mig_files = sorted(n for n in os.listdir(MIGRATIONS) if n.endswith(".sql") and n >= "0004")
         for name in mig_files:
