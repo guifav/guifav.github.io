@@ -29,7 +29,9 @@ Regras:
 - Linha malformada (ação, email, datas, interesses ou ids fora do formato que o Worker grava; o email com a mesma regra
   do `normalizeEmail` do Worker) não é gravada nem marcada, e é contada em `linha_invalida` (o wrapper alerta).
 - Lê e valida tudo (D1, metadados, Pessoas e Conversões) antes de qualquer escrita. A saída tem só contagens, nunca emails.
-  Um campo SELECT que já existe no Twenty sem todas as opções que o sync grava é recusado antes de qualquer escrita.
+  Um campo SELECT que já existe no Twenty sem todas as opções que o sync grava é recusado antes de qualquer escrita, com
+  uma exceção: no campo Ação (`SELECT_COMPLETAVEIS`), o próprio sync cria as opções que faltam (com --apply, antes das
+  Conversões), como faz com os interesses.
 - Origem (issue #114): vai na Conversão, nunca na Pessoa, com as listas e os padrões do Worker
   (workers/newsletter/src/origem.ts) e do CHECK da migração 0006. Linha anterior à #114 tem a origem toda nula e vira
   Conversão com os campos de origem vazios. Origem fora do formato (canal ou fonte fora da lista, UTM ou página de
@@ -455,7 +457,8 @@ def read_metadata(c: TS.Clients) -> dict:
             if k in have and have[k]["type"] != f["type"]:
                 raise SyncError(f"campo {k} existe com outro tipo")
             # SELECT que já existe precisa ter todas as opções que o sync grava: senão o Twenty recusaria a Conversão no
-            # meio da rodada, depois de outras escritas.
+            # meio da rodada, depois de outras escritas. Exceção: os campos de SELECT_COMPLETAVEIS (só a Ação), cujas
+            # opções que faltam o ensure_schema cria antes de qualquer Conversão.
             if k in have and f["type"] == "SELECT" and k not in SELECT_COMPLETAVEIS:
                 missing = {o["value"] for o in f["options"]} - set(_option_values(have[k]))
                 if missing:
@@ -548,7 +551,8 @@ def conversion_body(r: dict, person_id: str) -> dict:
 
 
 def ensure_schema(c: TS.Clients, meta: dict, labels: dict[str, str]) -> None:
-    """Cria o que falta: objeto, campos, relação e opções novas de interesse. Só roda com --apply, depois das leituras."""
+    """Cria o que falta: objeto, campos, relação, opções novas de interesse e as opções que faltam nos campos de
+    SELECT_COMPLETAVEIS (a Ação). Só roda com --apply, depois das leituras."""
     fm = "mutation($input: CreateOneFieldMetadataInput!){ createOneField(input:$input){ id name type options } }"
 
     def create(object_id: str, name: str, spec: dict, opts: list | None = None) -> dict:
