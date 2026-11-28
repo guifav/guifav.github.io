@@ -725,7 +725,10 @@
   }
 
   function initOneTap() {
+    // Reconfere tudo na hora de abrir: o GIS pode terminar de carregar depois de um logout em outra aba (supressão),
+    // de um login, de uma mudança no banner ou de uma navegação para página sem One Tap.
     if (currentUser || !authInstance || !fbAuth) return;
+    if (sessionGet(ONE_TAP_SUPPRESSED_KEY) === '1' || isNoOneTapPath(loc.pathname) || readConsent() === null) return;
     try {
       var id = w.google && w.google.accounts && w.google.accounts.id;
       if (!id || typeof id.initialize !== 'function' || typeof id.prompt !== 'function') return;

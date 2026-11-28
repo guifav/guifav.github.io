@@ -1946,3 +1946,67 @@ test('Kimi P2 (rodada 9): logout em outra aba antes da primeira resposta do Fire
   assert.equal(v.session.getItem('guifav_one_tap_suppressed'), null);
   assert.deepEqual(v.gtagCalls, []);
 });
+
+test('Kimi P2 (rodada 11 do #203): track.js só agenda o auth.js depois do load da página', () => {
+  function run(readyState: string) {
+    const winHandlers: Record<string, Array<() => void>> = {};
+    const idleCalls: Array<() => void> = [];
+    const appended: El[] = [];
+    const html = new El('html');
+    const body = html.appendChild(new El('body'));
+    const origAppend = body.appendChild.bind(body);
+    body.appendChild = (c: El) => { appended.push(c); return origAppend(c); };
+    const ctx: Record<string, unknown> = {
+      document: {
+        documentElement: html, body, readyState, baseURI: 'https://guifav.dev/', referrer: '', cookie: '',
+        createElement: (t: string) => new El(t), querySelector: () => null, addEventListener: () => {},
+      },
+      location: { hostname: 'guifav.dev', pathname: '/', href: 'https://guifav.dev/' },
+      sessionStorage: new Storage(), localStorage: new Storage(), URL, JSON, Date,
+      setTimeout: () => 0,
+      requestIdleCallback: (fn: () => void) => idleCalls.push(fn),
+      addEventListener: (t: string, fn: () => void) => { (winHandlers[t] ??= []).push(fn); },
+    };
+    ctx.window = ctx;
+    vm.runInContext(TRACK_SRC, vm.createContext(ctx));
+    return { winHandlers, idleCalls, appended };
+  }
+  const loading = run('loading');
+  assert.equal(loading.idleCalls.length, 0, 'nada agendado antes do load');
+  assert.equal((loading.winHandlers.load ?? []).length, 1);
+  loading.winHandlers.load[0]();
+  assert.equal(loading.idleCalls.length, 1, 'agenda no load');
+  loading.idleCalls[0]();
+  assert.ok(loading.appended.some((e) => e.tag === 'script' && String(e.attrs.src).startsWith('/assets/auth.js?v=')));
+
+  const complete = run('complete');
+  assert.equal(complete.idleCalls.length, 1, 'página já carregada: agenda na hora');
+  assert.equal((complete.winHandlers.load ?? []).length, 0);
+});
+
+test('Kimi P2 (rodada 11 do #203): GIS que termina de carregar depois de um logout em outra aba não abre o One Tap', async () => {
+  const s = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: null });
+  assert.equal(s.gisScripts().length, 1, 'GIS sendo baixado');
+  await s.emitStorage('heating-login-v1', JSON.stringify({ t: NOW }));
+  await s.emitStorage('heating-login-v1', null);
+  s.finishGisLoad();
+  await flush();
+  assert.equal(s.oneTapPrompts.length, 0);
+
+  // Controle: sem saída no meio, o GIS carregado abre o convite.
+  const c = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: null });
+  c.finishGisLoad();
+  await flush();
+  assert.equal(c.oneTapPrompts.length, 1);
+});
+
+test('P3 (rodada 11 do #203): marca gravada em outra aba não suprime; apagada cancela o convite aberto', async () => {
+  const s = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: null, gisAvailable: true });
+  assert.equal(s.oneTapPrompts.length, 1, 'convite aberto para o visitante');
+  await s.emitStorage('heating-login-v1', JSON.stringify({ t: NOW }));
+  assert.equal(s.session.getItem('guifav_one_tap_suppressed'), null, 'login em outra aba não é saída');
+  assert.equal(s.oneTapCancels.length, 0);
+  await s.emitStorage('heating-login-v1', null);
+  assert.equal(s.session.getItem('guifav_one_tap_suppressed'), '1');
+  assert.equal(s.oneTapCancels.length, 1, 'o convite aberto é cancelado');
+});
