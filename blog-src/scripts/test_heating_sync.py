@@ -56,11 +56,11 @@ def ago(days: float = 0, seconds: float = 0) -> str:
 
 
 def sql_normalizado(sql: str) -> str:
-    """Texto de um CREATE do sqlite_master para comparar esquemas: tira comentários `--`, aspas duplas de identificador
-    (o RENAME as acrescenta), `IF NOT EXISTS` e diferenças de espaço. Literais entre aspas simples ficam intactos, para
-    que uma mudança dentro de um CHECK nunca seja normalizada. Nomes não são reescritos: depois do RENAME o
-    sqlite_master já guarda o nome final, então um `_new` que sobre em tabela, índice ou trigger aparece como diferença.
-    Comentário em bloco (`/* */`) não é tratado; nenhuma migração usa."""
+    """Texto de um CREATE do sqlite_master para comparar esquemas: tira comentários (`--` até o fim da linha e `/* */`,
+    como o SQLite os lê), aspas duplas de identificador (o RENAME as acrescenta), `IF NOT EXISTS` e diferenças de
+    espaço. Literais entre aspas simples ficam intactos, para que uma mudança dentro de um CHECK nunca seja normalizada.
+    Nomes não são reescritos: depois do RENAME o sqlite_master já guarda o nome final, então um `_new` que sobre em
+    tabela, índice ou trigger aparece como diferença."""
     partes, fora, i = [], [], 0
 
     def fecha_fora():
@@ -73,6 +73,10 @@ def sql_normalizado(sql: str) -> str:
         if sql.startswith("--", i):
             fim = sql.find("\n", i)
             i = len(sql) if fim < 0 else fim
+        elif sql.startswith("/*", i):
+            fim = sql.find("*/", i + 2)
+            i = len(sql) if fim < 0 else fim + 2  # o SQLite aceita comentário em bloco aberto até o fim
+            fora.append(" ")
         elif sql[i] == "'":
             fim = i + 1
             while True:
@@ -871,7 +875,7 @@ class HeatingSyncTest(unittest.TestCase):
         # Esquema das seis tabelas com as migrações até a 0014 (sem o limite do D1, que recusaria só os INSERT) e até a
         # 0015. Trocando cada CHECK de data dividido pela forma antiga, o texto tem de ficar idêntico: as oito colunas
         # usam a forma canônica (o teste seguinte prova que ela equivale ao padrão de 92) e, nas seis tabelas, nenhum
-        # outro CHECK, coluna, índice ou trigger mudou. As outras tabelas a 0015 não toca.
+        # outro CHECK, coluna, índice ou trigger mudou. Fora delas, o esquema fica idêntico.
         padrao = "[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z"
         dividido = re.compile(
             r"CHECK \(\s*length\((\w+)\) = 24 AND substr\(\1, 1, 10\) GLOB '\[0-9\]\[0-9\]\[0-9\]\[0-9\]-\[0-9\]\[0-9\]-\[0-9\]\[0-9\]'"
@@ -879,7 +883,7 @@ class HeatingSyncTest(unittest.TestCase):
             r" AND substr\(\1, 20, 5\) GLOB '\.\[0-9\]\[0-9\]\[0-9\]Z'\s*\)")
         tabelas = ("engagement_events", "heating", "heating_optout", "curso_esquecido", "site_identities", "ga4_purge_queue")
 
-        def esquema(ate: str, troca_0015=None) -> dict:
+        def esquema(ate: str, troca_0015=None, fora=False) -> dict:
             db = sqlite3.connect(":memory:")
             for nome in sorted(n for n in os.listdir(MIGRATIONS) if n.endswith(".sql") and n <= ate):
                 with open(os.path.join(MIGRATIONS, nome), encoding="utf-8") as fh:
@@ -890,8 +894,8 @@ class HeatingSyncTest(unittest.TestCase):
                     self.assertNotEqual(texto, antes_troca)
                 db.executescript(texto)
             linhas = db.execute(
-                "SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL AND tbl_name IN (%s)"
-                % ",".join("?" * len(tabelas)), tabelas).fetchall()
+                "SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL AND tbl_name %s IN (%s)"
+                % ("NOT" if fora else "", ",".join("?" * len(tabelas))), tabelas).fetchall()
             db.close()
             return {(t, n): sql for t, n, sql in linhas}
 
@@ -908,6 +912,13 @@ class HeatingSyncTest(unittest.TestCase):
                 self.assertEqual(normal(sql), normal(antes[chave]))
         self.assertEqual(trocas, 8)
 
+        # Fora das seis tabelas a 0015 não mexe em nada (revisão do Claude fresh no head c2f8a29).
+        fora_antes, fora_depois = esquema("0014_zzz", fora=True), esquema("0015_zzz", fora=True)
+        self.assertGreater(len(fora_antes), 10)
+        self.assertEqual(fora_depois, fora_antes)
+        self.assertNotEqual(esquema("0015_zzz", ("DROP TABLE heating;", "DROP INDEX subscribers_email;\nDROP TABLE heating;"),
+                                    fora=True), fora_antes)
+
         # Rodada 2 do #210 (Kimi): um trigger que grava em `ga4_purge_queue_new` (tabela que não existe depois do RENAME)
         # tem de aparecer como diferença, não ser normalizado.
         mutante = esquema("0015_zzz", ("INSERT INTO ga4_purge_queue (uid,", "INSERT INTO ga4_purge_queue_new (uid,"))
@@ -922,6 +933,12 @@ class HeatingSyncTest(unittest.TestCase):
         self.assertNotEqual(sql_normalizado(base.replace("heating_optout", "heating_optout_new")), sql_normalizado(base))
         self.assertEqual(sql_normalizado('CREATE TABLE IF NOT EXISTS "heating_optout" (h TEXT) -- x\n'),
                          sql_normalizado("CREATE TABLE heating_optout ( h TEXT )"))
+        # Revisão do Roger no head c2f8a29: `--` dentro de `/* */` cortava a linha e escondia a coluna seguinte.
+        bloco = "CREATE TABLE t (a TEXT /* -- it's */ , b TEXT)"
+        self.assertNotEqual(sql_normalizado(bloco), sql_normalizado(bloco.replace("b TEXT", "c TEXT")))
+        self.assertEqual(sql_normalizado(bloco), sql_normalizado("CREATE TABLE t (a TEXT , b TEXT)"))
+        self.assertNotEqual(sql_normalizado("CREATE TABLE t (a TEXT) /* aberto"), sql_normalizado("CREATE TABLE t (b TEXT)"))
+        self.assertEqual(sql_normalizado("CREATE TABLE t (a TEXT CHECK (a <> '/* x */'))").count("/* x */"), 1)
         for mutante in ("'*[^0-9a-f_new]*'", "'*[^0-9a-f\"]*'", "'*[^0-9a-f IF NOT EXISTS]*'", "'*[^0-9a-f ]*'",
                         "'*[^0-9a-f--]*'", "'*[^0-9a-f'']*'"):
             with self.subTest(mutante=mutante):
