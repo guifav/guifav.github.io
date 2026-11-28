@@ -726,7 +726,8 @@
 
   function initOneTap() {
     // Reconfere tudo na hora de abrir: o GIS pode terminar de carregar depois de um logout em outra aba (supressão),
-    // de um login, de uma mudança no banner ou de uma navegação para página sem One Tap.
+    // de um login ou de uma mudança no banner. A página não muda sem recarregar (site estático); conferir o caminho
+    // aqui é só defesa.
     if (currentUser || !authInstance || !fbAuth) return;
     if (sessionGet(ONE_TAP_SUPPRESSED_KEY) === '1' || isNoOneTapPath(loc.pathname) || readConsent() === null) return;
     try {

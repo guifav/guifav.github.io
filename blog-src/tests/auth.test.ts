@@ -1948,9 +1948,10 @@ test('Kimi P2 (rodada 9): logout em outra aba antes da primeira resposta do Fire
 });
 
 test('Kimi P2 (rodada 11 do #203): track.js só agenda o auth.js depois do load da página', () => {
-  function run(readyState: string) {
+  function run(readyState: string, withIdle = true) {
     const winHandlers: Record<string, Array<() => void>> = {};
     const idleCalls: Array<() => void> = [];
+    const timers: Array<{ fn: () => void; ms: number }> = [];
     const appended: El[] = [];
     const html = new El('html');
     const body = html.appendChild(new El('body'));
@@ -1963,13 +1964,13 @@ test('Kimi P2 (rodada 11 do #203): track.js só agenda o auth.js depois do load 
       },
       location: { hostname: 'guifav.dev', pathname: '/', href: 'https://guifav.dev/' },
       sessionStorage: new Storage(), localStorage: new Storage(), URL, JSON, Date,
-      setTimeout: () => 0,
-      requestIdleCallback: (fn: () => void) => idleCalls.push(fn),
+      setTimeout: (fn: () => void, ms: number) => timers.push({ fn, ms }),
       addEventListener: (t: string, fn: () => void) => { (winHandlers[t] ??= []).push(fn); },
     };
+    if (withIdle) ctx.requestIdleCallback = (fn: () => void) => idleCalls.push(fn);
     ctx.window = ctx;
     vm.runInContext(TRACK_SRC, vm.createContext(ctx));
-    return { winHandlers, idleCalls, appended };
+    return { winHandlers, idleCalls, appended, timers };
   }
   const loading = run('loading');
   assert.equal(loading.idleCalls.length, 0, 'nada agendado antes do load');
@@ -1982,6 +1983,20 @@ test('Kimi P2 (rodada 11 do #203): track.js só agenda o auth.js depois do load 
   const complete = run('complete');
   assert.equal(complete.idleCalls.length, 1, 'página já carregada: agenda na hora');
   assert.equal((complete.winHandlers.load ?? []).length, 0);
+
+  // interactive (DOM pronto, recursos ainda carregando) também espera o load.
+  const interactive = run('interactive');
+  assert.equal(interactive.idleCalls.length, 0);
+  assert.equal((interactive.winHandlers.load ?? []).length, 1);
+
+  // Sem requestIdleCallback: o fallback de 1,5 s só é agendado depois do load.
+  const noIdle = run('loading', false);
+  const authTimers = () => noIdle.timers.filter((t) => t.ms === 1500);
+  assert.equal(authTimers().length, 0, 'nada antes do load');
+  noIdle.winHandlers.load[0]();
+  assert.equal(authTimers().length, 1);
+  authTimers()[0].fn();
+  assert.ok(noIdle.appended.some((e) => e.tag === 'script' && String(e.attrs.src).startsWith('/assets/auth.js?v=')));
 });
 
 test('Kimi P2 (rodada 11 do #203): GIS que termina de carregar depois de um logout em outra aba não abre o One Tap', async () => {
@@ -1992,6 +2007,13 @@ test('Kimi P2 (rodada 11 do #203): GIS que termina de carregar depois de um logo
   s.finishGisLoad();
   await flush();
   assert.equal(s.oneTapPrompts.length, 0);
+
+  // Cookies apagados em outra aba (consent-v1 some) enquanto o GIS baixa: também não abre.
+  const k = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: null });
+  k.local.removeItem('consent-v1');
+  k.finishGisLoad();
+  await flush();
+  assert.equal(k.oneTapPrompts.length, 0);
 
   // Controle: sem saída no meio, o GIS carregado abre o convite.
   const c = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: null });
