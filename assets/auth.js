@@ -929,8 +929,14 @@
       // Outra aba entrou na conta ou ligou o vínculo: com cookies aceitos, os anúncios e sinais saem aqui também, sem
       // esperar o Firebase propagar (nem depender dele carregar).
       if ((k === LOGIN_KEY && loginMarkedInBrowser()) || (k === LINK_KEY && linkGrantedInBrowser())) {
+        // A identificação desta aba já nega tudo; a condição só evita repetir a chamada.
         var identifiedHere = validTenantUser(currentUser) && readHeatingLink(currentUser.uid) === 'granted';
         if (readConsent() === 'granted' && !identifiedHere) denyAdSignals();
+      } else if ((k === LOGIN_KEY || (k === LINK_KEY && activeUid === null && !headSentUid))
+        && readConsent() === 'granted' && !adsBlockedInBrowser()) {
+        // Outra aba saiu da conta (marca apagada) ou desligou o vínculo, e aqui não sobra sessão, marca nem vínculo:
+        // volta ao consentimento comum sem depender do Firebase desta aba. Com user_id ativo, o clearUserId devolve.
+        restoreAdSignals();
       }
       if (k === LOGIN_KEY) return;
       if (readConsent() !== null) loadFirebase();

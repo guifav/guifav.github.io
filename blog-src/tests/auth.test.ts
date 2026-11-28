@@ -1838,12 +1838,13 @@ test('Kimi P2 (rodada 8): outra aba que entra na conta ou liga o vínculo nega a
   await r.emitStorage('heating-link-v1', JSON.stringify({ v: 'granted', t: NOW, uid: 'UidCurso123ABC' }));
   assert.deepEqual(r.gtagCalls.slice(beforeR).slice(0, 3), LOGIN_AD_DENY);
 
-  // Marca apagada ou vínculo desligado em outra aba não nega; cookies recusados também não.
+  // Marca apagada ou vínculo desligado em outra aba não nega (só volta ao consentimento comum); cookies recusados também não.
   const q = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: null });
   const beforeQ = q.gtagCalls.length;
   await q.emitStorage('heating-login-v1', null);
   await q.emitStorage('heating-link-v1', JSON.stringify({ v: 'denied', t: NOW, uid: 'UidCurso123ABC' }));
-  assert.ok(!q.gtagCalls.slice(beforeQ).some((c) => c[0] === 'set' && c[1] === 'allow_google_signals'));
+  assert.ok(!q.gtagCalls.slice(beforeQ).some((c) => c[0] === 'set' && c[1] === 'allow_google_signals' && c[2] === false));
+  assert.ok(!q.gtagCalls.slice(beforeQ).some((c) => c[0] === 'consent' && (c[2] as { ad_storage?: string }).ad_storage === 'denied'));
   const n = await setupAuth({ consent: { v: 'denied', t: NOW - 1000 }, initialUser: null });
   await n.emitStorage('heating-login-v1', JSON.stringify({ t: NOW }));
   assert.deepEqual(n.gtagCalls, []);
@@ -1874,4 +1875,37 @@ test('Claude P4 (rodada 8): antes do Firebase, vínculo apagado em outra aba sem
   const beforeR = r.gtagCalls.length;
   await r.emitStorage('heating-link-v1', null);
   assert.deepEqual(r.gtagCalls.slice(beforeR), [['set', { user_id: null }]]);
+});
+
+test('Roger P2 (86e90be): login e logout em outra aba, com esta aba deslogada, devolvem anúncios e sinais sem recarregar', async () => {
+  const s = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: null });
+  const before = s.gtagCalls.length;
+  await s.emitStorage('heating-login-v1', JSON.stringify({ t: NOW }));
+  await s.emitStorage('heating-login-v1', null);
+  assert.deepEqual(s.gtagCalls.slice(before), [
+    ...LOGIN_AD_DENY,
+    ['consent', 'update', AD_CONSENT_GRANTED],
+    ['set', 'allow_google_signals', true],
+    ['set', 'allow_ad_personalization_signals', true],
+  ]);
+
+  // Vínculo ligado e depois desligado em outra aba, esta aba deslogada e sem user_id: o mesmo.
+  const r = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: null });
+  const beforeR = r.gtagCalls.length;
+  await r.emitStorage('heating-link-v1', JSON.stringify({ v: 'granted', t: NOW, uid: 'UidCurso123ABC' }));
+  await r.emitStorage('heating-link-v1', JSON.stringify({ v: 'denied', t: NOW, uid: 'UidCurso123ABC' }));
+  const after = r.gtagCalls.slice(beforeR);
+  assert.deepEqual(after.slice(0, 3), LOGIN_AD_DENY);
+  assert.deepEqual(after.filter((c) => c[0] === 'consent').pop(), ['consent', 'update', AD_CONSENT_GRANTED]);
+  assert.ok(after.some((c) => c[0] === 'set' && c[1] === 'allow_google_signals' && c[2] === true));
+
+  // Marca apagada, mas esta aba continua logada (Firebase confirma) ou com o vínculo ligado: nada volta.
+  const q = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: makeUser() });
+  const beforeQ = q.gtagCalls.length;
+  await q.emitStorage('heating-login-v1', null);
+  assert.ok(!q.gtagCalls.slice(beforeQ).some((c) => c[0] === 'consent'));
+  // Cookies recusados: nada volta.
+  const n = await setupAuth({ consent: { v: 'denied', t: NOW - 1000 }, initialUser: null });
+  await n.emitStorage('heating-login-v1', null);
+  assert.deepEqual(n.gtagCalls, []);
 });
