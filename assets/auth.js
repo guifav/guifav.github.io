@@ -15,8 +15,8 @@
 //   marcada com o: 1): aí o login não liga de novo enquanto a marca valer. O GA4 só identifica (user_id,
 //   heating-uid-v1, auth_identified) depois de o /identidade confirmar o vínculo neste navegador (s: 1): quem pediu
 //   oposição nunca é identificado antes de uma confirmação. Num navegador já confirmado antes da oposição, a sessão
-//   seguinte ainda identifica até o 409 chegar (e o <head> manda o user_id guardado por até 30 min); o --optout impede
-//   a pontuação, então o efeito é só esse hit no GA4.
+//   seguinte só identifica depois de um novo POST ok nesta aba (marca de envio na sessionStorage, que o <head> também
+//   exige antes de mandar o user_id guardado).
 // - Todo login com o vínculo ligado envia POST https://insights.guifav.dev/identidade com o ID token uma vez por sessão
 //   e por uid, com ou sem o aceite dos cookies; a origem da visita só vai junto com consent-v1 granted.
 // - Só com as 3 condições (logado no tenant, consent-v1 granted e heating-link-v1 granted para o uid):
@@ -191,9 +191,12 @@
   }
 
   // Vínculo confirmado pelo servidor neste navegador (POST /identidade ok para o uid): só então o GA4 identifica.
+  // A confirmação vale só nesta aba: s: 1 de uma sessão anterior não basta, porque a oposição pode ter sido registrada
+  // depois dela (rodada 2 do #212). A marca de envio da sessão (POST /identidade ok nesta aba) é exigida junto, a mesma
+  // que o trecho do <head> confere antes de mandar o user_id guardado.
   function linkConfirmed(uid) {
     var entry = readHeatingLinkEntry(uid);
-    return Boolean(entry && entry.v === 'granted' && entry.s === 1);
+    return Boolean(entry && entry.v === 'granted' && entry.s === 1 && sessionGet(IDENTITY_SENT_PREFIX + uid) === '1');
   }
 
   function markLinkConfirmed(uid) {
@@ -968,6 +971,8 @@
     return adsBlockedInBrowser();
   };
 
+  // Supõe que o <head> mandou o user_id sempre que o heating-uid-v1 vale; o <head> também exige a marca de envio desta
+  // aba, então numa aba nova isso só causa um user_id: null defensivo a mais (nunca identifica nem devolve anúncios).
   var headUid = readConsent() === 'granted' ? readHeatingUid() : null;
   headSentUid = headUid !== null;
   if (readConsent() !== 'granted') removeHeatingUid();

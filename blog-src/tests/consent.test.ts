@@ -364,13 +364,28 @@ function inlineBase(): string {
   return "const GA4_ID = 'G-K7Y87QNCX8'; const CONTENT_GROUP = 'insights-artigo';" + m![1];
 }
 
-function runInline(rel: string, stored: unknown, heatingUid?: unknown, heatingLink?: unknown, heatingLogin?: unknown) {
+// sessionStorage da aba no trecho do <head>: a marca de envio do /identidade (POST ok nesta aba) libera o user_id.
+// 'throw' simula sessionStorage bloqueado (o acesso lança) e 'absent', o global ausente.
+type SessionOpt = Storage | 'throw' | 'absent';
+function sentMark(...uids: string[]): Storage {
+  const s = new Storage();
+  for (const uid of uids) s.setItem(`guifav_identidade_sent_v2:${uid}`, '1');
+  return s;
+}
+
+function runInline(rel: string, stored: unknown, heatingUid?: unknown, heatingLink?: unknown, heatingLogin?: unknown,
+  session: SessionOpt = new Storage()) {
   const storage = new Storage();
   if (stored !== undefined) storage.setItem('consent-v1', typeof stored === 'string' ? stored : JSON.stringify(stored));
   if (heatingUid !== undefined) storage.setItem('heating-uid-v1', typeof heatingUid === 'string' ? heatingUid : JSON.stringify(heatingUid));
   if (heatingLink !== undefined) storage.setItem('heating-link-v1', typeof heatingLink === 'string' ? heatingLink : JSON.stringify(heatingLink));
   if (heatingLogin !== undefined) storage.setItem('heating-login-v1', typeof heatingLogin === 'string' ? heatingLogin : JSON.stringify(heatingLogin));
   const ctx: Record<string, unknown> = { localStorage: storage, location: { hostname: 'guifav.dev' }, JSON, Date: Object.assign(function () {}, { now: () => NOW }) };
+  if (session === 'throw') {
+    Object.defineProperty(ctx, 'sessionStorage', { get() { throw new Error('SecurityError'); } });
+  } else if (session !== 'absent') {
+    ctx.sessionStorage = session;
+  }
   ctx.window = ctx;
   vm.runInContext(rel === 'Base.astro' ? inlineBase() : inlineGa(rel), vm.createContext(ctx));
   // Cópia por JSON: os objetos nascem em outro realm (vm).
@@ -402,9 +417,9 @@ for (const rel of ['index.html', 'portfolio/index.html', 'consultoria/index.html
     const LINK = { v: 'granted', t: NOW - 100 * DAY, uid: 'UidHead123' };
     const uidSet = (l: unknown[][]) => l.find((c) => c[0] === 'set' && typeof c[1] === 'object' && 'user_id' in (c[1] as object));
 
-    // Vínculo ligado + heating-uid-v1 do mesmo uid (até 30 min): nega os 3 sinais de anúncio (analytics_storage continua
-    // granted), desliga os sinais no GA4 e seta user_id, tudo ANTES do config.
-    const withUid = runInline(rel, { v: 'granted', t: NOW - DAY }, { uid: 'UidHead123', t: NOW - 29 * MIN }, LINK);
+    // Vínculo ligado + heating-uid-v1 do mesmo uid (até 30 min) + marca de envio do /identidade nesta aba: nega os 3
+    // sinais de anúncio (analytics_storage continua granted), desliga os sinais no GA4 e seta user_id, tudo ANTES do config.
+    const withUid = runInline(rel, { v: 'granted', t: NOW - DAY }, { uid: 'UidHead123', t: NOW - 29 * MIN }, LINK, undefined, sentMark('UidHead123'));
     assert.deepEqual(
       names(withUid).filter((n) => n.startsWith('consent') || n.startsWith('config')),
       ['consent:default', 'consent:update', 'consent:update', 'config:'],
@@ -416,12 +431,33 @@ for (const rel of ['index.html', 'portfolio/index.html', 'consultoria/index.html
     const persIdx = withUid.findIndex((c) => c[0] === 'set' && c[1] === 'allow_ad_personalization_signals' && c[2] === false);
     const uidIdx = withUid.findIndex((c) => c[0] === 'set' && typeof c[1] === 'object' && (c[1] as { user_id?: string }).user_id === 'UidHead123');
     assert.ok(adDeniedIdx > 0 && sigIdx > adDeniedIdx && persIdx > sigIdx && uidIdx > persIdx && configIdx > uidIdx, JSON.stringify(withUid));
+    // Vínculo confirmado (s: 1) com a marca desta aba: o mesmo user_id.
+    assert.deepEqual(uidSet(runInline(rel, { v: 'granted', t: NOW - DAY }, { uid: 'UidHead123', t: NOW - MIN }, { ...LINK, s: 1 }, undefined, sentMark('UidHead123'))),
+      ['set', { user_id: 'UidHead123' }]);
+
+    // Rodada 2 do #212: sem a marca de envio desta aba para o mesmo uid (aba nova, s: 1 de uma sessão anterior, marca de
+    // outro uid, valor diferente de '1', sessionStorage bloqueado ou ausente), nada de user_id; a negação de anúncios e
+    // sinais antes do config continua, porque não depende da marca.
+    const semMarca: Array<[string, SessionOpt]> = [['sem marca', new Storage()], ['marca de outro uid', sentMark('OutroUid999')],
+      ['marca 0', (() => { const x = new Storage(); x.setItem('guifav_identidade_sent_v2:UidHead123', '0'); return x; })()],
+      ['sessionStorage que lança', 'throw'], ['sem sessionStorage', 'absent']];
+    for (const [caso, session] of semMarca) {
+      for (const link of [LINK, { ...LINK, s: 1 }]) {
+        const label = `${caso}${link === LINK ? '' : ' (s: 1)'}`;
+        const res = runInline(rel, { v: 'granted', t: NOW - DAY }, { uid: 'UidHead123', t: NOW - MIN }, link, undefined, session);
+        assert.equal(uidSet(res), undefined, label);
+        assert.deepEqual(updates(res), [GRANTED, AD_DENIED], label);
+        assert.deepEqual(sets(res), [['ads_data_redaction', true], ['allow_google_signals', false], ['allow_ad_personalization_signals', false]], label);
+        assert.ok(res.findIndex((c) => c[0] === 'config') > res.findIndex((c) => c[0] === 'set' && c[1] === 'allow_ad_personalization_signals'), label);
+      }
+    }
 
     // Vínculo ligado sem uid recente (visita nova depois de 30 min, ou uid de outra pessoa): anúncios negados e
-    // sinais desligados do mesmo jeito, mas sem user_id (o auth.js decide depois de confirmar a sessão).
+    // sinais desligados do mesmo jeito, mas sem user_id (o auth.js decide depois de confirmar a sessão), mesmo com a
+    // marca de envio desta aba para os dois uids.
     for (const uid of [undefined, { uid: 'UidHead123', t: NOW - 30 * MIN }, { uid: 'UidHead123', t: NOW - DAY },
       { uid: 'OutroUid999', t: NOW - MIN }, { uid: 'UidHead123', t: NOW + DAY }, '{quebrado']) {
-      const res = runInline(rel, { v: 'granted', t: NOW - DAY }, uid, LINK);
+      const res = runInline(rel, { v: 'granted', t: NOW - DAY }, uid, LINK, undefined, sentMark('UidHead123', 'OutroUid999'));
       assert.deepEqual(updates(res), [GRANTED, AD_DENIED], JSON.stringify(uid));
       assert.ok(res.some((c) => c[0] === 'set' && c[1] === 'allow_google_signals' && c[2] === false), JSON.stringify(uid));
       assert.equal(uidSet(res), undefined, JSON.stringify(uid));
@@ -431,14 +467,14 @@ for (const rel of ['index.html', 'portfolio/index.html', 'consultoria/index.html
     // nada de anúncio negado, sinal nem user_id.
     for (const link of [undefined, { v: 'denied', t: NOW, uid: 'UidHead123' }, { v: 'granted', t: NOW - 365 * DAY, uid: 'UidHead123' },
       { v: 'granted', t: NOW + DAY, uid: 'UidHead123' }, { v: 'granted', t: NOW, uid: 'uid-com-traco' }, { v: 'granted', t: NOW }, '{quebrado']) {
-      const res = runInline(rel, { v: 'granted', t: NOW - DAY }, { uid: 'UidHead123', t: NOW - MIN }, link);
+      const res = runInline(rel, { v: 'granted', t: NOW - DAY }, { uid: 'UidHead123', t: NOW - MIN }, link, undefined, sentMark('UidHead123'));
       assert.deepEqual(sets(res), [['ads_data_redaction', true]], JSON.stringify(link));
       assert.deepEqual(updates(res), [GRANTED], JSON.stringify(link));
     }
 
     // Marca de sessão logada sem vínculo: nega anúncios e sinais antes do config, sem user_id (mesmo com uid sobrando).
     for (const age of [0, 200 * DAY, 365 * DAY - 1]) {
-      const res = runInline(rel, { v: 'granted', t: NOW - DAY }, { uid: 'UidHead123', t: NOW - MIN }, undefined, { t: NOW - age });
+      const res = runInline(rel, { v: 'granted', t: NOW - DAY }, { uid: 'UidHead123', t: NOW - MIN }, undefined, { t: NOW - age }, sentMark('UidHead123'));
       assert.deepEqual(updates(res), [GRANTED, AD_DENIED], `login age=${age}`);
       assert.ok(res.some((c) => c[0] === 'set' && c[1] === 'allow_google_signals' && c[2] === false));
       assert.ok(res.some((c) => c[0] === 'set' && c[1] === 'allow_ad_personalization_signals' && c[2] === false));
@@ -454,7 +490,7 @@ for (const rel of ['index.html', 'portfolio/index.html', 'consultoria/index.html
 
     // Sem consent-v1 granted, o vínculo e o uid nunca setam sinais, consentimento nem user_id.
     for (const consent of [undefined, { v: 'denied', t: NOW }, { v: 'granted', t: NOW - 366 * DAY }]) {
-      const res = runInline(rel, consent, { uid: 'UidHead123', t: NOW - 5 * MIN }, LINK);
+      const res = runInline(rel, consent, { uid: 'UidHead123', t: NOW - 5 * MIN }, LINK, undefined, sentMark('UidHead123'));
       assert.deepEqual(sets(res), [['ads_data_redaction', true]], JSON.stringify(consent));
       assert.deepEqual(updates(res), [], JSON.stringify(consent));
     }

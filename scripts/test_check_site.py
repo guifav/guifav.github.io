@@ -5418,10 +5418,36 @@ class PriorityRemovedTest(unittest.TestCase):
         self.assertEqual(C.check_priority_removed(self.site), [])
 
     def test_page_present_fails(self):
+        # Rodada 2 do #212 (Kimi): qualquer arquivo que o Pages serviria em /prioridade conta, sem distinção de caixa.
+        for rel, prefix in (
+            (C.REMOVED_PRIORITY_PAGE, "prioridade/:"),
+            ("prioridade/index.htm", "prioridade/:"),
+            ("prioridade/x/y.txt", "prioridade/:"),
+            ("Prioridade/index.html", "Prioridade/:"),
+            ("prioridade.html", "prioridade.html:"),
+            ("Prioridade.HTM", "Prioridade.HTM:"),
+            ("prioridade.xhtml", "prioridade.xhtml:"),
+            ("prioridade", "prioridade:"),
+        ):
+            with self.subTest(rel=rel):
+                self.tearDown()
+                self.setUp()
+                self.build_valid_site()
+                self.w(rel, self.page("<h1>Não quero ser pontuado</h1>"))
+                got = C.check_priority_removed(self.site)
+                self.assertEqual(len(got), 1, got)
+                self.assertTrue(got[0].startswith(prefix) and "removida" in got[0], got)
+
+    def test_empty_dir_and_similar_names_pass(self):
         self.build_valid_site()
-        self.w(C.REMOVED_PRIORITY_PAGE, self.page("<h1>Não quero ser pontuado</h1>"))
-        got = C.check_priority_removed(self.site)
-        self.assertTrue(any(p.startswith(C.REMOVED_PRIORITY_PAGE + ":") and "removida" in p for p in got), got)
+        (self.site / "prioridade").mkdir()
+        (self.site / "prioridade" / "vazia").mkdir()
+        self.w("prioridades.html", self.page(""))
+        self.w("prioridades/index.html", self.page(""))
+        self.w("blog/prioridade.html", self.page(""))
+        self.w("blog/prioridade/index.html", self.page(""))
+        self.w("prioridade.txt.bak", "x")
+        self.assertEqual(C.check_priority_removed(self.site), [])
 
     def test_sitemap_entry_fails(self):
         for sm in ("sitemap-site.xml", "blog/sitemap.xml"):
@@ -5497,7 +5523,7 @@ class PriorityRemovedTest(unittest.TestCase):
                 contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
             code = C.main(["--site", str(self.site), "--posts", str(self.tmp.name), "--consts", str(consts)])
         self.assertEqual(code, 1)
-        self.assertIn(C.REMOVED_PRIORITY_PAGE, err.getvalue())
+        self.assertIn("prioridade/: a página de oposição foi removida", err.getvalue())
         (self.site / C.REMOVED_PRIORITY_PAGE).unlink()
         with isolate_main_rule("check_priority_removed"), \
                 contextlib.redirect_stderr(io.StringIO()), contextlib.redirect_stdout(io.StringIO()):
@@ -5707,8 +5733,8 @@ class AuthCheckTest(unittest.TestCase):
             "gtag('consent','update',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});"
             "gtag('set','allow_google_signals',false);"
             "gtag('set','allow_ad_personalization_signals',false);}"
-            "if(l){var u=p('heating-uid-v1');"
-            "if(u&&u.uid===k.uid&&typeof u.t==='number'&&n-u.t>=0&&n-u.t<18e5)gtag('set',{user_id:u.uid});}"
+            "if(l){var u=p('heating-uid-v1'),c=null;try{c=sessionStorage.getItem('guifav_identidade_sent_v2:'+(u&&u.uid))}catch(e){}"
+            "if(u&&u.uid===k.uid&&c==='1'&&typeof u.t==='number'&&n-u.t>=0&&n-u.t<18e5)gtag('set',{user_id:u.uid});}"
             "})();}"
         )
         cfg = "gtag('js',new Date());gtag('config','G-K7Y87QNCX8',{content_group:'home'});"
@@ -5721,6 +5747,9 @@ class AuthCheckTest(unittest.TestCase):
             "uid com validade de 365 dias": uid_block.replace("n-u.t<18e5", "n-u.t<31536e6") + cfg,
             "anuncio negado so com o uid": uid_block.replace("k.v==='granted'&&", "") + cfg,
             "user_id sem conferir o uid do vinculo": uid_block.replace("u.uid===k.uid&&", "") + cfg,
+            # Rodada 2 do #212: o user_id só sai depois que esta aba confirmou o vínculo na sessão.
+            "user_id sem confirmacao da sessao": uid_block.replace("c==='1'&&", "") + cfg,
+            "confirmacao da sessao com outra chave": uid_block.replace("guifav_identidade_sent_v2:", "guifav_identidade_sent_v1:") + cfg,
             "sem consent update de anuncio": uid_block.replace("gtag('consent','update',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});", "") + cfg,
             "sem sinais de anuncio": uid_block.replace("gtag('set','allow_google_signals',false);", "") + cfg,
             "sem user_id": uid_block.replace("gtag('set',{user_id:u.uid});", "") + cfg,

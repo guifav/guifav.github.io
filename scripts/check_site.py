@@ -3472,8 +3472,15 @@ def _is_removed_priority(url: str, base: str) -> bool:
 def check_priority_removed(site: Path) -> list[str]:
     """#197: a página /prioridade/ saiu (decisão de 2026-11-28); não pode estar no site montado, nos sitemaps nem em links."""
     problems: list[str] = []
-    if (site / REMOVED_PRIORITY_PAGE).is_file():
-        problems.append(f"{REMOVED_PRIORITY_PAGE}: a página de oposição foi removida e não pode estar no site montado")
+    # Qualquer arquivo que o Pages serviria em /prioridade (prioridade.html, .htm, .xhtml ou qualquer coisa dentro de
+    # prioridade/), sem distinção de maiúsculas (revisão do Kimi na rodada 2 do #212).
+    if site.is_dir():
+        for entry in sorted(site.iterdir()):
+            name = entry.name.lower()
+            if entry.is_file() and name in ("prioridade", "prioridade.html", "prioridade.htm", "prioridade.xhtml"):
+                problems.append(f"{entry.name}: a página de oposição foi removida e não pode estar no site montado")
+            elif entry.is_dir() and name == "prioridade" and any(x.is_file() for x in entry.rglob("*")):
+                problems.append(f"{entry.name}/: a página de oposição foi removida e não pode estar no site montado")
     for sm in ("sitemap-site.xml", "blog/sitemap.xml"):
         if not (site / sm).is_file():
             continue
@@ -3516,8 +3523,8 @@ GA_UID_BLOCK = (
     "if(l||(g&&typeofg.t==='number'&&n-g.t>=0&&n-g.t<31536e6)){gtag('consent','update',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});"
     "gtag('set','allow_google_signals',false);"
     "gtag('set','allow_ad_personalization_signals',false);"
-    "}if(l){varu=p('heating-uid-v1');"
-    "if(u&&u.uid===k.uid&&typeofu.t==='number'&&n-u.t>=0&&n-u.t<18e5)gtag('set',{user_id:u.uid});"
+    "}if(l){varu=p('heating-uid-v1'),c=null;try{c=sessionStorage.getItem('guifav_identidade_sent_v2:'+(u&&u.uid))}catch(e){}"
+    "if(u&&u.uid===k.uid&&c==='1'&&typeofu.t==='number'&&n-u.t>=0&&n-u.t<18e5)gtag('set',{user_id:u.uid});"
     "}})();"
     "}"
 )
