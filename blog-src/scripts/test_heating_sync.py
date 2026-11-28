@@ -55,6 +55,62 @@ def ago(days: float = 0, seconds: float = 0) -> str:
     return CS.stamp(NOW - timedelta(days=days, seconds=seconds))
 
 
+def sql_normalizado(sql: str) -> str:
+    """Texto de um CREATE do sqlite_master para comparar esquemas.
+
+    Só três coisas são normalizadas, e cada uma numa posição conhecida:
+    - o cabeçalho `CREATE <tipo> [IF NOT EXISTS] <nome>`: sai o `IF NOT EXISTS` e as aspas do nome, se ele for um
+      identificador simples (o RENAME acrescenta essas aspas);
+    - comentários (`--` até o fim da linha e `/* */`, como o SQLite os lê);
+    - diferenças de espaço fora de literal.
+
+    Todo o resto fica como está, inclusive aspas duplas no corpo (`"NOT" NULL` e `NOT NULL` são diferentes), nomes
+    entre colchetes ou crases e literais entre aspas simples, com espaços e parênteses de dentro. Nomes não são reescritos: depois do RENAME o sqlite_master já guarda o nome final, então um
+    `_new` que sobre em tabela, índice ou trigger aparece como diferença."""
+    m = re.match(r'\s*CREATE\s+(TABLE|INDEX|UNIQUE\s+INDEX|TRIGGER|VIEW)\s+(?:IF\s+NOT\s+EXISTS\s+)?("(?:[^"]|"")*"|\w+)',
+                 sql, re.I)
+    cabeca = ""
+    if m:
+        nome = m.group(2)
+        if nome.startswith('"') and re.fullmatch(r'"[A-Za-z_][A-Za-z0-9_]*"', nome):
+            nome = nome[1:-1]
+        cabeca = f"CREATE {' '.join(m.group(1).upper().split())} {nome}"
+        sql = sql[m.end():]
+    partes, fora, i = [cabeca], [], 0
+
+    def fecha_fora():
+        partes.append(" ".join("".join(fora).split()).replace("( ", "(").replace(" )", ")"))
+        fora.clear()
+
+    def fim_entre(aspa: str, ini: int) -> int:
+        fim = ini + 1
+        while True:  # aspa dobrada dentro é parte do conteúdo
+            fim = sql.index(aspa, fim)
+            if sql.startswith(aspa * 2, fim):
+                fim += 2
+                continue
+            return fim
+
+    while i < len(sql):
+        if sql.startswith("--", i):
+            fim = sql.find("\n", i)
+            i = len(sql) if fim < 0 else fim
+        elif sql.startswith("/*", i):
+            fim = sql.find("*/", i + 2)
+            i = len(sql) if fim < 0 else fim + 2  # o SQLite aceita comentário em bloco aberto até o fim
+            fora.append(" ")
+        elif sql[i] in "'\"`[":
+            fim = sql.index("]", i + 1) if sql[i] == "[" else fim_entre(sql[i], i)
+            fecha_fora()
+            partes.append(sql[i:fim + 1])
+            i = fim + 1
+        else:
+            fora.append(sql[i])
+            i += 1
+    fecha_fora()
+    return " ".join(p for p in partes if p)
+
+
 class Fake:
     """D1 pela API REST (SQLite com migrações reais + batch transacional) e Twenty local com estado e lixeira."""
 
@@ -830,6 +886,219 @@ class HeatingSyncTest(unittest.TestCase):
         }, indices)
         gatilhos = {r[0] for r in f.db.execute("SELECT name FROM sqlite_master WHERE type = 'trigger'")}
         self.assertIn("site_identities_enqueue_purge", gatilhos)
+
+    def test_0015_recria_as_seis_tabelas_iguais_as_originais_salvo_o_check_de_data(self):
+        # Esquema das seis tabelas com as migrações até a 0014 (sem o limite do D1, que recusaria só os INSERT) e até a
+        # 0015. Trocando cada CHECK de data dividido pela forma antiga, o texto tem de ficar idêntico: as oito colunas
+        # usam a forma canônica (o teste seguinte prova que ela equivale ao padrão de 92) e, nas seis tabelas, nenhum
+        # outro CHECK, coluna, índice ou trigger mudou. Fora delas, o esquema fica idêntico.
+        padrao = "[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z"
+        dividido = re.compile(
+            r"CHECK \(\s*length\((\w+)\) = 24 AND substr\(\1, 1, 10\) GLOB '\[0-9\]\[0-9\]\[0-9\]\[0-9\]-\[0-9\]\[0-9\]-\[0-9\]\[0-9\]'"
+            r"\s+AND substr\(\1, 11, 9\) GLOB 'T\[0-9\]\[0-9\]:\[0-9\]\[0-9\]:\[0-9\]\[0-9\]'"
+            r" AND substr\(\1, 20, 5\) GLOB '\.\[0-9\]\[0-9\]\[0-9\]Z'\s*\)")
+        tabelas = ("engagement_events", "heating", "heating_optout", "curso_esquecido", "site_identities", "ga4_purge_queue")
+
+        def esquema(ate: str, troca_0015=None, fora=False) -> dict:
+            db = sqlite3.connect(":memory:")
+            for nome in sorted(n for n in os.listdir(MIGRATIONS) if n.endswith(".sql") and n <= ate):
+                with open(os.path.join(MIGRATIONS, nome), encoding="utf-8") as fh:
+                    texto = fh.read()
+                if troca_0015 and nome.startswith("0015"):
+                    antes_troca = texto
+                    texto = texto.replace(*troca_0015)
+                    self.assertNotEqual(texto, antes_troca)
+                db.executescript(texto)
+            linhas = db.execute(
+                "SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL AND tbl_name %s IN (%s)"
+                % ("NOT" if fora else "", ",".join("?" * len(tabelas))), tabelas).fetchall()
+            db.close()
+            return {(t, n): sql for t, n, sql in linhas}
+
+        normal = sql_normalizado
+
+        antes, depois = esquema("0014_zzz"), esquema("0015_zzz")
+        self.assertEqual(set(antes), set(depois))
+        self.assertEqual(len([k for k in antes if k[0] == "table"]), 6)
+        trocas = 0
+        for chave, sql in depois.items():
+            sql, n = dividido.subn(lambda m: f"CHECK ({m.group(1)} GLOB '{padrao}')", sql)
+            trocas += n
+            with self.subTest(objeto=chave):
+                self.assertEqual(normal(sql), normal(antes[chave]))
+        self.assertEqual(trocas, 8)
+
+        # Além do texto, os atributos que o SQLite leu de cada coluna (tipo, NOT NULL, DEFAULT, chave), para que nenhuma
+        # grafia equivalente no texto esconda uma mudança de significado (rodada 4 do #210, Kimi).
+        def colunas(ate: str) -> dict:
+            db = sqlite3.connect(":memory:")
+            for nome in sorted(n for n in os.listdir(MIGRATIONS) if n.endswith(".sql") and n <= ate):
+                with open(os.path.join(MIGRATIONS, nome), encoding="utf-8") as fh:
+                    db.executescript(fh.read())
+            r = {t: db.execute(f"PRAGMA table_xinfo({t})").fetchall() for t in tabelas}
+            db.close()
+            return r
+
+        self.assertEqual(colunas("0015_zzz"), colunas("0014_zzz"))
+
+        # Fora das seis tabelas a 0015 não mexe em nada (revisão do Claude fresh no head c2f8a29).
+        fora_antes, fora_depois = esquema("0014_zzz", fora=True), esquema("0015_zzz", fora=True)
+        self.assertGreater(len(fora_antes), 10)
+        self.assertEqual(fora_depois, fora_antes)
+        self.assertNotEqual(esquema("0015_zzz", ("DROP TABLE heating;", "DROP INDEX subscribers_email;\nDROP TABLE heating;"),
+                                    fora=True), fora_antes)
+
+        # Rodada 2 do #210 (Kimi): um trigger que grava em `ga4_purge_queue_new` (tabela que não existe depois do RENAME)
+        # tem de aparecer como diferença, não ser normalizado.
+        mutante = esquema("0015_zzz", ("INSERT INTO ga4_purge_queue (uid,", "INSERT INTO ga4_purge_queue_new (uid,"))
+        chave = ("trigger", "site_identities_enqueue_purge")
+        self.assertNotEqual(normal(mutante[chave]), normal(antes[chave]))
+
+    def test_normalizacao_do_esquema_nunca_mexe_dentro_de_literal(self):
+        # Rodada 1 do #210 (Kimi): `_new`, aspas e `IF NOT EXISTS` saíam também de dentro de literais, e um CHECK
+        # `NOT GLOB '*[^0-9a-f_new]*'` (que aceita 'n' * 64) passava por igual ao original. Rodada 2: nenhum nome é
+        # reescrito, então `_new` fora de literal também é diferença.
+        base = "CREATE TABLE heating_optout (h TEXT CHECK (h NOT GLOB '*[^0-9a-f]*'))"
+        self.assertNotEqual(sql_normalizado(base.replace("heating_optout", "heating_optout_new")), sql_normalizado(base))
+        self.assertEqual(sql_normalizado('CREATE TABLE IF NOT EXISTS "heating_optout" (h TEXT) -- x\n'),
+                         sql_normalizado("CREATE TABLE heating_optout ( h TEXT )"))
+        # Rodada 3 do #210 (Kimi): tirar toda aspa dupla fazia `source TEXT "NOT NULL"` (coluna sem NOT NULL) igual ao
+        # original. Só identificador simples perde as aspas.
+        # Rodada 4 (Kimi): `"NOT" NULL` também deixa de ser restrição; aspas no corpo nunca são tiradas.
+        self.assertEqual(sql_normalizado('CREATE TABLE "t" (a TEXT)'), sql_normalizado("CREATE TABLE t (a TEXT)"))
+        self.assertEqual(sql_normalizado('CREATE TABLE IF NOT EXISTS t (a TEXT)'), sql_normalizado("CREATE TABLE t (a TEXT)"))
+        self.assertNotEqual(sql_normalizado('CREATE TABLE "a""b" (a TEXT)'), sql_normalizado("CREATE TABLE ab (a TEXT)"))
+        for original, mutante in (("a TEXT NOT NULL", 'a TEXT "NOT NULL"'), ("a TEXT NOT NULL", 'a TEXT "NOT" NULL'),
+                                  ("a TEXT NOT NULL", '"a" TEXT NOT NULL'), ("OLD.uid", '"OLD.uid"')):
+            with self.subTest(mutante=mutante):
+                aspas = "CREATE TABLE t (a TEXT NOT NULL, b TEXT CHECK (b <> OLD.uid))"
+                self.assertNotEqual(sql_normalizado(aspas.replace(original, mutante)), sql_normalizado(aspas))
+        # Rodada 5 (Claude fresh): o ajuste de espaço junto de parêntese rodava também dentro de literal.
+        for a, b in (("'( x'", "'(x'"), ("'x )'", "'x)'"), ("'*( *'", "'*(*'"), ("[a  b]", "[a b]"), ("`a -- b`", "`a`"),
+                     ("[a /* b */]", "[a]")):
+            with self.subTest(a=a, b=b):
+                self.assertNotEqual(sql_normalizado(f"CREATE TABLE t (c TEXT CHECK (c <> {a}))"),
+                                    sql_normalizado(f"CREATE TABLE t (c TEXT CHECK (c <> {b}))"))
+        # Revisão do Roger no head 919aa2b: `--` ou `/*` dentro de colchetes ou crases escondia a coluna seguinte.
+        for nome in ("[a--b]", "`a/*b`"):
+            with self.subTest(nome=nome):
+                self.assertNotEqual(sql_normalizado(f"CREATE TABLE t ({nome} TEXT, c TEXT)"),
+                                    sql_normalizado(f"CREATE TABLE t ({nome} TEXT, d TEXT)"))
+        self.assertEqual(sql_normalizado("CREATE TABLE t ( c TEXT CHECK ( c <> 'x' ) )"),
+                         sql_normalizado("CREATE TABLE t (c TEXT CHECK (c <> 'x'))"))
+        # Revisão do Roger no head c2f8a29: `--` dentro de `/* */` cortava a linha e escondia a coluna seguinte.
+        bloco = "CREATE TABLE t (a TEXT /* -- it's */ , b TEXT)"
+        self.assertNotEqual(sql_normalizado(bloco), sql_normalizado(bloco.replace("b TEXT", "c TEXT")))
+        self.assertEqual(sql_normalizado(bloco), sql_normalizado("CREATE TABLE t (a TEXT , b TEXT)"))
+        self.assertNotEqual(sql_normalizado("CREATE TABLE t (a TEXT) /* aberto"), sql_normalizado("CREATE TABLE t (b TEXT)"))
+        self.assertEqual(sql_normalizado("CREATE TABLE t (a TEXT CHECK (a <> '/* x */'))").count("/* x */"), 1)
+        for mutante in ("'*[^0-9a-f_new]*'", "'*[^0-9a-f\"]*'", "'*[^0-9a-f IF NOT EXISTS]*'", "'*[^0-9a-f ]*'",
+                        "'*[^0-9a-f--]*'", "'*[^0-9a-f'']*'"):
+            with self.subTest(mutante=mutante):
+                self.assertNotEqual(sql_normalizado(base.replace("'*[^0-9a-f]*'", mutante)), sql_normalizado(base))
+
+    def test_0015_tem_so_os_comandos_esperados_na_ordem(self):
+        # Rodadas 3 e 4 do #210 (Kimi e Claude fresh): mais linhas no teste de preservação só deslocam o LIMIT que
+        # escapa, e fixar só os INSERT deixava passar um DELETE ou UPDATE avulso. Aqui o arquivo inteiro é fixado: para
+        # cada tabela, na ordem, `CREATE TABLE <t>_new (...)`, a cópia exata (`INSERT INTO <t>_new (<colunas da 0014>)`
+        # e `SELECT <as mesmas> FROM <t>`, nada depois do FROM), `DROP TABLE <t>`, `ALTER TABLE <t>_new RENAME TO <t>` e
+        # os índices de <t>; no fim, o trigger e mais nada. O conteúdo de cada CREATE é conferido no teste estrutural.
+        db = sqlite3.connect(":memory:")
+        for nome in sorted(n for n in os.listdir(MIGRATIONS) if n.endswith(".sql") and n < "0015"):
+            with open(os.path.join(MIGRATIONS, nome), encoding="utf-8") as fh:
+                db.executescript(fh.read())
+        with open(os.path.join(MIGRATIONS, "0015_d1_glob_curto.sql"), encoding="utf-8") as fh:
+            texto = re.sub(r"(?m)^--[^\n]*\n", "", fh.read())
+        self.assertNotIn("/*", texto)
+        self.assertNotIn("--", texto)  # comentário só em linha própria; nenhum no meio de comando
+        tabelas = ("engagement_events", "heating", "heating_optout", "curso_esquecido", "site_identities", "ga4_purge_queue")
+        antes_trigger, trigger = texto.split("CREATE TRIGGER", 1)
+        comandos = [" ".join(c.split()) for c in antes_trigger.split(";") if c.strip()]
+        esperados = []
+        for t in tabelas:
+            cols = ", ".join(r[1] for r in db.execute(f"PRAGMA table_info({t})"))
+            n_indices = db.execute(
+                "SELECT count(*) FROM sqlite_master WHERE type = 'index' AND tbl_name = ? AND sql IS NOT NULL", (t,)
+            ).fetchone()[0]
+            esperados += [rf"CREATE TABLE {t}_new \(.*\)", re.escape(f"INSERT INTO {t}_new ({cols}) SELECT {cols} FROM {t}"),
+                          f"DROP TABLE {t}", f"ALTER TABLE {t}_new RENAME TO {t}"]
+            esperados += [rf"CREATE INDEX IF NOT EXISTS \w+ ON {t} \([^;]*\)"] * n_indices
+        self.assertEqual(len(comandos), len(esperados))
+        for n, (comando, padrao) in enumerate(zip(comandos, esperados)):
+            with self.subTest(n=n, comando=comando[:60]):
+                self.assertRegex(comando, rf"\A{padrao}\Z")
+        self.assertRegex(trigger, r"\A IF NOT EXISTS site_identities_enqueue_purge\b")
+        self.assertEqual(trigger.count("END;"), 1)
+        self.assertEqual(trigger.split("END;", 1)[1].strip(), "")
+        db.close()
+
+    def test_0015_preserva_as_linhas_de_cada_tabela_coluna_por_coluna(self):
+        # Os seis INSERT ... SELECT da 0015 copiam cada coluna para ela mesma. Duas linhas por tabela: dentro de cada
+        # linha, colunas do mesmo tipo têm valores distintos (uma troca de colunas aparece), e as duas linhas diferem em
+        # todas as colunas (uma cópia parcial aparece). O teste confere isso antes de usar as linhas.
+        db = sqlite3.connect(":memory:")  # sem o limite do D1: até a 0014 o CHECK de data ainda tem o padrão de 92
+        db.row_factory = sqlite3.Row
+        for nome in sorted(n for n in os.listdir(MIGRATIONS) if n.endswith(".sql") and n < "0015"):
+            with open(os.path.join(MIGRATIONS, nome), encoding="utf-8") as fh:
+                db.executescript(fh.read())
+        d = lambda dia: f"2026-11-{dia:02d}T0{dia % 10}:1{dia % 10}:2{dia % 10}.{dia:03d}Z"
+        # Duas linhas por tabela, comparadas pela chave (rodada 2 do #210); o teste anterior fixa o arquivo inteiro, o
+        # que pega LIMIT, WHERE ou um DELETE avulso de qualquer tamanho.
+        linhas = {
+            "engagement_events": ("id", [
+                {"id": "ev-1", "context": "site", "email": "a@b.co", "signal": "email_aberto", "source": "resend",
+                 "ref": "ref-1", "occurred_at": d(1), "recorded_at": d(2)},
+                {"id": "ev-2", "context": CTX_CURSO, "email": "e@f.co", "signal": "curso_aula", "source": "curso",
+                 "ref": None, "occurred_at": d(11), "recorded_at": d(12)},
+            ]),
+            "heating": ("context, email", [
+                {"context": "site", "email": "a@b.co", "score": 12, "band": "frio", "signals": '["x"]',
+                 "computed_at": d(3), "twenty_person_id": "p-1"},
+                {"context": CTX_CURSO, "email": "e@f.co", "score": 70, "band": "quente", "signals": '["y"]',
+                 "computed_at": d(13), "twenty_person_id": None},
+            ]),
+            "heating_optout": ("email_hmac", [
+                {"email_hmac": hexid(1), "opted_out_at": d(4)},
+                {"email_hmac": hexid(3), "opted_out_at": d(14)},
+            ]),
+            "curso_esquecido": ("context, email_hmac", [
+                {"context": CTX_CURSO, "email_hmac": hexid(2), "forgotten_at": d(5)},
+                {"context": "curso:outro-curso", "email_hmac": hexid(4), "forgotten_at": d(15)},
+            ]),
+            "site_identities": ("uid", [
+                {"uid": "u1", "email": "c@d.co", "linked_at": d(6)},
+                {"uid": "u3", "email": "g@h.co", "linked_at": d(16)},
+            ]),
+            "ga4_purge_queue": ("uid", [
+                {"uid": "u2", "ga4_pendente": 0, "sessoes": '[["ps", 1]]', "bq_tentativas": 2, "bq_concluido": 1,
+                 "geracao": 3, "bq_erro": "falhou", "proxima_em": d(7), "criado_em": d(8)},
+                {"uid": "u4", "ga4_pendente": 1, "sessoes": "[]", "bq_tentativas": 4, "bq_concluido": 0,
+                 "geracao": 5, "bq_erro": None, "proxima_em": d(17), "criado_em": d(18)},
+            ]),
+        }
+        for tabela, (_, regs) in linhas.items():
+            with self.subTest(semente=tabela):
+                a, b = regs
+                self.assertEqual(set(a), set(b))
+                self.assertTrue(all(a[c] != b[c] for c in a), [c for c in a if a[c] == b[c]])
+                for linha in regs:
+                    por_tipo: dict = {}
+                    for c, v in linha.items():
+                        if v is not None:
+                            por_tipo.setdefault(type(v), []).append(v)
+                    self.assertTrue(all(len(vs) == len(set(vs)) for vs in por_tipo.values()), linha)
+        for tabela, (_, regs) in linhas.items():
+            for linha in regs:
+                cols = ", ".join(linha)
+                db.execute(f"INSERT INTO {tabela} ({cols}) VALUES ({', '.join('?' * len(linha))})",
+                           tuple(linha.values()))
+        with open(os.path.join(MIGRATIONS, "0015_d1_glob_curto.sql"), encoding="utf-8") as fh:
+            db.executescript(fh.read())
+        for tabela, (chave, regs) in linhas.items():
+            with self.subTest(tabela=tabela):
+                esperado = sorted(regs, key=lambda r: tuple(r[c] for c in chave.split(", ")))
+                self.assertEqual([dict(r) for r in db.execute(f"SELECT * FROM {tabela} ORDER BY {chave}")], esperado)
+        db.close()
 
     def test_check_de_data_dividido_aceita_e_recusa_os_mesmos_valores_de_antes(self):
         # O CHECK da 0015 (comprimento 24 e três GLOB curtos) precisa aceitar exatamente o que o padrão de 92 aceitava.
