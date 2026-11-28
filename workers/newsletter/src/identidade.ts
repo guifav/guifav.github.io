@@ -360,9 +360,10 @@ export async function handleIdentidade(
 
   // Conversão "login no site", uma por pessoa (id derivado do email; a repetição é ignorada), na mesma guarda da oposição.
   // Falha aqui responde 500: o auth.js tenta de novo na página seguinte, e o upsert do vínculo é idempotente.
+  let convChanges: number | undefined;
   try {
     const hmac = await heatingOptoutHmac(verified.email, env.FORGET_HMAC_KEY);
-    await env.DB
+    const convRes = await env.DB
       .prepare(`INSERT INTO conversions
         (id, email, action, material, interests, occurred_at, verified,
          origin_channel, origin_source, utm_source, utm_medium, utm_campaign, landing_path)
@@ -372,8 +373,14 @@ export async function handleIdentidade(
       .bind(await loginConversionId(verified.email), verified.email, linkedAt,
         origem.canal, origem.fonte, origem.utmSource, origem.utmMedium, origem.utmCampaign, origem.entrada, hmac)
       .run();
+    convChanges = convRes?.meta?.changes;
   } catch (e) {
     console.error(`conversão de login não gravada: ${motivo(e)}`);
+    return plain(500, 'falha ao gravar identidade', cors);
+  }
+  // 0 é esperado (login repetido, ou oposição gravada entre as duas instruções); sem contagem, a escrita não é verificável.
+  if (typeof convChanges !== 'number') {
+    console.error('conversão de login sem contagem de linhas do D1');
     return plain(500, 'falha ao gravar identidade', cors);
   }
 

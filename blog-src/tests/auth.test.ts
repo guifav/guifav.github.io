@@ -2050,13 +2050,36 @@ test('login vira conversão (#197): o POST /identidade leva a origem da visita u
     heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
   });
   s.win.guifavOrigin = {
-    current: () => ({ canal: 'busca', fonte: 'google', utm_source: 'news', utm_medium: null, utm_campaign: 'lanc 1', entrada: '/blog/x/' }),
+    current: () => ({ canal: 'busca', fonte: 'google', utm_source: 'news', utm_medium: null, utm_campaign: 'lanc-1', entrada: '/blog/x/' }),
   };
   await s.emitAuth(makeUser());
   assert.equal(s.fetchCalls.length, 1);
   const init = s.fetchCalls[0].init as { headers: Record<string, string>; body?: string };
   assert.deepEqual(init.headers, { Authorization: 'Bearer jwt.token.falso', 'Content-Type': 'application/x-www-form-urlencoded' });
-  assert.equal(init.body, 'origem_canal=busca&origem_fonte=google&utm_source=news&utm_campaign=lanc%201&origem_entrada=%2Fblog%2Fx%2F');
+  assert.equal(init.body, 'origem_canal=busca&origem_fonte=google&utm_source=news&utm_campaign=lanc-1&origem_entrada=%2Fblog%2Fx%2F');
+
+  // Kimi P2 (rodada 8 do #206): valores fora do padrão (URL, termo buscado, identificador, maiúsculas) não saem do navegador.
+  const h = await setupAuth({
+    consent: { v: 'granted', t: NOW - 1000 },
+    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
+  });
+  h.win.guifavOrigin = {
+    current: () => ({
+      canal: 'busca', fonte: 'Google Ads', utm_source: 'https://evil.example/?gclid=abc', utm_medium: 'como fazer rag',
+      utm_campaign: 'ok_1', entrada: '/blog/x/?q=termo buscado',
+    }),
+  };
+  await h.emitAuth(makeUser());
+  const initH = h.fetchCalls[0].init as { body?: string };
+  assert.equal(initH.body, 'origem_canal=busca&utm_campaign=ok_1');
+  // Caminho acima de 200 caracteres também não sai.
+  const l = await setupAuth({
+    consent: { v: 'granted', t: NOW - 1000 },
+    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
+  });
+  l.win.guifavOrigin = { current: () => ({ canal: 'direto', entrada: '/' + 'a'.repeat(200) }) };
+  await l.emitAuth(makeUser());
+  assert.equal((l.fetchCalls[0].init as { body?: string }).body, 'origem_canal=direto');
   assert.ok(!String(init.body).includes('@'), 'nunca o email');
 
   // Sem guifavOrigin (track.js ausente) ou com valor estranho: POST sem corpo, como antes.

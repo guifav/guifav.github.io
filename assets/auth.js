@@ -314,16 +314,25 @@
 
   // Origem da visita (a mesma que o track.js põe nos formulários), em campos urlencoded para o POST /identidade gravar
   // com a conversão do login. Só rótulos de listas fixas, sem URL, termo buscado nem identificador; o Worker revalida.
+  // Padrões dos rótulos (os mesmos do Worker em workers/newsletter/src/origem.ts; lá também se confere a lista fixa de
+  // canais e fontes): valor fora do padrão não sai do navegador.
+  var ORIGIN_LABEL_RE = /^[a-z_]{1,32}$/;
+  var ORIGIN_UTM_RE = /^[a-z0-9._-]{1,64}$/;
+  var ORIGIN_PATH_RE = /^\/(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]*$/;
+
   function originBody() {
     try {
       var o = w.guifavOrigin && typeof w.guifavOrigin.current === 'function' ? w.guifavOrigin.current() : null;
       if (!o || typeof o !== 'object') return '';
-      var campos = [['origem_canal', o.canal], ['origem_fonte', o.fonte], ['utm_source', o.utm_source],
-        ['utm_medium', o.utm_medium], ['utm_campaign', o.utm_campaign], ['origem_entrada', o.entrada]];
+      var campos = [['origem_canal', o.canal, ORIGIN_LABEL_RE], ['origem_fonte', o.fonte, ORIGIN_LABEL_RE],
+        ['utm_source', o.utm_source, ORIGIN_UTM_RE], ['utm_medium', o.utm_medium, ORIGIN_UTM_RE],
+        ['utm_campaign', o.utm_campaign, ORIGIN_UTM_RE], ['origem_entrada', o.entrada, ORIGIN_PATH_RE]];
       var partes = [];
       for (var i = 0; i < campos.length; i++) {
         var v = campos[i][1];
-        if (typeof v === 'string' && v) partes.push(campos[i][0] + '=' + encodeURIComponent(v));
+        if (typeof v !== 'string' || !campos[i][2].test(v)) continue;
+        if (campos[i][0] === 'origem_entrada' && v.length > 200) continue;
+        partes.push(campos[i][0] + '=' + encodeURIComponent(v));
       }
       return partes.join('&');
     } catch (e) { return ''; }

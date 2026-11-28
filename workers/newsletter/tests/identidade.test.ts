@@ -605,3 +605,30 @@ test('oposição gravada entre o vínculo e a conversão (corrida com --forget):
   assert.equal(res.status, 204);
   assert.deepEqual(s.rows('conversions'), []);
 });
+
+test('D1 sem contagem de linhas só na conversão de login: 500 com log curto (Kimi P2, rodada 8 do #206)', async () => {
+  const s = setup();
+  const real = s.env.DB;
+  s.env.DB = {
+    prepare: (sql: string) => {
+      const st = real.prepare(sql);
+      if (!/INSERT INTO conversions/.test(sql)) return st;
+      const wrap = (b: typeof st): typeof st => ({
+        ...b,
+        bind: (...v: unknown[]) => wrap(b.bind(...v)),
+        run: async () => {
+          await b.run();
+          return { success: true } as Awaited<ReturnType<typeof b.run>>;
+        },
+      });
+      return wrap(st);
+    },
+  } as typeof real;
+  const token = await signJwt(validPayload({ sub: 'UidSemMetaConv1' }));
+  let res!: Response;
+  const logs = await capturaErros(async () => {
+    res = await s.run(idReq({ token }));
+  });
+  assert.equal(res.status, 500);
+  assert.deepEqual(logs, ['conversão de login sem contagem de linhas do D1']);
+});
