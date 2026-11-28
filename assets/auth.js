@@ -55,7 +55,8 @@
   var UID_KEY = 'heating-uid-v1';
   var LOGIN_KEY = 'heating-login-v1';
   var IDENTIFIED_PREFIX = 'guifav_auth_identified:';
-  var IDENTITY_SENT_PREFIX = 'guifav_identidade_sent:';
+  // v2 (#206): o auth.js antigo marcava o envio sem a origem; o atual manda uma vez de novo na mesma aba, já com ela.
+  var IDENTITY_SENT_PREFIX = 'guifav_identidade_sent_v2:';
   var ONE_TAP_SUPPRESSED_KEY = 'guifav_one_tap_suppressed';
   var TTL_MS = 365 * 24 * 3600 * 1000;
   var UID_TTL_MS = 30 * 60 * 1000;
@@ -338,6 +339,11 @@
     } catch (e) { return ''; }
   }
 
+  // Sempre com corpo: o Worker só grava a conversão do login quando ele vem (a chamada sem corpo é de cliente antigo).
+  function identityBody() {
+    return originBody() || 'origem_canal=desconhecida';
+  }
+
   function sendIdentity(user) {
     var uid = user.uid;
     if (sessionGet(IDENTITY_SENT_PREFIX + uid) === '1' || identityInFlightUid === uid) return;
@@ -346,12 +352,11 @@
     Promise.resolve(user.getIdToken()).then(function (token) {
       if (!token || typeof token !== 'string') return;
       if (!canIdentify(uid)) return;
-      var body = originBody();
-      var init = { method: 'POST', headers: { Authorization: 'Bearer ' + token } };
-      if (body) {
-        init.headers['Content-Type'] = 'application/x-www-form-urlencoded';
-        init.body = body;
-      }
+      var init = {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: identityBody()
+      };
       return w.fetch(IDENTITY_URL, init).then(function (res) {
         if (res && res.ok) {
           sessionSet(IDENTITY_SENT_PREFIX + uid, '1');

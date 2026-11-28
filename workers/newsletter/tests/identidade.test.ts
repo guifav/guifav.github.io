@@ -297,10 +297,11 @@ test('login vira conversão site_login comprovada, uma por pessoa, com a origem 
   assert.equal((await s.run(idReq({ token: t3, body: 'origem_canal=hacker&utm_source=OK!&utm_medium=social' }))).status, 204);
   const c3 = s.rows('conversions').find((r) => (r as Record<string, unknown>).email === 'outra@dominio.com') as Record<string, unknown>;
   assert.deepEqual([c3.origin_channel, c3.origin_source, c3.utm_source, c3.utm_medium], ['desconhecida', null, null, 'social']);
+  // Sem corpo (auth.js antigo em cache, ou outro cliente): grava só o vínculo, nunca a conversão.
   const t4 = await signJwt(validPayload({ sub: 'UidLogin4', email: 'semcorpo@dominio.com' }));
   assert.equal((await s.run(idReq({ token: t4 }))).status, 204);
-  const c4 = s.rows('conversions').find((r) => (r as Record<string, unknown>).email === 'semcorpo@dominio.com') as Record<string, unknown>;
-  assert.equal(c4.origin_channel, 'desconhecida');
+  assert.equal(s.rows('conversions').find((r) => (r as Record<string, unknown>).email === 'semcorpo@dominio.com'), undefined);
+  assert.ok(s.rows('site_identities').some((r) => (r as Record<string, unknown>).uid === 'UidLogin4'));
 });
 
 test('login com oposição não grava conversão; falha ao gravar a conversão responde 500 com log curto', async () => {
@@ -314,7 +315,7 @@ test('login com oposição não grava conversão; falha ao gravar a conversão r
   const f = setup({ d1Falha: /INSERT INTO conversions/ });
   const tf = await signJwt(validPayload({ sub: 'UidFalha1', email: 'falha@exemplo.com' }));
   let res!: Response;
-  const logs = await capturaErros(async () => { res = await f.run(idReq({ token: tf })); });
+  const logs = await capturaErros(async () => { res = await f.run(idReq({ token: tf, body: 'origem_canal=desconhecida' })); });
   assert.equal(res.status, 500);
   assert.equal(logs.length, 1);
   assert.match(logs[0], /^conversão de login não gravada: /);
@@ -627,42 +628,29 @@ test('D1 sem contagem de linhas só na conversão de login: 500 com log curto (K
   const token = await signJwt(validPayload({ sub: 'UidSemMetaConv1' }));
   let res!: Response;
   const logs = await capturaErros(async () => {
-    res = await s.run(idReq({ token }));
+    res = await s.run(idReq({ token, body: 'origem_canal=desconhecida' }));
   });
   assert.equal(res.status, 500);
   assert.deepEqual(logs, ['conversão de login sem contagem de linhas do D1']);
 });
 
-test('origem desconhecida do primeiro login é trocada pela conhecida antes do sync, nunca o contrário (Kimi P2, rodada 9 do #206)', async () => {
+test('publicação em qualquer ordem: chamada sem corpo (cliente antigo) não cria a conversão; a do cliente novo cria com a origem (Kimi P2, rodadas 9 e 10 do #206)', async () => {
   const s = setup();
-  // auth.js antigo em cache (sem corpo) durante a publicação: a conversão nasce com origem desconhecida.
+  // auth.js antigo em cache (sem corpo) depois do Worker novo: só o vínculo.
   const t1 = await signJwt(validPayload({ sub: 'UidRollout1', email: 'rollout@exemplo.com' }));
   assert.equal((await s.run(idReq({ token: t1 }))).status, 204);
-  const conv = () => s.rows('conversions').find((r) => (r as Record<string, unknown>).email === 'rollout@exemplo.com') as Record<string, unknown>;
-  assert.equal(conv().origin_channel, 'desconhecida');
-  const primeira = conv().occurred_at;
-  // O próximo login, já com o auth.js novo, traz a origem: ela substitui a desconhecida, sem mudar a data.
+  const conv = () => s.rows('conversions').filter((r) => (r as Record<string, unknown>).email === 'rollout@exemplo.com') as Record<string, unknown>[];
+  assert.deepEqual(conv(), []);
+  // O próximo envio, do auth.js novo, cria a conversão já com a origem.
   s.avanca(60_000);
-  const t2 = await signJwt(validPayload({ sub: 'UidRollout1', email: 'rollout@exemplo.com' }));
-  assert.equal((await s.run(idReq({ token: t2, body: 'origem_canal=busca&origem_fonte=google&origem_entrada=/blog/x/' }))).status, 204);
-  assert.deepEqual([conv().origin_channel, conv().origin_source, conv().landing_path, conv().occurred_at], ['busca', 'google', '/blog/x/', primeira]);
-  assert.equal(s.rows('conversions').length, 1);
-  // Origem conhecida não é sobrescrita por outra, nem por uma desconhecida.
-  const t3 = await signJwt(validPayload({ sub: 'UidRollout2', email: 'rollout@exemplo.com' }));
-  assert.equal((await s.run(idReq({ token: t3, body: 'origem_canal=social&origem_fonte=linkedin' }))).status, 204);
-  assert.equal((await s.run(idReq({ token: t3 }))).status, 204);
-  assert.equal(conv().origin_channel, 'busca');
-  // Depois do sync (synced_at preenchido), nem a desconhecida é trocada: o Twenty já recebeu a conversão.
-  const t4 = await signJwt(validPayload({ sub: 'UidSync1', email: 'sync@exemplo.com' }));
-  assert.equal((await s.run(idReq({ token: t4 }))).status, 204);
-  s.db.prepare("UPDATE conversions SET synced_at = ? WHERE email = 'sync@exemplo.com'").run(new Date(NOW).toISOString());
-  assert.equal((await s.run(idReq({ token: t4, body: 'origem_canal=busca' }))).status, 204);
-  const cs = s.rows('conversions').find((r) => (r as Record<string, unknown>).email === 'sync@exemplo.com') as Record<string, unknown>;
-  assert.equal(cs.origin_channel, 'desconhecida');
-  // Desconhecida não troca desconhecida (nem os UTM que vieram com ela).
-  const t5 = await signJwt(validPayload({ sub: 'UidUtm1', email: 'utm@exemplo.com' }));
-  assert.equal((await s.run(idReq({ token: t5, body: 'utm_source=primeira' }))).status, 204);
-  assert.equal((await s.run(idReq({ token: t5, body: 'utm_source=segunda' }))).status, 204);
-  const cu = s.rows('conversions').find((r) => (r as Record<string, unknown>).email === 'utm@exemplo.com') as Record<string, unknown>;
-  assert.deepEqual([cu.origin_channel, cu.utm_source], ['desconhecida', 'primeira']);
+  assert.equal((await s.run(idReq({ token: t1, body: 'origem_canal=busca&origem_fonte=google&utm_source=news&origem_entrada=/blog/x/' }))).status, 204);
+  assert.equal(conv().length, 1);
+  assert.deepEqual([conv()[0].origin_channel, conv()[0].origin_source, conv()[0].utm_source, conv()[0].landing_path], ['busca', 'google', 'news', '/blog/x/']);
+  assert.equal(conv()[0].occurred_at, new Date(NOW + 60_000).toISOString());
+  // Depois, nada muda a conversão: nem outra origem, nem chamada sem corpo.
+  const t2 = await signJwt(validPayload({ sub: 'UidRollout2', email: 'rollout@exemplo.com' }));
+  assert.equal((await s.run(idReq({ token: t2, body: 'origem_canal=social&origem_fonte=linkedin' }))).status, 204);
+  assert.equal((await s.run(idReq({ token: t2 }))).status, 204);
+  assert.equal(conv().length, 1);
+  assert.equal(conv()[0].origin_channel, 'busca');
 });

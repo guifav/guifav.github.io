@@ -864,8 +864,9 @@ test('as três condições do user_id, heating-uid-v1 sincronizado, sinais de an
   assert.equal(s.fetchCalls.length, 1);
   assert.equal(s.fetchCalls[0].url, 'https://insights.guifav.dev/identidade');
   assert.equal(s.fetchCalls[0].init?.method, 'POST');
-  assert.deepEqual(s.fetchCalls[0].init?.headers, { Authorization: 'Bearer jwt.token.falso' });
-  assert.equal(s.fetchCalls[0].init?.body, undefined);
+  // Sempre com corpo (o Worker só grava a conversão do login quando ele vem); sem origem, a desconhecida.
+  assert.deepEqual(s.fetchCalls[0].init?.headers, { Authorization: 'Bearer jwt.token.falso', 'Content-Type': 'application/x-www-form-urlencoded' });
+  assert.equal(s.fetchCalls[0].init?.body, 'origem_canal=desconhecida');
 
   // Nunca chama Clarity nem vaza email em nenhum canal ou DOM.
   assert.deepEqual(s.clarityCalls, []);
@@ -1582,7 +1583,7 @@ test('oposição em /prioridade: /identidade responde 409, o vínculo desliga ne
   assert.equal(s.local.getItem('heating-uid-v1'), null);
   const last = s.gtagCalls.filter((c) => c[0] === 'set' && typeof c[1] === 'object' && c[1] !== null && 'user_id' in (c[1] as object)).pop();
   assert.deepEqual(last, ['set', { user_id: null }]);
-  assert.equal(s.session.getItem('guifav_identidade_sent:UidCurso123ABC'), null, 'não marca como enviada');
+  assert.equal(s.session.getItem('guifav_identidade_sent_v2:UidCurso123ABC'), null, 'não marca como enviada');
   const state = s.findClass('guifav-auth-state')!;
   assert.equal(state.textContent, 'Desligado');
   assert.equal(s.pendingTimers(), 0);
@@ -2082,7 +2083,7 @@ test('login vira conversão (#197): o POST /identidade leva a origem da visita u
   assert.equal((l.fetchCalls[0].init as { body?: string }).body, 'origem_canal=direto');
   assert.ok(!String(init.body).includes('@'), 'nunca o email');
 
-  // Sem guifavOrigin (track.js ausente) ou com valor estranho: POST sem corpo, como antes.
+  // Sem guifavOrigin (track.js ausente) ou com valor estranho: corpo só com a origem desconhecida.
   const r = await setupAuth({
     consent: { v: 'granted', t: NOW - 1000 },
     heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
@@ -2090,6 +2091,26 @@ test('login vira conversão (#197): o POST /identidade leva a origem da visita u
   r.win.guifavOrigin = { current: () => { throw new Error('quebrado'); } };
   await r.emitAuth(makeUser());
   const initR = r.fetchCalls[0].init as { headers: Record<string, string>; body?: string };
-  assert.deepEqual(initR.headers, { Authorization: 'Bearer jwt.token.falso' });
-  assert.equal(initR.body, undefined);
+  assert.deepEqual(initR.headers, { Authorization: 'Bearer jwt.token.falso', 'Content-Type': 'application/x-www-form-urlencoded' });
+  assert.equal(initR.body, 'origem_canal=desconhecida');
+});
+
+test('Kimi P2 (rodada 10 do #206): marca de envio do auth.js antigo na mesma aba não impede o envio com a origem', async () => {
+  const session = new Storage();
+  session.setItem('guifav_identidade_sent:UidCurso123ABC', '1'); // gravada pelo auth.js antigo (envio sem corpo)
+  const s = await setupAuth({
+    session,
+    consent: { v: 'granted', t: NOW - 1000 },
+    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
+    initialUser: makeUser(),
+  });
+  assert.equal(s.fetchCalls.length, 1, 'o auth.js atual manda uma vez, já com corpo');
+  assert.equal(session.getItem('guifav_identidade_sent_v2:UidCurso123ABC'), '1');
+  const s2 = await setupAuth({
+    session,
+    consent: { v: 'granted', t: NOW - 1000 },
+    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
+    initialUser: makeUser(),
+  });
+  assert.equal(s2.fetchCalls.length, 0, 'e só uma vez por sessão');
 });
