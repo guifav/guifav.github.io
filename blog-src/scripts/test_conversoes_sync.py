@@ -784,7 +784,7 @@ class OrigemTest(unittest.TestCase):
         f.add(1, "novo@x.com", action="site_login", material=None, interests=(),
               origem={"origin_channel": "busca", "origin_source": "google", "landing_path": "/blog/"})
         counts, _ = run(f, apply=True)
-        self.assertEqual(counts.get("conversao_invalida", 0), 0)
+        self.assertEqual(counts["linha_invalida"], 0)
         self.assertEqual(f.pending(), [])
         pessoas = [p for p in f.people.values() if p["emails"]["primaryEmail"] == "novo@x.com"]
         self.assertEqual(len(pessoas), 1, "Pessoa criada")
