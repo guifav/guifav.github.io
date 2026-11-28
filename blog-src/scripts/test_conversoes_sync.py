@@ -412,6 +412,8 @@ class SyncTest(unittest.TestCase):
             "material no login": dict(action="site_login"),
             "login não comprovado": dict(action="site_login", material=None, verified=0),
             "arquivo no login": dict(action="site_login", material=None, file="planilha-custos-ia"),
+            "client_id do GA4 no login": dict(action="site_login", material=None, interests=(), ga="123.456"),
+            "interesses no login": dict(action="site_login", material=None),
             "interesses não JSON": dict(raw_interests="nada"),
             "interesses objeto": dict(raw_interests="{}"),
             "interesse id minúsculo": dict(interests=({"id": "custo", "rotulo": "C"},)),
@@ -811,6 +813,13 @@ class OrigemTest(unittest.TestCase):
         self.assertEqual(opts[3]["position"], 3)
         ev = conv_by_event(f)
         self.assertEqual((ev[hexid(1)]["acao"], ev[hexid(2)]["acao"]), ("MATERIAL_DOWNLOAD", "SITE_LOGIN"))
+        # O --forget também roda com o campo Ação antigo (lê os metadados antes de apagar no D1 e no Twenty).
+        h = Fake(schema=True)
+        h.conv_fields["acao"]["options"] = [o for o in h.conv_fields["acao"]["options"] if o["value"] != "SITE_LOGIN"]
+        h.add(1, "esquece@x.com", action="site_login", material=None, interests=())
+        run(h, apply=True)
+        forget(h, "esquece@x.com", apply=True)
+        self.assertEqual(h.db.execute("SELECT count(*) FROM conversions WHERE email = 'esquece@x.com'").fetchone()[0], 0)
         # Campo SELECT fora dos completáveis continua exigindo todas as opções (o canal da origem, por exemplo).
         g = Fake(schema=True)
         g.conv_fields["origemCanal"]["options"] = g.conv_fields["origemCanal"]["options"][:-1]

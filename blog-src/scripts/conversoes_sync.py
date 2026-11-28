@@ -406,6 +406,9 @@ def parse_row(r: dict) -> dict | None:
             return None
         if r.get("request_id") is not None and action != "material_download":
             return None
+        # O login (Worker /identidade) grava sem client_id do GA4 e sem interesses: qualquer coisa diferente é linha adulterada.
+        if action == "site_login" and (r.get("ga_client_id") is not None or (r.get("interests") or "") != "[]"):
+            return None
         when = iso_ms(r.get("occurred_at") or "")
         if not when:
             return None
