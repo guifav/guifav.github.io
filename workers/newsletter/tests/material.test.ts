@@ -608,7 +608,7 @@ test('G4: o GA4 do Worker é o mesmo do site, e o segredo do Measurement Protoco
   assert.doesNotMatch(TOML, /^\s*GA4_API_SECRET\s*=/m);
 });
 
-test('M10: o rodapé do email do material avisa que o pedido fica registrado, como pedir a remoção (#99) e o link de oposição (#197)', async () => {
+test('M10: o rodapé do email do material avisa que o pedido fica registrado e como pedir a remoção (#99); o link de oposição saiu em 28/11 (#197)', async () => {
   const s = setup();
   await s.run(pedir(ok));
   const b = emails(s.calls)[0].body;
@@ -616,11 +616,9 @@ test('M10: o rodapé do email do material avisa que o pedido fica registrado, co
     assert.match(t, /o pedido fica registrado/);
     assert.match(t, /contact@guifav\.dev/);
     assert.doesNotMatch(t, /nada mais será enviado/);
-    assert.match(t, /Não quero ser pontuado/);
-    assert.match(t, /https:\/\/guifav\.dev\/prioridade\//);
+    assert.doesNotMatch(t, /Não quero ser pontuado/);
+    assert.doesNotMatch(t, /prioridade/);
   }
-  assert.ok(b.html.includes('<a href="https://guifav.dev/prioridade/" style="color:inherit">Não quero ser pontuado</a>'));
-  assert.ok(b.text.includes('Não quero ser pontuado: https://guifav.dev/prioridade/'));
 });
 
 test('G5: o envio ao GA4 fica dentro do waitUntil: GA4 travado não segura o download, e o trabalho só termina com ele', async () => {

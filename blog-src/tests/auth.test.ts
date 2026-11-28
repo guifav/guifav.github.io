@@ -15,16 +15,32 @@ const TENANT_ID = 'guifav-dev-g6dp4';
 const CLIENT_ID = '486000748530-fj4un9nf6q94dcfjkttbrb87v026eboi.apps.googleusercontent.com';
 const API_KEY = 'AIzaSyC16_hENAEO4CH6hHDcbFA9St8P1oLdYgI';
 const IDB_USER_KEY = `firebase:authUser:${API_KEY}:[DEFAULT]`;
-const NOTICE_TEXT =
-  'Ao entrar, sua atividade neste site fica ligada ao seu contato: páginas vistas, tempo de leitura, rolagem e cliques em Agende e Contato. Uso para saber quem abordar primeiro. Você pode desligar quando quiser no menu da conta.';
+const IDENTITY_URL = 'https://insights.guifav.dev/identidade';
+const UID = 'UidCurso123ABC';
 const AD_CONSENT_DENIED = { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' };
 const AD_CONSENT_GRANTED = { ad_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'granted' };
-// Sessão logada sem identificar (aviso pendente ou recusado): anúncios e sinais negados (desenho do #197, item 4).
+// Sessão logada sem identificar (oposição registrada, ou cookies aceitos sem o vínculo legível): anúncios e sinais
+// negados (desenho do #197, item 4).
 const LOGIN_AD_DENY = [
   ['consent', 'update', { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' }],
   ['set', 'allow_google_signals', false],
   ['set', 'allow_ad_personalization_signals', false],
 ];
+// Identificação com as 3 condições: anúncios e sinais negados antes do user_id; auth_identified só uma vez por sessão.
+const identifySeq = (uid: string, comEvento = true): unknown[][] => [
+  ['consent', 'update', AD_CONSENT_DENIED],
+  ['set', 'allow_google_signals', false],
+  ['set', 'allow_ad_personalization_signals', false],
+  ['set', { user_id: uid }],
+  ...(comEvento ? [['event', 'auth_identified']] : []),
+];
+// Oposição registrada no servidor (409 do /identidade): a única marca que segura o vínculo desligado.
+const OPPOSED_LINK = { v: 'denied', t: NOW - DAY, uid: UID, o: 1 };
+const UID_TTL = 30 * 60 * 1000;
+const isUserIdSet = (c: unknown[], uid: string | null) =>
+  c[0] === 'set' && typeof c[1] === 'object' && c[1] !== null && (c[1] as { user_id?: unknown }).user_id === uid;
+// Vínculo ligado e já confirmado pelo servidor neste navegador (POST /identidade ok, s: 1).
+const linkOk = (t: number, uid = UID) => ({ v: 'granted', t, uid, s: 1 });
 const INDEXED_DB_PERSISTENCE = { type: 'INDEXED_DB' };
 const BROWSER_LOCAL_PERSISTENCE = { type: 'LOCAL' };
 const BROWSER_POPUP_RESOLVER = { type: 'POPUP_REDIRECT_RESOLVER' };
@@ -45,7 +61,8 @@ class El {
   attrs: Record<string, string> = {};
   children: El[] = [];
   parent: El | null = null;
-  textContent = '';
+  // Texto como no DOM: atribuir textContent troca os filhos por um nó #text; ler concatena o texto dos filhos.
+  private rawText = '';
   hidden = false;
   async = false;
   focused = false;
@@ -54,6 +71,25 @@ class El {
   constructor(tag: string, onFocus?: (el: El) => void) {
     this.tag = tag;
     this.onFocus = onFocus;
+  }
+  get textContent(): string {
+    if (this.tag === '#text') return this.rawText;
+    return this.children.map((c) => c.textContent).join('');
+  }
+  set textContent(v: string) {
+    const s = String(v ?? '');
+    if (this.tag === '#text') {
+      this.rawText = s;
+      return;
+    }
+    for (const c of this.children) c.parent = null;
+    this.children = [];
+    if (s) {
+      const t = new El('#text');
+      t.rawText = s;
+      t.parent = this;
+      this.children.push(t);
+    }
   }
   setAttribute(k: string, v: string) {
     this.attrs[k] = String(v);
@@ -65,9 +101,44 @@ class El {
     delete this.attrs[k];
   }
   appendChild(c: El) {
+    if (c.parent) c.parent.removeChild(c);
     c.parent = this;
     this.children.push(c);
     return c;
+  }
+  insertBefore(c: El, ref: El | null) {
+    if (c.parent) c.parent.removeChild(c);
+    const i = ref ? this.children.indexOf(ref) : -1;
+    c.parent = this;
+    if (i < 0) this.children.push(c);
+    else this.children.splice(i, 0, c);
+    return c;
+  }
+  removeChild(c: El) {
+    const i = this.children.indexOf(c);
+    if (i >= 0) this.children.splice(i, 1);
+    c.parent = null;
+    return c;
+  }
+  replaceChild(n: El, old: El) {
+    const i = this.children.indexOf(old);
+    if (i < 0) return old;
+    if (n.parent) n.parent.removeChild(n);
+    n.parent = this;
+    this.children[i] = n;
+    old.parent = null;
+    return old;
+  }
+  get parentNode() {
+    return this.parent;
+  }
+  get firstChild() {
+    return this.children[0] ?? null;
+  }
+  get nextSibling() {
+    if (!this.parent) return null;
+    const sib = this.parent.children;
+    return sib[sib.indexOf(this) + 1] ?? null;
   }
   contains(node: unknown): boolean {
     if (node === this) return true;
@@ -112,11 +183,37 @@ class Storage {
   }
 }
 
+// Storage que registra cada gravação: prova que uma chave nunca foi escrita, nem por um instante.
+class SpyStorage extends Storage {
+  writes: Array<[string, string]> = [];
+  setItem(k: string, v: string) {
+    this.writes.push([k, String(v)]);
+    super.setItem(k, v);
+  }
+}
+
+// POST /identidade que só responde quando o teste mandar.
+function identidadePendente() {
+  const fila: Array<(r: { ok: boolean; status: number }) => void> = [];
+  return {
+    fetch: () => new Promise<{ ok: boolean; status: number }>((res) => {
+      fila.push(res);
+    }),
+    responder: (status: number) => {
+      const r = fila.shift();
+      assert.ok(r, 'POST em andamento');
+      r({ ok: status >= 200 && status < 300, status });
+    },
+    pendentes: () => fila.length,
+  };
+}
+
 interface FakeUser {
   uid: string;
   tenantId: string | null;
   displayName?: string | null;
   email?: string | null;
+  photoURL?: string | null;
   getIdToken?: () => Promise<string>;
 }
 
@@ -150,6 +247,10 @@ interface SetupOpts {
   signOutFn?: () => Promise<void>;
   signInPopupFn?: () => Promise<unknown>;
   withConsentScript?: boolean;
+  // Página sem o menu superior (sem #theme-toggle): o auth.js não mostra botão de conta.
+  noHeader?: boolean;
+  // Outro item no menu superior depois do botão de tema: o botão da conta entra entre os dois, não no fim.
+  extraAfterTheme?: boolean;
 }
 
 async function flush() {
@@ -263,6 +364,19 @@ async function setupAuth(opts: SetupOpts = {}) {
   const html = new El('html', setActive);
   const head = html.appendChild(new El('head', setActive));
   const body = html.appendChild(new El('body', setActive));
+  // Menu superior do site: nav > .nav-links > ... #lang-toggle, #theme-toggle (o botão da conta entra depois do tema).
+  let navLinks: El | null = null;
+  let themeToggle: El | null = null;
+  if (!opts.noHeader) {
+    const nav = body.appendChild(new El('nav', setActive));
+    navLinks = nav.appendChild(new El('div', setActive));
+    navLinks.setAttribute('class', 'nav-links');
+    const lang = navLinks.appendChild(new El('button', setActive));
+    lang.setAttribute('id', 'lang-toggle');
+    themeToggle = navLinks.appendChild(new El('button', setActive));
+    themeToggle.setAttribute('id', 'theme-toggle');
+    if (opts.extraAfterTheme) navLinks.appendChild(new El('a', setActive)).setAttribute('id', 'nav-extra');
+  }
   const docHandlers: Record<string, Array<(e: unknown) => void>> = {};
   const winHandlers: Record<string, Array<(e: unknown) => void>> = {};
 
@@ -390,6 +504,7 @@ async function setupAuth(opts: SetupOpts = {}) {
     },
     JSON,
     Promise,
+    URL,
     Date: { now: () => currentNow },
     setTimeout: (fn: () => void, ms: number) => {
       const id = nextTimerId++;
@@ -516,6 +631,8 @@ async function setupAuth(opts: SetupOpts = {}) {
   return {
     head,
     body,
+    navLinks,
+    themeToggle,
     local,
     session,
     authObj,
@@ -594,6 +711,42 @@ function makeUser(overrides: Partial<FakeUser> = {}): FakeUser {
   };
 }
 
+// Aviso do login, região aria-live e interruptor do vínculo saíram em 28/11: nada disso pode existir no DOM.
+function assertSemAvisoNemInterruptor(s: { body: El }, label = '') {
+  const avisos = s.body.findAll((e) => /(^|\s)guifav-auth-(notice|live|yes|no|state)(\s|$)/.test(e.attrs.class ?? ''));
+  assert.equal(avisos.length, 0, `${label}: nenhum aviso do login`);
+  assert.equal(
+    s.body.findAll((e) => e.attrs.role === 'menuitemcheckbox' || e.attrs.role === 'switch').length,
+    0,
+    `${label}: nenhum interruptor do vínculo`,
+  );
+  assert.equal(s.body.findAll((e) => 'aria-live' in e.attrs).length, 0, `${label}: nenhuma região aria-live`);
+}
+
+// Tudo o que sai ou fica visível (DOM com atributos, GA4, Worker, logs e storage) sem o email da conta.
+function assertSemEmail(
+  s: { body: El; gtagCalls: unknown[]; fetchCalls: unknown[]; warns: string[]; local: Storage; session: Storage },
+  label = '',
+) {
+  const dump = JSON.stringify({
+    dom: s.body.findAll(() => true).map((e) => [e.textContent, e.attrs]),
+    gtag: s.gtagCalls,
+    fetch: s.fetchCalls,
+    warns: s.warns,
+    local: [...s.local.m.entries()],
+    session: [...s.session.m.entries()],
+  });
+  assert.ok(!dump.includes('maria.secreta'), `${label}: email não aparece`);
+  assert.ok(!dump.includes('@'), `${label}: nenhum @`);
+}
+
+test('o auth.js não tem mais aviso do login, interruptor do vínculo nem exclusão de /prioridade', () => {
+  for (const s of ['guifav-auth-notice', 'guifav-auth-yes', 'guifav-auth-no', 'guifav-auth-live', 'menuitemcheckbox',
+    'aria-live', 'Ligar minha atividade', 'column-reverse', "'/prioridade'"]) {
+    assert.ok(!AUTH_SRC.includes(s), s);
+  }
+});
+
 test('track.js carrega auth.js com ?v= em idle só em guifav.dev e nunca em prévia local ou /admin', () => {
   function runTrack(hostname: string, pathname: string, useIdle: boolean) {
     const appended: El[] = [];
@@ -667,7 +820,7 @@ test('nada do Google carrega antes da resposta ao banner, sessão salva no Index
     const s = await setupAuth({ pathname: '/', idbMode, initialUser: null });
     assert.deepEqual(s.firebaseImports, [], `idbMode=${idbMode}: não deve importar Firebase`);
     assert.equal(s.gisScripts().length, 0, `idbMode=${idbMode}: não deve carregar GIS`);
-    assert.equal(s.findClass('guifav-auth-btn')?.textContent, 'Entrar com Google', `idbMode=${idbMode}`);
+    assert.equal(s.findClass('guifav-auth-btn')?.textContent, 'Entrar', `idbMode=${idbMode}`);
     if (idbMode === 'upgrade') {
       assert.equal(s.idbStats().upgradeAborted, true, 'onupgradeneeded deve abortar para não criar DB vazio');
     }
@@ -678,11 +831,15 @@ test('nada do Google carrega antes da resposta ao banner, sessão salva no Index
     }
   }
 
-  // (b) Sessão salva no IndexedDB carrega Firebase mesmo antes do banner, mas sem aviso nem One Tap.
+  // (b) Sessão salva no IndexedDB carrega Firebase mesmo antes do banner, sem One Tap e sem aviso: a conta aparece
+  // no menu superior.
   const withSession = await setupAuth({ pathname: '/', idbMode: 'session', initialUser: makeUser() });
   assert.equal(withSession.firebaseImports.length, 2);
-  assert.equal(withSession.findClass('guifav-auth-btn')?.textContent, 'Maria');
-  assert.equal(withSession.findClass('guifav-auth-notice'), null, 'aviso não aparece antes do banner');
+  const userBtn = withSession.findClass('guifav-auth-btn')!;
+  assert.equal(userBtn.attrs.class, 'nav-btn guifav-auth-btn is-user');
+  assert.equal(userBtn.attrs['aria-label'], 'Maria, menu da conta');
+  assert.equal(userBtn.textContent, 'M', 'sem foto, a inicial do primeiro nome');
+  assertSemAvisoNemInterruptor(withSession, 'antes do banner');
   assert.equal(withSession.gisScripts().length, 0);
 
   // (c) Sem banner e sem sessão: clicar em "Entrar com Google" carrega Firebase sob demanda e abre popup no tenant.
@@ -754,7 +911,6 @@ test('One Tap: só carrega depois da resposta ao banner (granted ou denied), nun
   for (const [pathname, title] of [
     ['/privacidade/', 'Política de privacidade'],
     ['/termos/', 'Termos de uso'],
-    ['/prioridade/', 'Não quero ser pontuado'],
     ['/404.html', 'Página não encontrada | Guilherme Favaron'],
     ['/inexistente/', 'Página não encontrada | Guilherme Favaron'],
   ]) {
@@ -781,287 +937,350 @@ test('One Tap: só carrega depois da resposta ao banner (granted ou denied), nun
   assert.ok(!AUTH_SRC.includes('getNotDisplayedReason'), 'não deve depender de getNotDisplayedReason por causa do FedCM');
 });
 
-test('aviso do login só aparece depois do banner respondido E com consent-v1 granted', async () => {
-  // Logado (sessão salva no IndexedDB) sem resposta no banner -> aviso NÃO aparece.
-  const preBanner = await setupAuth({ idbMode: 'session', initialUser: makeUser() });
-  assert.equal(preBanner.findClass('guifav-auth-notice'), null);
-  // Clicar "Não" no banner -> aviso continua sem aparecer.
-  await preBanner.emitConsent('denied');
-  assert.equal(preBanner.findClass('guifav-auth-notice'), null);
-  // Clicar "Sim" no banner -> agora o aviso aparece.
-  await preBanner.emitConsent('granted');
-  const notice = preBanner.findClass('guifav-auth-notice');
-  assert.ok(notice && !notice.hidden);
-  assert.equal(notice.findAll((e) => e.tag === 'p')[0].textContent, NOTICE_TEXT);
+test('login antes do banner liga o vínculo sem aviso e manda o POST uma vez sem a origem; Não não identifica; Sim identifica sem repetir o POST', async () => {
+  // Logado (sessão salva no IndexedDB) sem resposta no banner: o vínculo liga e o login vai ao servidor como origem
+  // desconhecida, mesmo com a origem da visita disponível; nada vai ao GA4.
+  const s = await setupAuth({ idbMode: 'session' });
+  s.win.guifavOrigin = { current: () => ({ canal: 'busca', fonte: 'google' }) };
+  await s.emitAuth(makeUser());
+  // O servidor respondeu ok: o vínculo fica confirmado (s: 1), mas sem cookies aceitos o GA4 não recebe nada.
+  assert.deepEqual(JSON.parse(s.local.getItem('heating-link-v1')!), linkOk(NOW));
+  assert.equal(s.fetchCalls.length, 1);
+  assert.equal(s.fetchCalls[0].url, IDENTITY_URL);
+  assert.equal(s.fetchCalls[0].init?.body, 'origem_canal=desconhecida');
+  assert.deepEqual(s.gtagCalls, []);
+  assert.equal(s.local.getItem('heating-uid-v1'), null);
+  assertSemAvisoNemInterruptor(s, 'sem resposta no banner');
 
-  // Já com consent-v1 denied -> aviso NÃO aparece.
-  const denied = await setupAuth({ consent: { v: 'denied', t: NOW - 1000 }, initialUser: makeUser() });
-  assert.equal(denied.findClass('guifav-auth-notice'), null);
+  // "Não" no banner: só o user_id null defensivo; nada de heating-uid-v1 nem novo POST.
+  await s.emitConsent('denied');
+  assert.deepEqual(s.gtagCalls, [['set', { user_id: null }]]);
+  assert.equal(s.local.getItem('heating-uid-v1'), null);
+  assert.equal(s.fetchCalls.length, 1);
+  assertSemAvisoNemInterruptor(s, 'Não');
+
+  // "Sim" depois: identifica na hora (vínculo já confirmado), sem aviso e sem repetir o POST da mesma sessão.
+  await s.emitConsent('granted');
+  assert.deepEqual(s.gtagCalls.slice(1), identifySeq(UID));
+  assert.deepEqual(JSON.parse(s.local.getItem('heating-uid-v1')!), { uid: UID, t: NOW });
+  assert.equal(s.fetchCalls.length, 1, 'uma vez por sessão e por uid');
+  assertSemAvisoNemInterruptor(s, 'Sim');
 });
 
-test('tenant errado é ignorado; tenant certo mostra primeiro nome e aviso do login', async () => {
+test('login com cookies recusados ou sem resposta: liga o vínculo e manda o POST /identidade uma vez com origem_canal=desconhecida, sem user_id nem heating-uid-v1', async () => {
+  for (const caso of ['recusados', 'sem resposta'] as const) {
+    const local = new Storage();
+    const session = new Storage();
+    if (caso === 'recusados') local.setItem('consent-v1', JSON.stringify({ v: 'denied', t: NOW - 1000 }));
+    // Sobra de heating-uid-v1 de quando os cookies estavam aceitos.
+    local.setItem('heating-uid-v1', JSON.stringify({ uid: UID, t: NOW - 1000 }));
+    const s = await setupAuth({ local, session, idbMode: 'session' });
+    s.win.guifavOrigin = {
+      current: () => ({ canal: 'busca', fonte: 'google', utm_source: 'news', utm_campaign: 'lanc-1', entrada: '/blog/x/' }),
+    };
+    await s.emitAuth(makeUser());
+    assert.deepEqual(JSON.parse(local.getItem('heating-link-v1')!), linkOk(NOW), `${caso}: confirmado pelo servidor`);
+    assert.deepEqual(JSON.parse(local.getItem('heating-login-v1')!), { t: NOW }, caso);
+    assert.equal(s.fetchCalls.length, 1, caso);
+    assert.equal(s.fetchCalls[0].url, IDENTITY_URL, caso);
+    assert.equal(s.fetchCalls[0].init?.method, 'POST', caso);
+    assert.deepEqual(
+      s.fetchCalls[0].init?.headers,
+      { Authorization: 'Bearer jwt.token.falso', 'Content-Type': 'application/x-www-form-urlencoded' },
+      caso,
+    );
+    assert.equal(s.fetchCalls[0].init?.body, 'origem_canal=desconhecida', `${caso}: a origem só vai com cookies aceitos`);
+    assert.deepEqual(s.gtagCalls, [], `${caso}: nada de user_id nem consentimento no GA4`);
+    assert.equal(local.getItem('heating-uid-v1'), null, caso);
+    assert.equal(session.getItem('guifav_identidade_sent_v2:UidCurso123ABC'), '1', caso);
+    assertSemAvisoNemInterruptor(s, caso);
+    assertSemEmail(s, caso);
+
+    // Outra página na mesma sessão: não repete o POST nem manda nada ao GA4.
+    const s2 = await setupAuth({ local, session, idbMode: 'session', initialUser: makeUser() });
+    assert.equal(s2.fetchCalls.length, 0, caso);
+    assert.deepEqual(s2.gtagCalls, [], caso);
+    assert.equal(local.getItem('heating-uid-v1'), null, caso);
+  }
+});
+
+test('Gui (28/11): todo login liga o vínculo; denied antigo sem o, vencido, quebrado ou de outro uid viram granted agora; só a oposição (o: 1) segura', async () => {
+  for (const [caso, link] of [
+    ['denied antigo do interruptor (sem o)', { v: 'denied', t: NOW - DAY, uid: UID }],
+    ['granted vencido (> 365 dias)', { v: 'granted', t: NOW - 366 * DAY, uid: UID }],
+    ['granted de outro uid', { v: 'granted', t: NOW - DAY, uid: 'UidOutraConta9' }],
+    ['oposição de outro uid', { v: 'denied', t: NOW - DAY, uid: 'UidOutraConta9', o: 1 }],
+    ['oposição vencida (> 365 dias)', { ...OPPOSED_LINK, t: NOW - 366 * DAY }],
+    ['quebrado', '{nao-e-json'],
+  ] as const) {
+    const s = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, heatingLink: link, initialUser: makeUser() });
+    assert.deepEqual(JSON.parse(s.local.getItem('heating-link-v1')!), linkOk(NOW), caso);
+    assert.deepEqual(JSON.parse(s.local.getItem('heating-uid-v1')!), { uid: UID, t: NOW }, caso);
+    // Sessão logada nega anúncios na hora; a identificação só vem com a resposta ok do POST.
+    assert.deepEqual(s.gtagCalls, [...LOGIN_AD_DENY, ...identifySeq(UID)], caso);
+    assert.equal(s.fetchCalls.length, 1, caso);
+    assert.equal(s.fetchCalls[0].init?.body, 'origem_canal=desconhecida', caso);
+  }
+
+  // Vínculo confirmado numa sessão anterior (s: 1, sem a marca de envio desta aba): não identifica antes de o POST desta
+  // sessão responder (rodada 2 do #212); com a resposta ok, identifica uma vez. Nem o login nem o POST ok reescrevem o
+  // instante (a validade de 365 dias não é renovada a cada página).
+  const kept = linkOk(NOW - DAY);
+  const k = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, heatingLink: kept, initialUser: makeUser() });
+  assert.deepEqual(JSON.parse(k.local.getItem('heating-link-v1')!), kept);
+  assert.deepEqual(k.gtagCalls, [...LOGIN_AD_DENY, ...identifySeq(UID)]);
+  assert.equal(k.fetchCalls.length, 1);
+
+  // Vínculo ligado antes do s: 1 (sem confirmação): nega anúncios, e a primeira resposta ok confirma, renova o instante e
+  // identifica.
+  const legado = { v: 'granted', t: NOW - DAY, uid: UID };
+  const l = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, heatingLink: legado, initialUser: makeUser() });
+  assert.deepEqual(JSON.parse(l.local.getItem('heating-link-v1')!), linkOk(NOW));
+  assert.deepEqual(l.gtagCalls, [...LOGIN_AD_DENY, ...identifySeq(UID)]);
+
+  // Oposição válida do mesmo uid: a marca fica como está e nada vai ao Worker; com cookies aceitos, a sessão logada só
+  // nega anúncios e sinais, sem user_id nem heating-uid-v1.
+  for (const consent of [{ v: 'granted', t: NOW - 1000 }, { v: 'denied', t: NOW - 1000 }, undefined]) {
+    const label = consent ? consent.v : 'sem resposta';
+    const o = await setupAuth({
+      consent,
+      heatingLink: OPPOSED_LINK,
+      heatingUid: { uid: UID, t: NOW - 1000 },
+      idbMode: 'session',
+      initialUser: makeUser(),
+    });
+    assert.deepEqual(JSON.parse(o.local.getItem('heating-link-v1')!), OPPOSED_LINK, label);
+    assert.deepEqual(o.fetchCalls, [], label);
+    assert.equal(o.local.getItem('heating-uid-v1'), null, label);
+    assert.ok(!o.gtagCalls.some((c) => isUserIdSet(c, UID)), `${label}: nunca user_id`);
+    assert.ok(!o.gtagCalls.some((c) => c[0] === 'event'), `${label}: nunca auth_identified`);
+    if (label === 'granted') {
+      // O <head> mandou o uid da sobra; o auth.js tira o user_id e mantém anúncios negados.
+      assert.deepEqual(o.gtagCalls, [...LOGIN_AD_DENY, ['set', { user_id: null }]], label);
+    } else {
+      assert.deepEqual(o.gtagCalls, [], label);
+    }
+    assertSemAvisoNemInterruptor(o, label);
+  }
+});
+
+test('tenant errado é ignorado; tenant certo mostra a conta no menu superior e liga o vínculo sem aviso', async () => {
   const wrongTenant = await setupAuth({
     consent: { v: 'granted', t: NOW - 1000 },
     heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidOutroTenant1' },
     initialUser: makeUser({ uid: 'UidOutroTenant1', tenantId: 'outro-tenant' }),
   });
   assert.equal(wrongTenant.authObj.tenantId, TENANT_ID);
-  assert.equal(wrongTenant.findClass('guifav-auth-btn')?.textContent, 'Entrar com Google');
-  assert.equal(wrongTenant.findClass('guifav-auth-notice'), null);
+  assert.equal(wrongTenant.findClass('guifav-auth-btn')?.textContent, 'Entrar');
+  assert.equal(wrongTenant.findClass('guifav-auth-btn')?.attrs['aria-label'], 'Entrar com Google');
   assert.deepEqual(wrongTenant.gtagCalls, []);
   assert.deepEqual(wrongTenant.fetchCalls, []);
+  assert.deepEqual(
+    JSON.parse(wrongTenant.local.getItem('heating-link-v1')!),
+    { v: 'granted', t: NOW - 1000, uid: 'UidOutroTenant1' },
+    'outro tenant não mexe no vínculo',
+  );
+  assert.equal(wrongTenant.local.getItem('heating-login-v1'), null, 'outro tenant não marca login');
 
   const ok = await setupAuth({
     consent: { v: 'granted', t: NOW - 1000 },
     initialUser: makeUser(),
   });
-  assert.equal(ok.findClass('guifav-auth-btn')?.textContent, 'Maria');
-  const notice = ok.findClass('guifav-auth-notice');
-  assert.ok(notice && !notice.hidden);
-  assert.equal(notice.findAll((e) => e.tag === 'p')[0].textContent, NOTICE_TEXT);
-  assert.equal(ok.findClass('guifav-auth-yes')?.textContent, 'Ligar');
-  assert.equal(ok.findClass('guifav-auth-no')?.textContent, 'Agora não');
-  // Antes de clicar em "Ligar", não manda user_id, não grava heating-uid-v1 nem chama POST /identidade; a sessão logada
-  // já nega anúncios e sinais e grava a marca de login (sem uid nem email) para o <head> das próximas páginas.
-  assert.equal(ok.local.getItem('heating-uid-v1'), null);
-  assert.deepEqual(ok.gtagCalls, LOGIN_AD_DENY);
+  const btn = ok.findClass('guifav-auth-btn')!;
+  assert.equal(btn.attrs.class, 'nav-btn guifav-auth-btn is-user');
+  assert.equal(btn.attrs['aria-label'], 'Maria, menu da conta');
+  assert.equal(btn.attrs.title, 'Maria');
+  assert.equal(ok.findClass('guifav-auth-name')?.textContent, 'Conectado como Maria');
+  assertSemAvisoNemInterruptor(ok, 'tenant certo');
+  // Sem aviso: o login liga o vínculo, nega anúncios e manda o POST /identidade (sem guifavOrigin, como origem
+  // desconhecida); com a resposta ok, confirma o vínculo, grava heating-uid-v1 e identifica no GA4. A marca de login
+  // (sem uid nem email) vai para o <head> das próximas páginas.
+  assert.deepEqual(JSON.parse(ok.local.getItem('heating-link-v1')!), linkOk(NOW));
+  assert.deepEqual(JSON.parse(ok.local.getItem('heating-uid-v1')!), { uid: UID, t: NOW });
+  assert.deepEqual(ok.gtagCalls, [...LOGIN_AD_DENY, ...identifySeq(UID)]);
   assert.deepEqual(JSON.parse(ok.local.getItem('heating-login-v1')!), { t: NOW });
-  assert.equal(wrongTenant.local.getItem('heating-login-v1'), null, 'outro tenant não marca login');
-  assert.deepEqual(ok.fetchCalls, []);
+  assert.equal(ok.fetchCalls.length, 1);
+  assert.equal(ok.fetchCalls[0].init?.body, 'origem_canal=desconhecida');
 });
 
-test('as três condições do user_id, heating-uid-v1 sincronizado, sinais de anúncio desligados, uma vez por sessão e zero vazamento de email', async () => {
+test('login com cookies aceitos liga o vínculo sozinho: as três condições do user_id, heating-uid-v1, sinais de anúncio desligados, POST com a origem uma vez por sessão e zero vazamento de email', async () => {
   const local = new Storage();
   const session = new Storage();
   local.setItem('consent-v1', JSON.stringify({ v: 'granted', t: NOW - 1000 }));
 
-  const s = await setupAuth({ local, session, initialUser: makeUser() });
-  await s.click(s.findClass('guifav-auth-yes')!);
+  const s = await setupAuth({ local, session });
+  s.win.guifavOrigin = { current: () => ({ canal: 'busca', fonte: 'google', entrada: '/blog/x/' }) };
+  await s.emitAuth(makeUser());
 
-  // Escolha e heating-uid-v1 salvos com validade.
-  assert.deepEqual(JSON.parse(local.getItem('heating-link-v1')!), {
-    v: 'granted',
-    t: NOW,
-    uid: 'UidCurso123ABC',
-  });
-  assert.deepEqual(JSON.parse(local.getItem('heating-uid-v1')!), {
-    uid: 'UidCurso123ABC',
-    t: NOW,
-  });
+  // Vínculo (confirmado pelo servidor) e heating-uid-v1 gravados com validade, sem aviso nem clique.
+  assert.deepEqual(JSON.parse(local.getItem('heating-link-v1')!), linkOk(NOW));
+  assert.deepEqual(JSON.parse(local.getItem('heating-uid-v1')!), { uid: UID, t: NOW });
+  assert.deepEqual(JSON.parse(local.getItem('heating-login-v1')!), { t: NOW });
+  assertSemAvisoNemInterruptor(s, 'login');
 
-  // Ordem no GA4: a sessão logada já negou anúncios ao entrar; no "Ligar", consentimento de anúncio negado (sem mexer em
-  // analytics_storage) e sinais desligados antes de user_id, seguido de auth_identified.
-  assert.deepEqual(s.gtagCalls, [
-    ...LOGIN_AD_DENY,
-    ['consent', 'update', AD_CONSENT_DENIED],
-    ['set', 'allow_google_signals', false],
-    ['set', 'allow_ad_personalization_signals', false],
-    ['set', { user_id: 'UidCurso123ABC' }],
-    ['event', 'auth_identified'],
-  ]);
+  // Ordem no GA4: a sessão logada nega anúncios e sinais na hora; com a resposta ok do POST, consentimento de anúncio
+  // negado (sem mexer em analytics_storage) e sinais desligados antes de user_id, seguido de auth_identified.
+  assert.deepEqual(s.gtagCalls, [...LOGIN_AD_DENY, ...identifySeq(UID)]);
 
-  // POST /identidade com Bearer e o corpo mínimo da origem.
+  // POST /identidade com Bearer e a origem da visita (cookies aceitos).
   assert.equal(s.fetchCalls.length, 1);
-  assert.equal(s.fetchCalls[0].url, 'https://insights.guifav.dev/identidade');
+  assert.equal(s.fetchCalls[0].url, IDENTITY_URL);
   assert.equal(s.fetchCalls[0].init?.method, 'POST');
-  // Sempre com corpo (o Worker só grava a conversão do login quando ele vem); sem origem, a desconhecida.
   assert.deepEqual(s.fetchCalls[0].init?.headers, { Authorization: 'Bearer jwt.token.falso', 'Content-Type': 'application/x-www-form-urlencoded' });
-  assert.equal(s.fetchCalls[0].init?.body, 'origem_canal=desconhecida');
+  assert.equal(s.fetchCalls[0].init?.body, 'origem_canal=busca&origem_fonte=google&origem_entrada=%2Fblog%2Fx%2F');
+  assert.equal(session.getItem('guifav_identidade_sent_v2:UidCurso123ABC'), '1');
 
-  // Nunca chama Clarity nem vaza email em nenhum canal ou DOM.
+  // Nunca chama Clarity nem vaza email em nenhum canal, storage ou DOM.
   assert.deepEqual(s.clarityCalls, []);
-  const dump = JSON.stringify({
-    gtag: s.gtagCalls,
-    fetch: s.fetchCalls,
-    warns: s.warns,
-    dom: s.body.findAll(() => true).map((e) => e.textContent),
-  });
-  assert.ok(!dump.includes('maria.secreta@exemplo.com'));
-  assert.ok(!dump.includes('@'));
+  assertSemEmail(s, 'login');
 
-  // Segunda página na mesma sessão: mantém heating-uid-v1, reaplica consentimento e sinais desligados e user_id, mas NÃO repete auth_identified nem POST.
-  const s2 = await setupAuth({ local, session, initialUser: makeUser() });
-  assert.equal(s2.findClass('guifav-auth-notice'), null, 'aviso não reaparece para o mesmo uid');
-  assert.deepEqual(JSON.parse(local.getItem('heating-uid-v1')!), { uid: 'UidCurso123ABC', t: NOW });
-  assert.deepEqual(s2.gtagCalls, [
-    ['consent', 'update', AD_CONSENT_DENIED],
-    ['set', 'allow_google_signals', false],
-    ['set', 'allow_ad_personalization_signals', false],
-    ['set', { user_id: 'UidCurso123ABC' }],
-  ]);
+  // Segunda página na mesma sessão, um minuto depois: renova heating-uid-v1, reaplica a negação e o user_id, mas NÃO
+  // repete auth_identified nem o POST e não reescreve o vínculo.
+  const s2 = await setupAuth({ local, session, now: NOW + MIN, initialUser: makeUser() });
+  assert.deepEqual(JSON.parse(local.getItem('heating-uid-v1')!), { uid: UID, t: NOW + MIN });
+  assert.deepEqual(JSON.parse(local.getItem('heating-link-v1')!), linkOk(NOW));
+  assert.deepEqual(s2.gtagCalls, identifySeq(UID, false), 'confirmado: identifica na hora, sem negar antes');
   assert.equal(s2.fetchCalls.length, 0);
 
-  // Outro uid na mesma sessão não herda heating-link-v1 nem heating-uid-v1 do primeiro uid: apaga heating-uid-v1 e manda user_id null; os anúncios continuam negados porque o vínculo segue ligado neste navegador.
+  // Outro uid na mesma sessão não herda nada do primeiro: o login dele liga o vínculo dele e identifica, com POST e
+  // auth_identified próprios.
+  const t3 = NOW + 2 * MIN;
   const otherUid = await setupAuth({
     local,
     session,
+    now: t3,
     initialUser: makeUser({ uid: 'UidDiferente999', displayName: 'Ana Paula' }),
   });
-  assert.ok(otherUid.findClass('guifav-auth-notice'));
-  assert.equal(local.getItem('heating-uid-v1'), null);
-  assert.deepEqual(otherUid.gtagCalls, [...LOGIN_AD_DENY, ['set', { user_id: null }]]);
-  assert.equal(otherUid.fetchCalls.length, 0);
+  assert.deepEqual(JSON.parse(local.getItem('heating-link-v1')!), linkOk(t3, 'UidDiferente999'));
+  assert.deepEqual(JSON.parse(local.getItem('heating-uid-v1')!), { uid: 'UidDiferente999', t: t3 });
+  // O <head> mandou o uid anterior (heating-uid-v1 da sessão): ele sai na hora, e o novo uid só entra com a confirmação.
+  assert.deepEqual(otherUid.gtagCalls, [...LOGIN_AD_DENY, ['set', { user_id: null }], ...identifySeq('UidDiferente999')]);
+  assert.equal(otherUid.fetchCalls.length, 1);
+  assert.equal(otherUid.findClass('guifav-auth-btn')?.attrs['aria-label'], 'Ana, menu da conta');
 
-  // Troca de usuário para outro uid na mesma página sem reload: limpa user_id; anúncios seguem negados (vínculo ligado no navegador).
+  // Troca de usuário na mesma página sem reload: o user_id anterior sai na hora e o novo uid só é identificado depois de
+  // o POST dele confirmar o vínculo dele; o botão passa a mostrar a conta nova.
   const switchUser = await setupAuth({
     consent: { v: 'granted', t: NOW - 1000 },
-    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
+    heatingLink: { v: 'granted', t: NOW - 1000, uid: UID },
     initialUser: makeUser(),
   });
   const callsBeforeSwitch = switchUser.gtagCalls.length;
   await switchUser.emitAuth(makeUser({ uid: 'UidDiferente999', displayName: 'Ana Paula' }));
-  assert.equal(switchUser.local.getItem('heating-uid-v1'), null);
-  assert.deepEqual(switchUser.gtagCalls.slice(callsBeforeSwitch), [['set', { user_id: null }]]);
+  assert.deepEqual(switchUser.gtagCalls.slice(callsBeforeSwitch), [['set', { user_id: null }], ...identifySeq('UidDiferente999')]);
+  assert.deepEqual(JSON.parse(switchUser.local.getItem('heating-uid-v1')!), { uid: 'UidDiferente999', t: NOW });
+  assert.deepEqual(JSON.parse(switchUser.local.getItem('heating-link-v1')!), linkOk(NOW, 'UidDiferente999'));
+  assert.equal(switchUser.fetchCalls.length, 2);
+  const switchBtn = switchUser.findClass('guifav-auth-btn')!;
+  assert.equal(switchBtn.attrs['aria-label'], 'Ana, menu da conta');
+  assert.equal(switchBtn.attrs.title, 'Ana');
+  assert.equal(switchBtn.textContent, 'A');
+  assert.equal(switchUser.findClass('guifav-auth-name')?.textContent, 'Conectado como Ana');
 
-  // Sem consent-v1 granted (cookies negados), mesmo com heating-link-v1 granted e heating-uid-v1 sobrando: apaga heating-uid-v1 e nada vai ao GA4 nem ao Worker.
-  const noCookies = await setupAuth({
-    consent: { v: 'denied', t: NOW - 1000 },
-    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
-    heatingUid: { uid: 'UidCurso123ABC', t: NOW - 1000 },
-    initialUser: makeUser(),
-  });
-  assert.equal(noCookies.local.getItem('heating-uid-v1'), null);
-  assert.deepEqual(noCookies.gtagCalls, []);
-  assert.equal(noCookies.fetchCalls.length, 0);
-
-  // Se heating-uid-v1 existia (snippet do <head> enviou user_id e negou anúncios), mas sessão Firebase não existe mais: limpa a chave e envia user_id null; anúncios seguem negados (vínculo ligado).
+  // Se heating-uid-v1 existia (snippet do <head> enviou user_id e negou anúncios), mas a sessão Firebase não existe mais:
+  // limpa a chave e envia user_id null; anúncios seguem negados (vínculo ligado).
   const staleSession = await setupAuth({
     consent: { v: 'granted', t: NOW - 1000 },
-    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
-    heatingUid: { uid: 'UidCurso123ABC', t: NOW - 1000 },
+    heatingLink: { v: 'granted', t: NOW - 1000, uid: UID },
+    heatingUid: { uid: UID, t: NOW - 1000 },
     initialUser: null,
   });
   assert.equal(staleSession.local.getItem('heating-uid-v1'), null);
   assert.deepEqual(staleSession.gtagCalls, [['set', { user_id: null }]]);
-
-  // heating-link-v1 vencido (> 365 dias) não vale: limpa heating-uid-v1 e reabre o aviso.
-  const expired = await setupAuth({
-    consent: { v: 'granted', t: NOW - 1000 },
-    heatingLink: { v: 'granted', t: NOW - 366 * DAY, uid: 'UidCurso123ABC' },
-    heatingUid: { uid: 'UidCurso123ABC', t: NOW - 1000 },
-    initialUser: makeUser(),
-  });
-  assert.ok(expired.findClass('guifav-auth-notice'));
-  assert.equal(expired.local.getItem('heating-uid-v1'), null);
-  // Vínculo vencido, mas a sessão continua logada: anúncios seguem negados (não voltam a granted).
-  assert.deepEqual(expired.gtagCalls, [...LOGIN_AD_DENY, ['set', { user_id: null }]]);
-  assert.equal(expired.fetchCalls.length, 0);
+  assert.deepEqual(staleSession.fetchCalls, []);
 });
 
-test('limpeza de heating-uid-v1, user_id null literal e retorno do consentimento de anúncios em: Agora não, desligar no menu, logout e revogação de cookies; Sair suprime One Tap na mesma página', async () => {
-  // 1. "Agora não" no aviso (nunca identificado nesta página: limpa user_id e não precisa reenviar consent update).
+test('limpeza de heating-uid-v1, user_id null literal e consentimento de anúncios em: logout e revogação de cookies; Sair suprime One Tap na mesma página', async () => {
+  // 1. Logout ("Sair"): limpa heating-uid-v1 e user_id, marca supressão na sessão, chama disableAutoSelect() e NÃO dispara
+  // One Tap; anúncios seguem negados (o vínculo deste navegador continua ligado).
   const s1 = await setupAuth({
     consent: { v: 'granted', t: NOW - 1000 },
-    initialUser: makeUser(),
-  });
-  await s1.click(s1.findClass('guifav-auth-no')!);
-  assert.deepEqual(JSON.parse(s1.local.getItem('heating-link-v1')!), {
-    v: 'denied',
-    t: NOW,
-    uid: 'UidCurso123ABC',
-  });
-  assert.equal(s1.local.getItem('heating-uid-v1'), null);
-  assert.deepEqual(s1.gtagCalls, [...LOGIN_AD_DENY, ['set', { user_id: null }]]);
-  assert.equal((s1.gtagCalls[3][1] as { user_id: unknown }).user_id, null);
-
-  // 2. Desligar no menu da conta: limpa user_id; logado, os anúncios continuam negados (só voltam depois do logout).
-  const s2 = await setupAuth({
-    consent: { v: 'granted', t: NOW - 1000 },
-    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
-    initialUser: makeUser(),
-  });
-  assert.ok(s2.local.getItem('heating-uid-v1'));
-  const callsBeforeOff = s2.gtagCalls.length;
-  await s2.click(s2.findClass('guifav-auth-btn')!);
-  const toggle = s2.body.findAll((e) => e.attrs.role === 'menuitemcheckbox')[0];
-  assert.equal(toggle.attrs['aria-checked'], 'true');
-  await s2.click(toggle);
-  assert.equal(toggle.attrs['aria-checked'], 'false');
-  assert.equal(s2.local.getItem('heating-uid-v1'), null);
-  assert.deepEqual(s2.gtagCalls.slice(callsBeforeOff), [['set', { user_id: null }]]);
-
-  // 3. Logout ("Sair"): limpa heating-uid-v1 e user_id, marca supressão na sessão, chama disableAutoSelect() e NÃO dispara One Tap; anúncios seguem negados (o vínculo deste navegador continua ligado).
-  const s3 = await setupAuth({
-    consent: { v: 'granted', t: NOW - 1000 },
-    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
+    heatingLink: { v: 'granted', t: NOW - 1000, uid: UID },
     initialUser: makeUser(),
     gisAvailable: true,
   });
-  assert.ok(s3.local.getItem('heating-uid-v1'));
-  const callsBeforeSair = s3.gtagCalls.length;
-  await s3.click(s3.findClass('guifav-auth-btn')!);
-  const sair = s3.body.findAll((e) => e.textContent === 'Sair')[0];
-  await s3.click(sair);
-  assert.equal(s3.signOutCalls(), 1);
-  assert.equal(s3.local.getItem('heating-uid-v1'), null);
-  assert.equal(s3.session.getItem('guifav_one_tap_suppressed'), '1');
-  assert.equal(s3.oneTapDisableAutoSelects.length, 1);
-  assert.equal(s3.oneTapPrompts.length, 0, 'Sair não pode disparar One Tap na mesma página');
-  const sairCalls = s3.gtagCalls.slice(callsBeforeSair);
+  assert.ok(s1.local.getItem('heating-uid-v1'));
+  const callsBeforeSair = s1.gtagCalls.length;
+  await s1.click(s1.findClass('guifav-auth-btn')!);
+  const sair = s1.body.findAll((e) => e.attrs.role === 'menuitem')[0];
+  assert.equal(sair.textContent, 'Sair');
+  await s1.click(sair);
+  assert.equal(s1.signOutCalls(), 1);
+  assert.equal(s1.local.getItem('heating-uid-v1'), null);
+  assert.equal(s1.local.getItem('heating-login-v1'), null);
+  assert.equal(s1.session.getItem('guifav_one_tap_suppressed'), '1');
+  assert.equal(s1.oneTapDisableAutoSelects.length, 1);
+  assert.equal(s1.oneTapPrompts.length, 0, 'Sair não pode disparar One Tap na mesma página');
+  const sairCalls = s1.gtagCalls.slice(callsBeforeSair);
   assert.deepEqual(sairCalls.slice(0, 1), [['set', { user_id: null }]]);
+  assert.equal((sairCalls[0][1] as { user_id: unknown }).user_id, null, 'null literal, não string vazia');
   assert.equal(
     sairCalls.filter((c) => c[0] === 'consent' && c[1] === 'update').length,
     0,
     'com o vínculo ligado no navegador, o logout não devolve anúncios',
   );
+  assert.equal(s1.findClass('guifav-auth-btn')?.textContent, 'Entrar');
 
-  // 3b. Mesmo com signOut lento/pendente, o clique em "Sair" já limpa heating-uid-v1 e manda user_id null sincronamente.
-  const s3b = await setupAuth({
+  // 1b. Mesmo com signOut lento/pendente, o clique em "Sair" já limpa heating-uid-v1 e manda user_id null sincronamente.
+  const s1b = await setupAuth({
     consent: { v: 'granted', t: NOW - 1000 },
-    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
+    heatingLink: { v: 'granted', t: NOW - 1000, uid: UID },
     initialUser: makeUser(),
     signOutFn: () => new Promise<void>(() => {}),
   });
-  await s3b.click(s3b.findClass('guifav-auth-btn')!);
-  const callsBeforeOut = s3b.gtagCalls.length;
-  await s3b.click(s3b.body.findAll((e) => e.textContent === 'Sair')[0]);
-  assert.equal(s3b.local.getItem('heating-uid-v1'), null);
-  assert.deepEqual(s3b.gtagCalls.slice(callsBeforeOut), [['set', { user_id: null }]]);
+  await s1b.click(s1b.findClass('guifav-auth-btn')!);
+  const callsBeforeOut = s1b.gtagCalls.length;
+  await s1b.click(s1b.body.findAll((e) => e.attrs.role === 'menuitem')[0]);
+  assert.equal(s1b.local.getItem('heating-uid-v1'), null);
+  assert.deepEqual(s1b.gtagCalls.slice(callsBeforeOut), [['set', { user_id: null }]]);
 
-  // 4. Visitante muda banner de cookies para "Não" (guifav-consent denied): limpa user_id e NÃO devolve anúncios para granted.
-  const s4 = await setupAuth({
+  // 2. Visitante muda banner de cookies para "Não" (guifav-consent denied): limpa user_id, NÃO devolve anúncios para
+  // granted e não manda outro POST.
+  const s2 = await setupAuth({
     consent: { v: 'granted', t: NOW - 1000 },
-    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
+    heatingLink: { v: 'granted', t: NOW - 1000, uid: UID },
     initialUser: makeUser(),
   });
-  assert.ok(s4.local.getItem('heating-uid-v1'));
-  const countBefore = s4.fetchCalls.length;
-  const callsBeforeDeny = s4.gtagCalls.length;
-  await s4.emitConsent('denied');
-  assert.equal(s4.local.getItem('heating-uid-v1'), null);
-  assert.deepEqual(s4.gtagCalls.slice(callsBeforeDeny), [['set', { user_id: null }]]);
-  assert.equal(s4.fetchCalls.length, countBefore);
+  assert.ok(s2.local.getItem('heating-uid-v1'));
+  const countBefore = s2.fetchCalls.length;
+  const callsBeforeDeny = s2.gtagCalls.length;
+  await s2.emitConsent('denied');
+  assert.equal(s2.local.getItem('heating-uid-v1'), null);
+  assert.deepEqual(s2.gtagCalls.slice(callsBeforeDeny), [['set', { user_id: null }]]);
+  assert.equal((s2.gtagCalls[callsBeforeDeny][1] as { user_id: unknown }).user_id, null);
+  assert.equal(s2.fetchCalls.length, countBefore);
+  assert.deepEqual(JSON.parse(s2.local.getItem('heating-link-v1')!), linkOk(NOW), 'o vínculo (confirmado no carregamento) fica');
 
-  // 4b. Se aceitar cookies de novo na mesma página com login e heating-link-v1 ativos, volta a negar anúncios antes de setar user_id.
-  const callsBeforeRegrant = s4.gtagCalls.length;
-  await s4.emitConsent('granted');
-  assert.deepEqual(s4.gtagCalls.slice(callsBeforeRegrant), [
-    ['consent', 'update', AD_CONSENT_DENIED],
-    ['set', 'allow_google_signals', false],
-    ['set', 'allow_ad_personalization_signals', false],
-    ['set', { user_id: 'UidCurso123ABC' }],
-  ]);
+  // 2b. Se aceitar cookies de novo na mesma página com login e heating-link-v1 ativos, volta a negar anúncios antes de
+  // setar user_id, sem repetir auth_identified nem o POST.
+  const callsBeforeRegrant = s2.gtagCalls.length;
+  await s2.emitConsent('granted');
+  assert.deepEqual(s2.gtagCalls.slice(callsBeforeRegrant), identifySeq(UID, false));
+  assert.equal(s2.fetchCalls.length, countBefore);
 });
 
-test('outra aba (evento storage): ressincroniza toggle, aviso, heating-uid-v1, user_id null e consentimento de anúncios', async () => {
-  // 1. Outra aba desliga heating-link-v1 -> atualiza toggle e manda user_id null; logado, os anúncios seguem negados.
+test('outra aba (evento storage): oposição gravada lá, cookies revogados, heating-uid-v1 apagado ou trocado e localStorage.clear() mandam user_id null aqui sem devolver anúncios', async () => {
+  // 1. Outra aba recebe 409 do /identidade e grava a oposição -> user_id null aqui também, sem religar o vínculo nem
+  // mandar outro POST; logado, os anúncios seguem negados.
   const s1 = await setupAuth({
     consent: { v: 'granted', t: NOW - 1000 },
-    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
+    heatingLink: { v: 'granted', t: NOW - 1000, uid: UID },
     initialUser: makeUser(),
   });
-  const toggle1 = s1.body.findAll((e) => e.attrs.role === 'menuitemcheckbox')[0];
-  assert.equal(toggle1.attrs['aria-checked'], 'true');
   const calls1 = s1.gtagCalls.length;
-  await s1.emitStorage('heating-link-v1', JSON.stringify({ v: 'denied', t: NOW, uid: 'UidCurso123ABC' }));
-  assert.equal(toggle1.attrs['aria-checked'], 'false');
+  const fetch1 = s1.fetchCalls.length;
+  const oposicao = JSON.stringify({ v: 'denied', t: NOW, uid: UID, o: 1 });
+  await s1.emitStorage('heating-link-v1', oposicao);
+  assert.equal(s1.local.getItem('heating-link-v1'), oposicao, 'esta aba não religa o vínculo');
   assert.equal(s1.local.getItem('heating-uid-v1'), null);
   assert.deepEqual(s1.gtagCalls.slice(calls1), [['set', { user_id: null }]]);
+  assert.equal(s1.fetchCalls.length, fetch1);
+  assertSemAvisoNemInterruptor(s1, 'oposição em outra aba');
 
   // 2. Outra aba revoga consent-v1 -> manda user_id null e NÃO devolve anúncios para granted.
   const s2 = await setupAuth({
     consent: { v: 'granted', t: NOW - 1000 },
-    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
+    heatingLink: { v: 'granted', t: NOW - 1000, uid: UID },
     initialUser: makeUser(),
   });
   const calls2 = s2.gtagCalls.length;
@@ -1069,10 +1288,11 @@ test('outra aba (evento storage): ressincroniza toggle, aviso, heating-uid-v1, u
   assert.equal(s2.local.getItem('heating-uid-v1'), null);
   assert.deepEqual(s2.gtagCalls.slice(calls2), [['set', { user_id: null }]]);
 
-  // 3. Outra aba remove heating-uid-v1 (ex.: logout lá) -> manda user_id null sem reescrever heating-uid-v1; anúncios seguem negados (vínculo ligado).
+  // 3. Outra aba remove heating-uid-v1 (ex.: logout lá) -> manda user_id null sem reescrever heating-uid-v1; anúncios
+  // seguem negados (vínculo ligado).
   const s3 = await setupAuth({
     consent: { v: 'granted', t: NOW - 1000 },
-    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
+    heatingLink: { v: 'granted', t: NOW - 1000, uid: UID },
     initialUser: makeUser(),
   });
   const calls3 = s3.gtagCalls.length;
@@ -1080,10 +1300,11 @@ test('outra aba (evento storage): ressincroniza toggle, aviso, heating-uid-v1, u
   assert.equal(s3.local.getItem('heating-uid-v1'), null);
   assert.deepEqual(s3.gtagCalls.slice(calls3), [['set', { user_id: null }]]);
 
-  // 4. Outra aba troca heating-uid-v1 para outro uid -> manda user_id null nesta aba sem apagar o uid da outra aba; anúncios seguem negados.
+  // 4. Outra aba troca heating-uid-v1 para outro uid -> manda user_id null nesta aba sem apagar o uid da outra aba;
+  // anúncios seguem negados.
   const s4 = await setupAuth({
     consent: { v: 'granted', t: NOW - 1000 },
-    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
+    heatingLink: { v: 'granted', t: NOW - 1000, uid: UID },
     initialUser: makeUser(),
   });
   const calls4 = s4.gtagCalls.length;
@@ -1092,100 +1313,127 @@ test('outra aba (evento storage): ressincroniza toggle, aviso, heating-uid-v1, u
   assert.equal(s4.local.getItem('heating-uid-v1'), otherUidVal);
   assert.deepEqual(s4.gtagCalls.slice(calls4), [['set', { user_id: null }]]);
 
-  // 5. Outra aba chama localStorage.clear() (key === null) -> manda user_id null e NÃO devolve anúncios para granted.
+  // 5. Outra aba chama localStorage.clear() (key === null) -> manda user_id null, NÃO devolve anúncios para granted e não
+  // religa o vínculo apagado (só o próximo login liga).
   const s5 = await setupAuth({
     consent: { v: 'granted', t: NOW - 1000 },
-    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
+    heatingLink: { v: 'granted', t: NOW - 1000, uid: UID },
     initialUser: makeUser(),
   });
   const calls5 = s5.gtagCalls.length;
   await s5.emitStorage(null, null);
   assert.deepEqual(s5.gtagCalls.slice(calls5), [['set', { user_id: null }]]);
+  assert.equal(s5.local.getItem('heating-link-v1'), null);
 });
 
-test('getIdToken pendente com toggle desligado no meio não faz POST /identidade', async () => {
-  let resolveToken!: (tok: string) => void;
-  const user = makeUser({
-    getIdToken: () => new Promise<string>((resolve) => {
-      resolveToken = resolve;
-    }),
-  });
-  const s = await setupAuth({
-    consent: { v: 'granted', t: NOW - 1000 },
-    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
-    initialUser: user,
-  });
+test('getIdToken pendente com Sair, oposição gravada em outra aba ou troca de conta no meio não faz POST /identidade com o token antigo', async () => {
+  const pendente = () => {
+    let resolveToken: ((tok: string) => void) | null = null;
+    const user = makeUser({
+      getIdToken: () => new Promise<string>((resolve) => {
+        resolveToken = resolve;
+      }),
+    });
+    return { user, resolve: (tok: string) => resolveToken?.(tok) };
+  };
+
+  // 1. Sair no menu enquanto getIdToken ainda está pendente: nenhum fetch sai depois.
+  const p1 = pendente();
+  const s = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: p1.user });
   assert.equal(s.fetchCalls.length, 0);
-
-  // Desliga o toggle no menu enquanto getIdToken ainda está pendente.
   await s.click(s.findClass('guifav-auth-btn')!);
-  const toggle = s.body.findAll((e) => e.attrs.role === 'menuitemcheckbox')[0];
-  await s.click(toggle);
-
-  // Resolve o token depois de desligar: nenhum fetch deve sair.
-  resolveToken('jwt.tardio.desligado');
+  await s.click(s.body.findAll((e) => e.attrs.role === 'menuitem')[0]);
+  assert.equal(s.signOutCalls(), 1);
+  p1.resolve('jwt.tardio.saiu');
   await flush();
   assert.equal(s.fetchCalls.length, 0);
+
+  // 2. Outra aba grava a oposição (409 lá) enquanto o token daqui está pendente: nenhum fetch.
+  const p2 = pendente();
+  const r = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: p2.user });
+  await r.emitStorage('heating-link-v1', JSON.stringify({ v: 'denied', t: NOW, uid: UID, o: 1 }));
+  p2.resolve('jwt.tardio.oposicao');
+  await flush();
+  assert.equal(r.fetchCalls.length, 0);
+
+  // 3. Outra conta entra na mesma página antes do token: só a conta nova vai ao servidor, com o token dela.
+  const p3 = pendente();
+  const q = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: p3.user });
+  await q.emitAuth(makeUser({ uid: 'UidOutraConta9', displayName: 'Outra Pessoa' }));
+  p3.resolve('jwt.tardio.trocou');
+  await flush();
+  assert.equal(q.fetchCalls.length, 1);
+  assert.equal((q.fetchCalls[0].init?.headers as Record<string, string>).Authorization, 'Bearer jwt.token.falso');
 });
 
-test('Clarity mask e acessibilidade: ordem no DOM, menuitemcheckbox, aria-label com nome, setas, clique fora e Escape no menu e aviso', async () => {
+test('Clarity mask e acessibilidade: botão no menu superior, menu com o nome e um item Sair, aria-label com nome, setas, clique fora e Escape', async () => {
   const s = await setupAuth({
     consent: { v: 'granted', t: NOW - 1000 },
     initialUser: makeUser(),
   });
 
-  // Clarity mask no container do botão, no menu e no aviso.
+  // Clarity mask no container do botão e no menu.
   const root = s.findClass('guifav-auth')!;
   const btn = s.findClass('guifav-auth-btn')!;
   const menu = s.findClass('guifav-auth-menu')!;
-  const notice = s.findClass('guifav-auth-notice')!;
+  assert.equal(root.tag, 'span');
   assert.equal(root.attrs['data-clarity-mask'], 'true');
   assert.equal(menu.attrs['data-clarity-mask'], 'true');
-  assert.equal(notice.attrs['data-clarity-mask'], 'true');
 
-  // Ordem no DOM: botão antes do menu; CSS usa flex-direction:column-reverse.
-  assert.deepEqual(root.children.map((c) => c.attrs.class), ['guifav-auth-btn', 'guifav-auth-menu']);
+  // Ordem no DOM: botão antes do menu; o menu abre para baixo do botão (sem column-reverse).
+  assert.deepEqual(root.children.map((c) => c.attrs.class), ['nav-btn guifav-auth-btn is-user', 'guifav-auth-menu']);
   const style = s.head.findAll((e) => e.attrs.id === 'guifav-auth-style')[0];
-  assert.ok(style.textContent.includes('flex-direction:column-reverse'));
+  assert.ok(style);
+  assert.ok(!style.textContent.includes('column-reverse'));
+  assert.ok(style.textContent.includes('.guifav-auth-menu{position:absolute;top:calc(100% + 8px);right:0'));
 
-  // aria-label contém o texto visível (WCAG 2.5.3).
-  assert.equal(btn.textContent, 'Maria');
-  assert.ok(btn.attrs['aria-label'].includes('Maria'));
+  // Botão: nome no aria-label e no title (a foto ou a inicial não têm texto legível).
+  assert.equal(btn.tag, 'button');
+  assert.equal(btn.attrs.type, 'button');
+  assert.equal(btn.attrs['aria-label'], 'Maria, menu da conta');
+  assert.equal(btn.attrs.title, 'Maria');
+  assert.equal(btn.attrs['aria-haspopup'], 'menu');
+  assert.equal(btn.attrs['aria-controls'], 'guifav-auth-menu');
+  assert.equal(btn.attrs['aria-expanded'], 'false');
 
-  // Aviso: aria-describedby aponta para o <p> e Escape fecha o aviso devolvendo foco ao botão.
-  const descId = notice.attrs['aria-describedby'];
-  assert.ok(descId);
-  const descP = notice.findAll((e) => e.attrs.id === descId)[0];
-  assert.equal(descP.textContent, NOTICE_TEXT);
-  assert.equal(notice.hidden, false);
-  s.keydown('Escape');
-  assert.equal(notice.hidden, true);
-  assert.equal(s.activeElement(), btn);
+  // Painel (escondido, mascarado) sem role nem id: o nome fica fora do menu ARIA, que só tem o item "Sair" (P3 da
+  // revisão do #212: um role="menu" só tem itens).
+  assert.equal(menu.hidden, true);
+  assert.equal(menu.getAttribute('role'), null);
+  assert.equal(menu.getAttribute('id'), null);
+  assert.deepEqual(menu.children.map((c) => c.attrs.class ?? c.attrs.id), ['guifav-auth-name', 'guifav-auth-menu']);
+  const nome = menu.children[0];
+  assert.equal(nome.textContent, 'Conectado como Maria');
+  assert.equal(nome.getAttribute('role'), null);
+  const list = menu.children[1];
+  assert.equal(list.tag, 'div');
+  assert.equal(list.attrs.id, 'guifav-auth-menu', 'o aria-controls do botão aponta para o menu ARIA');
+  assert.equal(list.attrs.role, 'menu');
+  assert.equal(list.attrs['aria-label'], 'Conta');
+  assert.equal(s.body.findAll((e) => e.attrs.id === 'guifav-auth-menu').length, 1);
+  assert.equal(s.body.findAll((e) => e.attrs.role === 'menu').length, 1);
+  assert.deepEqual(list.children.map((c) => c.attrs.role), ['menuitem']);
+  assert.equal(menu.findAll((e) => e.attrs.role === 'menuitem').length, 1);
+  const sair = list.children[0];
+  assert.equal(sair.tag, 'button');
+  assert.equal(sair.textContent, 'Sair');
+  assertSemAvisoNemInterruptor(s, 'menu');
 
-  // Menu: role="menuitemcheckbox" com aria-checked, foco ao abrir, setas, clique fora e Escape.
-  const toggle = menu.findAll((e) => e.attrs.role === 'menuitemcheckbox')[0];
-  const sair = menu.findAll((e) => e.attrs.role === 'menuitem')[0];
-  assert.ok(toggle);
-  assert.equal(toggle.attrs['aria-checked'], 'false');
-  assert.equal(menu.findAll((e) => e.attrs.role === 'switch').length, 0);
+  // Teclas com o menu fechado não fazem nada.
+  assert.equal(s.keydown('ArrowDown'), false);
 
+  // Abrir foca o item; setas, Home e End ficam no único item e evitam a rolagem da página.
   await s.click(btn);
   assert.equal(menu.hidden, false);
-  assert.equal(s.activeElement(), toggle, 'abrir menu foca primeiro item');
-
-  s.keydown('ArrowDown');
-  assert.equal(s.activeElement(), sair);
-  s.keydown('ArrowDown');
-  assert.equal(s.activeElement(), toggle, 'ArrowDown cicla ao início');
-  s.keydown('ArrowUp');
-  assert.equal(s.activeElement(), sair, 'ArrowUp cicla ao fim');
-  s.keydown('Home');
-  assert.equal(s.activeElement(), toggle);
-  s.keydown('End');
-  assert.equal(s.activeElement(), sair);
+  assert.equal(btn.attrs['aria-expanded'], 'true');
+  assert.equal(s.activeElement(), sair, 'abrir menu foca o primeiro item');
+  for (const key of ['ArrowDown', 'ArrowUp', 'Home', 'End']) {
+    assert.equal(s.keydown(key), true, key);
+    assert.equal(s.activeElement(), sair, key);
+  }
 
   // Escape fecha menu e devolve foco ao botão.
-  s.keydown('Escape');
+  assert.equal(s.keydown('Escape'), true);
   assert.equal(menu.hidden, true);
   assert.equal(btn.attrs['aria-expanded'], 'false');
   assert.equal(s.activeElement(), btn);
@@ -1195,6 +1443,13 @@ test('Clarity mask e acessibilidade: ordem no DOM, menuitemcheckbox, aria-label 
   assert.equal(menu.hidden, false);
   await s.clickOutside();
   assert.equal(menu.hidden, true);
+
+  // Clique no botão com o menu aberto fecha e devolve o foco ao botão.
+  await s.click(btn);
+  assert.equal(s.activeElement(), sair);
+  await s.click(btn);
+  assert.equal(menu.hidden, true);
+  assert.equal(s.activeElement(), btn);
 });
 
 test('falha do Firebase não quebra a página e emite só log curto sem dado pessoal', async () => {
@@ -1243,23 +1498,23 @@ test('initializeAuth sem popupRedirectResolver não pede apis.google.com sem cli
   assert.deepEqual(clicked.warns, []);
 });
 
-test('heating-uid-v1 tem validade deslizante de 30 min: renova a cada página, não ultrapassa heating-link-v1 e nunca grava se vencido', async () => {
+test('heating-uid-v1 tem validade deslizante de 30 min: renova a cada página, não ultrapassa heating-link-v1 e nunca grava com o vínculo vencido sem um novo login', async () => {
   const local = new Storage();
   const session = new Storage();
   local.setItem('consent-v1', JSON.stringify({ v: 'granted', t: NOW - DAY }));
-  local.setItem('heating-link-v1', JSON.stringify({ v: 'granted', t: NOW - DAY, uid: 'UidCurso123ABC' }));
+  local.setItem('heating-link-v1', JSON.stringify({ v: 'granted', t: NOW - DAY, uid: UID }));
 
   // Página 1 em NOW: grava heating-uid-v1 com t = NOW.
   await setupAuth({ local, session, now: NOW, initialUser: makeUser() });
-  assert.deepEqual(JSON.parse(local.getItem('heating-uid-v1')!), { uid: 'UidCurso123ABC', t: NOW });
+  assert.deepEqual(JSON.parse(local.getItem('heating-uid-v1')!), { uid: UID, t: NOW });
 
   // Página 2 em NOW + 20 min (dentro dos 30 min): renova t para NOW + 20 min após confirmar as 3 condições.
   const t2 = NOW + 20 * MIN;
   await setupAuth({ local, session, now: t2, initialUser: makeUser() });
-  assert.deepEqual(JSON.parse(local.getItem('heating-uid-v1')!), { uid: 'UidCurso123ABC', t: t2 });
+  assert.deepEqual(JSON.parse(local.getItem('heating-uid-v1')!), { uid: UID, t: t2 });
 
-  // Página 3 em t2 + 31 min (passou de 30 min): se deslogou no curso, auth.js limpa a chave vencida sem precisar mandar user_id null
-  // (o snippet do <head> já ignorou a chave vencida).
+  // Página 3 em t2 + 31 min (passou de 30 min): se deslogou no curso, auth.js limpa a chave vencida sem precisar mandar
+  // user_id null (o snippet do <head> já ignorou a chave vencida).
   const t3 = t2 + 31 * MIN;
   const loggedOut = await setupAuth({ local, session, now: t3, initialUser: null });
   assert.equal(local.getItem('heating-uid-v1'), null);
@@ -1268,39 +1523,61 @@ test('heating-uid-v1 tem validade deslizante de 30 min: renova a cada página, n
   // Nova visita em t3 + 5 min com Firebase ainda logado: auth.js confirma as 3 condições e grava novo t.
   const t4 = t3 + 5 * MIN;
   await setupAuth({ local, session, now: t4, initialUser: makeUser() });
-  assert.deepEqual(JSON.parse(local.getItem('heating-uid-v1')!), { uid: 'UidCurso123ABC', t: t4 });
+  assert.deepEqual(JSON.parse(local.getItem('heating-uid-v1')!), { uid: UID, t: t4 });
 
-  // Quando heating-link-v1 está a 5 min de vencer (dia 365): heating-uid-v1 limita t para expirar junto com heating-link-v1.
+  // Quando heating-link-v1 (confirmado) está a 5 min de vencer (dia 365): heating-uid-v1 limita t para expirar junto com
+  // heating-link-v1 (nem o login nem o POST ok renovam um vínculo confirmado ainda válido).
   const linkStart = NOW - 365 * DAY + 5 * MIN;
   const nearExpiry = await setupAuth({
     now: NOW,
     consent: { v: 'granted', t: NOW - DAY },
-    heatingLink: { v: 'granted', t: linkStart, uid: 'UidCurso123ABC' },
+    heatingLink: linkOk(linkStart),
     initialUser: makeUser(),
   });
   const written = JSON.parse(nearExpiry.local.getItem('heating-uid-v1')!);
-  assert.equal(written.uid, 'UidCurso123ABC');
+  assert.equal(written.uid, UID);
   assert.equal(written.t + 30 * MIN, linkStart + 365 * DAY, 'não pode ultrapassar a validade de heating-link-v1');
+  assert.equal(JSON.parse(nearExpiry.local.getItem('heating-link-v1')!).t, linkStart);
 
-  // Quando heating-link-v1 já venceu: nunca grava heating-uid-v1 e remove se houver sobra.
+  // Quando heating-link-v1 já venceu e o Firebase não tem sessão: nunca grava heating-uid-v1 e remove a sobra; sem
+  // vínculo nem login válidos, o user_id do <head> sai e os anúncios voltam ao consentimento comum.
   const expiredLink = await setupAuth({
     now: NOW,
     consent: { v: 'granted', t: NOW - DAY },
-    heatingLink: { v: 'granted', t: NOW - 365 * DAY, uid: 'UidCurso123ABC' },
-    heatingUid: { uid: 'UidCurso123ABC', t: NOW - 5 * MIN },
-    initialUser: makeUser(),
+    heatingLink: { v: 'granted', t: NOW - 365 * DAY, uid: UID },
+    heatingUid: { uid: UID, t: NOW - 5 * MIN },
+    initialUser: null,
   });
   assert.equal(expiredLink.local.getItem('heating-uid-v1'), null);
+  assert.deepEqual(expiredLink.gtagCalls, [
+    ['set', { user_id: null }],
+    ['consent', 'update', AD_CONSENT_GRANTED],
+    ['set', 'allow_google_signals', true],
+    ['set', 'allow_ad_personalization_signals', true],
+  ]);
+
+  // Vínculo vencido com a sessão logada: o login renova o vínculo (t = agora) e heating-uid-v1 volta com a validade cheia.
+  const renewed = await setupAuth({
+    now: NOW,
+    consent: { v: 'granted', t: NOW - DAY },
+    heatingLink: { v: 'granted', t: NOW - 365 * DAY, uid: UID },
+    heatingUid: { uid: UID, t: NOW - 5 * MIN },
+    initialUser: makeUser(),
+  });
+  assert.deepEqual(JSON.parse(renewed.local.getItem('heating-link-v1')!), linkOk(NOW));
+  assert.deepEqual(JSON.parse(renewed.local.getItem('heating-uid-v1')!), { uid: UID, t: NOW });
+  // O uid que o <head> mandou com o vínculo vencido sai até o servidor confirmar o vínculo renovado.
+  assert.deepEqual(renewed.gtagCalls, [...LOGIN_AD_DENY, ['set', { user_id: null }], ...identifySeq(UID)]);
 
   // Evento storage de heating-uid-v1 vindo de outra aba com mesmo uid não reescreve heating-uid-v1 (evita loop entre abas).
   const tab = await setupAuth({
     now: NOW,
     consent: { v: 'granted', t: NOW - DAY },
-    heatingLink: { v: 'granted', t: NOW - DAY, uid: 'UidCurso123ABC' },
+    heatingLink: { v: 'granted', t: NOW - DAY, uid: UID },
     initialUser: makeUser(),
   });
   tab.setNow(NOW + 5000);
-  const fromOtherTab = JSON.stringify({ uid: 'UidCurso123ABC', t: NOW + 1000 });
+  const fromOtherTab = JSON.stringify({ uid: UID, t: NOW + 1000 });
   await tab.emitStorage('heating-uid-v1', fromOtherTab);
   assert.equal(tab.local.getItem('heating-uid-v1'), fromOtherTab);
 });
@@ -1498,10 +1775,6 @@ test('antes de o Firebase responder: storage que não revoga não apaga o uid do
   assert.deepEqual(d.gtagCalls.slice(beforeD)[0], ['set', { user_id: null }]);
 });
 
-const UID_TTL = 30 * 60 * 1000;
-const isUserIdSet = (c: unknown[], uid: string | null) =>
-  c[0] === 'set' && typeof c[1] === 'object' && c[1] !== null && (c[1] as { user_id?: unknown }).user_id === uid;
-
 test('Kimi P1 (rodada 4): página aberta sem o Firebase confirmar perde o user_id no vencimento de heating-uid-v1', async () => {
   // Firebase nunca responde (sem initialUser): o uid do <head> vale até o fim dos 30 min e então sai.
   const s = await setupAuth({
@@ -1568,105 +1841,222 @@ test('Kimi P1 (rodada 4): aba que volta a ficar visível com o temporizador atra
   assert.deepEqual(r.gtagCalls.slice(beforeR), []);
 });
 
-test('oposição em /prioridade: /identidade responde 409, o vínculo desliga neste navegador e o user_id sai', async () => {
-  const s = await setupAuth({
-    consent: { v: 'granted', t: NOW - 1000 },
-    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
-    initialUser: makeUser(),
-    identityStatus: 409,
-  });
-  await flush();
+test('oposição: /identidade responde 409, o vínculo desliga com o: 1 neste navegador, o user_id sai e o próximo login não religa', async () => {
+  const local = new SpyStorage();
+  local.setItem('consent-v1', JSON.stringify({ v: 'granted', t: NOW - 1000 }));
+  const s = await setupAuth({ local, initialUser: makeUser(), identityStatus: 409 });
   assert.equal(s.fetchCalls.length, 1);
-  const link = JSON.parse(s.local.getItem('heating-link-v1') || 'null');
-  assert.equal(link.v, 'denied');
-  assert.equal(link.uid, 'UidCurso123ABC');
-  assert.equal(s.local.getItem('heating-uid-v1'), null);
-  const last = s.gtagCalls.filter((c) => c[0] === 'set' && typeof c[1] === 'object' && c[1] !== null && 'user_id' in (c[1] as object)).pop();
-  assert.deepEqual(last, ['set', { user_id: null }]);
+  assert.deepEqual(JSON.parse(local.getItem('heating-link-v1')!), { v: 'denied', t: NOW, uid: UID, o: 1 });
+  assert.equal(local.getItem('heating-uid-v1'), null);
+  // P2 da revisão do #212: sem a confirmação do servidor, o GA4 nunca identificou; o 409 só manda o user_id null
+  // defensivo e, logado, os anúncios seguem negados (nada de consentimento concedido).
+  assert.deepEqual(s.gtagCalls, [...LOGIN_AD_DENY, ['set', { user_id: null }]]);
+  assert.ok(!local.writes.some(([k]) => k === 'heating-uid-v1'), 'heating-uid-v1 nunca gravado');
+  assert.ok(!local.writes.some(([k, v]) => k === 'heating-link-v1' && JSON.parse(v).s === 1), 'nunca confirmado');
+  assert.equal(s.session.getItem('guifav_auth_identified:UidCurso123ABC'), null);
   assert.equal(s.session.getItem('guifav_identidade_sent_v2:UidCurso123ABC'), null, 'não marca como enviada');
-  const state = s.findClass('guifav-auth-state')!;
-  assert.equal(state.textContent, 'Desligado');
   assert.equal(s.pendingTimers(), 0);
   assert.equal(s.warns.length, 0, 'oposição não é falha');
+  // A conta continua no menu superior, sem interruptor nem aviso.
+  const btn = s.findClass('guifav-auth-btn')!;
+  assert.equal(btn.attrs.class, 'nav-btn guifav-auth-btn is-user');
+  assertSemAvisoNemInterruptor(s, '409');
+
+  // Próxima página (sessão nova, um dia depois) com o mesmo uid: o login não religa, nada vai ao Worker e o GA4 só
+  // recebe a negação de anúncios da sessão logada, sem user_id.
+  const next = await setupAuth({ local, now: NOW + DAY, initialUser: makeUser() });
+  assert.deepEqual(JSON.parse(local.getItem('heating-link-v1')!), { v: 'denied', t: NOW, uid: UID, o: 1 });
+  assert.deepEqual(next.fetchCalls, []);
+  assert.deepEqual(next.gtagCalls, LOGIN_AD_DENY);
+  assert.equal(local.getItem('heating-uid-v1'), null);
+
+  // Sair e entrar de novo na mesma página também não religa.
+  await next.click(next.findClass('guifav-auth-btn')!);
+  await next.click(next.body.findAll((e) => e.attrs.role === 'menuitem')[0]);
+  await next.emitAuth(makeUser());
+  assert.deepEqual(JSON.parse(local.getItem('heating-link-v1')!), { v: 'denied', t: NOW, uid: UID, o: 1 });
+  assert.deepEqual(next.fetchCalls, []);
+  assert.ok(!next.gtagCalls.some((c) => isUserIdSet(c, UID)), 'nunca user_id');
+  assert.ok(!next.gtagCalls.some((c) => c[0] === 'event'), 'nunca auth_identified');
+
+  // Com cookies recusados, o 409 grava a mesma marca (o user_id null é só defensivo) e a próxima página não manda nada.
+  const dl = new Storage();
+  dl.setItem('consent-v1', JSON.stringify({ v: 'denied', t: NOW - 1000 }));
+  const d = await setupAuth({ local: dl, initialUser: makeUser(), identityStatus: 409 });
+  assert.equal(d.fetchCalls.length, 1);
+  assert.equal(d.fetchCalls[0].init?.body, 'origem_canal=desconhecida');
+  assert.deepEqual(JSON.parse(dl.getItem('heating-link-v1')!), { v: 'denied', t: NOW, uid: UID, o: 1 });
+  assert.deepEqual(d.gtagCalls, [['set', { user_id: null }]]);
+  const d2 = await setupAuth({ local: dl, initialUser: makeUser() });
+  assert.deepEqual(d2.fetchCalls, []);
+  assert.deepEqual(d2.gtagCalls, []);
 });
 
-test('Kimi P2 (rodada 4): o aviso recebe o foco ao abrir e devolve o foco ao fechar por Ligar, Agora não ou Escape', async () => {
-  for (const how of ['Ligar', 'Agora não', 'Escape'] as const) {
-    const s = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: makeUser() });
-    const notice = s.findClass('guifav-auth-notice')!;
-    const btn = s.findClass('guifav-auth-btn')!;
-    assert.equal(notice.hidden, false, how);
-    assert.equal(notice.attrs.tabindex, '-1', how);
-    assert.equal(s.activeElement(), notice, `${how}: foco no diálogo ao abrir`);
-    if (how === 'Escape') {
-      s.keydown('Escape');
-    } else {
-      const b = notice.findAll((e) => e.tag === 'button' && e.textContent === how)[0];
-      b.focus();
-      await s.click(b);
-    }
-    assert.equal(notice.hidden, true, how);
-    assert.equal(s.activeElement(), btn, `${how}: foco volta ao botão da conta`);
+test('cabeçalho (28/11): o botão da conta entra logo depois de #theme-toggle dentro de .nav-links; sem o menu superior, nenhum botão e o login continua', async () => {
+  const isRoot = (e: El) => (e.attrs.class ?? '').split(' ').includes('guifav-auth');
+  const styles = (x: { head: El }) => x.head.findAll((e) => e.attrs.id === 'guifav-auth-style');
+
+  // Deslogado: "Entrar" logo depois do botão de tema, dentro de .nav-links.
+  const s = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 } });
+  const root = s.findClass('guifav-auth')!;
+  assert.ok(root);
+  assert.equal(root.tag, 'span');
+  assert.equal(root.parentNode, s.navLinks);
+  assert.equal(s.themeToggle!.nextSibling, root, 'logo depois do botão de tema');
+  assert.deepEqual(s.navLinks!.children.map((c) => c.attrs.id ?? c.attrs.class), ['lang-toggle', 'theme-toggle', 'guifav-auth']);
+  assert.equal(s.body.findAll(isRoot).length, 1);
+  assert.equal(styles(s).length, 1);
+  const btn = root.children[0];
+  assert.equal(btn.tag, 'button');
+  assert.equal(btn.attrs.type, 'button');
+  assert.equal(btn.attrs.class, 'nav-btn guifav-auth-btn');
+  assert.equal(btn.textContent, 'Entrar');
+  assert.equal(btn.attrs['aria-label'], 'Entrar com Google');
+  for (const a of ['title', 'aria-haspopup', 'aria-controls', 'aria-expanded']) assert.equal(btn.getAttribute(a), null, a);
+  const menu = root.children[1];
+  assert.equal(menu.attrs.class, 'guifav-auth-menu');
+  assert.equal(menu.hidden, true);
+  assert.equal(root.findAll((e) => e.attrs.id === 'guifav-auth-menu')[0]?.attrs.role, 'menu', 'aria-controls aponta para o menu ARIA');
+  assertSemAvisoNemInterruptor(s, 'deslogado');
+
+  // Login na mesma página: o mesmo botão vira a conta, sem duplicar nem sair do lugar.
+  await s.emitAuth(makeUser());
+  assert.equal(s.body.findAll(isRoot).length, 1);
+  assert.equal(s.findClass('guifav-auth'), root);
+  assert.equal(s.themeToggle!.nextSibling, root);
+  assert.equal(root.children[0], btn);
+  assert.equal(btn.attrs.class, 'nav-btn guifav-auth-btn is-user');
+  assert.equal(btn.attrs['aria-label'], 'Maria, menu da conta');
+  assert.equal(btn.attrs.title, 'Maria');
+  assert.equal(btn.attrs['aria-haspopup'], 'menu');
+  assert.equal(btn.attrs['aria-controls'], 'guifav-auth-menu');
+  assert.equal(btn.attrs['aria-expanded'], 'false');
+  assert.ok(!btn.textContent.includes('Entrar'), 'o texto Entrar sai');
+  assert.deepEqual(btn.children.map((c) => c.attrs.class), ['guifav-auth-initial']);
+  assert.equal(styles(s).length, 1, 'estilo injetado uma vez');
+  assertSemAvisoNemInterruptor(s, 'logado');
+
+  // Logout: volta a "Entrar", sem foto nem inicial e sem os atributos do menu.
+  await s.emitAuth(null);
+  assert.equal(btn.attrs.class, 'nav-btn guifav-auth-btn');
+  assert.equal(btn.textContent, 'Entrar');
+  assert.deepEqual(btn.children.map((c) => c.tag), ['#text']);
+  assert.equal(btn.attrs['aria-label'], 'Entrar com Google');
+  for (const a of ['title', 'aria-haspopup', 'aria-controls', 'aria-expanded']) assert.equal(btn.getAttribute(a), null, a);
+  assert.equal(s.findClass('guifav-auth-name')?.textContent, '');
+  assert.equal(menu.hidden, true);
+
+  // Página sem o menu superior (sem #theme-toggle): nenhum botão nem estilo, mas o login liga o vínculo, identifica e vai
+  // ao Worker; o logout também funciona sem botão.
+  const n = await setupAuth({ noHeader: true, consent: { v: 'granted', t: NOW - 1000 }, initialUser: makeUser() });
+  assert.equal(n.navLinks, null);
+  assert.equal(n.body.findAll(isRoot).length, 0);
+  assert.equal(n.findClass('guifav-auth-btn'), null);
+  assert.equal(n.findClass('guifav-auth-menu'), null);
+  assert.equal(styles(n).length, 0);
+  assert.deepEqual(JSON.parse(n.local.getItem('heating-link-v1')!), linkOk(NOW));
+  assert.deepEqual(n.gtagCalls, [...LOGIN_AD_DENY, ...identifySeq(UID)]);
+  assert.equal(n.fetchCalls.length, 1);
+  assert.deepEqual(n.warns, []);
+  await n.emitAuth(null);
+  assert.equal(n.local.getItem('heating-uid-v1'), null);
+  assert.equal(n.local.getItem('heating-login-v1'), null);
+  assert.equal(n.body.findAll(isRoot).length, 0);
+
+  // Com outro item depois do botão de tema, a conta entra entre os dois (logo depois do tema), não no fim.
+  const x = await setupAuth({ extraAfterTheme: true, consent: { v: 'granted', t: NOW - 1000 }, initialUser: makeUser() });
+  assert.deepEqual(x.navLinks!.children.map((c) => c.attrs.id ?? c.attrs.class), ['lang-toggle', 'theme-toggle', 'guifav-auth', 'nav-extra']);
+  assert.equal(x.themeToggle!.nextSibling, x.findClass('guifav-auth'));
+
+  // Sem o menu superior e deslogado: o One Tap continua valendo, entra no tenant e a sessão identifica normalmente.
+  const o = await setupAuth({ noHeader: true, consent: { v: 'granted', t: NOW - 1000 }, initialUser: null, gisAvailable: true });
+  assert.equal(o.body.findAll(isRoot).length, 0);
+  assert.equal(o.oneTapPrompts.length, 1);
+  const cb = o.oneTapInits[0].callback as (r: { credential: string }) => void;
+  cb({ credential: 'google-id-token-xyz' });
+  await flush();
+  assert.equal(o.signInCredCalls.length, 1);
+  assert.equal(o.signInCredCalls[0].tenantId, TENANT_ID);
+  await o.emitAuth(makeUser());
+  assert.deepEqual(o.gtagCalls, [...LOGIN_AD_DENY, ...identifySeq(UID)]);
+  assert.equal(o.fetchCalls.length, 1);
+  assert.equal(o.body.findAll(isRoot).length, 0);
+});
+
+test('avatar (28/11): foto do Google por https vira img sem referrer; outro host, http ou lixo vira a inicial; erro da imagem troca pela inicial; menu com o primeiro nome e nada de email', async () => {
+  const FOTO = 'https://lh3.googleusercontent.com/a/ACg8ocJfotoFalsa=s96-c';
+  const s = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: makeUser({ photoURL: FOTO }) });
+  const btn = s.findClass('guifav-auth-btn')!;
+  assert.equal(btn.children.length, 1);
+  const img = btn.children[0];
+  assert.equal(img.tag, 'img');
+  assert.equal(img.attrs.class, 'guifav-auth-avatar');
+  assert.equal(img.attrs.src, FOTO);
+  assert.equal(img.attrs.alt, '', 'decorativa: o nome está no aria-label');
+  assert.equal(img.attrs.referrerpolicy, 'no-referrer');
+  assert.equal(img.attrs.width, '24');
+  assert.equal(img.attrs.height, '24');
+  assert.equal(btn.textContent, '');
+  assert.equal(btn.attrs['aria-label'], 'Maria, menu da conta');
+  assert.equal(btn.attrs.title, 'Maria');
+  assert.equal(s.findClass('guifav-auth-initial'), null);
+  assert.equal(s.findClass('guifav-auth-name')?.textContent, 'Conectado como Maria');
+  assertSemAvisoNemInterruptor(s, 'com foto');
+  assertSemEmail(s, 'com foto');
+
+  // Foto que falha ao carregar: a inicial entra no lugar da img (uma vez só).
+  img.emit('error');
+  assert.equal(img.parentNode, null);
+  assert.deepEqual(btn.children.map((c) => c.attrs.class), ['guifav-auth-initial']);
+  assert.equal(btn.textContent, 'M');
+  assert.equal(btn.children[0].attrs['aria-hidden'], 'true');
+  img.emit('error');
+  assert.equal(btn.children.length, 1);
+  assertSemEmail(s, 'depois do erro');
+
+  // Outro host, http, sufixo enganoso ou valor que não é URL: só a inicial, nunca img.
+  for (const photoURL of [
+    'https://exemplo.com/foto.png',
+    'http://lh3.googleusercontent.com/a/x',
+    'https://lh3.googleusercontent.com.evil.example/a',
+    'https://evilgoogleusercontent.com/a',
+    // Só lh3, o endereço citado na política (revisão da rodada 2 do #212).
+    'https://lh4.googleusercontent.com/a/x',
+    'https://googleusercontent.com/a/x',
+    'javascript:alert(1)',
+    'data:image/png;base64,AAAA',
+    'não é uma url',
+    '',
+    null,
+  ]) {
+    const r = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: makeUser({ photoURL }) });
+    const b = r.findClass('guifav-auth-btn')!;
+    assert.equal(b.findAll((e) => e.tag === 'img').length, 0, String(photoURL));
+    assert.deepEqual(b.children.map((c) => c.attrs.class), ['guifav-auth-initial'], String(photoURL));
+    assert.equal(b.textContent, 'M', String(photoURL));
+    assertSemEmail(r, String(photoURL));
   }
 
-  // Foco estava em outro elemento quando o aviso abriu: volta para ele, não para o botão da conta.
-  const r = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 } });
-  const other = r.findClass('guifav-auth-item')!;
-  other.focus();
-  await r.emitAuth(makeUser());
-  const n = r.findClass('guifav-auth-notice')!;
-  assert.equal(r.activeElement(), n);
-  r.keydown('Escape');
-  assert.equal(r.activeElement(), other);
+  // Sem nome, a conta aparece como "Conta" com a inicial "?"; nome com espaços e minúsculo vira o primeiro nome e a
+  // inicial maiúscula.
+  const semNome = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: makeUser({ displayName: null }) });
+  assert.equal(semNome.findClass('guifav-auth-btn')?.textContent, '?');
+  assert.equal(semNome.findClass('guifav-auth-btn')?.attrs['aria-label'], 'Conta, menu da conta');
+  assert.equal(semNome.findClass('guifav-auth-name')?.textContent, 'Conectado como Conta');
+  const minusculo = await setupAuth({
+    consent: { v: 'granted', t: NOW - 1000 },
+    initialUser: makeUser({ displayName: '  joão  da silva ' }),
+  });
+  assert.equal(minusculo.findClass('guifav-auth-btn')?.textContent, 'J');
+  assert.equal(minusculo.findClass('guifav-auth-btn')?.attrs['aria-label'], 'joão, menu da conta');
 
-  // Fechamento programático (cookies negados) sem foco no aviso não rouba o foco.
-  const q = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: makeUser() });
-  const qn = q.findClass('guifav-auth-notice')!;
-  const qitem = q.findClass('guifav-auth-item')!;
-  qitem.focus();
-  await q.emitConsent('denied');
-  assert.equal(qn.hidden, true);
-  assert.equal(q.activeElement(), qitem);
-});
-
-test('Claude P2 (rodada 5): aviso que abre sozinho não tira o foco de quem digita; anuncia por aria-live', async () => {
-  const s = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 } });
-  // A região viva já existe, vazia, antes de o aviso abrir (rodada 6: leitor de tela ignora região que nasce com texto).
-  const live = s.findClass('guifav-auth-live')!;
-  assert.ok(live);
-  assert.equal(live.attrs.role, 'status');
-  assert.equal(live.attrs['aria-live'], 'polite');
-  assert.equal(live.textContent, '');
-  const input = s.body.appendChild(s.createElement('input'));
-  input.focus();
-  await s.emitAuth(makeUser());
-  const notice = s.findClass('guifav-auth-notice')!;
-  assert.equal(notice.hidden, false);
-  assert.equal(s.activeElement(), input, 'o foco continua no campo');
-  assert.equal(live.textContent, '', 'o texto entra um instante depois');
-  await s.advance(100);
-  assert.equal(live.textContent, NOTICE_TEXT);
-  // Responder pelo clique fecha sem puxar o foco de volta para o botão da conta se ele não estava no aviso.
-  const yes = notice.findAll((e) => e.tag === 'button' && e.textContent === 'Ligar')[0];
-  await s.click(yes);
-  assert.equal(notice.hidden, true);
-  assert.equal(s.activeElement(), input);
-  assert.equal(live.textContent, '', 'fechar o aviso apaga o texto da região viva');
-
-  // Aviso fechado antes do anúncio: o texto não entra depois.
-  const q = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 } });
-  const qin = q.body.appendChild(q.createElement('input'));
-  qin.focus();
-  await q.emitAuth(makeUser());
-  await q.emitConsent('denied');
-  await q.advance(200);
-  assert.equal(q.findClass('guifav-auth-live')!.textContent, '');
-
-  // Sem nada focado (ou com o foco no botão da conta), o aviso toma o foco e não usa a região viva.
-  const r = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: makeUser() });
-  assert.equal(r.activeElement(), r.findClass('guifav-auth-notice'));
-  await r.advance(200);
-  assert.equal(r.findClass('guifav-auth-live')!.textContent, '', 'com o foco no aviso, a região viva não repete o texto');
+  // Troca de conta na mesma página: a foto da conta anterior sai.
+  const t = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: makeUser({ photoURL: FOTO }) });
+  await t.emitAuth(makeUser({ uid: 'UidOutraConta9', displayName: 'Bruno Lima', photoURL: null }));
+  const tb = t.findClass('guifav-auth-btn')!;
+  assert.equal(tb.findAll((e) => e.tag === 'img').length, 0);
+  assert.equal(tb.textContent, 'B');
+  assert.equal(t.findClass('guifav-auth-name')?.textContent, 'Conectado como Bruno');
 });
 
 test('Claude P3 (rodada 5): antes do Firebase, uid de outra pessoa gravado por outra aba tira o user_id do <head>', async () => {
@@ -1706,14 +2096,11 @@ test('Claude P3 (rodada 5): 409 que chega depois de trocar de conta não desliga
   assert.deepEqual(last, ['set', { user_id: 'UidOutraConta9' }]);
 });
 
-test('Kimi P1 (rodada 6): sessão logada sem vínculo nega anúncios, marca login e só devolve anúncios no logout', async () => {
-  const s = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: makeUser() });
+test('Kimi P1 (rodada 6): sessão logada sem vínculo (oposição) nega anúncios, marca login e só devolve anúncios no logout', async () => {
+  const s = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, heatingLink: OPPOSED_LINK, initialUser: makeUser() });
   assert.deepEqual(s.gtagCalls, LOGIN_AD_DENY);
   assert.ok(s.local.getItem('heating-login-v1'));
-  // "Agora não" mantém a sessão logada: anúncios continuam negados.
-  const beforeNo = s.gtagCalls.length;
-  await s.click(s.findClass('guifav-auth-no')!);
-  assert.ok(!s.gtagCalls.slice(beforeNo).some((c) => c[0] === 'consent'), 'nada de anúncio concedido logado');
+  assert.deepEqual(s.fetchCalls, []);
   // Logout (Firebase propaga null): a marca sai e os anúncios voltam, porque o vínculo não está ligado.
   const beforeOut = s.gtagCalls.length;
   await s.emitAuth(null);
@@ -1726,21 +2113,21 @@ test('Kimi P1 (rodada 6): sessão logada sem vínculo nega anúncios, marca logi
     ['set', 'allow_ad_personalization_signals', true],
   ]);
 
-  // Com o vínculo ligado no navegador, o logout não devolve anúncios.
-  const r = await setupAuth({
-    consent: { v: 'granted', t: NOW - 1000 },
-    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
-    initialUser: makeUser(),
-  });
+  // Com o vínculo ligado no navegador (o que todo login faz), o logout não devolve anúncios.
+  const r = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: makeUser() });
+  assert.deepEqual(r.gtagCalls, [...LOGIN_AD_DENY, ...identifySeq(UID)]);
   const beforeR = r.gtagCalls.length;
   await r.emitAuth(null);
   assert.equal(r.local.getItem('heating-login-v1'), null);
   assert.equal(r.gtagCalls.slice(beforeR).filter((c) => c[0] === 'consent').length, 0);
 
-  // Cookies recusados: login não manda nada ao GA4 (anúncios já negados por padrão), mas marca o login.
+  // Cookies recusados: login não manda nada ao GA4 (anúncios já negados por padrão), mas marca o login e manda o POST
+  // sem a origem.
   const q = await setupAuth({ consent: { v: 'denied', t: NOW - 1000 }, initialUser: makeUser() });
   assert.deepEqual(q.gtagCalls, []);
   assert.ok(q.local.getItem('heating-login-v1'));
+  assert.equal(q.fetchCalls.length, 1);
+  assert.equal(q.fetchCalls[0].init?.body, 'origem_canal=desconhecida');
 });
 
 test('Kimi P2 (rodada 6): logout em outra aba suprime o One Tap nesta aba; Kimi P3: Sair pelo teclado devolve o foco', async () => {
@@ -1756,40 +2143,57 @@ test('Kimi P2 (rodada 6): logout em outra aba suprime o One Tap nesta aba; Kimi 
   const k = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' }, initialUser: makeUser() });
   const btn = k.findClass('guifav-auth-btn')!;
   await k.click(btn);
-  const sair = k.body.findAll((e) => e.textContent === 'Sair')[0];
+  const sair = k.body.findAll((e) => e.attrs.role === 'menuitem')[0];
+  assert.equal(sair.textContent, 'Sair');
   sair.focus();
   await k.click(sair);
   assert.equal(k.activeElement(), btn, 'o foco volta ao botão da conta');
 });
 
-test('Kimi P1 (rodada 6): sem a marca de login gravável, a sessão confirmada ainda segura anúncios; guifavAuthIdentified', async () => {
+test('Kimi P1 (rodada 6): sem a marca de login gravável, a sessão confirmada ainda segura anúncios depois do 409; guifavAuthIdentified', async () => {
+  let responder: ((r: { ok: boolean; status: number }) => void) | null = null;
   const s = await setupAuth({
     consent: { v: 'granted', t: NOW - 1000 },
-    heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' },
     initialUser: makeUser(),
+    identityFetch: () => new Promise((res) => {
+      responder = res;
+    }),
   });
   const authIdentified = () => (s.win.guifavAuthIdentified as () => boolean)();
   assert.equal(authIdentified(), true);
-  // Armazenamento sem a marca (bloqueado ou apagado): desligar o vínculo logado não devolve anúncios.
+  assert.deepEqual(s.gtagCalls, LOGIN_AD_DENY, 'POST em andamento: vínculo sem confirmação, sem user_id');
+  // Armazenamento sem a marca (bloqueado ou apagado): a oposição que chega (409) desliga o vínculo logado sem devolver
+  // anúncios.
   s.local.removeItem('heating-login-v1');
-  await s.click(s.findClass('guifav-auth-btn')!);
   const before = s.gtagCalls.length;
-  await s.click(s.body.findAll((e) => e.attrs.role === 'menuitemcheckbox')[0]);
+  assert.ok(responder, 'POST em andamento');
+  responder!({ ok: false, status: 409 });
+  await flush();
+  assert.deepEqual(JSON.parse(s.local.getItem('heating-link-v1')!), { v: 'denied', t: NOW, uid: UID, o: 1 });
   assert.deepEqual(s.gtagCalls.slice(before), [['set', { user_id: null }]]);
   assert.equal(authIdentified(), true, 'logado sem vínculo: o consent.js mantém anúncios negados');
+  // Logout: sem sessão, marca nem vínculo, o banner volta a conceder e os anúncios voltam aqui.
+  const beforeOut = s.gtagCalls.length;
   await s.emitAuth(null);
   assert.equal(authIdentified(), false, 'depois do logout e sem vínculo, o banner volta a conceder');
+  assert.deepEqual(s.gtagCalls.slice(beforeOut), [
+    ['set', { user_id: null }],
+    ['consent', 'update', AD_CONSENT_GRANTED],
+    ['set', 'allow_google_signals', true],
+    ['set', 'allow_ad_personalization_signals', true],
+  ]);
 });
 
-test('Claude P3 (rodada 7) e Kimi P2 (rodada 8): no Sim, o auth.js só nega quando a marca de login não é legível', async () => {
-  // Logado com a marca legível: o consent.js nega ad_* e os dois sinais na hora; o auth.js não repete.
-  const s = await setupAuth({ idbMode: 'session', initialUser: makeUser() });
+test('Claude P3 (rodada 7) e Kimi P2 (rodada 8): no Sim, o auth.js só nega quando a marca de login não é legível; com o vínculo ligado, identifica de uma vez', async () => {
+  // Logado com oposição e a marca legível: o consent.js nega ad_* e os dois sinais na hora; o auth.js não repete.
+  const s = await setupAuth({ idbMode: 'session', heatingLink: OPPOSED_LINK, initialUser: makeUser() });
   assert.ok(s.local.getItem('heating-login-v1'));
   await s.emitConsent('granted');
   assert.deepEqual(s.gtagCalls, []);
+  assert.deepEqual(s.fetchCalls, []);
 
   // Sessão confirmada nesta página mas a marca sumiu (armazenamento bloqueado ou apagado): o auth.js nega no Sim.
-  const r = await setupAuth({ idbMode: 'session', initialUser: makeUser() });
+  const r = await setupAuth({ idbMode: 'session', heatingLink: OPPOSED_LINK, initialUser: makeUser() });
   r.local.removeItem('heating-login-v1');
   await r.emitConsent('granted');
   assert.deepEqual(r.gtagCalls, LOGIN_AD_DENY);
@@ -1798,27 +2202,45 @@ test('Claude P3 (rodada 7) e Kimi P2 (rodada 8): no Sim, o auth.js só nega quan
   const q = await setupAuth({ idbMode: 'session', initialUser: null });
   await q.emitConsent('granted');
   assert.deepEqual(q.gtagCalls, []);
+
+  // Login sem resposta no banner (vínculo ligado no login): o Sim identifica de uma vez, sem negar duas vezes, e não
+  // repete o POST feito antes do banner.
+  const k = await setupAuth({ idbMode: 'session', initialUser: makeUser() });
+  assert.deepEqual(k.gtagCalls, []);
+  assert.equal(k.fetchCalls.length, 1);
+  await k.emitConsent('granted');
+  assert.deepEqual(k.gtagCalls, identifySeq(UID));
+  assert.equal(k.fetchCalls.length, 1);
 });
 
-test('Kimi P2 e P3 (rodada 7): Não -> Sim logado sem vínculo desliga os sinais; logout remoto com foco no menu devolve o foco', async () => {
-  // Não -> Sim logado sem vínculo: quem nega ad_* e os sinais é o consent.js (testado em consent.test.ts); o auth.js
+test('Kimi P2 e P3 (rodada 7): Não -> Sim logado sem vínculo desliga os sinais só pelo consent.js; com vínculo identifica; logout remoto com foco no menu devolve o foco', async () => {
+  // Não -> Sim logado com oposição: quem nega ad_* e os sinais é o consent.js (testado em consent.test.ts); o auth.js
   // não duplica.
-  const s = await setupAuth({ consent: { v: 'denied', t: NOW - 1000 }, initialUser: makeUser() });
+  const s = await setupAuth({ consent: { v: 'denied', t: NOW - 1000 }, heatingLink: OPPOSED_LINK, initialUser: makeUser() });
   assert.deepEqual(s.gtagCalls, []);
   await s.emitConsent('granted');
   assert.deepEqual(s.gtagCalls, []);
 
-  const k = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' }, initialUser: makeUser() });
+  // Não -> Sim logado com o vínculo ligado: identifica uma vez, com a negação só dentro da identificação.
+  const v = await setupAuth({ consent: { v: 'denied', t: NOW - 1000 }, initialUser: makeUser() });
+  assert.deepEqual(v.gtagCalls, []);
+  assert.equal(v.fetchCalls.length, 1);
+  await v.emitConsent('granted');
+  assert.deepEqual(v.gtagCalls, identifySeq(UID));
+  assert.equal(v.fetchCalls.length, 1);
+
+  const k = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, heatingLink: { v: 'granted', t: NOW - 1000, uid: UID }, initialUser: makeUser() });
   const btn = k.findClass('guifav-auth-btn')!;
   await k.click(btn);
-  const sair = k.body.findAll((e) => e.textContent === 'Sair')[0];
-  sair.focus();
+  const sair = k.body.findAll((e) => e.attrs.role === 'menuitem')[0];
+  assert.equal(k.activeElement(), sair);
   await k.emitAuth(null); // Sair feito em outra aba
   assert.equal(k.activeElement(), btn, 'o foco sai do item escondido e volta ao botão');
-  assert.equal(btn.textContent, 'Entrar com Google');
+  assert.equal(btn.textContent, 'Entrar');
+  assert.equal(k.findClass('guifav-auth-menu')?.hidden, true);
 
   // Fechar o menu com clique fora não rouba o foco de onde a pessoa clicou.
-  const c = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, heatingLink: { v: 'granted', t: NOW - 1000, uid: 'UidCurso123ABC' }, initialUser: makeUser() });
+  const c = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, heatingLink: { v: 'granted', t: NOW - 1000, uid: UID }, initialUser: makeUser() });
   await c.click(c.findClass('guifav-auth-btn')!);
   const input = c.body.appendChild(c.createElement('input'));
   input.focus();
@@ -2113,4 +2535,233 @@ test('Kimi P2 (rodada 10 do #206): marca de envio do auth.js antigo na mesma aba
     initialUser: makeUser(),
   });
   assert.equal(s2.fetchCalls.length, 0, 'e só uma vez por sessão');
+});
+
+test('P2 da revisão do #212: o GA4 só identifica depois de o /identidade confirmar o vínculo (s: 1); Sim e outra aba sem confirmação no meio não adiantam', async () => {
+  const local = new SpyStorage();
+  local.setItem('consent-v1', JSON.stringify({ v: 'granted', t: NOW - 1000 }));
+  const pend = identidadePendente();
+  const s = await setupAuth({ local, initialUser: makeUser(), identityFetch: pend.fetch });
+
+  // POST em andamento: vínculo ligado sem s, a sessão logada só nega anúncios; nada de user_id, heating-uid-v1 nem
+  // auth_identified, e nenhum temporizador do heating-uid-v1.
+  assert.equal(s.fetchCalls.length, 1);
+  assert.deepEqual(JSON.parse(local.getItem('heating-link-v1')!), { v: 'granted', t: NOW, uid: UID });
+  assert.deepEqual(s.gtagCalls, LOGIN_AD_DENY);
+  assert.equal(local.getItem('heating-uid-v1'), null);
+  assert.equal(s.pendingTimers(), 0);
+  assert.equal((s.win.guifavAuthIdentified as () => boolean)(), true, 'o consent.js mantém anúncios negados');
+
+  // Sim de novo no banner enquanto o POST não volta: nada de identificar nem de segundo POST.
+  await s.emitConsent('granted');
+  assert.deepEqual(s.gtagCalls, LOGIN_AD_DENY);
+  assert.equal(s.fetchCalls.length, 1);
+
+  // Servidor confirma: s: 1 com o instante da confirmação, marca de envio da sessão e identificação completa.
+  s.setNow(NOW + 2000);
+  pend.responder(204);
+  await flush();
+  assert.deepEqual(JSON.parse(local.getItem('heating-link-v1')!), linkOk(NOW + 2000));
+  assert.equal(s.session.getItem('guifav_identidade_sent_v2:UidCurso123ABC'), '1');
+  assert.deepEqual(s.gtagCalls, [...LOGIN_AD_DENY, ...identifySeq(UID)]);
+  assert.deepEqual(JSON.parse(local.getItem('heating-uid-v1')!), { uid: UID, t: NOW + 2000 });
+  // heating-uid-v1 só foi gravado depois da confirmação.
+  const confirmWrite = local.writes.findIndex(([k, v]) => k === 'heating-link-v1' && JSON.parse(v).s === 1);
+  const firstUidWrite = local.writes.findIndex(([k]) => k === 'heating-uid-v1');
+  assert.ok(confirmWrite >= 0 && firstUidWrite > confirmWrite, 'heating-uid-v1 depois do s: 1');
+  assert.equal(s.fetchCalls.length, 1);
+  assert.deepEqual(s.warns, []);
+
+  // Outra aba confirma o vínculo (s: 1) enquanto o POST daqui está pendente: a confirmação de lá não vale nesta aba
+  // (rodada 2 do #212), que só reafirma a negação; a identificação vem com a resposta ok do POST daqui, uma vez.
+  const po = identidadePendente();
+  const o = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: makeUser(), identityFetch: po.fetch });
+  assert.deepEqual(o.gtagCalls, LOGIN_AD_DENY);
+  const beforeO = o.gtagCalls.length;
+  await o.emitStorage('heating-link-v1', JSON.stringify(linkOk(NOW)));
+  assert.deepEqual(o.gtagCalls.slice(beforeO), LOGIN_AD_DENY);
+  assert.equal(o.local.getItem('heating-uid-v1'), null);
+  po.responder(204);
+  await flush();
+  assert.deepEqual(o.gtagCalls.slice(beforeO), [...LOGIN_AD_DENY, ...identifySeq(UID)]);
+
+  // Outra aba liga o vínculo sem confirmar: aqui só reafirma a negação, sem user_id.
+  const pp = identidadePendente();
+  const p = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: makeUser(), identityFetch: pp.fetch });
+  const beforeP = p.gtagCalls.length;
+  await p.emitStorage('heating-link-v1', JSON.stringify({ v: 'granted', t: NOW, uid: UID }));
+  assert.deepEqual(p.gtagCalls.slice(beforeP), LOGIN_AD_DENY);
+  assert.equal(p.local.getItem('heating-uid-v1'), null);
+
+  // Vínculo de outro uid com s: 1 não confirma este uid.
+  const pq = identidadePendente();
+  const q = await setupAuth({
+    consent: { v: 'granted', t: NOW - 1000 },
+    heatingLink: linkOk(NOW - DAY, 'UidOutraConta9'),
+    initialUser: makeUser(),
+    identityFetch: pq.fetch,
+  });
+  assert.deepEqual(JSON.parse(q.local.getItem('heating-link-v1')!), { v: 'granted', t: NOW, uid: UID });
+  assert.deepEqual(q.gtagCalls, LOGIN_AD_DENY);
+
+  // Marca de envio da sessão (POST aceito por um auth.js de antes do s: 1) vale como confirmação: identifica sem novo
+  // POST e grava s: 1.
+  const session = new Storage();
+  session.setItem('guifav_identidade_sent_v2:UidCurso123ABC', '1');
+  const legado = await setupAuth({
+    session,
+    consent: { v: 'granted', t: NOW - 1000 },
+    heatingLink: { v: 'granted', t: NOW - DAY, uid: UID },
+    initialUser: makeUser(),
+  });
+  assert.deepEqual(legado.fetchCalls, []);
+  assert.deepEqual(JSON.parse(legado.local.getItem('heating-link-v1')!), linkOk(NOW));
+  assert.deepEqual(legado.gtagCalls, [...LOGIN_AD_DENY, ...identifySeq(UID)]);
+  assert.deepEqual(JSON.parse(legado.local.getItem('heating-uid-v1')!), { uid: UID, t: NOW });
+
+  // Aba identificada cujo vínculo perde a confirmação sem evento (storage perdido; outra aba gravou um vínculo novo sem
+  // s: 1): no vencimento de heating-uid-v1, a chave não renova e o user_id sai.
+  const v = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, heatingLink: linkOk(NOW - DAY), initialUser: makeUser() });
+  assert.ok(v.gtagCalls.some((c) => isUserIdSet(c, UID)));
+  v.local.setItem('heating-link-v1', JSON.stringify({ v: 'granted', t: NOW, uid: UID }));
+  const beforeV = v.gtagCalls.length;
+  await v.advance(UID_TTL + 1000);
+  assert.equal(v.local.getItem('heating-uid-v1'), null);
+  assert.deepEqual(v.gtagCalls.slice(beforeV), [['set', { user_id: null }]]);
+  assert.equal(v.pendingTimers(), 0);
+});
+
+test('P2 da revisão do #212: 409 no primeiro login, com cookies aceitos, nunca produz user_id, heating-uid-v1 nem auth_identified em momento algum', async () => {
+  const local = new SpyStorage();
+  local.setItem('consent-v1', JSON.stringify({ v: 'granted', t: NOW - 1000 }));
+  const pend = identidadePendente();
+  const s = await setupAuth({ local, initialUser: makeUser(), identityFetch: pend.fetch });
+  const nunca = (x: { gtagCalls: unknown[][]; session: Storage }, label: string) => {
+    assert.ok(!x.gtagCalls.some((c) => isUserIdSet(c, UID)), `${label}: nunca user_id`);
+    assert.ok(!x.gtagCalls.some((c) => c[0] === 'event'), `${label}: nunca auth_identified`);
+    assert.ok(!local.writes.some(([k]) => k === 'heating-uid-v1'), `${label}: heating-uid-v1 nunca gravado`);
+    assert.ok(!local.writes.some(([k, v]) => k === 'heating-link-v1' && JSON.parse(v).s === 1), `${label}: nunca confirmado`);
+    assert.equal(x.session.getItem('guifav_auth_identified:UidCurso123ABC'), null, label);
+  };
+  nunca(s, 'POST em andamento');
+
+  // Sim no banner, aba escondida e de volta e o relógio passando dos 30 min: nada identifica antes da resposta.
+  await s.emitConsent('granted');
+  await s.emitVisibility('hidden');
+  await s.emitVisibility('visible');
+  await s.advance(UID_TTL + 1000);
+  nunca(s, 'antes da resposta');
+
+  pend.responder(409);
+  await flush();
+  nunca(s, 'depois do 409');
+  assert.deepEqual(JSON.parse(local.getItem('heating-link-v1')!), { v: 'denied', t: NOW + UID_TTL + 1000, uid: UID, o: 1 });
+  assert.deepEqual(s.gtagCalls, [...LOGIN_AD_DENY, ['set', { user_id: null }]]);
+  assert.equal(s.session.getItem('guifav_identidade_sent_v2:UidCurso123ABC'), null);
+  assert.deepEqual(s.warns, []);
+
+  // Próxima página na mesma sessão: nada de POST nem identificação.
+  const s2 = await setupAuth({ local, session: s.session, now: NOW + UID_TTL + 2000, initialUser: makeUser() });
+  nunca(s2, 'próxima página');
+  assert.deepEqual(s2.fetchCalls, []);
+  assert.deepEqual(s2.gtagCalls, LOGIN_AD_DENY);
+});
+
+test('P2 da revisão do #212: falha do /identidade (500 ou rede) não confirma o vínculo nem identifica no GA4; a próxima página tenta de novo', async () => {
+  for (const caso of ['500', 'rede'] as const) {
+    const local = new SpyStorage();
+    const session = new Storage();
+    local.setItem('consent-v1', JSON.stringify({ v: 'granted', t: NOW - 1000 }));
+    const s = await setupAuth({
+      local,
+      session,
+      initialUser: makeUser(),
+      ...(caso === '500' ? { identityStatus: 500 } : { identityThrow: true }),
+    });
+    assert.equal(s.fetchCalls.length, 1, caso);
+    assert.deepEqual(JSON.parse(local.getItem('heating-link-v1')!), { v: 'granted', t: NOW, uid: UID }, `${caso}: sem s`);
+    assert.deepEqual(s.gtagCalls, LOGIN_AD_DENY, caso);
+    assert.equal(local.getItem('heating-uid-v1'), null, caso);
+    assert.ok(!local.writes.some(([k]) => k === 'heating-uid-v1'), `${caso}: heating-uid-v1 nunca gravado`);
+    assert.equal(session.getItem('guifav_identidade_sent_v2:UidCurso123ABC'), null, caso);
+    assert.equal(session.getItem('guifav_auth_identified:UidCurso123ABC'), null, caso);
+    assert.deepEqual(
+      s.warns,
+      [caso === '500' ? 'guifav-auth: identidade nao registrada' : 'guifav-auth: falha ao enviar identidade'],
+      caso,
+    );
+    assertSemEmail(s, caso);
+
+    // Próxima página na mesma sessão, servidor de volta: manda de novo, confirma e identifica.
+    const s2 = await setupAuth({ local, session, now: NOW + MIN, initialUser: makeUser() });
+    assert.equal(s2.fetchCalls.length, 1, caso);
+    assert.deepEqual(JSON.parse(local.getItem('heating-link-v1')!), linkOk(NOW + MIN), caso);
+    assert.deepEqual(s2.gtagCalls, [...LOGIN_AD_DENY, ...identifySeq(UID)], caso);
+    assert.deepEqual(JSON.parse(local.getItem('heating-uid-v1')!), { uid: UID, t: NOW + MIN }, caso);
+  }
+});
+
+test('Kimi P2 (rodada 2 do #212): s: 1 de uma sessão anterior não identifica antes de o POST desta sessão responder; o 409 que chega desliga sem nunca identificar', async () => {
+  // Repro exato: vínculo confirmado numa sessão anterior (s: 1) e heating-uid-v1 ainda dentro dos 30 min, cookies aceitos,
+  // aba nova (sem a marca de envio), POST pendente; a oposição foi registrada no servidor nesse meio tempo.
+  const local = new SpyStorage();
+  local.setItem('consent-v1', JSON.stringify({ v: 'granted', t: NOW - 1000 }));
+  local.setItem('heating-link-v1', JSON.stringify(linkOk(NOW - DAY)));
+  local.setItem('heating-uid-v1', JSON.stringify({ uid: UID, t: NOW - 5 * MIN }));
+  local.setItem('heating-login-v1', JSON.stringify({ t: NOW - DAY }));
+  const w0 = local.writes.length;
+  const session = new Storage();
+  const pend = identidadePendente();
+  const s = await setupAuth({ local, session, initialUser: makeUser(), identityFetch: pend.fetch });
+  const nunca = (label: string) => {
+    assert.ok(!s.gtagCalls.some((c) => isUserIdSet(c, UID)), `${label}: nunca user_id`);
+    assert.ok(!s.gtagCalls.some((c) => c[0] === 'event'), `${label}: nunca auth_identified`);
+    assert.ok(!local.writes.slice(w0).some(([k]) => k === 'heating-uid-v1'), `${label}: heating-uid-v1 nunca regravado`);
+    assert.equal(session.getItem('guifav_auth_identified:UidCurso123ABC'), null, label);
+    assert.equal(session.getItem('guifav_identidade_sent_v2:UidCurso123ABC'), null, label);
+  };
+
+  // POST pendente: nada identificado; a sobra de heating-uid-v1 sai e o user_id vai a null (defensivo).
+  assert.equal(s.fetchCalls.length, 1);
+  assert.deepEqual(s.gtagCalls, [...LOGIN_AD_DENY, ['set', { user_id: null }]]);
+  assert.equal(local.getItem('heating-uid-v1'), null);
+  assert.equal((s.win.guifavAuthIdentified as () => boolean)(), true);
+  nunca('POST pendente');
+  // Sim no banner e o relógio andando também não identificam.
+  await s.emitConsent('granted');
+  await s.advance(UID_TTL + 1000);
+  nunca('antes da resposta');
+
+  // O 409 chega: a marca da oposição é gravada e nada nunca foi identificado.
+  pend.responder(409);
+  await flush();
+  assert.deepEqual(JSON.parse(local.getItem('heating-link-v1')!), { v: 'denied', t: NOW + UID_TTL + 1000, uid: UID, o: 1 });
+  nunca('depois do 409');
+  assert.ok(!s.gtagCalls.some((c) => c[0] === 'consent' && (c[2] as { ad_storage?: string }).ad_storage === 'granted'), 'logado: anúncios nunca voltam');
+  assert.deepEqual(s.warns, []);
+
+  // Controle: na mesma aba, com a marca de envio, o s: 1 identifica na hora e sem POST (próxima página da mesma sessão).
+  const okSession = new Storage();
+  okSession.setItem('guifav_identidade_sent_v2:UidCurso123ABC', '1');
+  const c = await setupAuth({
+    session: okSession,
+    consent: { v: 'granted', t: NOW - 1000 },
+    heatingLink: linkOk(NOW - DAY),
+    initialUser: makeUser(),
+  });
+  assert.deepEqual(c.fetchCalls, []);
+  assert.deepEqual(c.gtagCalls, identifySeq(UID));
+  // Marca de envio de outro uid não confirma este.
+  const other = new Storage();
+  other.setItem('guifav_identidade_sent_v2:UidOutraConta9', '1');
+  const pd = identidadePendente();
+  const d = await setupAuth({
+    session: other,
+    consent: { v: 'granted', t: NOW - 1000 },
+    heatingLink: linkOk(NOW - DAY),
+    initialUser: makeUser(),
+    identityFetch: pd.fetch,
+  });
+  assert.deepEqual(d.gtagCalls, LOGIN_AD_DENY);
+  assert.equal(d.fetchCalls.length, 1);
 });

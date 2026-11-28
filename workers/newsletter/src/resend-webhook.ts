@@ -399,7 +399,7 @@ export async function handleResendWebhook(
     for (const email of emails) {
       const hmac = await heatingOptoutHmac(email, env.FORGET_HMAC_KEY);
       const id = `rs:${await sha256Hex(`${svixId}\n${email}`)}`;
-      // Checa heating_optout e insere na mesma instrução para eliminar a corrida com POST /prioridade.
+      // Checa heating_optout e insere na mesma instrução para eliminar a corrida com a oposição (--optout).
       // O WHERE NOT EXISTS também desambigua o ON CONFLICT no parser do SQLite (INSERT ... SELECT).
       // Só a repetição do id (reentrega do Resend) é ignorada; violação de CHECK continua virando erro 500.
       const res = await env.DB

@@ -623,16 +623,10 @@ LEGAL_SPECS = (
 )
 PRIVACY_ANCHORS = ("cookies", "materiais", "origem", "prioridade", "cursos", "quem-processa")
 LEGAL_FOOTER_HREFS = ("/privacidade/", "/termos/", "/privacidade/#cookies")
-# Página de oposição ao heating (#197): noindex, fora do sitemap, formulário POST para insights.guifav.dev/prioridade.
-PRIORITY_PAGE = "prioridade/index.html"
-PRIORITY_URL = "/prioridade/"
-PRIORITY_TITLE = "Não quero ser pontuado" + TITLE_SEP + SITE_NAME
-PRIORITY_H1 = "Não quero ser pontuado"
-PRIORITY_ACTION = "https://insights.guifav.dev/prioridade"
-PRIORITY_FRAGMENTS = ("pronto", "erro-verificacao", "erro-email", "erro-limite", "erro")
-# Turnstile (#197): espelha TURNSTILE_SITE_KEY de blog-src/src/consts.ts.
-TURNSTILE_SITE_KEY = "0x4AAAAAAF8raRhCn4ciudgW"
-TURNSTILE_SCRIPT_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js"
+# Página de oposição ao heating (#197) removida por decisão do Gui (2026-11-28): a oposição é pedida por email
+# (contact@guifav.dev). O caminho não pode voltar ao site montado, aos sitemaps nem a links das páginas.
+REMOVED_PRIORITY_PAGE = "prioridade/index.html"
+REMOVED_PRIORITY_PATH = "/prioridade"
 # Marcador de data pendente (#197): nenhuma página publicada pode sair com "[DATA]" literal.
 DATE_PLACEHOLDER = "[DATA]"
 EXPERT_INSIGHTS_PAGES = {f"blog/{p}/index.html" for p in
@@ -646,7 +640,7 @@ def expected_content_group(rel: str) -> str | None:
         return "portfolio"
     if rel == "consultoria/index.html":
         return "consultoria"
-    if rel in LEGAL_PAGES or rel == PRIORITY_PAGE:
+    if rel in LEGAL_PAGES:
         return "legal"
     if (rel == "blog/index.html" or re.fullmatch(r"blog/pagina/\d+/index\.html", rel)
             or re.fullmatch(r"blog/tema/[a-z0-9][a-z0-9-]*/index\.html", rel)):
@@ -838,8 +832,8 @@ def check_titles_and_groups(rel: str, html: str) -> list[str]:
 TRACK_PATH = "/assets/track.js"
 AUTH_PATH = "/assets/auth.js"
 GIS_CLIENT_URL = "accounts.google.com/gsi/client"
-NO_ONE_TAP_PAGES = ("404.html", "privacidade/index.html", "termos/index.html", "prioridade/index.html")
-NO_ONE_TAP_AUTH_PREFIXES = ("/privacidade", "/termos", "/prioridade", "/404")
+NO_ONE_TAP_PAGES = ("404.html", "privacidade/index.html", "termos/index.html")
+NO_ONE_TAP_AUTH_PREFIXES = ("/privacidade", "/termos", "/404")
 CTA_LOCATIONS = ("hero", "projetos", "consultoria", "chamada-final", "consultoria-pagina", "como-contratar")  # as duas últimas: #136
 SIGNUP_PAGE = "blog/inscricao-confirmada/index.html"
 CONTACT_EMAIL = "contact@guifav.dev"
@@ -3450,119 +3444,59 @@ def check_old_youtube_handle(site: Path) -> list[str]:
     return problems
 
 
-class _PriorityPage(HTMLParser):
-    """Coleta <script src>, elementos com id, <form> e seus <input type=email name=email> e widgets Turnstile fora de comentário/template/noscript/hidden."""
+class _Hrefs(HTMLParser):
+    """Coleta o valor de todo atributo href (qualquer tag, fora de comentários), com entidades já decodificadas."""
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
-        self.stack: list[tuple[str, bool]] = []
-        self.scripts: list[str] = []
-        self.id_attrs: dict[str, dict[str, str]] = {}
-        self.forms: list[dict[str, object]] = []
-        self.active_form: dict[str, object] | None = None
-
-    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        self.handle_starttag(tag, attrs)
-        if tag not in VOID_TAGS:
-            self.handle_endtag(tag)
+        self.hrefs: list[str] = []
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        a: dict[str, str] = {}
         for k, v in attrs:
-            a.setdefault(k, v or "")
-        inert = any(i for _, i in self.stack) or tag in ("template", "noscript") or "hidden" in a
-        if not inert:
-            eid = a.get("id", "").strip()
-            if eid:
-                self.id_attrs.setdefault(eid, a)
-            if tag == "script":
-                stype = a.get("type", "").strip().lower()
-                if not stype or stype in ("text/javascript", "module", "application/javascript"):
-                    src = a.get("src", "").strip()
-                    if src:
-                        self.scripts.append(src)
-            elif tag == "form":
-                form: dict[str, object] = {"attrs": a, "email_inputs": 0, "turnstile_sitekeys": []}
-                self.forms.append(form)
-                self.active_form = form
-            elif self.active_form is not None:
-                if tag == "input" and a.get("type", "").strip().lower() == "email" and a.get("name", "") == "email":
-                    self.active_form["email_inputs"] = int(self.active_form["email_inputs"]) + 1
-                elif tag == "div" and "cf-turnstile" in a.get("class", "").split():
-                    self.active_form["turnstile_sitekeys"].append(a.get("data-sitekey", ""))
-        if tag not in VOID_TAGS:
-            self.stack.append((tag, tag in ("template", "noscript") or "hidden" in a))
-
-    def handle_endtag(self, tag: str) -> None:
-        for i in range(len(self.stack) - 1, -1, -1):
-            if self.stack[i][0] == tag:
-                closed = self.stack[i:]
-                del self.stack[i:]
-                if any(t == "form" for t, _ in closed):
-                    self.active_form = None
-                return
+            if k == "href" and v and v.strip():
+                self.hrefs.append(v.strip())
 
 
-def check_priority(site: Path) -> list[str]:
-    """#197: /prioridade/ existe com noindex, canonical próprio, título, H1, formulário com Turnstile e os 5 fragmentos, fora do sitemap."""
+def _is_removed_priority(url: str, base: str) -> bool:
+    """True quando a URL, resolvida a partir de base, aponta para /prioridade (com ou sem barra) em guifav.dev."""
+    try:
+        u = urlsplit(urljoin(base, url))
+    except ValueError:
+        return False
+    if u.scheme not in ("http", "https") or (u.hostname or "").lower().rstrip(".") != SITE_HOST:
+        return False
+    path = unquote(u.path or "/").lower()
+    return path == REMOVED_PRIORITY_PATH or path.startswith(REMOVED_PRIORITY_PATH + "/")
+
+
+def check_priority_removed(site: Path) -> list[str]:
+    """#197: a página /prioridade/ saiu (decisão de 2026-11-28); não pode estar no site montado, nos sitemaps nem em links."""
     problems: list[str] = []
-    entries = _sitemap(site, "sitemap-site.xml", "urlset", "url", problems)
-    sitemap_locs = {loc for loc, _ in entries} if entries is not None else None
-    if sitemap_locs is not None and SITE_ORIGIN + PRIORITY_URL in sitemap_locs:
-        problems.append(f"sitemap-site.xml: {SITE_ORIGIN}{PRIORITY_URL} tem noindex e não entra no sitemap")
-    page = site / PRIORITY_PAGE
-    if not page.is_file():
-        return problems + [f"{PRIORITY_PAGE}: página de oposição ausente no site montado (site-manifest.txt)"]
-    html = page.read_text(encoding="utf-8")
-    p = _Page()
-    p.feed(html)
-    p.close()
-    if not any(_robots_noindex(r) for r in p.robots):
-        problems.append(f"{PRIORITY_PAGE}: página de oposição precisa de noindex")
-    if not p.canonicals or not canonical_is_self(p.canonicals, PRIORITY_URL):
-        problems.append(f"{PRIORITY_PAGE}: página de oposição precisa de canonical próprio "
-                        f"({SITE_ORIGIN}{PRIORITY_URL}), tem {p.canonicals}")
-    visible = _visible_html(html)
-    m = re.search(r"<title[^>]*>(.*?)</title\s*>", visible, flags=re.S | re.I)
-    title = unescape(m.group(1)).strip() if m else None
-    if title != PRIORITY_TITLE:
-        problems.append(f"{PRIORITY_PAGE}: o título precisa ser {PRIORITY_TITLE!r}: {title!r}")
-    h1s = [re.sub(r"\s+", " ", unescape(re.sub(r"<[^>]+>", "", h))).strip()
-           for h in re.findall(r"<h1\b[^>]*>(.*?)</h1\s*>", visible, flags=re.S | re.I)]
-    if h1s != [PRIORITY_H1]:
-        problems.append(f"{PRIORITY_PAGE}: a página precisa de um H1 {PRIORITY_H1!r}, tem {h1s}")
-    if "/privacidade/#prioridade" not in p.refs:
-        problems.append(f"{PRIORITY_PAGE}: falta link para /privacidade/#prioridade")
-    pf = _PriorityPage()
-    pf.feed(html)
-    pf.close()
-    for frag in PRIORITY_FRAGMENTS:
-        if frag not in pf.id_attrs:
-            problems.append(f"{PRIORITY_PAGE}: falta a mensagem #{frag}")
-        elif pf.id_attrs[frag].get("tabindex", "").strip() != "-1":
-            problems.append(f'{PRIORITY_PAGE}: mensagem #{frag} precisa de tabindex="-1"')
-    has_focus_script = any(
-        "location.hash" in masked and ".focus(" in masked
-        for masked in (_js_mask(body) for body in _exec_scripts(html))
-    )
-    if not has_focus_script:
-        problems.append(f"{PRIORITY_PAGE}: falta o script de foco nas mensagens de fragmento")
-    if TURNSTILE_SCRIPT_SRC not in pf.scripts:
-        problems.append(f"{PRIORITY_PAGE}: falta o script do Turnstile ({TURNSTILE_SCRIPT_SRC})")
-    forms = [f for f in pf.forms if f["attrs"].get("action") == PRIORITY_ACTION]
-    if len(forms) != 1:
-        problems.append(f"{PRIORITY_PAGE}: esperado um formulário para {PRIORITY_ACTION}, achados {len(forms)}")
-    else:
-        form = forms[0]
-        attrs = form["attrs"]
-        if attrs.get("method", "").lower() != "post":
-            problems.append(f'{PRIORITY_PAGE}: formulário precisa usar method="post"')
-        if attrs.get("data-clarity-mask") != "true":
-            problems.append(f'{PRIORITY_PAGE}: formulário precisa de data-clarity-mask="true"')
-        if int(form["email_inputs"]) < 1:
-            problems.append(f"{PRIORITY_PAGE}: formulário sem campo de email")
-        if form["turnstile_sitekeys"] != [TURNSTILE_SITE_KEY]:
-            problems.append(f'{PRIORITY_PAGE}: formulário sem widget do Turnstile com data-sitekey="{TURNSTILE_SITE_KEY}"')
+    # Qualquer arquivo que o Pages serviria em /prioridade (prioridade.html, .htm, .xhtml ou qualquer coisa dentro de
+    # prioridade/), sem distinção de maiúsculas (revisão do Kimi na rodada 2 do #212).
+    if site.is_dir():
+        for entry in sorted(site.iterdir()):
+            name = entry.name.lower()
+            if entry.is_file() and name in ("prioridade", "prioridade.html", "prioridade.htm", "prioridade.xhtml"):
+                problems.append(f"{entry.name}: a página de oposição foi removida e não pode estar no site montado")
+            elif entry.is_dir() and name == "prioridade" and any(x.is_file() for x in entry.rglob("*")):
+                problems.append(f"{entry.name}/: a página de oposição foi removida e não pode estar no site montado")
+    for sm in ("sitemap-site.xml", "blog/sitemap.xml"):
+        if not (site / sm).is_file():
+            continue
+        # Sitemap ausente ou inválido já é apontado por check_root_sitemaps e pelas regras do blog.
+        for loc, _ in _sitemap(site, sm, "urlset", "url", []) or []:
+            if _is_removed_priority(loc, SITE_ORIGIN + "/"):
+                problems.append(f"{sm}: lista a página removida {loc}")
+    for f in html_files(site):
+        rel = f.relative_to(site).as_posix()
+        parser = _Hrefs()
+        parser.feed(f.read_text(encoding="utf-8"))
+        parser.close()
+        base = SITE_ORIGIN + _page_url(site, f)
+        for href in parser.hrefs:
+            if _is_removed_priority(href, base):
+                problems.append(f"{rel}: link para a página removida {REMOVED_PRIORITY_PATH}/ ({href})")
     return problems
 
 
@@ -3589,8 +3523,8 @@ GA_UID_BLOCK = (
     "if(l||(g&&typeofg.t==='number'&&n-g.t>=0&&n-g.t<31536e6)){gtag('consent','update',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});"
     "gtag('set','allow_google_signals',false);"
     "gtag('set','allow_ad_personalization_signals',false);"
-    "}if(l){varu=p('heating-uid-v1');"
-    "if(u&&u.uid===k.uid&&typeofu.t==='number'&&n-u.t>=0&&n-u.t<18e5)gtag('set',{user_id:u.uid});"
+    "}if(l){varu=p('heating-uid-v1'),c=null;try{c=sessionStorage.getItem('guifav_identidade_sent_v2:'+(u&&u.uid))}catch(e){}"
+    "if(u&&u.uid===k.uid&&c==='1'&&typeofu.t==='number'&&n-u.t>=0&&n-u.t<18e5)gtag('set',{user_id:u.uid});"
     "}})();"
     "}"
 )
@@ -3655,7 +3589,7 @@ def check_ga_uid_snippet(rel: str, html: str) -> list[str]:
 
 
 def check_auth(site: Path) -> list[str]:
-    """#197 corte 2: track.js carrega auth.js com versão (?v= de 12 dígitos), snippet GA4 lê heating-uid-v1 antes do config, auth.js alterna consentimento de anúncios na sessão identificada, e 404, /privacidade/, /termos/ e /prioridade/ ficam sem One Tap."""
+    """#197 corte 2: track.js carrega auth.js com versão (?v= de 12 dígitos), snippet GA4 lê heating-uid-v1 antes do config, auth.js alterna consentimento de anúncios na sessão identificada, e 404, /privacidade/ e /termos/ ficam sem One Tap."""
     problems: list[str] = []
     track_file = site / "assets/track.js"
     auth_file = site / "assets/auth.js"
@@ -3784,7 +3718,7 @@ def main(argv: list[str] | None = None) -> int:
         problems += check_post_residues(Path(args.posts))
         problems += check_llm_ranking(Path(args.site))
         problems += check_legal(Path(args.site))
-        problems += check_priority(Path(args.site))
+        problems += check_priority_removed(Path(args.site))
         problems += check_auth(Path(args.site))
         problems += check_date_placeholder(Path(args.site))
         problems += check_llms_txt(Path(args.site), Path(args.posts))

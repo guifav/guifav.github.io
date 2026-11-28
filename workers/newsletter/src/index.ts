@@ -4,7 +4,6 @@
 //   POST /material           formulário das páginas de material: Turnstile, validação e email com o link
 //   GET  /material/download  link assinado do email (7 dias): entrega o arquivo (bundle ou R2) e grava a conversão (issue #97)
 //   POST /resend/webhook     webhook do Resend (svix): grava eventos de email em engagement_events para o heating (#197)
-//   POST /prioridade         formulário de oposição ao heating: grava heating_optout e apaga eventos, nota e vínculos do email (#197)
 //   POST /identidade         vínculo uid -> email das sessões logadas (Firebase ID token RS256 -> site_identities, #197 corte 2)
 // Desde a issue #114, a inscrição e o pedido de material levam a origem da visita (src/origem.ts) até a conversão.
 // As garantias A1 a A9 estão no PR e em tests/worker.test.ts; as dos materiais, em tests/material.test.ts;
@@ -15,8 +14,8 @@ import { material, arquivo, INTERESSES } from './materiais.ts';
 import { recordConversion, conversionId, requestId, requestInfo, motivo, type D1Like } from './conversoes.ts';
 import { parseOrigem } from './origem.ts';
 import { parseGaClientId, sendDownloadEvent } from './ga4.ts';
-import { checkForgotten, heatingOptoutHmac } from './forget.ts';
-import { handleResendWebhook, readBoundedBytes } from './resend-webhook.ts';
+import { checkForgotten } from './forget.ts';
+import { handleResendWebhook } from './resend-webhook.ts';
 import { handleIdentidade } from './identidade.ts';
 
 export { normalizeEmail };
@@ -356,70 +355,6 @@ async function download(url: URL, env: Env, deps: Deps): Promise<Response> {
   return new Response(body, { status: 200, headers });
 }
 
-async function parseFormFields(req: Request, maxBytes: number): Promise<((k: string) => string | null) | 'too_large' | 'invalid'> {
-  const rawBytes = await readBoundedBytes(req, maxBytes);
-  if (rawBytes === null) return 'too_large';
-  const ct = (req.headers.get('content-type') ?? '').toLowerCase();
-  if (ct.startsWith('multipart/form-data')) {
-    try {
-      const fd = await new Request(req.url, { method: 'POST', headers: { 'content-type': req.headers.get('content-type')! }, body: rawBytes }).formData();
-      return (k: string) => {
-        const v = fd.get(k);
-        return typeof v === 'string' ? v : null;
-      };
-    } catch {
-      return 'invalid';
-    }
-  }
-  let text: string;
-  try {
-    text = new TextDecoder('utf-8', { fatal: true }).decode(rawBytes);
-  } catch {
-    return 'invalid';
-  }
-  const params = new URLSearchParams(text);
-  return (k: string) => params.get(k);
-}
-
-async function prioridade(req: Request, env: Env, deps: Deps): Promise<Response> {
-  if (req.headers.get('origin') !== env.SITE_ORIGIN) return plain(403, 'origem não permitida');
-  const fields = await parseFormFields(req, MAX_BODY);
-  if (fields === 'too_large') return plain(413, 'pedido grande demais');
-  if (fields === 'invalid') return plain(400, 'formulário inválido');
-
-  const page = `${env.SITE_ORIGIN}/prioridade/`;
-  const ip = req.headers.get('cf-connecting-ip') ?? 'desconhecido';
-  // Limite por IP antes do Turnstile, como no /subscribe e no /material.
-  if (!(await env.RL_IP.limit({ key: ip })).success) return redirect(`${page}#erro-limite`);
-
-  const token = fields('cf-turnstile-response');
-  if (!token || !(await turnstileOk(token, ip, env, deps))) return redirect(`${page}#erro-verificacao`);
-
-  const email = normalizeEmail(fields('email') ?? '');
-  if (!email) return redirect(`${page}#erro-email`);
-
-  // Sem confirmação por email: a oposição só protege (épico #197) e vale para todos os contextos (`site` e cursos).
-  // Não cria contato nem envia email. D1Like deste Worker não declara batch; os quatro comandos rodam em sequência com
-  // a marca primeiro, para que uma falha nos DELETEs já bloqueie eventos e vínculos novos enquanto o titular recebe
-  // #erro para tentar novamente.
-  const nowIso = new Date(deps.now()).toISOString();
-  try {
-    const hmac = await heatingOptoutHmac(email, env.FORGET_HMAC_KEY);
-    await env.DB
-      .prepare('INSERT INTO heating_optout (email_hmac, opted_out_at) VALUES (?, ?) ON CONFLICT(email_hmac) DO UPDATE SET opted_out_at = excluded.opted_out_at')
-      .bind(hmac, nowIso)
-      .run();
-    // Os três DELETEs apagam todos os contextos e vínculos de identidade (todos os uids) do email (oposição geral).
-    await env.DB.prepare('DELETE FROM engagement_events WHERE email = ?').bind(email).run();
-    await env.DB.prepare('DELETE FROM heating WHERE email = ?').bind(email).run();
-    await env.DB.prepare('DELETE FROM site_identities WHERE email = ?').bind(email).run();
-  } catch (e) {
-    console.error(`oposição ao heating não gravada: ${motivo(e)}`);
-    return redirect(`${page}#erro`);
-  }
-  return redirect(`${page}#pronto`);
-}
-
 export async function handle(req: Request, env: Env, deps: Deps): Promise<Response> {
   const url = new URL(req.url);
   if (url.pathname === '/resend/webhook') {
@@ -427,13 +362,6 @@ export async function handle(req: Request, env: Env, deps: Deps): Promise<Respon
   }
   if (url.pathname === '/identidade') {
     return handleIdentidade(req, env, deps);
-  }
-  if (url.pathname === '/prioridade') {
-    if (req.method !== 'POST') return plain(405, 'método não permitido', { allow: 'POST' });
-    if (!env.FORGET_HMAC_KEY || env.FORGET_HMAC_KEY.length < MIN_SECRET || !env.TURNSTILE_SECRET) {
-      return plain(500, 'Worker sem configuração');
-    }
-    return prioridade(req, env, deps);
   }
   if (url.pathname === '/material' || url.pathname === '/material/download') {
     if (url.pathname === '/material' && req.method !== 'POST') return plain(405, 'método não permitido', { allow: 'POST' });

@@ -1,4 +1,4 @@
-// Testes do heating de contatos (épico #197, corte 1): migrações 0010 e 0011, POST /resend/webhook e POST /prioridade.
+// Testes do heating de contatos (épico #197, corte 1): migrações 0010 e 0011, POST /resend/webhook e a oposição (a rota /prioridade saiu em 28/11).
 // Rodar em workers/newsletter/: npm test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -125,19 +125,6 @@ function webhookReq(
       ...opts.extraHeaders,
     },
     body: opts.method && opts.method !== 'POST' ? undefined : body,
-  });
-}
-
-function prioridadeReq(fields: Record<string, string>, headers: Record<string, string> = {}): Request {
-  return new Request('https://insights.guifav.dev/prioridade', {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/x-www-form-urlencoded',
-      origin: 'https://guifav.dev',
-      'cf-connecting-ip': '203.0.113.9',
-      ...headers,
-    },
-    body: new URLSearchParams(fields).toString(),
   });
 }
 
@@ -907,7 +894,7 @@ test('W16: entradas inválidas em HEATING_CURSOS e HEATING_REMETENTES_SITE são 
   }
 });
 
-test('W17: corrida com POST /prioridade — se a oposição grava a marca imediatamente antes do INSERT do webhook, nenhum evento do email fica gravado', async () => {
+test('W17: corrida com a oposição (--optout) — se a marca é gravada a marca imediatamente antes do INSERT do webhook, nenhum evento do email fica gravado', async () => {
   const base = d1();
   const email = 'corrida@exemplo.com';
   const hmac = await heatingOptoutHmac(email, FORGET_KEY);
@@ -925,7 +912,7 @@ test('W17: corrida com POST /prioridade — se a oposição grava a marca imedia
         run: async () => {
           if (!prioridadeExecutou && /INSERT\s+INTO\s+engagement_events\b/i.test(sql)) {
             prioridadeExecutou = true;
-            // Simula POST /prioridade terminando imediatamente antes do INSERT do webhook:
+            // Simula a oposição (--optout) terminando imediatamente antes do INSERT do webhook:
             // grava a marca de oposição e apaga eventos e heating anteriores do email.
             base.raw.prepare(
               'INSERT INTO heating_optout (email_hmac, opted_out_at) VALUES (?, ?) ON CONFLICT(email_hmac) DO UPDATE SET opted_out_at = excluded.opted_out_at',
@@ -1050,181 +1037,20 @@ test('W20: assinatura svix é verificada sobre id.ts. + bytes brutos do corpo (c
   assert.equal(s.rows('engagement_events').length, 1);
 });
 
-// ---------------------------------------------------------------- POST /prioridade
+// ---------------------------------------------------------------- /prioridade removida (28/11)
 
-test('P1: /prioridade grava a marca, apaga eventos, heating (todos os contextos) e site_identities (todos os uids) só do email informado e não chama o Resend', async () => {
+test('P0: a página e o formulário de oposição saíram (decisão do Gui em 28/11): /prioridade responde 404 em qualquer método', async () => {
+  // A oposição agora é pedida por email (contact@guifav.dev) e aplicada com o --optout do heating_sync.py.
   const s = setup();
-  const iso = new Date(NOW - 60_000).toISOString();
-  for (const email of ['leitor@exemplo.com', 'outro@exemplo.com']) {
-    for (const ctx of ['site', 'curso:chatgpt-no-dia-a-dia']) {
-      s.db.prepare(`INSERT INTO engagement_events (id, context, email, signal, source, ref, occurred_at, recorded_at)
-        VALUES (?, ?, ?, 'email_aberto', 'resend', 'em_1', ?, ?)`).run(`rs:${ctx}:${email.split('@')[0]}`, ctx, email, iso, iso);
-      s.db.prepare(`INSERT INTO heating (context, email, score, band, signals, computed_at)
-        VALUES (?, ?, 60, 'morno', '["email_aberto"]', ?)`).run(ctx, email, iso);
-    }
-  }
-  s.db.prepare('INSERT INTO site_identities (uid, email, linked_at) VALUES (?, ?, ?)').run('UidLeitor1', 'leitor@exemplo.com', iso);
-  s.db.prepare('INSERT INTO site_identities (uid, email, linked_at) VALUES (?, ?, ?)').run('UidLeitor2', 'leitor@exemplo.com', iso);
-  s.db.prepare('INSERT INTO site_identities (uid, email, linked_at) VALUES (?, ?, ?)').run('UidOutro1', 'outro@exemplo.com', iso);
-
-  const r = await s.run(prioridadeReq({ email: '  Leitor@Exemplo.COM ', 'cf-turnstile-response': 'tok' }));
-  assert.equal(r.status, 303);
-  assert.equal(loc(r), 'https://guifav.dev/prioridade/#pronto');
-  assert.equal(s.calls.filter((c) => c.url.includes('resend.com')).length, 0);
-
-  const optouts = s.rows('heating_optout');
-  assert.equal(optouts.length, 1);
-  assert.deepEqual(optouts[0], {
-    email_hmac: await heatingOptoutHmac('leitor@exemplo.com', FORGET_KEY),
-    opted_out_at: new Date(NOW).toISOString(),
-  });
-  assert.deepEqual(s.rows('engagement_events').map((x) => [x.context, x.email]), [
-    ['site', 'outro@exemplo.com'],
-    ['curso:chatgpt-no-dia-a-dia', 'outro@exemplo.com'],
-  ]);
-  assert.deepEqual(s.rows('heating').map((x) => [x.context, x.email]), [
-    ['site', 'outro@exemplo.com'],
-    ['curso:chatgpt-no-dia-a-dia', 'outro@exemplo.com'],
-  ]);
-  assert.deepEqual(s.rows('site_identities').map((x) => [x.uid, x.email]), [
-    ['UidOutro1', 'outro@exemplo.com'],
-  ]);
-
-  // Repetir a oposição depois atualiza opted_out_at (upsert) sem erro.
-  s.avanca(5_000);
-  const r2 = await s.run(prioridadeReq({ email: 'leitor@exemplo.com', 'cf-turnstile-response': 'tok' }));
-  assert.equal(r2.status, 303);
-  assert.equal(loc(r2), 'https://guifav.dev/prioridade/#pronto');
-  assert.equal(s.rows('heating_optout')[0].opted_out_at, new Date(NOW + 5_000).toISOString());
-
-  // Webhook que chega depois (tanto do site quanto do curso) não volta a gravar eventos do email oposto.
-  for (const [id, from] of [
-    ['msg_pos_optout_site', 'Guilherme Favaron <insights@guifav.dev>'],
-    ['msg_pos_optout_curso', 'Guilherme Favaron | ChatGPT no dia a dia <chatgpt-no-dia-a-dia@guifav.dev>'],
-  ] as const) {
-    const rw = await s.run(webhookReq({
-      type: 'email.clicked',
-      created_at: new Date(NOW + 5_000).toISOString(),
-      data: { email_id: 'em_pos', from, to: ['leitor@exemplo.com'], click: { link: 'https://guifav.dev/blog/post/' } },
-    }, { id, tsSec: Math.floor((NOW + 5_000) / 1000) }));
-    assert.equal(rw.status, 200, id);
-  }
-  assert.deepEqual(s.rows('engagement_events').map((x) => x.email), ['outro@exemplo.com', 'outro@exemplo.com']);
-});
-
-test('P2: /prioridade aceita multipart/form-data e não revela se o email existia', async () => {
-  const s = setup();
-  const fd = new FormData();
-  fd.set('email', 'nunca-visto@exemplo.com');
-  fd.set('cf-turnstile-response', 'tok');
-  const r = await s.run(new Request('https://insights.guifav.dev/prioridade', {
-    method: 'POST',
-    headers: { origin: 'https://guifav.dev', 'cf-connecting-ip': '203.0.113.9' },
-    body: fd,
-  }));
-  assert.equal(r.status, 303);
-  assert.equal(loc(r), 'https://guifav.dev/prioridade/#pronto');
-  assert.equal(s.rows('heating_optout').length, 1);
-  assert.equal(s.rows('heating_optout')[0].email_hmac, await heatingOptoutHmac('nunca-visto@exemplo.com', FORGET_KEY));
-});
-
-test('P3: /prioridade valida método, Origin, tamanho do corpo, limite por IP, Turnstile e email', async () => {
-  const s = setup();
-  // Método != POST
-  const rGet = await s.run(new Request('https://insights.guifav.dev/prioridade'));
-  assert.equal(rGet.status, 405);
-  assert.equal(rGet.headers.get('allow'), 'POST');
-
-  // Origin errado ou ausente
-  assert.equal((await s.run(prioridadeReq({ email: 'a@b.com', 'cf-turnstile-response': 'tok' }, { origin: 'https://evil.example' }))).status, 403);
-  const semOrigin = new Request('https://insights.guifav.dev/prioridade', {
-    method: 'POST',
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-    body: 'email=a@b.com&cf-turnstile-response=tok',
-  });
-  assert.equal((await s.run(semOrigin)).status, 403);
-
-  // Corpo maior que 8192 bytes
-  assert.equal((await s.run(prioridadeReq({ email: 'a@b.com', 'cf-turnstile-response': 'tok', lixo: 'x'.repeat(9000) }))).status, 413);
-
-  // Limite por IP antes do Turnstile -> #erro-limite sem chamar siteverify
-  const sRl = setup({ rlIp: false });
-  const rRl = await sRl.run(prioridadeReq({ email: 'a@b.com', 'cf-turnstile-response': 'tok' }));
-  assert.equal(rRl.status, 303);
-  assert.equal(loc(rRl), 'https://guifav.dev/prioridade/#erro-limite');
-  assert.equal(sRl.calls.length, 0);
-
-  // Turnstile ausente, reprovado ou outro host -> #erro-verificacao
-  for (const [nome, o, fields] of [
-    ['sem token', {}, { email: 'a@b.com' }],
-    ['reprovado', { turnstile: { success: false } }, { email: 'a@b.com', 'cf-turnstile-response': 'tok' }],
-    ['outro host', { turnstile: { success: true, hostname: 'evil.example' } }, { email: 'a@b.com', 'cf-turnstile-response': 'tok' }],
-    ['erro de rede', { turnstile: new Error('rede') }, { email: 'a@b.com', 'cf-turnstile-response': 'tok' }],
-  ] as const) {
-    const st = setup(o);
-    const rt = await st.run(prioridadeReq(fields));
-    assert.equal(rt.status, 303, nome);
-    assert.equal(loc(rt), 'https://guifav.dev/prioridade/#erro-verificacao', nome);
-    assert.equal(st.rows('heating_optout').length, 0, nome);
-  }
-
-  // Email inválido -> #erro-email
-  for (const badEmail of ['', 'sem-arroba', 'a@b', 'a@b.com\nbcc@x.com']) {
-    const rBad = await s.run(prioridadeReq({ email: badEmail, 'cf-turnstile-response': 'tok' }));
-    assert.equal(rBad.status, 303, badEmail);
-    assert.equal(loc(rBad), 'https://guifav.dev/prioridade/#erro-email', badEmail);
+  for (const method of ['GET', 'POST']) {
+    const r = await s.run(new Request('https://insights.guifav.dev/prioridade', {
+      method,
+      headers: method === 'POST' ? { origin: 'https://guifav.dev', 'content-type': 'application/x-www-form-urlencoded' } : {},
+      body: method === 'POST' ? 'email=leitor%40exemplo.com&cf-turnstile-response=tok' : undefined,
+    }));
+    assert.equal(r.status, 404, method);
   }
   assert.equal(s.rows('heating_optout').length, 0);
-});
-
-test('P4: falha do D1 em /prioridade redireciona para #erro, sem email no log, e grava a marca antes dos DELETEs', async () => {
-  const s = setup({ d1Falha: /DELETE FROM heating/, d1Mensagem: 'D1_ERROR: falha ao apagar sigiloso@exemplo.com' });
-  const iso = new Date(NOW).toISOString();
-  s.db.prepare(`INSERT INTO engagement_events (id, context, email, signal, source, ref, occurred_at, recorded_at)
-    VALUES ('rs:1', 'site', 'sigiloso@exemplo.com', 'email_aberto', 'resend', 'em_1', ?, ?)`).run(iso, iso);
-
-  let r!: Response;
-  const erros = await capturaErros(async () => {
-    r = await s.run(prioridadeReq({ email: 'sigiloso@exemplo.com', 'cf-turnstile-response': 'tok' }));
-  });
-  assert.equal(r.status, 303);
-  assert.equal(loc(r), 'https://guifav.dev/prioridade/#erro');
-  assert.equal(erros.length, 1);
-  assert.ok(!erros[0].includes('sigiloso'), erros[0]);
-  assert.ok(!erros[0].includes('exemplo.com'), erros[0]);
-  // Como a marca é gravada primeiro, mesmo com falha no DELETE o opt-out já protege contra novos eventos.
-  assert.equal(s.rows('heating_optout').length, 1);
-  assert.equal(s.rows('engagement_events').length, 0);
-
-  // Falha no DELETE de site_identities também redireciona para #erro sem vazar email e mantém a marca gravada.
-  const sId = setup({ d1Falha: /DELETE FROM site_identities/, d1Mensagem: 'D1_ERROR: falha ao apagar sigiloso@exemplo.com' });
-  sId.db.prepare('INSERT INTO site_identities (uid, email, linked_at) VALUES (?, ?, ?)').run('UidSig1', 'sigiloso@exemplo.com', iso);
-  let rId!: Response;
-  const errosId = await capturaErros(async () => {
-    rId = await sId.run(prioridadeReq({ email: 'sigiloso@exemplo.com', 'cf-turnstile-response': 'tok' }));
-  });
-  assert.equal(rId.status, 303);
-  assert.equal(loc(rId), 'https://guifav.dev/prioridade/#erro');
-  assert.equal(errosId.length, 1);
-  assert.ok(!errosId[0].includes('sigiloso'), errosId[0]);
-  assert.equal(sId.rows('heating_optout').length, 1);
-});
-
-test('P5: FORGET_HMAC_KEY ausente/curta e TURNSTILE_SECRET ausente em /prioridade devolvem 500 Worker sem configuração', async () => {
-  for (const [nome, opts] of [
-    ['FORGET_HMAC_KEY undefined', { forgetKey: undefined }],
-    ['FORGET_HMAC_KEY vazia', { forgetKey: '' }],
-    ['FORGET_HMAC_KEY curta (31)', { forgetKey: 'x'.repeat(31) }],
-    ['TURNSTILE_SECRET undefined', { turnstileSecret: undefined }],
-    ['TURNSTILE_SECRET vazia', { turnstileSecret: '' }],
-  ] as Array<[string, SetupOpts]>) {
-    const s = setup(opts);
-    const r = await s.run(prioridadeReq({ email: 'a@b.com', 'cf-turnstile-response': 'tok' }));
-    assert.equal(r.status, 500, nome);
-    assert.equal(await r.text(), 'Worker sem configuração', nome);
-    assert.equal(s.calls.length, 0, nome);
-    assert.equal(s.rows('heating_optout').length, 0, nome);
-  }
 });
 
 test('C1: wrangler.toml documenta RESEND_HEATING_WEBHOOK_SECRET sem segredo e declara HEATING_REMETENTES_SITE e HEATING_CURSOS', () => {

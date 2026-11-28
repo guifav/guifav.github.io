@@ -29,7 +29,7 @@ Decisões registradas do desenho:
   curso mede. O teto somado de 20 vale para os passivos (`email_aberto`) do curso.
 - Status desconhecido no curso (Firestore indisponível na rodada ou inscrito ausente do Firestore): os sinais de email
   do curso não contam (bloqueio conservador).
-- Oposição concorrente (`POST /prioridade` durante a rodada): todo `INSERT` em `engagement_events` e `heating` é
+- Oposição concorrente (`--optout` de outra execução durante a rodada): todo `INSERT` em `engagement_events` e `heating` é
   condicional na mesma instrução (`WHERE NOT EXISTS (SELECT 1 FROM heating_optout WHERE email_hmac = ...)`), e no fim
   da rodada (após as escritas no D1 e no Twenty) o job relê `heating_optout` e limpa D1 e Twenty (Pessoa e Inscrições)
   para qualquer marca nova desde a leitura inicial.

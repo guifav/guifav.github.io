@@ -1505,7 +1505,7 @@ class HeatingSyncTest(unittest.TestCase):
                     sql = data.get("sql", "")
                     if not self.injected_ev and sql.startswith("INSERT INTO engagement_events"):
                         self.injected_ev = True
-                        # Simula POST /prioridade gravando heating_optout logo antes do INSERT de eventos.
+                        # Simula uma oposição concorrente (--optout) gravando heating_optout logo antes do INSERT de eventos.
                         self.add_optout("corr-ev@corp.com")
                         res = super().__call__(method, url, headers, body)
                         self.ev_after_insert = [
@@ -1514,7 +1514,7 @@ class HeatingSyncTest(unittest.TestCase):
                         return res
                     if not self.injected_ht and "batch" in data and data["batch"][0]["sql"] == "DELETE FROM heating":
                         self.injected_ht = True
-                        # Simula POST /prioridade gravando heating_optout logo antes do batch de heating.
+                        # Simula uma oposição concorrente (--optout) gravando heating_optout logo antes do batch de heating.
                         self.add_optout("corr-ht@corp.com")
                         res = super().__call__(method, url, headers, body)
                         self.ht_after_batch = [
@@ -3356,7 +3356,7 @@ class Ga4EBigQueryTest(unittest.TestCase):
             with self.assertRaises(sqlite3.IntegrityError, msg=str(kw)):
                 f.add_purge_queue(**kw)
 
-        # 2) Trigger AFTER DELETE ON site_identities (como o Worker faz no POST /prioridade): enfileira automaticamente.
+        # 2) Trigger AFTER DELETE ON site_identities (como o --optout e o --forget fazem): enfileira automaticamente.
         f.add_identity("UidViaWorker1", "web@corp.com")
         f.db.execute("DELETE FROM site_identities WHERE email = ?", ("web@corp.com",))
         f.db.commit()
