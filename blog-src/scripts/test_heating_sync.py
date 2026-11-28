@@ -64,8 +64,8 @@ def sql_normalizado(sql: str) -> str:
     - comentários (`--` até o fim da linha e `/* */`, como o SQLite os lê);
     - diferenças de espaço fora de literal.
 
-    Todo o resto fica como está, inclusive aspas duplas no corpo (`"NOT" NULL` e `NOT NULL` são diferentes) e literais
-    entre aspas simples. Nomes não são reescritos: depois do RENAME o sqlite_master já guarda o nome final, então um
+    Todo o resto fica como está, inclusive aspas duplas no corpo (`"NOT" NULL` e `NOT NULL` são diferentes), nomes
+    entre colchetes ou crases e literais entre aspas simples, com espaços e parênteses de dentro. Nomes não são reescritos: depois do RENAME o sqlite_master já guarda o nome final, então um
     `_new` que sobre em tabela, índice ou trigger aparece como diferença."""
     m = re.match(r'\s*CREATE\s+(TABLE|INDEX|UNIQUE\s+INDEX|TRIGGER|VIEW)\s+(?:IF\s+NOT\s+EXISTS\s+)?("(?:[^"]|"")*"|\w+)',
                  sql, re.I)
@@ -99,8 +99,8 @@ def sql_normalizado(sql: str) -> str:
             fim = sql.find("*/", i + 2)
             i = len(sql) if fim < 0 else fim + 2  # o SQLite aceita comentário em bloco aberto até o fim
             fora.append(" ")
-        elif sql[i] in "'\"":
-            fim = fim_entre(sql[i], i)
+        elif sql[i] in "'\"`[":
+            fim = sql.index("]", i + 1) if sql[i] == "[" else fim_entre(sql[i], i)
             fecha_fora()
             partes.append(sql[i:fim + 1])
             i = fim + 1
@@ -108,7 +108,7 @@ def sql_normalizado(sql: str) -> str:
             fora.append(sql[i])
             i += 1
     fecha_fora()
-    return " ".join(p for p in partes if p).replace("( ", "(").replace(" )", ")")
+    return " ".join(p for p in partes if p)
 
 
 class Fake:
@@ -973,6 +973,14 @@ class HeatingSyncTest(unittest.TestCase):
             with self.subTest(mutante=mutante):
                 aspas = "CREATE TABLE t (a TEXT NOT NULL, b TEXT CHECK (b <> OLD.uid))"
                 self.assertNotEqual(sql_normalizado(aspas.replace(original, mutante)), sql_normalizado(aspas))
+        # Rodada 5 (Claude fresh): o ajuste de espaço junto de parêntese rodava também dentro de literal.
+        for a, b in (("'( x'", "'(x'"), ("'x )'", "'x)'"), ("'*( *'", "'*(*'"), ("[a  b]", "[a b]"), ("`a -- b`", "`a`"),
+                     ("[a /* b */]", "[a]")):
+            with self.subTest(a=a, b=b):
+                self.assertNotEqual(sql_normalizado(f"CREATE TABLE t (c TEXT CHECK (c <> {a}))"),
+                                    sql_normalizado(f"CREATE TABLE t (c TEXT CHECK (c <> {b}))"))
+        self.assertEqual(sql_normalizado("CREATE TABLE t ( c TEXT CHECK ( c <> 'x' ) )"),
+                         sql_normalizado("CREATE TABLE t (c TEXT CHECK (c <> 'x'))"))
         # Revisão do Roger no head c2f8a29: `--` dentro de `/* */` cortava a linha e escondia a coluna seguinte.
         bloco = "CREATE TABLE t (a TEXT /* -- it's */ , b TEXT)"
         self.assertNotEqual(sql_normalizado(bloco), sql_normalizado(bloco.replace("b TEXT", "c TEXT")))
