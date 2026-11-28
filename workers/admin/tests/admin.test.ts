@@ -29,8 +29,7 @@ function d1(failBatch?: number, failSql?: RegExp, beforeBatch?: (n: number) => P
   let batches = 0;
   const db = new DatabaseSync(':memory:');
   const dir = new URL('../migrations/', import.meta.url);
-  const files = readdirSync(dir).filter((f) => f.endsWith('.sql')).sort();
-  for (const f of files) {
+  for (const f of readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()) {
     db.exec(readFileSync(new URL(f, dir), 'utf-8'));
   }
   const stmt = (sql: string, args: unknown[] = []): D1Stmt => ({

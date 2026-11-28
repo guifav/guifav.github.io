@@ -41,8 +41,7 @@ interface FakeD1 extends D1Like {
 function d1(opts: { failSql?: RegExp; failInsertCatalogAt?: number } = {}): FakeD1 {
   const db = new DatabaseSync(':memory:');
   const dir = new URL('../migrations/', import.meta.url);
-  const files = readdirSync(dir).filter((f) => f.endsWith('.sql')).sort();
-  for (const f of files) {
+  for (const f of readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()) {
     db.exec(readFileSync(new URL(f, dir), 'utf-8'));
   }
   let catalogInserts = 0;

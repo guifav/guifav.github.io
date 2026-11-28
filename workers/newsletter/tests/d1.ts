@@ -9,8 +9,7 @@ export function d1(falha?: RegExp, mensagem = 'D1_ERROR: UNIQUE constraint faile
   porta?: Promise<void>): D1Like & { raw: DatabaseSync } {
   const db = new DatabaseSync(':memory:');
   const dir = new URL('../../admin/migrations/', import.meta.url);
-  const files = readdirSync(dir).filter((f) => f.endsWith('.sql')).sort();
-  for (const f of files) db.exec(readFileSync(new URL(f, dir), 'utf-8'));
+  for (const f of readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()) db.exec(readFileSync(new URL(f, dir), 'utf-8'));
   const stmt = (sql: string, args: unknown[] = []): D1Stmt => ({
     bind: (...v: unknown[]) => stmt(sql, v),
     run: async () => {
