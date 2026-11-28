@@ -798,7 +798,7 @@ class HeatingSyncTest(unittest.TestCase):
 
     def test_insert_condicional_respeita_o_limite_de_select_composto_do_d1(self):
         # 28/11 (épico #197): a primeira rodada real falhou no D1 com "too many terms in compound SELECT" (11 linhas num
-        # UNION ALL). O D1 falso tem o mesmo teto de 5; um curso com muitos eventos grava em lotes de 5.
+        # UNION ALL). O D1 falso tem o mesmo teto de 5; um contato com muitas conversões grava em lotes de 5.
         self.assertEqual(H.D1_COMPOUND_SELECT_MAX, 5)
         self.assertLessEqual(H.EVENT_CHUNK, H.D1_COMPOUND_SELECT_MAX)
         self.assertLessEqual(H.HEATING_CHUNK, H.D1_COMPOUND_SELECT_MAX)
@@ -2104,7 +2104,8 @@ class CliAndOutputTest(unittest.TestCase):
         self.assertNotIn("ok@corp.com", txt_fc)
 
     def test_lotes_heating_d1_batch_conversao_e_curso_invalidos_e_check_0012(self):
-        # 20 emails válidos -> 2 lotes de INSERT (14 + 6) dentro de uma única transação `batch` com <= 100 params.
+        # 20 emails válidos no site e 1 no curso -> 21 notas em 5 lotes de INSERT de até 5 (teto de SELECT composto do D1)
+        # numa única `batch`, com <= 100 params.
         f = Fake(schema=True)
         for i in range(1, 21):
             f.add_conv(i, f"u{i:02d}@corp.com", action="newsletter_confirm", when=ago(days=0))
@@ -2131,7 +2132,10 @@ class CliAndOutputTest(unittest.TestCase):
         self.assertEqual(len(batches), 1)
         partes = batches[0][len("BATCH:"):].split(";")
         n_heating = f.db.execute("SELECT count(*) FROM heating").fetchone()[0]
-        self.assertEqual(partes, ["DELETE"] + ["INSERT"] * -(-n_heating // H.HEATING_CHUNK))
+        # Volume fixo: 20 notas do site e 1 do curso (ok2). Um defeito que gravasse só o primeiro lote deixaria 5.
+        self.assertEqual(n_heating, 21)
+        self.assertEqual(f.db.execute("SELECT count(*) FROM heating WHERE context = 'site'").fetchone()[0], 20)
+        self.assertEqual(partes, ["DELETE"] + ["INSERT"] * 5)
 
         # Migração 0012 recusa contexto `site` e `email_hmac` fora do padrão hex 64.
         with self.assertRaises(sqlite3.IntegrityError):
