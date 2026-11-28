@@ -860,7 +860,7 @@ test('as três condições do user_id, heating-uid-v1 sincronizado, sinais de an
     ['event', 'auth_identified'],
   ]);
 
-  // POST /identidade com Bearer e sem corpo.
+  // POST /identidade com Bearer e o corpo mínimo da origem.
   assert.equal(s.fetchCalls.length, 1);
   assert.equal(s.fetchCalls[0].url, 'https://insights.guifav.dev/identidade');
   assert.equal(s.fetchCalls[0].init?.method, 'POST');

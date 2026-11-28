@@ -57,6 +57,8 @@ class Fake:
 
     def __init__(self, people=(), schema=False, fail=None, db_path=":memory:"):
         self.db = sqlite3.connect(db_path)
+        # O D1 de produção aceita no máximo 5 termos num SELECT composto (medido em 28/11); o SQLite padrão aceita 500.
+        self.db.setlimit(sqlite3.SQLITE_LIMIT_COMPOUND_SELECT, H.D1_COMPOUND_SELECT_MAX)
         self.db.row_factory = sqlite3.Row
         mig_files = sorted(n for n in os.listdir(MIGRATIONS) if n.endswith(".sql"))
         for name in mig_files:
@@ -793,6 +795,24 @@ class HeatingSyncTest(unittest.TestCase):
              counts2["inscricoes_criadas"], counts2["inscricoes_atualizadas"]),
             (0, 0, 0, 0, 0, 0),
         )
+
+    def test_insert_condicional_respeita_o_limite_de_select_composto_do_d1(self):
+        # 28/11 (épico #197): a primeira rodada real falhou no D1 com "too many terms in compound SELECT" (11 linhas num
+        # UNION ALL). O D1 falso tem o mesmo teto de 5; um contato com muitas conversões grava em lotes de 5.
+        self.assertEqual(H.D1_COMPOUND_SELECT_MAX, 5)
+        self.assertLessEqual(H.EVENT_CHUNK, H.D1_COMPOUND_SELECT_MAX)
+        self.assertLessEqual(H.HEATING_CHUNK, H.D1_COMPOUND_SELECT_MAX)
+        f = Fake(people=[person("p1", "muitos@corp.com")], schema=True)
+        for i in range(1, 24):
+            f.add_conv(i, "muitos@corp.com", action="material_download", when=ago(days=i % 20 + 1))
+        counts, _ = run_job(f, apply=True)
+        n = f.db.execute("SELECT count(*) FROM engagement_events WHERE email = 'muitos@corp.com'").fetchone()[0]
+        self.assertEqual(n, 23)
+        self.assertEqual(counts["eventos_conversao_novos"], 23)
+        with self.assertRaises(ValueError):
+            H._insert_events_sql([{"id": str(i)} for i in range(6)], FORGET_KEY)
+        with self.assertRaises(ValueError):
+            H._insert_heating_sql([("site", "a@b.co", 1, "FRIO", "[]", NOW_ISO, None)] * 6, FORGET_KEY)
 
     def test_login_no_site_nao_pontua_nem_conta_como_conversao_invalida(self):
         # site_login (épico #197): conversão válida para o CRM, sem sinal na régua; não gera evento nem alerta.
@@ -2084,7 +2104,8 @@ class CliAndOutputTest(unittest.TestCase):
         self.assertNotIn("ok@corp.com", txt_fc)
 
     def test_lotes_heating_d1_batch_conversao_e_curso_invalidos_e_check_0012(self):
-        # 20 emails válidos -> 2 lotes de INSERT (14 + 6) dentro de uma única transação `batch` com <= 100 params.
+        # 20 emails válidos no site e 1 no curso -> 21 notas em 5 lotes de INSERT de até 5 (teto de SELECT composto do D1)
+        # numa única `batch`, com <= 100 params.
         f = Fake(schema=True)
         for i in range(1, 21):
             f.add_conv(i, f"u{i:02d}@corp.com", action="newsletter_confirm", when=ago(days=0))
@@ -2107,7 +2128,14 @@ class CliAndOutputTest(unittest.TestCase):
         self.assertEqual(counts["curso_invalido"], 3)
         self.assertLessEqual(f.max_params, 100)
         batches = [w for w in f.d1_writes() if w.startswith("BATCH:")]
-        self.assertEqual(batches, ["BATCH:DELETE;INSERT;INSERT"])
+        # Uma troca só: DELETE e os INSERT em lotes de até D1_COMPOUND_SELECT_MAX linhas (limite do D1).
+        self.assertEqual(len(batches), 1)
+        partes = batches[0][len("BATCH:"):].split(";")
+        n_heating = f.db.execute("SELECT count(*) FROM heating").fetchone()[0]
+        # Volume fixo: 20 notas do site e 1 do curso (ok2). Um defeito que gravasse só o primeiro lote deixaria 5.
+        self.assertEqual(n_heating, 21)
+        self.assertEqual(f.db.execute("SELECT count(*) FROM heating WHERE context = 'site'").fetchone()[0], 20)
+        self.assertEqual(partes, ["DELETE"] + ["INSERT"] * 5)
 
         # Migração 0012 recusa contexto `site` e `email_hmac` fora do padrão hex 64.
         with self.assertRaises(sqlite3.IntegrityError):
@@ -2387,8 +2415,10 @@ class Ga4EBigQueryTest(unittest.TestCase):
                 ga_writes.append(("ev", data["params"][0][:11]))
             elif sql.startswith("INSERT INTO meta"):
                 ga_writes.append(("meta", data["params"][1]))
+        # Lotes de até 5 eventos: um dia pode ter mais de um INSERT, sempre antes do marcador daquele dia.
+        colapsado = [w for i, w in enumerate(ga_writes) if i == 0 or w != ga_writes[i - 1]]
         self.assertEqual(
-            ga_writes,
+            colapsado,
             [("ev", "ga:20261125"), ("meta", "2026-11-25"), ("ev", "ga:20261126"), ("meta", "2026-11-26")],
         )
 
