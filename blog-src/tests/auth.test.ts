@@ -2019,6 +2019,9 @@ test('avatar (28/11): foto do Google por https vira img sem referrer; outro host
     'http://lh3.googleusercontent.com/a/x',
     'https://lh3.googleusercontent.com.evil.example/a',
     'https://evilgoogleusercontent.com/a',
+    // Só lh3, o endereço citado na política (revisão da rodada 2 do #212).
+    'https://lh4.googleusercontent.com/a/x',
+    'https://googleusercontent.com/a/x',
     'javascript:alert(1)',
     'data:image/png;base64,AAAA',
     'não é uma url',

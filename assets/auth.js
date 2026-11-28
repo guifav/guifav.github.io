@@ -14,7 +14,9 @@
 //   (decisão do Gui em 28/11). Só fica desligado quando o /identidade responde 409 (oposição registrada para o email,
 //   marcada com o: 1): aí o login não liga de novo enquanto a marca valer. O GA4 só identifica (user_id,
 //   heating-uid-v1, auth_identified) depois de o /identidade confirmar o vínculo neste navegador (s: 1): quem pediu
-//   oposição e entra por um navegador sem a marca o: 1 nunca chega a ser identificado antes do 409.
+//   oposição nunca é identificado antes de uma confirmação. Num navegador já confirmado antes da oposição, a sessão
+//   seguinte ainda identifica até o 409 chegar (e o <head> manda o user_id guardado por até 30 min); o --optout impede
+//   a pontuação, então o efeito é só esse hit no GA4.
 // - Todo login com o vínculo ligado envia POST https://insights.guifav.dev/identidade com o ID token uma vez por sessão
 //   e por uid, com ou sem o aceite dos cookies; a origem da visita só vai junto com consent-v1 granted.
 // - Só com as 3 condições (logado no tenant, consent-v1 granted e heating-link-v1 granted para o uid):
@@ -70,8 +72,9 @@
   var UID_RE = /^[0-9A-Za-z]{1,128}$/;
 
   var NO_ONE_TAP_PREFIXES = ['/privacidade', '/termos', '/404'];
-  // Foto da conta Google: só https em *.googleusercontent.com (o que o Firebase devolve para contas Google).
-  var PHOTO_HOST_RE = /(^|\.)googleusercontent\.com$/;
+  // Foto da conta Google: só https em lh3.googleusercontent.com, o endereço citado na política de privacidade (o que o
+  // Firebase devolve para contas Google); qualquer outro vira a inicial do nome.
+  var PHOTO_HOST_RE = /^lh3\.googleusercontent\.com$/;
 
   var fbAuth = null;
   var authInstance = null;
