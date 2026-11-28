@@ -246,6 +246,17 @@ def conv_by_event(fake):
 
 
 class SyncTest(unittest.TestCase):
+    def test_d1_falso_tem_os_limites_medidos_no_d1_de_producao(self):
+        # 28/11 (épico #197): 5 termos num SELECT composto e 50 caracteres de padrão de GLOB/LIKE, como o D1 de produção.
+        f = Fake()
+        cinco = " UNION ALL ".join(["SELECT 1"] * 5)
+        self.assertEqual(len(f.db.execute(cinco).fetchall()), 5)
+        with self.assertRaisesRegex(sqlite3.OperationalError, "too many terms in compound SELECT"):
+            f.db.execute(cinco + " UNION ALL SELECT 1").fetchall()
+        self.assertEqual(f.db.execute("SELECT 'a' GLOB ?", ("?" * 50,)).fetchone()[0], 0)
+        with self.assertRaisesRegex(sqlite3.OperationalError, "LIKE or GLOB pattern too complex"):
+            f.db.execute("SELECT 'a' GLOB ?", ("?" * 51,)).fetchone()
+
     def test_dry_run_writes_nothing(self):
         f = Fake(people=[person("p1", "a@x.com")])
         f.add(1, "a@x.com")

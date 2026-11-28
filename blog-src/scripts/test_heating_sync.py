@@ -831,6 +831,45 @@ class HeatingSyncTest(unittest.TestCase):
         gatilhos = {r[0] for r in f.db.execute("SELECT name FROM sqlite_master WHERE type = 'trigger'")}
         self.assertIn("site_identities_enqueue_purge", gatilhos)
 
+    def test_0015_recria_as_seis_tabelas_iguais_as_originais_salvo_o_check_de_data(self):
+        # Esquema das seis tabelas com as migrações até a 0014 (sem o limite do D1, que recusaria só os INSERT) e até a
+        # 0015. Trocando cada CHECK de data dividido pela forma antiga, o texto tem de ficar idêntico: as oito colunas
+        # usam a forma canônica (o teste seguinte prova que ela equivale ao padrão de 92) e nenhum outro CHECK, coluna,
+        # índice ou trigger mudou.
+        padrao = "[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z"
+        dividido = re.compile(
+            r"CHECK \(\s*length\((\w+)\) = 24 AND substr\(\1, 1, 10\) GLOB '\[0-9\]\[0-9\]\[0-9\]\[0-9\]-\[0-9\]\[0-9\]-\[0-9\]\[0-9\]'"
+            r"\s+AND substr\(\1, 11, 9\) GLOB 'T\[0-9\]\[0-9\]:\[0-9\]\[0-9\]:\[0-9\]\[0-9\]'"
+            r" AND substr\(\1, 20, 5\) GLOB '\.\[0-9\]\[0-9\]\[0-9\]Z'\s*\)")
+        tabelas = ("engagement_events", "heating", "heating_optout", "curso_esquecido", "site_identities", "ga4_purge_queue")
+
+        def esquema(ate: str) -> dict:
+            db = sqlite3.connect(":memory:")
+            for nome in sorted(n for n in os.listdir(MIGRATIONS) if n.endswith(".sql") and n <= ate):
+                with open(os.path.join(MIGRATIONS, nome), encoding="utf-8") as fh:
+                    db.executescript(fh.read())
+            linhas = db.execute(
+                "SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL AND tbl_name IN (%s)"
+                % ",".join("?" * len(tabelas)), tabelas).fetchall()
+            db.close()
+            return {(t, n): sql for t, n, sql in linhas}
+
+        def normal(sql: str) -> str:
+            sql = re.sub(r"--[^\n]*", "", sql)
+            sql = sql.replace(" IF NOT EXISTS", "").replace("_new", "").replace('"', "")
+            return " ".join(sql.split()).replace("( ", "(").replace(" )", ")")
+
+        antes, depois = esquema("0014_zzz"), esquema("0015_zzz")
+        self.assertEqual(set(antes), set(depois))
+        self.assertEqual(len([k for k in antes if k[0] == "table"]), 6)
+        trocas = 0
+        for chave, sql in depois.items():
+            sql, n = dividido.subn(lambda m: f"CHECK ({m.group(1)} GLOB '{padrao}')", sql)
+            trocas += n
+            with self.subTest(objeto=chave):
+                self.assertEqual(normal(sql), normal(antes[chave]))
+        self.assertEqual(trocas, 8)
+
     def test_check_de_data_dividido_aceita_e_recusa_os_mesmos_valores_de_antes(self):
         # O CHECK da 0015 (comprimento 24 e três GLOB curtos) precisa aceitar exatamente o que o padrão de 92 aceitava.
         antigo = sqlite3.connect(":memory:")  # sem limite, para avaliar o padrão antigo
