@@ -57,14 +57,14 @@ def ago(days: float = 0, seconds: float = 0) -> str:
 
 def sql_normalizado(sql: str) -> str:
     """Texto de um CREATE do sqlite_master para comparar esquemas: tira comentários (`--` até o fim da linha e `/* */`,
-    como o SQLite os lê), aspas duplas de identificador (o RENAME as acrescenta), `IF NOT EXISTS` e diferenças de
-    espaço. Literais entre aspas simples ficam intactos, para que uma mudança dentro de um CHECK nunca seja normalizada.
+    como o SQLite os lê), as aspas duplas em volta de identificador simples (o RENAME as acrescenta), `IF NOT EXISTS` e
+    diferenças de espaço. Literais entre aspas simples ficam intactos, para que uma mudança dentro de um CHECK nunca seja normalizada.
     Nomes não são reescritos: depois do RENAME o sqlite_master já guarda o nome final, então um `_new` que sobre em
     tabela, índice ou trigger aparece como diferença."""
     partes, fora, i = [], [], 0
 
     def fecha_fora():
-        txt = "".join(fora).replace('"', "")
+        txt = "".join(fora)
         txt = re.sub(r"\bIF NOT EXISTS\b", " ", txt)
         partes.append(" ".join(txt.split()).replace("( ", "(").replace(" )", ")"))
         fora.clear()
@@ -77,6 +77,13 @@ def sql_normalizado(sql: str) -> str:
             fim = sql.find("*/", i + 2)
             i = len(sql) if fim < 0 else fim + 2  # o SQLite aceita comentário em bloco aberto até o fim
             fora.append(" ")
+        elif sql[i] == '"':
+            fim = sql.index('"', i + 1)
+            ident = sql[i + 1:fim]
+            # Identificador simples perde as aspas (o RENAME as acrescenta); qualquer outra coisa entre aspas duplas fica
+            # como está, porque `"NOT NULL"` ou `"OLD.uid"` mudam o significado.
+            fora.append(ident if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", ident) else sql[i:fim + 1])
+            i = fim + 1
         elif sql[i] == "'":
             fim = i + 1
             while True:
@@ -933,6 +940,13 @@ class HeatingSyncTest(unittest.TestCase):
         self.assertNotEqual(sql_normalizado(base.replace("heating_optout", "heating_optout_new")), sql_normalizado(base))
         self.assertEqual(sql_normalizado('CREATE TABLE IF NOT EXISTS "heating_optout" (h TEXT) -- x\n'),
                          sql_normalizado("CREATE TABLE heating_optout ( h TEXT )"))
+        # Rodada 3 do #210 (Kimi): tirar toda aspa dupla fazia `source TEXT "NOT NULL"` (coluna sem NOT NULL) igual ao
+        # original. Só identificador simples perde as aspas.
+        self.assertEqual(sql_normalizado('CREATE TABLE "t" ("a" TEXT)'), sql_normalizado("CREATE TABLE t (a TEXT)"))
+        for original, mutante in (("a TEXT NOT NULL", 'a TEXT "NOT NULL"'), ("OLD.uid", '"OLD.uid"')):
+            with self.subTest(mutante=mutante):
+                aspas = "CREATE TABLE t (a TEXT NOT NULL, b TEXT CHECK (b <> OLD.uid))"
+                self.assertNotEqual(sql_normalizado(aspas.replace(original, mutante)), sql_normalizado(aspas))
         # Revisão do Roger no head c2f8a29: `--` dentro de `/* */` cortava a linha e escondia a coluna seguinte.
         bloco = "CREATE TABLE t (a TEXT /* -- it's */ , b TEXT)"
         self.assertNotEqual(sql_normalizado(bloco), sql_normalizado(bloco.replace("b TEXT", "c TEXT")))
@@ -944,6 +958,25 @@ class HeatingSyncTest(unittest.TestCase):
             with self.subTest(mutante=mutante):
                 self.assertNotEqual(sql_normalizado(base.replace("'*[^0-9a-f]*'", mutante)), sql_normalizado(base))
 
+    def test_0015_copia_cada_tabela_inteira_e_coluna_por_coluna(self):
+        # Rodada 3 do #210 (Kimi): mais linhas no teste de preservação só deslocam o LIMIT que escapa. Aqui a forma dos
+        # seis comandos de cópia é fixada: `INSERT INTO <t>_new (<colunas>)\nSELECT <colunas> FROM <t>;`, com as colunas da
+        # tabela na 0014, na ordem, e nada depois do FROM (sem WHERE, LIMIT, OFFSET, ORDER BY ou junção).
+        db = sqlite3.connect(":memory:")
+        for nome in sorted(n for n in os.listdir(MIGRATIONS) if n.endswith(".sql") and n < "0015"):
+            with open(os.path.join(MIGRATIONS, nome), encoding="utf-8") as fh:
+                db.executescript(fh.read())
+        with open(os.path.join(MIGRATIONS, "0015_d1_glob_curto.sql"), encoding="utf-8") as fh:
+            texto = fh.read()
+        tabelas = ("engagement_events", "heating", "heating_optout", "curso_esquecido", "site_identities", "ga4_purge_queue")
+        sem_trigger = re.sub(r"(?m)^--[^\n]*\n", "", texto[:texto.index("CREATE TRIGGER")])
+        self.assertEqual(len(re.findall(r"\bINSERT\b", sem_trigger, re.I)), 6)
+        for t in tabelas:
+            with self.subTest(tabela=t):
+                cols = ", ".join(r[1] for r in db.execute(f"PRAGMA table_info({t})"))
+                self.assertIn(f"\n\nINSERT INTO {t}_new ({cols})\nSELECT {cols} FROM {t};\n\n", sem_trigger)
+        db.close()
+
     def test_0015_preserva_as_linhas_de_cada_tabela_coluna_por_coluna(self):
         # Os seis INSERT ... SELECT da 0015 copiam cada coluna para ela mesma. As linhas usam um valor diferente em cada
         # coluna de mesmo tipo (datas, inteiros, textos), para que uma troca de colunas na cópia apareça.
@@ -953,7 +986,8 @@ class HeatingSyncTest(unittest.TestCase):
             with open(os.path.join(MIGRATIONS, nome), encoding="utf-8") as fh:
                 db.executescript(fh.read())
         d = lambda dia: f"2026-11-{dia:02d}T0{dia % 10}:1{dia % 10}:2{dia % 10}.{dia:03d}Z"
-        # Duas linhas por tabela, para que um `LIMIT 1` na cópia apareça (rodada 2 do #210); comparadas pela chave.
+        # Duas linhas por tabela, comparadas pela chave (rodada 2 do #210); a forma dos comandos de cópia, que pega
+        # qualquer LIMIT ou WHERE, é fixada no teste anterior.
         linhas = {
             "engagement_events": ("id", [
                 {"id": "ev-1", "context": "site", "email": "a@b.co", "signal": "email_aberto", "source": "resend",
