@@ -37,6 +37,9 @@ ENV = {
     "FORGET_HMAC_KEY": FORGET_KEY,
 }
 MIGRATIONS = os.path.join(HERE, "..", "..", "workers", "admin", "migrations")
+# O D1 de produção recusa padrão de GLOB/LIKE acima de 50 caracteres ("LIKE or GLOB pattern too complex", medido em
+# 28/11: 50 passa, 51 falha); o SQLite padrão aceita 50000. A migração 0015 trouxe os CHECKs de data para esse limite.
+D1_LIKE_PATTERN_MAX = 50
 NOW = datetime(2026, 11, 27, 12, 0, 0, tzinfo=timezone.utc)
 NOW_ISO = CS.stamp(NOW)
 CUSTO = {"id": "CUSTO_IA", "rotulo": "Custo de IA"}
@@ -59,6 +62,7 @@ class Fake:
         self.db = sqlite3.connect(db_path)
         # O D1 de produção aceita no máximo 5 termos num SELECT composto (medido em 28/11); o SQLite padrão aceita 500.
         self.db.setlimit(sqlite3.SQLITE_LIMIT_COMPOUND_SELECT, H.D1_COMPOUND_SELECT_MAX)
+        self.db.setlimit(sqlite3.SQLITE_LIMIT_LIKE_PATTERN_LENGTH, D1_LIKE_PATTERN_MAX)
         self.db.row_factory = sqlite3.Row
         mig_files = sorted(n for n in os.listdir(MIGRATIONS) if n.endswith(".sql"))
         for name in mig_files:
@@ -795,6 +799,67 @@ class HeatingSyncTest(unittest.TestCase):
              counts2["inscricoes_criadas"], counts2["inscricoes_atualizadas"]),
             (0, 0, 0, 0, 0, 0),
         )
+
+    def test_d1_falso_tem_os_limites_medidos_no_d1_de_producao(self):
+        # Os dois limites que derrubaram as rodadas reais de 28/11; se o D1 falso aceitar mais que o D1, os testes mentem.
+        f = Fake()
+        cinco = " UNION ALL ".join(["SELECT 1"] * H.D1_COMPOUND_SELECT_MAX)
+        self.assertEqual(len(f.db.execute(cinco).fetchall()), 5)
+        with self.assertRaisesRegex(sqlite3.OperationalError, "too many terms in compound SELECT"):
+            f.db.execute(cinco + " UNION ALL SELECT 1").fetchall()
+        self.assertEqual(f.db.execute("SELECT 'a' GLOB ?", ("?" * D1_LIKE_PATTERN_MAX,)).fetchone()[0], 0)
+        with self.assertRaisesRegex(sqlite3.OperationalError, "LIKE or GLOB pattern too complex"):
+            f.db.execute("SELECT 'a' GLOB ?", ("?" * (D1_LIKE_PATTERN_MAX + 1),)).fetchone()
+
+    def test_esquema_final_nao_tem_padrao_de_glob_ou_like_acima_do_limite_do_d1(self):
+        # 28/11 (épico #197): a segunda rodada real falhou com "LIKE or GLOB pattern too complex": os CHECKs de data das
+        # migrações 0011 a 0014 usavam um padrão de 92 caracteres. A 0015 recria as seis tabelas com padrões curtos.
+        f = Fake()
+        longos = []
+        for nome, sql in f.db.execute("SELECT name, sql FROM sqlite_master WHERE sql IS NOT NULL"):
+            for m in re.finditer(r"\b(?:GLOB|LIKE)\s+'((?:[^']|'')*)'", sql, re.I):
+                if len(m.group(1).replace("''", "'")) > D1_LIKE_PATTERN_MAX:
+                    longos.append((nome, len(m.group(1))))
+        self.assertEqual(longos, [])
+        tabelas = {r[0] for r in f.db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+        self.assertFalse({t for t in tabelas if t.endswith("_new")})
+        indices = {r[0] for r in f.db.execute("SELECT name FROM sqlite_master WHERE type = 'index' AND sql IS NOT NULL")}
+        self.assertLessEqual({
+            "engagement_events_context_email_occurred", "engagement_events_email", "engagement_events_signal_ref",
+            "heating_context_score_email", "heating_email", "site_identities_email", "ga4_purge_queue_proxima",
+        }, indices)
+        gatilhos = {r[0] for r in f.db.execute("SELECT name FROM sqlite_master WHERE type = 'trigger'")}
+        self.assertIn("site_identities_enqueue_purge", gatilhos)
+
+    def test_check_de_data_dividido_aceita_e_recusa_os_mesmos_valores_de_antes(self):
+        # O CHECK da 0015 (comprimento 24 e três GLOB curtos) precisa aceitar exatamente o que o padrão de 92 aceitava.
+        antigo = sqlite3.connect(":memory:")  # sem limite, para avaliar o padrão antigo
+        padrao = "[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z"
+        validos = [NOW_ISO, "2026-11-28T00:00:00.000Z", "9999-99-99T99:99:99.999Z"]
+        invalidos = [
+            "", "2026-11-28", "2026-11-28T13:53:07Z", "2026-11-28T13:53:07.123", "2026-11-28T13:53:07.123ZZ",
+            "2026-11-28 13:53:07.123Z", "2026-11-28T13:53:07.12aZ", "x2026-11-28T13:53:07.123Z", "2026/11/28T13:53:07.123Z",
+            "2026-11-28T13:53:07.123z", "2026-11-28T13-53-07.123Z", "2026-11-28T13:53:07.1234Z",
+            "2026-11-28T13:53:07,123Z",  # no GLOB o ponto é literal
+        ]
+        f = Fake()
+        for i, valor in enumerate(validos + invalidos):
+            esperado = bool(antigo.execute("SELECT ? GLOB ?", (valor, padrao)).fetchone()[0])
+            self.assertEqual(esperado, valor in validos, valor)
+            for tabela, sql, args in (
+                ("heating_optout", "INSERT INTO heating_optout (email_hmac, opted_out_at) VALUES (?, ?)", (hexid(i),)),
+                ("site_identities", "INSERT INTO site_identities (uid, email, linked_at) VALUES (?, ?, ?)",
+                 (f"u{i}", "a@b.co")),
+                ("curso_esquecido", "INSERT INTO curso_esquecido (context, email_hmac, forgotten_at) VALUES (?, ?, ?)",
+                 (CTX_CURSO, hexid(i))),
+            ):
+                with self.subTest(tabela=tabela, valor=valor):
+                    if esperado:
+                        f.db.execute(sql, (*args, valor))
+                    else:
+                        with self.assertRaisesRegex(sqlite3.IntegrityError, "CHECK constraint failed"):
+                            f.db.execute(sql, (*args, valor))
+        antigo.close()
 
     def test_insert_condicional_respeita_o_limite_de_select_composto_do_d1(self):
         # 28/11 (épico #197): a primeira rodada real falhou no D1 com "too many terms in compound SELECT" (11 linhas num

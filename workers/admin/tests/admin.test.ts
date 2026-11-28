@@ -845,3 +845,17 @@ test('T2: sem TOPIC_ID o painel não descadastra nem copia, e o wrangler.toml tr
   assert.equal(s.calls.filter((c) => c.url.startsWith('https://api.resend.com')).length, 0);
   assert.equal(TOPIC, '77f2a0b8-16aa-4ac6-9840-c352559edb51');
 });
+
+test('D1: o esquema final não tem padrão de GLOB ou LIKE acima de 50 caracteres (limite do D1 de produção)', () => {
+  // 28/11 (épico #197): o D1 recusa padrão acima de 50 caracteres ("LIKE or GLOB pattern too complex"); o SQLite do
+  // node:sqlite aceita 50000 e não deixa baixar o limite, então a garantia aqui é estática, sobre o esquema já migrado.
+  const db = d1().raw;
+  const longos: string[] = [];
+  for (const r of db.prepare('SELECT name, sql FROM sqlite_master WHERE sql IS NOT NULL').all()) {
+    const { name, sql } = plain(r) as { name: string; sql: string };
+    for (const m of sql.matchAll(/\b(?:GLOB|LIKE)\s+'((?:[^']|'')*)'/gi)) {
+      if (m[1].replaceAll("''", "'").length > 50) longos.push(`${name}: ${m[1].length}`);
+    }
+  }
+  assert.deepEqual(longos, []);
+});
