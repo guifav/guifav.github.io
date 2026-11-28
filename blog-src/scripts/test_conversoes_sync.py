@@ -268,7 +268,8 @@ class SyncTest(unittest.TestCase):
                           "gaClientId": "TEXT", "origemCanal": "SELECT", "origemFonte": "SELECT", "utmSource": "TEXT",
                           "utmMedium": "TEXT", "utmCampaign": "TEXT", "paginaEntrada": "TEXT", "pessoa": "RELATION"})
         self.assertTrue(f.conv_fields["eventoId"]["_spec"]["isUnique"])
-        self.assertEqual([o["value"] for o in f.conv_fields["acao"]["options"]], ["MATERIAL_REQUEST", "MATERIAL_DOWNLOAD", "NEWSLETTER_CONFIRM"])
+        self.assertEqual([o["value"] for o in f.conv_fields["acao"]["options"]],
+                         ["MATERIAL_REQUEST", "MATERIAL_DOWNLOAD", "NEWSLETTER_CONFIRM", "SITE_LOGIN"])
         for name, t in (("siteInteresses", "MULTI_SELECT"), ("siteUltimaConversao", "DATE_TIME"), ("siteEmailComprovado", "BOOLEAN"),
                         ("siteGaClientId", "TEXT")):
             self.assertEqual(f.person_fields[name]["type"], t)
@@ -408,6 +409,11 @@ class SyncTest(unittest.TestCase):
             "email sem domínio": dict(email="a@x"),
             "material ausente no download": dict(material=None, file="x"),
             "material na confirmação": dict(action="newsletter_confirm"),
+            "material no login": dict(action="site_login"),
+            "login não comprovado": dict(action="site_login", material=None, verified=0),
+            "arquivo no login": dict(action="site_login", material=None, file="planilha-custos-ia"),
+            "client_id do GA4 no login": dict(action="site_login", material=None, interests=(), ga="123.456"),
+            "interesses no login": dict(action="site_login", material=None),
             "interesses não JSON": dict(raw_interests="nada"),
             "interesses objeto": dict(raw_interests="{}"),
             "interesse id minúsculo": dict(interests=({"id": "custo", "rotulo": "C"},)),
@@ -771,6 +777,60 @@ class OrigemTest(unittest.TestCase):
         opts = lambda n: [(o["value"], o["label"]) for o in f.conv_fields[n]["options"]]  # noqa: E731
         self.assertEqual([v for v, _ in opts("origemCanal")], [v for v, _ in S.CANAIS.values()])
         self.assertEqual(opts("origemFonte")[-1], ("OUTRO", "Outro"))
+
+    def test_login_no_site_cria_a_pessoa_e_a_conversao_comprovada(self):
+        # Épico #197 (decisão do Gui, 27/11): o login no site é conversão comprovada e cria a Pessoa, como um download.
+        f = Fake()
+        f.add(1, "novo@x.com", action="site_login", material=None, interests=(),
+              origem={"origin_channel": "busca", "origin_source": "google", "landing_path": "/blog/"})
+        counts, _ = run(f, apply=True)
+        self.assertEqual(counts["linha_invalida"], 0)
+        self.assertEqual(f.pending(), [])
+        pessoas = [p for p in f.people.values() if p["emails"]["primaryEmail"] == "novo@x.com"]
+        self.assertEqual(len(pessoas), 1, "Pessoa criada")
+        ev = conv_by_event(f)[hexid(1)]
+        self.assertEqual(ev["acao"], "SITE_LOGIN")
+        self.assertEqual((ev["origemCanal"], ev["origemFonte"], ev["paginaEntrada"]), ("BUSCA", "GOOGLE", "/blog/"))
+        opts = [(o["value"], o["label"]) for o in f.conv_fields["acao"]["options"]]
+        self.assertIn(("SITE_LOGIN", "Login no site"), opts)
+
+    def test_campo_acao_de_producao_com_tres_opcoes_ganha_site_login_sem_perder_as_antigas(self):
+        # Claude P1 (rodada 1 do #206): o campo Ação de produção nasceu com 3 opções. A primeira rodada depois do deploy
+        # cria SITE_LOGIN (mantendo as antigas com id) e sincroniza o download e o login; a simulação não falha.
+        f = Fake(schema=True)
+        antigas = [dict(o, id=f"opt-{i}") for i, o in enumerate(f.conv_fields["acao"]["options"]) if o["value"] != "SITE_LOGIN"]
+        f.conv_fields["acao"]["options"] = antigas
+        f.add(1, "dl@x.com")
+        f.add(2, "login@x.com", action="site_login", material=None, interests=())
+        dry, _ = run(f, apply=False)
+        self.assertEqual(dry["opcoes_a_criar"], 1)
+        self.assertEqual(f.pending(), sorted([hexid(1), hexid(2)]), "simulação não grava nada")
+        counts, _ = run(f, apply=True)
+        self.assertEqual(f.pending(), [])
+        opts = f.conv_fields["acao"]["options"]
+        self.assertEqual([o["value"] for o in opts], ["MATERIAL_REQUEST", "MATERIAL_DOWNLOAD", "NEWSLETTER_CONFIRM", "SITE_LOGIN"])
+        self.assertEqual([o.get("id") for o in opts[:3]], ["opt-0", "opt-1", "opt-2"], "as antigas vão com o id")
+        self.assertEqual(opts[3]["position"], 3)
+        ev = conv_by_event(f)
+        self.assertEqual((ev[hexid(1)]["acao"], ev[hexid(2)]["acao"]), ("MATERIAL_DOWNLOAD", "SITE_LOGIN"))
+        # O --forget também roda com o campo Ação antigo (lê os metadados antes de apagar no D1 e no Twenty), sem nenhuma
+        # rodada antes que complete o campo.
+        # A Conversão já está no Twenty (rodada anterior) e o campo volta às 3 opções logo antes do --forget.
+        h = Fake(schema=True)
+        h.add(1, "esquece@x.com", action="site_login", material=None, interests=())
+        run(h, apply=True)
+        self.assertEqual(len([cv for cv in h.convs.values() if cv.get("eventoId") == hexid(1)]), 1)
+        h.conv_fields["acao"]["options"] = [o for o in h.conv_fields["acao"]["options"] if o["value"] != "SITE_LOGIN"]
+        forget(h, "esquece@x.com", apply=True)
+        self.assertNotIn("SITE_LOGIN", [o["value"] for o in h.conv_fields["acao"]["options"]], "o --forget não mexe no esquema")
+        self.assertEqual([cv for cv in h.convs.values() if cv.get("eventoId") == hexid(1)], [], "apagada no Twenty")
+        self.assertEqual(h.db.execute("SELECT count(*) FROM conversions WHERE email = 'esquece@x.com'").fetchone()[0], 0)
+        # Campo SELECT fora dos completáveis continua exigindo todas as opções (o canal da origem, por exemplo).
+        g = Fake(schema=True)
+        g.conv_fields["origemCanal"]["options"] = g.conv_fields["origemCanal"]["options"][:-1]
+        g.add(1, "dl@x.com")
+        with self.assertRaises(S.SyncError):
+            run(g, apply=True)
 
     def test_lists_match_the_worker_and_the_migration(self):
         # As listas são as mesmas nos quatro lugares (origem.ts, track.js, migração 0006 e aqui): conferidas pelo texto.

@@ -103,7 +103,7 @@ class Fake:
             verified = 0 if action == "material_request" else 1
         if action == "material_download" and file is None:
             file = material
-        if action == "newsletter_confirm":
+        if action in ("newsletter_confirm", "site_login"):
             material = None
             file = None
         self.db.execute(
@@ -793,6 +793,20 @@ class HeatingSyncTest(unittest.TestCase):
              counts2["inscricoes_criadas"], counts2["inscricoes_atualizadas"]),
             (0, 0, 0, 0, 0, 0),
         )
+
+    def test_login_no_site_nao_pontua_nem_conta_como_conversao_invalida(self):
+        # site_login (épico #197): conversão válida para o CRM, sem sinal na régua; não gera evento nem alerta.
+        f = Fake(people=[person("p1", "login@corp.com")], schema=True)
+        f.add_conv(1, "login@corp.com", action="site_login", interests=(), when=ago(days=1))
+        f.add_conv(2, "login@corp.com", action="material_download", when=ago(days=1))
+        f.add_conv(3, "login@corp.com", action="material_request", when=ago(days=2))
+        f.add_conv(4, "login@corp.com", action="newsletter_confirm", when=ago(days=3))
+        counts, _ = run_job(f, apply=True)
+        self.assertEqual(counts["conversao_invalida"], 0)
+        evs = [r for r in f.db.execute("SELECT id, signal FROM engagement_events WHERE email = 'login@corp.com'")]
+        # As três ações de antes continuam pontuando, cada uma no seu sinal; só o login fica de fora.
+        self.assertEqual(sorted(r[1] for r in evs), ["material_baixado", "material_pedido", "newsletter_confirmada"])
+        self.assertNotIn("cv:" + hexid(1), [r[0] for r in evs])
 
     def test_oposicao_exclusao_e_retencao(self):
         f = Fake(

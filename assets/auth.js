@@ -55,7 +55,8 @@
   var UID_KEY = 'heating-uid-v1';
   var LOGIN_KEY = 'heating-login-v1';
   var IDENTIFIED_PREFIX = 'guifav_auth_identified:';
-  var IDENTITY_SENT_PREFIX = 'guifav_identidade_sent:';
+  // v2 (#206): o auth.js antigo marcava o envio sem a origem; o atual manda uma vez de novo na mesma aba, já com ela.
+  var IDENTITY_SENT_PREFIX = 'guifav_identidade_sent_v2:';
   var ONE_TAP_SUPPRESSED_KEY = 'guifav_one_tap_suppressed';
   var TTL_MS = 365 * 24 * 3600 * 1000;
   var UID_TTL_MS = 30 * 60 * 1000;
@@ -312,6 +313,37 @@
     );
   }
 
+  // Origem da visita (a mesma que o track.js põe nos formulários), em campos urlencoded para o POST /identidade gravar
+  // com a conversão do login. Só rótulos de listas fixas, sem URL, termo buscado nem identificador; o Worker revalida.
+  // Padrões dos rótulos (os mesmos do Worker em workers/newsletter/src/origem.ts; lá também se confere a lista fixa de
+  // canais e fontes): valor fora do padrão não sai do navegador.
+  var ORIGIN_LABEL_RE = /^[a-z_]{1,32}$/;
+  var ORIGIN_UTM_RE = /^[a-z0-9._-]{1,64}$/;
+  var ORIGIN_PATH_RE = /^\/(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]*$/;
+
+  function originBody() {
+    try {
+      var o = w.guifavOrigin && typeof w.guifavOrigin.current === 'function' ? w.guifavOrigin.current() : null;
+      if (!o || typeof o !== 'object') return '';
+      var campos = [['origem_canal', o.canal, ORIGIN_LABEL_RE], ['origem_fonte', o.fonte, ORIGIN_LABEL_RE],
+        ['utm_source', o.utm_source, ORIGIN_UTM_RE], ['utm_medium', o.utm_medium, ORIGIN_UTM_RE],
+        ['utm_campaign', o.utm_campaign, ORIGIN_UTM_RE], ['origem_entrada', o.entrada, ORIGIN_PATH_RE]];
+      var partes = [];
+      for (var i = 0; i < campos.length; i++) {
+        var v = campos[i][1];
+        if (typeof v !== 'string' || !campos[i][2].test(v)) continue;
+        if (campos[i][0] === 'origem_entrada' && v.length > 200) continue;
+        partes.push(campos[i][0] + '=' + encodeURIComponent(v));
+      }
+      return partes.join('&');
+    } catch (e) { return ''; }
+  }
+
+  // Sempre com corpo: o Worker só grava a conversão do login quando ele vem (a chamada sem corpo é de cliente antigo).
+  function identityBody() {
+    return originBody() || 'origem_canal=desconhecida';
+  }
+
   function sendIdentity(user) {
     var uid = user.uid;
     if (sessionGet(IDENTITY_SENT_PREFIX + uid) === '1' || identityInFlightUid === uid) return;
@@ -320,10 +352,12 @@
     Promise.resolve(user.getIdToken()).then(function (token) {
       if (!token || typeof token !== 'string') return;
       if (!canIdentify(uid)) return;
-      return w.fetch(IDENTITY_URL, {
+      var init = {
         method: 'POST',
-        headers: { Authorization: 'Bearer ' + token }
-      }).then(function (res) {
+        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: identityBody()
+      };
+      return w.fetch(IDENTITY_URL, init).then(function (res) {
         if (res && res.ok) {
           sessionSet(IDENTITY_SENT_PREFIX + uid, '1');
         } else if (res && res.status === 409) {

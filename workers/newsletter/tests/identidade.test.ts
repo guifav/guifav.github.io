@@ -9,6 +9,7 @@ import {
   FIREBASE_PROJECT_ID,
   FIREBASE_TENANT_ID,
   JWKS_URL,
+  loginConversionId,
   resetJwksCache,
 } from '../src/identidade.ts';
 import { heatingOptoutHmac } from '../src/forget.ts';
@@ -172,7 +173,7 @@ function idReq(opts: {
   origin?: string | null;
   token?: string | null;
   authHeader?: string;
-  body?: string;
+  body?: string | Uint8Array;
   ip?: string;
 } = {}): Request {
   const headers: Record<string, string> = {};
@@ -253,7 +254,7 @@ test('método diferente de POST/OPTIONS devolve 405; Origin errado no POST devol
   assert.deepEqual(s.rows('site_identities'), []);
 });
 
-test('limite por IP (RL_IP) devolve 429; corpo não vazio devolve 400', async () => {
+test('limite por IP (RL_IP) devolve 429; corpo acima de 1 KiB devolve 413 e UTF-8 inválido 400', async () => {
   const token = await signJwt(validPayload());
   const limited = setup({ rlIp: false });
   const r429 = await limited.run(idReq({ token, ip: '203.0.113.10' }));
@@ -261,10 +262,65 @@ test('limite por IP (RL_IP) devolve 429; corpo não vazio devolve 400', async ()
   assert.deepEqual(limited.rl, ['203.0.113.10']);
   assert.equal(limited.jwksFetches(), 0);
 
+  // Corpo opcional com a origem da visita: acima de 1 KiB responde 413, UTF-8 inválido 400, sem buscar o JWKS.
   const s = setup();
-  const r400 = await s.run(idReq({ token, body: '{"a":1}' }));
+  const r413 = await s.run(idReq({ token, body: 'origem_canal=busca&x=' + 'a'.repeat(1024) }));
+  assert.equal(r413.status, 413);
+  const r400 = await s.run(idReq({ token, body: new Uint8Array([0xff, 0xfe, 0xfd]) }));
   assert.equal(r400.status, 400);
   assert.equal(s.jwksFetches(), 0);
+});
+
+test('login vira conversão site_login comprovada, uma por pessoa, com a origem validada do corpo', async () => {
+  const s = setup();
+  const t1 = await signJwt(validPayload({ sub: 'UidLogin1', email: 'Pessoa@Dominio.com' }));
+  const body = 'origem_canal=busca&origem_fonte=google&utm_source=news&utm_medium=email&utm_campaign=lanc-1&origem_entrada=/blog/x/';
+  assert.equal((await s.run(idReq({ token: t1, body }))).status, 204);
+  const convs = s.rows('conversions');
+  assert.equal(convs.length, 1);
+  const c = convs[0] as Record<string, unknown>;
+  assert.equal(c.id, await loginConversionId('pessoa@dominio.com'));
+  assert.deepEqual(
+    [c.email, c.action, c.material, c.interests, c.verified, c.origin_channel, c.origin_source, c.utm_source, c.utm_medium, c.utm_campaign, c.landing_path, c.synced_at],
+    ['pessoa@dominio.com', 'site_login', null, '[]', 1, 'busca', 'google', 'news', 'email', 'lanc-1', '/blog/x/', null],
+  );
+  assert.equal(c.occurred_at, new Date(NOW).toISOString());
+
+  // Outro login da mesma pessoa (outro uid, outra origem): nenhuma conversão nova, a primeira fica como estava.
+  const t2 = await signJwt(validPayload({ sub: 'UidLogin2', email: 'pessoa@dominio.com' }));
+  assert.equal((await s.run(idReq({ token: t2, body: 'origem_canal=direto' }))).status, 204);
+  assert.equal(s.rows('conversions').length, 1);
+  assert.equal((s.rows('conversions')[0] as Record<string, unknown>).origin_channel, 'busca');
+
+  // Sem corpo ou com campos fora do padrão: canal "desconhecida", campo inválido some sem levar os outros.
+  const t3 = await signJwt(validPayload({ sub: 'UidLogin3', email: 'outra@dominio.com' }));
+  assert.equal((await s.run(idReq({ token: t3, body: 'origem_canal=hacker&utm_source=OK!&utm_medium=social' }))).status, 204);
+  const c3 = s.rows('conversions').find((r) => (r as Record<string, unknown>).email === 'outra@dominio.com') as Record<string, unknown>;
+  assert.deepEqual([c3.origin_channel, c3.origin_source, c3.utm_source, c3.utm_medium], ['desconhecida', null, null, 'social']);
+  // Sem corpo (auth.js antigo em cache, ou outro cliente): grava só o vínculo, nunca a conversão.
+  const t4 = await signJwt(validPayload({ sub: 'UidLogin4', email: 'semcorpo@dominio.com' }));
+  assert.equal((await s.run(idReq({ token: t4 }))).status, 204);
+  assert.equal(s.rows('conversions').find((r) => (r as Record<string, unknown>).email === 'semcorpo@dominio.com'), undefined);
+  assert.ok(s.rows('site_identities').some((r) => (r as Record<string, unknown>).uid === 'UidLogin4'));
+});
+
+test('login com oposição não grava conversão; falha ao gravar a conversão responde 500 com log curto', async () => {
+  const s = setup();
+  s.db.prepare('INSERT INTO heating_optout (email_hmac, opted_out_at) VALUES (?, ?)')
+    .run(await heatingOptoutHmac('leitor@exemplo.com', FORGET_KEY), new Date(NOW).toISOString());
+  const tok = await signJwt(validPayload({ sub: 'UidOposto1', email: 'leitor@exemplo.com' }));
+  assert.equal((await s.run(idReq({ token: tok, body: 'origem_canal=busca' }))).status, 409);
+  assert.deepEqual(s.rows('conversions'), []);
+
+  const f = setup({ d1Falha: /INSERT INTO conversions/ });
+  const tf = await signJwt(validPayload({ sub: 'UidFalha1', email: 'falha@exemplo.com' }));
+  let res!: Response;
+  const logs = await capturaErros(async () => { res = await f.run(idReq({ token: tf, body: 'origem_canal=desconhecida' })); });
+  assert.equal(res.status, 500);
+  assert.equal(logs.length, 1);
+  assert.match(logs[0], /^conversão de login não gravada: /);
+  assert.ok(!logs[0].includes('falha@exemplo.com'), 'log sem email');
+  assert.equal(f.rows('site_identities').length, 1, 'o vínculo fica gravado; a repetição é idempotente');
 });
 
 test('POST válido grava uid -> email normalizado, faz upsert no mesmo uid e aceita outro uid com mesmo email', async () => {
@@ -530,4 +586,71 @@ test('README: o contrato de POST /identidade documenta 409 para quem tem oposiç
   assert.ok(row, 'linha de POST /identidade no README');
   assert.match(row!, /oposição em `heating_optout`[^|]*responde `409`/);
   assert.doesNotMatch(row!, /oposição[^|;]*não grava e responde `204`/);
+});
+
+test('oposição gravada entre o vínculo e a conversão (corrida com --forget): a guarda do INSERT não grava a conversão', async () => {
+  const s = setup();
+  const hmac = await heatingOptoutHmac('corrida@exemplo.com', FORGET_KEY);
+  const real = s.env.DB;
+  s.env.DB = {
+    prepare: (sql: string) => {
+      if (/INSERT INTO conversions/.test(sql)) {
+        // O --forget (ou o POST /prioridade) grava a oposição logo depois do upsert do vínculo.
+        s.db.prepare('INSERT OR IGNORE INTO heating_optout (email_hmac, opted_out_at) VALUES (?, ?)').run(hmac, new Date(NOW).toISOString());
+      }
+      return real.prepare(sql);
+    },
+  } as typeof real;
+  const tok = await signJwt(validPayload({ sub: 'UidCorrida1', email: 'corrida@exemplo.com' }));
+  const res = await s.run(idReq({ token: tok, body: 'origem_canal=busca' }));
+  assert.equal(res.status, 204);
+  assert.deepEqual(s.rows('conversions'), []);
+});
+
+test('D1 sem contagem de linhas só na conversão de login: 500 com log curto (Kimi P2, rodada 8 do #206)', async () => {
+  const s = setup();
+  const real = s.env.DB;
+  s.env.DB = {
+    prepare: (sql: string) => {
+      const st = real.prepare(sql);
+      if (!/INSERT INTO conversions/.test(sql)) return st;
+      const wrap = (b: typeof st): typeof st => ({
+        ...b,
+        bind: (...v: unknown[]) => wrap(b.bind(...v)),
+        run: async () => {
+          await b.run();
+          return { success: true } as Awaited<ReturnType<typeof b.run>>;
+        },
+      });
+      return wrap(st);
+    },
+  } as typeof real;
+  const token = await signJwt(validPayload({ sub: 'UidSemMetaConv1' }));
+  let res!: Response;
+  const logs = await capturaErros(async () => {
+    res = await s.run(idReq({ token, body: 'origem_canal=desconhecida' }));
+  });
+  assert.equal(res.status, 500);
+  assert.deepEqual(logs, ['conversão de login sem contagem de linhas do D1']);
+});
+
+test('publicação em qualquer ordem: chamada sem corpo (cliente antigo) não cria a conversão; a do cliente novo cria com a origem (Kimi P2, rodadas 9 e 10 do #206)', async () => {
+  const s = setup();
+  // auth.js antigo em cache (sem corpo) depois do Worker novo: só o vínculo.
+  const t1 = await signJwt(validPayload({ sub: 'UidRollout1', email: 'rollout@exemplo.com' }));
+  assert.equal((await s.run(idReq({ token: t1 }))).status, 204);
+  const conv = () => s.rows('conversions').filter((r) => (r as Record<string, unknown>).email === 'rollout@exemplo.com') as Record<string, unknown>[];
+  assert.deepEqual(conv(), []);
+  // O próximo envio, do auth.js novo, cria a conversão já com a origem.
+  s.avanca(60_000);
+  assert.equal((await s.run(idReq({ token: t1, body: 'origem_canal=busca&origem_fonte=google&utm_source=news&origem_entrada=/blog/x/' }))).status, 204);
+  assert.equal(conv().length, 1);
+  assert.deepEqual([conv()[0].origin_channel, conv()[0].origin_source, conv()[0].utm_source, conv()[0].landing_path], ['busca', 'google', 'news', '/blog/x/']);
+  assert.equal(conv()[0].occurred_at, new Date(NOW + 60_000).toISOString());
+  // Depois, nada muda a conversão: nem outra origem, nem chamada sem corpo.
+  const t2 = await signJwt(validPayload({ sub: 'UidRollout2', email: 'rollout@exemplo.com' }));
+  assert.equal((await s.run(idReq({ token: t2, body: 'origem_canal=social&origem_fonte=linkedin' }))).status, 204);
+  assert.equal((await s.run(idReq({ token: t2 }))).status, 204);
+  assert.equal(conv().length, 1);
+  assert.equal(conv()[0].origin_channel, 'busca');
 });

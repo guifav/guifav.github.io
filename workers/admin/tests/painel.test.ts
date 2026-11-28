@@ -180,7 +180,7 @@ async function jwt(claims: Record<string, unknown> = {}, key: CryptoKey = kp.pri
 interface ConvSeed {
   id: string;
   email: string;
-  action: 'material_request' | 'material_download' | 'newsletter_confirm';
+  action: 'material_request' | 'material_download' | 'newsletter_confirm' | 'site_login';
   material?: string | null;
   file?: string | null;
   verified?: number;
@@ -1523,4 +1523,53 @@ test('P7: heatingScoreCell exibe 0 (frio) para spam e heatingSignalsCell limita 
   const htmlHeat = await (await s.req('/admin/contatos?ordem=heating')).text();
   assert.ok(htmlHeat.includes('Sinal 1 (50,0); Sinal 2 (12,0); Sinal 3 (10,0)'));
   assert.ok(!htmlHeat.includes('Sinal 4'));
+});
+
+test('contatos mostra o login no site (épico #197) com rótulo próprio e filtro', async () => {
+  const s = setup();
+  seedConversions(s.db, [
+    {
+      id: 'l1', email: 'login@x.com', action: 'site_login', material: null, verified: 1,
+      occurred_at: '2026-11-28T01:00:00.000Z', origin_channel: 'busca', origin_source: 'google',
+    },
+    {
+      id: 'l2', email: 'dl@x.com', action: 'material_download', material: 'mapa-decisao-ia', file: 'mapa-decisao-pdf', verified: 1,
+      occurred_at: '2026-11-28T00:30:00.000Z',
+    },
+  ]);
+  const html = await (await s.req('/admin/contatos')).text();
+  assert.ok(html.includes('<td>login no site</td>'));
+  assert.ok(html.includes('<option value="site_login">login no site</option>'));
+  const filtrado = await (await s.req('/admin/contatos?acao=site_login')).text();
+  const tbody = filtrado.match(/<tbody>([\s\S]*?)<\/tbody>/)?.[1] ?? '';
+  assert.ok(tbody.includes('login@x.com'));
+  assert.ok(!tbody.includes('dl@x.com'));
+});
+
+test('Páginas de entrada não contam o login no site (Kimi P2, rodada 6 do #206)', async () => {
+  const s = setup();
+  const dl = (id: string, email: string, path: string) => ({
+    id, email, action: 'material_download' as const, material: 'mapa-decisao-ia', file: 'mapa-decisao-pdf', verified: 1,
+    occurred_at: '2026-11-27T10:00:00.000Z', landing_path: path,
+  });
+  const login = (id: string, email: string, path: string) => ({
+    id, email, action: 'site_login' as const, material: null, verified: 1, occurred_at: '2026-11-27T11:00:00.000Z', landing_path: path,
+  });
+  seedConversions(s.db, [
+    // Página A: 1 download e 2 logins. Página B: 2 downloads. Sem o filtro, A (3) viria antes de B (2).
+    dl('a1', 'a@x.com', '/blog/pagina-a/'), login('a2', 'b@x.com', '/blog/pagina-a/'), login('a3', 'c@x.com', '/blog/pagina-a/'),
+    dl('b1', 'd@x.com', '/blog/pagina-b/'), dl('b2', 'e@x.com', '/blog/pagina-b/'),
+    // Página só com login: não vira linha zerada.
+    login('c1', 'f@x.com', '/blog/so-login/'),
+  ]);
+  const html = await (await s.req('/admin/conteudos')).text();
+  const ini = html.indexOf('<h2>Páginas de entrada</h2>');
+  assert.ok(ini >= 0);
+  const fim = html.indexOf('<h2>', ini + 10);
+  const sec = html.slice(ini, fim < 0 ? undefined : fim);
+  assert.ok(!sec.includes('/blog/so-login/'), 'login sozinho não vira linha zerada');
+  const ia = sec.indexOf('/blog/pagina-a/');
+  const ib = sec.indexOf('/blog/pagina-b/');
+  assert.ok(ia >= 0 && ib >= 0);
+  assert.ok(ib < ia, 'a ordem segue só as ações das colunas: B (2 downloads) antes de A (1 download e 2 logins)');
 });

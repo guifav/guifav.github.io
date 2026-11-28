@@ -3,15 +3,29 @@
 // max-age do Cache-Control, com prazo de 3 s na busca), exige iss, aud, exp no futuro (folga zero), iat no passado
 // (folga de 5 min), sub válido, email_verified === true, email válido e firebase.tenant === "guifav-dev-g6dp4".
 // Respeita oposição global em heating_optout (409 sem gravar, para o site desligar o vínculo naquele navegador) e faz
-// upsert em site_identities por uid (204).
-// CORS restrito a env.SITE_ORIGIN (https://guifav.dev), sem credenciais/cookies, corpo vazio e limite por IP.
+// upsert em site_identities por uid (204). Grava também a conversão "login no site" (`site_login`, comprovada: o Google
+// confirma o email) uma vez por pessoa, com a origem da visita do corpo (campos do formulário, até 1 KiB), para o
+// conversoes_sync criar a Pessoa no Twenty (decisão do Gui, 27/11).
+// CORS restrito a env.SITE_ORIGIN (https://guifav.dev), sem credenciais/cookies, corpo opcional urlencoded de até 1 KiB com a
+// origem da visita (acima disso 413; UTF-8 inválido 400) e limite por IP.
 import { normalizeEmail } from './email.ts';
 import { heatingOptoutHmac } from './forget.ts';
 import { motivo, type D1Like } from './conversoes.ts';
+import { parseOrigem } from './origem.ts';
 import { readBoundedBytes } from './resend-webhook.ts';
 import { MIN_SECRET } from './token.ts';
 
 const enc = new TextEncoder();
+/** Corpo opcional: os seis campos da origem da visita, urlencoded (bem abaixo disso na prática). */
+export const IDENTIDADE_BODY_MAX = 1024;
+
+async function sha256Hex(s: string): Promise<string> {
+  const h = new Uint8Array(await crypto.subtle.digest('SHA-256', enc.encode(s)));
+  return [...h].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** Id da conversão de login: um por pessoa (o login seguinte, em qualquer uid, não cria outra). */
+export const loginConversionId = (email: string) => sha256Hex(`site_login\n${email}`);
 
 export const JWKS_URL = 'https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com';
 export const FIREBASE_PROJECT_ID = 'mindapps';
@@ -289,10 +303,18 @@ export async function handleIdentidade(
     return plain(429, 'muitas requisições', cors);
   }
 
-  const rawBody = await readBoundedBytes(req, 1);
-  if (rawBody === null || rawBody.byteLength > 0) {
-    return plain(400, 'corpo deve ser vazio', cors);
+  const rawBody = await readBoundedBytes(req, IDENTIDADE_BODY_MAX);
+  if (rawBody === null) {
+    return plain(413, 'corpo grande demais', cors);
   }
+  let bodyText = '';
+  try {
+    bodyText = new TextDecoder('utf-8', { fatal: true }).decode(rawBody);
+  } catch {
+    return plain(400, 'corpo inválido', cors);
+  }
+  // Sem corpo (ou campo fora do padrão), a origem é "desconhecida", como num formulário sem JavaScript.
+  const origem = parseOrigem(new URLSearchParams(bodyText));
 
   const token = extractBearer(req.headers.get('authorization'));
   if (!token) {
@@ -333,6 +355,36 @@ export async function handleIdentidade(
   }
   if (typeof changes !== 'number') {
     console.error('identidade sem contagem de linhas do D1');
+    return plain(500, 'falha ao gravar identidade', cors);
+  }
+
+  // Conversão "login no site", uma por pessoa (id derivado do email; a repetição é ignorada), na mesma guarda da oposição.
+  // Só com corpo: o assets/auth.js atual sempre manda a origem (no mínimo origem_canal=desconhecida); a chamada sem corpo é
+  // de um auth.js antigo em cache durante a publicação (ou de outro cliente) e grava só o vínculo. Assim a conversão nunca
+  // nasce sem a origem que o cliente novo manda, sem precisar corrigir a origem depois (nem correr contra o sync).
+  // Falha aqui responde 500: o auth.js tenta de novo na página seguinte, e o upsert do vínculo é idempotente.
+  if (rawBody.byteLength === 0) return empty(204, cors);
+  let convChanges: number | undefined;
+  try {
+    const hmac = await heatingOptoutHmac(verified.email, env.FORGET_HMAC_KEY);
+    const convRes = await env.DB
+      .prepare(`INSERT INTO conversions
+        (id, email, action, material, interests, occurred_at, verified,
+         origin_channel, origin_source, utm_source, utm_medium, utm_campaign, landing_path)
+        SELECT ?, ?, 'site_login', NULL, '[]', ?, 1, ?, ?, ?, ?, ?, ?
+        WHERE NOT EXISTS (SELECT 1 FROM heating_optout WHERE email_hmac = ?)
+        ON CONFLICT(id) DO NOTHING`)
+      .bind(await loginConversionId(verified.email), verified.email, linkedAt,
+        origem.canal, origem.fonte, origem.utmSource, origem.utmMedium, origem.utmCampaign, origem.entrada, hmac)
+      .run();
+    convChanges = convRes?.meta?.changes;
+  } catch (e) {
+    console.error(`conversão de login não gravada: ${motivo(e)}`);
+    return plain(500, 'falha ao gravar identidade', cors);
+  }
+  // 0 é esperado (login repetido, ou oposição gravada entre as duas instruções); sem contagem, a escrita não é verificável.
+  if (typeof convChanges !== 'number') {
+    console.error('conversão de login sem contagem de linhas do D1');
     return plain(500, 'falha ao gravar identidade', cors);
   }
 
