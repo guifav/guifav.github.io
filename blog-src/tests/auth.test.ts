@@ -2014,6 +2014,17 @@ test('Kimi P2 (rodada 11 do #203): GIS que termina de carregar depois de um logo
   k.finishGisLoad();
   await flush();
   assert.equal(k.oneTapPrompts.length, 0);
+  // Kimi P3 (rodada 1 do #205): a tentativa rearma, e a próxima resposta ao banner abre o convite.
+  await k.emitConsent('granted');
+  assert.equal(k.oneTapPrompts.length, 1);
+  // Supressão continua valendo mesmo rearmado.
+  const z = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: null });
+  await z.emitStorage('heating-login-v1', JSON.stringify({ t: NOW }));
+  await z.emitStorage('heating-login-v1', null);
+  z.finishGisLoad();
+  await flush();
+  await z.emitConsent('granted');
+  assert.equal(z.oneTapPrompts.length, 0);
 
   // Controle: sem saída no meio, o GIS carregado abre o convite.
   const c = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, initialUser: null });

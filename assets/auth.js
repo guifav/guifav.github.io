@@ -729,7 +729,12 @@
     // de um login ou de uma mudança no banner. A página não muda sem recarregar (site estático); conferir o caminho
     // aqui é só defesa.
     if (currentUser || !authInstance || !fbAuth) return;
-    if (sessionGet(ONE_TAP_SUPPRESSED_KEY) === '1' || isNoOneTapPath(loc.pathname) || readConsent() === null) return;
+    if (sessionGet(ONE_TAP_SUPPRESSED_KEY) === '1' || isNoOneTapPath(loc.pathname) || readConsent() === null) {
+      // Abortou por condição que pode mudar (banner sem resposta agora): rearma, e a próxima resposta ao banner tenta
+      // de novo pelo maybeStartOneTap, que reconfere tudo (inclusive a supressão).
+      oneTapStarted = false;
+      return;
+    }
     try {
       var id = w.google && w.google.accounts && w.google.accounts.id;
       if (!id || typeof id.initialize !== 'function' || typeof id.prompt !== 'function') return;
