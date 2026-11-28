@@ -358,7 +358,9 @@ export async function handleIdentidade(
     return plain(500, 'falha ao gravar identidade', cors);
   }
 
-  // Conversão "login no site", uma por pessoa (id derivado do email; a repetição é ignorada), na mesma guarda da oposição.
+  // Conversão "login no site", uma por pessoa (id derivado do email), na mesma guarda da oposição. A repetição não cria
+  // outra nem muda a data; só troca a origem "desconhecida" por uma conhecida enquanto o sync ainda não levou a conversão ao
+  // Twenty (por exemplo, a primeira chamada veio de um auth.js antigo em cache, sem corpo, durante a publicação).
   // Falha aqui responde 500: o auth.js tenta de novo na página seguinte, e o upsert do vínculo é idempotente.
   let convChanges: number | undefined;
   try {
@@ -369,7 +371,12 @@ export async function handleIdentidade(
          origin_channel, origin_source, utm_source, utm_medium, utm_campaign, landing_path)
         SELECT ?, ?, 'site_login', NULL, '[]', ?, 1, ?, ?, ?, ?, ?, ?
         WHERE NOT EXISTS (SELECT 1 FROM heating_optout WHERE email_hmac = ?)
-        ON CONFLICT(id) DO NOTHING`)
+        ON CONFLICT(id) DO UPDATE SET
+          origin_channel = excluded.origin_channel, origin_source = excluded.origin_source,
+          utm_source = excluded.utm_source, utm_medium = excluded.utm_medium, utm_campaign = excluded.utm_campaign,
+          landing_path = excluded.landing_path
+        WHERE conversions.synced_at IS NULL AND conversions.origin_channel = 'desconhecida'
+          AND excluded.origin_channel <> 'desconhecida'`)
       .bind(await loginConversionId(verified.email), verified.email, linkedAt,
         origem.canal, origem.fonte, origem.utmSource, origem.utmMedium, origem.utmCampaign, origem.entrada, hmac)
       .run();
