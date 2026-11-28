@@ -180,7 +180,7 @@ async function jwt(claims: Record<string, unknown> = {}, key: CryptoKey = kp.pri
 interface ConvSeed {
   id: string;
   email: string;
-  action: 'material_request' | 'material_download' | 'newsletter_confirm';
+  action: 'material_request' | 'material_download' | 'newsletter_confirm' | 'site_login';
   material?: string | null;
   file?: string | null;
   verified?: number;
