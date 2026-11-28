@@ -3,8 +3,7 @@
 O D1 falso é um SQLite em memória com as migrações reais do painel (0001 em diante, incluindo 0010, 0011, 0012 e 0014),
 com suporte ao payload `batch` da API REST do Cloudflare D1 (incluindo simulação de falha no meio do batch sem rollback),
 e o Twenty falso guarda estado como o servidor (lixeira, campos únicos `emails` e `inscricaoId`, objeto `courseEnrollment`
-e relação `pessoa`). Enquanto a migração 0013 (`site_identities`, do PR #203) não estiver no diretório de migrações,
-o D1 falso cria a tabela com o esquema da 0013; após o merge do #203, os testes passam a usar a migração real.
+e relação `pessoa`). A `site_identities` vem da migração real 0013 (PR #203).
 """
 import contextlib
 import copy
@@ -38,15 +37,6 @@ ENV = {
     "FORGET_HMAC_KEY": FORGET_KEY,
 }
 MIGRATIONS = os.path.join(HERE, "..", "..", "workers", "admin", "migrations")
-# Esquema da migração 0013 (`site_identities`, do PR #203): usado apenas enquanto 0013_*.sql não estiver em MIGRATIONS.
-# Após o merge do #203, o loop de migrações carrega a 0013 real automaticamente.
-SITE_IDENTITIES_0013_SQL = (
-    "CREATE TABLE IF NOT EXISTS site_identities ("
-    "uid TEXT PRIMARY KEY NOT NULL CHECK (length(uid) BETWEEN 1 AND 128 AND uid NOT GLOB '*[^0-9A-Za-z]*'), "
-    "email TEXT NOT NULL CHECK (length(email) BETWEEN 3 AND 254 AND email = lower(email)), "
-    "linked_at TEXT NOT NULL CHECK (linked_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z')); "
-    "CREATE INDEX IF NOT EXISTS site_identities_email ON site_identities (email);"
-)
 NOW = datetime(2026, 11, 27, 12, 0, 0, tzinfo=timezone.utc)
 NOW_ISO = CS.stamp(NOW)
 CUSTO = {"id": "CUSTO_IA", "rotulo": "Custo de IA"}
@@ -69,8 +59,6 @@ class Fake:
         self.db = sqlite3.connect(db_path)
         self.db.row_factory = sqlite3.Row
         mig_files = sorted(n for n in os.listdir(MIGRATIONS) if n.endswith(".sql"))
-        if not any(n.startswith("0013_") for n in mig_files):
-            self.db.executescript(SITE_IDENTITIES_0013_SQL)
         for name in mig_files:
             with open(os.path.join(MIGRATIONS, name), encoding="utf-8") as fh:
                 self.db.executescript(fh.read())

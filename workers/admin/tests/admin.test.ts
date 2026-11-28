@@ -30,9 +30,6 @@ function d1(failBatch?: number, failSql?: RegExp, beforeBatch?: (n: number) => P
   const db = new DatabaseSync(':memory:');
   const dir = new URL('../migrations/', import.meta.url);
   const files = readdirSync(dir).filter((f) => f.endsWith('.sql')).sort();
-  if (!files.some((f) => f.startsWith('0013_'))) {
-    db.exec("CREATE TABLE IF NOT EXISTS site_identities (uid TEXT PRIMARY KEY NOT NULL, email TEXT NOT NULL, linked_at TEXT NOT NULL);");
-  }
   for (const f of files) {
     db.exec(readFileSync(new URL(f, dir), 'utf-8'));
   }

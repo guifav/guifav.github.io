@@ -28,15 +28,6 @@ import twenty_sync as TS  # noqa: E402
 ENV = {"CLOUDFLARE_API_TOKEN": "cf", "CLOUDFLARE_ACCOUNT_ID": "acc", "D1_DATABASE_ID": "db", "TWENTY_API_KEY": "tw",
        "TWENTY_LOCAL_URL": "http://127.0.0.1:3100"}
 MIGRATIONS = os.path.join(HERE, "..", "..", "workers", "admin", "migrations")
-# Esquema da migração 0013 (`site_identities`, do PR #203): criado apenas enquanto 0013_*.sql não estiver em MIGRATIONS.
-# Após o merge do #203, os testes passam a usar a migração real automaticamente.
-SITE_IDENTITIES_0013_SQL = (
-    "CREATE TABLE IF NOT EXISTS site_identities ("
-    "uid TEXT PRIMARY KEY NOT NULL CHECK (length(uid) BETWEEN 1 AND 128 AND uid NOT GLOB '*[^0-9A-Za-z]*'), "
-    "email TEXT NOT NULL CHECK (length(email) BETWEEN 3 AND 254 AND email = lower(email)), "
-    "linked_at TEXT NOT NULL CHECK (linked_at GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z')); "
-    "CREATE INDEX IF NOT EXISTS site_identities_email ON site_identities (email);"
-)
 CUSTO = {"id": "CUSTO_IA", "rotulo": "Custo de IA"}
 ARQ = {"id": "ARQUITETURA_IA", "rotulo": "Arquitetura de IA (RAG, SQL, contexto longo)"}
 EXPERT = {"id": "EXPERT_INSIGHTS", "rotulo": "Expert Insights"}
@@ -53,8 +44,6 @@ class Fake:
         self.db = sqlite3.connect(db_path)
         self.db.row_factory = sqlite3.Row
         mig_files = sorted(n for n in os.listdir(MIGRATIONS) if n.endswith(".sql") and n >= "0004")
-        if not any(n.startswith("0013_") for n in mig_files):
-            self.db.executescript(SITE_IDENTITIES_0013_SQL)
         for name in mig_files:
             with open(os.path.join(MIGRATIONS, name), encoding="utf-8") as fh:
                 self.db.executescript(fh.read())
