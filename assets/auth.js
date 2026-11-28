@@ -941,7 +941,15 @@
         // volta ao consentimento comum sem depender do Firebase desta aba. Com user_id ativo, o clearUserId devolve.
         restoreAdSignals();
       }
-      if (k === LOGIN_KEY) return;
+      if (k === LOGIN_KEY) {
+        // Marca apagada em outra aba = saída da conta neste navegador: o One Tap não reaparece nesta aba até um novo
+        // login, mesmo que o Firebase daqui ainda não tenha respondido.
+        if (!loginMarkedInBrowser()) {
+          sessionSet(ONE_TAP_SUPPRESSED_KEY, '1');
+          cancelOneTap();
+        }
+        return;
+      }
       if (readConsent() !== null) loadFirebase();
       updateToggleLabel();
       syncNotice();

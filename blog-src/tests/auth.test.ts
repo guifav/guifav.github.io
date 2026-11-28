@@ -1931,11 +1931,14 @@ test('Kimi P2 (rodada 9): logout em outra aba antes da primeira resposta do Fire
   const local2 = new Storage();
   local2.setItem('consent-v1', JSON.stringify({ v: 'granted', t: NOW - 1000 }));
   local2.setItem('heating-login-v1', JSON.stringify({ t: NOW - 1000 }));
-  const r = await setupAuth({ local: local2 });
+  const r = await setupAuth({ local: local2, gisAvailable: true });
   const beforeR = r.gtagCalls.length;
   await r.emitStorage('heating-login-v1', null);
   await r.emitAuth(null);
   assert.equal(r.gtagCalls.slice(beforeR).filter((c) => c[0] === 'consent').length, 1);
+  // Claude P2 (rodada 10): nessa ordem (Sair termina lá antes do Firebase daqui responder), o One Tap também fica suprimido.
+  assert.equal(r.session.getItem('guifav_one_tap_suppressed'), '1');
+  assert.equal(r.oneTapPrompts.length, 0);
 
   // Visitante sem marca: a primeira resposta sem usuário não suprime o One Tap nem mexe em anúncios.
   const v = await setupAuth({ consent: { v: 'granted', t: NOW - 1000 }, gisAvailable: true });
