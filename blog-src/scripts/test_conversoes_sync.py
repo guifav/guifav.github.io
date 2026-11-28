@@ -813,12 +813,14 @@ class OrigemTest(unittest.TestCase):
         self.assertEqual(opts[3]["position"], 3)
         ev = conv_by_event(f)
         self.assertEqual((ev[hexid(1)]["acao"], ev[hexid(2)]["acao"]), ("MATERIAL_DOWNLOAD", "SITE_LOGIN"))
-        # O --forget também roda com o campo Ação antigo (lê os metadados antes de apagar no D1 e no Twenty).
+        # O --forget também roda com o campo Ação antigo (lê os metadados antes de apagar no D1 e no Twenty), sem nenhuma
+        # rodada antes que complete o campo.
         h = Fake(schema=True)
         h.conv_fields["acao"]["options"] = [o for o in h.conv_fields["acao"]["options"] if o["value"] != "SITE_LOGIN"]
         h.add(1, "esquece@x.com", action="site_login", material=None, interests=())
-        run(h, apply=True)
+        self.assertNotIn("SITE_LOGIN", [o["value"] for o in h.conv_fields["acao"]["options"]])
         forget(h, "esquece@x.com", apply=True)
+        self.assertNotIn("SITE_LOGIN", [o["value"] for o in h.conv_fields["acao"]["options"]], "o --forget não mexe no esquema")
         self.assertEqual(h.db.execute("SELECT count(*) FROM conversions WHERE email = 'esquece@x.com'").fetchone()[0], 0)
         # Campo SELECT fora dos completáveis continua exigindo todas as opções (o canal da origem, por exemplo).
         g = Fake(schema=True)

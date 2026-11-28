@@ -799,10 +799,13 @@ class HeatingSyncTest(unittest.TestCase):
         f = Fake(people=[person("p1", "login@corp.com")], schema=True)
         f.add_conv(1, "login@corp.com", action="site_login", interests=(), when=ago(days=1))
         f.add_conv(2, "login@corp.com", action="material_download", when=ago(days=1))
+        f.add_conv(3, "login@corp.com", action="material_request", when=ago(days=2))
+        f.add_conv(4, "login@corp.com", action="newsletter_confirm", when=ago(days=3))
         counts, _ = run_job(f, apply=True)
         self.assertEqual(counts["conversao_invalida"], 0)
         evs = [r for r in f.db.execute("SELECT id, signal FROM engagement_events WHERE email = 'login@corp.com'")]
-        self.assertEqual([r[1] for r in evs], ["material_baixado"])
+        # As três ações de antes continuam pontuando, cada uma no seu sinal; só o login fica de fora.
+        self.assertEqual(sorted(r[1] for r in evs), ["material_baixado", "material_pedido", "newsletter_confirmada"])
         self.assertNotIn("cv:" + hexid(1), [r[0] for r in evs])
 
     def test_oposicao_exclusao_e_retencao(self):
