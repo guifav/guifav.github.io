@@ -1,4 +1,4 @@
-// Login com Google One Tap, aviso próprio do login e user_id no GA4 (épico #197, corte 2).
+// Login com Google One Tap, conta no menu superior e user_id no GA4 (épico #197, corte 2).
 // Carregado tardiamente pelo assets/track.js, só em guifav.dev e nunca em prévias locais nem em /admin.
 //
 // - Nada do Google (Firebase SDK em gstatic.com nem GIS em accounts.google.com) carrega antes de:
@@ -9,21 +9,26 @@
 // - Compartilha o app [DEFAULT] e o tenant guifav-dev-g6dp4 com o curso (mesma origem): quem entrou no curso
 //   já aparece logado aqui. Sessões de outro tenant são ignoradas.
 // - Google One Tap (GIS): só para quem não está logado, só depois que o visitante respondeu ao banner de
-//   cookies (consent-v1 válido, granted ou denied), e nunca em /privacidade/, /termos/, /prioridade/ nem 404.
-// - Aviso do login (heating-link-v1 no localStorage, 365 dias por uid): só aparece depois do banner respondido
-//   e com consent-v1 granted.
+//   cookies (consent-v1 válido, granted ou denied), e nunca em /privacidade/, /termos/ nem 404.
+// - Vínculo (heating-link-v1 no localStorage, 365 dias por uid): todo login liga o vínculo, sem aviso nem interruptor
+//   (decisão do Gui em 28/11). Só fica desligado quando o /identidade responde 409 (oposição registrada para o email,
+//   marcada com o: 1): aí o login não liga de novo enquanto a marca valer.
+// - Todo login com o vínculo ligado envia POST https://insights.guifav.dev/identidade com o ID token uma vez por sessão
+//   e por uid, com ou sem o aceite dos cookies; a origem da visita só vai junto com consent-v1 granted.
 // - Só com as 3 condições (logado no tenant, consent-v1 granted e heating-link-v1 granted para o uid):
 //   mantém heating-uid-v1 = {uid, t} no localStorage com validade deslizante de 30 min (renovada a cada página
 //   depois de confirmar as 3 condições, sem nunca ultrapassar heating-link-v1; lida pelo snippet do <head> antes
 //   do gtag('config')), nega ad_storage/ad_user_data/ad_personalization (mantendo analytics_storage granted),
-//   desliga sinais de anúncio no GA4, grava user_id, envia auth_identified uma vez por sessão e envia
-//   POST https://insights.guifav.dev/identidade com o ID token uma vez por sessão e por uid.
+//   desliga sinais de anúncio no GA4, grava user_id e envia auth_identified uma vez por sessão.
 // - Quando qualquer condição deixa de valer (ou em outra aba via evento storage): apaga heating-uid-v1,
 //   envia gtag('set', { user_id: null }) e nada mais é enviado. Os anúncios só voltam a granted se consent-v1
 //   continuar granted e o vínculo (heating-link-v1) não estiver ligado neste navegador: com o vínculo ligado,
 //   nenhuma visita deste navegador alimenta anúncio (snippet do <head>, consent.js e este arquivo).
 // - Antes de o Firebase responder, só uma revogação explícita (banner Não, vínculo desligado) apaga ou concede algo.
-// - Nunca acessa nem envia email; nunca chama clarity('identify'); mascara botão, menu e aviso no Clarity.
+// - A conta fica no menu superior, logo depois do botão de tema (#theme-toggle): "Entrar" para quem não está logado e a
+//   foto da conta Google (ou a inicial do nome) para quem está, com o menu Sair. Página sem esse menu não mostra botão;
+//   o One Tap continua valendo nela.
+// - Nunca acessa nem envia email; nunca chama clarity('identify'); mascara botão e menu no Clarity.
 //   Falha em silêncio se o Firebase ou o GIS não carregarem.
 (function () {
   var d = document;
@@ -62,8 +67,9 @@
   var UID_TTL_MS = 30 * 60 * 1000;
   var UID_RE = /^[0-9A-Za-z]{1,128}$/;
 
-  var NO_ONE_TAP_PREFIXES = ['/privacidade', '/termos', '/prioridade', '/404'];
-  var NOTICE_TEXT = 'Ao entrar, sua atividade neste site fica ligada ao seu contato: páginas vistas, tempo de leitura, rolagem e cliques em Agende e Contato. Uso para saber quem abordar primeiro. Você pode desligar quando quiser no menu da conta.';
+  var NO_ONE_TAP_PREFIXES = ['/privacidade', '/termos', '/404'];
+  // Foto da conta Google: só https em *.googleusercontent.com (o que o Firebase devolve para contas Google).
+  var PHOTO_HOST_RE = /(^|\.)googleusercontent\.com$/;
 
   var fbAuth = null;
   var authInstance = null;
@@ -78,17 +84,12 @@
   var menuFocusIdx = -1;
   var popupBusy = false;
   var uidTimer = null;
-  var noticeReturnFocus = null;
 
   var rootEl = null;
   var triggerBtn = null;
   var menuEl = null;
-  var toggleBtn = null;
-  var toggleStateEl = null;
+  var menuNameEl = null;
   var signOutBtn = null;
-  var noticeEl = null;
-  var liveEl = null;
-  var announceTimer = null;
 
   function logWarn(msg) {
     try {
@@ -174,11 +175,21 @@
     sendGtag('set', 'allow_ad_personalization_signals', false);
   }
 
-  function writeHeatingLink(uid, v) {
+  function writeHeatingLink(uid, v, opposed) {
     if (!uid || (v !== 'granted' && v !== 'denied')) return;
+    var entry = { v: v, t: Date.now(), uid: uid };
+    if (v === 'denied' && opposed) entry.o = 1;
     try {
-      w.localStorage.setItem(LINK_KEY, JSON.stringify({ v: v, t: Date.now(), uid: uid }));
+      w.localStorage.setItem(LINK_KEY, JSON.stringify(entry));
     } catch (e) { /* sem storage */ }
+  }
+
+  // Todo login liga o vínculo. A única marca que segura é a da oposição (409 do /identidade, com o: 1); uma marca
+  // "denied" sem ela vem do interruptor que existia até 28/11 e também passa a ligado.
+  function ensureLink(uid) {
+    var entry = readHeatingLinkEntry(uid);
+    if (entry && (entry.v === 'granted' || entry.o === 1)) return;
+    writeHeatingLink(uid, 'granted');
   }
 
   function readHeatingUid() {
@@ -304,13 +315,9 @@
     if (wasIdentified && readConsent() === 'granted' && !adsBlockedInBrowser()) restoreAdSignals();
   }
 
-  function canIdentify(uid) {
-    return Boolean(
-      validTenantUser(currentUser)
-      && currentUser.uid === uid
-      && readConsent() === 'granted'
-      && readHeatingLink(uid) === 'granted'
-    );
+  // Envio do vínculo ao servidor: só logado no tenant e com o vínculo ligado para o uid, com ou sem os cookies aceitos.
+  function canLink(uid) {
+    return Boolean(validTenantUser(currentUser) && currentUser.uid === uid && readHeatingLink(uid) === 'granted');
   }
 
   // Origem da visita (a mesma que o track.js põe nos formulários), em campos urlencoded para o POST /identidade gravar
@@ -340,8 +347,9 @@
   }
 
   // Sempre com corpo: o Worker só grava a conversão do login quando ele vem (a chamada sem corpo é de cliente antigo).
+  // A origem da visita só vai com os cookies aceitos; sem o aceite, o login vai como origem desconhecida.
   function identityBody() {
-    return originBody() || 'origem_canal=desconhecida';
+    return (readConsent() === 'granted' && originBody()) || 'origem_canal=desconhecida';
   }
 
   function sendIdentity(user) {
@@ -351,7 +359,7 @@
     identityInFlightUid = uid;
     Promise.resolve(user.getIdToken()).then(function (token) {
       if (!token || typeof token !== 'string') return;
-      if (!canIdentify(uid)) return;
+      if (!canLink(uid)) return;
       var init = {
         method: 'POST',
         headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -361,10 +369,10 @@
         if (res && res.ok) {
           sessionSet(IDENTITY_SENT_PREFIX + uid, '1');
         } else if (res && res.status === 409) {
-          // Oposição registrada em /prioridade para este email: o vínculo desliga neste navegador e o user_id sai.
+          // Oposição registrada para este email (pedido por email, aplicado com --optout): o vínculo desliga neste
+          // navegador com a marca de oposição, o login não religa e o user_id sai.
           if (validTenantUser(currentUser) && currentUser.uid === uid) {
-            writeHeatingLink(uid, 'denied');
-            updateToggleLabel();
+            writeHeatingLink(uid, 'denied', true);
             syncIdentityState(true);
           }
         } else {
@@ -379,7 +387,8 @@
   }
 
   function syncIdentityState(forceClear, skipUidWrite) {
-    if (validTenantUser(currentUser) && readConsent() === 'granted' && readHeatingLink(currentUser.uid) === 'granted') {
+    var linked = validTenantUser(currentUser) && readHeatingLink(currentUser.uid) === 'granted';
+    if (linked && readConsent() === 'granted') {
       var uid = currentUser.uid;
       if (!skipUidWrite) writeHeatingUid(uid);
       sendGtag('consent', 'update', { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' });
@@ -396,6 +405,9 @@
       sendIdentity(currentUser);
       return;
     }
+    // Logado com o vínculo e sem os cookies aceitos: o vínculo vai ao servidor (o login vira contato), o GA4 não recebe
+    // user_id.
+    if (linked) sendIdentity(currentUser);
     // Antes de o Firebase responder, sem revogação explícita (banner Não ou vínculo desligado), nada é apagado nem
     // concedido: o uid do <head> e os anúncios negados continuam até o onAuthStateChanged decidir.
     if (!authResolved && !forceClear) return;
@@ -411,26 +423,18 @@
     var style = d.createElement('style');
     style.setAttribute('id', 'guifav-auth-style');
     style.textContent = [
-      '.guifav-auth{position:fixed;right:16px;bottom:16px;z-index:900;min-width:168px;display:flex;flex-direction:column-reverse;align-items:flex-end;gap:8px;font-family:inherit}',
+      '.guifav-auth{position:relative;display:inline-flex;align-items:center}',
       '.guifav-auth[hidden]{display:none}',
-      '.guifav-auth-btn{display:inline-flex;align-items:center;justify-content:center;min-width:168px;height:36px;padding:0 14px;border:1px solid var(--border,#e5e5e5);border-radius:999px;background:var(--bg-card,#fff);color:var(--text,#171717);box-shadow:var(--shadow,0 4px 16px rgba(0,0,0,.12));font:600 13px/1 inherit;cursor:pointer;white-space:nowrap}',
-      '.guifav-auth-btn:hover{border-color:var(--text-secondary,#525252)}',
-      '.guifav-auth-btn:focus-visible,.guifav-auth-item:focus-visible,.guifav-auth-yes:focus-visible,.guifav-auth-no:focus-visible{outline:2px solid var(--hl,#FFBE00);outline-offset:2px}',
-      '.guifav-auth-menu{min-width:250px;max-width:calc(100vw - 32px);padding:8px;border:1px solid var(--border,#e5e5e5);border-radius:12px;background:var(--bg-card,#fff);color:var(--text,#171717);box-shadow:var(--shadow,0 12px 32px rgba(0,0,0,.18));display:flex;flex-direction:column;gap:4px}',
+      '.guifav-auth-btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap}',
+      '.guifav-auth-btn.is-user{padding:2px;border-radius:999px;width:30px;height:30px}',
+      '.guifav-auth-avatar{display:block;width:24px;height:24px;border-radius:50%;object-fit:cover}',
+      '.guifav-auth-initial{display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--hl,#FFBE00);color:#171717;font-weight:700;font-size:12px}',
+      '.guifav-auth-btn:focus-visible,.guifav-auth-item:focus-visible{outline:2px solid var(--hl,#FFBE00);outline-offset:2px}',
+      '.guifav-auth-menu{position:absolute;top:calc(100% + 8px);right:0;z-index:900;min-width:200px;max-width:calc(100vw - 32px);padding:8px;border:1px solid var(--border,#e5e5e5);border-radius:12px;background:var(--bg-card,#fff);color:var(--text,#171717);box-shadow:var(--shadow,0 12px 32px rgba(0,0,0,.18));display:flex;flex-direction:column;gap:4px}',
       '.guifav-auth-menu[hidden]{display:none}',
-      '.guifav-auth-item{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:9px 10px;border:0;border-radius:8px;background:transparent;color:var(--text,#171717);font:500 13px/1.35 inherit;text-align:left;cursor:pointer}',
-      '.guifav-auth-item:hover{background:var(--tag-bg,#f5f5f5)}',
-      '.guifav-auth-state{font-size:12px;font-weight:700;color:var(--text-secondary,#525252);flex-shrink:0}',
-      '.guifav-auth-notice{position:fixed;left:16px;right:16px;bottom:64px;z-index:950;max-width:560px;margin:0 auto;padding:16px 18px;border:1px solid var(--border,#e5e5e5);border-radius:12px;background:var(--bg-card,#fff);color:var(--text,#171717);box-shadow:var(--shadow,0 12px 32px rgba(0,0,0,.18));font-size:14px;line-height:1.55}',
-      '.guifav-auth-notice[hidden]{display:none}',
-      '.guifav-auth-live{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}',
-      '.guifav-auth-notice p{margin:0 0 12px}',
-      '.guifav-auth-actions{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}',
-      '.guifav-auth-yes,.guifav-auth-no{font:600 14px/1 inherit;padding:8px 16px;border-radius:8px;cursor:pointer;border:1px solid transparent}',
-      '.guifav-auth-yes{background:#2563eb;color:#fff}',
-      '.guifav-auth-yes:hover{background:#1d4ed8}',
-      '.guifav-auth-no{background:var(--tag-bg,#e5e5e5);color:var(--text,#171717);border-color:var(--border,#d4d4d4)}',
-      '@media(max-width:700px){.guifav-auth{right:12px;bottom:12px}.guifav-auth-notice{left:12px;right:12px;bottom:58px}}'
+      '.guifav-auth-name{padding:6px 10px 8px;font-size:12px;color:var(--text-secondary,#525252);border-bottom:1px solid var(--border,#e5e5e5);margin-bottom:4px}',
+      '.guifav-auth-item{display:flex;align-items:center;width:100%;padding:9px 10px;border:0;border-radius:8px;background:transparent;color:var(--text,#171717);font:500 13px/1.35 inherit;text-align:left;cursor:pointer}',
+      '.guifav-auth-item:hover{background:var(--tag-bg,#f5f5f5)}'
     ].join('');
     d.head.appendChild(style);
   }
@@ -445,10 +449,7 @@
   }
 
   function getMenuItems() {
-    var items = [];
-    if (toggleBtn) items.push(toggleBtn);
-    if (signOutBtn) items.push(signOutBtn);
-    return items;
+    return signOutBtn ? [signOutBtn] : [];
   }
 
   function focusMenuItem(idx) {
@@ -471,120 +472,6 @@
     } else {
       menuFocusIdx = -1;
       if (focusInMenu && triggerBtn && typeof triggerBtn.focus === 'function') triggerBtn.focus();
-    }
-  }
-
-  function updateToggleLabel() {
-    if (!toggleBtn || !toggleStateEl || !currentUser) return;
-    var on = readHeatingLink(currentUser.uid) === 'granted';
-    toggleBtn.setAttribute('aria-checked', on ? 'true' : 'false');
-    toggleStateEl.textContent = on ? 'Ligado' : 'Desligado';
-  }
-
-  // Aviso não modal: ao abrir recebe o foco (leitor de tela anuncia o diálogo); ao fechar com o foco dentro dele,
-  // o foco volta para onde estava (ou para o botão da conta). Fechamentos programáticos sem foco no aviso não mexem.
-  function hideNotice() {
-    if (!noticeEl || noticeEl.hidden) return;
-    var active = d.activeElement;
-    var hadFocus = Boolean(active && typeof noticeEl.contains === 'function' && noticeEl.contains(active));
-    noticeEl.hidden = true;
-    cancelAnnounce();
-    var back = noticeReturnFocus;
-    noticeReturnFocus = null;
-    if (!hadFocus) return;
-    if (!back || typeof back.focus !== 'function' || back.isConnected === false) back = triggerBtn;
-    if (back && typeof back.focus === 'function') back.focus();
-  }
-
-  function showNotice() {
-    if (!d.body) return;
-    if (!noticeEl) {
-      noticeEl = el('div', {
-        'class': 'guifav-auth-notice',
-        role: 'dialog',
-        'aria-label': 'Aviso de atividade da conta',
-        'aria-describedby': 'guifav-auth-notice-desc',
-        tabindex: '-1',
-        'data-clarity-mask': 'true'
-      });
-      noticeEl.hidden = true;
-      var p = el('p', { id: 'guifav-auth-notice-desc' }, noticeEl);
-      p.textContent = NOTICE_TEXT;
-      var actions = el('div', { 'class': 'guifav-auth-actions' }, noticeEl);
-      var yesBtn = el('button', { type: 'button', 'class': 'guifav-auth-yes' }, actions);
-      yesBtn.textContent = 'Ligar';
-      var noBtn = el('button', { type: 'button', 'class': 'guifav-auth-no' }, actions);
-      noBtn.textContent = 'Agora não';
-
-      yesBtn.addEventListener('click', function () {
-        if (!currentUser) return;
-        writeHeatingLink(currentUser.uid, 'granted');
-        hideNotice();
-        updateToggleLabel();
-        syncIdentityState(false);
-      });
-
-      noBtn.addEventListener('click', function () {
-        if (!currentUser) return;
-        writeHeatingLink(currentUser.uid, 'denied');
-        hideNotice();
-        updateToggleLabel();
-        syncIdentityState(true);
-      });
-
-      d.body.appendChild(noticeEl);
-    }
-    if (!noticeEl.hidden) return;
-    var active = d.activeElement;
-    // O aviso abre sozinho de 1,5 a 4 s depois do carregamento: só toma o foco se nada estiver focado ou se o foco
-    // estiver no botão da conta (a pessoa acabou de clicar em Entrar). Quem já digita num campo continua nele, e o
-    // leitor de tela recebe o texto do aviso por uma região aria-live.
-    var free = !active || active === d.body || active === d.documentElement
-      || Boolean(rootEl && typeof rootEl.contains === 'function' && rootEl.contains(active));
-    noticeReturnFocus = active && active !== d.body && active !== d.documentElement ? active : null;
-    noticeEl.hidden = false;
-    if (free) {
-      if (typeof noticeEl.focus === 'function') noticeEl.focus();
-    } else {
-      announce(NOTICE_TEXT);
-    }
-  }
-
-  // Região viva criada vazia junto com o widget: leitores de tela só anunciam mudança numa região que já estava na
-  // página, então o texto entra um instante depois de o aviso abrir e sai quando o aviso fecha.
-  function ensureLiveRegion() {
-    if (liveEl || !d.body) return;
-    liveEl = el('div', { 'class': 'guifav-auth-live', role: 'status', 'aria-live': 'polite', 'data-clarity-mask': 'true' });
-    d.body.appendChild(liveEl);
-  }
-
-  function cancelAnnounce() {
-    if (announceTimer !== null) {
-      try { if (typeof w.clearTimeout === 'function') w.clearTimeout(announceTimer); } catch (e) { /* ignora */ }
-      announceTimer = null;
-    }
-    if (liveEl) liveEl.textContent = '';
-  }
-
-  function announce(text) {
-    ensureLiveRegion();
-    if (!liveEl) return;
-    cancelAnnounce();
-    if (typeof w.setTimeout !== 'function') {
-      liveEl.textContent = text;
-      return;
-    }
-    announceTimer = w.setTimeout(function () {
-      announceTimer = null;
-      if (liveEl) liveEl.textContent = text; // hideNotice cancela este temporizador
-    }, 100);
-  }
-
-  function syncNotice() {
-    if (validTenantUser(currentUser) && readConsent() === 'granted' && readHeatingLink(currentUser.uid) === null) {
-      showNotice();
-    } else {
-      hideNotice();
     }
   }
 
@@ -630,20 +517,65 @@
     } catch (e) { /* ignora */ }
   }
 
+  // Foto da conta Google, só de *.googleusercontent.com por https; qualquer outra coisa vira a inicial do nome.
+  function safePhotoUrl(user) {
+    var raw = user && typeof user.photoURL === 'string' ? user.photoURL : '';
+    if (!raw) return '';
+    try {
+      var u = new URL(raw);
+      return u.protocol === 'https:' && PHOTO_HOST_RE.test(u.hostname) ? u.href : '';
+    } catch (e) { return ''; }
+  }
+
+  function initialOf(user) {
+    var name = firstName(user);
+    return name === 'Conta' ? '?' : name.charAt(0).toUpperCase();
+  }
+
+  function fillTrigger(user) {
+    while (triggerBtn.firstChild) triggerBtn.removeChild(triggerBtn.firstChild);
+    var photo = safePhotoUrl(user);
+    var initial = el('span', { 'class': 'guifav-auth-initial', 'aria-hidden': 'true' });
+    initial.textContent = initialOf(user);
+    if (!photo) {
+      triggerBtn.appendChild(initial);
+      return;
+    }
+    var img = el('img', {
+      'class': 'guifav-auth-avatar',
+      src: photo,
+      alt: '',
+      width: '24',
+      height: '24',
+      referrerpolicy: 'no-referrer',
+      decoding: 'async'
+    }, triggerBtn);
+    img.addEventListener('error', function () {
+      if (img.parentNode === triggerBtn) triggerBtn.replaceChild(initial, img);
+    }, { once: true });
+  }
+
+  // A conta mora no menu superior, logo depois do botão de tema. Sem esse menu (página sem cabeçalho), não há botão.
+  function headerSlot() {
+    if (typeof d.getElementById !== 'function') return null;
+    var theme = d.getElementById('theme-toggle');
+    return theme && theme.parentNode ? theme : null;
+  }
+
   function renderWidget() {
     if (!d.body) return;
     if (!rootEl) {
+      var anchor = headerSlot();
+      if (!anchor) return;
       injectStyles();
-      rootEl = el('div', { 'class': 'guifav-auth', 'data-clarity-mask': 'true' });
+      rootEl = el('span', { 'class': 'guifav-auth', 'data-clarity-mask': 'true' });
 
-      // Botão antes do menu no DOM; flex-direction: column-reverse coloca o menu visualmente acima.
-      triggerBtn = el('button', { type: 'button', 'class': 'guifav-auth-btn' }, rootEl);
+      triggerBtn = el('button', { type: 'button', 'class': 'nav-btn guifav-auth-btn' }, rootEl);
       triggerBtn.addEventListener('click', function () {
         if (!currentUser) {
           signInPopup();
           return;
         }
-        updateToggleLabel();
         setMenuOpen(!menuOpen);
       });
 
@@ -655,25 +587,7 @@
       }, rootEl);
       menuEl.hidden = true;
 
-      toggleBtn = el('button', {
-        type: 'button',
-        'class': 'guifav-auth-item',
-        role: 'menuitemcheckbox',
-        'aria-checked': 'false'
-      }, menuEl);
-      var toggleLabel = el('span', {}, toggleBtn);
-      toggleLabel.textContent = 'Ligar minha atividade ao meu contato';
-      toggleStateEl = el('span', { 'class': 'guifav-auth-state' }, toggleBtn);
-      toggleStateEl.textContent = 'Desligado';
-
-      toggleBtn.addEventListener('click', function () {
-        if (!currentUser) return;
-        var next = readHeatingLink(currentUser.uid) === 'granted' ? 'denied' : 'granted';
-        writeHeatingLink(currentUser.uid, next);
-        hideNotice();
-        updateToggleLabel();
-        syncIdentityState(next === 'denied');
-      });
+      menuNameEl = el('div', { 'class': 'guifav-auth-name', role: 'presentation' }, menuEl);
 
       signOutBtn = el('button', { type: 'button', 'class': 'guifav-auth-item', role: 'menuitem' }, menuEl);
       signOutBtn.textContent = 'Sair';
@@ -681,7 +595,6 @@
         sessionSet(ONE_TAP_SUPPRESSED_KEY, '1');
         disableOneTapAutoSelect();
         setMenuOpen(false);
-        hideNotice();
         clearUserId(true);
         if (authInstance && fbAuth && typeof fbAuth.signOut === 'function') {
           Promise.resolve(fbAuth.signOut(authInstance)).catch(function () {
@@ -690,8 +603,7 @@
         }
       });
 
-      d.body.appendChild(rootEl);
-      ensureLiveRegion();
+      anchor.parentNode.insertBefore(rootEl, anchor.nextSibling);
 
       d.addEventListener('click', function (e) {
         if (!menuOpen || !rootEl) return;
@@ -701,53 +613,52 @@
       });
 
       d.addEventListener('keydown', function (e) {
-        if (!e || typeof e.key !== 'string') return;
-        if (menuOpen) {
-          var items = getMenuItems();
-          var active = (d && d.activeElement) || (e && e.target);
-          var idx = items.indexOf(active);
-          if (idx < 0) idx = menuFocusIdx;
-          if (e.key === 'Escape') {
-            if (typeof e.preventDefault === 'function') e.preventDefault();
-            setMenuOpen(false);
-            if (triggerBtn && typeof triggerBtn.focus === 'function') triggerBtn.focus();
-          } else if (e.key === 'ArrowDown') {
-            if (typeof e.preventDefault === 'function') e.preventDefault();
-            focusMenuItem(idx < 0 ? 0 : idx + 1);
-          } else if (e.key === 'ArrowUp') {
-            if (typeof e.preventDefault === 'function') e.preventDefault();
-            focusMenuItem(idx < 0 ? items.length - 1 : idx - 1);
-          } else if (e.key === 'Home') {
-            if (typeof e.preventDefault === 'function') e.preventDefault();
-            focusMenuItem(0);
-          } else if (e.key === 'End') {
-            if (typeof e.preventDefault === 'function') e.preventDefault();
-            focusMenuItem(items.length - 1);
-          }
-          return;
-        }
-        if (e.key === 'Escape' && noticeEl && !noticeEl.hidden) {
+        if (!e || typeof e.key !== 'string' || !menuOpen) return;
+        var items = getMenuItems();
+        var active = (d && d.activeElement) || (e && e.target);
+        var idx = items.indexOf(active);
+        if (idx < 0) idx = menuFocusIdx;
+        if (e.key === 'Escape') {
           if (typeof e.preventDefault === 'function') e.preventDefault();
-          hideNotice();
+          setMenuOpen(false);
+          if (triggerBtn && typeof triggerBtn.focus === 'function') triggerBtn.focus();
+        } else if (e.key === 'ArrowDown') {
+          if (typeof e.preventDefault === 'function') e.preventDefault();
+          focusMenuItem(idx < 0 ? 0 : idx + 1);
+        } else if (e.key === 'ArrowUp') {
+          if (typeof e.preventDefault === 'function') e.preventDefault();
+          focusMenuItem(idx < 0 ? items.length - 1 : idx - 1);
+        } else if (e.key === 'Home') {
+          if (typeof e.preventDefault === 'function') e.preventDefault();
+          focusMenuItem(0);
+        } else if (e.key === 'End') {
+          if (typeof e.preventDefault === 'function') e.preventDefault();
+          focusMenuItem(items.length - 1);
         }
       });
     }
 
     if (currentUser) {
       var name = firstName(currentUser);
-      triggerBtn.textContent = name;
+      fillTrigger(currentUser);
+      triggerBtn.setAttribute('class', 'nav-btn guifav-auth-btn is-user');
       triggerBtn.setAttribute('aria-label', name + ', menu da conta');
+      triggerBtn.setAttribute('title', name);
       triggerBtn.setAttribute('aria-haspopup', 'menu');
       triggerBtn.setAttribute('aria-controls', 'guifav-auth-menu');
       triggerBtn.setAttribute('aria-expanded', menuOpen ? 'true' : 'false');
-      updateToggleLabel();
+      menuNameEl.textContent = 'Conectado como ' + name;
     } else {
       setMenuOpen(false);
-      triggerBtn.textContent = 'Entrar com Google';
+      while (triggerBtn.firstChild) triggerBtn.removeChild(triggerBtn.firstChild);
+      triggerBtn.textContent = 'Entrar';
+      triggerBtn.setAttribute('class', 'nav-btn guifav-auth-btn');
       triggerBtn.setAttribute('aria-label', 'Entrar com Google');
+      triggerBtn.removeAttribute('title');
       triggerBtn.removeAttribute('aria-haspopup');
       triggerBtn.removeAttribute('aria-controls');
       triggerBtn.removeAttribute('aria-expanded');
+      if (menuNameEl) menuNameEl.textContent = '';
     }
   }
 
@@ -917,12 +828,12 @@
           var wasLoggedIn = validTenantUser(currentUser);
           currentUser = user;
           writeLoginMark();
+          ensureLink(user.uid);
           // Sessão logada nunca alimenta anúncio: com cookies aceitos e sem identificar agora (a identificação já nega),
           // nega na hora. Com cookies recusados os anúncios já estão negados e nada é coletado.
           if (!wasLoggedIn && readConsent() === 'granted' && readHeatingLink(user.uid) !== 'granted') denyAdSignals();
           cancelOneTap();
           renderWidget();
-          syncNotice();
           syncIdentityState(false);
         } else {
           var wasUser = currentUser !== null;
@@ -935,7 +846,6 @@
           removeLoginMark();
           // Saiu aqui ou em outra aba (o Firebase propaga): o One Tap não reaparece nesta aba até um novo login.
           if (hadSession) sessionSet(ONE_TAP_SUPPRESSED_KEY, '1');
-          hideNotice();
           renderWidget();
           syncIdentityState(hadIdentity);
           if (hadSession && hadAdsBlocked && readConsent() === 'granted' && !adsBlockedInBrowser()) restoreAdSignals();
@@ -955,7 +865,6 @@
     w.addEventListener('guifav-consent', function (e) {
       var detail = e && e.detail;
       loadFirebase();
-      syncNotice();
       if (detail === 'granted') {
         // "Sim" com sessão confirmada nesta página, sem a marca ainda legível pelo consent.js (armazenamento bloqueado):
         // nega aqui também. O consent.js já nega com a marca ou o vínculo; a identificação, quando acontece agora, nega tudo.
@@ -994,8 +903,6 @@
         return;
       }
       if (readConsent() !== null) loadFirebase();
-      updateToggleLabel();
-      syncNotice();
       if (k === UID_KEY) {
         if (!authResolved) {
           // Antes de o Firebase responder: outra aba que renova o mesmo uid não muda nada; uid apagado, vencido ou

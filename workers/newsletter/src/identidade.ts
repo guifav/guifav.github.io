@@ -332,7 +332,7 @@ export async function handleIdentidade(
   let changes: number | undefined;
   try {
     const hmac = await heatingOptoutHmac(verified.email, env.FORGET_HMAC_KEY);
-    // Checa heating_optout e faz upsert na mesma instrução para eliminar corrida com POST /prioridade.
+    // Checa heating_optout e faz upsert na mesma instrução para eliminar corrida com a oposição (--optout).
     const res = await env.DB
       .prepare(`INSERT INTO site_identities (uid, email, linked_at)
         SELECT ?, ?, ?

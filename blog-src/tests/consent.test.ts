@@ -382,7 +382,7 @@ const MATERIAIS = [
   'ferramentas/mapa-decisao-ia',
   'materiais/livro-desbloqueando-a-inteligencia-artificial',
 ].flatMap((m) => [`${m}/index.html`, `${m}/enviado/index.html`]);
-for (const rel of ['index.html', 'portfolio/index.html', 'consultoria/index.html', 'ferramentas/index.html', 'ferramentas/llm-ranking/index.html', 'cursos/index.html', 'prioridade/index.html', 'privacidade/index.html', 'termos/index.html', ...MATERIAIS, 'Base.astro']) {
+for (const rel of ['index.html', 'portfolio/index.html', 'consultoria/index.html', 'ferramentas/index.html', 'ferramentas/llm-ranking/index.html', 'cursos/index.html', 'privacidade/index.html', 'termos/index.html', ...MATERIAIS, 'Base.astro']) {
   test(`${rel}: padrão negado antes do config; aceite válido vira update granted e lê o vínculo e o uid antes do config`, () => {
     const names = (l: unknown[][]) => l.map((c) => `${c[0]}:${c[0] === 'consent' ? c[1] : ''}`);
     const none = runInline(rel, undefined);

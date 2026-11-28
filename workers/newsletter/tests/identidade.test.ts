@@ -595,7 +595,7 @@ test('oposição gravada entre o vínculo e a conversão (corrida com --forget):
   s.env.DB = {
     prepare: (sql: string) => {
       if (/INSERT INTO conversions/.test(sql)) {
-        // O --forget (ou o POST /prioridade) grava a oposição logo depois do upsert do vínculo.
+        // O --forget (ou o --optout) grava a oposição logo depois do upsert do vínculo.
         s.db.prepare('INSERT OR IGNORE INTO heating_optout (email_hmac, opted_out_at) VALUES (?, ?)').run(hmac, new Date(NOW).toISOString());
       }
       return real.prepare(sql);
