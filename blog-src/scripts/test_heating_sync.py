@@ -78,7 +78,13 @@ def sql_normalizado(sql: str) -> str:
             i = len(sql) if fim < 0 else fim + 2  # o SQLite aceita comentário em bloco aberto até o fim
             fora.append(" ")
         elif sql[i] == '"':
-            fim = sql.index('"', i + 1)
+            fim = i + 1
+            while True:  # `""` dentro do identificador é uma aspa do nome, como `''` no literal
+                fim = sql.index('"', fim)
+                if sql.startswith('""', fim):
+                    fim += 2
+                    continue
+                break
             ident = sql[i + 1:fim]
             # Identificador simples perde as aspas (o RENAME as acrescenta); qualquer outra coisa entre aspas duplas fica
             # como está, porque `"NOT NULL"` ou `"OLD.uid"` mudam o significado.
@@ -943,6 +949,7 @@ class HeatingSyncTest(unittest.TestCase):
         # Rodada 3 do #210 (Kimi): tirar toda aspa dupla fazia `source TEXT "NOT NULL"` (coluna sem NOT NULL) igual ao
         # original. Só identificador simples perde as aspas.
         self.assertEqual(sql_normalizado('CREATE TABLE "t" ("a" TEXT)'), sql_normalizado("CREATE TABLE t (a TEXT)"))
+        self.assertNotEqual(sql_normalizado('CREATE TABLE t ("a""b" TEXT)'), sql_normalizado("CREATE TABLE t (ab TEXT)"))
         for original, mutante in (("a TEXT NOT NULL", 'a TEXT "NOT NULL"'), ("OLD.uid", '"OLD.uid"')):
             with self.subTest(mutante=mutante):
                 aspas = "CREATE TABLE t (a TEXT NOT NULL, b TEXT CHECK (b <> OLD.uid))"
@@ -958,23 +965,39 @@ class HeatingSyncTest(unittest.TestCase):
             with self.subTest(mutante=mutante):
                 self.assertNotEqual(sql_normalizado(base.replace("'*[^0-9a-f]*'", mutante)), sql_normalizado(base))
 
-    def test_0015_copia_cada_tabela_inteira_e_coluna_por_coluna(self):
-        # Rodada 3 do #210 (Kimi): mais linhas no teste de preservação só deslocam o LIMIT que escapa. Aqui a forma dos
-        # seis comandos de cópia é fixada: `INSERT INTO <t>_new (<colunas>)\nSELECT <colunas> FROM <t>;`, com as colunas da
-        # tabela na 0014, na ordem, e nada depois do FROM (sem WHERE, LIMIT, OFFSET, ORDER BY ou junção).
+    def test_0015_tem_so_os_comandos_esperados_na_ordem(self):
+        # Rodadas 3 e 4 do #210 (Kimi e Claude fresh): mais linhas no teste de preservação só deslocam o LIMIT que
+        # escapa, e fixar só os INSERT deixava passar um DELETE ou UPDATE avulso. Aqui o arquivo inteiro é fixado: para
+        # cada tabela, na ordem, `CREATE TABLE <t>_new (...)`, a cópia exata (`INSERT INTO <t>_new (<colunas da 0014>)`
+        # e `SELECT <as mesmas> FROM <t>`, nada depois do FROM), `DROP TABLE <t>`, `ALTER TABLE <t>_new RENAME TO <t>` e
+        # os índices de <t>; no fim, o trigger e mais nada. O conteúdo de cada CREATE é conferido no teste estrutural.
         db = sqlite3.connect(":memory:")
         for nome in sorted(n for n in os.listdir(MIGRATIONS) if n.endswith(".sql") and n < "0015"):
             with open(os.path.join(MIGRATIONS, nome), encoding="utf-8") as fh:
                 db.executescript(fh.read())
         with open(os.path.join(MIGRATIONS, "0015_d1_glob_curto.sql"), encoding="utf-8") as fh:
-            texto = fh.read()
+            texto = re.sub(r"(?m)^--[^\n]*\n", "", fh.read())
+        self.assertNotIn("/*", texto)
+        self.assertNotIn("--", texto)  # comentário só em linha própria; nenhum no meio de comando
         tabelas = ("engagement_events", "heating", "heating_optout", "curso_esquecido", "site_identities", "ga4_purge_queue")
-        sem_trigger = re.sub(r"(?m)^--[^\n]*\n", "", texto[:texto.index("CREATE TRIGGER")])
-        self.assertEqual(len(re.findall(r"\bINSERT\b", sem_trigger, re.I)), 6)
+        antes_trigger, trigger = texto.split("CREATE TRIGGER", 1)
+        comandos = [" ".join(c.split()) for c in antes_trigger.split(";") if c.strip()]
+        esperados = []
         for t in tabelas:
-            with self.subTest(tabela=t):
-                cols = ", ".join(r[1] for r in db.execute(f"PRAGMA table_info({t})"))
-                self.assertIn(f"\n\nINSERT INTO {t}_new ({cols})\nSELECT {cols} FROM {t};\n\n", sem_trigger)
+            cols = ", ".join(r[1] for r in db.execute(f"PRAGMA table_info({t})"))
+            n_indices = db.execute(
+                "SELECT count(*) FROM sqlite_master WHERE type = 'index' AND tbl_name = ? AND sql IS NOT NULL", (t,)
+            ).fetchone()[0]
+            esperados += [rf"CREATE TABLE {t}_new \(.*\)", re.escape(f"INSERT INTO {t}_new ({cols}) SELECT {cols} FROM {t}"),
+                          f"DROP TABLE {t}", f"ALTER TABLE {t}_new RENAME TO {t}"]
+            esperados += [rf"CREATE INDEX IF NOT EXISTS \w+ ON {t} \([^;]*\)"] * n_indices
+        self.assertEqual(len(comandos), len(esperados))
+        for n, (comando, padrao) in enumerate(zip(comandos, esperados)):
+            with self.subTest(n=n, comando=comando[:60]):
+                self.assertRegex(comando, rf"\A{padrao}\Z")
+        self.assertRegex(trigger, r"\A IF NOT EXISTS site_identities_enqueue_purge\b")
+        self.assertEqual(trigger.count("END;"), 1)
+        self.assertEqual(trigger.split("END;", 1)[1].strip(), "")
         db.close()
 
     def test_0015_preserva_as_linhas_de_cada_tabela_coluna_por_coluna(self):
@@ -986,8 +1009,8 @@ class HeatingSyncTest(unittest.TestCase):
             with open(os.path.join(MIGRATIONS, nome), encoding="utf-8") as fh:
                 db.executescript(fh.read())
         d = lambda dia: f"2026-11-{dia:02d}T0{dia % 10}:1{dia % 10}:2{dia % 10}.{dia:03d}Z"
-        # Duas linhas por tabela, comparadas pela chave (rodada 2 do #210); a forma dos comandos de cópia, que pega
-        # qualquer LIMIT ou WHERE, é fixada no teste anterior.
+        # Duas linhas por tabela, comparadas pela chave (rodada 2 do #210); o teste anterior fixa o arquivo inteiro, o
+        # que pega LIMIT, WHERE ou um DELETE avulso de qualquer tamanho.
         linhas = {
             "engagement_events": ("id", [
                 {"id": "ev-1", "context": "site", "email": "a@b.co", "signal": "email_aberto", "source": "resend",
