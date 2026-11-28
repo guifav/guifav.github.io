@@ -1,11 +1,12 @@
 """Calcula o heating (temperatura de engajamento) dos contatos no D1 `blog-admin` e leva para o Twenty (crm.guifav.dev).
-Épico #197, corte 1.
+Épico #197, cortes 1 e 2.
 
-Simulação por padrão: lê o D1, o Firestore (curso) e o Twenty e mostra só contagens. Grava apenas com --apply.
+Simulação por padrão: lê o D1, o Firestore (curso), o BigQuery (export do GA4 do site) e o Twenty e mostra só contagens.
+Grava apenas com --apply.
 
 Contextos separados (decisão do Gui, 2026-11-27):
-- `site`: conversões do site, emails da newsletter e dos materiais, e eventos do site (corte 2). A nota vai para a
-  tabela `heating` no D1 e para os quatro campos `heating*` na Person do Twenty.
+- `site`: conversões do site, emails da newsletter e dos materiais, e eventos do site vindos do export do GA4 no
+  BigQuery (corte 2). A nota vai para a tabela `heating` no D1 e para os quatro campos `heating*` na Person do Twenty.
 - `curso:<slug>`: cadastro, aulas concluídas e emails do próprio curso. A nota vai para `heating` no D1 e para o objeto
   `courseEnrollment` ("Inscrição em curso") ligado à Person no Twenty.
 
@@ -35,43 +36,74 @@ Decisões registradas do desenho:
 - Id do evento de aula (`curso_aula`): usa `cu:<slug>:aula:<googleUid>:<sha16>:<dayId>`, incluindo os 16 primeiros
   hex do SHA-256 do email normalizado para que dois documentos com o mesmo `googleUid` e emails diferentes não colidam.
   Como ainda não há evento de curso gravado em produção, não precisa de migração de ids.
+- Engajamento no site pelo export do GA4 no BigQuery (corte 2): ativado apenas quando `HEATING_GA4_DESDE` (`AAAA-MM-DD`)
+  está definida no ambiente (ausente = fonte desligada e nada é lido). Como o GA4 atualiza a tabela diária por até
+  3 dias, cada rodada relê os 3 dias até o marcador `heating_ga4_ultimo_dia` (D1 `meta`) além dos dias novos até ontem
+  (UTC), no máximo 14 dias por rodada, consultando apenas a tabela fechada do dia
+  (`mindapps.analytics_341040810.events_YYYYMMDD`, nunca intraday nem wildcard), com filtro `stream_id = '13120304692'`
+  e `privacy_info.analytics_storage = 'Yes'` e ligação retroativa só dentro da mesma sessão (`user_pseudo_id` +
+  `ga_session_id` quando a sessão tem exatamente um `user_id`). Os ids determinísticos (`ga:<yyyymmdd>:<sha16>:<sig>`)
+  deduplicam a releitura e o marcador nunca regride. Resolve `uid -> email` em `site_identities` (migração 0013), que
+  também é lida sempre que houver oposição pendente ou fila (`ga4_purge_queue`), mesmo sem dias novos do GA4; `uid` sem
+  vínculo é ignorado (`ga4_sem_vinculo`). Um dia sem tabela (dia sem eventos) não trava a sequência: se um dia
+  posterior já tem tabela, conta em `ga4_dia_sem_tabela` e o marcador segue; se nenhum dia posterior tem tabela ainda,
+  espera sem erro. Erro/indisponibilidade do BigQuery marca `ga4_indisponivel: 1`, segue sem a fonte e não avança
+  `heating_ga4_ultimo_dia`. O marcador só avança depois de gravar os eventos do dia.
 
-Dependências na KVM:
-- A leitura do Firestore usa `google-auth` (2.56.3) e `google-cloud-firestore`, já instalados no Python do sistema da
-  KVM. Se faltarem (ou se `HEATING_GCP_SA_FILE` estiver ausente ou falhar), a rodada marca `curso_indisponivel`, mantém
-  os eventos já gravados com bloqueio conservador dos sinais de email do curso e não toca nas Inscrições no Twenty
-  (exceto limpeza de nota em caso de oposição). Se faltarem no ambiente, instalar `google-auth` e
-  `google-cloud-firestore` no Python usado pelo wrapper da KVM.
+Dependências e papéis da conta de serviço na KVM (`HEATING_GCP_SA_FILE`, projeto `mindapps`):
+- Usa `google-auth`, `google-cloud-firestore` e `google-cloud-bigquery` (3.43.0), já instalados no Python do sistema da
+  KVM (importados dentro das funções de produção). Se faltarem (ou se `HEATING_GCP_SA_FILE` estiver ausente ou falhar),
+  o job marca `curso_indisponivel` e/ou `ga4_indisponivel` sem derrubar as demais fontes.
+- Papéis mínimos da conta de serviço (`guifav-heating@mindapps`):
+  - `roles/datastore.viewer` no projeto `mindapps` (leitura do Firestore do curso);
+  - BigQuery Job User (`roles/bigquery.jobUser`) no projeto `mindapps`;
+  - WRITER no dataset `analytics_341040810` (leitura diária e DELETE por tabela em `events_*`, `users_*` e `pseudonymous_users_*`);
+  - Editor na propriedade GA4 `341040810` (para `properties.submitUserDeletion` na fila de remoção).
 
 Modos:
-- Padrão (`heating_sync.py [--apply]`): traz conversões e curso para `engagement_events`, aplica oposição
-  (`heating_optout`), exclusões (`HEATING_EXCLUDE` e domínios de teste), esquecidos de curso (`curso_esquecido`) e
-  retenção (365 dias), calcula a régua por contexto em relação ao instante T, substitui `heating` no D1 via payload
-  `batch` da API REST e atualiza o Twenty (somente o que mudou).
+- Padrão (`heating_sync.py [--apply]`): traz conversões, curso e GA4 (quando `HEATING_GA4_DESDE` está definida) para
+  `engagement_events`, aplica oposição (`heating_optout`, apagando também `site_identities` remanescentes para disparar
+  o trigger), exclusões (`HEATING_EXCLUDE` e domínios de teste), esquecidos de curso (`curso_esquecido`) e retenção
+  (365 dias), processa itens vencidos da fila única `ga4_purge_queue` (migração 0014, alimentada por trigger `AFTER
+  DELETE ON site_identities`: chama `submitUserDeletion` no GA4 enquanto `ga4_pendente = 1`, contando 403/erro em
+  `ga4_remocao_pendente`, e executa o DELETE no BigQuery em `events_*`, `users_YYYYMMDD` existentes e linhas exclusivas
+  de `pseudonymous_users_YYYYMMDD` somando as `sessoes` já salvas às descobertas agora, repetido em D+1, D+3 e enquanto
+  houver tabela adiada por streaming buffer: da 5ª tentativa em diante repete diariamente e conta `bq_remocao_travada`;
+  com o JSON das sessões acima de 1.000.000 de caracteres (cerca de 25 mil sessões) o item fica e conta
+  `bq_sessoes_excedidas`; o fechamento vale só na `geracao` lida; o item só sai da fila quando GA4 e BigQuery
+  terminam),
+  calcula a régua por contexto em relação ao instante T, substitui `heating` no D1 via payload `batch` da API REST e
+  atualiza o Twenty (somente o que mudou).
   Risco aceito na troca de `heating`: a documentação da Cloudflare garante transação no `batch()` do binding em
   Workers, não no `batch` da API REST; se a troca falhar no meio sem rollback (deixando `heating` vazia ou parcial),
   a rodada seguinte refaz a tabela inteira a partir de `engagement_events`.
 - Oposição (`heating_sync.py --optout [--apply]`): lê UM email da entrada padrão, grava a marca permanente em
-  `heating_optout`, apaga eventos e notas de todos os contextos no D1 e limpa os campos `heating*` da Person e
-  nota/faixa/sinais/calculadoEm das Inscrições no Twenty.
+  `heating_optout`, apaga eventos e notas de todos os contextos no D1, limpa os campos `heating*` da Person e
+  nota/faixa/sinais/calculadoEm das Inscrições no Twenty, apaga as linhas do email em `site_identities` (o trigger
+  enfileira cada `uid` em `ga4_purge_queue`) e processa a fila na hora quando há credencial GCP (`HEATING_GCP_SA_FILE`).
+  Sem credencial (por exemplo no Mac), apenas enfileira, informa `ga4_fila_pendente_total` e sai com código 2 (o job
+  diário da KVM conclui a remoção). Com credencial, se GA4 responder
+  403/erro ou o BigQuery falhar, o item fica pendente na fila para o job diário, imprime mensagem fixa (sem `uid`) e
+  sai com código 2, sem impedir as outras remoções.
 - Esquecimento de curso (`heating_sync.py --forget-curso <slug> [--apply]`): lê UM email da entrada padrão, grava a
   marca permanente em `curso_esquecido` (migração 0012) para impedir rematerialização do Firestore, apaga de vez a
   Inscrição no Twenty (inclusive da lixeira) conferindo na releitura e apaga eventos e nota daquele curso no D1, sem
-  apagar a Pessoa nem tocar no contexto `site`.
+  apagar a Pessoa nem tocar no contexto `site`, em `heating_optout` nem no GA4/BigQuery.
 
 Lock compartilhado: usa o mesmo arquivo de lock do `conversoes_sync.py` (`CONVERSOES_SYNC_LOCK`, padrão
 `/tmp/guifav-conversoes-sync.lock`), porque os dois apagam e gravam nas mesmas tabelas. Se o lock estiver ocupado,
 espera até 10 minutos e falha com mensagem fixa.
 
 Wrapper da KVM: roda diariamente às 10:53 (BRT) a partir da `main` atualizada, com alerta por email se o script sair
-com erro ou se `curso_indisponivel`, `conversao_invalida`, `curso_invalido` ou `pessoa_na_lixeira` forem maiores que
-zero.
+com erro ou se `curso_indisponivel`, `ga4_indisponivel` (que também sobe quando o DELETE do BigQuery falha na fila,
+`bq_remocao_falhou`), `ga4_remocao_pendente`, `bq_remocao_travada`, `bq_sessoes_excedidas`, `conversao_invalida`,
+`curso_invalido` ou `pessoa_na_lixeira` forem maiores que zero.
 
 Rodar na KVM (todas as credenciais vêm do ambiente):
     CLOUDFLARE_API_TOKEN=... CLOUDFLARE_ACCOUNT_ID=... D1_DATABASE_ID=... TWENTY_API_KEY=... \\
     TWENTY_LOCAL_URL=http://127.0.0.1:3100 FORGET_HMAC_KEY=... [HEATING_GCP_SA_FILE=...] \\
-    [HEATING_EMAIL_DESDE=...] [HEATING_EXCLUDE=...] python3 scripts/heating_sync.py [--apply]
-    printf '%s\\n' "$EMAIL" | FORGET_HMAC_KEY=... ... python3 scripts/heating_sync.py --optout [--apply]
+    [HEATING_EMAIL_DESDE=...] [HEATING_GA4_DESDE=AAAA-MM-DD] [HEATING_EXCLUDE=...] python3 scripts/heating_sync.py [--apply]
+    printf '%s\\n' "$EMAIL" | FORGET_HMAC_KEY=... [HEATING_GCP_SA_FILE=...] ... python3 scripts/heating_sync.py --optout [--apply]
     printf '%s\\n' "$EMAIL" | FORGET_HMAC_KEY=... ... python3 scripts/heating_sync.py --forget-curso chatgpt-no-dia-a-dia [--apply]
 """
 from __future__ import annotations
@@ -86,7 +118,7 @@ import sys
 import time
 import urllib.parse
 from collections import Counter, OrderedDict
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import conversoes_sync as CS  # noqa: E402
@@ -213,7 +245,7 @@ DOMINIOS_TESTE_EXATOS = frozenset({"example.com", "example.org", "example.net", 
 DOMINIOS_TESTE_SUFIXOS = (".test", ".invalid", ".example")
 
 # Prefixos HMAC (iguais aos do Worker / migração 0012).
-OPTOUT_PREFIX = "heating-optout-v1\n"
+OPTOUT_PREFIX = CS.HEATING_OPTOUT_PREFIX
 CURSO_ESQUECIDO_PREFIX = "curso-esquecido-v1\n"
 
 # Lock compartilhado com conversoes_sync.py: espera até 10 minutos.
@@ -305,6 +337,16 @@ ENROLL_FIELDS = OrderedDict([
 RUN_COUNT_KEYS = (
     "eventos_conversao_novos",
     "eventos_curso_novos",
+    "eventos_ga4_novos",
+    "ga4_dias_lidos",
+    "ga4_dia_sem_tabela",
+    "ga4_sem_vinculo",
+    "ga4_indisponivel",
+    "ga4_remocao_pendente",
+    "ga4_fila_processados",
+    "bq_remocao_adiada",
+    "bq_remocao_travada",
+    "bq_sessoes_excedidas",
     "conversao_invalida",
     "curso_invalido",
     "curso_indisponivel",
@@ -323,6 +365,24 @@ RUN_COUNT_KEYS = (
     "pessoa_na_lixeira",
 )
 
+# Export do GA4 no BigQuery (épico #197, corte 2).
+GCP_PROJECT = CS.GCP_PROJECT
+GA4_PROPERTY_ID = CS.GA4_PROPERTY_ID
+GA4_STREAM_ID = CS.GA4_STREAM_ID
+BQ_DATASET = CS.BQ_DATASET
+BQ_LOCATION = CS.BQ_LOCATION
+SITE_UID_RE = CS.SITE_UID_RE
+GA4_PURGE_PENDENTE_MSG = CS.GA4_PURGE_PENDENTE_MSG
+BQ_PURGE_PENDENTE_MSG = CS.BQ_PURGE_PENDENTE_MSG
+GA4_FILA_SEM_CRED_MSG = CS.GA4_FILA_SEM_CRED_MSG
+processar_fila_ga4 = CS.processar_fila_ga4
+
+GA4_META_KEY = "heating_ga4_ultimo_dia"
+GA4_MAX_DIAS = 14
+GA4_REPROCESS_DIAS = 3
+GA4_ENGAGED_MSEC_MIN = 60_000
+GA4_DIA_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+
 FORGET_CURSO_AVISO = (
     "Aviso: a Pessoa no Twenty e os dados do curso no Firestore e no Identity Platform não foram apagados; "
     "o progresso e a conta do curso no Firestore e no Identity Platform saem pelo app do curso, se o pedido incluir isso."
@@ -331,6 +391,10 @@ FORGET_CURSO_AVISO = (
 
 class CursoIndisponivel(Exception):
     """Falha na leitura do Firestore ou ausência de HEATING_GCP_SA_FILE."""
+
+
+class Ga4Indisponivel(Exception):
+    """Falha na leitura do export do GA4 no BigQuery ou ausência de HEATING_GCP_SA_FILE."""
 
 
 # ------------------------------------------------------------------ Helpers de HMAC, datas, exclusão e D1
@@ -346,11 +410,7 @@ def _check_key(key: str) -> None:
 
 def heating_optout_hmac(email: str, key: str) -> str:
     """HMAC-SHA256 em hex minúsculo de `heating-optout-v1\\n` + email normalizado, igual ao Worker."""
-    _check_key(key)
-    norm = email.strip().lower() if isinstance(email, str) else ""
-    if not CS.valid_email(norm):
-        raise SyncError("email inválido na entrada")
-    return hmac.new(key.encode("utf-8"), (OPTOUT_PREFIX + norm).encode("utf-8"), hashlib.sha256).hexdigest()
+    return CS.heating_optout_hmac(email, key)
 
 
 def curso_esquecido_hmac(context: str, email: str, key: str) -> str:
@@ -587,6 +647,156 @@ def ler_curso_firestore(slug: str, sa_file: str | None = None) -> list[dict]:
         mod = type(e).__module__ or ""
         if isinstance(e, (OSError, ValueError)) or mod.startswith(("google.", "grpc")):
             raise CursoIndisponivel(f"leitura do Firestore falhou ({name})") from e
+        raise
+
+
+# ------------------------------------------------------------------ Leitura do export do GA4 (BigQuery opcional)
+
+def parse_iso_date(raw: str | None) -> date | None:
+    """Valida data no formato estrito AAAA-MM-DD; devolve None se inválida."""
+    if not isinstance(raw, str):
+        return None
+    s = raw.strip()
+    if not CS._full(GA4_DIA_RE, s):
+        return None
+    try:
+        return date.fromisoformat(s)
+    except ValueError:
+        return None
+
+
+def ga4_ts_to_iso_ms(ts_us) -> str:
+    """Converte event_timestamp do GA4 (microssegundos UTC inteiros) para ISO UTC com milissegundos; '' se inválido."""
+    if not isinstance(ts_us, int) or isinstance(ts_us, bool) or ts_us < 0:
+        return ""
+    secs, rem_us = divmod(ts_us, 1_000_000)
+    try:
+        dt = datetime.fromtimestamp(secs, tz=timezone.utc).replace(microsecond=rem_us)
+    except (ValueError, OverflowError, OSError):
+        return ""
+    return CS.stamp(dt)
+
+
+def uid_sha256_16(uid: str) -> str:
+    return hashlib.sha256(uid.encode("utf-8")).hexdigest()[:16]
+
+
+def ga4_day_query_sql(dia: date) -> str:
+    """Monta a consulta diária sobre a tabela fechada `events_YYYYMMDD` (nunca wildcard nem intraday),
+    com filtro de stream, consentimento (`analytics_storage = 'Yes'`) e ligação retroativa só dentro da mesma sessão."""
+    if not isinstance(dia, date):
+        raise SyncError("data inválida para consulta do GA4")
+    yyyymmdd = dia.strftime("%Y%m%d")
+    table_ref = f"`{GCP_PROJECT}.{BQ_DATASET}.events_{yyyymmdd}`"
+    return (
+        f"WITH base AS (\n"
+        f"  SELECT\n"
+        f"    user_id,\n"
+        f"    user_pseudo_id,\n"
+        f"    (SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'ga_session_id') AS ga_session_id,\n"
+        f"    event_name,\n"
+        f"    event_timestamp,\n"
+        f"    COALESCE(\n"
+        f"      (SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'engagement_time_msec'),\n"
+        f"      0\n"
+        f"    ) AS engagement_time_msec\n"
+        f"  FROM {table_ref}\n"
+        f"  WHERE stream_id = @stream_id\n"
+        f"    AND privacy_info.analytics_storage = 'Yes'\n"
+        f"),\n"
+        f"sessoes_uid AS (\n"
+        f"  SELECT\n"
+        f"    user_pseudo_id,\n"
+        f"    ga_session_id,\n"
+        f"    ANY_VALUE(user_id) AS session_user_id\n"
+        f"  FROM base\n"
+        f"  WHERE user_id IS NOT NULL\n"
+        f"    AND user_id != ''\n"
+        f"    AND user_pseudo_id IS NOT NULL\n"
+        f"    AND ga_session_id IS NOT NULL\n"
+        f"  GROUP BY user_pseudo_id, ga_session_id\n"
+        f"  HAVING COUNT(DISTINCT user_id) = 1\n"
+        f"),\n"
+        f"ligados AS (\n"
+        f"  SELECT\n"
+        f"    COALESCE(NULLIF(b.user_id, ''), s.session_user_id) AS uid,\n"
+        f"    b.user_pseudo_id,\n"
+        f"    b.ga_session_id,\n"
+        f"    b.event_name,\n"
+        f"    b.event_timestamp,\n"
+        f"    b.engagement_time_msec\n"
+        f"  FROM base AS b\n"
+        f"  LEFT JOIN sessoes_uid AS s\n"
+        f"    ON b.user_pseudo_id = s.user_pseudo_id\n"
+        f"   AND b.ga_session_id = s.ga_session_id\n"
+        f")\n"
+        f"SELECT\n"
+        f"  uid AS user_id,\n"
+        f"  COUNT(DISTINCT CONCAT(COALESCE(user_pseudo_id, ''), ':', COALESCE(CAST(ga_session_id AS STRING), ''))) AS sessoes,\n"
+        f"  COUNTIF(event_name = 'page_view') AS page_views,\n"
+        f"  SUM(engagement_time_msec) AS engagement_time_msec,\n"
+        f"  COUNTIF(event_name = 'scroll') AS scrolls,\n"
+        f"  COUNTIF(event_name = 'contact_click') AS cliques_contato,\n"
+        f"  COUNTIF(event_name = 'schedule_click') AS cliques_agenda,\n"
+        f"  MIN(event_timestamp) AS min_ts_visita,\n"
+        f"  MIN(IF(engagement_time_msec > 0 OR event_name = 'scroll', event_timestamp, NULL)) AS min_ts_engajamento,\n"
+        f"  MIN(IF(event_name = 'contact_click', event_timestamp, NULL)) AS min_ts_contato,\n"
+        f"  MIN(IF(event_name = 'schedule_click', event_timestamp, NULL)) AS min_ts_agenda\n"
+        f"FROM ligados\n"
+        f"WHERE uid IS NOT NULL AND uid != ''\n"
+        f"GROUP BY uid"
+    )
+
+
+def ler_ga4_dia(dia: date, sa_file: str | None = None) -> list[dict] | None:
+    """Lê sinais agregados por `user_id` na tabela fechada `events_YYYYMMDD` do export do GA4 no BigQuery.
+    Devolve None se a tabela do dia ainda não existe; levanta Ga4Indisponivel se o BigQuery falhar."""
+    if not isinstance(dia, date):
+        raise SyncError("data inválida para leitura do GA4")
+    path = sa_file if sa_file is not None else os.environ.get("HEATING_GCP_SA_FILE", "").strip()
+    if not path:
+        raise Ga4Indisponivel("HEATING_GCP_SA_FILE ausente")
+    try:
+        from google.cloud import bigquery  # type: ignore[import-not-found]
+        from google.oauth2 import service_account  # type: ignore[import-not-found]
+    except ImportError as e:
+        raise Ga4Indisponivel("biblioteca do BigQuery ausente") from e
+
+    table_id = f"{GCP_PROJECT}.{BQ_DATASET}.events_{dia.strftime('%Y%m%d')}"
+    try:
+        creds = service_account.Credentials.from_service_account_file(path)
+        client = bigquery.Client(project=GCP_PROJECT, credentials=creds)
+        try:
+            table = client.get_table(table_id)
+        except Exception as e:  # noqa: BLE001
+            if CS._is_not_found(e):
+                return None
+            raise
+        sql = ga4_day_query_sql(dia)
+        cfg = CS._bq_cfg(bigquery, query_parameters=[bigquery.ScalarQueryParameter("stream_id", "STRING", GA4_STREAM_ID)])
+        location = getattr(table, "location", None) or BQ_LOCATION
+        rows = client.query(sql, job_config=cfg, location=location).result()
+        out: list[dict] = []
+        for row in rows:
+            out.append({
+                "user_id": row["user_id"],
+                "sessoes": row["sessoes"],
+                "page_views": row["page_views"],
+                "engagement_time_msec": row["engagement_time_msec"],
+                "scrolls": row["scrolls"],
+                "cliques_contato": row["cliques_contato"],
+                "cliques_agenda": row["cliques_agenda"],
+                "min_ts_visita": row["min_ts_visita"],
+                "min_ts_engajamento": row["min_ts_engajamento"],
+                "min_ts_contato": row["min_ts_contato"],
+                "min_ts_agenda": row["min_ts_agenda"],
+            })
+        return out
+    except Ga4Indisponivel:
+        raise
+    except Exception as e:  # noqa: BLE001
+        if CS._is_google_err(e):
+            raise Ga4Indisponivel(f"leitura do BigQuery falhou ({type(e).__name__})") from e
         raise
 
 
@@ -1064,9 +1274,13 @@ def run(
     out=None,
     now_dt: datetime | None = None,
     ler_curso=None,
+    ler_ga4_dia=None,
     forget_key: str | None = None,
     exclude_emails: set[str] | None = None,
     email_desde: str | None = ...,
+    ga4_desde: str | None = ...,
+    ga4_delete=None,
+    bq_delete=None,
 ) -> Counter:
     out = out or sys.stdout
     key = c.env.get("FORGET_HMAC_KEY", "") if forget_key is None else forget_key
@@ -1098,6 +1312,21 @@ def run(
     else:
         email_desde_iso = None
 
+    if ga4_desde is ...:
+        raw_ga4_desde = (c.env.get("HEATING_GA4_DESDE") or "").strip()
+        if raw_ga4_desde:
+            ga4_desde_date = parse_iso_date(raw_ga4_desde)
+            if ga4_desde_date is None:
+                raise SyncError("HEATING_GA4_DESDE inválida")
+        else:
+            ga4_desde_date = None
+    elif ga4_desde:
+        ga4_desde_date = parse_iso_date(ga4_desde)
+        if ga4_desde_date is None:
+            raise SyncError("HEATING_GA4_DESDE inválida")
+    else:
+        ga4_desde_date = None
+
     counts: Counter = Counter({k: 0 for k in RUN_COUNT_KEYS})
 
     # ------------------------------------------------------------------ 1) Leituras e validações (antes de qualquer escrita)
@@ -1116,6 +1345,39 @@ def run(
         for r in c.d1("SELECT email FROM subscribers WHERE unsubscribed = 1")
         if isinstance(r.get("email"), str)
     }
+    due_purges = c.d1(
+        "SELECT uid, ga4_pendente, sessoes, bq_tentativas, proxima_em, criado_em "
+        "FROM ga4_purge_queue WHERE proxima_em <= ? ORDER BY proxima_em, uid",
+        [now_iso],
+    )
+
+    # Marcador do GA4 só é lido quando HEATING_GA4_DESDE está definida (ausente = fonte desligada).
+    # O GA4 atualiza a tabela diária por até 3 dias: cada rodada relê os 3 dias até o marcador além dos novos.
+    ga4_days_eligible: list[date] = []
+    ga4_marker_before: date | None = None
+    if ga4_desde_date is not None:
+        meta_rows = c.d1("SELECT v FROM meta WHERE k = ?", [GA4_META_KEY])
+        if meta_rows:
+            ga4_marker_before = parse_iso_date(meta_rows[0].get("v"))
+            if ga4_marker_before is None:
+                raise SyncError("heating_ga4_ultimo_dia inválido no D1")
+            inicio = max(ga4_desde_date, ga4_marker_before - timedelta(days=GA4_REPROCESS_DIAS - 1))
+        else:
+            inicio = ga4_desde_date
+        ontem = now_dt.date() - timedelta(days=1)
+        cur_dia = inicio
+        while cur_dia <= ontem and len(ga4_days_eligible) < GA4_MAX_DIAS:
+            ga4_days_eligible.append(cur_dia)
+            cur_dia += timedelta(days=1)
+
+    # `site_identities` é lida sempre que houver dias do GA4 a ler, oposição pendente ou fila vencida.
+    uid_to_email: dict[str, str] = {}
+    if ga4_days_eligible or optout_hmacs or due_purges:
+        for r in c.d1("SELECT uid, email FROM site_identities"):
+            u = r.get("uid")
+            em = r.get("email").strip().lower() if isinstance(r.get("email"), str) else ""
+            if CS._full(SITE_UID_RE, u) and CS.valid_email(em):
+                uid_to_email[u] = em
 
     # Metadados e registros do Twenty (com lixeira).
     meta = read_metadata(c)
@@ -1136,6 +1398,59 @@ def run(
         if not isinstance(docs, list):
             raise SyncError("retorno da leitura do curso inválido")
         cursos_disponiveis[slug] = _parse_curso_docs(slug, docs, counts)
+
+    # Leitura do export do GA4 no BigQuery (dia por dia, no máximo 14 por rodada).
+    # Dia sem tabela: se um dia posterior já tem tabela, conta em `ga4_dia_sem_tabela` e o marcador segue;
+    # se nenhum dia posterior tem tabela ainda, espera sem erro e sem avançar o marcador além do último dia existente.
+    ga4_raw_days: list[tuple[date, list[dict]]] = []
+    if ga4_days_eligible:
+        ga4_reader = (
+            ler_ga4_dia
+            if ler_ga4_dia is not None
+            else (lambda dia: globals()["ler_ga4_dia"](dia, c.env.get("HEATING_GCP_SA_FILE", "").strip()))
+        )
+        day_results: list[tuple[date, list[dict] | None]] = []
+        for dia in ga4_days_eligible:
+            try:
+                day_rows = ga4_reader(dia)
+            except (Ga4Indisponivel, CS.GoogleIndisponivel, OSError):
+                counts["ga4_indisponivel"] = 1
+                day_results = []
+                break
+            if day_rows is not None and not isinstance(day_rows, list):
+                raise SyncError("retorno da leitura do GA4 inválido")
+            day_results.append((dia, day_rows))
+
+        last_found_idx: int | None = None
+        for i, (_dia, day_rows) in enumerate(day_results):
+            if day_rows is not None:
+                last_found_idx = i
+        # Janela inteira sem tabela (por exemplo, 14 dias sem evento nenhum logo depois de ligar a fonte): sem isto o
+        # marcador nunca nasceria e toda rodada voltaria ao mesmo bloco. Se a tabela de ontem já existe, os dias da
+        # janela são dias sem evento e o marcador anda até o fim da janela (as linhas lidas de ontem ficam para a rodada
+        # em que ontem entrar na janela).
+        if last_found_idx is None and day_results and len(day_results) == len(ga4_days_eligible):
+            ontem_probe = now_dt.date() - timedelta(days=1)
+            if ga4_days_eligible[-1] < ontem_probe:
+                try:
+                    probe_rows = ga4_reader(ontem_probe)
+                except (Ga4Indisponivel, CS.GoogleIndisponivel, OSError):
+                    counts["ga4_indisponivel"] = 1
+                    probe_rows = None
+                    day_results = []
+                if probe_rows is not None:
+                    day_results = [(dia, []) for dia, _rows in day_results]
+                    counts["ga4_dia_sem_tabela"] += sum(
+                        1 for dia, _r in day_results if ga4_marker_before is None or dia > ga4_marker_before
+                    )
+                    last_found_idx = len(day_results) - 1
+        if last_found_idx is not None:
+            for dia, day_rows in day_results[:last_found_idx + 1]:
+                if day_rows is None:
+                    if ga4_marker_before is None or dia > ga4_marker_before:
+                        counts["ga4_dia_sem_tabela"] += 1
+                else:
+                    ga4_raw_days.append((dia, day_rows))
 
     # ------------------------------------------------------------------ 2) Preparar novos eventos e aplicar oposição / esquecidos / retenção
     existing_event_ids = {ev["id"] for ev in existing_events}
@@ -1240,7 +1555,82 @@ def run(
         inscricoes_ativas_por_curso[slug] = kept
     counts["eventos_curso_novos"] = len(new_curso_events)
 
-    # Passo 3: oposição, esquecidos e retenção sobre eventos e notas já existentes no D1
+    # Passo 2b: GA4 (BigQuery) -> eventos de engagement_events (por dia, para avançar o marcador após cada dia)
+    ga4_days_to_write: list[tuple[date, list[dict]]] = []
+    new_ga4_events: list[dict] = []
+    for dia, day_rows in ga4_raw_days:
+        yyyymmdd = dia.strftime("%Y%m%d")
+        day_events: list[dict] = []
+        for row in day_rows:
+            if not isinstance(row, dict):
+                continue
+            uid = row.get("user_id")
+            if not isinstance(uid, str) or not uid:
+                continue
+            email = uid_to_email.get(uid)
+            if email is None:
+                counts["ga4_sem_vinculo"] += 1
+                continue
+            if is_optout(email):
+                optout_seen.add(email)
+                continue
+            uid_h = uid_sha256_16(uid)
+            sessoes = int(row.get("sessoes") or 0)
+            eng_ms = int(row.get("engagement_time_msec") or 0)
+            scrolls = int(row.get("scrolls") or 0)
+            cliques_contato = int(row.get("cliques_contato") or 0)
+            cliques_agenda = int(row.get("cliques_agenda") or 0)
+
+            sinais_dia: list[tuple[str, str]] = []
+            ts_visita = ga4_ts_to_iso_ms(row.get("min_ts_visita"))
+            if sessoes > 0 and ts_visita:
+                sinais_dia.append(("site_visita", ts_visita))
+            if eng_ms >= GA4_ENGAGED_MSEC_MIN or scrolls > 0:
+                ts_eng = ga4_ts_to_iso_ms(row.get("min_ts_engajamento")) or ts_visita
+                if ts_eng:
+                    sinais_dia.append(("site_engajada", ts_eng))
+            if cliques_contato > 0:
+                ts_cont = ga4_ts_to_iso_ms(row.get("min_ts_contato"))
+                if ts_cont:
+                    sinais_dia.append(("site_contato", ts_cont))
+            if cliques_agenda > 0:
+                ts_ag = ga4_ts_to_iso_ms(row.get("min_ts_agenda"))
+                if ts_ag:
+                    sinais_dia.append(("site_agende", ts_ag))
+
+            for sig, occurred_at in sinais_dia:
+                if occurred_at < retention_cutoff:
+                    continue
+                ev_id = f"ga:{yyyymmdd}:{uid_h}:{sig}"
+                if ev_id in existing_event_ids:
+                    continue
+                existing_event_ids.add(ev_id)
+                ev = {
+                    "id": ev_id,
+                    "context": "site",
+                    "email": email,
+                    "signal": sig,
+                    "source": "ga4",
+                    "ref": None,
+                    "occurred_at": occurred_at,
+                    "recorded_at": now_iso,
+                }
+                day_events.append(ev)
+                new_ga4_events.append(ev)
+        ga4_days_to_write.append((dia, day_events))
+    counts["ga4_dias_lidos"] = len(ga4_days_to_write)
+    counts["eventos_ga4_novos"] = len(new_ga4_events)
+    # Passo 3: oposição, esquecidos e retenção sobre eventos, notas e `site_identities` já existentes no D1
+    optout_identities_delete: set[str] = set()
+    optout_identities_uids: set[str] = set()
+    for u, em in uid_to_email.items():
+        if is_optout(em):
+            optout_seen.add(em)
+            optout_identities_delete.add(em)
+            optout_identities_uids.add(u)
+    if not apply:
+        counts["ga4_fila_processados"] = len({r["uid"] for r in due_purges} | optout_identities_uids)
+
     kept_events: list[dict] = []
     retention_delete_count = 0
     for ev in existing_events:
@@ -1274,7 +1664,7 @@ def run(
     counts["oposicao_aplicada"] = len(optout_seen)
     counts["retencao_apagados"] = retention_delete_count
 
-    all_active_events = kept_events + new_conv_events + new_curso_events
+    all_active_events = kept_events + new_conv_events + new_curso_events + new_ga4_events
 
     # ------------------------------------------------------------------ 3) Passo 4: cálculo da régua por (context, email)
     events_by_ctx_email: dict[tuple[str, str], list[dict]] = {}
@@ -1514,21 +1904,61 @@ def run(
                 updated_enroll_patches[eid] = patch
 
         # 5d) Atualiza `engagement_events` no D1: insere novos condicionalmente (WHERE NOT EXISTS heating_optout),
-        #     apaga oposição, esquecidos e retenção (> 365d).
+        #     grava GA4 dia por dia (só avançando `heating_ga4_ultimo_dia` após gravar os eventos do dia),
+        #     apaga oposição, esquecidos e retenção (> 365d), e processa itens vencidos de `ga4_purge_queue`.
         all_new_events = new_conv_events + new_curso_events
         for i in range(0, len(all_new_events), EVENT_CHUNK):
             part = all_new_events[i:i + EVENT_CHUNK]
             sql, params = _insert_events_sql(part, key)
             c.d1(sql, params)
+        ga4_marker = ga4_marker_before
+        for dia, day_events in ga4_days_to_write:
+            for i in range(0, len(day_events), EVENT_CHUNK):
+                part = day_events[i:i + EVENT_CHUNK]
+                sql, params = _insert_events_sql(part, key)
+                c.d1(sql, params)
+            if ga4_marker is None or dia > ga4_marker:
+                c.d1(
+                    "INSERT INTO meta (k, v) VALUES (?, ?) ON CONFLICT(k) DO UPDATE SET v = max(meta.v, excluded.v)",
+                    [GA4_META_KEY, dia.isoformat()],
+                )
+                ga4_marker = dia
         if optout_emails_d1_delete:
             del_list = sorted(optout_emails_d1_delete)
             for i in range(0, len(del_list), DELETE_CHUNK):
                 part = del_list[i:i + DELETE_CHUNK]
                 c.d1(f"DELETE FROM engagement_events WHERE email IN ({','.join('?' * len(part))})", part)
+        if optout_identities_delete:
+            # Apagar `site_identities` dispara o trigger da 0014 e enfileira cada uid em `ga4_purge_queue`.
+            id_del_list = sorted(optout_identities_delete)
+            for i in range(0, len(id_del_list), DELETE_CHUNK):
+                part = id_del_list[i:i + DELETE_CHUNK]
+                c.d1(f"DELETE FROM site_identities WHERE email IN ({','.join('?' * len(part))})", part)
         for ctx, email in sorted(esquecido_d1_delete):
             c.d1("DELETE FROM engagement_events WHERE context = ? AND email = ?", [ctx, email])
         if retention_delete_count:
             c.d1("DELETE FROM engagement_events WHERE occurred_at < ?", [retention_cutoff])
+
+        if due_purges or optout_identities_uids:
+            q_res = processar_fila_ga4(
+                c,
+                only_due=True,
+                include_uids=sorted(optout_identities_uids),
+                ga4_delete=ga4_delete,
+                bq_delete=bq_delete,
+                now_dt=now_dt,
+                stop_on_bq_error=True,
+            )
+            if q_res["sem_credencial"]:
+                counts["ga4_indisponivel"] = 1
+            else:
+                counts["ga4_fila_processados"] += q_res["ga4_fila_processados"]
+                counts["bq_remocao_adiada"] += q_res["bq_remocao_adiada"]
+                counts["ga4_remocao_pendente"] += q_res["ga4_remocao_pendente"]
+                counts["bq_remocao_travada"] += q_res["bq_remocao_travada"]
+                counts["bq_sessoes_excedidas"] += q_res["bq_sessoes_excedidas"]
+                if q_res["bq_remocao_falhou"]:
+                    counts["ga4_indisponivel"] = 1
 
         # 5e) Troca a tabela `heating` inteira via `batch` da API REST (com INSERT condicional em heating_optout),
         #     se houve mudança (risco aceito: sem garantia de transação na API REST; se falhar no meio sem rollback,
@@ -1574,6 +2004,9 @@ def run(
             for p in people:
                 if not p.get("deletedAt"):
                     candidate_emails.update(TS._emails(p))
+            for r in c.d1("SELECT email FROM site_identities"):
+                if isinstance(r.get("email"), str):
+                    candidate_emails.add(r["email"].strip().lower())
 
             late_optout_emails = sorted(
                 em for em in candidate_emails
@@ -1585,6 +2018,7 @@ def run(
                     ph = ",".join("?" * len(part))
                     c.d1(f"DELETE FROM engagement_events WHERE email IN ({ph})", part)
                     c.d1(f"DELETE FROM heating WHERE email IN ({ph})", part)
+                    c.d1(f"DELETE FROM site_identities WHERE email IN ({ph})", part)
 
                 person_heating_present = [k for k in PERSON_HEATING_FIELDS if k in meta["person"]]
                 updated_pids = {pid for pid, _ in person_updates}
@@ -1646,10 +2080,22 @@ def run(
 
 # ------------------------------------------------------------------ Modos --optout e --forget-curso
 
-def optout(c: TS.Clients, email: str, *, apply: bool = False, out=None, forget_key: str | None = None) -> Counter:
-    """Registra oposição permanente ao heating (`heating_optout`), apaga eventos e notas de todos os contextos no D1
-    e limpa campos heating* na Person (tanto achadas pelo email quanto pelos `twenty_person_id` salvos em `heating` e
-    `conversions` antes de apagar o D1) e nota/faixa/sinais/calculadoEm das Inscrições no Twenty."""
+def optout(
+    c: TS.Clients,
+    email: str,
+    *,
+    apply: bool = False,
+    out=None,
+    forget_key: str | None = None,
+    ga4_delete=None,
+    bq_delete=None,
+    now_dt: datetime | None = None,
+) -> Counter:
+    """Registra oposição permanente ao heating (`heating_optout`), apaga eventos e notas de todos os contextos no D1,
+    limpa campos heating* na Person (tanto achadas pelo email quanto pelos `twenty_person_id` salvos em `heating` e
+    `conversions` antes de apagar o D1) e nota/faixa/sinais/calculadoEm das Inscrições no Twenty, apaga
+    `site_identities` (cujo trigger enfileira os `uid`s em `ga4_purge_queue`) e processa a fila na hora quando há
+    credencial GCP (sem credencial, apenas enfileira e informa)."""
     out = out or sys.stdout
     key = c.env.get("FORGET_HMAC_KEY", "") if forget_key is None else forget_key
     norm = email.strip().lower()
@@ -1658,16 +2104,14 @@ def optout(c: TS.Clients, email: str, *, apply: bool = False, out=None, forget_k
 
     if apply:
         # Grava a marca permanente antes de ler o Twenty (mesmo upsert do Worker, com relógio do D1).
-        c.d1(
-            f"INSERT INTO heating_optout (email_hmac, opted_out_at) VALUES (?, {CS._D1_NOW_SQL}) "
-            f"ON CONFLICT(email_hmac) DO UPDATE SET opted_out_at = excluded.opted_out_at",
-            [opt_hmac],
-        )
+        CS._upsert_heating_optout(c, opt_hmac)
 
     ev_count = int(c.d1("SELECT count(*) AS n FROM engagement_events WHERE email = ?", [norm])[0]["n"])
     heat_rows = c.d1("SELECT twenty_person_id FROM heating WHERE email = ?", [norm])
     heat_count = len(heat_rows)
     conv_rows = c.d1("SELECT twenty_person_id FROM conversions WHERE email = ?", [norm])
+    raw_identities = c.d1("SELECT uid FROM site_identities WHERE email = ?", [norm])
+    site_uids = sorted({r["uid"] for r in raw_identities if CS._full(SITE_UID_RE, r.get("uid"))})
     ref_pids = {
         r["twenty_person_id"]
         for r in (*heat_rows, *conv_rows)
@@ -1701,7 +2145,11 @@ def optout(c: TS.Clients, email: str, *, apply: bool = False, out=None, forget_k
     counts["notas_apagadas"] = heat_count
     counts["pessoas_limpas"] = len(persons_to_clear)
     counts["inscricoes_limpas"] = len(enrolls_to_clear)
+    counts["identidades_site"] = len(site_uids)
 
+    ga4_pendente = False
+    bq_falhou = False
+    sem_cred_enfileirado = False
     if apply:
         if person_heating_present:
             patch_p = {k: None for k in person_heating_present}
@@ -1713,8 +2161,55 @@ def optout(c: TS.Clients, email: str, *, apply: bool = False, out=None, forget_k
                 c.twenty("PATCH", f"/rest/{ENROLL_PLURAL}/{urllib.parse.quote(x['id'])}", patch_e, op="limpar heating da inscrição")
         c.d1("DELETE FROM engagement_events WHERE email = ?", [norm])
         c.d1("DELETE FROM heating WHERE email = ?", [norm])
+        if raw_identities:
+            c.d1("DELETE FROM site_identities WHERE email = ?", [norm])
+            if c.d1("SELECT count(*) AS n FROM site_identities WHERE email = ?", [norm])[0]["n"] != 0:
+                raise SyncError("o D1 ainda tem identidades do site do email depois da oposição")
+        if site_uids:
+            g_res = processar_fila_ga4(
+                c,
+                uids=site_uids,
+                ga4_delete=ga4_delete,
+                bq_delete=bq_delete,
+                now_dt=now_dt,
+            )
+            if g_res["sem_credencial"]:
+                counts["ga4_fila_enfileirados"] = len(site_uids)
+                sem_cred_enfileirado = True
+            else:
+                counts["ga4_removidos"] = g_res["ga4_removidos"]
+                counts["ga4_remocao_pendente"] = g_res["ga4_remocao_pendente"]
+                counts["bq_tabelas_limpas"] = g_res["bq_tabelas_limpas"]
+                counts["bq_remocao_adiada"] = g_res["bq_remocao_adiada"]
+                counts["ga4_fila_restantes"] = g_res["ga4_fila_restantes"]
+                if g_res["bq_remocao_falhou"]:
+                    counts["bq_remocao_falhou"] = g_res["bq_remocao_falhou"]
+                    bq_falhou = True
+                if g_res["bq_sessoes_excedidas"]:
+                    counts["bq_sessoes_excedidas"] = g_res["bq_sessoes_excedidas"]
+                    bq_falhou = True
+                ga4_pendente = g_res["ga4_remocao_pendente"] > 0
 
+    if apply:
+        # Mesmo repetido depois de o vínculo sumir, o comando continua avisando enquanto houver GA4 pendente na fila.
+        counts["ga4_fila_pendente_total"] = int(
+            c.d1("SELECT count(*) AS n FROM ga4_purge_queue WHERE ga4_pendente = 1")[0]["n"]
+        )
+        counts["bq_fila_com_erro_total"] = int(
+            c.d1("SELECT count(*) AS n FROM ga4_purge_queue WHERE bq_erro IS NOT NULL")[0]["n"]
+        )
     CS._report(counts, out, "oposição registrada" if apply else "simulação: nada foi apagado (use --apply)")
+    if apply and counts.get("ga4_fila_pendente_total", 0) > 0 and not ga4_pendente and not sem_cred_enfileirado:
+        print(CS.GA4_FILA_PENDENTE_MSG, file=out)
+    if apply and counts.get("bq_fila_com_erro_total", 0) > 0 and not bq_falhou:
+        print(CS.BQ_FILA_COM_ERRO_MSG, file=out)
+    if apply and sem_cred_enfileirado:
+        print(GA4_FILA_SEM_CRED_MSG, file=out)
+    else:
+        if apply and ga4_pendente:
+            print(GA4_PURGE_PENDENTE_MSG, file=out)
+        if apply and bq_falhou:
+            print(BQ_PURGE_PENDENTE_MSG, file=out)
     return counts
 
 
@@ -1794,6 +2289,9 @@ def main(
     *,
     now_dt: datetime | None = None,
     ler_curso=None,
+    ler_ga4_dia=None,
+    ga4_delete=None,
+    bq_delete=None,
     lock_wait_s: float = LOCK_WAIT_S,
     lock_poll_s: float = LOCK_POLL_S,
     monotonic=time.monotonic,
@@ -1816,11 +2314,12 @@ def main(
         print(f"ERRO: {msg}", file=sys.stderr)
         return 2
     env["FORGET_HMAC_KEY"] = forget_key
-    for opt_k in ("HEATING_EXCLUDE", "HEATING_GCP_SA_FILE", "HEATING_EMAIL_DESDE"):
+    for opt_k in ("HEATING_EXCLUDE", "HEATING_GCP_SA_FILE", "HEATING_EMAIL_DESDE", "HEATING_GA4_DESDE"):
         if opt_k in os.environ:
             env[opt_k] = os.environ[opt_k]
 
     lock = None
+    rc = 0
     try:
         lock_path = os.environ.get("CONVERSOES_SYNC_LOCK") or CS.LOCK_DEFAULT
         lock = _acquire_lock(lock_path, wait_s=lock_wait_s, poll_s=lock_poll_s, sleep=sleep, monotonic=monotonic)
@@ -1831,11 +2330,33 @@ def main(
                 flag = "--optout" if a.optout else "--forget-curso"
                 raise SyncError(f"{flag} espera exatamente um email na entrada padrão")
             if a.optout:
-                optout(c, lines[0], apply=a.apply, forget_key=forget_key)
+                counts = optout(
+                    c,
+                    lines[0],
+                    apply=a.apply,
+                    forget_key=forget_key,
+                    ga4_delete=ga4_delete,
+                    bq_delete=bq_delete,
+                    now_dt=now_dt,
+                )
+                if a.apply and (counts.get("ga4_remocao_pendente", 0) > 0 or counts.get("bq_remocao_falhou", 0) > 0
+                                or counts.get("bq_sessoes_excedidas", 0) > 0
+                                or counts.get("ga4_fila_pendente_total", 0) > 0
+                                or counts.get("bq_fila_com_erro_total", 0) > 0):
+                    rc = 2
             else:
                 forget_curso(c, a.forget_curso, lines[0], apply=a.apply, forget_key=forget_key)
         else:
-            run(c, apply=a.apply, now_dt=now_dt, ler_curso=ler_curso, forget_key=forget_key)
+            run(
+                c,
+                apply=a.apply,
+                now_dt=now_dt,
+                ler_curso=ler_curso,
+                ler_ga4_dia=ler_ga4_dia,
+                forget_key=forget_key,
+                ga4_delete=ga4_delete,
+                bq_delete=bq_delete,
+            )
     except SyncError as e:
         print(f"ERRO: {e}", file=sys.stderr)
         return 1
@@ -1845,7 +2366,7 @@ def main(
     finally:
         if lock is not None:
             lock.close()
-    return 0
+    return rc
 
 
 if __name__ == "__main__":

@@ -55,6 +55,9 @@ jobs:
           ASTRO_TELEMETRY_DISABLED: "1"
         run: npm run build
 
+      - name: Instalar duckdb (executa a consulta diária do GA4 em test_heating_sync.py)
+        run: python3 -m pip install --user --break-system-packages --only-binary=duckdb duckdb==1.4.4
+
       - name: Testes dos scripts de montagem
         run: |
           python3 scripts/test_assemble_site.py

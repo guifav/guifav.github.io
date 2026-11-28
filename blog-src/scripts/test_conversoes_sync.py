@@ -43,7 +43,8 @@ class Fake:
     def __init__(self, people=(), schema=False, fail=None, listing=None, db_path=":memory:"):
         self.db = sqlite3.connect(db_path)
         self.db.row_factory = sqlite3.Row
-        for name in sorted(n for n in os.listdir(MIGRATIONS) if n.endswith(".sql") and n >= "0004"):
+        mig_files = sorted(n for n in os.listdir(MIGRATIONS) if n.endswith(".sql") and n >= "0004")
+        for name in mig_files:
             with open(os.path.join(MIGRATIONS, name), encoding="utf-8") as fh:
                 self.db.executescript(fh.read())
         self.people = {p["id"]: copy.deepcopy(p) for p in people}
@@ -87,6 +88,13 @@ class Fake:
 
     def pending(self):
         return sorted(r[0] for r in self.db.execute("SELECT id FROM conversions WHERE synced_at IS NULL"))
+
+    def add_identity(self, uid: str, email: str, linked_at: str = "2026-11-27T10:00:00.000Z"):
+        self.db.execute(
+            "INSERT INTO site_identities (uid, email, linked_at) VALUES (?, ?, ?)",
+            (uid, email.strip().lower(), linked_at),
+        )
+        self.db.commit()
 
     # ---- transporte ----
     def __call__(self, method, url, headers, body):
@@ -1168,6 +1176,117 @@ class ForgetMarcadorTest(unittest.TestCase):
         self.assertEqual(f.db.execute("SELECT count(*) FROM conversions WHERE email = ?", (VETOR_EMAIL,)).fetchone()[0], 1)
         self.assertEqual(len(f.convs), 1)
 
+    def test_forget_apply_records_permanent_heating_optout_before_reads_and_deletes(self):
+        # Decisão do Gui (2026-11-27): --forget grava também a oposição permanente ao heating (`heating_optout`,
+        # HMAC `heating-optout-v1\n` + email com FORGET_HMAC_KEY, mesmo upsert do Worker) antes de ler ou apagar o resto.
+        import hashlib
+        import hmac
+        from datetime import datetime, timezone
+
+        iso_re = r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$"
+        expected_optout_hmac = hmac.new(
+            FORGET_KEY.encode("utf-8"),
+            f"heating-optout-v1\n{VETOR_EMAIL}".encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        self.assertEqual(S.heating_optout_hmac(VETOR_EMAIL, FORGET_KEY), expected_optout_hmac)
+        self.assertEqual(S.heating_optout_hmac("  Leitor@Exemplo.COM ", FORGET_KEY), expected_optout_hmac)
+        self.assertNotEqual(expected_optout_hmac, VETOR_HMAC)
+        with self.assertRaises(S.SyncError):
+            S.heating_optout_hmac(VETOR_EMAIL, "x" * 31)
+        with self.assertRaises(S.SyncError):
+            S.heating_optout_hmac("invalido", FORGET_KEY)
+
+        f = Fake(people=[person("p1", VETOR_EMAIL)])
+        f.add(1, VETOR_EMAIL)
+        run(f, apply=True)
+
+        # 1) Simulação (--forget sem --apply) não grava heating_optout.
+        rc_dry, out_dry = self._run_cli(f, "--forget", stdin=f"{VETOR_EMAIL}\n", forget_key=FORGET_KEY)
+        self.assertEqual(rc_dry, 0, out_dry)
+        self.assertEqual(f.db.execute("SELECT count(*) FROM heating_optout").fetchone()[0], 0)
+
+        # 2) --forget --apply grava forgotten e heating_optout antes de qualquer leitura ou DELETE, usando o relógio do D1.
+        start_calls = len(f.calls)
+        real_now = S._now
+        S._now = lambda: datetime(2000, 1, 1, 0, 0, 0, 0, tzinfo=timezone.utc)
+        try:
+            rc, out = self._run_cli(f, "--forget", "--apply", stdin=f"  {VETOR_EMAIL.upper()} \n", forget_key=FORGET_KEY)
+        finally:
+            S._now = real_now
+        self.assertEqual(rc, 0, out)
+        self.assertNotIn(VETOR_EMAIL, out.lower())
+
+        new_calls = f.calls[start_calls:]
+        self.assertTrue(new_calls[0][1].endswith("/query"))
+        self.assertTrue(new_calls[0][2]["sql"].lstrip().upper().startswith("INSERT INTO FORGOTTEN"))
+        self.assertTrue(new_calls[1][1].endswith("/query"))
+        opt_sql = new_calls[1][2]["sql"]
+        self.assertTrue(opt_sql.lstrip().upper().startswith("INSERT INTO HEATING_OPTOUT"), opt_sql)
+        self.assertIn("ON CONFLICT(email_hmac) DO UPDATE SET opted_out_at = excluded.opted_out_at", opt_sql)
+        self.assertIn("strftime('%Y-%m-%dT%H:%M:%fZ','now')", opt_sql)
+        self.assertEqual(new_calls[1][2]["params"], [expected_optout_hmac])
+        self.assertNotIn(VETOR_EMAIL, json.dumps(new_calls[1][2]).lower())
+
+        # Confirma ordem: os dois INSERTs antes de qualquer SELECT, leitura do Twenty ou DELETE.
+        ops = []
+        for m, p, d, _ in new_calls:
+            if p.endswith("/query"):
+                sql_u = d["sql"].lstrip().upper()
+                if sql_u.startswith("INSERT INTO FORGOTTEN"):
+                    ops.append("ins_forgotten")
+                elif sql_u.startswith("INSERT INTO HEATING_OPTOUT"):
+                    ops.append("ins_optout")
+                elif sql_u.startswith("SELECT") and "select" not in ops:
+                    ops.append("select")
+                elif sql_u.startswith("DELETE FROM CONVERSIONS"):
+                    ops.append("del_d1")
+            elif m == "DELETE":
+                ops.append("del_tw")
+        self.assertEqual(ops, ["ins_forgotten", "ins_optout", "select", "del_tw", "del_d1"])
+
+        opt_rows = [dict(r) for r in f.db.execute("SELECT email_hmac, opted_out_at FROM heating_optout")]
+        self.assertEqual(len(opt_rows), 1)
+        self.assertEqual(opt_rows[0]["email_hmac"], expected_optout_hmac)
+        self.assertRegex(opt_rows[0]["opted_out_at"], iso_re)
+        self.assertFalse(opt_rows[0]["opted_out_at"].startswith("2000-"), opt_rows[0]["opted_out_at"])
+
+        # 3) Upsert idempotente: repetir --forget --apply atualiza opted_out_at mantendo 1 linha.
+        f.db.execute("UPDATE heating_optout SET opted_out_at = ? WHERE email_hmac = ?", ("2020-01-01T00:00:00.000Z", expected_optout_hmac))
+        f.db.commit()
+        rc2, out2 = self._run_cli(f, "--forget", "--apply", stdin=f"{VETOR_EMAIL}\n", forget_key=FORGET_KEY)
+        self.assertEqual(rc2, 0, out2)
+        opt_rows2 = [dict(r) for r in f.db.execute("SELECT email_hmac, opted_out_at FROM heating_optout")]
+        self.assertEqual(len(opt_rows2), 1)
+        self.assertRegex(opt_rows2[0]["opted_out_at"], iso_re)
+        self.assertGreater(opt_rows2[0]["opted_out_at"], "2020-01-01T00:00:00.000Z")
+
+        # 4) A marca em heating_optout é permanente: a poda de marcadores vencidos em forgotten (> 8d) não a apaga.
+        f.db.execute(
+            "UPDATE forgotten SET forgotten_at = strftime('%Y-%m-%dT%H:%M:%fZ','now','-9 days') WHERE email_hmac = ?",
+            (VETOR_HMAC,),
+        )
+        f.db.commit()
+        run(f, apply=True)
+        self.assertEqual(f.db.execute("SELECT count(*) FROM forgotten").fetchone()[0], 0)
+        self.assertEqual(
+            [r[0] for r in f.db.execute("SELECT email_hmac FROM heating_optout")],
+            [expected_optout_hmac],
+        )
+
+        # 5) Se o Twenty falhar na leitura, heating_optout já fica gravado e conversions permanece intacta.
+        g = Fake(people=[person("p1", VETOR_EMAIL)])
+        g.add(1, VETOR_EMAIL)
+        run(g, apply=True)
+        g.fail = lambda m, p, d: (500, {"errors": [{"message": "twenty fora"}]}) if p == "/metadata" else None
+        with self.assertRaises(S.SyncError):
+            forget(g, VETOR_EMAIL, apply=True)
+        self.assertEqual(
+            [r[0] for r in g.db.execute("SELECT email_hmac FROM heating_optout")],
+            [expected_optout_hmac],
+        )
+        self.assertEqual(g.db.execute("SELECT count(*) FROM conversions WHERE email = ?", (VETOR_EMAIL,)).fetchone()[0], 1)
+
     def test_expired_markers_over_8_days_are_deleted_on_apply_and_only_counted_without_apply(self):
         from datetime import datetime, timezone
         # Relógio da KVM deslocado para provar que o corte de 8 dias vem do relógio do D1 (#134).
@@ -1657,6 +1776,637 @@ class TwentyPersonIdTest(unittest.TestCase):
         counts_v, _ = forget(f, "vazio@x.com", apply=True)
         self.assertEqual(counts_v["pessoas_heating_limpas"], 0)
         self.assertEqual(len(f.twenty_writes()), n_before)
+
+
+class ForgetGooglePurgeTest(unittest.TestCase):
+    def setUp(self):
+        fd, self.lock = tempfile.mkstemp(prefix="conversoes-lock-ga4-")
+        os.close(fd)
+        self.addCleanup(os.unlink, self.lock)
+
+    def _run_cli(self, fake, *args, stdin=None, ga4_delete=None, bq_delete=None, now_dt=None, sa_file=None):
+        out, err = io.StringIO(), io.StringIO()
+        keys = [*ENV, "CONVERSOES_SYNC_LOCK", "FORGET_HMAC_KEY", "HEATING_GCP_SA_FILE"]
+        old = {k: os.environ.get(k) for k in keys}
+        os.environ.update(ENV)
+        os.environ["CONVERSOES_SYNC_LOCK"] = self.lock
+        os.environ["FORGET_HMAC_KEY"] = FORGET_KEY
+        if sa_file is None:
+            os.environ.pop("HEATING_GCP_SA_FILE", None)
+        else:
+            os.environ["HEATING_GCP_SA_FILE"] = sa_file
+        try:
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                rc = S.main(
+                    list(args),
+                    transport=fake,
+                    sleep=lambda s: None,
+                    stdin=io.StringIO(stdin) if stdin is not None else None,
+                    ga4_delete=ga4_delete,
+                    bq_delete=bq_delete,
+                    now_dt=now_dt,
+                )
+        finally:
+            for k, v in old.items():
+                os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
+        return rc, out.getvalue() + err.getvalue()
+
+    def test_forget_site_chama_ga4_e_bq_agenda_fila_e_apaga_site_identities(self):
+        from datetime import datetime, timedelta, timezone
+        now = datetime(2026, 11, 27, 12, 0, 0, tzinfo=timezone.utc)
+        f = Fake(people=[person("p1", "segredo@x.com")])
+        f.add(1, "segredo@x.com")
+        run(f, apply=True)
+        f.add_identity("UidSiteAlpha1", "segredo@x.com")
+        f.add_identity("UidSiteBeta2", "segredo@x.com")
+        f.add_identity("UidOutroEmail3", "outro@x.com")
+
+        ga4_calls: list[str] = []
+        bq_calls: list[tuple[str, list]] = []
+
+        # Simulação: conta identidades_site, não chama Google, não apaga site_identities nem dispara trigger.
+        rc_dry, out_dry = self._run_cli(
+            f, "--forget", stdin="segredo@x.com\n",
+            ga4_delete=lambda u: ga4_calls.append(u) or True,
+            bq_delete=lambda u, s: bq_calls.append((u, list(s))) or {"tabelas_limpas": 1, "adiadas": 0, "sessoes": []},
+            now_dt=now,
+        )
+        self.assertEqual((rc_dry, ga4_calls, bq_calls), (0, [], []))
+        self.assertIn("identidades_site: 2", out_dry)
+        self.assertEqual(f.db.execute("SELECT count(*) FROM site_identities").fetchone()[0], 3)
+        self.assertEqual(f.db.execute("SELECT count(*) FROM ga4_purge_queue").fetchone()[0], 0)
+
+        # --apply: apaga site_identities (trigger enfileira), processa GA4 e BigQuery na hora, salva sessoes e agenda D+1.
+        rc, out = self._run_cli(
+            f, "--forget", "--apply", stdin="segredo@x.com\n",
+            ga4_delete=lambda u: ga4_calls.append(u) or True,
+            bq_delete=lambda u, s: bq_calls.append((u, list(s))) or {
+                "tabelas_limpas": 2, "adiadas": 1, "sessoes": [("ps-" + u, 1001)],
+            },
+            now_dt=now,
+        )
+        self.assertEqual(rc, 0, out)
+        self.assertEqual(ga4_calls, ["UidSiteAlpha1", "UidSiteBeta2"])
+        self.assertEqual(bq_calls, [("UidSiteAlpha1", []), ("UidSiteBeta2", [])])
+        self.assertIn("ga4_removidos: 2", out)
+        self.assertIn("bq_tabelas_limpas: 4", out)
+        self.assertIn("bq_remocao_adiada: 2", out)
+        self.assertNotIn(S.GA4_PURGE_PENDENTE_MSG, out)
+        self.assertNotIn(S.GA4_FILA_SEM_CRED_MSG, out)
+        for secret in ("segredo@x.com", "UidSiteAlpha1", "UidSiteBeta2"):
+            self.assertNotIn(secret.lower(), out.lower())
+        self.assertEqual([r[0] for r in f.db.execute("SELECT uid FROM site_identities")], ["UidOutroEmail3"])
+        queue = [
+            dict(r)
+            for r in f.db.execute(
+                "SELECT uid, ga4_pendente, sessoes, bq_tentativas, proxima_em FROM ga4_purge_queue ORDER BY uid"
+            )
+        ]
+        self.assertEqual(
+            queue,
+            [
+                {
+                    "uid": "UidSiteAlpha1",
+                    "ga4_pendente": 0,
+                    "sessoes": '[["ps-UidSiteAlpha1",1001]]',
+                    "bq_tentativas": 1,
+                    "proxima_em": S.stamp(now + timedelta(days=1)),
+                },
+                {
+                    "uid": "UidSiteBeta2",
+                    "ga4_pendente": 0,
+                    "sessoes": '[["ps-UidSiteBeta2",1001]]',
+                    "bq_tentativas": 1,
+                    "proxima_em": S.stamp(now + timedelta(days=1)),
+                },
+            ],
+        )
+
+    def test_forget_com_sessoes_excedidas_avisa_e_sai_com_codigo_2(self):
+        # Kimi P2 (rodada 3 do #204): mesmo com o GA4 feito, BigQuery barrado por excesso de sessões sai com código 2.
+        f = Fake(people=[person("p1", "muitas@x.com")])
+        f.add(1, "muitas@x.com")
+        run(f, apply=True)
+        f.add_identity("UidMuitasF1", "muitas@x.com")
+
+        def bq_muitas(uid, saved, persistir):
+            persistir([(f"ps{i:07d}", i) for i in range(60000)])
+            return {"tabelas_limpas": 1, "adiadas": 0, "sessoes": []}
+
+        rc, out = self._run_cli(f, "--forget", "--apply", stdin="muitas@x.com\n",
+                                ga4_delete=lambda _u: True, bq_delete=bq_muitas)
+        self.assertEqual(rc, 2, out)
+        self.assertIn("bq_sessoes_excedidas: 1", out)
+        self.assertIn(S.BQ_PURGE_PENDENTE_MSG, out)
+        self.assertNotIn(S.BQ_FILA_COM_ERRO_MSG, out, "a falha desta rodada já tem a própria mensagem")
+        self.assertNotIn("UidMuitasF1", out)
+        # Repetir o --forget com o vínculo já apagado continua avisando e saindo com 2 (Kimi P2, rodada 4).
+        rc2, out2 = self._run_cli(f, "--forget", "--apply", stdin="muitas@x.com\n",
+                                  ga4_delete=lambda _u: True, bq_delete=bq_muitas)
+        self.assertEqual(rc2, 2, out2)
+        self.assertIn("bq_fila_com_erro_total: 1", out2)
+        self.assertIn(S.BQ_FILA_COM_ERRO_MSG, out2)
+
+        # Falha operacional do BigQuery com GA4 feito: o mesmo aviso na repetição.
+        g = Fake(people=[person("p2", "falha@x.com")])
+        g.add(2, "falha@x.com")
+        run(g, apply=True)
+        g.add_identity("UidFalhaF2", "falha@x.com")
+
+        def bq_fora(uid, saved):
+            raise S.GoogleIndisponivel("BigQuery fora")
+
+        rc_g1, _ = self._run_cli(g, "--forget", "--apply", stdin="falha@x.com\n", ga4_delete=lambda _u: True, bq_delete=bq_fora)
+        rc_g2, out_g2 = self._run_cli(g, "--forget", "--apply", stdin="falha@x.com\n", ga4_delete=lambda _u: True, bq_delete=bq_fora)
+        self.assertEqual((rc_g1, rc_g2), (2, 2), out_g2)
+        self.assertIn("bq_fila_com_erro_total: 1", out_g2)
+        self.assertEqual(g.db.execute("SELECT bq_erro FROM ga4_purge_queue").fetchone()[0], "falhou")
+
+        # Repetição normal (D+1 pendente, sem erro) não é erro: GA4 feito, BigQuery rodou, código 0.
+        h = Fake(people=[person("p3", "normal@x.com")])
+        h.add(3, "normal@x.com")
+        run(h, apply=True)
+        h.add_identity("UidNormalF3", "normal@x.com")
+        ok_bq = lambda _u, _s: {"tabelas_limpas": 1, "adiadas": 0, "sessoes": []}
+        rc_h1, out_h1 = self._run_cli(h, "--forget", "--apply", stdin="normal@x.com\n", ga4_delete=lambda _u: True, bq_delete=ok_bq)
+        rc_h2, out_h2 = self._run_cli(h, "--forget", "--apply", stdin="normal@x.com\n", ga4_delete=lambda _u: True, bq_delete=ok_bq)
+        self.assertEqual((rc_h1, rc_h2), (0, 0), out_h1 + out_h2)
+        self.assertIn("bq_fila_com_erro_total: 0", out_h2)
+
+    def test_forget_ga4_403_bq_falha_e_sem_sa_file(self):
+        from datetime import datetime, timedelta, timezone
+        now = datetime(2026, 11, 27, 12, 0, 0, tzinfo=timezone.utc)
+
+        # 1) 403 no GA4: código 2 + mensagem fixa; BigQuery roda e salva sessões; item fica na fila com ga4_pendente=1
+        #    para o job diário retomar (e conclui quando o GA4 passar a responder 200).
+        f = Fake(people=[person("p1", "erro403@x.com")])
+        f.add(1, "erro403@x.com")
+        run(f, apply=True)
+        f.add_identity("UidErro403", "erro403@x.com")
+        bq_calls: list[tuple[str, list]] = []
+        rc_403, out_403 = self._run_cli(
+            f, "--forget", "--apply", stdin="erro403@x.com\n",
+            ga4_delete=lambda _u: False,
+            bq_delete=lambda u, s: bq_calls.append((u, list(s))) or {
+                "tabelas_limpas": 1, "adiadas": 0, "sessoes": [("ps403", 55)],
+            },
+            now_dt=now,
+        )
+        self.assertEqual(rc_403, 2, out_403)
+        self.assertIn("ga4_remocao_pendente: 1", out_403)
+        self.assertIn(S.GA4_PURGE_PENDENTE_MSG, out_403)
+        self.assertEqual(bq_calls, [("UidErro403", [])])
+        self.assertEqual((f.convs, f.db.execute("SELECT count(*) FROM conversions").fetchone()[0]), ({}, 0))
+        self.assertEqual(f.db.execute("SELECT count(*) FROM site_identities").fetchone()[0], 0)
+        q403 = dict(f.db.execute(
+            "SELECT uid, ga4_pendente, sessoes, bq_tentativas, proxima_em FROM ga4_purge_queue WHERE uid = 'UidErro403'"
+        ).fetchone())
+        self.assertEqual(
+            q403,
+            {
+                "uid": "UidErro403",
+                "ga4_pendente": 1,
+                "sessoes": '[["ps403",55]]',
+                "bq_tentativas": 1,
+                "proxima_em": S.stamp(now + timedelta(days=1)),
+            },
+        )
+        for secret in ("erro403@x.com", "UidErro403"):
+            self.assertNotIn(secret.lower(), out_403.lower())
+        # Ao corrigir o papel de Editor e processar a fila em D+1, GA4 zera ga4_pendente e BQ recebe as sessões salvas.
+        retried_ga4: list[str] = []
+        retried_bq: list[tuple[str, list]] = []
+        r_d1 = S.processar_fila_ga4(
+            TS.Clients(ENV, f, sleep=lambda s: None),
+            only_due=True,
+            ga4_delete=lambda u: retried_ga4.append(u) or True,
+            bq_delete=lambda u, s: retried_bq.append((u, list(s))) or {"tabelas_limpas": 1, "adiadas": 0, "sessoes": []},
+            now_dt=now + timedelta(days=1),
+        )
+        self.assertEqual((retried_ga4, retried_bq), (["UidErro403"], [("UidErro403", [("ps403", 55)])]))
+        self.assertEqual((r_d1["ga4_removidos"], r_d1["ga4_remocao_pendente"]), (1, 0))
+        q403_d1 = dict(f.db.execute(
+            "SELECT ga4_pendente, bq_tentativas, proxima_em FROM ga4_purge_queue WHERE uid = 'UidErro403'"
+        ).fetchone())
+        self.assertEqual(q403_d1, {"ga4_pendente": 0, "bq_tentativas": 2, "proxima_em": S.stamp(now + timedelta(days=3))})
+
+        # 2) GA4 200 mas BigQuery falha: código 2 + BQ_PURGE_PENDENTE_MSG; ga4_pendente=0, bq_tentativas=0 e
+        #    proxima_em=agora (tentativa imediata na próxima rodada). Mata mutações M15/M16.
+        h = Fake(people=[person("p1", "bqfalha@x.com")])
+        h.add(1, "bqfalha@x.com")
+        run(h, apply=True)
+        h.add_identity("UidBqFalha1", "bqfalha@x.com")
+
+        def fail_bq(_u, _s):
+            raise S.GoogleIndisponivel("BQ indisponível")
+
+        rc_bq, out_bq = self._run_cli(
+            h, "--forget", "--apply", stdin="bqfalha@x.com\n",
+            ga4_delete=lambda _u: True,
+            bq_delete=fail_bq,
+            now_dt=now,
+        )
+        self.assertEqual(rc_bq, 2, out_bq)
+        self.assertIn("bq_remocao_falhou: 1", out_bq)
+        self.assertIn(S.BQ_PURGE_PENDENTE_MSG, out_bq)
+        self.assertNotIn(S.GA4_PURGE_PENDENTE_MSG, out_bq)
+        qbq = dict(h.db.execute(
+            "SELECT uid, ga4_pendente, bq_tentativas, proxima_em FROM ga4_purge_queue WHERE uid = 'UidBqFalha1'"
+        ).fetchone())
+        self.assertEqual(
+            qbq,
+            {"uid": "UidBqFalha1", "ga4_pendente": 0, "bq_tentativas": 0, "proxima_em": S.stamp(now)},
+        )
+        for secret in ("bqfalha@x.com", "UidBqFalha1"):
+            self.assertNotIn(secret.lower(), out_bq.lower())
+
+        # 3) Sem HEATING_GCP_SA_FILE (ex.: no Mac): apaga site_identities (trigger enfileira), informa que ficou
+        #    enfileirado para o job diário e sai com código 2 enquanto o GA4 está pendente na fila (sem chamar Google).
+        g = Fake(people=[person("p1", "mac@x.com")])
+        g.add(1, "mac@x.com")
+        run(g, apply=True)
+        g.add_identity("UidSemSa1", "mac@x.com")
+        rc_mac, out_mac = self._run_cli(g, "--forget", "--apply", stdin="mac@x.com\n", now_dt=now, sa_file=None)
+        self.assertEqual(rc_mac, 2, out_mac)
+        self.assertIn("ga4_fila_pendente_total: 1", out_mac)
+        self.assertIn("ga4_fila_enfileirados: 1", out_mac)
+        self.assertIn(S.GA4_FILA_SEM_CRED_MSG, out_mac)
+        self.assertNotIn(S.GA4_PURGE_PENDENTE_MSG, out_mac)
+        self.assertEqual((g.convs, g.db.execute("SELECT count(*) FROM site_identities").fetchone()[0]), ({}, 0))
+        qmac = dict(g.db.execute(
+            "SELECT uid, ga4_pendente, sessoes, bq_tentativas FROM ga4_purge_queue WHERE uid = 'UidSemSa1'"
+        ).fetchone())
+        self.assertEqual(qmac, {"uid": "UidSemSa1", "ga4_pendente": 1, "sessoes": "[]", "bq_tentativas": 0})
+        for secret in ("mac@x.com", "UidSemSa1"):
+            self.assertNotIn(secret.lower(), out_mac.lower())
+
+    def test_ga4_submit_user_deletion_e_bq_apagar_uid_producao(self):
+        import types
+
+        def norm_sql(sql: str) -> str:
+            return re.sub(r"\s+", " ", sql).strip()
+
+        ga4_posts: list[tuple] = []
+        sa_scopes: list = []
+        bq_queries: list[tuple] = []
+
+        class BadRequest(Exception):
+            __module__ = "google.api_core.exceptions"
+            code = 400
+
+        class NotFound(Exception):
+            __module__ = "google.api_core.exceptions"
+            code = 404
+
+        class _ScalarParam:
+            def __init__(self, name, typ, value):
+                self.name, self.type_, self.value = name, typ, value
+
+        class _StructParam:
+            def __init__(self, name, *sub):
+                self.name, self.sub = name, list(sub)
+
+        class _ArrayParam:
+            def __init__(self, name, array_type, values):
+                self.name, self.array_type, self.values = name, array_type, list(values)
+
+        class _JobCfg:
+            def __init__(self, query_parameters=()):
+                self.query_parameters = list(query_parameters)
+                self.maximum_bytes_billed = None
+
+        class _QueryJob:
+            def __init__(self, rows=()):
+                self._rows = list(rows)
+
+            def result(self):
+                return self._rows
+
+        ga4_status = {"code": 200}
+        bq_mode = {"mode": "full"}
+
+        class _AuthSession:
+            def __init__(self, creds):
+                self.creds = creds
+
+            def post(self, url, json=None, timeout=None):
+                ga4_posts.append((url, json, timeout))
+                return types.SimpleNamespace(status_code=ga4_status["code"])
+
+        class _Creds:
+            @staticmethod
+            def from_service_account_file(path, scopes=None):
+                sa_scopes.append((path, scopes))
+                return object()
+
+        class _BqClient:
+            def __init__(self, project=None, credentials=None):
+                self.project = project
+
+            def query(self, sql, job_config=None, location=None):
+                bq_queries.append((sql, job_config, location))
+                if bq_mode["mode"] == "first_delete_fails" and sql.lstrip().startswith("DELETE FROM"):
+                    raise RuntimeError("falha de rede no primeiro DELETE")
+                if bq_mode["mode"] == "dataset_not_found":
+                    raise NotFound("Not found: Dataset mindapps:analytics_341040810")
+                if "INFORMATION_SCHEMA.TABLES" in sql:
+                    if bq_mode["mode"] == "no_users_tables":
+                        return _QueryJob([{"table_name": "pseudonymous_users_20261125"}])
+                    return _QueryJob([
+                        {"table_name": "users_20261125"},
+                        {"table_name": "users_20261126"},
+                        {"table_name": "pseudonymous_users_20261125"},
+                        {"table_name": "pseudonymous_users_20261126"},
+                        {"table_name": "users_invalido"},
+                    ])
+                if sql.lstrip().startswith("WITH eventos"):
+                    if bq_mode["mode"] == "events_not_found":
+                        raise NotFound("Not found: Table events_*")
+                    return _QueryJob([
+                        {"table_suffix": "20261125", "user_pseudo_id": "ps_exclusivo", "ga_session_id": 1001},
+                        {"table_suffix": "20261126", "user_pseudo_id": "ps_compartilhado", "ga_session_id": 1002},
+                        {"table_suffix": "intraday_20261127", "user_pseudo_id": "ps_exclusivo", "ga_session_id": 1003},
+                        {"table_suffix": "20261125; DROP TABLE x", "user_pseudo_id": "ps_evil", "ga_session_id": 9999},
+                    ])
+                if "AND user_id != @uid" in sql:
+                    # `ps_compartilhado` já apareceu com outro user_id -> NÃO pode ser apagado de pseudonymous_users_*
+                    return _QueryJob([{"user_pseudo_id": "ps_compartilhado"}])
+                if "FROM `mindapps.analytics_341040810.users_*`" in sql:
+                    return _QueryJob([
+                        {"table_suffix": "20261125"},
+                        {"table_suffix": "20261199"},  # fora das tabelas existentes -> ignorado
+                    ])
+                if "FROM `mindapps.analytics_341040810.pseudonymous_users_*`" in sql:
+                    return _QueryJob([{"table_suffix": "20261125"}])
+                if "events_intraday_20261127" in sql:
+                    raise BadRequest("UPDATE or DELETE statement over table would affect rows in the streaming buffer")
+                return _QueryJob()
+
+        fake_google = types.ModuleType("google")
+        fake_auth = types.ModuleType("google.auth")
+        fake_auth_tr = types.ModuleType("google.auth.transport")
+        fake_auth_req = types.ModuleType("google.auth.transport.requests")
+        fake_oauth = types.ModuleType("google.oauth2")
+        fake_sa = types.ModuleType("google.oauth2.service_account")
+        fake_cloud = types.ModuleType("google.cloud")
+        fake_bq = types.ModuleType("google.cloud.bigquery")
+
+        fake_auth_req.AuthorizedSession = _AuthSession
+        fake_sa.Credentials = _Creds
+        fake_bq.Client = _BqClient
+        fake_bq.QueryJobConfig = _JobCfg
+        fake_bq.ScalarQueryParameter = _ScalarParam
+        fake_bq.ArrayQueryParameter = _ArrayParam
+        fake_bq.StructQueryParameter = _StructParam
+
+        mod_map = {
+            "google": fake_google,
+            "google.auth": fake_auth,
+            "google.auth.transport": fake_auth_tr,
+            "google.auth.transport.requests": fake_auth_req,
+            "google.oauth2": fake_oauth,
+            "google.oauth2.service_account": fake_sa,
+            "google.cloud": fake_cloud,
+            "google.cloud.bigquery": fake_bq,
+        }
+        saved = {k: sys.modules.get(k) for k in mod_map}
+        sys.modules.update(mod_map)
+        try:
+            # 1) GA4 200 -> True; 403 -> False; confere URL, escopo e payload.
+            self.assertTrue(S._ga4_submit_user_deletion("UidProd99", "/tmp/sa.json"))
+            self.assertEqual(
+                ga4_posts[-1],
+                ("https://analyticsadmin.googleapis.com/v1alpha/properties/341040810:submitUserDeletion", {"userId": "UidProd99"}, 30),
+            )
+            self.assertEqual(sa_scopes[-1], ("/tmp/sa.json", ["https://www.googleapis.com/auth/analytics.edit"]))
+            ga4_status["code"] = 403
+            self.assertFalse(S._ga4_submit_user_deletion("UidProd99", "/tmp/sa.json"))
+
+            # 2) BigQuery completo: events_* + users_YYYYMMDD + pseudonymous_users_YYYYMMDD (só exclusivos) + sessoes_conhecidas.
+            #    `persistir` registra na mesma lista das consultas, para provar que vem antes do primeiro DELETE.
+            persistidas: list[list] = []
+
+            def persistir(sessoes):
+                persistidas.append(list(sessoes))
+                bq_queries.append(("PERSISTIR", None, None))
+
+            res = S._bq_apagar_uid("UidProd99", "/tmp/sa.json", sessoes_conhecidas=[("ps_antigo", 500)], persistir=persistir)
+            self.assertEqual(
+                res,
+                {
+                    "tabelas_limpas": 4,  # events_20261125, events_20261126, users_20261125, pseudonymous_users_20261125
+                    "adiadas": 1,         # events_intraday_20261127
+                    "sessoes": [
+                        ("ps_antigo", 500),
+                        ("ps_compartilhado", 1002),
+                        ("ps_exclusivo", 1001),
+                        ("ps_exclusivo", 1003),
+                    ],
+                },
+            )
+            # Sessões gravadas uma vez, com a união completa, antes do primeiro DELETE (Claude P1, rodada 3).
+            self.assertEqual(
+                persistidas,
+                [[("ps_antigo", 500), ("ps_compartilhado", 1002), ("ps_exclusivo", 1001), ("ps_exclusivo", 1003)]],
+            )
+            i_persist = [q[0] for q in bq_queries].index("PERSISTIR")
+            i_delete = next(i for i, q in enumerate(bq_queries) if q[0].lstrip().startswith("DELETE FROM"))
+            self.assertLess(i_persist, i_delete)
+            # Toda consulta leva o teto de bytes cobrados (Claude P4, rodada 3).
+            for sql_q, cfg_q, _loc in bq_queries:
+                if sql_q != "PERSISTIR":
+                    self.assertEqual(cfg_q.maximum_bytes_billed, S.BQ_MAX_BYTES, sql_q[:60])
+            # Verifica estrutura exata da SQL de descoberta (mata M8a, M8b e P0 de sessão mista).
+            disc_sql = norm_sql(bq_queries[1][0])
+            self.assertIn(
+                "FROM eventos WHERE user_id = @uid AND user_pseudo_id IS NOT NULL AND ga_session_id IS NOT NULL",
+                disc_sql,
+            )
+            self.assertIn("UNION DISTINCT SELECT s.user_pseudo_id, s.ga_session_id FROM UNNEST(@sessoes_conhecidas) AS s", disc_sql)
+            self.assertIn("LEFT JOIN sessoes AS s ON e.user_pseudo_id = s.user_pseudo_id AND e.ga_session_id = s.ga_session_id", disc_sql)
+            self.assertIn("WHERE e.user_id = @uid OR ((e.user_id IS NULL OR e.user_id = '') AND s.user_pseudo_id IS NOT NULL)", disc_sql)
+
+            # Verifica DELETEs de events_*: nunca wildcard, nunca sufixo malicioso (mata M8c), só anônimos pelo par de sessão (P0).
+            ev_dels = [q for q in bq_queries if q[0].startswith("DELETE FROM `mindapps.analytics_341040810.events_")]
+            self.assertEqual(len(ev_dels), 3)
+            for dsql, _cfg, _loc in ev_dels:
+                nsql = norm_sql(dsql)
+                self.assertNotIn("events_*", nsql)
+                self.assertNotIn("DROP TABLE", nsql)
+                self.assertIn("WHERE user_id = @uid OR ( (user_id IS NULL OR user_id = '') AND STRUCT(", nsql)
+
+            # Verifica DELETE de users_YYYYMMDD (somente tabela existente com linhas).
+            u_dels = [q for q in bq_queries if q[0].startswith("DELETE FROM `mindapps.analytics_341040810.users_")]
+            self.assertEqual(len(u_dels), 1)
+            self.assertEqual(
+                norm_sql(u_dels[0][0]),
+                "DELETE FROM `mindapps.analytics_341040810.users_20261125` WHERE user_id = @uid",
+            )
+
+            # Verifica DELETE de pseudonymous_users_YYYYMMDD: usa pseudo_user_id e exclui ps_compartilhado!
+            p_dels = [q for q in bq_queries if q[0].startswith("DELETE FROM `mindapps.analytics_341040810.pseudonymous_users_")]
+            self.assertEqual(len(p_dels), 1)
+            self.assertEqual(
+                norm_sql(p_dels[0][0]),
+                "DELETE FROM `mindapps.analytics_341040810.pseudonymous_users_20261125` WHERE pseudo_user_id IN UNNEST(@pseudo_ids)",
+            )
+            p_param = [p for p in p_dels[0][1].query_parameters if p.name == "pseudo_ids"][0]
+            self.assertEqual(p_param.values, ["ps_antigo", "ps_exclusivo"])
+            self.assertNotIn("ps_compartilhado", p_param.values)
+
+            # 2b) O primeiro DELETE falha: a exceção sobe, mas as sessões já estavam gravadas.
+            bq_queries.clear()
+            persistidas.clear()
+            bq_mode["mode"] = "first_delete_fails"
+            with self.assertRaises(Exception):
+                S._bq_apagar_uid("UidProd99", "/tmp/sa.json", persistir=persistir)
+            self.assertEqual(len(persistidas), 1)
+            self.assertIn(("ps_exclusivo", 1001), persistidas[0])
+            bq_mode["mode"] = "full"
+
+            # 3) Quando não existem tabelas `users_YYYYMMDD` ainda, não falha nem consulta `users_*`.
+            bq_queries.clear()
+            bq_mode["mode"] = "no_users_tables"
+            res_no_u = S._bq_apagar_uid("UidProd99", "/tmp/sa.json")
+            self.assertEqual(res_no_u["tabelas_limpas"], 3)
+            for sql_q, cfg_q, _loc in bq_queries:
+                self.assertEqual(cfg_q.maximum_bytes_billed, S.BQ_MAX_BYTES, sql_q[:60])
+            self.assertFalse(any(".users_*" in q[0] for q in bq_queries))
+
+            # 4) Dataset ou tabela `events_*` não encontrados na descoberta -> erro (GoogleIndisponivel), NÃO sucesso!
+            bq_mode["mode"] = "dataset_not_found"
+            with self.assertRaises(S.GoogleIndisponivel):
+                S._bq_apagar_uid("UidProd99", "/tmp/sa.json")
+            bq_mode["mode"] = "events_not_found"
+            with self.assertRaises(S.GoogleIndisponivel):
+                S._bq_apagar_uid("UidProd99", "/tmp/sa.json")
+        finally:
+            for k, v in saved.items():
+                sys.modules.pop(k, None) if v is None else sys.modules.__setitem__(k, v)
+
+    def test_bq_sessao_mista_nao_apaga_outro_uid_nem_outra_sessao(self):
+        """Executa a lógica real de `_bq_discover_events_sql`, `_bq_delete_events_sql` e `_bq_shared_pseudo_ids_sql`
+        em SQLite sobre dados sintéticos, provando que:
+        - em sessão mista (UidA + UidB + anônimos na mesma sessão), apagar UidA remove UidA e anônimos, mas mantém UidB;
+        - anônimos de outra sessão do mesmo user_pseudo_id permanecem intactos;
+        - em D+1 (após UidA já ter sido apagado), eventos anônimos atrasados da sessão salva ainda são descobertos e
+          apagados usando `sessoes_conhecidas`, sem tocar em UidB;
+        - em `pseudonymous_users`, `user_pseudo_id` compartilhado com UidB é preservado e o exclusivo de UidA sai."""
+        db = sqlite3.connect(":memory:")
+        db.row_factory = sqlite3.Row
+        db.executescript(
+            """
+            CREATE TABLE events (
+              id TEXT PRIMARY KEY,
+              table_suffix TEXT NOT NULL,
+              user_id TEXT,
+              user_pseudo_id TEXT,
+              ga_session_id INTEGER
+            );
+            CREATE TABLE pseudo_users (
+              day TEXT NOT NULL,
+              pseudo_user_id TEXT NOT NULL
+            );
+            """
+        )
+        # Sessão mista (ps_mix, 1001): anônimo NULL, anônimo '', UidA e UidB na mesma sessão!
+        # Outra sessão (ps_mix, 2002): anônimo que NÃO pertence à sessão de UidA.
+        # Sessão exclusiva de UidA: (ps_solo, 3001) com anônimo + UidA.
+        # Outra pessoa UidC em (ps_c, 4001) + linha de UidA sem ga_session_id.
+        seed = [
+            ("e1", "20261125", None, "ps_mix", 1001),
+            ("e2", "20261125", "", "ps_mix", 1001),
+            ("e3", "20261125", "UidA", "ps_mix", 1001),
+            ("e4", "20261125", "UidB", "ps_mix", 1001),
+            ("e5", "20261125", None, "ps_mix", 2002),
+            ("e6", "20261125", None, "ps_solo", 3001),
+            ("e7", "20261125", "UidA", "ps_solo", 3001),
+            ("e8", "20261125", "UidC", "ps_c", 4001),
+            ("e9", "20261126", "UidA", "ps_solo", None),
+        ]
+        db.executemany("INSERT INTO events VALUES (?, ?, ?, ?, ?)", seed)
+        db.executemany(
+            "INSERT INTO pseudo_users VALUES (?, ?)",
+            [("20261125", "ps_mix"), ("20261125", "ps_solo"), ("20261125", "ps_c")],
+        )
+
+        def run_discover(uid: str, known: list[tuple[str, int]]):
+            # Traduz apenas os marcadores de BigQuery da SQL real produzida pelo código para SQLite.
+            sql = S._bq_discover_events_sql(bool(known))
+            self.assertIn("WHERE user_id = @uid", sql)
+            self.assertIn("AND e.ga_session_id = s.ga_session_id", sql)
+            self.assertIn("(e.user_id IS NULL OR e.user_id = '')", sql)
+            db.execute("DROP TABLE IF EXISTS _known")
+            db.execute("CREATE TEMP TABLE _known (user_pseudo_id TEXT, ga_session_id INTEGER)")
+            if known:
+                db.executemany("INSERT INTO _known VALUES (?, ?)", known)
+            q = (
+                sql.replace("`mindapps.analytics_341040810.events_*`", "events")
+                .replace("_TABLE_SUFFIX AS table_suffix", "table_suffix")
+                .replace("(SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'ga_session_id') AS ga_session_id", "ga_session_id")
+                .replace("UNION DISTINCT", "UNION")
+                .replace("UNNEST(@sessoes_conhecidas)", "_known")
+                .replace("@uid", ":uid")
+            )
+            return [dict(r) for r in db.execute(q, {"uid": uid})]
+
+        def run_delete(suffix: str, uid: str, sessoes: list[tuple[str, int]]):
+            sql = S._bq_delete_events_sql(f"`mindapps.analytics_341040810.events_{suffix}`", bool(sessoes))
+            if sessoes:
+                self.assertIn("(user_id IS NULL OR user_id = '')", sql)
+            db.execute("DROP TABLE IF EXISTS _sess")
+            db.execute("CREATE TEMP TABLE _sess (user_pseudo_id TEXT, ga_session_id INTEGER)")
+            if sessoes:
+                db.executemany("INSERT INTO _sess VALUES (?, ?)", sessoes)
+            q = (
+                sql.replace(f"DELETE FROM `mindapps.analytics_341040810.events_{suffix}`", "DELETE FROM events")
+                .replace(
+                    "STRUCT(\n       user_pseudo_id,\n       (SELECT value.int_value FROM UNNEST(event_params) WHERE key = 'ga_session_id')\n     ) IN (\n       SELECT AS STRUCT s.user_pseudo_id, s.ga_session_id\n       FROM UNNEST(@sessoes) AS s\n     )",
+                    "EXISTS (SELECT 1 FROM _sess AS s WHERE s.user_pseudo_id = events.user_pseudo_id AND s.ga_session_id = events.ga_session_id)",
+                )
+                .replace("@uid", ":uid")
+            )
+            q = f"{q} AND table_suffix = :suf" if "OR" not in q else q.replace("WHERE ", "WHERE table_suffix = :suf AND (", 1) + ")"
+            db.execute(q, {"uid": uid, "suf": suffix})
+
+        # Passada D0: descobre sessões, checa pseudo_ids compartilhados e apaga events + pseudo_users exclusivos.
+        disc0 = run_discover("UidA", [])
+        discovered_sessoes = sorted({(r["user_pseudo_id"], r["ga_session_id"]) for r in disc0 if r["ga_session_id"] is not None})
+        self.assertEqual(discovered_sessoes, [("ps_mix", 1001), ("ps_solo", 3001)])
+        cand_pseudos = sorted({r["user_pseudo_id"] for r in disc0 if r["user_pseudo_id"]})
+        shared_sql = (
+            S._bq_shared_pseudo_ids_sql()
+            .replace("`mindapps.analytics_341040810.events_*`", "events")
+            .replace("IN UNNEST(@pseudo_ids)", f"IN ({','.join('?' * len(cand_pseudos))})")
+            .replace("@uid", "?")
+        )
+        shared = {r["user_pseudo_id"] for r in db.execute(shared_sql, [*cand_pseudos, "UidA"])}
+        self.assertEqual(shared, {"ps_mix"})
+        excl = sorted(set(cand_pseudos) - shared)
+        self.assertEqual(excl, ["ps_solo"])
+
+        by_suf: dict[str, set[tuple[str, int]]] = {}
+        for r in disc0:
+            s = by_suf.setdefault(r["table_suffix"], set())
+            if r["ga_session_id"] is not None:
+                s.add((r["user_pseudo_id"], r["ga_session_id"]))
+        for suf, ss in sorted(by_suf.items()):
+            run_delete(suf, "UidA", sorted(ss))
+        db.execute(f"DELETE FROM pseudo_users WHERE pseudo_user_id IN ({','.join('?' * len(excl))})", excl)
+
+        remaining_ids = [r["id"] for r in db.execute("SELECT id FROM events ORDER BY id")]
+        # e4 (UidB na sessão mista!), e5 (anônimo de outra sessão 2002!) e e8 (UidC) DEVEM permanecer!
+        self.assertEqual(remaining_ids, ["e4", "e5", "e8"])
+        # ps_mix (compartilhado com UidB) e ps_c permanecem; ps_solo foi apagado!
+        self.assertEqual([r[0] for r in db.execute("SELECT pseudo_user_id FROM pseudo_users ORDER BY pseudo_user_id")], ["ps_c", "ps_mix"])
+
+        # Passada D+1: chega um evento anônimo atrasado na sessão (ps_mix, 1001) quando UidA já não existe em events!
+        db.execute("INSERT INTO events VALUES ('e10', '20261126', NULL, 'ps_mix', 1001)")
+        disc1 = run_discover("UidA", discovered_sessoes)
+        self.assertEqual([(r["table_suffix"], r["user_pseudo_id"], r["ga_session_id"]) for r in disc1], [("20261126", "ps_mix", 1001)])
+        run_delete("20261126", "UidA", [("ps_mix", 1001)])
+        self.assertEqual([r["id"] for r in db.execute("SELECT id FROM events ORDER BY id")], ["e4", "e5", "e8"])
+        db.close()
 
 
 if __name__ == "__main__":
