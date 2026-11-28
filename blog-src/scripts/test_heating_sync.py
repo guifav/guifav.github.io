@@ -834,8 +834,8 @@ class HeatingSyncTest(unittest.TestCase):
     def test_0015_recria_as_seis_tabelas_iguais_as_originais_salvo_o_check_de_data(self):
         # Esquema das seis tabelas com as migrações até a 0014 (sem o limite do D1, que recusaria só os INSERT) e até a
         # 0015. Trocando cada CHECK de data dividido pela forma antiga, o texto tem de ficar idêntico: as oito colunas
-        # usam a forma canônica (o teste seguinte prova que ela equivale ao padrão de 92) e nenhum outro CHECK, coluna,
-        # índice ou trigger mudou.
+        # usam a forma canônica (o teste seguinte prova que ela equivale ao padrão de 92) e, nas seis tabelas, nenhum
+        # outro CHECK, coluna, índice ou trigger mudou. As outras tabelas a 0015 não toca.
         padrao = "[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9][0-9][0-9]Z"
         dividido = re.compile(
             r"CHECK \(\s*length\((\w+)\) = 24 AND substr\(\1, 1, 10\) GLOB '\[0-9\]\[0-9\]\[0-9\]\[0-9\]-\[0-9\]\[0-9\]-\[0-9\]\[0-9\]'"
@@ -856,7 +856,9 @@ class HeatingSyncTest(unittest.TestCase):
 
         def normal(sql: str) -> str:
             sql = re.sub(r"--[^\n]*", "", sql)
-            sql = sql.replace(" IF NOT EXISTS", "").replace("_new", "").replace('"', "")
+            sql = sql.replace(" IF NOT EXISTS", "").replace('"', "")
+            for t in tabelas:  # só o nome provisório da tabela, nunca um `_new` dentro de coluna ou CHECK
+                sql = re.sub(rf"\b{t}_new\b", t, sql)
             return " ".join(sql.split()).replace("( ", "(").replace(" )", ")")
 
         antes, depois = esquema("0014_zzz"), esquema("0015_zzz")
@@ -869,6 +871,37 @@ class HeatingSyncTest(unittest.TestCase):
             with self.subTest(objeto=chave):
                 self.assertEqual(normal(sql), normal(antes[chave]))
         self.assertEqual(trocas, 8)
+
+    def test_0015_preserva_as_linhas_de_cada_tabela_coluna_por_coluna(self):
+        # Os seis INSERT ... SELECT da 0015 copiam cada coluna para ela mesma. As linhas usam um valor diferente em cada
+        # coluna de mesmo tipo (datas, inteiros, textos), para que uma troca de colunas na cópia apareça.
+        db = sqlite3.connect(":memory:")  # sem o limite do D1: até a 0014 o CHECK de data ainda tem o padrão de 92
+        db.row_factory = sqlite3.Row
+        for nome in sorted(n for n in os.listdir(MIGRATIONS) if n.endswith(".sql") and n < "0015"):
+            with open(os.path.join(MIGRATIONS, nome), encoding="utf-8") as fh:
+                db.executescript(fh.read())
+        d = lambda dia: f"2026-11-{dia:02d}T0{dia % 10}:1{dia % 10}:2{dia % 10}.{dia:03d}Z"
+        linhas = {
+            "engagement_events": {"id": "ev-1", "context": "site", "email": "a@b.co", "signal": "email_aberto",
+                                  "source": "resend", "ref": "ref-1", "occurred_at": d(1), "recorded_at": d(2)},
+            "heating": {"context": "site", "email": "a@b.co", "score": 12, "band": "frio", "signals": '["x"]',
+                        "computed_at": d(3), "twenty_person_id": "p-1"},
+            "heating_optout": {"email_hmac": hexid(1), "opted_out_at": d(4)},
+            "curso_esquecido": {"context": CTX_CURSO, "email_hmac": hexid(2), "forgotten_at": d(5)},
+            "site_identities": {"uid": "u1", "email": "c@d.co", "linked_at": d(6)},
+            "ga4_purge_queue": {"uid": "u2", "ga4_pendente": 0, "sessoes": '[["ps", 1]]', "bq_tentativas": 2,
+                                "bq_concluido": 1, "geracao": 3, "bq_erro": "falhou", "proxima_em": d(7),
+                                "criado_em": d(8)},
+        }
+        for tabela, linha in linhas.items():
+            cols = ", ".join(linha)
+            db.execute(f"INSERT INTO {tabela} ({cols}) VALUES ({', '.join('?' * len(linha))})", tuple(linha.values()))
+        with open(os.path.join(MIGRATIONS, "0015_d1_glob_curto.sql"), encoding="utf-8") as fh:
+            db.executescript(fh.read())
+        for tabela, linha in linhas.items():
+            with self.subTest(tabela=tabela):
+                self.assertEqual([dict(r) for r in db.execute(f"SELECT * FROM {tabela}")], [linha])
+        db.close()
 
     def test_check_de_data_dividido_aceita_e_recusa_os_mesmos_valores_de_antes(self):
         # O CHECK da 0015 (comprimento 24 e três GLOB curtos) precisa aceitar exatamente o que o padrão de 92 aceitava.
