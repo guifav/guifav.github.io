@@ -12,7 +12,9 @@
 //   cookies (consent-v1 válido, granted ou denied), e nunca em /privacidade/, /termos/ nem 404.
 // - Vínculo (heating-link-v1 no localStorage, 365 dias por uid): todo login liga o vínculo, sem aviso nem interruptor
 //   (decisão do Gui em 28/11). Só fica desligado quando o /identidade responde 409 (oposição registrada para o email,
-//   marcada com o: 1): aí o login não liga de novo enquanto a marca valer.
+//   marcada com o: 1): aí o login não liga de novo enquanto a marca valer. O GA4 só identifica (user_id,
+//   heating-uid-v1, auth_identified) depois de o /identidade confirmar o vínculo neste navegador (s: 1): quem pediu
+//   oposição e entra por um navegador sem a marca o: 1 nunca chega a ser identificado antes do 409.
 // - Todo login com o vínculo ligado envia POST https://insights.guifav.dev/identidade com o ID token uma vez por sessão
 //   e por uid, com ou sem o aceite dos cookies; a origem da visita só vai junto com consent-v1 granted.
 // - Só com as 3 condições (logado no tenant, consent-v1 granted e heating-link-v1 granted para o uid):
@@ -175,13 +177,24 @@
     sendGtag('set', 'allow_ad_personalization_signals', false);
   }
 
-  function writeHeatingLink(uid, v, opposed) {
+  function writeHeatingLink(uid, v, opposed, confirmed) {
     if (!uid || (v !== 'granted' && v !== 'denied')) return;
     var entry = { v: v, t: Date.now(), uid: uid };
     if (v === 'denied' && opposed) entry.o = 1;
+    if (v === 'granted' && confirmed) entry.s = 1;
     try {
       w.localStorage.setItem(LINK_KEY, JSON.stringify(entry));
     } catch (e) { /* sem storage */ }
+  }
+
+  // Vínculo confirmado pelo servidor neste navegador (POST /identidade ok para o uid): só então o GA4 identifica.
+  function linkConfirmed(uid) {
+    var entry = readHeatingLinkEntry(uid);
+    return Boolean(entry && entry.v === 'granted' && entry.s === 1);
+  }
+
+  function markLinkConfirmed(uid) {
+    if (readHeatingLink(uid) === 'granted' && !linkConfirmed(uid)) writeHeatingLink(uid, 'granted', false, true);
   }
 
   // Todo login liga o vínculo. A única marca que segura é a da oposição (409 do /identidade, com o: 1); uma marca
@@ -208,7 +221,7 @@
     if (!uid || !UID_RE.test(uid)) return;
     if (!validTenantUser(currentUser) || currentUser.uid !== uid || readConsent() !== 'granted') return;
     var link = readHeatingLinkEntry(uid);
-    if (!link || link.v !== 'granted') return;
+    if (!link || link.v !== 'granted' || link.s !== 1) return;
     var now = Date.now();
     var maxT = link.t + TTL_MS - UID_TTL_MS;
     var t = now < maxT ? now : maxT;
@@ -368,6 +381,11 @@
       return w.fetch(IDENTITY_URL, init).then(function (res) {
         if (res && res.ok) {
           sessionSet(IDENTITY_SENT_PREFIX + uid, '1');
+          // Vínculo confirmado pelo servidor: agora o GA4 pode identificar (com os cookies aceitos).
+          if (validTenantUser(currentUser) && currentUser.uid === uid && readHeatingLink(uid) === 'granted') {
+            markLinkConfirmed(uid);
+            syncIdentityState(false);
+          }
         } else if (res && res.status === 409) {
           // Oposição registrada para este email (pedido por email, aplicado com --optout): o vínculo desliga neste
           // navegador com a marca de oposição, o login não religa e o user_id sai.
@@ -388,7 +406,9 @@
 
   function syncIdentityState(forceClear, skipUidWrite) {
     var linked = validTenantUser(currentUser) && readHeatingLink(currentUser.uid) === 'granted';
-    if (linked && readConsent() === 'granted') {
+    // Envio já aceito nesta aba (marca de sessão) vale como confirmação, inclusive para a marca gravada antes do s: 1.
+    if (linked && sessionGet(IDENTITY_SENT_PREFIX + currentUser.uid) === '1') markLinkConfirmed(currentUser.uid);
+    if (linked && linkConfirmed(currentUser.uid) && readConsent() === 'granted') {
       var uid = currentUser.uid;
       if (!skipUidWrite) writeHeatingUid(uid);
       sendGtag('consent', 'update', { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' });
@@ -405,8 +425,8 @@
       sendIdentity(currentUser);
       return;
     }
-    // Logado com o vínculo e sem os cookies aceitos: o vínculo vai ao servidor (o login vira contato), o GA4 não recebe
-    // user_id.
+    // Logado com o vínculo ainda não confirmado, ou sem os cookies aceitos: o vínculo vai ao servidor (o login vira
+    // contato) e o GA4 não recebe user_id. A resposta ok confirma e chama esta função de novo.
     if (linked) sendIdentity(currentUser);
     // Antes de o Firebase responder, sem revogação explícita (banner Não ou vínculo desligado), nada é apagado nem
     // concedido: o uid do <head> e os anúncios negados continuam até o onAuthStateChanged decidir.
@@ -579,17 +599,15 @@
         setMenuOpen(!menuOpen);
       });
 
-      menuEl = el('div', {
-        'class': 'guifav-auth-menu',
-        id: 'guifav-auth-menu',
-        role: 'menu',
-        'data-clarity-mask': 'true'
-      }, rootEl);
+      // Painel que abre sob o botão: o nome fica fora do role="menu" (um menu ARIA só tem itens); o menu tem só o Sair.
+      menuEl = el('div', { 'class': 'guifav-auth-menu', 'data-clarity-mask': 'true' }, rootEl);
       menuEl.hidden = true;
 
-      menuNameEl = el('div', { 'class': 'guifav-auth-name', role: 'presentation' }, menuEl);
+      menuNameEl = el('div', { 'class': 'guifav-auth-name' }, menuEl);
 
-      signOutBtn = el('button', { type: 'button', 'class': 'guifav-auth-item', role: 'menuitem' }, menuEl);
+      var menuList = el('div', { id: 'guifav-auth-menu', role: 'menu', 'aria-label': 'Conta' }, menuEl);
+
+      signOutBtn = el('button', { type: 'button', 'class': 'guifav-auth-item', role: 'menuitem' }, menuList);
       signOutBtn.textContent = 'Sair';
       signOutBtn.addEventListener('click', function () {
         sessionSet(ONE_TAP_SUPPRESSED_KEY, '1');
@@ -831,7 +849,7 @@
           ensureLink(user.uid);
           // Sessão logada nunca alimenta anúncio: com cookies aceitos e sem identificar agora (a identificação já nega),
           // nega na hora. Com cookies recusados os anúncios já estão negados e nada é coletado.
-          if (!wasLoggedIn && readConsent() === 'granted' && readHeatingLink(user.uid) !== 'granted') denyAdSignals();
+          if (!wasLoggedIn && readConsent() === 'granted' && !linkConfirmed(user.uid)) denyAdSignals();
           cancelOneTap();
           renderWidget();
           syncIdentityState(false);
@@ -868,7 +886,7 @@
       if (detail === 'granted') {
         // "Sim" com sessão confirmada nesta página, sem a marca ainda legível pelo consent.js (armazenamento bloqueado):
         // nega aqui também. O consent.js já nega com a marca ou o vínculo; a identificação, quando acontece agora, nega tudo.
-        var identifyingNow = validTenantUser(currentUser) && readHeatingLink(currentUser.uid) === 'granted';
+        var identifyingNow = validTenantUser(currentUser) && linkConfirmed(currentUser.uid);
         if (validTenantUser(currentUser) && !loginMarkedInBrowser() && !linkGrantedInBrowser() && !identifyingNow) denyAdSignals();
         syncIdentityState(false);
         maybeStartOneTap();
@@ -885,7 +903,7 @@
       // esperar o Firebase propagar (nem depender dele carregar).
       if ((k === LOGIN_KEY && loginMarkedInBrowser()) || (k === LINK_KEY && linkGrantedInBrowser())) {
         // A identificação desta aba já nega tudo; a condição só evita repetir a chamada.
-        var identifiedHere = validTenantUser(currentUser) && readHeatingLink(currentUser.uid) === 'granted';
+        var identifiedHere = validTenantUser(currentUser) && linkConfirmed(currentUser.uid);
         if (readConsent() === 'granted' && !identifiedHere) denyAdSignals();
       } else if ((k === LOGIN_KEY || (k === LINK_KEY && activeUid === null && !headSentUid))
         && readConsent() === 'granted' && !adsBlockedInBrowser()) {

@@ -5553,11 +5553,11 @@ class PrioritySourcesTest(unittest.TestCase):
             # 11b: visitas logadas incluídas na lista "Entram na conta" antes de "Cada sinal vale pontos".
             "Entram na conta: a confirmação da inscrição nos Expert Insights, o pedido e o download de materiais e a "
             "abertura e o clique nos emails dos Expert Insights e dos materiais. Se você entrar no site com a sua conta "
-            "Google e ligar a sua atividade ao seu contato, entram também as suas visitas ao site, como descrito abaixo. "
+            "Google e aceitar os cookies, entram também as suas visitas ao site, como descrito abaixo. "
             "Cada sinal vale pontos",
             # 11c (28/11): login ligado ao contato ao entrar com a conta Google; visitas só com o aceite dos cookies.
             "Quando você entra no site com a sua conta Google, o login fica ligado ao seu contato: o primeiro login fica "
-            "registrado, com a origem da visita, e cria no meu CRM um contato só com o seu email, se ele ainda não "
+            "registrado, com a origem da visita se você aceitou os cookies, e cria no meu CRM um contato só com o seu email, se ele ainda não "
             "existir, como no download de um material. Se você também aceitar os cookies, as suas visitas ficam ligadas "
             "ao seu contato: páginas vistas, tempo de leitura, rolagem e cliques em Agende e Contato. Essas visitas "
             "entram na prioridade de contato. O Google Analytics recebe um código da sua conta, nunca o seu email, e "
@@ -5575,7 +5575,9 @@ class PrioritySourcesTest(unittest.TestCase):
             "accounts.google.com; no clique em Entrar, também de apis.google.com) depois que você responde ao aviso "
             "de cookies, se você já entrou antes neste navegador ou se clicar em Entrar; ao carregar, o Google recebe "
             "o endereço IP e o navegador usado (user agent). O login de um toque grava o cookie g_state, do Google, "
-            "para lembrar se você fechou o convite e não insistir.",
+            "para lembrar se você fechou o convite e não insistir. Com a sessão aberta, a foto da sua conta Google "
+            "aparece no menu do site, carregada de lh3.googleusercontent.com, que recebe o endereço IP e o navegador "
+            "usado (user agent), sem o endereço da página.",
             # 28/11: oposição só por email, sem a página /prioridade/.
             "Se você não quiser ser pontuado, ou quiser retirar o seu consentimento, escreva para "
             '<a href="mailto:contact@guifav.dev">contact@guifav.dev</a>. Eu paro de calcular e apago os registros no '
@@ -5597,6 +5599,7 @@ class PrioritySourcesTest(unittest.TestCase):
             "o link está também no rodapé dos emails",
             "aviso do login",
             "desligue no menu da conta",
+            "ligar a sua atividade ao seu contato",
             "Eu paro de calcular na hora",
         ):
             self.assertNotIn(gone, t)
