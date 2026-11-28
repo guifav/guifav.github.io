@@ -979,6 +979,11 @@ class HeatingSyncTest(unittest.TestCase):
             with self.subTest(a=a, b=b):
                 self.assertNotEqual(sql_normalizado(f"CREATE TABLE t (c TEXT CHECK (c <> {a}))"),
                                     sql_normalizado(f"CREATE TABLE t (c TEXT CHECK (c <> {b}))"))
+        # Revisão do Roger no head 919aa2b: `--` ou `/*` dentro de colchetes ou crases escondia a coluna seguinte.
+        for nome in ("[a--b]", "`a/*b`"):
+            with self.subTest(nome=nome):
+                self.assertNotEqual(sql_normalizado(f"CREATE TABLE t ({nome} TEXT, c TEXT)"),
+                                    sql_normalizado(f"CREATE TABLE t ({nome} TEXT, d TEXT)"))
         self.assertEqual(sql_normalizado("CREATE TABLE t ( c TEXT CHECK ( c <> 'x' ) )"),
                          sql_normalizado("CREATE TABLE t (c TEXT CHECK (c <> 'x'))"))
         # Revisão do Roger no head c2f8a29: `--` dentro de `/* */` cortava a linha e escondia a coluna seguinte.
