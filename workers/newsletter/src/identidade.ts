@@ -6,7 +6,8 @@
 // upsert em site_identities por uid (204). Grava também a conversão "login no site" (`site_login`, comprovada: o Google
 // confirma o email) uma vez por pessoa, com a origem da visita do corpo (campos do formulário, até 1 KiB), para o
 // conversoes_sync criar a Pessoa no Twenty (decisão do Gui, 27/11).
-// CORS restrito a env.SITE_ORIGIN (https://guifav.dev), sem credenciais/cookies, corpo vazio e limite por IP.
+// CORS restrito a env.SITE_ORIGIN (https://guifav.dev), sem credenciais/cookies, corpo opcional urlencoded de até 1 KiB com a
+// origem da visita (acima disso 413; UTF-8 inválido 400) e limite por IP.
 import { normalizeEmail } from './email.ts';
 import { heatingOptoutHmac } from './forget.ts';
 import { motivo, type D1Like } from './conversoes.ts';

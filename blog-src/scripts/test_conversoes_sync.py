@@ -815,12 +815,15 @@ class OrigemTest(unittest.TestCase):
         self.assertEqual((ev[hexid(1)]["acao"], ev[hexid(2)]["acao"]), ("MATERIAL_DOWNLOAD", "SITE_LOGIN"))
         # O --forget também roda com o campo Ação antigo (lê os metadados antes de apagar no D1 e no Twenty), sem nenhuma
         # rodada antes que complete o campo.
+        # A Conversão já está no Twenty (rodada anterior) e o campo volta às 3 opções logo antes do --forget.
         h = Fake(schema=True)
-        h.conv_fields["acao"]["options"] = [o for o in h.conv_fields["acao"]["options"] if o["value"] != "SITE_LOGIN"]
         h.add(1, "esquece@x.com", action="site_login", material=None, interests=())
-        self.assertNotIn("SITE_LOGIN", [o["value"] for o in h.conv_fields["acao"]["options"]])
+        run(h, apply=True)
+        self.assertEqual(len([cv for cv in h.convs.values() if cv.get("eventoId") == hexid(1)]), 1)
+        h.conv_fields["acao"]["options"] = [o for o in h.conv_fields["acao"]["options"] if o["value"] != "SITE_LOGIN"]
         forget(h, "esquece@x.com", apply=True)
         self.assertNotIn("SITE_LOGIN", [o["value"] for o in h.conv_fields["acao"]["options"]], "o --forget não mexe no esquema")
+        self.assertEqual([cv for cv in h.convs.values() if cv.get("eventoId") == hexid(1)], [], "apagada no Twenty")
         self.assertEqual(h.db.execute("SELECT count(*) FROM conversions WHERE email = 'esquece@x.com'").fetchone()[0], 0)
         # Campo SELECT fora dos completáveis continua exigindo todas as opções (o canal da origem, por exemplo).
         g = Fake(schema=True)

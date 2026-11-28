@@ -254,7 +254,7 @@ test('método diferente de POST/OPTIONS devolve 405; Origin errado no POST devol
   assert.deepEqual(s.rows('site_identities'), []);
 });
 
-test('limite por IP (RL_IP) devolve 429; corpo não vazio devolve 400', async () => {
+test('limite por IP (RL_IP) devolve 429; corpo acima de 1 KiB devolve 413 e UTF-8 inválido 400', async () => {
   const token = await signJwt(validPayload());
   const limited = setup({ rlIp: false });
   const r429 = await limited.run(idReq({ token, ip: '203.0.113.10' }));
