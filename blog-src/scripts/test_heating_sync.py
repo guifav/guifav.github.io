@@ -55,17 +55,17 @@ def ago(days: float = 0, seconds: float = 0) -> str:
     return CS.stamp(NOW - timedelta(days=days, seconds=seconds))
 
 
-def sql_normalizado(sql: str, tabelas) -> str:
-    """Texto de um CREATE do sqlite_master para comparar esquemas: tira comentários, aspas duplas de identificador,
-    `IF NOT EXISTS`, o sufixo provisório `_new` dos nomes em `tabelas` e diferenças de espaço. Literais entre aspas
-    simples ficam intactos, para que uma mudança dentro de um CHECK nunca seja normalizada."""
+def sql_normalizado(sql: str) -> str:
+    """Texto de um CREATE do sqlite_master para comparar esquemas: tira comentários `--`, aspas duplas de identificador
+    (o RENAME as acrescenta), `IF NOT EXISTS` e diferenças de espaço. Literais entre aspas simples ficam intactos, para
+    que uma mudança dentro de um CHECK nunca seja normalizada. Nomes não são reescritos: depois do RENAME o
+    sqlite_master já guarda o nome final, então um `_new` que sobre em tabela, índice ou trigger aparece como diferença.
+    Comentário em bloco (`/* */`) não é tratado; nenhuma migração usa."""
     partes, fora, i = [], [], 0
 
     def fecha_fora():
         txt = "".join(fora).replace('"', "")
         txt = re.sub(r"\bIF NOT EXISTS\b", " ", txt)
-        for t in tabelas:
-            txt = re.sub(rf"\b{t}_new\b", t, txt)
         partes.append(" ".join(txt.split()).replace("( ", "(").replace(" )", ")"))
         fora.clear()
 
@@ -879,18 +879,23 @@ class HeatingSyncTest(unittest.TestCase):
             r" AND substr\(\1, 20, 5\) GLOB '\.\[0-9\]\[0-9\]\[0-9\]Z'\s*\)")
         tabelas = ("engagement_events", "heating", "heating_optout", "curso_esquecido", "site_identities", "ga4_purge_queue")
 
-        def esquema(ate: str) -> dict:
+        def esquema(ate: str, troca_0015=None) -> dict:
             db = sqlite3.connect(":memory:")
             for nome in sorted(n for n in os.listdir(MIGRATIONS) if n.endswith(".sql") and n <= ate):
                 with open(os.path.join(MIGRATIONS, nome), encoding="utf-8") as fh:
-                    db.executescript(fh.read())
+                    texto = fh.read()
+                if troca_0015 and nome.startswith("0015"):
+                    antes_troca = texto
+                    texto = texto.replace(*troca_0015)
+                    self.assertNotEqual(texto, antes_troca)
+                db.executescript(texto)
             linhas = db.execute(
                 "SELECT type, name, sql FROM sqlite_master WHERE sql IS NOT NULL AND tbl_name IN (%s)"
                 % ",".join("?" * len(tabelas)), tabelas).fetchall()
             db.close()
             return {(t, n): sql for t, n, sql in linhas}
 
-        normal = lambda sql: sql_normalizado(sql, tabelas)
+        normal = sql_normalizado
 
         antes, depois = esquema("0014_zzz"), esquema("0015_zzz")
         self.assertEqual(set(antes), set(depois))
@@ -903,20 +908,24 @@ class HeatingSyncTest(unittest.TestCase):
                 self.assertEqual(normal(sql), normal(antes[chave]))
         self.assertEqual(trocas, 8)
 
+        # Rodada 2 do #210 (Kimi): um trigger que grava em `ga4_purge_queue_new` (tabela que não existe depois do RENAME)
+        # tem de aparecer como diferença, não ser normalizado.
+        mutante = esquema("0015_zzz", ("INSERT INTO ga4_purge_queue (uid,", "INSERT INTO ga4_purge_queue_new (uid,"))
+        chave = ("trigger", "site_identities_enqueue_purge")
+        self.assertNotEqual(normal(mutante[chave]), normal(antes[chave]))
+
     def test_normalizacao_do_esquema_nunca_mexe_dentro_de_literal(self):
         # Rodada 1 do #210 (Kimi): `_new`, aspas e `IF NOT EXISTS` saíam também de dentro de literais, e um CHECK
-        # `NOT GLOB '*[^0-9a-f_new]*'` (que aceita 'n' * 64) passava por igual ao original.
-        t = ("heating_optout",)
+        # `NOT GLOB '*[^0-9a-f_new]*'` (que aceita 'n' * 64) passava por igual ao original. Rodada 2: nenhum nome é
+        # reescrito, então `_new` fora de literal também é diferença.
         base = "CREATE TABLE heating_optout (h TEXT CHECK (h NOT GLOB '*[^0-9a-f]*'))"
-        self.assertEqual(sql_normalizado(base.replace("heating_optout", "heating_optout_new"), t),
-                         sql_normalizado(base, t))
-        self.assertEqual(sql_normalizado('CREATE TABLE IF NOT EXISTS "heating_optout" (h TEXT) -- x\n', t),
-                         sql_normalizado("CREATE TABLE heating_optout ( h TEXT )", t))
+        self.assertNotEqual(sql_normalizado(base.replace("heating_optout", "heating_optout_new")), sql_normalizado(base))
+        self.assertEqual(sql_normalizado('CREATE TABLE IF NOT EXISTS "heating_optout" (h TEXT) -- x\n'),
+                         sql_normalizado("CREATE TABLE heating_optout ( h TEXT )"))
         for mutante in ("'*[^0-9a-f_new]*'", "'*[^0-9a-f\"]*'", "'*[^0-9a-f IF NOT EXISTS]*'", "'*[^0-9a-f ]*'",
                         "'*[^0-9a-f--]*'", "'*[^0-9a-f'']*'"):
             with self.subTest(mutante=mutante):
-                self.assertNotEqual(sql_normalizado(base.replace("'*[^0-9a-f]*'", mutante), t),
-                                    sql_normalizado(base, t))
+                self.assertNotEqual(sql_normalizado(base.replace("'*[^0-9a-f]*'", mutante)), sql_normalizado(base))
 
     def test_0015_preserva_as_linhas_de_cada_tabela_coluna_por_coluna(self):
         # Os seis INSERT ... SELECT da 0015 copiam cada coluna para ela mesma. As linhas usam um valor diferente em cada
@@ -927,26 +936,49 @@ class HeatingSyncTest(unittest.TestCase):
             with open(os.path.join(MIGRATIONS, nome), encoding="utf-8") as fh:
                 db.executescript(fh.read())
         d = lambda dia: f"2026-11-{dia:02d}T0{dia % 10}:1{dia % 10}:2{dia % 10}.{dia:03d}Z"
+        # Duas linhas por tabela, para que um `LIMIT 1` na cópia apareça (rodada 2 do #210); comparadas pela chave.
         linhas = {
-            "engagement_events": {"id": "ev-1", "context": "site", "email": "a@b.co", "signal": "email_aberto",
-                                  "source": "resend", "ref": "ref-1", "occurred_at": d(1), "recorded_at": d(2)},
-            "heating": {"context": "site", "email": "a@b.co", "score": 12, "band": "frio", "signals": '["x"]',
-                        "computed_at": d(3), "twenty_person_id": "p-1"},
-            "heating_optout": {"email_hmac": hexid(1), "opted_out_at": d(4)},
-            "curso_esquecido": {"context": CTX_CURSO, "email_hmac": hexid(2), "forgotten_at": d(5)},
-            "site_identities": {"uid": "u1", "email": "c@d.co", "linked_at": d(6)},
-            "ga4_purge_queue": {"uid": "u2", "ga4_pendente": 0, "sessoes": '[["ps", 1]]', "bq_tentativas": 2,
-                                "bq_concluido": 1, "geracao": 3, "bq_erro": "falhou", "proxima_em": d(7),
-                                "criado_em": d(8)},
+            "engagement_events": ("id", [
+                {"id": "ev-1", "context": "site", "email": "a@b.co", "signal": "email_aberto", "source": "resend",
+                 "ref": "ref-1", "occurred_at": d(1), "recorded_at": d(2)},
+                {"id": "ev-2", "context": CTX_CURSO, "email": "e@f.co", "signal": "curso_aula", "source": "curso",
+                 "ref": None, "occurred_at": d(11), "recorded_at": d(12)},
+            ]),
+            "heating": ("context, email", [
+                {"context": "site", "email": "a@b.co", "score": 12, "band": "frio", "signals": '["x"]',
+                 "computed_at": d(3), "twenty_person_id": "p-1"},
+                {"context": "site", "email": "e@f.co", "score": 70, "band": "quente", "signals": '["y"]',
+                 "computed_at": d(13), "twenty_person_id": None},
+            ]),
+            "heating_optout": ("email_hmac", [
+                {"email_hmac": hexid(1), "opted_out_at": d(4)},
+                {"email_hmac": hexid(3), "opted_out_at": d(14)},
+            ]),
+            "curso_esquecido": ("context, email_hmac", [
+                {"context": CTX_CURSO, "email_hmac": hexid(2), "forgotten_at": d(5)},
+                {"context": CTX_CURSO, "email_hmac": hexid(4), "forgotten_at": d(15)},
+            ]),
+            "site_identities": ("uid", [
+                {"uid": "u1", "email": "c@d.co", "linked_at": d(6)},
+                {"uid": "u3", "email": "g@h.co", "linked_at": d(16)},
+            ]),
+            "ga4_purge_queue": ("uid", [
+                {"uid": "u2", "ga4_pendente": 0, "sessoes": '[["ps", 1]]', "bq_tentativas": 2, "bq_concluido": 1,
+                 "geracao": 3, "bq_erro": "falhou", "proxima_em": d(7), "criado_em": d(8)},
+                {"uid": "u4", "ga4_pendente": 1, "sessoes": "[]", "bq_tentativas": 0, "bq_concluido": 0,
+                 "geracao": 0, "bq_erro": None, "proxima_em": d(17), "criado_em": d(18)},
+            ]),
         }
-        for tabela, linha in linhas.items():
-            cols = ", ".join(linha)
-            db.execute(f"INSERT INTO {tabela} ({cols}) VALUES ({', '.join('?' * len(linha))})", tuple(linha.values()))
+        for tabela, (_, regs) in linhas.items():
+            for linha in regs:
+                cols = ", ".join(linha)
+                db.execute(f"INSERT INTO {tabela} ({cols}) VALUES ({', '.join('?' * len(linha))})",
+                           tuple(linha.values()))
         with open(os.path.join(MIGRATIONS, "0015_d1_glob_curto.sql"), encoding="utf-8") as fh:
             db.executescript(fh.read())
-        for tabela, linha in linhas.items():
+        for tabela, (chave, regs) in linhas.items():
             with self.subTest(tabela=tabela):
-                self.assertEqual([dict(r) for r in db.execute(f"SELECT * FROM {tabela}")], [linha])
+                self.assertEqual([dict(r) for r in db.execute(f"SELECT * FROM {tabela} ORDER BY {chave}")], regs)
         db.close()
 
     def test_check_de_data_dividido_aceita_e_recusa_os_mesmos_valores_de_antes(self):
