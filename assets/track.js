@@ -40,7 +40,7 @@
   var WORKER_HOST = 'insights.guifav.dev';
   var ORIGIN_FORMS = { '/subscribe': 1, '/material': 1 };
   // Login com Google One Tap e user_id no GA4 (épico #197, corte 2): carregado em idle, só em guifav.dev e fora de /admin.
-  var AUTH_SRC = '/assets/auth.js?v=202611271230';
+  var AUTH_SRC = '/assets/auth.js?v=202611281030';
 
   // ---- Origem da visita (issue #114). Listas iguais às de workers/newsletter/src/origem.ts e da migração 0006. ----
   var CANAIS = ['busca', 'assistente', 'social', 'email', 'pago', 'outro_site', 'direto', 'desconhecida'];
@@ -370,10 +370,18 @@
         parent.appendChild(s);
       } catch (e) { /* sem DOM para injetar: ignora */ }
     };
-    if (typeof window.requestIdleCallback === 'function') {
-      window.requestIdleCallback(load, { timeout: 3000 });
-    } else if (typeof window.setTimeout === 'function') {
-      window.setTimeout(load, 1500);
+    var schedule = function () {
+      if (typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(load, { timeout: 3000 });
+      } else if (typeof window.setTimeout === 'function') {
+        window.setTimeout(load, 1500);
+      }
+    };
+    // Só depois do load da página (Firebase e GIS nunca disputam os recursos do primeiro carregamento).
+    if (d.readyState === 'complete' || typeof window.addEventListener !== 'function') {
+      schedule();
+    } else {
+      window.addEventListener('load', schedule, { once: true });
     }
   }
   scheduleAuth();
