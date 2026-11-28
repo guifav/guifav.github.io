@@ -252,9 +252,12 @@ CURSO_ESQUECIDO_PREFIX = "curso-esquecido-v1\n"
 LOCK_WAIT_S = 600.0
 LOCK_POLL_S = 1.0
 
-# Limite de 100 parâmetros por instrução do D1 (inclui 1 parâmetro `email_hmac` por linha no WHERE NOT EXISTS).
-EVENT_CHUNK = 11       # 9 parâmetros * 11 = 99 <= 100
-HEATING_CHUNK = 12     # 8 parâmetros * 12 = 96 <= 100
+# Limites do D1 por instrução: 100 parâmetros (inclui 1 `email_hmac` por linha no WHERE NOT EXISTS) e, medido em produção
+# em 28/11 (épico #197), no máximo 5 termos num SELECT composto (`too many terms in compound SELECT` a partir de 6; o
+# SQLite padrão aceita 500). Os INSERT condicionais montam um UNION ALL com um SELECT por linha, então o teto é 5 linhas.
+D1_COMPOUND_SELECT_MAX = 5
+EVENT_CHUNK = D1_COMPOUND_SELECT_MAX    # 9 parâmetros * 5 = 45 <= 100
+HEATING_CHUNK = D1_COMPOUND_SELECT_MAX  # 8 parâmetros * 5 = 40 <= 100
 DELETE_CHUNK = 90      # <= 100
 
 # ------------------------------------------------------------------ Metadados do Twenty
@@ -513,7 +516,9 @@ def formatar_sinais_texto(sinais: list[dict]) -> str:
 
 
 def _insert_events_sql(part: list[dict], key: str) -> tuple[str, list]:
-    """INSERT condicional em `engagement_events`: checa `heating_optout` na mesma instrução (<= 100 params)."""
+    """INSERT condicional em `engagement_events`: checa `heating_optout` na mesma instrução (<= 100 params, <= 5 linhas)."""
+    if len(part) > D1_COMPOUND_SELECT_MAX:
+        raise ValueError(f"no máximo {D1_COMPOUND_SELECT_MAX} linhas por INSERT (limite do D1)")
     cols = ("id", "context", "email", "signal", "source", "ref", "occurred_at", "recorded_at")
     params: list = []
     selects: list[str] = []
@@ -541,7 +546,9 @@ def _insert_events_sql(part: list[dict], key: str) -> tuple[str, list]:
 
 
 def _insert_heating_sql(part: list[tuple], key: str) -> tuple[str, list]:
-    """INSERT condicional em `heating`: checa `heating_optout` na mesma instrução (<= 100 params)."""
+    """INSERT condicional em `heating`: checa `heating_optout` na mesma instrução (<= 100 params, <= 5 linhas)."""
+    if len(part) > D1_COMPOUND_SELECT_MAX:
+        raise ValueError(f"no máximo {D1_COMPOUND_SELECT_MAX} linhas por INSERT (limite do D1)")
     cols = ("context", "email", "score", "band", "signals", "computed_at", "twenty_person_id")
     params: list = []
     selects: list[str] = []
