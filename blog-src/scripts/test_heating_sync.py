@@ -1033,8 +1033,9 @@ class HeatingSyncTest(unittest.TestCase):
         db.close()
 
     def test_0015_preserva_as_linhas_de_cada_tabela_coluna_por_coluna(self):
-        # Os seis INSERT ... SELECT da 0015 copiam cada coluna para ela mesma. As linhas usam um valor diferente em cada
-        # coluna de mesmo tipo (datas, inteiros, textos), para que uma troca de colunas na cópia apareça.
+        # Os seis INSERT ... SELECT da 0015 copiam cada coluna para ela mesma. Duas linhas por tabela: dentro de cada
+        # linha, colunas do mesmo tipo têm valores distintos (uma troca de colunas aparece), e as duas linhas diferem em
+        # todas as colunas (uma cópia parcial aparece). O teste confere isso antes de usar as linhas.
         db = sqlite3.connect(":memory:")  # sem o limite do D1: até a 0014 o CHECK de data ainda tem o padrão de 92
         db.row_factory = sqlite3.Row
         for nome in sorted(n for n in os.listdir(MIGRATIONS) if n.endswith(".sql") and n < "0015"):
@@ -1053,7 +1054,7 @@ class HeatingSyncTest(unittest.TestCase):
             "heating": ("context, email", [
                 {"context": "site", "email": "a@b.co", "score": 12, "band": "frio", "signals": '["x"]',
                  "computed_at": d(3), "twenty_person_id": "p-1"},
-                {"context": "site", "email": "e@f.co", "score": 70, "band": "quente", "signals": '["y"]',
+                {"context": CTX_CURSO, "email": "e@f.co", "score": 70, "band": "quente", "signals": '["y"]',
                  "computed_at": d(13), "twenty_person_id": None},
             ]),
             "heating_optout": ("email_hmac", [
@@ -1062,7 +1063,7 @@ class HeatingSyncTest(unittest.TestCase):
             ]),
             "curso_esquecido": ("context, email_hmac", [
                 {"context": CTX_CURSO, "email_hmac": hexid(2), "forgotten_at": d(5)},
-                {"context": CTX_CURSO, "email_hmac": hexid(4), "forgotten_at": d(15)},
+                {"context": "curso:outro-curso", "email_hmac": hexid(4), "forgotten_at": d(15)},
             ]),
             "site_identities": ("uid", [
                 {"uid": "u1", "email": "c@d.co", "linked_at": d(6)},
@@ -1071,10 +1072,21 @@ class HeatingSyncTest(unittest.TestCase):
             "ga4_purge_queue": ("uid", [
                 {"uid": "u2", "ga4_pendente": 0, "sessoes": '[["ps", 1]]', "bq_tentativas": 2, "bq_concluido": 1,
                  "geracao": 3, "bq_erro": "falhou", "proxima_em": d(7), "criado_em": d(8)},
-                {"uid": "u4", "ga4_pendente": 1, "sessoes": "[]", "bq_tentativas": 0, "bq_concluido": 0,
-                 "geracao": 0, "bq_erro": None, "proxima_em": d(17), "criado_em": d(18)},
+                {"uid": "u4", "ga4_pendente": 1, "sessoes": "[]", "bq_tentativas": 4, "bq_concluido": 0,
+                 "geracao": 5, "bq_erro": None, "proxima_em": d(17), "criado_em": d(18)},
             ]),
         }
+        for tabela, (_, regs) in linhas.items():
+            with self.subTest(semente=tabela):
+                a, b = regs
+                self.assertEqual(set(a), set(b))
+                self.assertTrue(all(a[c] != b[c] for c in a), [c for c in a if a[c] == b[c]])
+                for linha in regs:
+                    por_tipo: dict = {}
+                    for c, v in linha.items():
+                        if v is not None:
+                            por_tipo.setdefault(type(v), []).append(v)
+                    self.assertTrue(all(len(vs) == len(set(vs)) for vs in por_tipo.values()), linha)
         for tabela, (_, regs) in linhas.items():
             for linha in regs:
                 cols = ", ".join(linha)
@@ -1084,7 +1096,8 @@ class HeatingSyncTest(unittest.TestCase):
             db.executescript(fh.read())
         for tabela, (chave, regs) in linhas.items():
             with self.subTest(tabela=tabela):
-                self.assertEqual([dict(r) for r in db.execute(f"SELECT * FROM {tabela} ORDER BY {chave}")], regs)
+                esperado = sorted(regs, key=lambda r: tuple(r[c] for c in chave.split(", ")))
+                self.assertEqual([dict(r) for r in db.execute(f"SELECT * FROM {tabela} ORDER BY {chave}")], esperado)
         db.close()
 
     def test_check_de_data_dividido_aceita_e_recusa_os_mesmos_valores_de_antes(self):
