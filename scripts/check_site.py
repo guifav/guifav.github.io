@@ -836,6 +836,10 @@ def check_titles_and_groups(rel: str, html: str) -> list[str]:
 # Eventos próprios do GA4 (issue #60): assets/track.js. Contrato igual ao de check_titles_and_groups: alarme de
 # integridade sobre o HTML dos três templates (index.html, portfolio/index.html e Base.astro do blog).
 TRACK_PATH = "/assets/track.js"
+AUTH_PATH = "/assets/auth.js"
+GIS_CLIENT_URL = "accounts.google.com/gsi/client"
+NO_ONE_TAP_PAGES = ("404.html", "privacidade/index.html", "termos/index.html", "prioridade/index.html")
+NO_ONE_TAP_AUTH_PREFIXES = ("/privacidade", "/termos", "/prioridade", "/404")
 CTA_LOCATIONS = ("hero", "projetos", "consultoria", "chamada-final", "consultoria-pagina", "como-contratar")  # as duas últimas: #136
 SIGNUP_PAGE = "blog/inscricao-confirmada/index.html"
 CONTACT_EMAIL = "contact@guifav.dev"
@@ -3579,6 +3583,116 @@ def check_date_placeholder(site: Path) -> list[str]:
     return problems
 
 
+GA_UID_BLOCK = (
+    "if(window.guifavConsent==='granted'){gtag('consent','update',{ad_storage:'granted',ad_user_data:'granted',ad_personalization:'granted',analytics_storage:'granted'});"
+    "(function(){varp=function(x){try{returnJSON.parse(localStorage.getItem(x)||'null')}catch(e){returnnull}},k=p('heating-link-v1'),g=p('heating-login-v1'),n=Date.now(),l=!!(k&&k.v==='granted'&&typeofk.uid==='string'&&/^[0-9A-Za-z]{1,128}$/.test(k.uid)&&typeofk.t==='number'&&n-k.t>=0&&n-k.t<31536e6);"
+    "if(l||(g&&typeofg.t==='number'&&n-g.t>=0&&n-g.t<31536e6)){gtag('consent','update',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'});"
+    "gtag('set','allow_google_signals',false);"
+    "gtag('set','allow_ad_personalization_signals',false);"
+    "}if(l){varu=p('heating-uid-v1');"
+    "if(u&&u.uid===k.uid&&typeofu.t==='number'&&n-u.t>=0&&n-u.t<18e5)gtag('set',{user_id:u.uid});"
+    "}})();"
+    "}"
+)
+AUTH_AD_CONSENT_DENIED = "sendGtag('consent','update',{ad_storage:'denied',ad_user_data:'denied',ad_personalization:'denied'})"
+AUTH_AD_CONSENT_GRANTED = "sendGtag('consent','update',{ad_storage:'granted',ad_user_data:'granted',ad_personalization:'granted'})"
+
+
+def _has_js_code(js: str, compact_needle: str) -> bool:
+    """compact_needle (sem espaços) aparece em código JS real (fora de comentário e não dentro de string)."""
+    mask = _js_mask(js)
+    code = _js_mask(js, keep_strings=True)
+    chars: list[str] = []
+    idx_map: list[int] = []
+    for pos, ch in enumerate(code):
+        if not ch.isspace():
+            chars.append(ch)
+            idx_map.append(pos)
+    compact = "".join(chars)
+    start = 0
+    while True:
+        hit = compact.find(compact_needle, start)
+        if hit < 0:
+            return False
+        if mask[idx_map[hit]] == compact_needle[0]:
+            return True
+        start = hit + len(compact_needle)
+
+
+def check_ga_uid_snippet(rel: str, html: str) -> list[str]:
+    """#197 corte 2: em página com GA4, o snippet inline lê consent-v1 e heating-link-v1 (vínculo ligado nega anúncios e desliga os sinais) e só define user_id com o heating-uid-v1 do mesmo uid, tudo antes do config."""
+    if GA4_TAG not in html:
+        return []
+    blocks: list[tuple[int, int]] = []
+    first_config: tuple[int, int] | None = None
+    for i, body in enumerate(_exec_scripts(html)):
+        mask = _js_mask(body)
+        code = _js_mask(body, keep_strings=True)
+        for call in re.finditer(r"\bgtag\s*\(", mask):
+            if first_config is None and re.match(r"""gtag\s*\(\s*(['"])config\1\s*,""", code[call.start():]):
+                first_config = (i, call.start())
+        chars: list[str] = []
+        idx_map: list[int] = []
+        for pos, ch in enumerate(code):
+            if not ch.isspace():
+                chars.append(ch)
+                idx_map.append(pos)
+        compact = "".join(chars)
+        start = 0
+        while True:
+            hit = compact.find(GA_UID_BLOCK, start)
+            if hit < 0:
+                break
+            orig_pos = idx_map[hit]
+            if mask[orig_pos] == "i":
+                blocks.append((i, orig_pos))
+            start = hit + len(GA_UID_BLOCK)
+    if len(blocks) != 1:
+        return [f"{rel}: página com GA4 precisa do bloco de heating-uid-v1 (consentimento e sinais de anúncio desligados e user_id antes do config) uma vez, achados {len(blocks)}"]
+    if first_config is None or blocks[0] > first_config:
+        return [f"{rel}: o bloco de heating-uid-v1 precisa vir antes do primeiro gtag('config', ...)"]
+    return []
+
+
+def check_auth(site: Path) -> list[str]:
+    """#197 corte 2: track.js carrega auth.js com versão (?v= de 12 dígitos), snippet GA4 lê heating-uid-v1 antes do config, auth.js alterna consentimento de anúncios na sessão identificada, e 404, /privacidade/, /termos/ e /prioridade/ ficam sem One Tap."""
+    problems: list[str] = []
+    track_file = site / "assets/track.js"
+    auth_file = site / "assets/auth.js"
+    if not auth_file.is_file():
+        problems.append("assets/auth.js: arquivo ausente no site montado")
+    else:
+        auth_src = auth_file.read_text(encoding="utf-8")
+        for pref in NO_ONE_TAP_AUTH_PREFIXES:
+            if f"'{pref}'" not in auth_src and f'"{pref}"' not in auth_src:
+                problems.append(f"assets/auth.js: falta exclusão de One Tap para {pref}")
+        if not _has_js_code(auth_src, AUTH_AD_CONSENT_DENIED):
+            problems.append("assets/auth.js: falta negar ad_storage, ad_user_data e ad_personalization ao identificar")
+        if not _has_js_code(auth_src, AUTH_AD_CONSENT_GRANTED):
+            problems.append("assets/auth.js: falta devolver ad_storage, ad_user_data e ad_personalization para granted ao sair da identificação")
+    if not track_file.is_file():
+        problems.append("assets/track.js: arquivo ausente no site montado")
+    else:
+        track_src = track_file.read_text(encoding="utf-8")
+        if not re.search(r"""['"]/assets/auth\.js\?v=\d{12}['"]""", track_src):
+            problems.append("assets/track.js: precisa carregar /assets/auth.js com versão ?v= de 12 dígitos")
+    for rel in NO_ONE_TAP_PAGES:
+        f = site / rel
+        if not f.is_file():
+            continue
+        html = f.read_text(encoding="utf-8")
+        if GIS_CLIENT_URL in html:
+            problems.append(f"{rel}: não pode carregar o Google Identity Services (One Tap)")
+        if _track_loads(html, AUTH_PATH):
+            problems.append(f"{rel}: não pode carregar {AUTH_PATH} diretamente")
+        if rel == "404.html" and _track_loads(html, TRACK_PATH):
+            problems.append(f"{rel}: página 404 não pode carregar {TRACK_PATH}")
+    for f in html_files(site):
+        rel = f.relative_to(site).as_posix()
+        problems += check_ga_uid_snippet(rel, f.read_text(encoding="utf-8"))
+    return problems
+
+
 # Séries de artigos com links cruzados obrigatórios no corpo do post (#106), na ordem de leitura.
 SERIES: tuple[tuple[str, ...], ...] = (
     (
@@ -3671,6 +3785,7 @@ def main(argv: list[str] | None = None) -> int:
         problems += check_llm_ranking(Path(args.site))
         problems += check_legal(Path(args.site))
         problems += check_priority(Path(args.site))
+        problems += check_auth(Path(args.site))
         problems += check_date_placeholder(Path(args.site))
         problems += check_llms_txt(Path(args.site), Path(args.posts))
         problems += check_courses(Path(args.site))

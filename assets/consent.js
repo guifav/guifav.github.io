@@ -8,8 +8,9 @@
 // Este arquivo:
 // - mostra o banner ("Aceitar os cookies?", Sim e Não, link para a política) enquanto não há escolha válida;
 // - grava a escolha em localStorage "consent-v1" ({v: "granted"|"denied", t: epoch ms}), válida por 365 dias;
-// - Sim: consent update granted e carrega o Clarity; Não: consent update denied e apaga os cookies do GA4 e do
-//   Clarity (se o Clarity já estava gravando, recarrega a página para ele parar);
+// - Sim: consent update granted (se a sessão já está identificada, concede só analytics_storage e mantém
+//   ad_storage/ad_user_data/ad_personalization negados) e carrega o Clarity; Não: consent update denied e apaga os
+//   cookies do GA4 e do Clarity (se o Clarity já estava gravando, recarrega a página para ele parar);
 // - qualquer link com data-consent-open (o "Cookies" do rodapé) reabre o banner;
 // - texto em português ou inglês conforme o idioma da página (e muda junto com o seletor de idioma).
 // Sem localStorage, o banner aparece a cada página e nada é gravado; sem gtag, nada quebra.
@@ -17,6 +18,9 @@
   var d = document;
   var KEY = 'consent-v1';
   var MAX_AGE = 365 * 24 * 3600 * 1000;
+  var LINK_KEY = 'heating-link-v1';
+  var LOGIN_KEY = 'heating-login-v1';
+  var UID_RE = /^[0-9A-Za-z]{1,128}$/;
   var POLICY = '/privacidade/#cookies';
   var TEXT = {
     pt: { q: 'Aceitar os cookies?', yes: 'Sim', no: 'Não', policy: 'Política de privacidade e cookies' },
@@ -39,10 +43,58 @@
     try { localStorage.setItem(KEY, JSON.stringify({ v: v, t: Date.now() })); } catch (e) { /* sem storage */ }
   }
 
+  // #197 corte 2: navegador com o vínculo do login ligado (heating-link-v1 granted, 365 dias) nunca alimenta anúncio,
+  // a mesma regra do snippet do <head>; o user_id em si é decidido pelo snippet e pelo auth.js.
+  function hasHeatingLinkGranted() {
+    try {
+      var k = JSON.parse(localStorage.getItem(LINK_KEY) || 'null');
+      if (k && k.v === 'granted' && typeof k.uid === 'string' && UID_RE.test(k.uid) && typeof k.t === 'number') {
+        var age = Date.now() - k.t;
+        return age >= 0 && age < MAX_AGE;
+      }
+    } catch (e) { /* sem storage ou valor quebrado */ }
+    return false;
+  }
+
+  // Sessão logada (marca gravada pelo auth.js quando o Firebase confirma a conta, 365 dias): também nega anúncio.
+  function hasLoginMark() {
+    try {
+      var g = JSON.parse(localStorage.getItem(LOGIN_KEY) || 'null');
+      if (g && typeof g.t === 'number') {
+        var age = Date.now() - g.t;
+        return age >= 0 && age < MAX_AGE;
+      }
+    } catch (e) { /* sem storage ou valor quebrado */ }
+    return false;
+  }
+
+  function isIdentified() {
+    if (hasHeatingLinkGranted() || hasLoginMark()) return true;
+    try {
+      if (typeof window.guifavAuthIdentified === 'function' && window.guifavAuthIdentified()) return true;
+    } catch (e) { /* ignora */ }
+    return false;
+  }
+
   function consent(v) {
     var o = {};
-    for (var i = 0; i < ALL.length; i++) o[ALL[i]] = v;
-    if (typeof window.gtag === 'function') window.gtag('consent', 'update', o);
+    var blocked = v === 'granted' && isIdentified();
+    if (blocked) {
+      o.ad_storage = 'denied';
+      o.ad_user_data = 'denied';
+      o.ad_personalization = 'denied';
+      o.analytics_storage = 'granted';
+    } else {
+      for (var i = 0; i < ALL.length; i++) o[ALL[i]] = v;
+    }
+    if (typeof window.gtag !== 'function') return;
+    window.gtag('consent', 'update', o);
+    // No "Sim", os dois sinais de anúncio acompanham o consentimento na hora, sem depender do auth.js (carregado depois):
+    // desligados com sessão logada ou vínculo ligado, ligados de novo no consentimento comum.
+    if (v === 'granted') {
+      window.gtag('set', 'allow_google_signals', !blocked);
+      window.gtag('set', 'allow_ad_personalization_signals', !blocked);
+    }
   }
 
   function clearCookies() {
@@ -74,10 +126,19 @@
     if (banner) banner.hidden = true;
   }
 
+  function notify(v) {
+    try {
+      if (typeof window.dispatchEvent === 'function' && typeof window.CustomEvent === 'function') {
+        window.dispatchEvent(new window.CustomEvent('guifav-consent', { detail: v }));
+      }
+    } catch (e) { /* sem CustomEvent */ }
+  }
+
   function choose(v) {
     write(v);
     consent(v);
     hide();
+    notify(v);
     if (v === 'granted') {
       if (typeof window.guifavClarity === 'function') window.guifavClarity();
     } else {

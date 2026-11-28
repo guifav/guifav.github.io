@@ -65,7 +65,26 @@ const base = import.meta.env.BASE_URL;
         return c && c.v === 'granted' && typeof c.t === 'number' && Date.now() - c.t >= 0 && Date.now() - c.t < 31536e6 ? 'granted' : null;
       } catch (e) { return null; }
     }();
-    if (window.guifavConsent === 'granted') gtag('consent', 'update', { ad_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'granted', analytics_storage: 'granted' });
+    if (window.guifavConsent === 'granted') {
+      gtag('consent', 'update', { ad_storage: 'granted', ad_user_data: 'granted', ad_personalization: 'granted', analytics_storage: 'granted' });
+      // #197 corte 2: sessão logada (heating-login-v1, gravado pelo auth.js quando o Firebase confirma a conta) ou
+      // navegador com o vínculo do login ligado (heating-link-v1), ambos de até 365 dias, nunca alimentam anúncio;
+      // o user_id só vai com o vínculo ligado e o heating-uid-v1 do mesmo uid, confirmado há menos de 30 min.
+      (function () {
+        var p = function (x) { try { return JSON.parse(localStorage.getItem(x) || 'null') } catch (e) { return null } },
+          k = p('heating-link-v1'), g = p('heating-login-v1'), n = Date.now(),
+          l = !!(k && k.v === 'granted' && typeof k.uid === 'string' && /^[0-9A-Za-z]{1,128}$/.test(k.uid) && typeof k.t === 'number' && n - k.t >= 0 && n - k.t < 31536e6);
+        if (l || (g && typeof g.t === 'number' && n - g.t >= 0 && n - g.t < 31536e6)) {
+          gtag('consent', 'update', { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied' });
+          gtag('set', 'allow_google_signals', false);
+          gtag('set', 'allow_ad_personalization_signals', false);
+        }
+        if (l) {
+          var u = p('heating-uid-v1');
+          if (u && u.uid === k.uid && typeof u.t === 'number' && n - u.t >= 0 && n - u.t < 18e5) gtag('set', { user_id: u.uid });
+        }
+      })();
+    }
     gtag('js', new Date());
     gtag('config', GA4_ID, { content_group: CONTENT_GROUP });
   </script>}

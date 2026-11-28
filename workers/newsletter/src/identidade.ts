@@ -1,0 +1,340 @@
+// Registro do vínculo uid -> email das sessões logadas (épico #197, corte 2): POST /identidade.
+// Verifica o ID token do Firebase (RS256 via WebCrypto contra o JWKS do securetoken, cacheado em memória pelo
+// max-age do Cache-Control, com prazo de 3 s na busca), exige iss, aud, exp no futuro (folga zero), iat no passado
+// (folga de 5 min), sub válido, email_verified === true, email válido e firebase.tenant === "guifav-dev-g6dp4".
+// Respeita oposição global em heating_optout (409 sem gravar, para o site desligar o vínculo naquele navegador) e faz
+// upsert em site_identities por uid (204).
+// CORS restrito a env.SITE_ORIGIN (https://guifav.dev), sem credenciais/cookies, corpo vazio e limite por IP.
+import { normalizeEmail } from './email.ts';
+import { heatingOptoutHmac } from './forget.ts';
+import { motivo, type D1Like } from './conversoes.ts';
+import { readBoundedBytes } from './resend-webhook.ts';
+import { MIN_SECRET } from './token.ts';
+
+const enc = new TextEncoder();
+
+export const JWKS_URL = 'https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com';
+export const FIREBASE_PROJECT_ID = 'mindapps';
+export const FIREBASE_ISSUER = `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`;
+export const FIREBASE_TENANT_ID = 'guifav-dev-g6dp4';
+export const JWKS_TIMEOUT_MS = 3000;
+const CLOCK_SKEW_SEC = 5 * 60;
+const MAX_TOKEN_LEN = 8192;
+const UID_RE = /^[0-9A-Za-z]{1,128}$/;
+const B64URL_RE = /^[A-Za-z0-9_-]+$/;
+
+interface JwksCache {
+  keys: Map<string, CryptoKey>;
+  expiresAt: number;
+}
+
+let jwksCache: JwksCache | null = null;
+
+/**
+ * Intervalo mínimo entre buscas forçadas do JWKS por `kid` desconhecido. O Google gira as chaves do securetoken e
+ * anuncia `max-age` de horas: sem a busca forçada, um token assinado pela chave nova seria recusado até o cache
+ * vencer. O intervalo impede que tokens com `kid` inventado façam o Worker buscar o JWKS a cada pedido.
+ */
+export const JWKS_REFETCH_MIN_MS = 60_000;
+let jwksLastForcedAt = Number.NEGATIVE_INFINITY;
+
+/** Limpa o cache em memória do JWKS (uso em testes). */
+export function resetJwksCache(): void {
+  jwksCache = null;
+  jwksLastForcedAt = Number.NEGATIVE_INFINITY;
+}
+
+export interface IdentidadeEnv {
+  SITE_ORIGIN: string;
+  FORGET_HMAC_KEY: string;
+  RL_IP: { limit(o: { key: string }): Promise<{ success: boolean }> };
+  DB: D1Like;
+}
+
+export interface IdentidadeDeps {
+  fetch: typeof fetch;
+  now: () => number;
+  jwksTimeoutMs?: number;
+}
+
+function corsHeaders(origin: string): Record<string, string> {
+  return {
+    'access-control-allow-origin': origin,
+    vary: 'Origin',
+  };
+}
+
+function preflightHeaders(origin: string): Record<string, string> {
+  return {
+    ...corsHeaders(origin),
+    'access-control-allow-methods': 'POST',
+    'access-control-allow-headers': 'authorization, content-type',
+    'access-control-max-age': '600',
+    'cache-control': 'no-store',
+  };
+}
+
+const plain = (status: number, body: string, extra: Record<string, string> = {}) =>
+  new Response(body, { status, headers: { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store', ...extra } });
+
+const empty = (status: number, extra: Record<string, string> = {}) =>
+  new Response(null, { status, headers: { 'cache-control': 'no-store', ...extra } });
+
+function decodeBase64Url(s: string): Uint8Array<ArrayBuffer> | null {
+  if (!s || s.length % 4 === 1 || !B64URL_RE.test(s)) return null;
+  const b64 = s.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = b64.length % 4 === 0 ? b64 : b64 + '='.repeat(4 - (b64.length % 4));
+  try {
+    const bin = atob(padded);
+    const out = new Uint8Array(new ArrayBuffer(bin.length));
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+function decodeJsonPart(part: string): Record<string, unknown> | null {
+  const bytes = decodeBase64Url(part);
+  if (!bytes) return null;
+  try {
+    const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    const parsed: unknown = JSON.parse(text);
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null;
+    return parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function parseMaxAgeMs(cacheControl: string | null): number {
+  if (!cacheControl) return 0;
+  const m = /(?:^|,|\s)max-age\s*=\s*(\d+)(?:\s*,|\s|$)/i.exec(cacheControl);
+  if (!m) return 0;
+  const sec = Number(m[1]);
+  return Number.isSafeInteger(sec) && sec > 0 ? sec * 1000 : 0;
+}
+
+async function getJwksKeys(deps: IdentidadeDeps, force = false): Promise<Map<string, CryptoKey> | null> {
+  const nowMs = deps.now();
+  if (!force && jwksCache && nowMs < jwksCache.expiresAt) {
+    return jwksCache.keys;
+  }
+
+  const timeoutMs = deps.jwksTimeoutMs ?? JWKS_TIMEOUT_MS;
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const fetchPromise = deps.fetch(JWKS_URL, { method: 'GET', signal: controller.signal });
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        controller.abort();
+        reject(new Error('jwks_timeout'));
+      }, timeoutMs);
+    });
+    const res = await Promise.race([fetchPromise, timeoutPromise]);
+    if (!res.ok) return null;
+    const maxAgeMs = parseMaxAgeMs(res.headers.get('cache-control'));
+    const data: unknown = await res.json();
+    if (typeof data !== 'object' || data === null || !Array.isArray((data as { keys?: unknown }).keys)) {
+      return null;
+    }
+
+    const keys = new Map<string, CryptoKey>();
+    for (const rawKey of (data as { keys: unknown[] }).keys) {
+      if (typeof rawKey !== 'object' || rawKey === null || Array.isArray(rawKey)) continue;
+      const jwk = rawKey as JsonWebKey & { kid?: unknown; use?: unknown };
+      if (jwk.kty !== 'RSA' || typeof jwk.kid !== 'string' || !jwk.kid || jwk.kid.length > 128) continue;
+      if (typeof jwk.n !== 'string' || typeof jwk.e !== 'string') continue;
+      if (jwk.alg !== undefined && jwk.alg !== 'RS256') continue;
+      if (jwk.use !== undefined && jwk.use !== 'sig') continue;
+      try {
+        const key = await crypto.subtle.importKey(
+          'jwk',
+          { kty: 'RSA', n: jwk.n, e: jwk.e, alg: 'RS256', ext: true },
+          { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+          false,
+          ['verify'],
+        );
+        keys.set(jwk.kid, key);
+      } catch {
+        // Ignora chave malformada no conjunto sem descartar as demais.
+      }
+    }
+
+    if (keys.size === 0) return null;
+    if (maxAgeMs > 0) {
+      jwksCache = { keys, expiresAt: nowMs + maxAgeMs };
+    } else {
+      jwksCache = null;
+    }
+    return keys;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+type VerifyResult =
+  | { ok: true; uid: string; email: string }
+  | { ok: false; reason: string };
+
+async function verifyIdToken(token: string, deps: IdentidadeDeps): Promise<VerifyResult> {
+  if (!token || token.length > MAX_TOKEN_LEN) return { ok: false, reason: 'token_invalido' };
+  const parts = token.split('.');
+  if (parts.length !== 3) return { ok: false, reason: 'token_invalido' };
+  const [headerB64, payloadB64, sigB64] = parts;
+
+  const header = decodeJsonPart(headerB64);
+  if (!header) return { ok: false, reason: 'header_invalido' };
+  if (header.alg !== 'RS256') return { ok: false, reason: 'alg_invalido' };
+  if (typeof header.kid !== 'string' || !header.kid || header.kid.length > 128) {
+    return { ok: false, reason: 'kid_ausente' };
+  }
+
+  const sigBytes = decodeBase64Url(sigB64);
+  if (!sigBytes || sigBytes.byteLength === 0) return { ok: false, reason: 'assinatura_invalida' };
+
+  const payload = decodeJsonPart(payloadB64);
+  if (!payload) return { ok: false, reason: 'payload_invalido' };
+
+  const keys = await getJwksKeys(deps);
+  if (!keys) return { ok: false, reason: 'jwks_indisponivel' };
+
+  let key = keys.get(header.kid);
+  if (!key) {
+    // Rotação de chaves: um kid fora do cache força uma busca nova, no máximo uma por JWKS_REFETCH_MIN_MS.
+    const nowMs = deps.now();
+    if (nowMs - jwksLastForcedAt >= JWKS_REFETCH_MIN_MS) {
+      jwksLastForcedAt = nowMs;
+      const fresh = await getJwksKeys(deps, true);
+      if (fresh) key = fresh.get(header.kid);
+    }
+    if (!key) return { ok: false, reason: 'kid_desconhecido' };
+  }
+
+  let validSig = false;
+  try {
+    validSig = await crypto.subtle.verify(
+      'RSASSA-PKCS1-v1_5',
+      key,
+      sigBytes,
+      enc.encode(`${headerB64}.${payloadB64}`),
+    );
+  } catch {
+    validSig = false;
+  }
+  if (!validSig) return { ok: false, reason: 'assinatura_invalida' };
+
+  if (payload.iss !== FIREBASE_ISSUER) return { ok: false, reason: 'iss_invalido' };
+  if (payload.aud !== FIREBASE_PROJECT_ID) return { ok: false, reason: 'aud_invalido' };
+
+  const exp = payload.exp;
+  const iat = payload.iat;
+  if (typeof exp !== 'number' || !Number.isFinite(exp)) return { ok: false, reason: 'exp_invalido' };
+  if (typeof iat !== 'number' || !Number.isFinite(iat)) return { ok: false, reason: 'iat_invalido' };
+
+  const nowSec = deps.now() / 1000;
+  if (exp <= nowSec) return { ok: false, reason: 'expirado' };
+  if (iat > nowSec + CLOCK_SKEW_SEC) return { ok: false, reason: 'iat_futuro' };
+
+  const sub = payload.sub;
+  if (typeof sub !== 'string' || !UID_RE.test(sub)) return { ok: false, reason: 'sub_invalido' };
+
+  if (payload.email_verified !== true) return { ok: false, reason: 'email_nao_verificado' };
+  if (typeof payload.email !== 'string') return { ok: false, reason: 'email_invalido' };
+  const email = normalizeEmail(payload.email);
+  if (!email) return { ok: false, reason: 'email_invalido' };
+
+  const fb = payload.firebase;
+  if (typeof fb !== 'object' || fb === null || Array.isArray(fb)) {
+    return { ok: false, reason: 'tenant_invalido' };
+  }
+  if ((fb as { tenant?: unknown }).tenant !== FIREBASE_TENANT_ID) {
+    return { ok: false, reason: 'tenant_invalido' };
+  }
+
+  return { ok: true, uid: sub, email };
+}
+
+function extractBearer(authHeader: string | null): string | null {
+  if (!authHeader) return null;
+  const m = /^Bearer\s+(\S+)$/i.exec(authHeader.trim());
+  return m ? m[1] : null;
+}
+
+export async function handleIdentidade(
+  req: Request,
+  env: IdentidadeEnv,
+  deps: IdentidadeDeps,
+): Promise<Response> {
+  const origin = req.headers.get('origin');
+  if (req.method === 'OPTIONS') {
+    if (origin !== env.SITE_ORIGIN) return plain(403, 'origem não permitida');
+    return empty(204, preflightHeaders(env.SITE_ORIGIN));
+  }
+  if (req.method !== 'POST') {
+    return plain(405, 'método não permitido', { allow: 'POST, OPTIONS' });
+  }
+  if (origin !== env.SITE_ORIGIN) return plain(403, 'origem não permitida');
+
+  const cors = corsHeaders(env.SITE_ORIGIN);
+  if (!env.FORGET_HMAC_KEY || env.FORGET_HMAC_KEY.length < MIN_SECRET) {
+    return plain(500, 'Worker sem configuração', cors);
+  }
+
+  const ip = req.headers.get('cf-connecting-ip') ?? 'desconhecido';
+  if (!(await env.RL_IP.limit({ key: ip })).success) {
+    return plain(429, 'muitas requisições', cors);
+  }
+
+  const rawBody = await readBoundedBytes(req, 1);
+  if (rawBody === null || rawBody.byteLength > 0) {
+    return plain(400, 'corpo deve ser vazio', cors);
+  }
+
+  const token = extractBearer(req.headers.get('authorization'));
+  if (!token) {
+    console.error('identidade recusada: authorization_ausente');
+    return empty(401, cors);
+  }
+
+  const verified = await verifyIdToken(token, deps);
+  if (!verified.ok) {
+    console.error(`identidade recusada: ${verified.reason}`);
+    return empty(401, cors);
+  }
+
+  const linkedAt = new Date(deps.now()).toISOString();
+  let changes: number | undefined;
+  try {
+    const hmac = await heatingOptoutHmac(verified.email, env.FORGET_HMAC_KEY);
+    // Checa heating_optout e faz upsert na mesma instrução para eliminar corrida com POST /prioridade.
+    const res = await env.DB
+      .prepare(`INSERT INTO site_identities (uid, email, linked_at)
+        SELECT ?, ?, ?
+        WHERE NOT EXISTS (SELECT 1 FROM heating_optout WHERE email_hmac = ?)
+        ON CONFLICT(uid) DO UPDATE SET
+          email = excluded.email,
+          linked_at = excluded.linked_at`)
+      .bind(verified.uid, verified.email, linkedAt, hmac)
+      .run();
+    changes = res?.meta?.changes;
+  } catch (e) {
+    console.error(`identidade não gravada: ${motivo(e)}`);
+    return plain(500, 'falha ao gravar identidade', cors);
+  }
+  // O upsert sempre altera 1 linha (insere ou atualiza); 0 só acontece quando o WHERE NOT EXISTS barrou pela oposição.
+  // A resposta vai só a quem provou ser o dono do email pelo ID token, então não revela nada a terceiros.
+  if (changes === 0) {
+    console.error('identidade recusada: oposicao');
+    return empty(409, cors);
+  }
+  if (typeof changes !== 'number') {
+    console.error('identidade sem contagem de linhas do D1');
+    return plain(500, 'falha ao gravar identidade', cors);
+  }
+
+  return empty(204, cors);
+}

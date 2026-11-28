@@ -39,6 +39,8 @@
   var ORIGIN_KEY = 'site_origin_v1';
   var WORKER_HOST = 'insights.guifav.dev';
   var ORIGIN_FORMS = { '/subscribe': 1, '/material': 1 };
+  // Login com Google One Tap e user_id no GA4 (épico #197, corte 2): carregado em idle, só em guifav.dev e fora de /admin.
+  var AUTH_SRC = '/assets/auth.js?v=202611271230';
 
   // ---- Origem da visita (issue #114). Listas iguais às de workers/newsletter/src/origem.ts e da migração 0006. ----
   var CANAIS = ['busca', 'assistente', 'social', 'email', 'pago', 'outro_site', 'direto', 'desconhecida'];
@@ -350,4 +352,29 @@
       try { window.sessionStorage.setItem(SIGNUP_KEY, '1'); } catch (e) { /* sem storage: só não lembra */ }
     }
   }
+
+  // Carregamento tardio do login (épico #197, corte 2): só em guifav.dev, nunca em prévias locais nem em /admin.
+  function scheduleAuth() {
+    var loc = window.location;
+    if (!loc || loc.hostname !== 'guifav.dev') return;
+    var p = String(loc.pathname || '/');
+    if (p === '/admin' || p.indexOf('/admin/') === 0) return;
+    var load = function () {
+      try {
+        if (typeof d.createElement !== 'function') return;
+        var parent = d.body || d.head || d.documentElement;
+        if (!parent || typeof parent.appendChild !== 'function') return;
+        var s = d.createElement('script');
+        s.setAttribute('src', AUTH_SRC);
+        s.async = true;
+        parent.appendChild(s);
+      } catch (e) { /* sem DOM para injetar: ignora */ }
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+      window.requestIdleCallback(load, { timeout: 3000 });
+    } else if (typeof window.setTimeout === 'function') {
+      window.setTimeout(load, 1500);
+    }
+  }
+  scheduleAuth();
 })();

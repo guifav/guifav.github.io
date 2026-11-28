@@ -30,7 +30,7 @@ bucket_name = "blog-materiais"
 
 # D1 do painel (`workers/admin`, dono do esquema e das migrações): conversões do site (issues #97, #99 e #114),
 # marcador mínimo de remoção `forgotten` (issue #134) e tabelas do heating (`engagement_events`, `heating`,
-# `heating_optout`, épico #197). As migrações 0004 a 0011 precisam estar aplicadas antes do deploy.
+# `heating_optout`, `curso_esquecido` e `site_identities`, épico #197). As migrações 0004 a 0013 precisam estar aplicadas antes do deploy.
 [[d1_databases]]
 binding = "DB"
 database_name = "blog-admin"
