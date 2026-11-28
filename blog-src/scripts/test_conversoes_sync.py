@@ -792,6 +792,32 @@ class OrigemTest(unittest.TestCase):
         opts = [(o["value"], o["label"]) for o in f.conv_fields["acao"]["options"]]
         self.assertIn(("SITE_LOGIN", "Login no site"), opts)
 
+    def test_campo_acao_de_producao_com_tres_opcoes_ganha_site_login_sem_perder_as_antigas(self):
+        # Claude P1 (rodada 1 do #206): o campo Ação de produção nasceu com 3 opções. A primeira rodada depois do deploy
+        # cria SITE_LOGIN (mantendo as antigas com id) e sincroniza o download e o login; a simulação não falha.
+        f = Fake(schema=True)
+        antigas = [dict(o, id=f"opt-{i}") for i, o in enumerate(f.conv_fields["acao"]["options"]) if o["value"] != "SITE_LOGIN"]
+        f.conv_fields["acao"]["options"] = antigas
+        f.add(1, "dl@x.com")
+        f.add(2, "login@x.com", action="site_login", material=None, interests=())
+        dry, _ = run(f, apply=False)
+        self.assertEqual(dry["opcoes_a_criar"], 1)
+        self.assertEqual(f.pending(), sorted([hexid(1), hexid(2)]), "simulação não grava nada")
+        counts, _ = run(f, apply=True)
+        self.assertEqual(f.pending(), [])
+        opts = f.conv_fields["acao"]["options"]
+        self.assertEqual([o["value"] for o in opts], ["MATERIAL_REQUEST", "MATERIAL_DOWNLOAD", "NEWSLETTER_CONFIRM", "SITE_LOGIN"])
+        self.assertEqual([o.get("id") for o in opts[:3]], ["opt-0", "opt-1", "opt-2"], "as antigas vão com o id")
+        self.assertEqual(opts[3]["position"], 3)
+        ev = conv_by_event(f)
+        self.assertEqual((ev[hexid(1)]["acao"], ev[hexid(2)]["acao"]), ("MATERIAL_DOWNLOAD", "SITE_LOGIN"))
+        # Campo SELECT fora dos completáveis continua exigindo todas as opções (o canal da origem, por exemplo).
+        g = Fake(schema=True)
+        g.conv_fields["origemCanal"]["options"] = g.conv_fields["origemCanal"]["options"][:-1]
+        g.add(1, "dl@x.com")
+        with self.assertRaises(S.SyncError):
+            run(g, apply=True)
+
     def test_lists_match_the_worker_and_the_migration(self):
         # As listas são as mesmas nos quatro lugares (origem.ts, track.js, migração 0006 e aqui): conferidas pelo texto.
         with open(os.path.join(NEWSLETTER, "src", "origem.ts"), encoding="utf-8") as fh:

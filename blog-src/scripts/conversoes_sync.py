@@ -9,7 +9,7 @@ No Twenty, criados se faltarem (metadata API):
   visita (issue #114: origemCanal e origemFonte, SELECT; utmSource, utmMedium, utmCampaign e paginaEntrada, TEXT) e a
   relação N:1 `pessoa` com Person.
 - Na Person: siteInteresses (MULTI_SELECT, união dos interesses das conversões), siteUltimaConversao (DATE_TIME),
-  siteEmailComprovado (BOOLEAN: alguma conversão com o email comprovado por link) e siteGaClientId (TEXT, o client_id do
+  siteEmailComprovado (BOOLEAN: alguma conversão com o email comprovado por link ou pelo login com a conta Google) e siteGaClientId (TEXT, o client_id do
   GA4 da conversão mais recente que trouxe um).
 
 Regras:
@@ -17,7 +17,8 @@ Regras:
   uma Pessoa com o email: a conversão vai para a mais antiga (createdAt, depois id), e a contagem mostra o caso.
 - Datas com milissegundos do começo ao fim (o Worker grava `toISOString()`): ordenar, comparar e gravar no segundo cheio
   trocaria a Pessoa mais antiga e o client_id mais recente quando dois eventos caem no mesmo segundo.
-- Pessoa nova só nasce de uma ação com o email comprovado (download ou confirmação da newsletter), só com o email.
+- Pessoa nova só nasce de uma ação com o email comprovado (download, confirmação da newsletter ou login no site), só com o
+  email.
 - Pedido sem clique (`material_request`, `verified = 0`) só vira Conversão se o email já estiver numa Pessoa (decisão do
   Gui na #97, 2026-11-23). Sem Pessoa, a linha fica pendente no D1: se o email chegar ao CRM depois (pelo download, pela
   newsletter ou à mão), o pedido vai junto na rodada seguinte.
@@ -146,6 +147,9 @@ ACOES = {
 }
 # Ações sem material (o resto exige o slug do material).
 SEM_MATERIAL = {"newsletter_confirm", "site_login"}
+# SELECT cujas opções novas o próprio sync cria (com --apply, antes de qualquer Conversão): o campo Ação de produção nasceu
+# com as três primeiras ações, e a quarta (SITE_LOGIN) entra na primeira rodada depois do deploy.
+SELECT_COMPLETAVEIS = {"acao"}
 # Origem da visita (issue #114): valor no D1 -> (opção no Twenty, rótulo). As mesmas listas do Worker e da migração 0006.
 CANAIS = OrderedDict([
     ("busca", ("BUSCA", "Busca")), ("assistente", ("ASSISTENTE", "Assistente de IA")), ("social", ("SOCIAL", "Rede social")),
@@ -449,7 +453,7 @@ def read_metadata(c: TS.Clients) -> dict:
                 raise SyncError(f"campo {k} existe com outro tipo")
             # SELECT que já existe precisa ter todas as opções que o sync grava: senão o Twenty recusaria a Conversão no
             # meio da rodada, depois de outras escritas.
-            if k in have and f["type"] == "SELECT":
+            if k in have and f["type"] == "SELECT" and k not in SELECT_COMPLETAVEIS:
                 missing = {o["value"] for o in f["options"]} - set(_option_values(have[k]))
                 if missing:
                     raise SyncError(f"campo {k} existe sem as opções {', '.join(sorted(missing))}")
@@ -582,6 +586,16 @@ def ensure_schema(c: TS.Clients, meta: dict, labels: dict[str, str]) -> None:
             data = c.twenty("POST", "/metadata", {"query": um, "variables": {"input": {"id": field["id"], "update": {"options": options}}}},
                             op="criar opção")
             field["options"] = data["data"]["updateOneField"]["options"]
+    for name in sorted(SELECT_COMPLETAVEIS):
+        field = meta["conv"][name]
+        have = _option_values(field)
+        add = [{"value": o["value"], "label": o["label"], "color": o["color"], "position": len(have) + i}
+               for i, o in enumerate(o for o in CONV_FIELDS[name]["options"] if o["value"] not in have)]
+        if add:  # as opções antigas vão como estão (com id), para o Twenty não recriar nem apagar nenhuma
+            options = list(field.get("options") or []) + add
+            data = c.twenty("POST", "/metadata", {"query": um, "variables": {"input": {"id": field["id"], "update": {"options": options}}}},
+                            op="criar opção")
+            field["options"] = data["data"]["updateOneField"]["options"]
 
 
 def run(c: TS.Clients, *, apply: bool = False, out=None) -> Counter:
@@ -676,8 +690,10 @@ def run(c: TS.Clients, *, apply: bool = False, out=None) -> Counter:
     counts["objeto_a_criar"] = missing_obj
     counts["campos_a_criar"] = (sum(k not in meta["person"] for k in PERSON_FIELDS) + sum(k not in meta["conv"] for k in CONV_FIELDS)
                                 + (RELATION["name"] not in meta["conv"]))
-    counts["opcoes_a_criar"] = sum(len([v for v in labels if v not in _option_values(meta[o].get(n))])
-                                   for o, n in (("person", "siteInteresses"), ("conv", "interesses")))
+    counts["opcoes_a_criar"] = (sum(len([v for v in labels if v not in _option_values(meta[o].get(n))])
+                                    for o, n in (("person", "siteInteresses"), ("conv", "interesses")))
+                                + sum(len([o for o in CONV_FIELDS[n]["options"] if o["value"] not in _option_values(meta["conv"][n])])
+                                      for n in SELECT_COMPLETAVEIS if n in meta["conv"]))
 
     # 3) Escritas no Twenty e marcação em `conversions`, só com --apply: esquema, depois cada email (Pessoa, Conversões,
     # marca no D1) e por fim o preenchimento de `twenty_person_id` nas linhas antigas (#193).

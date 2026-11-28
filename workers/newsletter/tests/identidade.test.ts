@@ -586,3 +586,23 @@ test('README: o contrato de POST /identidade documenta 409 para quem tem oposiç
   assert.match(row!, /oposição em `heating_optout`[^|]*responde `409`/);
   assert.doesNotMatch(row!, /oposição[^|;]*não grava e responde `204`/);
 });
+
+test('oposição gravada entre o vínculo e a conversão (corrida com --forget): a guarda do INSERT não grava a conversão', async () => {
+  const s = setup();
+  const hmac = await heatingOptoutHmac('corrida@exemplo.com', FORGET_KEY);
+  const real = s.env.DB;
+  s.env.DB = {
+    prepare: (sql: string) => {
+      if (/INSERT INTO conversions/.test(sql)) {
+        // O --forget (ou o POST /prioridade) grava a oposição logo depois do upsert do vínculo.
+        s.db.prepare('INSERT OR IGNORE INTO heating_optout (email_hmac, opted_out_at) VALUES (?, ?)').run(hmac, new Date(NOW).toISOString());
+      }
+      return real.prepare(sql);
+    },
+  } as typeof real;
+  const tok = await signJwt(validPayload({ sub: 'UidCorrida1', email: 'corrida@exemplo.com' }));
+  const res = await s.run(idReq({ token: tok, body: 'origem_canal=busca' }));
+  assert.equal(res.status, 204);
+  assert.deepEqual(s.rows('conversions'), []);
+});
+

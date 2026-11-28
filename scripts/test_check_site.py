@@ -5692,6 +5692,9 @@ class PrioritySourcesTest(unittest.TestCase):
             "(Lei 13.709/2018, art. 7º, I). Para desligar, saia da conta, desligue no menu da conta ou clique em "
             "Cookies no rodapé e responda Não. Você pode pedir que eu apague o que já foi registrado, inclusive no Google "
             "Analytics.",
+            # #206: a origem da visita também vai no login (só com o aceite e o aviso do login).
+            "e envia o rótulo completo só no formulário, com ou sem o aceite dos cookies, e no login com a conta Google, "
+            "quando você aceitou os cookies e confirmou o aviso do login.",
             # 11d: Firebase Auth, GIS, gstatic, accounts.google.com, apis.google.com no clique, carregamento condicional e cookie g_state.
             "<strong>Google Identity Platform e Firestore</strong>: o login com a conta Google e o banco de dados com "
             "os dados do curso (inscrição e progresso). O login do site usa o Firebase Authentication e, para o login "
