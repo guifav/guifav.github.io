@@ -1548,25 +1548,28 @@ test('contatos mostra o login no site (épico #197) com rótulo próprio e filtr
 
 test('Páginas de entrada não contam o login no site (Kimi P2, rodada 6 do #206)', async () => {
   const s = setup();
+  const dl = (id: string, email: string, path: string) => ({
+    id, email, action: 'material_download' as const, material: 'mapa-decisao-ia', file: 'mapa-decisao-pdf', verified: 1,
+    occurred_at: '2026-11-27T10:00:00.000Z', landing_path: path,
+  });
+  const login = (id: string, email: string, path: string) => ({
+    id, email, action: 'site_login' as const, material: null, verified: 1, occurred_at: '2026-11-27T11:00:00.000Z', landing_path: path,
+  });
   seedConversions(s.db, [
-    { id: 'q1', email: 'a@x.com', action: 'material_download', material: 'mapa-decisao-ia', file: 'mapa-decisao-pdf', verified: 1,
-      occurred_at: '2026-11-27T10:00:00.000Z', landing_path: '/blog/com-download/' },
-    { id: 'q2', email: 'a@x.com', action: 'site_login', material: null, verified: 1,
-      occurred_at: '2026-11-27T11:00:00.000Z', landing_path: '/blog/com-download/' },
-    { id: 'q3', email: 'b@x.com', action: 'site_login', material: null, verified: 1,
-      occurred_at: '2026-11-27T12:00:00.000Z', landing_path: '/blog/so-login/' },
-    { id: 'q4', email: 'c@x.com', action: 'site_login', material: null, verified: 1,
-      occurred_at: '2026-11-27T13:00:00.000Z', landing_path: '/blog/so-login/' },
+    // Página A: 1 download e 2 logins. Página B: 2 downloads. Sem o filtro, A (3) viria antes de B (2).
+    dl('a1', 'a@x.com', '/blog/pagina-a/'), login('a2', 'b@x.com', '/blog/pagina-a/'), login('a3', 'c@x.com', '/blog/pagina-a/'),
+    dl('b1', 'd@x.com', '/blog/pagina-b/'), dl('b2', 'e@x.com', '/blog/pagina-b/'),
+    // Página só com login: não vira linha zerada.
+    login('c1', 'f@x.com', '/blog/so-login/'),
   ]);
   const html = await (await s.req('/admin/conteudos')).text();
   const ini = html.indexOf('<h2>Páginas de entrada</h2>');
   assert.ok(ini >= 0);
   const fim = html.indexOf('<h2>', ini + 10);
   const sec = html.slice(ini, fim < 0 ? undefined : fim);
-  assert.ok(sec.includes('/blog/com-download/'));
   assert.ok(!sec.includes('/blog/so-login/'), 'login sozinho não vira linha zerada');
-  const linha = sec.slice(sec.indexOf('/blog/com-download/'));
-  const tds = [...linha.slice(0, linha.indexOf('</tr>')).matchAll(/<td>([^<]*)<\/td>/g)].map((m) => m[1]);
-  assert.ok(!tds.includes('2'), 'o login na mesma página não soma no total');
+  const ia = sec.indexOf('/blog/pagina-a/');
+  const ib = sec.indexOf('/blog/pagina-b/');
+  assert.ok(ia >= 0 && ib >= 0);
+  assert.ok(ib < ia, 'a ordem segue só as ações das colunas: B (2 downloads) antes de A (1 download e 2 logins)');
 });
-
