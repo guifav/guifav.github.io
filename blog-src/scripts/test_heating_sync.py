@@ -56,18 +56,40 @@ def ago(days: float = 0, seconds: float = 0) -> str:
 
 
 def sql_normalizado(sql: str) -> str:
-    """Texto de um CREATE do sqlite_master para comparar esquemas: tira comentários (`--` até o fim da linha e `/* */`,
-    como o SQLite os lê), as aspas duplas em volta de identificador simples (o RENAME as acrescenta), `IF NOT EXISTS` e
-    diferenças de espaço. Literais entre aspas simples ficam intactos, para que uma mudança dentro de um CHECK nunca seja normalizada.
-    Nomes não são reescritos: depois do RENAME o sqlite_master já guarda o nome final, então um `_new` que sobre em
-    tabela, índice ou trigger aparece como diferença."""
-    partes, fora, i = [], [], 0
+    """Texto de um CREATE do sqlite_master para comparar esquemas.
+
+    Só três coisas são normalizadas, e cada uma numa posição conhecida:
+    - o cabeçalho `CREATE <tipo> [IF NOT EXISTS] <nome>`: sai o `IF NOT EXISTS` e as aspas do nome, se ele for um
+      identificador simples (o RENAME acrescenta essas aspas);
+    - comentários (`--` até o fim da linha e `/* */`, como o SQLite os lê);
+    - diferenças de espaço fora de literal.
+
+    Todo o resto fica como está, inclusive aspas duplas no corpo (`"NOT" NULL` e `NOT NULL` são diferentes) e literais
+    entre aspas simples. Nomes não são reescritos: depois do RENAME o sqlite_master já guarda o nome final, então um
+    `_new` que sobre em tabela, índice ou trigger aparece como diferença."""
+    m = re.match(r'\s*CREATE\s+(TABLE|INDEX|UNIQUE\s+INDEX|TRIGGER|VIEW)\s+(?:IF\s+NOT\s+EXISTS\s+)?("(?:[^"]|"")*"|\w+)',
+                 sql, re.I)
+    cabeca = ""
+    if m:
+        nome = m.group(2)
+        if nome.startswith('"') and re.fullmatch(r'"[A-Za-z_][A-Za-z0-9_]*"', nome):
+            nome = nome[1:-1]
+        cabeca = f"CREATE {' '.join(m.group(1).upper().split())} {nome}"
+        sql = sql[m.end():]
+    partes, fora, i = [cabeca], [], 0
 
     def fecha_fora():
-        txt = "".join(fora)
-        txt = re.sub(r"\bIF NOT EXISTS\b", " ", txt)
-        partes.append(" ".join(txt.split()).replace("( ", "(").replace(" )", ")"))
+        partes.append(" ".join("".join(fora).split()).replace("( ", "(").replace(" )", ")"))
         fora.clear()
+
+    def fim_entre(aspa: str, ini: int) -> int:
+        fim = ini + 1
+        while True:  # aspa dobrada dentro é parte do conteúdo
+            fim = sql.index(aspa, fim)
+            if sql.startswith(aspa * 2, fim):
+                fim += 2
+                continue
+            return fim
 
     while i < len(sql):
         if sql.startswith("--", i):
@@ -77,27 +99,8 @@ def sql_normalizado(sql: str) -> str:
             fim = sql.find("*/", i + 2)
             i = len(sql) if fim < 0 else fim + 2  # o SQLite aceita comentário em bloco aberto até o fim
             fora.append(" ")
-        elif sql[i] == '"':
-            fim = i + 1
-            while True:  # `""` dentro do identificador é uma aspa do nome, como `''` no literal
-                fim = sql.index('"', fim)
-                if sql.startswith('""', fim):
-                    fim += 2
-                    continue
-                break
-            ident = sql[i + 1:fim]
-            # Identificador simples perde as aspas (o RENAME as acrescenta); qualquer outra coisa entre aspas duplas fica
-            # como está, porque `"NOT NULL"` ou `"OLD.uid"` mudam o significado.
-            fora.append(ident if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", ident) else sql[i:fim + 1])
-            i = fim + 1
-        elif sql[i] == "'":
-            fim = i + 1
-            while True:
-                fim = sql.index("'", fim)
-                if sql.startswith("''", fim):
-                    fim += 2
-                    continue
-                break
+        elif sql[i] in "'\"":
+            fim = fim_entre(sql[i], i)
             fecha_fora()
             partes.append(sql[i:fim + 1])
             i = fim + 1
@@ -105,7 +108,7 @@ def sql_normalizado(sql: str) -> str:
             fora.append(sql[i])
             i += 1
     fecha_fora()
-    return " ".join(p for p in partes if p)
+    return " ".join(p for p in partes if p).replace("( ", "(").replace(" )", ")")
 
 
 class Fake:
@@ -925,6 +928,19 @@ class HeatingSyncTest(unittest.TestCase):
                 self.assertEqual(normal(sql), normal(antes[chave]))
         self.assertEqual(trocas, 8)
 
+        # Além do texto, os atributos que o SQLite leu de cada coluna (tipo, NOT NULL, DEFAULT, chave), para que nenhuma
+        # grafia equivalente no texto esconda uma mudança de significado (rodada 4 do #210, Kimi).
+        def colunas(ate: str) -> dict:
+            db = sqlite3.connect(":memory:")
+            for nome in sorted(n for n in os.listdir(MIGRATIONS) if n.endswith(".sql") and n <= ate):
+                with open(os.path.join(MIGRATIONS, nome), encoding="utf-8") as fh:
+                    db.executescript(fh.read())
+            r = {t: db.execute(f"PRAGMA table_xinfo({t})").fetchall() for t in tabelas}
+            db.close()
+            return r
+
+        self.assertEqual(colunas("0015_zzz"), colunas("0014_zzz"))
+
         # Fora das seis tabelas a 0015 não mexe em nada (revisão do Claude fresh no head c2f8a29).
         fora_antes, fora_depois = esquema("0014_zzz", fora=True), esquema("0015_zzz", fora=True)
         self.assertGreater(len(fora_antes), 10)
@@ -948,9 +964,12 @@ class HeatingSyncTest(unittest.TestCase):
                          sql_normalizado("CREATE TABLE heating_optout ( h TEXT )"))
         # Rodada 3 do #210 (Kimi): tirar toda aspa dupla fazia `source TEXT "NOT NULL"` (coluna sem NOT NULL) igual ao
         # original. Só identificador simples perde as aspas.
-        self.assertEqual(sql_normalizado('CREATE TABLE "t" ("a" TEXT)'), sql_normalizado("CREATE TABLE t (a TEXT)"))
-        self.assertNotEqual(sql_normalizado('CREATE TABLE t ("a""b" TEXT)'), sql_normalizado("CREATE TABLE t (ab TEXT)"))
-        for original, mutante in (("a TEXT NOT NULL", 'a TEXT "NOT NULL"'), ("OLD.uid", '"OLD.uid"')):
+        # Rodada 4 (Kimi): `"NOT" NULL` também deixa de ser restrição; aspas no corpo nunca são tiradas.
+        self.assertEqual(sql_normalizado('CREATE TABLE "t" (a TEXT)'), sql_normalizado("CREATE TABLE t (a TEXT)"))
+        self.assertEqual(sql_normalizado('CREATE TABLE IF NOT EXISTS t (a TEXT)'), sql_normalizado("CREATE TABLE t (a TEXT)"))
+        self.assertNotEqual(sql_normalizado('CREATE TABLE "a""b" (a TEXT)'), sql_normalizado("CREATE TABLE ab (a TEXT)"))
+        for original, mutante in (("a TEXT NOT NULL", 'a TEXT "NOT NULL"'), ("a TEXT NOT NULL", 'a TEXT "NOT" NULL'),
+                                  ("a TEXT NOT NULL", '"a" TEXT NOT NULL'), ("OLD.uid", '"OLD.uid"')):
             with self.subTest(mutante=mutante):
                 aspas = "CREATE TABLE t (a TEXT NOT NULL, b TEXT CHECK (b <> OLD.uid))"
                 self.assertNotEqual(sql_normalizado(aspas.replace(original, mutante)), sql_normalizado(aspas))
