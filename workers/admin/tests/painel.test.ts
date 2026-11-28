@@ -1524,3 +1524,24 @@ test('P7: heatingScoreCell exibe 0 (frio) para spam e heatingSignalsCell limita 
   assert.ok(htmlHeat.includes('Sinal 1 (50,0); Sinal 2 (12,0); Sinal 3 (10,0)'));
   assert.ok(!htmlHeat.includes('Sinal 4'));
 });
+
+test('contatos mostra o login no site (épico #197) com rótulo próprio e filtro', async () => {
+  const s = setup();
+  seedConversions(s.db, [
+    {
+      id: 'l1', email: 'login@x.com', action: 'site_login', material: null, verified: 1,
+      occurred_at: '2026-11-28T01:00:00.000Z', origin_channel: 'busca', origin_source: 'google',
+    },
+    {
+      id: 'l2', email: 'dl@x.com', action: 'material_download', material: 'mapa-decisao-ia', file: 'mapa-decisao-pdf', verified: 1,
+      occurred_at: '2026-11-28T00:30:00.000Z',
+    },
+  ]);
+  const html = await (await s.req('/admin/contatos')).text();
+  assert.ok(html.includes('<td>login no site</td>'));
+  assert.ok(html.includes('<option value="site_login">login no site</option>'));
+  const filtrado = await (await s.req('/admin/contatos?acao=site_login')).text();
+  const tbody = filtrado.match(/<tbody>([\s\S]*?)<\/tbody>/)?.[1] ?? '';
+  assert.ok(tbody.includes('login@x.com'));
+  assert.ok(!tbody.includes('dl@x.com'));
+});

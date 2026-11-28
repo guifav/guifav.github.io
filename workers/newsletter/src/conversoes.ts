@@ -17,7 +17,7 @@ export interface D1Like {
   prepare(sql: string): D1Stmt;
 }
 
-export type Acao = 'material_request' | 'material_download' | 'newsletter_confirm';
+export type Acao = 'material_request' | 'material_download' | 'newsletter_confirm' | 'site_login';
 
 const enc = new TextEncoder();
 

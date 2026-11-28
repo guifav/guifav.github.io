@@ -1491,6 +1491,10 @@ def run(
             continue
         if p["when"] < retention_cutoff:
             continue
+        # Ação sem sinal na régua (o login no site, `site_login`): não pontua; a visita logada já conta pelo GA4.
+        # Dar peso ao login é decisão da calibração (corte 3), não deste job.
+        if p["action"] not in CONV_SIGNAL_MAP:
+            continue
         ev_id = "cv:" + p["id"]
         if ev_id in existing_event_ids:
             continue

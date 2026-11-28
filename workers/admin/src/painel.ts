@@ -28,12 +28,13 @@ export interface SubscriberCounters {
   m: Record<string, string>;
 }
 
-export const ACTIONS = ['material_request', 'material_download', 'newsletter_confirm'] as const;
+export const ACTIONS = ['material_request', 'material_download', 'newsletter_confirm', 'site_login'] as const;
 
 const ACTION_LABELS: Record<string, string> = {
   material_request: 'pedido de material',
   material_download: 'download',
   newsletter_confirm: 'inscrição nos Expert Insights',
+  site_login: 'login no site',
 };
 
 export function actionLabel(action: string): string {
@@ -542,6 +543,7 @@ export async function contatosPage(url: URL, env: PainelEnv): Promise<Response> 
     ['material_request', 'pedido de material'],
     ['material_download', 'download'],
     ['newsletter_confirm', 'inscrição nos Expert Insights'],
+    ['site_login', 'login no site'],
   ])}
   ${opt('material', f.material, [['', 'todos os materiais'], ...MATERIAIS.map((m): [string, string] => [m.id, m.titulo])])}
   ${opt('comprovado', f.comprovado, [

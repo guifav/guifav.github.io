@@ -268,7 +268,8 @@ class SyncTest(unittest.TestCase):
                           "gaClientId": "TEXT", "origemCanal": "SELECT", "origemFonte": "SELECT", "utmSource": "TEXT",
                           "utmMedium": "TEXT", "utmCampaign": "TEXT", "paginaEntrada": "TEXT", "pessoa": "RELATION"})
         self.assertTrue(f.conv_fields["eventoId"]["_spec"]["isUnique"])
-        self.assertEqual([o["value"] for o in f.conv_fields["acao"]["options"]], ["MATERIAL_REQUEST", "MATERIAL_DOWNLOAD", "NEWSLETTER_CONFIRM"])
+        self.assertEqual([o["value"] for o in f.conv_fields["acao"]["options"]],
+                         ["MATERIAL_REQUEST", "MATERIAL_DOWNLOAD", "NEWSLETTER_CONFIRM", "SITE_LOGIN"])
         for name, t in (("siteInteresses", "MULTI_SELECT"), ("siteUltimaConversao", "DATE_TIME"), ("siteEmailComprovado", "BOOLEAN"),
                         ("siteGaClientId", "TEXT")):
             self.assertEqual(f.person_fields[name]["type"], t)
@@ -408,6 +409,9 @@ class SyncTest(unittest.TestCase):
             "email sem domínio": dict(email="a@x"),
             "material ausente no download": dict(material=None, file="x"),
             "material na confirmação": dict(action="newsletter_confirm"),
+            "material no login": dict(action="site_login"),
+            "login não comprovado": dict(action="site_login", material=None, verified=0),
+            "arquivo no login": dict(action="site_login", material=None, file="planilha-custos-ia"),
             "interesses não JSON": dict(raw_interests="nada"),
             "interesses objeto": dict(raw_interests="{}"),
             "interesse id minúsculo": dict(interests=({"id": "custo", "rotulo": "C"},)),
@@ -771,6 +775,22 @@ class OrigemTest(unittest.TestCase):
         opts = lambda n: [(o["value"], o["label"]) for o in f.conv_fields[n]["options"]]  # noqa: E731
         self.assertEqual([v for v, _ in opts("origemCanal")], [v for v, _ in S.CANAIS.values()])
         self.assertEqual(opts("origemFonte")[-1], ("OUTRO", "Outro"))
+
+    def test_login_no_site_cria_a_pessoa_e_a_conversao_comprovada(self):
+        # Épico #197 (decisão do Gui, 27/11): o login no site é conversão comprovada e cria a Pessoa, como um download.
+        f = Fake()
+        f.add(1, "novo@x.com", action="site_login", material=None, interests=(),
+              origem={"origin_channel": "busca", "origin_source": "google", "landing_path": "/blog/"})
+        counts, _ = run(f, apply=True)
+        self.assertEqual(counts.get("conversao_invalida", 0), 0)
+        self.assertEqual(f.pending(), [])
+        pessoas = [p for p in f.people.values() if p["emails"]["primaryEmail"] == "novo@x.com"]
+        self.assertEqual(len(pessoas), 1, "Pessoa criada")
+        ev = conv_by_event(f)[hexid(1)]
+        self.assertEqual(ev["acao"], "SITE_LOGIN")
+        self.assertEqual((ev["origemCanal"], ev["origemFonte"], ev["paginaEntrada"]), ("BUSCA", "GOOGLE", "/blog/"))
+        opts = [(o["value"], o["label"]) for o in f.conv_fields["acao"]["options"]]
+        self.assertIn(("SITE_LOGIN", "Login no site"), opts)
 
     def test_lists_match_the_worker_and_the_migration(self):
         # As listas são as mesmas nos quatro lugares (origem.ts, track.js, migração 0006 e aqui): conferidas pelo texto.

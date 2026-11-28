@@ -133,14 +133,19 @@ from twenty_sync import SyncError  # noqa: E402
 
 OBJ = {"nameSingular": "siteConversion", "namePlural": "siteConversions", "labelSingular": "Conversão do site",
        "labelPlural": "Conversões do site", "icon": "IconTargetArrow", "isLabelSyncedWithName": False,
-       "description": "Ações do site guifav.dev com email (pedido e download de material, confirmação da newsletter). "
+       "description": "Ações do site guifav.dev com email (pedido e download de material, confirmação da newsletter, "
+                      "login no site). "
                       "Gravadas pelo sync da issue #97 a partir do D1 blog-admin; não edite à mão."}
 PLURAL = OBJ["namePlural"]
 ACOES = {
     "material_request": ("MATERIAL_REQUEST", "Pedido de material"),
     "material_download": ("MATERIAL_DOWNLOAD", "Download de material"),
     "newsletter_confirm": ("NEWSLETTER_CONFIRM", "Inscrição confirmada"),
+    # Login no site com a conta Google (épico #197, decisão do Gui de 27/11): comprovado, sem material, um por pessoa.
+    "site_login": ("SITE_LOGIN", "Login no site"),
 }
+# Ações sem material (o resto exige o slug do material).
+SEM_MATERIAL = {"newsletter_confirm", "site_login"}
 # Origem da visita (issue #114): valor no D1 -> (opção no Twenty, rótulo). As mesmas listas do Worker e da migração 0006.
 CANAIS = OrderedDict([
     ("busca", ("BUSCA", "Busca")), ("assistente", ("ASSISTENTE", "Assistente de IA")), ("social", ("SOCIAL", "Rede social")),
@@ -385,7 +390,7 @@ def parse_row(r: dict) -> dict | None:
         if not _full(HEX64, r.get("id")) or not valid_email(r.get("email")):
             return None
         material = r.get("material")
-        if action == "newsletter_confirm":
+        if action in SEM_MATERIAL:
             if material is not None:
                 return None
         elif not _full(SLUG, material):
