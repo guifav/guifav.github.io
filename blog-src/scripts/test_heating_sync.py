@@ -55,6 +55,42 @@ def ago(days: float = 0, seconds: float = 0) -> str:
     return CS.stamp(NOW - timedelta(days=days, seconds=seconds))
 
 
+def sql_normalizado(sql: str, tabelas) -> str:
+    """Texto de um CREATE do sqlite_master para comparar esquemas: tira comentários, aspas duplas de identificador,
+    `IF NOT EXISTS`, o sufixo provisório `_new` dos nomes em `tabelas` e diferenças de espaço. Literais entre aspas
+    simples ficam intactos, para que uma mudança dentro de um CHECK nunca seja normalizada."""
+    partes, fora, i = [], [], 0
+
+    def fecha_fora():
+        txt = "".join(fora).replace('"', "")
+        txt = re.sub(r"\bIF NOT EXISTS\b", " ", txt)
+        for t in tabelas:
+            txt = re.sub(rf"\b{t}_new\b", t, txt)
+        partes.append(" ".join(txt.split()).replace("( ", "(").replace(" )", ")"))
+        fora.clear()
+
+    while i < len(sql):
+        if sql.startswith("--", i):
+            fim = sql.find("\n", i)
+            i = len(sql) if fim < 0 else fim
+        elif sql[i] == "'":
+            fim = i + 1
+            while True:
+                fim = sql.index("'", fim)
+                if sql.startswith("''", fim):
+                    fim += 2
+                    continue
+                break
+            fecha_fora()
+            partes.append(sql[i:fim + 1])
+            i = fim + 1
+        else:
+            fora.append(sql[i])
+            i += 1
+    fecha_fora()
+    return " ".join(p for p in partes if p)
+
+
 class Fake:
     """D1 pela API REST (SQLite com migrações reais + batch transacional) e Twenty local com estado e lixeira."""
 
@@ -854,12 +890,7 @@ class HeatingSyncTest(unittest.TestCase):
             db.close()
             return {(t, n): sql for t, n, sql in linhas}
 
-        def normal(sql: str) -> str:
-            sql = re.sub(r"--[^\n]*", "", sql)
-            sql = sql.replace(" IF NOT EXISTS", "").replace('"', "")
-            for t in tabelas:  # só o nome provisório da tabela, nunca um `_new` dentro de coluna ou CHECK
-                sql = re.sub(rf"\b{t}_new\b", t, sql)
-            return " ".join(sql.split()).replace("( ", "(").replace(" )", ")")
+        normal = lambda sql: sql_normalizado(sql, tabelas)
 
         antes, depois = esquema("0014_zzz"), esquema("0015_zzz")
         self.assertEqual(set(antes), set(depois))
@@ -871,6 +902,21 @@ class HeatingSyncTest(unittest.TestCase):
             with self.subTest(objeto=chave):
                 self.assertEqual(normal(sql), normal(antes[chave]))
         self.assertEqual(trocas, 8)
+
+    def test_normalizacao_do_esquema_nunca_mexe_dentro_de_literal(self):
+        # Rodada 1 do #210 (Kimi): `_new`, aspas e `IF NOT EXISTS` saíam também de dentro de literais, e um CHECK
+        # `NOT GLOB '*[^0-9a-f_new]*'` (que aceita 'n' * 64) passava por igual ao original.
+        t = ("heating_optout",)
+        base = "CREATE TABLE heating_optout (h TEXT CHECK (h NOT GLOB '*[^0-9a-f]*'))"
+        self.assertEqual(sql_normalizado(base.replace("heating_optout", "heating_optout_new"), t),
+                         sql_normalizado(base, t))
+        self.assertEqual(sql_normalizado('CREATE TABLE IF NOT EXISTS "heating_optout" (h TEXT) -- x\n', t),
+                         sql_normalizado("CREATE TABLE heating_optout ( h TEXT )", t))
+        for mutante in ("'*[^0-9a-f_new]*'", "'*[^0-9a-f\"]*'", "'*[^0-9a-f IF NOT EXISTS]*'", "'*[^0-9a-f ]*'",
+                        "'*[^0-9a-f--]*'", "'*[^0-9a-f'']*'"):
+            with self.subTest(mutante=mutante):
+                self.assertNotEqual(sql_normalizado(base.replace("'*[^0-9a-f]*'", mutante), t),
+                                    sql_normalizado(base, t))
 
     def test_0015_preserva_as_linhas_de_cada_tabela_coluna_por_coluna(self):
         # Os seis INSERT ... SELECT da 0015 copiam cada coluna para ela mesma. As linhas usam um valor diferente em cada
